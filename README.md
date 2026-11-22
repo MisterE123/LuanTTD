@@ -40,6 +40,7 @@ and hold **E** to move faster. The active hotbar shows the available tools.
 Left-click to use one. Right-click to cancel a build, finish order selection,
 or inspect. Escape closes menus. Open **Transport & World Guide** from Inventory for help in-game.
 Jump Map also accepts tile coordinates. Normal play does not require chat commands.
+Choose **Inventory → Tutorials** for guided [road, train, and boat businesses](docs/business-tutorials.md).
 
 ## Guides and settings
 

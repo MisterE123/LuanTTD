@@ -30,11 +30,11 @@ jobs:
       - name: Check Lua syntax and run focused tests
         run: |
           find mods/luanttd_core -type f -name '*.lua' -print0 | xargs -0 -r -n 1 luac5.1 -p
-          for t in sim world_setup workbench_index original_terrain_explorer_gate jump_map atmosphere hotbar ordinary_level_crossing \
+          for t in sim world_setup workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere hotbar ordinary_level_crossing \
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight rail_owned_default \
             rail_depot_fleet rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
-            road_bay_live road_terminus_town_limits; do
+            road_bay_live road_terminus_town_limits rail_owned_service rail_paid_runtime; do
             lua5.1 "tests/$t.lua"
           done
           lua5.1 tests/road_timber_live.lua craighead

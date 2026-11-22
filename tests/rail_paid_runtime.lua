@@ -240,3 +240,12 @@ if Air then
 end
 print(("PASS: one world/house clock, reload-safe road %d/$%d, rail %d/$%d, ferry %d/$%d, real carriage and source dwell")
   :format(counts.Coach,fares.Coach,counts.Rail,fares.Rail,counts.Ferry,fares.Ferry))
+
+core={get_modpath=function() return "mods/luanttd_core" end}
+local tutorial=dofile(root.."business_tutorials.lua")({s=s,Sim=Sim})
+local road_goal,road_total=tutorial.progress("Coach","road")
+local boat_goal,boat_total=tutorial.progress("Ferry","boat")
+assert(road_goal==6 and road_total>=fares.Coach)
+assert(boat_goal==5 and boat_total>=fares.Ferry)
+assert(tutorial.progress("Stranger","boat")==1)
+print("PASS real paid bus and ferry complete only the correct company's lesson")

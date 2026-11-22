@@ -500,6 +500,8 @@ return function(api,ui)
         entry[id.."_text"]=text;p:hud_change(entry[id],"text",text)
       end
     end
+    local guidance=ui.tutorial_hint and ui.tutorial_hint(p) or ""
+    if guidance~="" or entry.tutorial then draw("tutorial",{x=.5,y=.103},guidance,0xffedbe) end
     draw("aim",{x=.5,y=.55},desc,0xffe3a3)
     draw("status",{x=.5,y=H and .803 or .831},status,0xe8f2df)
     if H then

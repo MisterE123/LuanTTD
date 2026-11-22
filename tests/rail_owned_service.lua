@@ -411,3 +411,21 @@ if use_spans then assert(at_bridge and at_tunnel and at_cross,("%s %s %s"):forma
 assert(charged_cash>0 and charged_fixed>0)
 print(("PASS: bought %s + coach, stock acceleration/actual mass, load and fare reload, %d passengers/$%d, $%d running expense (%s)"):
  format(Roster.entry(engine).name,passengers,fare,charged_cash,use_spans and "stock bridge, tunnel and crossing" or "ordinary stock railway"))
+
+if not mode then
+  core={get_modpath=function() return "mods/luanttd_core" end}
+  local tutorial=dofile(root.."business_tutorials.lua")({s=s,Sim=Sim,rail_owned=Owned})
+  local goal,earned=tutorial.progress(owner,"rail")
+  assert(goal==7 and earned==fare,"the real paid consist should complete the lesson")
+  local dispatch=s.stock_rail_dispatch
+  s.stock_rail_dispatch={owner=owner,signals=dispatch.signals,runs={}}
+  local fleet=Owned.list
+  Owned.list=function()return {} end
+  assert(tutorial.progress(owner,"rail")==4,"the documented return-facing signal should pass")
+  local signal=dispatch.signals.records[id(10)]
+  local mask=signal.present_signals
+  signal.present_signals=T.signal_along(8)
+  assert(tutorial.progress(owner,"rail")==3,"flipping the documented signal should fail the lesson")
+  signal.present_signals=mask
+  Owned.list=fleet;s.stock_rail_dispatch=dispatch
+end

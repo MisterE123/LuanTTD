@@ -4,6 +4,7 @@ local U={}
 local esc=core.formspec_escape
 local session,hud={},{}
 local Workbenches=api.road_first and dofile(core.get_modpath("luanttd_core").."/workbench_index.lua")(api)
+local Tutorials=api.road_first and dofile(core.get_modpath("luanttd_core").."/business_tutorials.lua")(api)
 local JumpMap=api.road_first and dofile(core.get_modpath("luanttd_core").."/jump_map.lua")(api)
 
 local function view(name)
@@ -359,6 +360,7 @@ end
 function U.leave(n)
   session[n]=nil;hud[n]=nil
   if Workbenches then Workbenches.leave(n) end
+  if Tutorials then Tutorials.leave(n) end
 end
 function U.hud()
   for _,p in ipairs(core.get_connected_players()) do
@@ -383,6 +385,7 @@ local function pick(fields,id,a,prior)
   return prior
 end
 function U.fields(p,formname,f)
+  if Tutorials and formname==Tutorials.form then return Tutorials.fields(p,f) end
   if Workbenches and formname==Workbenches.form then return Workbenches.fields(p,f) end
   if formname=="" then
     if f.bl_sections and api.world.home_menu then api.world.home_menu(p);return true end
@@ -390,6 +393,7 @@ function U.fields(p,formname,f)
     if f.bl_company then U.open_company(p);return true end
     if f.bl_jump then U.open_jump(p);return true end
     if f.bl_finance then U.open_finance(p);return true end
+    if f.bl_tutorials and Tutorials then return Tutorials.open(p) end
     if f.bl_guide then return U.open_workbenches(p) end
     if f.bl_help then U.open_controls(p);return true end
     return false
@@ -498,14 +502,15 @@ function U.fields(p,formname,f)
 end
 function U.inventory(p)
   if api.road_first then
-    p:set_inventory_formspec("formspec_version[7]size[9.4,4.1]bgcolor[#152334;false]"..
+    p:set_inventory_formspec("formspec_version[7]size[9.4,4.9]bgcolor[#152334;false]"..
       "label[.4,.5;LuanTTD   /   Control desk]"..
       "button[.4,1.05;4.18,.62;bl_company;Fleet]"..
       "button[4.8,1.05;4.18,.62;bl_finance;Finances]"..
       "button[.4,1.88;4.18,.62;bl_jump;Jump map]"..
       "button[4.8,1.88;4.18,.62;bl_sections;Reset hotbar to sections]"..
       "button[.4,2.71;4.18,.62;bl_help;Controls]"..
-      "button[4.8,2.71;4.18,.62;bl_guide;Transport & World Guide]")
+      "button[4.8,2.71;4.18,.62;bl_guide;Transport & World Guide]"..
+      "button[.4,3.54;8.58,.67;bl_tutorials;Tutorials: Road, Train & Boat]")
     return
   end
   p:set_inventory_formspec("formspec_version[7]size[11,5.8]bgcolor[#101C2B;false]"..
@@ -519,6 +524,7 @@ function U.inventory(p)
     "label[.42,4.18;1 Inspect   /   2 Road   /   3 Track   /   4 Road stop]"..
     "label[.42,4.61;5 Rail station   /   6 Custom   /   7 Company   /   8 Jump]")
 end
+function U.tutorial_hint(p) return Tutorials and Tutorials.hint(p) or "" end
 function U.open_jump(p)
   view(p:get_player_name()).tab="map"
   U.open(p)
@@ -1569,7 +1575,8 @@ function U.preview(p,id,hit)
     local plan,msg,anchor=quote_rail(n,V,id)
     if not plan then return {id},not not anchor,msg end
     local title=rail_tool_labels[V.tool]
-    if plan.kind=="depot" or plan.kind=="signal" then title=title.."  ·  "..tram_dir[V.rail_dir or 2] end
+    if plan.kind=="depot" then title=title.."  ·  Door faces "..tram_dir[V.rail_dir or 2]
+    elseif plan.kind=="signal" then title=title.."  ·  Train travels "..tram_dir[V.rail_dir or 2] end
     if V.rail_remove and plan.kind=="track" then title="Remove "..title:lower() end
     return plan.ids,true,("%s  |  %s  ·  %d tiles"):format(title,dollars(plan.price),#plan.ids)
   end
