@@ -39,7 +39,9 @@ local function integer(n,low,high)
 end
 function M.defaults(settings)
   local seed=tonumber(settings:get("bayline_seed"))
-  local out={seed=integer(seed,0,4294967295) and seed or 1751,scenario="generated",survey_size=64}
+  local year=tonumber(settings:get("bayline_stock_bus_start_year"))
+  local out={seed=integer(seed,0,4294967295) and seed or 1751,scenario="generated",survey_size=64,
+    year=integer(year,1950,2050) and year or 1950}
   for _,item in ipairs(items) do
     local v=settings:get(item.setting)
     if type(item.default)=="number" then v=tonumber(v) end
@@ -68,6 +70,9 @@ function M.parse(current,fields)
   local seed=tonumber(fields.setup_seed or current.seed)
   if not integer(seed,0,4294967295) then return nil,"Enter a whole-number seed from 0 to 4,294,967,295." end
   out.seed=seed
+  local year=tonumber(fields.setup_year or current.year)
+  if not integer(year,1950,2050) then return nil,"Enter a starting year from 1950 to 2050." end
+  out.year=year
   return out
 end
 function M.read(core,storage)
@@ -75,6 +80,8 @@ function M.read(core,storage)
   if raw=="" then return end
   local cfg=core.parse_json(raw,nil,true)
   if type(cfg)~="table" or not integer(cfg.seed,0,4294967295) then return end
+  if cfg.year==nil then cfg.year=M.defaults(core.settings).year end
+  if not integer(cfg.year,1950,2050) then return end
   if not index(scenarios,cfg.scenario) or not index(survey_sizes,cfg.survey_size) then return end
   for _,item in ipairs(items) do
     if item.advanced and cfg[item.key]==nil then cfg[item.key]=item.default end
@@ -98,8 +105,12 @@ local function formspec(core,cfg,advanced,note)
     (advanced and "Basic options" or "Landscape options").."]"
   local labels={"Map size","Terrain relief","Sea level","Rivers","Town density","Town roads","Industry density","Tree placement"}
   local n=0
-  out[#out+1]="dropdown[.49,2.82;11.40,.52;setup_scenario;"..scenario_labels..";"..
+  out[#out+1]="dropdown[.49,2.82;7.16,.52;setup_scenario;"..scenario_labels..";"..
     index(scenarios,cfg.scenario)..";true]"
+  if cfg.scenario~="original" then
+    out[#out+1]="field[8.43,2.82;3.47,.52;setup_year;Starting year;"..esc(tostring(cfg.year)).."]"
+    out[#out+1]="field_close_on_enter[setup_year;false]"
+  end
   if cfg.scenario=="generated" then
     for i,item in ipairs(items) do
       if advanced==not not item.advanced then

@@ -53,7 +53,8 @@ or `/workbenches` for help in-game.
 
 The game exposes only implemented [OpenTTD options](settingtypes.txt), such as
 world generation, starting year, breakdown difficulty and road-vehicle
-servicing. The starting year affects which vehicles are on sale. Ordinary
+servicing. Choose the starting year in the world setup screen; it determines
+which vehicles are on sale. Choose 1968 for the Hendry 25 and UU 37. Ordinary
 Luanti engine settings, such as sound volume and shaders, are still Luanti's.
 
 ## Dedicated server

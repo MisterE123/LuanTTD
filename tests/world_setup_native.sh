@@ -9,9 +9,16 @@ if [[ -n "${BAYLINE_NATIVE_TOOLS:-}" ]]; then
 fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-world-setup-native.XXXXXX")
 echo "Native world setup evidence: $out"
+images=${LUANTTD_NATIVE_SCREENSHOTS:-$out}
+mkdir -p "$images"
 disp=${BAYLINE_NATIVE_DISPLAY:-331}
 game="$out/games/luanttd"
-mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
+world="$out/world"
+if [[ -n ${LUANTTD_NATIVE_WORLD_PARENT:-} ]]; then
+  world=$(mktemp -d "$LUANTTD_NATIVE_WORLD_PARENT/luanttd-world.XXXXXX")
+  echo "Disposable native world: $world"
+fi
+mkdir -p "$game" "$world" "$out/home" "$out/cache"
 exact=${BAYLINE_NATIVE_EXACT_GAME:-.}
 if [[ -n ${LUANTTD_NATIVE_MEDIA_CACHE:-} ]]; then
   # Media is content addressed; link a previous disposable run's cache.
@@ -39,6 +46,7 @@ cat >> "$out/instrumented.lua" <<'LUA'
 if api.generated_world then
   local p=S.stock_generated_profile
   assert(S.seed==817516 and p.width==128 and p.depth==128)
+  assert(Sim.date(S,0)==1968 and S.stock_bus_market.settings.starting_year==1968)
   assert(p.settings.terrain_type==1 and p.settings.amount_of_rivers==0 and p.settings.water_borders==0)
   core.log("action","STOCK SETUP GENERATED 128x128 seed "..S.seed)
   local function placed()
@@ -58,7 +66,7 @@ if api.generated_world then
 end
 LUA
 mv "$out/instrumented.lua" "$game/mods/luanttd_core/init.lua"
-cat > "$out/world/world.mt" <<'WORLD'
+cat > "$world/world.mt" <<'WORLD'
 gameid = luanttd
 backend = sqlite3
 player_backend = sqlite3
@@ -80,7 +88,7 @@ client=""
 trap 'if [[ -n "$client" ]]; then kill "$client" 2>/dev/null || true; fi; kill "$xv" 2>/dev/null || true; wait 2>/dev/null || true' EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 local_game() {
-  "${BAYLINE_LUANTI_CLIENT:-luanti}" --go --world "$out/world" --gameid luanttd --config "$out/local.conf" --logfile "" > "$out/$1.log" 2>&1 &
+  "${BAYLINE_LUANTI_CLIENT:-luanti}" --go --world "$world" --gameid luanttd --config "$out/local.conf" --logfile "" > "$out/$1.log" 2>&1 &
   client=$!
   for _ in {1..180}; do
     kill -0 "$client" 2>/dev/null || { cat "$out/$1.log"; exit 1; }
@@ -92,7 +100,7 @@ local_game() {
   sleep 2
 }
 rows() {
-  python3 - "$out/world/mod_storage.sqlite" "$1" <<'PY'
+  python3 - "$world/mod_storage.sqlite" "$1" <<'PY'
 import json, sqlite3, sys
 with sqlite3.connect(sys.argv[1]) as conn:
     rows=dict(conn.execute("SELECT CAST(key AS TEXT), CAST(value AS TEXT) FROM entries WHERE modname='luanttd_core'"))
@@ -100,7 +108,7 @@ if sys.argv[2]=="draft":
     assert not rows, sorted(rows)
 else:
     val=json.loads(rows["world_setup_v1"])
-    assert val["size"]==128 and val["seed"]==817516 and val["coast"]==0, val
+    assert val["size"]==128 and val["seed"]==817516 and val["coast"]==0 and val["year"]==1968, val
     print(json.dumps(val,indent=2))
 PY
 }
@@ -108,33 +116,34 @@ local_game first
 for _ in {1..120}; do grep -q 'STOCK SETUP PREGENERATED AIR' "$out/first.log" && break; sleep .25; done
 grep 'STOCK SETUP PREGENERATED AIR' "$out/first.log"
 rows draft
-import -window root "$out/options.png"
+import -window root "$images/options.png"
 xdotool mousemove 510 332 click 1 key ctrl+a type '12.5'
 xdotool mousemove 940 657 click 1
 sleep .45
 rows draft
-import -window root "$out/invalid-option.png"
+import -window root "$images/invalid-option.png"
 xdotool mousemove 515 332 click 1 key ctrl+a type '817516'
+xdotool mousemove 986 369 click 1 key ctrl+a type '1968'
 xdotool mousemove 712 422 click 1
 sleep .25
 xdotool key Down Return
 sleep .3
-import -window root "$out/selected-size.png"
+import -window root "$images/selected-size.png"
 xdotool mousemove 962 332 click 1
 sleep .35
 xdotool mousemove 1039 422 click 1
 sleep .25
 xdotool key Down Return
 sleep .35
-import -window root "$out/landscape-options.png"
+import -window root "$images/landscape-options.png"
 xdotool mousemove 940 657 click 1
 for _ in {1..50}; do
   if rows committed >"$out/options.json" 2>/dev/null; then break; fi
   sleep .2
 done
-test -s "$out/options.json" || { cat "$out/first.log"; import -window root "$out/fail.png"; exit 1; }
+test -s "$out/options.json" || { cat "$out/first.log"; import -window root "$images/fail.png"; exit 1; }
 sleep .8
-import -window root "$out/options-saved.png"
+import -window root "$images/options-saved.png"
 # Starting the same local world again must honor stored options without
 # showing the wizard or changing the global game configuration.
 kill "$client" 2>/dev/null || true
@@ -149,5 +158,7 @@ for _ in {1..240}; do
 done
 grep 'STOCK SETUP PLACED non-air' "$out/reopened.log"
 sleep 1
-import -window root "$out/generated.png"
-echo "PASS: real first-run options before terrain, invalid seed rejected, exact selected 128x128, seed and coastline loaded on reopen"
+import -window root "$images/generated.png"
+! grep -E 'ERROR\[(Server|Main)\]' "$out/reopened.log"
+kill -0 "$client"
+echo "PASS: first-run options and 1968 start, exact selected 128x128, seed and coast reopened and terrain was placed"

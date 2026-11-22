@@ -4,12 +4,14 @@ local params={bayline_seed="4294967295",bayline_generated_map_size="128",
 local settings={get=function(_,name)return params[name] end}
 local defaults=M.defaults(settings)
 assert(defaults.seed==4294967295 and defaults.size==128 and defaults.relief==1 and defaults.layout=="grid3")
-local submitted={setup_seed="12345678",setup_size="1",setup_relief="3",setup_rivers="2",setup_industries="1",setup_coast="2",setup_smooth="3",setup_variety="4"}
+local submitted={setup_seed="12345678",setup_size="1",setup_relief="3",setup_rivers="2",setup_year="1968",setup_industries="1",setup_coast="2",setup_smooth="3",setup_variety="4"}
 local cfg=assert(M.parse(defaults,submitted))
 assert(cfg.seed==12345678 and cfg.size==64 and cfg.relief==2 and cfg.rivers==1 and cfg.industries==0)
-assert(cfg.layout=="grid3" and defaults.size==128)
+assert(cfg.layout=="grid3" and defaults.size==128 and cfg.year==1968 and defaults.year==1950)
 assert(cfg.coast==0 and cfg.smooth==2 and cfg.variety==3)
 assert(not M.parse(defaults,{setup_seed="2.5"}))
+assert(not M.parse(defaults,{setup_year="1968.5"}))
+assert(not M.parse(defaults,{setup_year="1949"}))
 assert(M.parse(defaults,{setup_scenario="2"}).scenario=="farm")
 assert(M.parse(defaults,{setup_scenario="3"}).scenario=="oil")
 assert(M.parse(defaults,{setup_scenario="6",setup_survey_size="7"}).survey_size==4096)
