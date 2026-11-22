@@ -30,3 +30,10 @@ assert(x==65 and z==65)
 _,targets,cols,rows,stride,wide=M.cells({map_zoom=true},right_corner)
 assert(cols==64 and rows==64 and stride==1 and wide and targets[1]==Sim.id(65,65) and targets[4096]==right_corner)
 print("PASS full-region density, exact tile clicks, void protection, bounded wide overview and local detail")
+assert(M.pick_coordinates("128","128")==right_corner)
+assert(M.pick_coordinates(" 42 ","49")==Sim.id(42,49))
+S.tiles[1].stock_void=true
+for _,pair in ipairs({{"1","1"},{"129","5"},{"22","0"},{"1.5","2"},{"1e2","2"},{"1",false},{"-1","2"}}) do
+  assert(not M.pick_coordinates(pair[1],pair[2]))
+end
+print("PASS exact coordinate jumps accept playable integers only")

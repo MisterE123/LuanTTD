@@ -33,8 +33,7 @@ when there is nothing to cancel.
   **Rail Tools & Operations → Rail Waypoints** places or removes
   non-stopping [train route markers](rail-waypoints.md).
 - **Sea & Air** opens **Harbors** or **Airfields**.
-- **Navigation → Jump Map** is for travel. **Controls →
-  Workbenches & Scenarios** or `/workbenches` shows the active features.
+- **Navigation → Jump Map** is for travel. **Transport & World Guide** in Inventory shows the active features.
 
 **Bridge:** choose the near and far bridgeheads, then select a bridge
 type from the price list. **Tunnel:** aim at an uphill entry to preview

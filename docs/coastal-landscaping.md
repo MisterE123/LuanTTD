@@ -60,19 +60,19 @@ unchanged starter seed 1751, 946 of 949 unprotected dry flat-level-0
 tiles flood by day 40 when connected sea flooding is activated. That
 is why this is a separate new-world profile, not a default for old maps.
 
-On default seed 1751 test two cuts:
+On default seed 1751 test two cuts from the **Landscaping** hotbar:
 
-```text
-/landscape level 11 33 13 28
-/landscape lower 8 17 10 19
-```
+1. **Level area**: pick corner (11,33), then (13,28).
+2. **Lower area**: pick corner (8,17), then (10,19).
+
+Use Jump Map and the tile outline to locate the corners.
 
 The first copies a zero-height corner and costs $3,750 for 15 corners;
 the second excavates nine corners for $2,250. Both cuts start dry.
-Unpause and let a few game days pass. `/survey 12 28` visits the end of
-the bay; `/survey 9 18` visits the inland trench. The reference native
+Unpause and let a few game days pass. Jump Map coordinates (12,28)
+visit the end of the bay; (9,18) visits the inland trench. The reference native
 run wetted the bay on day 6. The isolated trench remained dry through
-day 24. `/landscape lower 9 18` cannot go lower.
+day 24. **Lower corner** at (9,18) cannot go any lower.
 
 ## Source and boundaries
 

@@ -72,6 +72,61 @@ function E.profiles(world)
   }
 end
 
+-- Inventory is available through the client's touch UI as well as the
+-- desktop key. Survey controls do not grant items or modify the map.
+E.inventory_form="formspec_version[7]size[8.4,2]bgcolor[#152334;false]"..
+  "label[.4,.40;LuanTTD / Original Terrain Survey]"..
+  "button[.4,1.06;7.6,.64;survey_controls;Survey controls]"
+function E.bind_controls(core,players,A)
+  local form="luanttd_core:survey_controls"
+  local function show(p,q,message,x,z)
+    local tx,tz=A.point(p)
+    local escape=core.formspec_escape
+    q.survey_open=true
+    core.show_formspec(p:get_player_name(),form,
+      "formspec_version[7]size[9.4,5.55]bgcolor[#152334;false]"..
+      "label[.4,.40;LuanTTD / Survey controls]"..
+      "label[.4,1.01;"..escape(A.describe(p)).."]"..
+      "button[.4,1.53;2.72,.63;survey_coast;Coast]"..
+      "button[3.34,1.53;2.72,.63;survey_transect;Transect]"..
+      "button[6.28,1.53;2.72,.63;survey_summit;Summit]"..
+      "field[.4,2.83;2.72,.66;survey_x;Tile X;"..escape(x or tostring(tx)).."]"..
+      "field[3.34,2.83;2.72,.66;survey_z;Tile Z;"..escape(z or tostring(tz)).."]"..
+      "field_close_on_enter[survey_x;false]field_close_on_enter[survey_z;false]"..
+      "button[6.28,2.83;2.72,.66;survey_go;Jump to tile]"..
+      "label[.4,3.92;"..escape(message or "Select a viewpoint or enter two tile coordinates.").."]"..
+      "button_exit[.4,4.58;8.60,.64;survey_back;Back to terrain]")
+  end
+  local function coordinate(s)
+    return type(s)=="string" and #s<=8 and s:match("^%s*%d+%s*$") and tonumber(s) or nil
+  end
+  core.register_on_player_receive_fields(function(p,name,f)
+    local n=p:get_player_name()
+    local q=players[n]
+    if not q then return false end
+    if name=="" and f.survey_controls then show(p,q);return true end
+    if name~=form then return false end
+    if not q.survey_open then return true end
+    if f.quit or f.survey_back then q.survey_open=nil;return true end
+    local moved
+    for _,key in ipairs({"coast","transect","summit"}) do
+      if f["survey_"..key] then A[key](p);moved=true;break end
+    end
+    if not moved and (f.survey_go or (f.key_enter and
+        (f.key_enter_field=="survey_x" or f.key_enter_field=="survey_z"))) then
+      local x,z=coordinate(f.survey_x),coordinate(f.survey_z)
+      local why
+      moved,why=A.visit(p,x,z)
+      if not moved then show(p,q,why,x and tostring(x),z and tostring(z)) end
+    end
+    if moved then
+      q.survey_open=nil
+      core.close_formspec(n,form)
+    end
+    return true
+  end)
+end
+
 local function install(core,world,Slope,Stream)
   local C=Stream.cover
   local bounds=world.stats()
@@ -211,10 +266,11 @@ local function install(core,world,Slope,Stream)
     p:set_moon({visible=false})
     p:set_stars({visible=false})
     clear_hud(p)
+    p:set_inventory_formspec(E.inventory_form)
     local hud=p:hud_add({type="text",position={x=.028,y=.06},alignment={x=1,y=0},
       text="LUANTTD  /  ORIGINAL TERRAIN",number=0xf7f3e2,style=1,size={x=1.10,y=1.10}})
     p:hud_add({type="text",position={x=.028,y=.94},alignment={x=1,y=0},
-      text="WASD fly  •  Space rise  •  Shift sink  •  E boost  •  /terrain",number=0xf7f3e2})
+      text="Inventory → Survey controls",number=0xf7f3e2})
     players[p:get_player_name()]={hud=hud}
     frame(p,views.coast)
   end)
@@ -257,27 +313,36 @@ local function install(core,world,Slope,Stream)
       end
     end
   end)
+  local function visit(p,x,z)
+    if not x or not z or x<2 or x>=WIDTH or z<2 or z>=DEPTH then
+      return false,("Playable grid: X 2–%d, Z 2–%d."):format(WIDTH-1,DEPTH-1)
+    end
+    local t=world.tile(x,z)
+    frame(p,{x=x,z=z,y=t.high+9,look_x=x,look_z=z+(z<DEPTH-4 and 4 or -4),look_y=t.base})
+    return true
+  end
+  local function describe(p)
+    local x,z,t=probe(p:get_pos())
+    return ("%s at %d, %d • class %d • corner slope mask %d • level %d–%d"):format(
+      material(t),x,z,t.class,t.mask,t.base,t.high)
+  end
+  E.bind_controls(core,players,{
+    coast=function(p) frame(p,views.coast) end,
+    transect=function(p) frame(p,views.transect) end,
+    summit=function(p) frame(p,views.summit) end,
+    visit=visit,describe=describe,
+    point=function(p) return probe(p:get_pos()) end,
+  })
+  -- Optional QA shortcut; all player actions are also in Survey controls.
   core.register_chatcommand("terrain",{params="[coast | transect | summit | tile X Z | inspect]",
-    description="Explore the source Original terrain",func=function(name,param)
+    description="Optional shortcut for Original Terrain Survey",func=function(name,param)
       local p=core.get_player_by_name(name)
       if not p then return false end
       local a,b=param:match("^tile%s+(%d+)%s+(%d+)%s*$")
-      if a and b then
-        local x,z=tonumber(a),tonumber(b)
-        if x<2 or x>=WIDTH or z<2 or z>=DEPTH then
-          return false,("Playable grid: X 2–%d, Z 2–%d."):format(WIDTH-1,DEPTH-1)
-        end
-        local t=world.tile(x,z)
-        frame(p,{x=x,z=z,y=t.high+9,look_x=x,look_z=z+(z<DEPTH-4 and 4 or -4),look_y=t.base})
-        return true
-      elseif views[param] then
-        frame(p,views[param]);return true
-      elseif param=="inspect" then
-        local x,z,t=probe(p:get_pos())
-        return true,("%s at %d, %d • class %d • corner slope mask %d • level %d–%d"):format(
-          material(t),x,z,t.class,t.mask,t.base,t.high)
-      end
-      return true,"Read-only terrain. Try /terrain coast, transect, summit, tile X Z, or inspect."
+      if a and b then return visit(p,tonumber(a),tonumber(b))
+      elseif views[param] then frame(p,views[param]);return true
+      elseif param=="inspect" then return true,describe(p) end
+      return true,"Open Inventory → Survey controls for views and tile details."
     end})
   return {world=world,stats=function()
     return {mapblocks=stats.mapblocks,chunks=stats.chunks,max_chunks_per_block=stats.max_chunks_per_block,

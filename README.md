@@ -38,8 +38,8 @@ still use the 14.1 reference, and what is missing.
 Fly with **WASD** and the mouse, rise with **Space**, descend with **Shift**,
 and hold **E** to move faster. The active hotbar shows the available tools.
 Left-click to use one. Right-click to cancel a build, finish order selection,
-or inspect. Escape closes menus. Use **Controls → Transport & World Guide**
-or `/workbenches` for help in-game.
+or inspect. Escape closes menus. Open **Transport & World Guide** from Inventory for help in-game.
+Jump Map also accepts tile coordinates. Normal play does not require chat commands.
 
 ## Guides and settings
 

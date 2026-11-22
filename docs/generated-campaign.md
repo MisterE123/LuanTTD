@@ -117,8 +117,7 @@ native graphical test of the Wood delivery.
 Make another fresh seed-1751 world with
 `bayline_generated_rivers = 3` and
 `bayline_generated_min_river_length = 2`. This runs stock TerraGenesis
-river widening and makes two rivers on the small map. `/survey 25 20`
-looks at a river incline that connects two levels. To make it navigable,
+river widening and makes two rivers on the small map. Enter (25,20) in Jump Map to visit a river incline that connects two levels. To make it navigable,
 select **Sea & Air → Harbors → Waterworks → Ship lock**
 and click the incline at `(25,20)`. The three-tile lock costs $17,500
 at the start. Flat river tiles can be traversed directly; sloped river
@@ -139,8 +138,8 @@ a roadside stop from Roadworks, or build your own connections. The
 protected sea/void edges are not construction ground. Rendered horizon water
 over the void boundary is scenery, not part of the transport network. Railworks,
 Bridges & Tunnels, and other compatible construction tools still use
-the standard hotbars. `/workbenches` indexes the modes; `/survey X Z`
-jumps to a map tile.
+the standard hotbars. Inventory opens the Transport & World Guide;
+Jump Map goes directly to a map tile.
 
 This is a **scoped stock pipeline**, not a claim that a mixed vanilla
 save or full OpenTTD seed will recreate every tile. It skips most stock
@@ -167,8 +166,7 @@ a low or unsuitable landscape can legitimately have no transmitter.
 Use a fresh seed-1751 world with `bayline_generated_map_size = 128`,
 `bayline_generated_relief = 3`, `bayline_generated_rivers = 1`, and
 `bayline_generated_mixed_freight = true`. This fixture creates eight
-towns, 13 industries, and two rivers. `/survey 106 70` goes beyond the
-old map edge. Roadworks can lay road `(102,70)–(111,70)` and put bus
+towns, 13 industries, and two rivers. Enter (106,70) in Jump Map to reach the test corridor. Roadworks can lay road `(102,70)–(111,70)` and put bus
 stops at `(103,70)` and `(110,70)`. These cost $2,226 at the start.
 The stock road path test verifies the directed route between the
 stops. This example doesn't dispatch a bus.

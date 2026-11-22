@@ -299,7 +299,7 @@ function U.open(p)
     rect(.37,1.93,19.96,11.38,"#182C3D")
     label(.72,2.34,"FIELD MANUAL","#FFE1A0")
     words(.72,2.8,18.65,9.45,[[FIRST PAYDAY
-Right-click in the 3D world and click Build starter bus line once. A bus leaves Port Alder for Mason Quay and brings back passengers on its return trip. Watch the bus move in the world and open /dispatch for company operations. Running at 4× gets your first fare in a few seconds. Check Finance and Fleet to see it paid.
+Right-click in the 3D world and click Build starter bus line once. A bus leaves Port Alder for Mason Quay and brings back passengers on its return trip. Watch the bus move in the world and open Fleet from Inventory for company operations. Running at 4× gets your first fare in a few seconds. Check Finance and Fleet to see it paid.
 
 BUILD IT YOURSELF
 Inspect a town or industry, then choose a terminal within five map tiles of it. Bulldoze any houses in the way. Build another compatible terminal near a receiver. Choose Road or Track and select its start then end (same tile for a single piece). Use Z then X to choose the elbow, and build per segment with a bridge across water or a tunnel through hills. A signal lets trains on the same directed route follow at a safe distance. Opposing trains wait their turn. Inspect a signal and choose Hold departures to block new use.
@@ -308,7 +308,7 @@ RUN THE SERVICE
 Fleet & orders lets you choose a model, cargo, and starting terminal. The purchase includes a starting order. Add at least one other order, and Dispatch. Routes repeat. At terminals you can transfer, wait for a full load, or unload without boarding. Multi-mode transfers require same-company terminals within two tiles, and only a final delivery earns a fare. Boats use navigable water and canals. Planes fly direct between airports.
 
 CONTROLS & PERSISTENCE
-WASD flies; Space and Shift raise/lower altitude. Hold E (Aux1) to fly faster. Directory, Locate Vehicle and the optional Jump Map teleport directly to a site. Escape closes sheets; /dispatch opens company operations. Right-click for tools, and left-click aimed at the ground to inspect or apply your selected tool. Your company, construction, orders, and economy save with the Luanti world. The first company controls speed on multiplayer; the simulation waits when nobody is online.
+WASD flies; Space and Shift raise/lower altitude. Hold E (Aux1) to fly faster. Directory, Locate Vehicle and the optional Jump Map teleport directly to a site. Close sheets to return to the world. Inventory opens company operations. Right-click for tools, and left-click aimed at the ground to inspect or apply your selected tool. Your company, construction, orders, and economy save with the Luanti world. The first company controls speed on multiplayer; the simulation waits when nobody is online.
 
 Models become available over time, loans accrue interest monthly, and each type of service uses its own facilities.]],"#C0D5D2")
     button(.73,12.48,3.18,.5,"go_map","Return to map","primary")
@@ -364,7 +364,7 @@ function U.hud()
   for _,p in ipairs(core.get_connected_players()) do
     local n=p:get_player_name();local c=S.companies[n]
     if c then
-      local message="LuanTTD   •   "..date().."   •   "..dollars(c.cash)..(api.road_first and "   •   I  Control desk" or "   •   /dispatch")
+      local message="LuanTTD   •   "..date().."   •   "..dollars(c.cash).."   •   Inventory: Control desk"
       local V=view(n)
       if not hud[n] then
         hud[n]=p:hud_add({type="text",position={x=.5,y=.05},alignment={x=0,y=0},offset={x=0,y=0},
@@ -390,6 +390,7 @@ function U.fields(p,formname,f)
     if f.bl_company then U.open_company(p);return true end
     if f.bl_jump then U.open_jump(p);return true end
     if f.bl_finance then U.open_finance(p);return true end
+    if f.bl_guide then return U.open_workbenches(p) end
     if f.bl_help then U.open_controls(p);return true end
     return false
   end
@@ -408,6 +409,16 @@ function U.fields(p,formname,f)
   end
   if f.survey then U.survey(p);return true end
   if V.tab=="map" and JumpMap then
+    if f.map_coordinates or (f.key_enter and (f.key_enter_field=="map_x" or f.key_enter_field=="map_z")) then
+      local id=JumpMap.pick_coordinates(f.map_x,f.map_z)
+      if id and U.teleport_tile(p,id) then
+        V.live=false
+        core.close_formspec(n,"luanttd_core:dispatch")
+        return true
+      end
+      V.status=("Choose a playable tile: X 1–%d, Z 1–%d."):format(Sim.W,Sim.H)
+      U.open(p);return true
+    end
     if f.map_zoom then V.map_zoom=not V.map_zoom;U.open(p);return true end
     local id=JumpMap.pick(V,f)
     if id then center(V,id);U.survey(p,id);return true end
@@ -494,7 +505,7 @@ function U.inventory(p)
       "button[.4,1.88;4.18,.62;bl_jump;Jump map]"..
       "button[4.8,1.88;4.18,.62;bl_sections;Reset hotbar to sections]"..
       "button[.4,2.71;4.18,.62;bl_help;Controls]"..
-      "label[4.8,3.00;Esc returns to the world.]")
+      "button[4.8,2.71;4.18,.62;bl_guide;Transport & World Guide]")
     return
   end
   p:set_inventory_formspec("formspec_version[7]size[11,5.8]bgcolor[#101C2B;false]"..

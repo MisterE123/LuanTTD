@@ -49,3 +49,41 @@ local views=E.profiles(fake(4096,128,1751))
 assert(samples<5200 and views.transect.x==2045 and views.transect.z==65)
 for _,p in pairs(views) do assert(p.x~=p.look_x or p.z~=p.look_z) end
 print("PASS Original explorer size/seed validation and bounded deterministic lookouts")
+
+local shown,name,closed,positioned,submitted
+local player={get_player_name=function()return "SurveyQA" end}
+local players={SurveyQA={}}
+local core={
+  formspec_escape=function(s)return s end,
+  show_formspec=function(_,form,data) name,shown=form,data end,
+  close_formspec=function(_,form) assert(form==name);closed=true end,
+  register_on_player_receive_fields=function(callback) submitted=callback end,
+}
+E.bind_controls(core,players,{
+  point=function()return 6,43 end,
+  describe=function()return "Shore: exact slope mask 3" end,
+  coast=function() positioned="coast" end,
+  transect=function() positioned="transect" end,
+  summit=function() positioned="summit" end,
+  visit=function(_,x,z)
+    if not x or not z or x<2 or z<2 or x>=64 or z>=64 then return false,"Outside playable grid" end
+    positioned={x,z};return true
+  end,
+})
+assert(E.inventory_form:find("survey_controls;Survey controls",1,true))
+assert(not submitted(player,"wrong form",{survey_controls=true}))
+assert(submitted(player,"",{survey_controls=true}))
+assert(shown:find("Shore: exact slope mask 3",1,true) and shown:find("survey_go;Jump to tile",1,true))
+assert(submitted(player,name,{survey_go=true,survey_x="64",survey_z="17"}) and not positioned)
+assert(shown:find("Outside playable grid",1,true))
+assert(submitted(player,name,{survey_go=true,survey_x="2.5",survey_z="17"}) and not positioned)
+for _,key in ipairs({"coast","transect","summit"}) do
+  submitted(player,"",{survey_controls=true})
+  assert(submitted(player,name,{["survey_"..key]=true}) and positioned==key and closed)
+end
+submitted(player,"",{survey_controls=true})
+submitted(player,name,{key_enter=true,key_enter_field="survey_x",survey_x="27",survey_z="17"})
+assert(positioned[1]==27 and positioned[2]==17)
+submitted(player,name,{survey_coast=true})
+assert(positioned[1]==27) -- stale fields cannot move the player
+print("PASS Inventory opens survey, all viewpoint buttons jump, exact coordinates validate, stale forms ignored")

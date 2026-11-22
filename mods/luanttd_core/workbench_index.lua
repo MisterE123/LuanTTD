@@ -109,8 +109,8 @@ return function(api)
       end},
     {"order_lists","Copy or share road orders","fleet",function() return api.road_first and "live" end,
       "Stop the receiving and source vehicles as required in the Fleet card. Open Orders, choose Copy or Share, and select the other route. Shared lists keep each vehicle's own progress; Stop sharing empties only this vehicle's list."},
-    {"mail","Town mail & postal routes",nil,function() return S.road_mail and api.terrain end,
-      "Build truck stops near house catchments with /truckstop X Z. Inspect a road depot for the postal van, add a pickup stop and a delivery stop, and check Mail acceptance before starting.",
+    {"mail","Town mail & postal routes","freight",function() return S.road_mail and api.terrain end,
+      "In Road Construction → Road Freight, use Truck stop near houses. Inspect a road depot for the postal van, add a pickup stop and a delivery stop, and check Mail acceptance before starting.",
     },
   })
 

@@ -100,3 +100,13 @@ f({wb_back=true});assert(closed==form and launches==3)
 u.leave("Alex")
 f({wb_open=true});assert(launches==3)
 print("PASS: discoverable workbench index, actual mount/readiness, fresh profiles, no configuration changes, explicit Open and Back")
+
+function p:set_inventory_formspec(form) markup=form end
+u.inventory(p)
+has("bl_guide;Transport & World Guide")
+assert(u.fields(p,"",{bl_guide=true}) and opened=="luanttd_core:workbenches")
+api.freight_tools,api.terrain,S.road_mail=true,true,true
+H.enable_freight()
+f({wb_tab_road=true});f({wb_rows="CHG:11"})
+has("use Truck stop");lacks("/truckstop");has("Open Road Freight")
+print("PASS touch-friendly inventory entry and postal guide use normal controls")

@@ -108,18 +108,22 @@ wait_log 'ORIGINAL TERRAIN COAST READY'
 win=$(xdotool search --sync --onlyvisible --pid "$client_pid" | tail -1)
 xdotool windowfocus --sync "$win"
 xdotool mousemove 720 450
-# Hide chat; stock commands still enter through the real client.
+# Exercise the same Inventory buttons players use rather than chat.
 xdotool key F2
 sleep 3
 import -window root "$out/coast.png"
-say() {
-  xdotool key t; sleep .22; xdotool type "$1"; xdotool key Return
+panel() {
+  xdotool key i
+  sleep .55
+  xdotool mousemove 720 469 click 1
+  sleep .75
 }
-say '/terrain transect'
-sleep 2
-import -window root "$out/transect-start.png"
-say '/explorer_probe'
+panel
+import -window root "$out/survey-controls.png"
+xdotool mousemove 720 402 click 1
 wait_log 'ORIGINAL TERRAIN FLIGHT ARMED'
+sleep 1
+import -window root "$out/transect-start.png"
 xdotool keydown w
 wait_log "ORIGINAL TERRAIN PLAYER CROSSED SEAM $seam1"
 import -window root "$out/transect-seam$seam1.png"
@@ -127,9 +131,16 @@ wait_log "ORIGINAL TERRAIN PLAYER CROSSED SEAM $seam2"
 xdotool keyup w
 sleep .3
 import -window root "$out/transect-seam$seam2.png"
-say '/terrain summit'
-sleep 2
+panel
+xdotool mousemove 879 402 click 1
+wait_log 'ORIGINAL TERRAIN PLAYER REACHED SUMMIT'
+sleep 1
 import -window root "$out/summit.png"
+panel
+xdotool mousemove 556 470 click 1 key ctrl+a type 27
+xdotool mousemove 720 470 click 1 key ctrl+a type 17
+xdotool mousemove 876 470 click 1
+wait_log 'ORIGINAL TERRAIN PLAYER REACHED EXACT TILE 27,17'
 grep -E 'ORIGINAL TERRAIN (GEOGRAPHY|PLAYER)' "$out/server.log"
 if grep -E 'ERROR\[' "$out/"{server,client}.log; then exit 1; fi
 kill -TERM "$client_pid" "$server_pid"

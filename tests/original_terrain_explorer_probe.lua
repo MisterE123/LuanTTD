@@ -80,25 +80,30 @@ core.register_on_joinplayer(function()
   joined=true
   if pending then core.log("action","ORIGINAL TERRAIN COAST READY") end
 end)
-local watching,last,remaining
-core.register_chatcommand("explorer_probe",{func=function(name)
-  local p=assert(core.get_player_by_name(name))
-  local pos=p:get_pos()
-  last=math.floor((pos.x+.5)/2)
-  assert(last==first_x and math.floor((pos.z+.5)/2)==flight_z)
-  watching=name
-  remaining={[seams[1]+1]=true,[seams[2]+1]=true}
-  core.log("action","ORIGINAL TERRAIN FLIGHT ARMED")
-  return true
-end})
+local last,remaining,summit_seen,exact_seen
+local summit=mode.profiles(world).summit
 core.register_globalstep(function()
-  if not watching then return end
-  local player=core.get_player_by_name(watching)
+  if not joined or restart then return end
+  local player=core.get_player_by_name("SurveyQA")
   if not player then return end
   local pos=player:get_pos()
-  local x=math.floor((pos.x+.5)/2)
+  local x,z=math.floor((pos.x+.5)/2),math.floor((pos.z+.5)/2)
+  if not summit_seen and x==summit.x and z==summit.z then
+    summit_seen=true
+    core.log("action","ORIGINAL TERRAIN PLAYER REACHED SUMMIT")
+  end
+  if not exact_seen and x==27 and z==17 then
+    exact_seen=true
+    core.log("action","ORIGINAL TERRAIN PLAYER REACHED EXACT TILE 27,17")
+  end
+  if not remaining and x==first_x and z==flight_z then
+    last=x
+    remaining={[seams[1]+1]=true,[seams[2]+1]=true}
+    core.log("action","ORIGINAL TERRAIN FLIGHT ARMED")
+  end
+  if not remaining or not next(remaining) then return end
   for _,limit in ipairs{seams[1]+1,seams[2]+1} do
-    if remaining[limit] and last<limit and x>=limit then
+    if remaining[limit] and last<limit and x>=limit and z==flight_z then
       assert(math.floor((pos.z+.5)/2)==flight_z)
       remaining[limit]=nil
       core.log("action","ORIGINAL TERRAIN PLAYER CROSSED SEAM "..limit)

@@ -39,14 +39,16 @@ keeps the camera above the true terrain surface and in stock playable
 bounds. It does not require changing player privileges. The HUD shows
 the underlying tile type, coordinates and terrain height.
 
-- `/terrain coast` starts offshore with a close shore view.
-- `/terrain transect` faces east across the two neighboring source
-  chunk borders at x=17 and x=25 on the default size/seed. On another
-  board it starts near the center. Hold **W** to cross both seams.
-- `/terrain summit` overlooks the high ridge.
-- `/terrain tile X Z` goes to a playable tile (each coordinate from 2
-  through the respective dimension minus 1).
-- `/terrain inspect` reports exact source slope and height at your tile.
+Open **Inventory → Survey controls** to see the current tile’s exact
+class, slope mask and heights. The same panel offers these jumps:
+
+- **Coast** starts offshore with a close shore view.
+- **Transect** faces east across the source chunk borders at x=17 and
+  x=25 on the default size and seed. On other boards it starts near
+  the center. Hold **W** to cross the seams.
+- **Summit** overlooks the high ridge.
+- **Jump to tile** accepts an exact X and Z, each from 2 through its
+  respective world dimension minus 1.
 
 All exploration terrain is non-diggable, protected, and has no
 simulated inventory, transport tools, or company UI. The usual map

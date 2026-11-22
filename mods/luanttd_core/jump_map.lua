@@ -85,6 +85,17 @@ return function(api)
       end
     end
   end
+  function M.pick_coordinates(raw_x,raw_z)
+    local function coord(raw,limit)
+      local n=type(raw)=="string" and #raw<=8 and raw:match("^%s*%d+%s*$") and tonumber(raw)
+      return n and n>=1 and n<=limit and n or nil
+    end
+    local x,z=coord(raw_x,Sim.W),coord(raw_z,Sim.H)
+    local id=x and z and Sim.id(x,z)
+    local t=id and S.tiles[id]
+    return t and not t.stock_void and id or nil
+  end
+
   function M.draw(V,p,form)
     local push,rect,label,button=form.push,form.rect,form.label,form.button
     local here=player_tile(p)
@@ -130,12 +141,16 @@ return function(api)
     label(14.93,5.55,"QUICK JUMPS","#FFE1A0")
     local y=5.82
     for i,site in ipairs(S.sites) do
-      if site.kind=="town" and not site.closed and y<11.68 then
+      if site.kind=="town" and not site.closed and y<10.24 then
         V.map_sites[i]=site.tile
         button(14.93,y,5.10,.43,"jump_site_"..i,site.name)
         y=y+.48
       end
     end
+    push("field[14.93,11.15;1.20,.53;map_x;Tile X;]"..
+      "field[16.30,11.15;1.20,.53;map_z;Tile Z;]"..
+      "field_close_on_enter[map_x;false]field_close_on_enter[map_z;false]")
+    button(17.67,11.15,2.36,.53,"map_coordinates","Jump to tile")
     button(14.93,12.22,5.10,.53,"map_return","Return to 3D world","primary")
   end
   return M

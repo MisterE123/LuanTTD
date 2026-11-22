@@ -64,8 +64,7 @@ visual testing are separate.
 
 ## Native fresh-world layout
 
-In Railworks, use the conventional tools in the Signals menu. Use `/survey 39 7` if you
-need to reach the clear ground. Start by building, not by placing
+In Railworks, use the conventional tools in the Signals menu. Open Jump Map and enter tile (39,7) if you need to reach the clear ground. Start by building, not by placing
 rails on the depot squares:
 
 1. Lay horizontal rail (34,7)–(46,7) and vertical rail

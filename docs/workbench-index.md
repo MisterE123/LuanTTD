@@ -1,7 +1,7 @@
 # Transport & World Guide
 
 Open **Controls → Transport & World Guide**, **Survey → Transport & World
-Guide**, or enter `/workbenches`. Select a transport or world topic to see
+Guide**, or choose it directly in Inventory. Select a transport or world topic to see
 how to start a route and which facilities, cargo or vehicles it needs.
 **Open …** goes to the relevant hotbar without buying or building anything.
 

@@ -714,7 +714,7 @@ if api.structure_tools then
   bridge_tool("concretebridge",1,"concrete")
 end
 core.register_chatcommand("bayline_help",{description="List LuanTTD’s key commands",func=function()
-  return true,"WASD flies; Space/Shift changes altitude; hold E to fly faster; left click uses your tool; right click opens the palette. /dispatch opens company operations and /survey X Z jumps to a tile."
+  return true,"WASD flies; Space/Shift changes altitude; hold E to fly faster; left click uses your tool; right click opens the palette. Open Inventory for company operations or Jump map for navigation."
 end})
 
 local rail_build_enabled=true
