@@ -1,4 +1,4 @@
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function stock(file,...) return dofile(root.."openttd/"..file..".lua")(...) end
 local T=dofile(root.."openttd/rail_track.lua")
 local F=stock("rail_follow",T)

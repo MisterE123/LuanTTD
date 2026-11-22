@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Generated river/ferry geometry and ordinary movement, no mocked path.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function m(path) return dofile(root..path..".lua") end
 local Sim,Terrain=m("sim"),m("openttd/terrain")
 local Slope=m("openttd/slope")

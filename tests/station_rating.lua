@@ -1,4 +1,4 @@
-local R=dofile("mods/bayline/openttd/station_rating.lua")
+local R=dofile("mods/luanttd_core/openttd/station_rating.lua")
 local g=R.new()
 assert(not g.has_rating and g.rating==175 and not R.has_tried_loading(g) and g.time_since_pickup==255)
 

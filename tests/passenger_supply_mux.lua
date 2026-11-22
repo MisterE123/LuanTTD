@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
-local function mod(path) return dofile("mods/bayline/"..path..".lua") end
+local function mod(path) return dofile("mods/luanttd_core/"..path..".lua") end
 local Sim=mod("sim")
 local P=mod("openttd/passengers")
 local H=mod("openttd/town_passengers")

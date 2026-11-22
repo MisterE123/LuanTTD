@@ -24,8 +24,8 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD Farm and Factory art fixture\n' > "$out/games/goods_art/game.conf"
 printf 'name = goodsart\n' > "$mod/mod.conf"
 cp tests/stock_farm_factory_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_industry_farm_*_*.obj,bl_industry_factory_*_*.obj,bl_balogh_goods_truck.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_industry_farm_atlas,bl_industry_factory_atlas,bl_balogh_goods_truck_atlas,bl_grass*,bl_road_10_plain_q*}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_industry_farm_*_*.obj,bl_industry_factory_*_*.obj,bl_balogh_goods_truck.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_industry_farm_atlas,bl_industry_factory_atlas,bl_balogh_goods_truck_atlas,bl_grass*,bl_road_10_plain_q*}.png "$mod/textures/"
 printf 'gameid = goods_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

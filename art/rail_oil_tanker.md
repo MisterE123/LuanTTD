@@ -19,8 +19,8 @@ discharge manifold are visual assets, not engineering models.
   and its bands, ladders and service equipment, frame and suspension,
   and two independently rolling steel axle assemblies. Frames 1–49
   demonstrate the wheel pivots.
-- `mods/bayline/models/bl_rail_oil_tanker.obj` and
-  `mods/bayline/textures/bl_rail_oil_tanker.png`: single static mesh
+- `mods/luanttd_core/models/bl_rail_oil_tanker.obj` and
+  `mods/luanttd_core/textures/bl_rail_oil_tanker.png`: single static mesh
   and original flat swatch atlas. Unit scale, -Z nominal nose, tire
   contact local Y=0, at world +.614 on flat base-zero track. Standard
   .424 rail spacing and one native node between coupled centers;

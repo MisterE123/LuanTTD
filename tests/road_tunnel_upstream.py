@@ -33,8 +33,8 @@ int main() {{
 }}
 '''
 lua_src = """
-local T=dofile("mods/bayline/openttd/road_tunnel.lua")
-local W=dofile("mods/bayline/road_bridge_motion.lua")
+local T=dofile("mods/luanttd_core/openttd/road_tunnel.lua")
+local W=dofile("mods/luanttd_core/road_bridge_motion.lua")
 local function frame(d,f)
   local p=(d==0 or d==3) and 15-f or f
   return d%2==0 and p or 0,d%2==1 and p or 0

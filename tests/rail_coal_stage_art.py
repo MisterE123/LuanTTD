@@ -60,7 +60,7 @@ def deck_faces(mesh,kind):
             assert bool(list(along_ray(faces,2,x,z)))==solid,(x,z,solid)
 
 def check():
-    atlas=ROOT/"mods/bayline/textures"
+    atlas=ROOT/"mods/luanttd_core/textures"
     # Equal palette samples for stock rails and ballast despite independent
     # facility atlas sizes. Blender's angle/colour is not trusted as a proxy.
     from PIL import Image

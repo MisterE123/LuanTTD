@@ -1,4 +1,4 @@
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local function m(name)return dofile(root..name..".lua")end
 local Slope=m("slope")
 local R=m("river_worldgen")(Slope)

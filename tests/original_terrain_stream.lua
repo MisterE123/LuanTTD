@@ -1,4 +1,4 @@
-local p="mods/bayline/"
+local p="mods/luanttd_core/"
 local Slope=dofile(p.."openttd/slope.lua")
 local Storage=dofile(p.."world_storage.lua")
 local Stream=dofile(p.."terrain_stream.lua")(Slope)

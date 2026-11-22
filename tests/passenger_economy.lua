@@ -1,7 +1,7 @@
-local M=dofile("mods/bayline/sim.lua")
-local T=dofile("mods/bayline/openttd/terrain.lua")
-local P=dofile("mods/bayline/openttd/passengers.lua")
-local I=dofile("mods/bayline/openttd/income.lua")
+local M=dofile("mods/luanttd_core/sim.lua")
+local T=dofile("mods/luanttd_core/openttd/terrain.lua")
+local P=dofile("mods/luanttd_core/openttd/passengers.lua")
+local I=dofile("mods/luanttd_core/openttd/income.lua")
 local function id(x,z) return M.id(x,z) end
 local function new()
   local s=M.new(1751)

@@ -19,7 +19,7 @@ local function verify()
     local x,z=pose.sample(td,f)
     local tx,tz=Sim.xy(tile)
     local pos={x=2*tx+.5+x,y=.614,z=2*tz+.5+z}
-    local name=i==1 and "bayline:dispatch_steam" or "bayline:dispatch_wagon"
+    local name=i==1 and "luanttd_core:dispatch_steam" or "luanttd_core:dispatch_wagon"
     for _,obj in ipairs(core.get_objects_inside_radius(pos,.09)) do
       local e=obj:get_luaentity()
       if e and e.name==name then return obj end

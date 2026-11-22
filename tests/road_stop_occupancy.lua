@@ -1,4 +1,4 @@
-local d="mods/bayline/openttd/"
+local d="mods/luanttd_core/openttd/"
 local Motion=dofile(d.."road_motion.lua")(dofile(d.."road_motion_data.lua"))
 local O=dofile(d.."road_stop_occupancy.lua")(Motion)
 local tiles={}

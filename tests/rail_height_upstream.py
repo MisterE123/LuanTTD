@@ -18,7 +18,7 @@ DIGEST.update({
 })
 
 LUA=r"""
-local r="mods/bayline/openttd/"
+local r="mods/luanttd_core/openttd/"
 local T=dofile(r.."rail_track.lua")
 local F=dofile(r.."rail_follow.lua")(T)
 local H=dofile(r.."rail_height.lua")(T,dofile(r.."slope.lua"))

@@ -154,7 +154,7 @@ int main() {
 }
 """
 LUA = r"""
-local H=dofile("mods/bayline/openttd/town_passengers.lua")
+local H=dofile("mods/luanttd_core/openttd/town_passengers.lua")
 for line in io.lines() do
   local a={}
   for part in line:gmatch("%S+") do a[#a+1]=tonumber(part) or part end

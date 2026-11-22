@@ -4,7 +4,7 @@ local owner,at="Harbor Goods QA",Sim.id
 local function proof_goods()
   local Run,Build,View=assert(api.rail_dispatch_controller),assert(api.rail_build),assert(api.rail_dispatch_view)
   local Owned=assert(api.rail_owned)
-  assert(S.harbor_valley and S.rail_goods_service and api.rail_goods_tools and
+  assert(S.qa_coastal and S.rail_goods_service and api.rail_goods_tools and
     Sim.road_timber_active(S) and View.goods_wagon_ready())
   Sim.mount_rail_goods(S,function() return false end)
   assert(not Sim.rail_goods_active(S))
@@ -29,7 +29,7 @@ local function proof_goods()
     local _,y=api.terrain.tile(tile)
     for _,obj in ipairs(core.get_objects_inside_radius({x=2*x+.5,y=y+.614,z=2*z+.5},2.1)) do
       local e=obj:get_luaentity()
-      if e and e.name=="bayline:dispatch_goods_van" then
+      if e and e.name=="luanttd_core:dispatch_goods_van" then
         local p=obj:get_properties()
         assert(p.mesh=="bl_rail_goods_van.obj" and p.textures[1]=="bl_rail_goods_van.png")
         assert(math.abs(y+.614-obj:get_pos().y)<.002)

@@ -389,7 +389,7 @@ def palette():
         return struct.pack(">I",len(data))+tag+data+struct.pack(">I",zlib.crc32(tag+data))
     data=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR", struct.pack(">IIBBBBB",256,8,8,2,0,0,0))
     data+=chunk(b"IDAT",zlib.compress((b"\0"+line)*8))+chunk(b"IEND",b"")
-    (ROOT/"mods/bayline/textures/bl_bayshore_trimotor_palette.png").write_bytes(data)
+    (ROOT/"mods/luanttd_core/textures/bl_bayshore_trimotor_palette.png").write_bytes(data)
 
 
 def merge(shapes):
@@ -418,7 +418,7 @@ def export():
         for l in face.loop_indices:
             uv.data[l].uv=((k+.5)/32,.5)
     o.data.update()
-    bpy.ops.wm.obj_export(filepath=str(ROOT/"mods/bayline/models/bl_bayshore_trimotor.obj"),
+    bpy.ops.wm.obj_export(filepath=str(ROOT/"mods/luanttd_core/models/bl_bayshore_trimotor.obj"),
         export_selected_objects=True,export_materials=False,export_uv=True,export_normals=True,
         export_triangulated_mesh=True,global_scale=10,forward_axis="NEGATIVE_Z",up_axis="Y")
 

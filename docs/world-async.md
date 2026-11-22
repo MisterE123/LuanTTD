@@ -1,6 +1,6 @@
 # Bounded authoritative terrain work in a Luanti worker
 
-`mods/bayline/world_async.lua` is an opt-in library for the owner VM; it does
+`mods/luanttd_core/world_async.lua` is an opt-in library for the owner VM; it does
 not change the current game mode or timers. It preloads pure terrain code
 in the server async environment with Luanti's
 [register_async_dofile and handle_async APIs](https://api.luanti.org/core-namespace-reference/#async-environment).

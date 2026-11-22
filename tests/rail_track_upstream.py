@@ -170,7 +170,7 @@ int main(){
 }
 """
     lua = r"""
-local R=dofile("mods/bayline/openttd/rail_track.lua")
+local R=dofile("mods/luanttd_core/openttd/rail_track.lua")
 local f={[0]="none","leveled","x","y","steep_lower","steep_both"}
 local counts={}
 for line in io.lines() do

@@ -77,7 +77,7 @@ int main() {
 """
 
 LUA = r"""
-local R=dofile("mods/bayline/openttd/rail_types.lua")
+local R=dofile("mods/luanttd_core/openttd/rail_types.lua")
 local function format(a)
   if #a==0 then return "-" end
   return table.concat(a,",")..","

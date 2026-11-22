@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Same stock station clock, two independently persisted carried rows.
-local function mod(path) return dofile("mods/bayline/"..path..".lua") end
+local function mod(path) return dofile("mods/luanttd_core/"..path..".lua") end
 local P,Income,Rating=mod("openttd/passengers"),mod("openttd/income"),mod("openttd/station_rating")
 local Queue=mod("station_rating_runtime")(nil,Rating,P)
 local Catchment=mod("openttd/station_catchment")(P,Rating,

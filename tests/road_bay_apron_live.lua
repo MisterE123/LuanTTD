@@ -1,6 +1,6 @@
 -- Compound native issue: a parked two-bay terminus needs its entire
 -- turning apron clear, not just a free logic tile, beside a three-arm road.
-local mod="mods/bayline/"
+local mod="mods/luanttd_core/"
 local Sim=dofile(mod.."sim.lua")
 local T=dofile(mod.."openttd/terrain.lua")
 local s=Sim.new(1751)

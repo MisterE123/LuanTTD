@@ -1,4 +1,4 @@
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local Sim=dofile(root.."sim.lua")
 local Terrain=dofile(root.."openttd/terrain.lua")
 local seed=dofile(root.."terrain_coastal_seed.lua")

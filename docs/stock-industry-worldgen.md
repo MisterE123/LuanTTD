@@ -3,8 +3,7 @@
 This slice ports the map-generation controller from
 [OpenTTD 14.1 `industry_cmd.cpp`](https://github.com/OpenTTD/OpenTTD/blob/14.1/src/industry_cmd.cpp)
 and the relevant [temperate definitions and tile layouts](https://github.com/OpenTTD/OpenTTD/blob/14.1/src/table/build_industry.h).
-It works on a generated terrain-and-town board, not Harbor Valley's
-authored scenario locations.
+It runs on the generated terrain-and-town board.
 
 The stage keeps source map-area density scaling, the editor density
 branch, the stock industry pool limit, the independent forced pass,

@@ -24,8 +24,8 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD track art fixture\n' > "$out/games/rail_art/game.conf"
 printf 'name = railpreview\n' > "$mod/mod.conf"
 cp tests/rail_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_rail_track_*,bl_rail_grade_*,bl_land_3.obj,bl_land_6.obj,bl_land_9.obj,bl_land_12.obj,bl_steam.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_rail_atlas,bl_grass*,bl_vehicle_palette}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_rail_track_*,bl_rail_grade_*,bl_land_3.obj,bl_land_6.obj,bl_land_9.obj,bl_land_12.obj,bl_steam.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_rail_atlas,bl_grass*,bl_vehicle_palette}.png "$mod/textures/"
 printf 'gameid = rail_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

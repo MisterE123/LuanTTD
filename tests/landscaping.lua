@@ -1,5 +1,5 @@
-local T=dofile("mods/bayline/openttd/terrain.lua")
-local L=dofile("mods/bayline/openttd/landscaping.lua")(T)
+local T=dofile("mods/luanttd_core/openttd/terrain.lua")
+local L=dofile("mods/luanttd_core/openttd/landscaping.lua")(T)
 local function pts(iterator)
   local out={}
   for x,z in iterator do out[#out+1]=x..":"..z end

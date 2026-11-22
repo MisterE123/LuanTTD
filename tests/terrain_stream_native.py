@@ -40,7 +40,7 @@ def main():
         (mod/"mod.conf").write_text("name = stockstream\n")
         (game/"game.conf").write_text("title = OpenTTD bounded terrain streaming probe\n")
         shutil.copyfile(fixtures.TESTS/"terrain_stream_native.lua",mod/"init.lua")
-        modules = fixtures.REPO/"mods"/"bayline"
+        modules = fixtures.REPO/"mods"/"luanttd_core"
         for file in ("import/openttd_ground.lua", "import/openttd_map.lua", "import/openttd_sparse.lua",
                      "openttd/slope.lua", "world_storage.lua", "terrain_stream.lua", "terrain_word.lua"):
             shutil.copyfile(modules/file,mod/Path(file).name)

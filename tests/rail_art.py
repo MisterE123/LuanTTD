@@ -6,7 +6,7 @@ from pathlib import Path
 import struct
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
+MODELS=ROOT/"mods/luanttd_core/models"
 NAMES=("Ballast_shoulder","Compacted_ballast","Creosoted_sleepers",
        "Cast_iron_chairs","Rail_foot","Rail_web","Polished_railhead","Loose_aggregate")
 SIDES=((-1,0),(0,1),(1,0),(0,-1))
@@ -81,7 +81,7 @@ def endpoints(groups,d=0):
 
 
 def main():
-    dims=struct.unpack(">II", (ROOT/"mods/bayline/textures/bl_rail_atlas.png").read_bytes()[16:24])
+    dims=struct.unpack(">II", (ROOT/"mods/luanttd_core/textures/bl_rail_atlas.png").read_bytes()[16:24])
     assert dims==(19*8,8)
     meshes={}
     for mask in range(1,64):

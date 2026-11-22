@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local Packets=dofile(root.."openttd/passengers.lua")
 local Rating=dofile(root.."openttd/station_rating.lua")
 local Mail=dofile(root.."road_mail_runtime.lua")()

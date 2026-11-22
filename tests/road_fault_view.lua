@@ -1,6 +1,6 @@
 -- Effects are viewer-local, throttled, and never imply a stopped order.
 local seen={}
-local V=dofile("mods/bayline/road_fault_view.lua")(function(p)seen[#seen+1]=p end)
+local V=dofile("mods/luanttd_core/road_fault_view.lua")(function(p)seen[#seen+1]=p end)
 local function player(name,x)
   return {get_pos=function()return {x=x,y=1,z=2} end,get_player_name=function()return name end}
 end

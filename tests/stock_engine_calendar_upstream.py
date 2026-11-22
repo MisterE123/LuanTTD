@@ -20,7 +20,7 @@ DIGEST.update({
 })
 
 LUA=r"""
-local E=dofile("mods/bayline/openttd/stock_engine_calendar.lua")
+local E=dofile("mods/luanttd_core/openttd/stock_engine_calendar.lua")
 for row in io.lines() do
   local a={}
   for v in row:gmatch("%d+") do a[#a+1]=tonumber(v) end

@@ -7,7 +7,7 @@ from PIL import Image
 
 from road_tunnel_art import polygon_clip, vehicle_bounds
 
-ROOT=Path(__file__).resolve().parents[1]/"mods"/"bayline"
+ROOT=Path(__file__).resolve().parents[1]/"mods"/"luanttd_core"
 MODELS=ROOT/"models"
 ATLAS=ROOT/"textures"/"bl_aqueduct.png"
 STOCK_DIRS=((-1,0),(0,1),(1,0),(0,-1))

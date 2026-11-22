@@ -5,11 +5,11 @@ return function(api,qa_ui)
   local username="NativeQA"
   local leopard=core.settings:get_bool("bayline_native_leopard",false)
   if leopard and S.day<14*360 then S.day=14*360 end
-  local road_visual=S.stock_bus_market and "bayline:vehicle_foster_bus" or
-    leopard and "bayline:vehicle_leopard_bus" or "bayline:vehicle_bus"
+  local road_visual=S.stock_bus_market and "luanttd_core:vehicle_foster_bus" or
+    leopard and "luanttd_core:vehicle_leopard_bus" or "luanttd_core:vehicle_bus"
   local trace=core.get_worldpath().."/native.json"
   local terrain_build=core.settings:get_bool("bayline_bridge_construction_preview",false)
-  local Terrain=terrain_build and dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
+  local Terrain=terrain_build and dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
   local form,buttons,aim,last_fields=nil,{},nil,nil
   local panel
   local extended={} -- shared upvalue under Lua 5.1's per-function limit
@@ -111,7 +111,7 @@ return function(api,qa_ui)
       end
       if path then break end
     end
-    assert(path,"No flat open road bend found in Harbor Valley")
+    assert(path,"No flat open road bend found in coastal test circuit")
     function extended.road_bend(p)
       if not p then return end
       local masks,link={},0
@@ -182,7 +182,7 @@ return function(api,qa_ui)
       if p then
         for _,obj in ipairs(core.get_objects_inside_radius(p:get_pos(),45)) do
           local e=obj:get_luaentity()
-          if e and (e.name:find("^bayline:dispatch_sh_[34]0") or e.name=="bayline:dispatch_wagon") then
+          if e and (e.name:find("^luanttd_core:dispatch_sh_[34]0") or e.name=="luanttd_core:dispatch_wagon") then
             r.meshes[#r.meshes+1]=obj:get_properties().mesh
             if e.name:sub(-10)=="_collector" then
               local pos=obj:get_pos()
@@ -195,19 +195,19 @@ return function(api,qa_ui)
     end
   end
   if core.settings:get_bool("bayline_rail_oil_preview",false) then
-    extended.rail_oil=dofile(core.get_modpath("bayline").."/native_rail_oil_probe.lua")(api,username,qa_ui)
+    extended.rail_oil=dofile(core.get_modpath("luanttd_core").."/native_rail_oil_probe.lua")(api,username,qa_ui)
   end
   if core.settings:get_bool("bayline_stock_coastal_flood",false) and api.coastal_flood_tools then
-    extended.coast=dofile(core.get_modpath("bayline").."/native_coastal_probe.lua")(api,username)
+    extended.coast=dofile(core.get_modpath("luanttd_core").."/native_coastal_probe.lua")(api,username)
   end
-  if S.harbor_valley then
+  if S.qa_coastal then
     function extended.starter(n)
       local ghost={}
       local player=core.get_player_by_name(n)
       if player then
         for _,obj in ipairs(core.get_objects_inside_radius(player:get_pos(),55)) do
           local e=obj:get_luaentity()
-          if e and e.name=="bayline:rail_selector" then
+          if e and e.name=="luanttd_core:rail_selector" then
             local pos=obj:get_pos()
             ghost[#ghost+1]={x=pos.x,z=pos.z,mesh=obj:get_properties().mesh}
           end
@@ -277,7 +277,7 @@ return function(api,qa_ui)
           local n=c and core.get_node_or_nil({x=x*2,y=t.h+1,z=z*2})
           local name=n and n.name or nil
           result.landmarks[#result.landmarks+1]={x=x,z=z,h=t.h,kind=q.kind,
-            visible=name=="bayline:stock_"..q.kind}
+            visible=name=="luanttd_core:stock_"..q.kind}
         end
         if c and t.stock_industry then
           local node=core.get_node_or_nil({x=x*2,y=t.h+1,z=z*2})
@@ -362,7 +362,7 @@ return function(api,qa_ui)
       if p then
         for _,e in ipairs(core.get_objects_inside_radius(p:get_pos(),48)) do
           local lua=e:get_luaentity()
-          if lua and lua.name:match("^bayline:farm_fence_") then out.fences=out.fences+1 end
+          if lua and lua.name:match("^luanttd_core:farm_fence_") then out.fences=out.fences+1 end
         end
       end
       for id,v in pairs(S.fleet) do if v.owner==n then
@@ -374,7 +374,7 @@ return function(api,qa_ui)
           for _,obj in ipairs(core.get_objects_inside_radius({x=x*2+.5,y=.52,z=z*2+.5},5)) do
             local lua=obj:get_luaentity()
             local prop=obj:get_properties()
-            if lua and lua.name=="bayline:vehicle_"..v.engine then
+            if lua and lua.name=="luanttd_core:vehicle_"..v.engine then
               if v.engine=="grain_truck" and prop.mesh=="bl_hereford_grain_truck_loaded.obj" then
                 q.loaded={mesh=prop.mesh,pos=obj:get_pos(),units=v.units,tick=S.stock_load_tick}
                 out.loaded=q.loaded;S.speed=0;api.save()
@@ -437,7 +437,7 @@ return function(api,qa_ui)
           local x,z=Sim.xy(Sim.position(S,v))
           for _,o in ipairs(core.get_objects_inside_radius({x=2*x+.5,y=.52,z=2*z+.5},4)) do
             local e=o:get_luaentity()
-            if e and e.name=="bayline:vehicle_oil_tanker" and o:get_properties().mesh=="bl_witcombe_oil_tanker.obj" then
+            if e and e.name=="luanttd_core:vehicle_oil_tanker" and o:get_properties().mesh=="bl_witcombe_oil_tanker.obj" then
               q.loaded={mesh=o:get_properties().mesh,pos=o:get_pos(),units=v.units,tick=S.stock_load_tick}
               out.loaded=q.loaded;S.speed=0;api.save()
               break
@@ -471,7 +471,7 @@ return function(api,qa_ui)
         local x,z=Sim.xy(Sim.position(S,v))
         for _,o in ipairs(core.get_objects_inside_radius({x=2*x+.5,y=.52,z=2*z+.5},4)) do
           local e=o:get_luaentity()
-          if e and e.name=="bayline:vehicle_foster_bus" then
+          if e and e.name=="luanttd_core:vehicle_foster_bus" then
             local pos=o:get_pos();local p=core.get_player_by_name(name)
             local dx,dy,dz=-1.5,1.6,2.36
             p:set_pos({x=pos.x+dx,y=pos.y+dy,z=pos.z+dz})
@@ -598,9 +598,9 @@ return function(api,qa_ui)
       end
       for _,e in ipairs(core.get_objects_inside_radius({x=79,y=.65,z=14.5},28)) do
         local ent=e:get_luaentity()
-        if ent and (ent.name=="bayline:dispatch_locomotive" or ent.name=="bayline:dispatch_wagon") then
+        if ent and (ent.name=="luanttd_core:dispatch_locomotive" or ent.name=="luanttd_core:dispatch_wagon") then
           out.drawing=out.drawing+1
-        elseif ent and ent.name:match("^bayline:dispatch_signal_") then
+        elseif ent and ent.name:match("^luanttd_core:dispatch_signal_") then
           out.heads[#out.heads+1]={name=ent.name,mesh=e:get_properties().mesh}
         end
       end
@@ -635,7 +635,7 @@ return function(api,qa_ui)
       local mesh
       for _,ref in ipairs(core.get_objects_inside_radius({x=34.5,y=1,z=26.5},2.5)) do
         local ent=ref:get_luaentity()
-        if ent and ent.name=="bayline:vehicle_"..v.engine then mesh=ref:get_pos() end
+        if ent and ent.name=="luanttd_core:vehicle_"..v.engine then mesh=ref:get_pos() end
       end
       return {latch=state.carrying,park=not not Sim.road_can_park(S,owner,v.id),unit_count=v.units,
         returning=v.road_return_depot,ordered=v.road_depot_resume,road_tick=v.last_depot_entry_tick,
@@ -661,7 +661,7 @@ return function(api,qa_ui)
         local x,z=Sim.xy(p)
         for _,ref in ipairs(core.get_objects_inside_radius({x=x*2+.5,y=.52,z=z*2+.5},3)) do
           local l=ref:get_luaentity()
-          if l and l.name=="bayline:vehicle_"..v.engine then
+          if l and l.name=="luanttd_core:vehicle_"..v.engine then
             q.model=ref:get_properties().mesh;q.pose=ref:get_pos()
           end
         end
@@ -677,7 +677,7 @@ return function(api,qa_ui)
       if n~=username then return false end
       local q=S.qa_junction
       if mode=="prepare" and not q.ready then
-        q.ready=dofile(core.get_modpath("bayline").."/road_junction_fixture.lua")(Sim,S,n)
+        q.ready=dofile(core.get_modpath("luanttd_core").."/road_junction_fixture.lua")(Sim,S,n)
         local all={}
         for id in ipairs(S.tiles) do all[#all+1]=id end
         api.render.update(all);api.save()
@@ -705,7 +705,7 @@ return function(api,qa_ui)
     end
     for _,o in ipairs(core.get_objects_inside_radius({x=30.5,y=.52,z=24.5},7.5)) do
       local e=o:get_luaentity()
-      if e and e.name=="bayline:vehicle_bus" then out.meshes[#out.meshes+1]=o:get_pos() end
+      if e and e.name=="luanttd_core:vehicle_bus" then out.meshes[#out.meshes+1]=o:get_pos() end
     end
     if not q.hold and #out.meshes==2 and ((out.drivers["1"] or {}).waits or 0)+((out.drivers["2"] or {}).waits or 0)>0 then
       S.speed=0
@@ -755,7 +755,7 @@ return function(api,qa_ui)
   local bridge_run=tunnel_run or core.settings:get_bool("bayline_native_bridge_run",false)
   local bridge_pass,tunnel_hidden,tunnel_exit
   if bridge_run then
-    local T=dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
+    local T=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
     local concrete=core.settings:get_bool("bayline_native_concrete",false)
     local east=concrete and 26 or 27
     local function at(x,z) return Sim.id(x,z or 12) end
@@ -886,7 +886,7 @@ return function(api,qa_ui)
         local point={x=v.x/8-.5,y=(v.y-1)/8+.5,z=v.z/8-.5}
         for _,ent in ipairs(core.get_objects_inside_radius(point,8)) do
           local lua=ent:get_luaentity()
-          if lua and lua.name=="bayline:stock_bayshore_trimotor" and lua.paid_clock==r.paid_clock then
+          if lua and lua.name=="luanttd_core:stock_bayshore_trimotor" and lua.paid_clock==r.paid_clock then
             state.models[r.paid_clock]={pos=ent:get_pos(),mesh=ent:get_properties().mesh}
           end
         end
@@ -905,7 +905,7 @@ return function(api,qa_ui)
   extended.install_air_fleet()
   local lock_fixture=core.settings:get_bool("bayline_native_lock",false)
   if lock_fixture and not S.qa_lock then
-    local T=dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
+    local T=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
     S.corner_grid.levels=T.new(Sim.W,Sim.H,function(x,z)
       return (x>=23 and 1 or 0)+(z<=18 and 1 or 0)
     end).levels
@@ -929,7 +929,7 @@ return function(api,qa_ui)
   end
   local aqua_fixture=core.settings:get_bool("bayline_native_aqueduct",false)
   if aqua_fixture and not S.qa_aqua_setup then
-    local T=dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
+    local T=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
     S.corner_grid.levels=T.new(Sim.W,Sim.H,function(x,z)
       return ((x<=20 or x>=25) and 1 or 0)+(z<=18 and 1 or 0)
     end).levels
@@ -954,7 +954,7 @@ return function(api,qa_ui)
   local paid_ferry_fixture=core.settings:get_bool("bayline_preview_paid_ferry",false)
   local buoy_fixture=core.settings:get_bool("bayline_native_buoy",false)
   if paid_ferry_fixture and not paid_rail_fixture and not S.qa_paid_ferry then
-    local T=dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
+    local T=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
     S.corner_grid.levels=T.new(Sim.W,Sim.H,function(x) return x<9 and 1 or 0 end).levels
     for id,a in ipairs(S.tiles) do
       local x=Sim.xy(id)
@@ -1002,7 +1002,7 @@ return function(api,qa_ui)
     out.vessel=craft
     for _,obj in ipairs(core.get_objects_inside_radius({x=18,y=.7,z=65},26)) do
       local e=obj:get_luaentity()
-      if e and e.name=="bayline:stock_yate_cargo_ship" then out.mesh=obj:get_pos();out.model=obj:get_properties().mesh end
+      if e and e.name=="luanttd_core:stock_yate_cargo_ship" then out.mesh=obj:get_pos();out.model=obj:get_properties().mesh end
     end
     if not q.loaded and craft and craft.loading and craft.onboard>=10 and craft.delivered==0 and out.mesh then
       S.speed=0
@@ -1155,7 +1155,7 @@ return function(api,qa_ui)
     S.qa_rail_span=qa
     local function at(x) return Sim.id(x,10) end
     if not qa.ready then
-      local T=dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
+      local T=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
       S.corner_grid.levels=T.new(Sim.W,Sim.H,function(x)
         return x>=14 and x<=18 and 5 or (x==7 or x==8) and 3 or 4
       end).levels
@@ -1215,7 +1215,7 @@ return function(api,qa_ui)
     local qa=S.qa_dispatch or {events={}}
     S.qa_dispatch=qa
     if not qa.ready then
-      local T=dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
+      local T=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
       for z=3,17 do for x=2,17 do
         local t=S.tiles[Sim.id(x,z)]
         t.h=0;t.terrain="grass";t.wood=nil;t.house=nil;t.site=nil;t.build=nil
@@ -1311,7 +1311,7 @@ return function(api,qa_ui)
   end
   local tram_fixture=core.settings:get_bool("bayline_tram_preview",false)
   if tram_fixture and not S.native_tram_initialized then
-    local T=dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
+    local T=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
     for x=5,9 do for z=6,15 do
       local cell=S.tiles[Sim.id(x,z)]
       cell.terrain="grass";cell.h=0;cell.wood=nil;cell.house=nil;cell.site=nil;cell.build=nil
@@ -1412,7 +1412,7 @@ return function(api,qa_ui)
         local yaw=o:get_yaw()
         local lane=p.z-24.5
         if p.x>23.5 and p.x<34.5 and math.abs(math.sin(yaw))>.99 and math.abs(math.abs(lane)-.155)<.01 then
-          local width=road_visual=="bayline:vehicle_foster_bus" and .6444 or leopard and .6485 or .638
+          local width=road_visual=="luanttd_core:vehicle_foster_bus" and .6444 or leopard and .6485 or .638
           lane_sample={x=p.x,z=p.z,offset=lane,visual_width=o:get_properties().visual_size.x*width,nose_x=math.sin(yaw)}
         end
       end
@@ -1424,13 +1424,13 @@ return function(api,qa_ui)
   local owned_default=core.settings:get_bool("bayline_native_owned_default",false)
   local owned_loco
   if core.settings:get_bool("bayline_native_floss",false) then
-    owned_loco={name="bayline:dispatch_floss",mesh="bl_rail_floss_47.obj"}
+    owned_loco={name="luanttd_core:dispatch_floss",mesh="bl_rail_floss_47.obj"}
   elseif core.settings:get_bool("bayline_native_ginzu",false) then
-    owned_loco={name="bayline:dispatch_ginzu",mesh="bl_rail_ginzu_a4.obj"}
+    owned_loco={name="luanttd_core:dispatch_ginzu",mesh="bl_rail_ginzu_a4.obj"}
   elseif core.settings:get_bool("bayline_native_jubilee",false) then
-    owned_loco={name="bayline:dispatch_jubilee",mesh="bl_rail_chaney_jubilee.obj"}
+    owned_loco={name="luanttd_core:dispatch_jubilee",mesh="bl_rail_chaney_jubilee.obj"}
   else
-    owned_loco={name="bayline:dispatch_steam",mesh="bl_rail_kirby_paul_tank.obj"}
+    owned_loco={name="luanttd_core:dispatch_steam",mesh="bl_rail_kirby_paul_tank.obj"}
   end
   local owned_z=owned_default and 5 or 10
   if owned_rail_fixture then
@@ -1475,7 +1475,7 @@ return function(api,qa_ui)
         local v=q.boarding and q.boarding.engine
         if v then
           x,y,z,tx,ty,tz=v.x-2.5,1.6,v.z-3.8,v.x-.2,.75,v.z
-          if owned_loco.name=="bayline:dispatch_ginzu" or owned_loco.name=="bayline:dispatch_floss" then
+          if owned_loco.name=="luanttd_core:dispatch_ginzu" or owned_loco.name=="luanttd_core:dispatch_floss" then
             x,y,z,tx,ty,tz=v.x+2.15,1.35,v.z-2.4,v.x-.36,.82,v.z
           end
         end
@@ -1510,7 +1510,7 @@ return function(api,qa_ui)
       local e=o:get_luaentity()
       if e and e.name==owned_loco.name and o:get_properties().mesh==owned_loco.mesh then
         engine=o:get_pos();model=o:get_properties().mesh
-      elseif e and e.name=="bayline:dispatch_wagon" then wagon=o:get_pos() end
+      elseif e and e.name=="luanttd_core:dispatch_wagon" then wagon=o:get_pos() end
     end
     if not q.boarding and service and paid and paid.loading and (service.passengers or 0)>0 and engine and wagon then
       S.speed=0
@@ -1572,12 +1572,12 @@ return function(api,qa_ui)
     end
     for _,obj in ipairs(core.get_objects_inside_radius({x=28,y=1,z=20},50)) do
       local e=obj:get_luaentity()
-      if e and (e.name=="bayline:vehicle_wood_truck" or e.name=="bayline:vehicle_goods_truck") then
+      if e and (e.name=="luanttd_core:vehicle_wood_truck" or e.name=="luanttd_core:vehicle_goods_truck") then
         out.mesh[e.name]={at=obj:get_pos(),obj=obj:get_properties().mesh}
       end
     end
     local wood=out.vehicles.wood_truck
-    local art=out.mesh["bayline:vehicle_wood_truck"]
+    local art=out.mesh["luanttd_core:vehicle_wood_truck"]
     if not q.loaded and wood and wood.units>=10 and wood.delivered==0 and art and art.obj=="bl_witcombe_wood_truck_loaded.obj" then
       S.speed=0;q.loaded={mesh=art.at,units=wood.units,tick=S.passenger_house_clock.counter};api.save()
     end
@@ -1600,7 +1600,7 @@ return function(api,qa_ui)
     return out
   end
   if pair_fixture then
-    local mod=core.get_modpath("bayline").."/"
+    local mod=core.get_modpath("luanttd_core").."/"
     S.qa_pair=S.qa_pair or {}
     if not S.qa_pair.ready then S.speed=0 end
     core.register_chatcommand("qa_pair",{func=function(n,mode)
@@ -1679,12 +1679,12 @@ return function(api,qa_ui)
     local locos,wagons={},{}
     for _,o in ipairs(core.get_objects_inside_radius({x=36,y=.62,z=28.5},52)) do
       local e=o:get_luaentity()
-      if e and (e.name=="bayline:dispatch_steam" or e.name=="bayline:dispatch_jubilee" or e.name=="bayline:dispatch_ginzu" or e.name=="bayline:dispatch_floss") then
+      if e and (e.name=="luanttd_core:dispatch_steam" or e.name=="luanttd_core:dispatch_jubilee" or e.name=="luanttd_core:dispatch_ginzu" or e.name=="luanttd_core:dispatch_floss") then
         local pos=o:get_pos()
         pos.mesh=o:get_properties().mesh
         locos[#locos+1]=pos
       end
-      if e and e.name=="bayline:dispatch_wagon" then wagons[#wagons+1]=o:get_pos() end
+      if e and e.name=="luanttd_core:dispatch_wagon" then wagons[#wagons+1]=o:get_pos() end
     end
     out.phase_hold=q.hold
     out.wait_event=q.wait_event
@@ -1724,16 +1724,16 @@ return function(api,qa_ui)
     local wagon,cart
     for _,o in ipairs(core.get_objects_inside_radius({x=74,y=.614,z=30.5},38)) do
       local e=o:get_luaentity()
-      if e and e.name:match("^bayline:dispatch_coal_") then
+      if e and e.name:match("^luanttd_core:dispatch_coal_") then
         cart=e.name;wagon=o:get_pos()
       end
     end
-    if not q.loaded and coal and coal.onboard>0 and cart=="bayline:dispatch_coal_loaded" then
+    if not q.loaded and coal and coal.onboard>0 and cart=="luanttd_core:dispatch_coal_loaded" then
       S.speed=0
       q.loaded={wagon=wagon,units=coal.onboard,clock=coal.tick,loading=coal.loading,tile=coal.cargo_tile}
       api.save()
     end
-    if not q.second_load and coal and coal.cycles==1 and coal.onboard>0 and cart=="bayline:dispatch_coal_loaded" then
+    if not q.second_load and coal and coal.cycles==1 and coal.onboard>0 and cart=="luanttd_core:dispatch_coal_loaded" then
       S.speed=0
       q.second_load={wagon=wagon,units=coal.onboard,clock=coal.tick,delivered=coal.delivered}
       api.save()
@@ -1833,7 +1833,7 @@ return function(api,qa_ui)
   local overtake_kind=core.settings:get("bayline_native_overtake")
   local overtake=overtake_kind=="stopped" or overtake_kind=="moving"
   if overtake then
-    local root=core.get_modpath("bayline").."/"
+    local root=core.get_modpath("luanttd_core").."/"
     local Fixture=dofile(root.."road_overtake_fixture.lua")(root,Sim)
     core.register_chatcommand("qa_overtake",{func=function(name,operation)
       if name~=username then return false end
@@ -1870,8 +1870,8 @@ return function(api,qa_ui)
     local follower,leader
     for _,o in ipairs(core.get_objects_inside_radius({x=24,y=.55,z=24.5},48)) do
       local e=o:get_luaentity()
-      if e and e.name=="bayline:vehicle_"..v.engine then follower=o:get_pos()
-      elseif e and e.name=="bayline:vehicle_"..l.engine then leader=o:get_pos() end
+      if e and e.name=="luanttd_core:vehicle_"..v.engine then follower=o:get_pos()
+      elseif e and e.name=="luanttd_core:vehicle_"..l.engine then leader=o:get_pos() end
     end
     local ground=core.get_node_or_nil({x=22,y=0,z=24})
     return {kind=q.kind,road=ground and ground.name,frame=f and {x=f[1],z=f[2],direction=f[3],tile=f[4],movement_frame=f[15]},
@@ -1902,7 +1902,7 @@ return function(api,qa_ui)
     local forward,back
     for _,o in ipairs(core.get_objects_inside_radius({x=26.5,y=.75,z=24.5},7.5)) do
       local ent=o:get_luaentity()
-      if ent and ent.name=="bayline:vehicle_bus" then
+      if ent and ent.name=="luanttd_core:vehicle_bus" then
         local pos,yaw=o:get_pos(),o:get_yaw()
         local dir=math.sin(yaw)
         if math.abs(dir)>.999 and math.abs(math.abs(pos.z-24.5)-.155)<.01 then
@@ -2090,7 +2090,7 @@ return function(api,qa_ui)
     if track_route then
       for _,obj in ipairs(core.get_objects_inside_radius({x=31.5,y=.7,z=34.5},5)) do
         local ent=obj:get_luaentity()
-        if ent and ent.name=="bayline:vehicle_steam" then
+        if ent and ent.name=="luanttd_core:vehicle_steam" then
           local q=obj:get_pos()
           local turning=q.x>31.65 and q.x<32.43 and q.z>32.54 and q.z<33.4
           rail_state={x=q.x,y=q.y,z=q.z,yaw=obj:get_yaw(),turning=turning,
@@ -2112,7 +2112,7 @@ return function(api,qa_ui)
         for _,obj in ipairs(core.get_objects_inside_radius({x=28.5,y=.52,z=24.5},8)) do
           local e=obj:get_luaentity()
           local p=obj:get_pos()
-          if e and e.name=="bayline:vehicle_mail_van" and math.abs(p.y-.52)<.01
+          if e and e.name=="luanttd_core:vehicle_mail_van" and math.abs(p.y-.52)<.01
               and math.abs(math.abs(p.z-24.5)-.155)<.01 then mail_mesh=p;break end
         end
       end
@@ -2124,7 +2124,7 @@ return function(api,qa_ui)
         failure=pilot.failure}
       for _,obj in ipairs(core.get_objects_inside_radius({x=31.5,y=.7,z=34.5},9)) do
         local ent=obj:get_luaentity()
-        if ent and ent.name=="bayline:vehicle_diesel" then rail_pilot.mesh=obj:get_pos();break end
+        if ent and ent.name=="luanttd_core:vehicle_diesel" then rail_pilot.mesh=obj:get_pos();break end
       end
     end
     local constructed
@@ -2146,7 +2146,7 @@ return function(api,qa_ui)
       local inside=false
       for _,obj in ipairs(core.get_objects_inside_radius({x=51.5,y=.52,z=24.5},8)) do
         local e=obj:get_luaentity()
-        if e and e.name=="bayline:vehicle_bus" then
+        if e and e.name=="luanttd_core:vehicle_bus" then
           local p=obj:get_pos()
           if p.x>47.5 and p.x<53.5 then inside=true end
           if p.x>55.5 and p.x<62 and math.abs(p.y-.52)<.02 then tunnel_exit=p end
@@ -2160,7 +2160,7 @@ return function(api,qa_ui)
       for _,obj in ipairs(core.get_objects_inside_radius({x=50.5,y=1.52,z=24.5},3)) do
         local ent=obj:get_luaentity()
         local pos=obj:get_pos()
-        if ent and ent.name=="bayline:vehicle_bus" and math.abs(pos.y-1.52)<.012
+        if ent and ent.name=="luanttd_core:vehicle_bus" and math.abs(pos.y-1.52)<.012
             and pos.x>=48 and pos.x<=53 and math.abs(math.abs(pos.z-24.5)-.155)<.012 then
           bridge_pass={x=pos.x,y=pos.y,z=pos.z}
           break
@@ -2197,9 +2197,9 @@ return function(api,qa_ui)
       end
       for _,o in ipairs(core.get_objects_inside_radius({x=72,y=.52,z=28.5},16)) do
         local e=o:get_luaentity()
-        if e and e.name=="bayline:vehicle_coal_tipper" and o:get_properties().mesh=="bl_coal_tipper_loaded.obj" then
+        if e and e.name=="luanttd_core:vehicle_coal_tipper" and o:get_properties().mesh=="bl_coal_tipper_loaded.obj" then
           S.qa_coal_loaded=o:get_pos()
-        elseif e and e.name=="bayline:coal_winding_sheaves" then
+        elseif e and e.name=="luanttd_core:coal_winding_sheaves" then
           local angle=o:get_rotation().x
           if S.qa_coal_gears and math.abs(S.qa_coal_gears-angle)>.12 then S.qa_coal_winding=true end
           S.qa_coal_gears=angle
@@ -2223,7 +2223,7 @@ return function(api,qa_ui)
         local seen={}
         for _,ref in ipairs(core.get_objects_inside_radius({x=2*x+3.5,y=.7,z=2*z+2.5},5)) do
           local ent,pos=ref:get_luaentity(),ref:get_pos()
-          if ent and ent.name=="bayline:tile_selector" and
+          if ent and ent.name=="luanttd_core:tile_selector" and
             ref:get_properties().textures[1]=="bl_selector_valid.png" then
             local u,v=math.floor((pos.x+.5)/2),math.floor((pos.z+.5)/2)
             if u>=x and u<x+4 and v>=z and v<z+3 then seen[u..","..v]=true end
@@ -2255,8 +2255,8 @@ return function(api,qa_ui)
         air_view.state={x=v.x,y=v.y,z=v.z,tick=v.tick,target=a.target}
         for _,o in ipairs(core.get_objects_inside_radius({x=v.x/8-.5,y=(v.y-1)/8+.5,z=v.z/8-.5},2)) do
           local e=o:get_luaentity()
-          if e and (e.name=="bayline:stock_bayshore_trimotor" or e.name=="bayline:stock_coleman_count"
-              or e.name=="bayline:stock_bakewell_cotswald") then
+          if e and (e.name=="luanttd_core:stock_bayshore_trimotor" or e.name=="luanttd_core:stock_coleman_count"
+              or e.name=="luanttd_core:stock_bakewell_cotswald") then
             air_view.aircraft=o:get_pos();air_view.model=o:get_properties().mesh
           end
         end
@@ -2287,7 +2287,7 @@ return function(api,qa_ui)
         paid_ferry_fixture and {x=20,y=.5,z=23} or {x=18,y=.5,z=69}
       for _,o in ipairs(core.get_objects_inside_radius(anchor,32)) do
         local ent=o:get_luaentity()
-        if ent and ent.name=="bayline:stock_harbor_ferry" then
+        if ent and ent.name=="luanttd_core:stock_harbor_ferry" then
           ship_view.ferry=o:get_pos();ship_view.yaw=o:get_yaw()
           if aqua_fixture and ship_view.ferry.y>1.48 and ship_view.ferry.x>43 and
               ship_view.ferry.x<48 and shot.vehicle.track==64 then
@@ -2343,8 +2343,8 @@ return function(api,qa_ui)
           local pool,gates=nil,0
           for _,o in ipairs(core.get_objects_inside_radius({x=44.5,y=1.0,z=40.5},3)) do
             local e=o:get_luaentity()
-            if e and e.name=="bayline:ship_lock_chamber_water" then pool=o:get_pos() end
-            if e and e.name:match("^bayline:ship_lock_gate_.+_closed$") then gates=gates+1 end
+            if e and e.name=="luanttd_core:ship_lock_chamber_water" then pool=o:get_pos() end
+            if e and e.name:match("^luanttd_core:ship_lock_gate_.+_closed$") then gates=gates+1 end
           end
           S.qa_lock.levels[ferry.vehicle.direction..":"..ferry.vehicle.z]={dir=ferry.vehicle.direction,phase=frame.phase}
           if not S.qa_lock.mid and pool and gates==2 and ship_view.ferry then
@@ -2393,12 +2393,12 @@ return function(api,qa_ui)
       local nearest=math.huge
       for _,o in ipairs(core.get_objects_inside_radius({x=28.5,y=.6,z=24.5},9)) do
         local e=o:get_luaentity()
-        if e and e.name=="bayline:vehicle_bus" then
+        if e and e.name=="luanttd_core:vehicle_bus" then
           local p=o:get_pos()
           local dist=math.abs(p.x-28.5)+math.abs(p.z-24.5)
           if dist<nearest then road_mesh=p;nearest=dist end
-        elseif e and e.name=="bayline:dispatch_locomotive" then engine_mesh=o:get_pos()
-        elseif e and e.name=="bayline:dispatch_wagon" then wagon_mesh=o:get_pos() end
+        elseif e and e.name=="luanttd_core:dispatch_locomotive" then engine_mesh=o:get_pos()
+        elseif e and e.name=="luanttd_core:dispatch_wagon" then wagon_mesh=o:get_pos() end
       end
       crossing_view={ready=q.ready,gate=r and r.phase,barred=r and r.barred,mesh=n and n.name,
         checked_road_tile=road_tile(q.bus),cross_tile=cross_id,denied=q.denied,opposite=road_tile(q.opposing),
@@ -2422,8 +2422,8 @@ return function(api,qa_ui)
       local engine,wagon
       for _,obj in ipairs(core.get_objects_inside_radius({x=24,y=5.6,z=20.5},38)) do
         local ent=obj:get_luaentity()
-        if ent and ent.name=="bayline:dispatch_locomotive" then engine=obj:get_pos()
-        elseif ent and ent.name=="bayline:dispatch_wagon" then wagon=obj:get_pos() end
+        if ent and ent.name=="luanttd_core:dispatch_locomotive" then engine=obj:get_pos()
+        elseif ent and ent.name=="luanttd_core:dispatch_wagon" then wagon=obj:get_pos() end
       end
       if not q.mid and engine and wagon and engine.x>12.2 and engine.x<17.4 and engine.y>5.55 and engine.y<5.69 then
         q.mid={head=engine,tail=wagon,clock=d.ticks}
@@ -2440,9 +2440,9 @@ return function(api,qa_ui)
       local count,signals=0,{}
       for _,obj in ipairs(core.get_objects_inside_radius({x=18.5,y=.612,z=18.5},32)) do
         local ent=obj:get_luaentity()
-        if ent and (ent.name=="bayline:dispatch_locomotive" or ent.name=="bayline:dispatch_wagon") then
+        if ent and (ent.name=="luanttd_core:dispatch_locomotive" or ent.name=="luanttd_core:dispatch_wagon") then
           count=count+1
-          if rail_grade_fixture and ent.name=="bayline:dispatch_locomotive" then
+          if rail_grade_fixture and ent.name=="luanttd_core:dispatch_locomotive" then
             local q,r=obj:get_pos(),obj:get_rotation()
             local angle=(r.x+math.pi)%(2*math.pi)-math.pi
             local mark=math.abs(angle)>.3 and (angle<0 and "up" or "down") or nil
@@ -2455,7 +2455,7 @@ return function(api,qa_ui)
             end
           end
         end
-        if ent and ent.name:match("^bayline:dispatch_signal_") then
+        if ent and ent.name:match("^luanttd_core:dispatch_signal_") then
           signals[#signals+1]={name=ent.name,pos=obj:get_pos()}
         end
       end
@@ -2483,7 +2483,7 @@ return function(api,qa_ui)
       end
       for _,obj in ipairs(core.get_objects_inside_radius({x=16.5,y=.512,z=20.5},12)) do
         local ent=obj:get_luaentity()
-        if ent and ent.name=="bayline:tram_preview_vehicle" then tram.vehicle=obj:get_pos();tram.yaw=obj:get_yaw() end
+        if ent and ent.name=="luanttd_core:tram_preview_vehicle" then tram.vehicle=obj:get_pos();tram.yaw=obj:get_yaw() end
       end
     end
     local stop_state={}
@@ -2511,7 +2511,7 @@ return function(api,qa_ui)
       if status then
         for _,obj in ipairs(core.get_objects_inside_radius({x=22.5,y=.52,z=24.5},1.05)) do
           local e=obj:get_luaentity()
-          if e and e.name=="bayline:vehicle_bus" then meshes[#meshes+1]=obj:get_pos() end
+          if e and e.name=="luanttd_core:vehicle_bus" then meshes[#meshes+1]=obj:get_pos() end
         end
       end
       bus_bay={id=id,status=status,station=S.tiles[id].station,fleet=frame,meshes=meshes,
@@ -2571,14 +2571,14 @@ return function(api,qa_ui)
       road_bend=extended.road_bend and extended.road_bend(player),
       clear_water=extended.clear_water and extended.clear_water(),
       demolition=extended.demolition and extended.demolition(),
-      starter_map=S.harbor_valley,starter=extended.starter and extended.starter(username),
+      starter_map=S.qa_coastal,starter=extended.starter and extended.starter(username),
       stock_workbenches=api.stock_workbenches_active and {
         bridges=api.structure_tools,rail=api.rail_build~=nil,rail_owned=api.rail_owned~=nil,rail_goods=api.rail_goods_tools,
         rail_spans=api.rail_spans~=nil,crossings=api.crossing_tools,rail_coal=api.rail_coal_tools,
         ship=api.ship_tools,air=api.airport_tools,tram=api.tram_tools,freight=api.freight_tools,
         oneway=api.oneway_tools,bays=api.road_bay_tools,mail=S.road_mail,
         paid_air=S.air_paid_service,paid_ship=S.ship_paid_service,paid_rail=S.rail_paid_service,
-        ordinary=S.harbor_valley and {coastal=api.coastal_flood_tools,growth=api.town_growth~=nil,airpair=S.air_fleet_preview,
+        ordinary=S.qa_coastal and {coastal=api.coastal_flood_tools,growth=api.town_growth~=nil,airpair=S.air_fleet_preview,
           railpair=api.rail_owned_pair_tools,block=api.rail_block_tools,buses=S.stock_bus_market~=nil,
           maintenance=api.bus_service_interval and api.bus_service_interval>0,yate=api.ship_coal_tools,timber=api.timber_tools} or nil,
       } or nil,
@@ -2598,7 +2598,7 @@ return function(api,qa_ui)
       local bg=markup:match('bgcolor%[#(%x%x%x%x%x%x)')
       if w and h and bg then panel={tonumber(w),tonumber(h),bg} end
       extended.jump_map_live=nil
-      if key=="bayline:dispatch" and markup:find(";bl_map_clear.png;",1,true) then
+      if key=="luanttd_core:dispatch" and markup:find(";bl_map_clear.png;",1,true) then
         local count=0
         for _ in markup:gmatch(";bl_map_clear%.png;jump_%d+;") do count=count+1 end
         extended.jump_map_live={count=count,detail=markup:find("LOCAL DETAIL",1,true)~=nil}

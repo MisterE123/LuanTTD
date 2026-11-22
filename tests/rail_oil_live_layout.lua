@@ -3,7 +3,7 @@
 return function(api,owner,with_truck)
   local Sim,S=api.Sim,api.s
   local at,Build=Sim.id,assert(api.rail_build)
-  local Track=dofile(core.get_modpath("bayline").."/openttd/rail_track.lua")
+  local Track=dofile(core.get_modpath("luanttd_core").."/openttd/rail_track.lua")
   local function build(ticket,reason)
     assert(ticket,reason)
     local ok,note=Build.build(owner,ticket)

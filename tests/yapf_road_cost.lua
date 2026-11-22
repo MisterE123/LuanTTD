@@ -1,5 +1,5 @@
-local F=dofile("mods/bayline/openttd/yapf_road_follow.lua")
-local C=dofile("mods/bayline/openttd/yapf_road_cost.lua")(F)
+local F=dofile("mods/luanttd_core/openttd/yapf_road_follow.lua")
+local C=dofile("mods/luanttd_core/openttd/yapf_road_cost.lua")(F)
 local tiles={}
 local function id(x,y) return y*16+x end
 local function xy(i) return i%16,math.floor(i/16) end
@@ -133,7 +133,7 @@ local depot=C.destination(board,v,{kind="any_depot"})
 assert(C.estimate(board,depot,span)==780)
 print("PASS: 14.1 road costs, segment boundaries, destination and off-order stop tradeoff (Lua fixture)")
 
-local S=dofile("mods/bayline/openttd/yapf_road_search.lua")(F,C)
+local S=dofile("mods/luanttd_core/openttd/yapf_road_search.lua")(F,C)
 tiles={}
 set(0,0,2,"depot").dir=F.SW
 set(1,0,14)
@@ -175,7 +175,7 @@ found,best=S.find(board,v,v.tile,2^sw,d,{max_search_nodes=0})
 assert(not found and best==nil)
 print("PASS: source YAPF search prefers ordinary short route, avoids off-order stop, respects node limits")
 
-local R=dofile("mods/bayline/openttd/road_track_choice.lua")(F,C,S)
+local R=dofile("mods/luanttd_core/openttd/road_track_choice.lua")(F,C,S)
 tiles[id(6,0)]=ordered
 local order,cache={kind="station",station=42},{}
 local choice,path_found,why=R.choose(board,v,id(1,0),F.SW,order,cache)

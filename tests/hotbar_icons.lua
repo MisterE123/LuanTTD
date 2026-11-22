@@ -1,6 +1,6 @@
 -- Check mounted menus, including alternative entries not enabled together.
-local hotbar = "mods/bayline/hotbar.lua"
-local textures = "mods/bayline/textures/"
+local hotbar = "mods/luanttd_core/hotbar.lua"
+local textures = "mods/luanttd_core/textures/"
 local identities, owners, pixels = {}, {}, {}
 local total = 0
 local function inspect(H)

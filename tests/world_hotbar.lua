@@ -3,7 +3,7 @@ local tools={}
 local now=0
 core={
   register_tool=function(id,def)assert(not tools[id]);tools[id]=def end,
-  get_modpath=function()return "mods/bayline" end,
+  get_modpath=function()return "mods/luanttd_core" end,
   get_us_time=function()return now end,
   register_chatcommand=function()end,
   register_allow_player_inventory_action=function()end,
@@ -80,7 +80,7 @@ local api={
     end,
     cancel=function()orders_canceled=orders_canceled+1;owned=false end},
 }
-local W=dofile("mods/bayline/world.lua")(api,ui)
+local W=dofile("mods/luanttd_core/world.lua")(api,ui)
 W.spawn(p)
 local function physical(slot)
   for at,authored in ipairs(W.hotbar_layout(p)) do if authored==slot then return at end end
@@ -98,11 +98,11 @@ assert(t==515 and hit.x==2.375 and hit.y==6.375 and hit.z==3.50)
 look.y=0
 assert(not W.target(p) and not select(2,W.target(p)))
 look.y=-1
-assert(stack(8)=="bayline:menu_section_railworks")
+assert(stack(8)=="luanttd_core:menu_section_railworks")
 use(8)
-assert(W.menu(p)=="railworks" and stack(2)=="bayline:menu_rail_autotrack")
-assert(contents[3]=="bayline:menu_teleport_tile" and stack(6)=="bayline:menu_rail_span_tunnel")
-assert(stack(9)=="bayline:menu_clear" and stack(10)=="bayline:menu_rail_bridge_picker")
+assert(W.menu(p)=="railworks" and stack(2)=="luanttd_core:menu_rail_autotrack")
+assert(contents[3]=="luanttd_core:menu_teleport_tile" and stack(6)=="luanttd_core:menu_rail_span_tunnel")
+assert(stack(9)=="luanttd_core:menu_clear" and stack(10)=="luanttd_core:menu_rail_bridge_picker")
 assert(action_count==0,"menu navigation used a build tool")
 use(2)
 assert(action_count==1 and pending and overlays[#overlays].id==515)
@@ -130,7 +130,7 @@ use(8);assert(W.menu(p)=="railops")
 use(8);assert(W.menu(p)=="railworks")
 use(8);assert(W.menu(p)=="home")
 assert(contents[#W.hotbar_layout(p)+1]=="")
-use(2);assert(W.menu(p)=="roads" and stack(10)=="bayline:menu_road_bridge_picker")
+use(2);assert(W.menu(p)=="roads" and stack(10)=="luanttd_core:menu_road_bridge_picker")
 index=physical(2);now=now+200000;W.hud(p) -- explicitly leave the inherited Bulldoze
 use(9);assert(last_build=="clear")
 use(8);assert(W.menu(p)=="home")

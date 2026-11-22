@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
-local E=dofile("mods/bayline/openttd/stock_engine_calendar.lua")
+local E=dofile("mods/luanttd_core/openttd/stock_engine_calendar.lua")
 local function fields(n,y,m,d)
   local a,b,c=E.ymd(n)
   assert(a==y and b==m and c==d)

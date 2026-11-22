@@ -8,7 +8,7 @@ return function(api,owner,qa_ui)
   core.register_chatcommand("qa_railoil",{func=function(n,mode)
     if n~=owner then return false end
     if mode=="layout" and not q.ready then
-      q.wells,q.sink,q.truck=dofile(core.get_modpath("bayline").."/rail_oil_live_layout.lua")(api,n,true)
+      q.wells,q.sink,q.truck=dofile(core.get_modpath("luanttd_core").."/rail_oil_live_layout.lua")(api,n,true)
       q.ready=true
     end
     if mode=="go" or mode=="resume" then S.speed=1 end
@@ -32,7 +32,7 @@ return function(api,owner,qa_ui)
     local last_wagon
     for _,obj in ipairs(core.get_objects_inside_radius({x=23,y=3,z=22},46)) do
       local e=obj:get_luaentity()
-      if e and e.name=="bayline:dispatch_oil_tanker" then
+      if e and e.name=="luanttd_core:dispatch_oil_tanker" then
         last_wagon=obj:get_pos()
         meshes[#meshes+1]=last_wagon
       end
@@ -40,7 +40,7 @@ return function(api,owner,qa_ui)
     if not q.partial and status and status.onboard>0 and status.onboard<30 and
         status.loading and q.wells==status.last_platform and last_wagon then
       S.speed=0
-      q.partial={oil=status.onboard,tick=status.tick,source=status.last_platform,wagon=last_wagon,kind="bayline:dispatch_oil_tanker"}
+      q.partial={oil=status.onboard,tick=status.tick,source=status.last_platform,wagon=last_wagon,kind="luanttd_core:dispatch_oil_tanker"}
       api.save()
     end
     local stations=S.stock_rail_stations or {}

@@ -24,8 +24,8 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD Bakewell Cotswald LB-3 art fixture\n' > "$out/games/bakewell_art/game.conf"
 printf 'name = bakewell\n' > "$mod/mod.conf"
 cp tests/bakewell_cotswald_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_bakewell_cotswald.obj,bl_bakewell_cotswald_flight.obj,bl_bayshore_trimotor.obj,bl_small_airport_?_?.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_bakewell_cotswald_atlas,bl_bayshore_trimotor_palette,bl_small_airport_atlas,bl_grass?,bl_grass_side}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_bakewell_cotswald.obj,bl_bakewell_cotswald_flight.obj,bl_bayshore_trimotor.obj,bl_small_airport_?_?.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_bakewell_cotswald_atlas,bl_bayshore_trimotor_palette,bl_small_airport_atlas,bl_grass?,bl_grass_side}.png "$mod/textures/"
 printf 'gameid = bakewell_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

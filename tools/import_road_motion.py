@@ -57,7 +57,7 @@ if __name__ == "__main__":
     parser.add_argument("header", type=Path)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    out = Path(__file__).resolve().parents[1] / "mods/bayline/openttd/road_motion_data.lua"
+    out = Path(__file__).resolve().parents[1] / "mods/luanttd_core/openttd/road_motion_data.lua"
     expected = generate(args.header)
     if args.check:
         if out.read_text() != expected:

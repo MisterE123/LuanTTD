@@ -24,11 +24,11 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD coal rail transfer art fixture\n' > "$out/games/rail_art/game.conf"
 printf 'name = railpreview\n' > "$mod/mod.conf"
 cp tests/rail_coal_stage_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_rail_track_1.obj,bl_rail_track_2.obj,bl_rail_kirby_paul_tank.obj,bl_rail_open_wagon.obj,bl_rail_coal_stage_*.obj,bl_coal_mine_0_*.obj,bl_power_station_*.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_rail_atlas,bl_rail_wagon_atlas,bl_rail_kirby_paul_tank,bl_grass*,bl_rail_coal_stage_atlas,bl_coal_mine_atlas,bl_power_station_atlas}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_rail_track_1.obj,bl_rail_track_2.obj,bl_rail_kirby_paul_tank.obj,bl_rail_open_wagon.obj,bl_rail_coal_stage_*.obj,bl_coal_mine_0_*.obj,bl_power_station_*.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_rail_atlas,bl_rail_wagon_atlas,bl_rail_kirby_paul_tank,bl_grass*,bl_rail_coal_stage_atlas,bl_coal_mine_atlas,bl_power_station_atlas}.png "$mod/textures/"
 if [[ ${BAYLINE_STOCK_COAL_WAGON_NATIVE:-0} = 1 ]]; then
-  cp mods/bayline/models/bl_rail_coal_wagon_{empty,loaded}.obj "$mod/models/"
-  cp mods/bayline/textures/bl_rail_coal_wagon_atlas.png "$mod/textures/"
+  cp mods/luanttd_core/models/bl_rail_coal_wagon_{empty,loaded}.obj "$mod/models/"
+  cp mods/luanttd_core/textures/bl_rail_coal_wagon_atlas.png "$mod/textures/"
 fi
 printf 'gameid = rail_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF

@@ -15,7 +15,7 @@ SHELL_DRAFT={18,19}
 
 
 def read():
-    path=ROOT/"mods/bayline/models/bl_harbor_ferry.obj"
+    path=ROOT/"mods/luanttd_core/models/bl_harbor_ferry.obj"
     vertices,tex,normals,faces=[],[],[],[]
     for line in path.read_text().splitlines():
         if not line or line.startswith("#"):
@@ -83,7 +83,7 @@ def slice_at(hull,vertices,level):
 
 def main():
     assert (ROOT/"art/harbor_ferry.blend").stat().st_size>150_000
-    img=(ROOT/"mods/bayline/textures/bl_harbor_ferry_palette.png").read_bytes()
+    img=(ROOT/"mods/luanttd_core/textures/bl_harbor_ferry_palette.png").read_bytes()
     assert img.startswith(b"\x89PNG\r\n\x1a\n") and struct.unpack(">II",img[16:24])==(256,8)
     vertices,faces=read()
     lo,hi=[tuple(fn(axis) for axis in zip(*vertices)) for fn in (min,max)]

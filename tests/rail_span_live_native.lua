@@ -29,10 +29,10 @@ core.after(0,function()
   assert(W.commit(S,owner,tunnel))
   -- Recorded stock portals form readonly conversion records even in the
   -- real native world; there is no active electric span/tool mount yet.
-  local types=dofile(core.get_modpath("bayline").."/openttd/rail_types.lua")
-  local geom=dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
-  local track=dofile(core.get_modpath("bayline").."/openttd/rail_track.lua")
-  local Wire=dofile(core.get_modpath("bayline").."/rail_electrification_world.lua")(Sim,geom,track,types,W)
+  local types=dofile(core.get_modpath("luanttd_core").."/openttd/rail_types.lua")
+  local geom=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
+  local track=dofile(core.get_modpath("luanttd_core").."/openttd/rail_track.lua")
+  local Wire=dofile(core.get_modpath("luanttd_core").."/rail_electrification_world.lua")(Sim,geom,track,types,W)
   local ctx={availability=function() return 3 end,span_art_ready=function() return true end}
   local quote_board={tile=function(at) return W.electric_record(S,at) end}
   local untouched=S.companies[owner].cash
@@ -65,9 +65,9 @@ core.after(0,function()
         {{x=26,y=5,z=20},"rail_tunnel_portal_2"},
         {{x=36,y=5,z=20},"rail_tunnel_portal_0"},
       }
-      local modpath=core.get_modpath("bayline")
+      local modpath=core.get_modpath("luanttd_core")
       for _,r in ipairs(expected) do
-        local name="bayline:stock_"..r[2]
+        local name="luanttd_core:stock_"..r[2]
         assert(core.get_node(r[1]).name==name,core.pos_to_string(r[1]).." expected "..name.."; got "..core.get_node(r[1]).name)
         local def=assert(core.registered_nodes[name])
         assert(def.drawtype=="mesh" and def.mesh=="bl_"..r[2]..".obj")
@@ -82,13 +82,13 @@ core.after(0,function()
       local deck_nodes={"head_ramp_2","span_0","span_0","span_0","head_ramp_0"}
       for n=1,#cables do
         local x=8+2*n
-        local name="bayline:stock_rail_bridge_catenary_"..cables[n]
+        local name="luanttd_core:stock_rail_bridge_catenary_"..cables[n]
         local node=core.get_node({x=x,y=6,z=20})
         assert(node.name==name,node.name.." not "..name)
         assert(core.registered_nodes[name].mesh=="bl_rail_bridge_catenary_"..cables[n]..".obj")
-        assert(core.get_node({x=x,y=5,z=20}).name=="bayline:stock_rail_bridge_wood_"..deck_nodes[n])
+        assert(core.get_node({x=x,y=5,z=20}).name=="luanttd_core:stock_rail_bridge_wood_"..deck_nodes[n])
       end
-      local profile=dofile(core.get_modpath("bayline").."/rail_bridge_wire_profile.lua")(
+      local profile=dofile(core.get_modpath("luanttd_core").."/rail_bridge_wire_profile.lua")(
         Sim,W,api.rail_bridge_wire_art,track,function(at) local _,h=api.terrain.tile(at);return h end)
       local approach=S.tiles[id(4)]
       approach.rail_type=1

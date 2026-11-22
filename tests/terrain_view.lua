@@ -1,10 +1,10 @@
-local T=dofile("mods/bayline/openttd/terrain.lua")
-local Sim=dofile("mods/bayline/sim.lua")
+local T=dofile("mods/luanttd_core/openttd/terrain.lua")
+local Sim=dofile("mods/luanttd_core/sim.lua")
 local grid=T.new(Sim.W,Sim.H,function(x,z)
   if (x==3 and z==3) or (x==4 and z==3) or (x==6 and z==6) then return 1 end
   return 0
 end)
-local V=dofile("mods/bayline/terrain_view.lua")(Sim,T,grid)
+local V=dofile("mods/luanttd_core/terrain_view.lua")(Sim,T,grid)
 local function close(got,want) assert(math.abs(got-want)<1e-8,got.." ~= "..want) end
 assert(V.tile(Sim.id(3,3))==9)
 assert(V.tile(Sim.id(6,6))==8)

@@ -17,10 +17,10 @@ DIGEST.update({
 })
 
 LUA = r"""
-local T=dofile("mods/bayline/openttd/rail_track.lua")
-local F=dofile("mods/bayline/openttd/rail_follow.lua")(T)
-local C=dofile("mods/bayline/openttd/rail_yapf_cost.lua")(T,F)
-local R=dofile("mods/bayline/openttd/rail_reservation.lua")(T,F,C)
+local T=dofile("mods/luanttd_core/openttd/rail_track.lua")
+local F=dofile("mods/luanttd_core/openttd/rail_follow.lua")(T)
+local C=dofile("mods/luanttd_core/openttd/rail_yapf_cost.lua")(T,F)
+local R=dofile("mods/luanttd_core/openttd/rail_reservation.lua")(T,F,C)
 local kinds={[0]="void","rail","signals","crossing","depot","station","waypoint","bridge","tunnel"}
 local function yes(b) return b and 1 or 0 end
 for line in io.lines() do

@@ -80,7 +80,7 @@ for dx in range(-10,11):
         for _ in range(17):
             cases.append((640+rng.randrange(16),320+rng.randrange(16),640+16*dx+rng.randrange(16),320+16*dy+rng.randrange(16)))
 data=''.join('%d %d %d %d\n'%v for v in cases)
-code='''local base="mods/bayline/openttd/"
+code='''local base="mods/luanttd_core/openttd/"
 local T=dofile(base.."rail_track.lua")
 local A=dofile(base.."autorail.lua")(T)
 for line in io.lines() do

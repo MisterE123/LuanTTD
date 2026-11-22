@@ -1,4 +1,4 @@
-local p="mods/bayline/"
+local p="mods/luanttd_core/"
 local function m(n) return dofile(p..n..".lua") end
 local S,T=m("sim"),m("openttd/terrain")
 local function value(a,b) assert(a==b,tostring(a).." != "..tostring(b)) end

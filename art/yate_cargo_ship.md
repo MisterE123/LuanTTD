@@ -25,8 +25,8 @@ forged bow anchor and below-water screw/rudder are actual geometry.
 
 ## Mounting
 
-- `mods/bayline/models/bl_yate_cargo_ship.obj` and
-  `mods/bayline/textures/bl_yate_cargo_ship_atlas.png`.
+- `mods/luanttd_core/models/bl_yate_cargo_ship.obj` and
+  `mods/luanttd_core/textures/bl_yate_cargo_ship_atlas.png`.
 - Entity origin at the real waterline, including a moving lock pool.
   Blender +Y fore / +Z up; native visual -Z fore / +Y up.
   Ten OBJ export units per native node, `visual_size={x=1,y=1,z=1}`.

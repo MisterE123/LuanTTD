@@ -1,4 +1,4 @@
-local H=dofile("mods/bayline/openttd/town_passengers.lua")
+local H=dofile("mods/luanttd_core/openttd/town_passengers.lua")
 local function same(a,b) assert(a==b,("%.17g != %.17g"):format(a,b)) end
 assert(H.specs[0x06][1]==30 and H.specs[0x06][2]==12)
 assert(H.specs[0x07][1]==140 and H.specs[0x08][1]==0 and H.specs[0x08][2]==22)

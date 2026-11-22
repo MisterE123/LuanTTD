@@ -1,5 +1,5 @@
 -- The real stock Sim clock, saved leg, route compiler and physical timeline.
-local F=dofile("tests/road_oneway_live_fixture.lua")("mods/bayline/",dofile("tests/road_overtake_fixture.lua"))
+local F=dofile("tests/road_oneway_live_fixture.lua")("mods/luanttd_core/",dofile("tests/road_overtake_fixture.lua"))
 local Sim,World,owner,id,target,fixture,held,reached,setup_sign=
   F.Sim,F.World,F.owner,F.id,F.target,F.fixture,F.held,F.reached,F.setup_sign
 local function cl(t)

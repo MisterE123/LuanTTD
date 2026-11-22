@@ -26,17 +26,17 @@ printf 'name = foster\n' > "$mod/mod.conf"
 cp tests/foster_bus_art_native.lua "$mod/init.lua"
 mkdir -p "$mod/source/openttd"
 cp tests/foster_bus_route.lua "$mod/"
-cp mods/bayline/{road_lanes.lua,road_motion_presentation.lua,road_motion_leg.lua,road_bridge_motion.lua} "$mod/source/"
-cp mods/bayline/openttd/{yapf_road_follow.lua,road_motion.lua,road_motion_data.lua} "$mod/source/openttd/"
-cp mods/bayline/models/{bl_foster_bus.obj,bl_leopard_bus.obj,bl_scenery_house_0.obj,bl_scenery_house_2.obj,bl_bus_shelter.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_foster_bus_atlas,bl_road_fleet_palette,bl_scenery_palette,bl_road_architecture,bl_grass?,bl_grass_side}.png "$mod/textures/"
+cp mods/luanttd_core/{road_lanes.lua,road_motion_presentation.lua,road_motion_leg.lua,road_bridge_motion.lua} "$mod/source/"
+cp mods/luanttd_core/openttd/{yapf_road_follow.lua,road_motion.lua,road_motion_data.lua} "$mod/source/openttd/"
+cp mods/luanttd_core/models/{bl_foster_bus.obj,bl_leopard_bus.obj,bl_scenery_house_0.obj,bl_scenery_house_2.obj,bl_bus_shelter.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_foster_bus_atlas,bl_road_fleet_palette,bl_scenery_palette,bl_road_architecture,bl_grass?,bl_grass_side}.png "$mod/textures/"
 for mask in 3 5 6 9 10 12; do
   if [[ ${BAYLINE_FOSTER_TOWN_STREET:-0} == 1 ]]; then
     for q in 0 1 2 3; do
-      cp "mods/bayline/textures/bl_town_street_${mask}_${q}.png" "$mod/textures/bl_road_${mask}_plain_q${q}.png"
+      cp "mods/luanttd_core/textures/bl_town_street_${mask}_${q}.png" "$mod/textures/bl_road_${mask}_plain_q${q}.png"
     done
   else
-    cp mods/bayline/textures/bl_road_${mask}_plain_q?.png "$mod/textures/"
+    cp mods/luanttd_core/textures/bl_road_${mask}_plain_q?.png "$mod/textures/"
   fi
 done
 printf 'gameid = foster_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"

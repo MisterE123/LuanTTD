@@ -10,9 +10,13 @@ fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-world-setup-native.XXXXXX")
 echo "Native world setup evidence: $out"
 disp=${BAYLINE_NATIVE_DISPLAY:-331}
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 exact=${BAYLINE_NATIVE_EXACT_GAME:-.}
+if [[ -n ${LUANTTD_NATIVE_MEDIA_CACHE:-} ]]; then
+  # Media is content addressed; link a previous disposable run's cache.
+  cp -al "$LUANTTD_NATIVE_MEDIA_CACHE/." "$out/cache/"
+fi
 cp "$exact/game.conf" "$game/"
 cp -al "$exact/mods" "$game/" || cp -R "$exact/mods" "$game/"
 cat > "$out/instrumented.lua" <<'LUA'
@@ -29,7 +33,7 @@ core.register_on_joinplayer(function()
   end)
 end)
 LUA
-cat "$game/mods/bayline/init.lua" >> "$out/instrumented.lua"
+cat "$game/mods/luanttd_core/init.lua" >> "$out/instrumented.lua"
 cat >> "$out/instrumented.lua" <<'LUA'
 
 if api.generated_world then
@@ -43,7 +47,7 @@ if api.generated_world then
       core.load_area(pos)
       local name=core.get_node(pos).name
       local tile=S.tiles[Sim.id(math.floor(pos.x/2),math.floor(pos.z/2))]
-      assert(name=="bayline:bedrock",core.pos_to_string(pos).." was "..name..
+      assert(name=="luanttd_core:bedrock",core.pos_to_string(pos).." was "..name..
         " / "..tostring(tile and tile.terrain).." / void="..tostring(tile and tile.stock_void))
       local top={x=pos.x,y=0,z=pos.z}
       assert(core.get_node(top).name~="air",core.pos_to_string(top).." stayed air")
@@ -53,9 +57,9 @@ if api.generated_world then
   core.after(0,placed)
 end
 LUA
-mv "$out/instrumented.lua" "$game/mods/bayline/init.lua"
+mv "$out/instrumented.lua" "$game/mods/luanttd_core/init.lua"
 cat > "$out/world/world.mt" <<'WORLD'
-gameid = bayline
+gameid = luanttd
 backend = sqlite3
 player_backend = sqlite3
 auth_backend = sqlite3
@@ -76,7 +80,7 @@ client=""
 trap 'if [[ -n "$client" ]]; then kill "$client" 2>/dev/null || true; fi; kill "$xv" 2>/dev/null || true; wait 2>/dev/null || true' EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 local_game() {
-  "${BAYLINE_LUANTI_CLIENT:-luanti}" --go --world "$out/world" --gameid bayline --config "$out/local.conf" --logfile "" > "$out/$1.log" 2>&1 &
+  "${BAYLINE_LUANTI_CLIENT:-luanti}" --go --world "$out/world" --gameid luanttd --config "$out/local.conf" --logfile "" > "$out/$1.log" 2>&1 &
   client=$!
   for _ in {1..180}; do
     kill -0 "$client" 2>/dev/null || { cat "$out/$1.log"; exit 1; }
@@ -91,7 +95,7 @@ rows() {
   python3 - "$out/world/mod_storage.sqlite" "$1" <<'PY'
 import json, sqlite3, sys
 with sqlite3.connect(sys.argv[1]) as conn:
-    rows=dict(conn.execute("SELECT CAST(key AS TEXT), CAST(value AS TEXT) FROM entries WHERE modname='bayline'"))
+    rows=dict(conn.execute("SELECT CAST(key AS TEXT), CAST(value AS TEXT) FROM entries WHERE modname='luanttd_core'"))
 if sys.argv[2]=="draft":
     assert not rows, sorted(rows)
 else:
@@ -111,14 +115,14 @@ sleep .45
 rows draft
 import -window root "$out/invalid-option.png"
 xdotool mousemove 515 332 click 1 key ctrl+a type '817516'
-xdotool mousemove 712 390 click 1
+xdotool mousemove 712 422 click 1
 sleep .25
 xdotool key Down Return
 sleep .3
 import -window root "$out/selected-size.png"
 xdotool mousemove 962 332 click 1
 sleep .35
-xdotool mousemove 1039 390 click 1
+xdotool mousemove 1039 422 click 1
 sleep .25
 xdotool key Down Return
 sleep .35

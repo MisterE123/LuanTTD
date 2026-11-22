@@ -235,7 +235,7 @@ int main(){
 }
 """
 program=r"""
-local p="mods/bayline/openttd/"
+local p="mods/luanttd_core/openttd/"
 local G=dofile(p.."town_growth.lua")
 local H=dofile(p.."town_growth_houses.lua")
 local B=dofile(p.."town_growth_build.lua")(G,H)

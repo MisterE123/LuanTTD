@@ -1,4 +1,4 @@
-local O=dofile("mods/bayline/openttd/scenery_object_worldgen.lua")
+local O=dofile("mods/luanttd_core/openttd/scenery_object_worldgen.lua")
 local function eq(a,b) assert(a==b,tostring(a).." != "..tostring(b)) end
 local w,h=64,64
 local function idx(x,z) return (z-1)*w+x-1 end

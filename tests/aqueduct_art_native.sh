@@ -24,8 +24,8 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD aqueduct fixture\n' > "$out/games/aqueduct_art/game.conf"
 printf 'name = waterwaypreview\n' > "$mod/mod.conf"
 cp tests/aqueduct_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_aqueduct_*,bl_town_flyer.obj,bl_harbor_ferry.obj,bl_rail_track_2.obj,bl_steam.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_aqueduct,bl_grass*,bl_road_5_plain_q*,bl_water0,bl_water_side,bl_vehicle_palette,bl_harbor_ferry_palette,bl_rail_atlas}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_aqueduct_*,bl_town_flyer.obj,bl_harbor_ferry.obj,bl_rail_track_2.obj,bl_steam.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_aqueduct,bl_grass*,bl_road_5_plain_q*,bl_water0,bl_water_side,bl_vehicle_palette,bl_harbor_ferry_palette,bl_rail_atlas}.png "$mod/textures/"
 printf 'gameid = aqueduct_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

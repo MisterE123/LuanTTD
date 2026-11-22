@@ -18,8 +18,8 @@ from witcombe_wood_truck_art import data_table
 
 ROOT=Path(__file__).resolve().parents[1]
 NAME="witcombe_oil_tanker"
-OBJ=ROOT/"mods/bayline/models"/f"bl_{NAME}.obj"
-ATLAS=ROOT/"mods/bayline/textures"/f"bl_{NAME}_atlas.png"
+OBJ=ROOT/"mods/luanttd_core/models"/f"bl_{NAME}.obj"
+ATLAS=ROOT/"mods/luanttd_core/textures"/f"bl_{NAME}_atlas.png"
 S=.42
 
 

@@ -26,8 +26,8 @@ not a BR logo, decal or pixel-art transfer.
   each of their three moving axle pivots, separate working fan rotors and
   individually named permanent assemblies. Frames 1–49 expose the
   wheel and rotor motion; no runtime Blender animation is exported.
-- `mods/bayline/models/bl_rail_floss_47.obj` and
-  `mods/bayline/textures/bl_rail_floss_47.png`: static mesh and original
+- `mods/luanttd_core/models/bl_rail_floss_47.obj` and
+  `mods/luanttd_core/textures/bl_rail_floss_47.png`: static mesh and original
   flat swatch texture atlas. Use unit scale, native nose -Z and zero
   tire-crown datum at world +.614 on flat base-0 track. Rail spacing is
   .424; centered coupling tips at ±.499 with Y=.157. The doors and buffers

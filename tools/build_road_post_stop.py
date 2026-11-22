@@ -289,8 +289,8 @@ def main():
     full,bay=author_stop(),author_stop(True)
     for suffix, mesh in [("straight_0", full),("straight_1",full.transformed(1)),
                          *((f"bay_{d}",bay.transformed((-d)%4)) for d in range(4))]:
-        (ROOT/"mods/bayline/models"/f"{PREFIX}_{suffix}.obj").write_text(payload(mesh,suffix))
-    (ROOT/"mods/bayline/textures"/f"{PREFIX}.png").write_bytes(atlas())
+        (ROOT/"mods/luanttd_core/models"/f"{PREFIX}_{suffix}.obj").write_text(payload(mesh,suffix))
+    (ROOT/"mods/luanttd_core/textures"/f"{PREFIX}.png").write_bytes(atlas())
     for label,model in (("Straight stop",full),("Compact bay stop",bay)):
         if label!=scene.name:
             scene=bpy.data.scenes.new(label)

@@ -1,4 +1,4 @@
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local function port(name,...)return dofile(root..name..".lua")(...)end
 local T=dofile(root.."rail_track.lua")
 local F=port("rail_follow",T)

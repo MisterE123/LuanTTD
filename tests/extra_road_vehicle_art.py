@@ -14,7 +14,7 @@ LANE_OFFSET=.155
 
 def load(stem):
     out = {"vertices":[], "uv":[], "faces":[]}
-    for line in (ROOT/f"mods/bayline/models/bl_{stem}.obj").read_text().splitlines():
+    for line in (ROOT/f"mods/luanttd_core/models/bl_{stem}.obj").read_text().splitlines():
         if not line or line.startswith("#"):
             continue
         k,*words=line.split()
@@ -36,7 +36,7 @@ def load(stem):
 
 
 def check():
-    palette = (ROOT/"mods/bayline/textures/bl_road_fleet_palette.png").read_bytes()
+    palette = (ROOT/"mods/luanttd_core/textures/bl_road_fleet_palette.png").read_bytes()
     assert palette.startswith(b"\x89PNG\r\n\x1a\n")
     assert struct.unpack(">II",palette[16:24])==(256,8)
     for stem,scale in SPEC.items():

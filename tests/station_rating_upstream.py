@@ -125,7 +125,7 @@ cpp=cpp.replace('std::cout<<"175 255\\n";', 'std::cout<<(int)INITIAL_STATION_RAT
     + '<<" "<<' + re.search(r"STATION_RATING_TICKS\s*=\s*(\d+)",timer)[1] + '<<"\\n";')
 
 lua = r"""
-local R=dofile('mods/bayline/openttd/station_rating.lua')
+local R=dofile('mods/luanttd_core/openttd/station_rating.lua')
 local function bit(b) return b and 1 or 0 end
 print(table.concat({R.initial,R.maximum,R.day_ticks,R.rating_ticks},' '))
 for line in io.lines() do

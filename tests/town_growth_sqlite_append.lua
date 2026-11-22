@@ -31,12 +31,12 @@ do
               local title,neighbor=tile_nodes(id)
               local h=S.tiles[id].source_house
               ground=ground or neighbor
-              assert(neighbor==ground and neighbor:match("^bayline:grass"),neighbor)
+              assert(neighbor==ground and neighbor:match("^luanttd_core:grass"),neighbor)
               if h.completed then
-                assert(title:match("^bayline:scenery_house_") or title=="bayline:town_shop",title)
+                assert(title:match("^luanttd_core:scenery_house_") or title=="luanttd_core:town_shop",title)
                 saw.complete=true
               else
-                assert(title=="bayline:house_build_stage_"..h.stage,title)
+                assert(title=="luanttd_core:house_build_stage_"..h.stage,title)
                 saw[h.stage]=true
               end
             end

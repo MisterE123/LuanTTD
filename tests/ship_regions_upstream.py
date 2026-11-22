@@ -223,7 +223,7 @@ for cells in worlds:
     rows.extend(f"{t} {k} {d} {s} {o}" for t,(k,d,s,o) in cells.items())
 
 lua=r"""
-local base="mods/bayline/openttd/"
+local base="mods/luanttd_core/openttd/"
 local T=dofile(base.."rail_track.lua")
 local W=dofile(base.."ship_follow.lua")(T)
 local Rfn=dofile(base.."ship_regions.lua")

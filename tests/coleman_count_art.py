@@ -16,7 +16,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def inspect(name):
     vertices,uv=[],[]
     meshes=[]
-    for row in (ROOT/"mods/bayline/models"/f"bl_{name}.obj").read_text().splitlines():
+    for row in (ROOT/"mods/luanttd_core/models"/f"bl_{name}.obj").read_text().splitlines():
         fields=row.split()
         if not fields: continue
         tag,*a=fields
@@ -44,7 +44,7 @@ def source(path):
 
 
 def main():
-    atlas=(ROOT/"mods/bayline/textures/bl_coleman_count_atlas.png").read_bytes()
+    atlas=(ROOT/"mods/luanttd_core/textures/bl_coleman_count_atlas.png").read_bytes()
     assert struct.unpack(">II",atlas[16:24])==(256,8)
     points,ground=inspect("coleman_count")
     up,flying=inspect("coleman_count_flight")

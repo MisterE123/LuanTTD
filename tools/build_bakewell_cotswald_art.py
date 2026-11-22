@@ -275,7 +275,7 @@ def atlas():
     data=b"".join(bytes.fromhex(P[k])*8 for k in KEYS)
     col=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",w,8,8,2,0,0,0))
     col+=chunk(b"IDAT",zlib.compress((b"\0"+data)*8,9))+chunk(b"IEND",b"")
-    (ROOT/"mods/bayline/textures"/f"{STEM}_atlas.png").write_bytes(col)
+    (ROOT/"mods/luanttd_core/textures"/f"{STEM}_atlas.png").write_bytes(col)
 
 
 def compact_obj(path):
@@ -351,7 +351,7 @@ def export():
             idx=KEYS.index(o.data.materials[face.material_index].name)
             for i in face.loop_indices: uv.data[i].uv=((idx+.5)/len(KEYS),.5)
         o.data.update()
-        path=ROOT/"mods/bayline/models"/f"{STEM}{suffix}.obj"
+        path=ROOT/"mods/luanttd_core/models"/f"{STEM}{suffix}.obj"
         bpy.ops.wm.obj_export(filepath=str(path),export_selected_objects=True,
             export_materials=False,export_uv=True,export_normals=True,export_triangulated_mesh=False,
             global_scale=10,forward_axis="NEGATIVE_Z",up_axis="Y")

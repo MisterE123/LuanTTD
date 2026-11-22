@@ -4,7 +4,7 @@ from pathlib import Path
 from PIL import Image
 from math import sqrt
 
-base = Path(__file__).resolve().parents[1] / "mods/bayline"
+base = Path(__file__).resolve().parents[1] / "mods/luanttd_core"
 palette = ["716c60","94998b","666354","244c54","277985","efe1ad","294149","aeb5a6"]
 im = Image.new("RGB",(len(palette)*8,8))
 for i,col in enumerate(palette):

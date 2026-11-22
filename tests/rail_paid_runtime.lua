@@ -2,7 +2,7 @@
 -- One stock map with a paid bus route, actual coupled shuttle and ferry.
 -- Pass 'air' to add two genuine airfields and verify all modes settle on
 -- the same world clock with independent ownership and catchments.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function stock(file,...) return dofile(root.."openttd/"..file..".lua")(...) end
 local Sim=dofile(root.."sim.lua")
 local Terrain=dofile(root.."openttd/terrain.lua")

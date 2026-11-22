@@ -26,8 +26,8 @@ printf 'name = bridgepreview\n' > "$mod/mod.conf"
 # The scene and road/terrain approaches remain identical to the wooden
 # fixture so the comparison substitutes the real shipped steel assets only.
 sed 's/bl_road_bridge_wood/bl_road_bridge_girder/g' tests/road_bridge_art_native.lua > "$mod/init.lua"
-cp mods/bayline/models/{bl_road_bridge_girder_*,bl_town_flyer.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_road_bridge_girder,bl_grass*,bl_road_10_plain_q*,bl_water0,bl_vehicle_palette}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_road_bridge_girder_*,bl_town_flyer.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_road_bridge_girder,bl_grass*,bl_road_10_plain_q*,bl_water0,bl_vehicle_palette}.png "$mod/textures/"
 printf 'gameid = bridge_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

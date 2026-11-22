@@ -138,7 +138,7 @@ int main() {
 }
 """
 LUA=r"""
-local base="mods/bayline/"
+local base="mods/luanttd_core/"
 local T=dofile(base.."openttd/loading_timing.lua")
 local P=dofile(base.."openttd/passengers.lua")
 local L=dofile(base.."road_loading_runtime.lua")(T,P)

@@ -6,7 +6,7 @@ from pathlib import Path
 from PIL import Image
 from road_tunnel_art import polygon_clip, ray_along_road, vehicle_bounds
 
-ROOT=Path(__file__).resolve().parents[1]/"mods"/"bayline"
+ROOT=Path(__file__).resolve().parents[1]/"mods"/"luanttd_core"
 MODELS=ROOT/"models"
 ASSEMBLY="bl_road_bridge_concrete"
 SURFACE=("Running_asphalt","Shoulder_slab","Inlaid_centre_markings")

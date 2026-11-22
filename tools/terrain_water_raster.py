@@ -17,7 +17,7 @@ RIVER_DIRECTIONS = {
     "river_east": Image.Transpose.ROTATE_90,
     "river_west": Image.Transpose.ROTATE_270,
 }
-OUT = Path(__file__).resolve().parents[1] / "mods/bayline/textures"
+OUT = Path(__file__).resolve().parents[1] / "mods/luanttd_core/textures"
 
 
 def palette(colors):

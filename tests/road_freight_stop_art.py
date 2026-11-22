@@ -16,7 +16,7 @@ from tempfile import TemporaryDirectory
 from small_airport_art import obj,cut,hull,intersects
 
 ROOT=Path(__file__).absolute().parents[1]
-M=ROOT/"mods/bayline/models"
+M=ROOT/"mods/luanttd_core/models"
 KEYS=("straight_0","straight_1","bay_0","bay_1","bay_2","bay_3")
 TURN=(0,1,0,-1,-2,-3)
 REQUIRED=("Small_weighmaster_booth_timber_shell","Engraved_WEIGH_key",
@@ -24,7 +24,7 @@ REQUIRED=("Small_weighmaster_booth_timber_shell","Engraved_WEIGH_key",
           "Hopper_open_inner_sloping_wear_plate","Visible_open_steel_hopper_rim",
           "Individual_loose_coal_visible_below_hopper_lip","Enamel_raised_COAL_clearance_notice")
 SAMPLE=r'''
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local K=dofile(root.."openttd/road_motion.lua")(dofile(root.."openttd/road_motion_data.lua"))
 local V=dofile(root.."road_motion_presentation.lua")(dofile(root.."road_lanes.lua"))
 local fd=assert(io.open(OUTPUT_PATH,'w'))
@@ -128,7 +128,7 @@ def variants():
         assert flat if key.startswith("bay_") else not flat
         assert all(y>.41 for f in canopy for _,y,_ in f)
         refs[key]=(obstacles,flat,turn)
-    atlas=(ROOT/"mods/bayline/textures/bl_road_freight_stop.png").read_bytes()
+    atlas=(ROOT/"mods/luanttd_core/textures/bl_road_freight_stop.png").read_bytes()
     assert atlas[:8]==b"\x89PNG\r\n\x1a\n" and int.from_bytes(atlas[16:20],"big")==256
     assert (ROOT/"art/road_freight_stop.blend").stat().st_size>80000
     return refs

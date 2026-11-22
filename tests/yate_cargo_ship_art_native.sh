@@ -24,8 +24,8 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD Yate Cargo Ship art fixture\n' > "$out/games/yate_art/game.conf"
 printf 'name = yate\n' > "$mod/mod.conf"
 cp tests/yate_cargo_ship_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_yate_cargo_ship.obj,bl_ship_dock_ramp_1.obj,bl_ship_dock_pier_1.obj,bl_ship_depot_1_?.obj,bl_ship_lock_*_1.obj,bl_ship_lock_chamber_water.obj,bl_ship_lock_gate_*_closed.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_yate_cargo_ship_atlas,bl_ship_facilities_atlas,bl_ship_lock_atlas,bl_grass?,bl_grass_side,bl_water?,bl_water_side}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_yate_cargo_ship.obj,bl_ship_dock_ramp_1.obj,bl_ship_dock_pier_1.obj,bl_ship_depot_1_?.obj,bl_ship_lock_*_1.obj,bl_ship_lock_chamber_water.obj,bl_ship_lock_gate_*_closed.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_yate_cargo_ship_atlas,bl_ship_facilities_atlas,bl_ship_lock_atlas,bl_grass?,bl_grass_side,bl_water?,bl_water_side}.png "$mod/textures/"
 printf 'gameid = yate_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

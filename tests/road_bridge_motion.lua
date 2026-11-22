@@ -1,5 +1,5 @@
 -- Pure-Lua integration against the actual Sim.wood_bridge save format.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local Sim=dofile(root.."sim.lua")
 local Terrain=dofile(root.."openttd/terrain.lua")
 local Slope=dofile(root.."openttd/slope.lua")

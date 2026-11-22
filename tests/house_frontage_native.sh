@@ -19,16 +19,16 @@ cleanup() {
   wait || true
 }
 trap cleanup EXIT
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game" "$out/"{world,home,cache}
 # A disposable hardlinked tree avoids copying >120MB of untouched assets.
 cp game.conf "$game/"
 cp -al mods "$game/"
-rm "$game/mods/bayline/init.lua"
-cp mods/bayline/init.lua "$game/mods/bayline/init.lua"
-cp tests/house_frontage_native.lua "$game/mods/bayline/house_frontage_native.lua"
-printf '\ndofile(mod.."/house_frontage_native.lua")(api)\n' >> "$game/mods/bayline/init.lua"
-printf 'gameid = bayline\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
+rm "$game/mods/luanttd_core/init.lua"
+cp mods/luanttd_core/init.lua "$game/mods/luanttd_core/init.lua"
+cp tests/house_frontage_native.lua "$game/mods/luanttd_core/house_frontage_native.lua"
+printf '\ndofile(mod.."/house_frontage_native.lua")(api)\n' >> "$game/mods/luanttd_core/init.lua"
+printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 if [[ -n ${BAYLINE_NATIVE_CACHE_SEED:-} ]]; then
   seed=$(realpath "$BAYLINE_NATIVE_CACHE_SEED")
   if [[ -d "$seed/minetest" ]]; then cp -R "$seed/minetest" "$out/cache/"; fi
@@ -68,7 +68,7 @@ xauth -f "$XAUTHORITY" add "$DISPLAY" MIT-MAGIC-COOKIE-1 "$cookie"
 pids+=("$!")
 for _ in {1..40}; do if xdpyinfo >/dev/null 2>&1; then break; fi; sleep .25; done
 if ! xdpyinfo >/dev/null 2>&1; then cat "$out/xvfb.log"; exit 1; fi
-luantiserver --world "$out/world" --config "$out/server.conf" --gameid bayline --logfile "" > "$out/server.log" 2>&1 &
+luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile "" > "$out/server.log" 2>&1 &
 pids+=("$!")
 for _ in {1..40}; do if grep -q 'listening' "$out/server.log"; then break; fi; sleep .25; done
 grep -q 'listening' "$out/server.log" || { cat "$out/server.log"; exit 1; }

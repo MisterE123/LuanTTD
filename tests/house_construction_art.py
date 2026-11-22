@@ -14,7 +14,7 @@ def site_hits(m,groups,axis,u,v):
 
 def main():
     models=[load("bl_house_build_stage_"+str(i)) for i in range(3)]
-    data=(ROOT/"mods/bayline/textures/bl_house_build_atlas.png").read_bytes()
+    data=(ROOT/"mods/luanttd_core/textures/bl_house_build_atlas.png").read_bytes()
     w,h=struct.unpack_from(">II",data,16)
     assert data[:8]==b"\x89PNG\r\n\x1a\n" and w%8==0 and h==8
     pts=[[p for g,ps in m for p in ps] for m in models]

@@ -70,7 +70,7 @@ int main(){
 }
 """
 lua=r"""
-local R=dofile("mods/bayline/openttd/road_slope.lua")
+local R=dofile("mods/luanttd_core/openttd/road_slope.lua")
 local F={[0]="none","leveled","x","y"}
 local n=0
 for line in io.lines() do

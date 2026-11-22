@@ -238,9 +238,9 @@ int main(){
     return r
 
 LUA = r"""
-local T=dofile("mods/bayline/openttd/rail_track.lua")
-local F=dofile("mods/bayline/openttd/rail_follow.lua")(T)
-local C=dofile("mods/bayline/openttd/rail_yapf_cost.lua")(T,F)
+local T=dofile("mods/luanttd_core/openttd/rail_track.lua")
+local F=dofile("mods/luanttd_core/openttd/rail_follow.lua")(T)
+local C=dofile("mods/luanttd_core/openttd/rail_yapf_cost.lua")(T,F)
 local names={[0]="void","rail","signals","crossing","depot","station","waypoint","bridge","tunnel"}
 local types={[0]={max_speed=70,compatible={[0]=true,[1]=true}},
  {max_speed=140,compatible={[0]=true,[1]=true}},

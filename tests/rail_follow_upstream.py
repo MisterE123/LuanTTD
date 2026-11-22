@@ -11,8 +11,8 @@ import tempfile
 from rail_track_upstream import ROOT, block, declarations, src
 
 LUA = r"""
-local T=dofile("mods/bayline/openttd/rail_track.lua")
-local F=dofile("mods/bayline/openttd/rail_follow.lua")(T)
+local T=dofile("mods/luanttd_core/openttd/rail_track.lua")
+local F=dofile("mods/luanttd_core/openttd/rail_follow.lua")(T)
 local kinds={[0]="void","rail","signals","crossing","depot","station","waypoint","bridge","tunnel"}
 local function yn(b) return b and 1 or 0 end
 for line in io.lines() do

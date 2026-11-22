@@ -1,4 +1,4 @@
-local script=dofile("mods/bayline/passenger_crowd.lua")
+local script=dofile("mods/luanttd_core/passenger_crowd.lua")
 local clock,events=0,{}
 local last={}
 core={

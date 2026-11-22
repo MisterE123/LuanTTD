@@ -20,7 +20,7 @@ cleanup() {
   wait || true
 }
 trap cleanup EXIT
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game" "$out/"{world,home,cache}
 if [[ -n ${BAYLINE_NATIVE_CACHE_SEED:-} && -d $BAYLINE_NATIVE_CACHE_SEED/minetest/media ]]; then
   mkdir -p "$out/cache/minetest"
@@ -29,13 +29,13 @@ fi
 cp "$src/game.conf" "$game/"
 cp -al "$src/mods" "$game/"
 # Replace the hard link before adding the disposable fixture.
-cp "$src/mods/bayline/init.lua" "$out/init.lua"
-mv "$out/init.lua" "$game/mods/bayline/init.lua"
-printf '\n' >> "$game/mods/bayline/init.lua"
+cp "$src/mods/luanttd_core/init.lua" "$out/init.lua"
+mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
+printf '\n' >> "$game/mods/luanttd_core/init.lua"
 fixture=bridge_pier_render_native
 if [[ ${BAYLINE_NATIVE_BRIDGE_ROAD_CLEAR:-0} == 1 ]]; then fixture=bridge_road_clearance_native; fi
-cat "tests/$fixture.lua" >> "$game/mods/bayline/init.lua"
-printf 'gameid = bayline\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
+cat "tests/$fixture.lua" >> "$game/mods/luanttd_core/init.lua"
+printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port
 prometheus_listener_address = 127.0.0.1:$port
@@ -75,7 +75,7 @@ xauth -f "$XAUTHORITY" add "$DISPLAY" MIT-MAGIC-COOKIE-1 "$cookie"
 pids+=("$!")
 for _ in {1..40}; do if xdpyinfo >/dev/null 2>&1; then break; fi; sleep .25; done
 if ! xdpyinfo >/dev/null 2>&1; then cat "$out/xvfb.log"; exit 1; fi
-luantiserver --world "$out/world" --config "$out/server.conf" --gameid bayline --logfile "" > "$out/server.log" 2>&1 &
+luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile "" > "$out/server.log" 2>&1 &
 pids+=("$!")
 for _ in {1..40}; do if grep -q 'listening' "$out/server.log"; then break; fi; sleep .25; done
 grep -q 'listening' "$out/server.log" || { cat "$out/server.log"; exit 1; }

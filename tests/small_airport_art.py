@@ -17,7 +17,7 @@ import subprocess
 import re
 
 ROOT=Path(__file__).resolve().parents[1]
-MODEL=ROOT/"mods/bayline/models"
+MODEL=ROOT/"mods/luanttd_core/models"
 TOP=.5
 RUNWAY="Seamless_rolled_runway_wearing_course"
 GROUND=.014
@@ -99,13 +99,13 @@ def footprint():
         "Flat_painted_runway_identifiers","Historic_corrugated_steel_hangar_roof",
         "Hangar_longitudinal_opaque_steel_walls","Open_bi-parting_door_leaves_against_flanks",
         "Open_striped_wind_sleeve_cloth","Analog_clock_hour_indexes"))
-    png=(ROOT/"mods/bayline/textures/bl_small_airport_atlas.png").read_bytes()
+    png=(ROOT/"mods/luanttd_core/textures/bl_small_airport_atlas.png").read_bytes()
     assert png[:8]==b"\x89PNG\r\n\x1a\n" and int.from_bytes(png[16:20],"big")>=256
     return all_parts
 
 TRACE=r'''
-local A=dofile("mods/bayline/openttd/airport_small.lua")
-local M=dofile("mods/bayline/openttd/airport_motion.lua")(A)
+local A=dofile("mods/luanttd_core/openttd/airport_small.lua")
+local M=dofile("mods/luanttd_core/openttd/airport_motion.lua")(A)
 local out=assert(io.open(DEST,'w'))
 local function airport(id,x,z) return {id=id,x=x,z=z,ground=0,flags=0,owner="A"} end
 for slot=1,2 do
@@ -211,7 +211,7 @@ def swept(groups, scale=1.0):
 
 if __name__=="__main__":
     art=footprint()
-    scale_def=(ROOT/"mods/bayline/airport_airframe_art.lua").read_text()
+    scale_def=(ROOT/"mods/luanttd_core/airport_airframe_art.lua").read_text()
     scale=float(re.search(r"scale=(\.?[0-9.]+)",scale_def)[1])
     count=swept(art, scale)
     print(f"PASS: 12 anchor-local meshes; three joined runway seams; real open hangar and collision-free clearances in {count} stock plane poses at shared scale {scale} (both stands and both hangar paths).")

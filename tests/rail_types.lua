@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
-local R=dofile("mods/bayline/openttd/rail_types.lua")
+local R=dofile("mods/luanttd_core/openttd/rail_types.lua")
 assert(R.tile_type(0xC1)==1 and R.set_tile_type(0xC1,0)==0xC0)
 assert(R.tile_type(0xFF)==63 and not R.entry(63))
 assert(R.convert_cost(0,1)==68 and R.convert_cost(1,0)==12)

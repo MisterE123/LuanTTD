@@ -1,7 +1,7 @@
 -- Reproducible meshes of the OpenTTD slope port's continuous height field.
 -- Run from game root: lua5.1 tools/build_terrain_meshes.lua
-local T=dofile("mods/bayline/openttd/slope.lua")
-local out="mods/bayline/models/bl_land_"
+local T=dofile("mods/luanttd_core/openttd/slope.lua")
+local out="mods/luanttd_core/models/bl_land_"
 -- Join opposite corners at the crease. Without a crease either diagonal
 -- triangulates the exact plane. OBJ X is inverted by the Luanti importer.
 local diagonal_we={[8]=true,[2]=true,[10]=true,[13]=true,[7]=true}

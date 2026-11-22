@@ -79,7 +79,7 @@ for poly in obj.data.polygons:
     u=(sw+.5)/16
     for idx in poly.loop_indices:
         uv.data[idx].uv=(u,.5)
-bpy.ops.wm.obj_export(filepath=str(root/"mods/bayline/models/bl_town_flyer.obj"),export_materials=False,
+bpy.ops.wm.obj_export(filepath=str(root/"mods/luanttd_core/models/bl_town_flyer.obj"),export_materials=False,
     export_selected_objects=True,export_uv=True,export_normals=True,export_triangulated_mesh=True,global_scale=10,forward_axis="NEGATIVE_Z",up_axis="Y")
 def asset(key,fn):
     bpy.ops.object.select_all(action="SELECT");bpy.ops.object.delete(use_global=False)
@@ -97,7 +97,7 @@ def asset(key,fn):
     for poly in obj.data.polygons:
         sw=colors.index(obj.data.materials[poly.material_index].name)
         for idx in poly.loop_indices: uv.data[idx].uv=((sw+.5)/16,.5)
-    bpy.ops.wm.obj_export(filepath=str(root/f"mods/bayline/models/bl_{key}.obj"),export_materials=False,
+    bpy.ops.wm.obj_export(filepath=str(root/f"mods/luanttd_core/models/bl_{key}.obj"),export_materials=False,
         export_selected_objects=True,export_uv=True,export_normals=True,export_triangulated_mesh=True,global_scale=10,
         forward_axis="NEGATIVE_Z",up_axis="Y")
 def cylinder(name,p,radius,count,depth,axis,mat,top=None):

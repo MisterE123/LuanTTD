@@ -1,6 +1,6 @@
 # Temperate forests at world creation
 
-`mods/bayline/openttd/tree_worldgen.lua` is the stock OpenTTD 14.1 temperate
+`mods/luanttd_core/openttd/tree_worldgen.lua` is the stock OpenTTD 14.1 temperate
 normal-game forest generation stage. This is not uniform decorative tree
 scattering. It preserves all RNG draws and writes in game order:
 

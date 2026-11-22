@@ -8,8 +8,8 @@ from zipfile import ZipFile,ZIP_DEFLATED
 import zlib
 
 ROOT=Path(__file__).resolve().parents[1]
-M=ROOT/"mods/bayline/models"
-T=ROOT/"mods/bayline/textures"
+M=ROOT/"mods/luanttd_core/models"
+T=ROOT/"mods/luanttd_core/textures"
 
 
 def load(path):

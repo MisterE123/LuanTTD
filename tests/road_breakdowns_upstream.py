@@ -158,7 +158,7 @@ int main(){
 """
 
 LUA = r"""
-local B=dofile("mods/bayline/openttd/road_breakdowns.lua")
+local B=dofile("mods/luanttd_core/openttd/road_breakdowns.lua")
 local s
 local function bit(flags,n) return math.floor(flags/2^n)%2==1 end
 local function num(b) return b and 1 or 0 end

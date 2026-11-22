@@ -1,6 +1,6 @@
 -- Reproducible first purchased train on the untouched default generated
 -- towns and corner grid. No injected house, grass or rail record.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function m(f) return dofile(root..f..".lua") end
 local function p(f,...) return m("openttd/"..f)(...) end
 local Sim=m("sim")

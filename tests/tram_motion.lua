@@ -1,4 +1,4 @@
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local Motion=dofile(root.."road_motion.lua")(dofile(root.."road_motion_data.lua"))
 local M=dofile(root.."tram_motion.lua")(dofile(root.."tram_motion_data.lua"),Motion)
 local F=dofile(root.."yapf_road_follow.lua")

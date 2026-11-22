@@ -13,7 +13,7 @@ texture. They share `bl_rail_signal_atlas.png`. Their physical origin is at
 center of the mast foot, exactly on the ground, not at the two-node tile
 center. Use them as fixed mesh entities with visual_size={x=1,y=1,z=1} over the existing track geometry.
 The model's aspect face is local -Z when no rotation is applied. Use the
-pose returned by `mods/bayline/rail_signal_art.lua` as the object's rotation
+pose returned by `mods/luanttd_core/rail_signal_art.lua` as the object's rotation
 directly, rather than applying road or locomotive heading adjustments.
 
 ## Track mounting

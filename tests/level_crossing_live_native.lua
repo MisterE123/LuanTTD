@@ -4,7 +4,7 @@ local cross=Sim.id(14,12)
 local cross_pos={x=28,y=1,z=24}
 local function gate(barred)
   api.render.crossing_gates()
-  local wanted="bayline:level_crossing_1_"..(barred and "closed" or "open")
+  local wanted="luanttd_core:level_crossing_1_"..(barred and "closed" or "open")
   local actual=core.get_node(cross_pos).name
   assert(actual==wanted,actual.." != "..wanted)
   local def=assert(core.registered_nodes[actual])

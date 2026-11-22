@@ -52,7 +52,7 @@ int main(){
 }
 """
 LUA=r"""
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function mod(n) return dofile(root..n..".lua") end
 local R=mod("openttd/station_rating")
 local C=mod("openttd/station_catchment")(nil,R)

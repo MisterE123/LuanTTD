@@ -36,8 +36,8 @@ stylized and are not a scale model of the museum object.
 
 ## Mount contract
 
-- `mods/bayline/models/bl_rail_ginzu_a4.obj` and
-  `mods/bayline/textures/bl_rail_ginzu_a4.png`.
+- `mods/luanttd_core/models/bl_rail_ginzu_a4.obj` and
+  `mods/luanttd_core/textures/bl_rail_ginzu_a4.png`.
 - **Native scale 1**, local **−Z nose**, +Y up. Ten OBJ units per native
   ground node. The rail crown is the model's Y=0; the ordinary mounting
   point is the same **+0.614** elevation as the existing Jubilee.

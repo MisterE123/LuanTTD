@@ -48,7 +48,7 @@ int main() {
 }
 '''
 LUA = '''
-local M=dofile("mods/bayline/openttd/road_motion.lua")(dofile("mods/bayline/openttd/road_motion_data.lua"))
+local M=dofile("mods/luanttd_core/openttd/road_motion.lua")(dofile("mods/luanttd_core/openttd/road_motion_data.lua"))
 local function line(...) print(table.concat({...},",")) end
 for side=0,1 do for over=0,1 do for state=0,79 do
   if state<48 or state>=64 then

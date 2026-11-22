@@ -8,7 +8,7 @@ import struct
 import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
+MODELS=ROOT/"mods/luanttd_core/models"
 COLORS=22
 TD=(0,1,2,3,4,5,8,9,10,11,12,13)
 SLOT={0:8,1:10,2:4,3:6,4:0,5:2,8:9,9:11,10:5,11:7,12:1,13:3}
@@ -52,7 +52,7 @@ def caps(group,area):
 
 
 def check_assets():
-    path=ROOT/"mods/bayline/textures/bl_rail_signal_atlas.png"
+    path=ROOT/"mods/luanttd_core/textures/bl_rail_signal_atlas.png"
     assert struct.unpack(">II",path.read_bytes()[16:24])==(COLORS*8,8)
     red,green=read("light","red"),read("light","green")
     assert {13,15}<=caps(red,"Red_aperture") and not ({14,16}&caps(red,"Green_aperture"))
@@ -68,7 +68,7 @@ def check_assets():
 
 def check_positions(lua,source):
     probe='''
-local A=dofile("mods/bayline/rail_signal_art.lua")
+local A=dofile("mods/luanttd_core/rail_signal_art.lua")
 assert(A.pose(9,11,6.5,4,true)==nil)
 assert(A.mesh("light",false)=="bl_rail_signal_light_red.obj")
 assert(A.mesh("semaphore",true)=="bl_rail_signal_semaphore_green.obj")

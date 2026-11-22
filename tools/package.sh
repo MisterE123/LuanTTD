@@ -9,7 +9,7 @@ if git show "$tag:game.conf" | grep -Fxq "title = LuanTTD"; then name=LuanTTD; f
 mkdir -p "$out"
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
-git archive --format=zip --prefix=bayline/ --output="$tmp/${name}-$tag.zip" "$tag"
+git archive --format=zip --prefix=luanttd/ --output="$tmp/${name}-$tag.zip" "$tag"
 git bundle create "$tmp/${name}-$tag.git.bundle" HEAD main "$tag"
 git bundle verify "$tmp/${name}-$tag.git.bundle"
 unzip -tq "$tmp/${name}-$tag.zip"

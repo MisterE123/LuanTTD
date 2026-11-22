@@ -5,8 +5,8 @@ from math import sqrt
 import struct
 
 ROOT=Path(__file__).resolve().parents[1]
-MODEL=ROOT/"mods/bayline/models"
-TEX=ROOT/"mods/bayline/textures/bl_road_post_stop.png"
+MODEL=ROOT/"mods/luanttd_core/models"
+TEX=ROOT/"mods/luanttd_core/textures/bl_road_post_stop.png"
 KEYS=("straight_0","straight_1","bay_0","bay_1","bay_2","bay_3")
 PARTS={"Paved_loading_platform","Raised_porcelain_POST_lettering",
        "Tied_canvas_mail_sacks","Parcels_awaiting_collection",

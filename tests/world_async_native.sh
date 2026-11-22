@@ -11,12 +11,12 @@ if [[ "$server" == */* ]]; then server=$(realpath "$server"); fi
 out=$2
 mkdir "$out"
 out=$(realpath "$out")
-mod="$out/games/worldasync/mods/bayline"
+mod="$out/games/worldasync/mods/luanttd_core"
 mkdir -p "$mod/openttd" "$out/world" "$out/home"
 printf 'title = Authoritative World Worker Probe\n' > "$out/games/worldasync/game.conf"
 printf 'name = bayline\n' > "$mod/mod.conf"
-cp mods/bayline/{world_storage,world_async,world_async_protocol,world_async_worker,terrain_word}.lua "$mod/"
-cp mods/bayline/openttd/{slope,terrain}.lua "$mod/openttd/"
+cp mods/luanttd_core/{world_storage,world_async,world_async_protocol,world_async_worker,terrain_word}.lua "$mod/"
+cp mods/luanttd_core/openttd/{slope,terrain}.lua "$mod/openttd/"
 cp tests/world_async_native.lua "$mod/init.lua"
 printf 'gameid = worldasync\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-39671}

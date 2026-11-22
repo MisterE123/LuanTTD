@@ -1,7 +1,7 @@
-local M=dofile("mods/bayline/sim.lua")
-local layout=dofile("mods/bayline/town_layout.lua")
-local T=dofile("mods/bayline/openttd/terrain.lua")
-local seed_terrain=dofile("mods/bayline/terrain_preview.lua")
+local M=dofile("mods/luanttd_core/sim.lua")
+local layout=dofile("mods/luanttd_core/town_layout.lua")
+local T=dofile("mods/luanttd_core/openttd/terrain.lua")
+local seed_terrain=dofile("mods/luanttd_core/terrain_preview.lua")
 for seed=1,60 do
   local s=M.new(seed)
   layout(M,s)

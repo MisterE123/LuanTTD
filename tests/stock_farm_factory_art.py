@@ -9,8 +9,8 @@ from zipfile import ZipFile, ZIP_DEFLATED
 from io import BytesIO
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
-TEXTURES=ROOT/"mods/bayline/textures"
+MODELS=ROOT/"mods/luanttd_core/models"
+TEXTURES=ROOT/"mods/luanttd_core/textures"
 LAYOUT={
     "farm":{(1,0):33,(1,1):34,(1,2):36,(0,0):37,(0,1):37,
             (0,2):36,(2,0):35,(2,1):38,(2,2):38},

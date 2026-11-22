@@ -9,7 +9,7 @@ fi
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-road-grade.XXXXXX")
 echo "Road-grade visual evidence: $out"
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game" "$out/home" "$out/cache" "$out/world"
 cp "$src/game.conf" "$game/"
 if [[ -n ${BAYLINE_NATIVE_CACHE_SEED:-} && -d $BAYLINE_NATIVE_CACHE_SEED/minetest ]]; then
@@ -25,10 +25,10 @@ if [[ "$(stat -c %d "$src")" == "$(stat -c %d "$out")" ]]; then
 else
   cp -R "$src/mods" "$game/"
 fi
-cp tests/road_grade_foundation_native.lua "$game/mods/bayline/"
-cat "$src/mods/bayline/init.lua" >"$out/init.lua"
+cp tests/road_grade_foundation_native.lua "$game/mods/luanttd_core/"
+cat "$src/mods/luanttd_core/init.lua" >"$out/init.lua"
 printf '\ndofile(mod.."/road_grade_foundation_native.lua")(api)\n' >>"$out/init.lua"
-mv "$out/init.lua" "$game/mods/bayline/init.lua"
+mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
 port=${BAYLINE_NATIVE_PORT:-42818}
@@ -37,7 +37,9 @@ export DISPLAY=":$display" XAUTHORITY="$out/Xauthority"
 pids=()
 cleanup() { for pid in "${pids[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done; wait || true; }
 trap cleanup EXIT
-printf 'gameid = bayline\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
+cp tests/qa_layout.lua "$game/mods/luanttd_core/qa_layout.lua"
+cp tests/coastal_corridor_fixture.lua "$game/mods/luanttd_core/qa_coastal_corridor.lua"
+printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 cat >"$out/native.conf" <<GAME
 port = $port
 server_announce = false
@@ -46,7 +48,7 @@ bayline_stock_generated_world = false
 bayline_stock_workbenches = false
 bayline_preview_terrain = true
 bayline_development_tools = true
-bayline_fixture_legacy_layout = true
+luanttd_qa_plain_layout = true
 GAME
 cat >"$out/client.conf" <<'GAME'
 screen_w = 1100
@@ -70,7 +72,7 @@ xauth -f "$XAUTHORITY" add "$DISPLAY" MIT-MAGIC-COOKIE-1 "$(python3 -c 'import s
 pids+=("$!")
 for _ in {1..60}; do xdpyinfo >/dev/null 2>&1 && break; sleep .2; done
 xdpyinfo >/dev/null 2>&1 || { cat "$out/xvfb.log"; exit 1; }
-luantiserver --world "$out/world" --config "$out/native.conf" --gameid bayline --logfile "" >"$out/server.log" 2>&1 &
+luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/server.log" 2>&1 &
 pids+=("$!")
 for _ in {1..80}; do grep -q 'listening' "$out/server.log" && break; sleep .2; done
 grep -q 'listening' "$out/server.log" || { cat "$out/server.log"; exit 1; }

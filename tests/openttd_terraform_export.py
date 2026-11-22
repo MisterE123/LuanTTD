@@ -44,7 +44,7 @@ def quote(luanti,root,port,source,data,tiles):
     (game/"game.conf").write_text("title = Stock shared-corner Raise quote\n")
     (mod/"mod.conf").write_text("name = terraform_lab\n")
     shutil.copyfile(HOME/"openttd_terraform_native.lua",mod/"init.lua")
-    repo=HOME.parent/"mods"/"bayline"
+    repo=HOME.parent/"mods"/"luanttd_core"
     for name in ("openttd/terrain.lua","openttd/slope.lua","openttd/landscaping.lua","import/openttd_map.lua"):
         shutil.copyfile(repo/name,mod/Path(name).name)
     settings=next(iter(data[b"PATS"].values()))

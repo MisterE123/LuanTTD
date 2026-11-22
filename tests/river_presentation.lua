@@ -13,7 +13,7 @@ for _,r in ipairs({{5,2,2},{5,3,1},{5,4,1},{6,4,0},{7,4,0},{4,3,1},{3,3,0},
   S.tiles[id(r[1],r[2])]={terrain="water",water_class="river",h=r[3]}
 end
 S.tiles[id(8,4)]={terrain="water",water_class="sea",h=0}
-local M=dofile("mods/bayline/river_presentation.lua")(Sim)
+local M=dofile("mods/luanttd_core/river_presentation.lua")(Sim)
 local m=M.routes(S)
 assert(m[id(7,4)]=="east" and m[id(6,4)]=="east" and m[id(5,4)]=="east")
 assert(m[id(5,3)]=="south" and m[id(5,2)]=="south" and m[id(4,3)]=="east")

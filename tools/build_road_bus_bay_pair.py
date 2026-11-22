@@ -202,10 +202,10 @@ def publish():
     mirrored=P.Mesh();ground(mirrored,.0775);building(mirrored)
     for k in range(4):
         obj=P.payload((m if k<2 else mirrored).transformed((-k)%4),str(k))
-        p=ROOT/"mods/bayline/models"/f"bl_road_bus_bay_pair_{k}.obj"
+        p=ROOT/"mods/luanttd_core/models"/f"bl_road_bus_bay_pair_{k}.obj"
         p.write_text(obj.replace(obj.splitlines()[0],
           "# Original simultaneous passenger bay art, stock one-entrance tile. tools/build_road_bus_bay_pair.py",1))
-    (ROOT/"mods/bayline/textures/bl_road_bus_bay_pair.png").write_bytes(P.atlas())
+    (ROOT/"mods/luanttd_core/textures/bl_road_bus_bay_pair.png").write_bytes(P.atlas())
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.preferences.filepaths.save_version=0
     sc=bpy.context.scene

@@ -1,7 +1,7 @@
 -- Appended to a disposable native game; uses actual paid Sim and renderer.
 return function(api)
   local S,Sim,R=api.s,api.Sim,api.render
-  local T=dofile(core.get_modpath("bayline").."/openttd/terrain.lua")
+  local T=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
   local function id(x,z) return assert(Sim.id(x,z)) end
   S.corner_grid.levels=T.new(Sim.W,Sim.H,function(x,z)
     if z>=9 and z<=16 and (x>=14 or (x==13 and z==12)) then return 1 end
@@ -27,9 +27,9 @@ return function(api)
   a,base,f=Sim.road_surface(S,id(13,11))
   assert(a==0 and base==1 and f=="leveled")
   assert(Sim.road_connected(S,id(12,11),2) and cost>0)
-  local ground=core.registered_nodes["bayline:road_10_plain_1"]
-  local flat=core.registered_nodes["bayline:road_foundation_10_1"]
-  local wedge=core.registered_nodes["bayline:road_grade_3_foundation"]
+  local ground=core.registered_nodes["luanttd_core:road_10_plain_1"]
+  local flat=core.registered_nodes["luanttd_core:road_foundation_10_1"]
+  local wedge=core.registered_nodes["luanttd_core:road_grade_3_foundation"]
   assert(ground.tiles[3]=="bl_grass_side.png" and flat.tiles[3]=="bl_road_surface_retaining.png")
   assert(#wedge.tiles==1 and wedge.tiles[1]=="bl_road_grade_foundation_10.png")
   core.register_on_joinplayer(function(p)
@@ -49,9 +49,9 @@ return function(api)
       for z=8,16 do for x=9,18 do dirty[#dirty+1]=id(x,z) end end
       R.update(dirty)
       local function at(x,y,z) return core.get_node({x=x,y=y,z=z}).name end
-      assert(at(24,1,22)=="bayline:road_grade_3_foundation")
+      assert(at(24,1,22)=="luanttd_core:road_grade_3_foundation")
       assert(not at(25,0,23):find("plain") and not at(24,0,22):find("plain"))
-      assert(at(26,1,22)=="bayline:road_foundation_10_2")
+      assert(at(26,1,22)=="luanttd_core:road_foundation_10_2")
       core.log("action","ROAD_GRADE_FOUNDATION_READY cost="..cost)
     end)
   end)

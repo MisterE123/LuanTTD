@@ -265,7 +265,7 @@ def export(name, make):
             uv.data[loop].uv=((c+.5)/64,.5)
     model.data.update()
     bpy.ops.wm.obj_export(
-        filepath=str(ROOT/f"mods/bayline/models/bl_town_{name}.obj"),
+        filepath=str(ROOT/f"mods/luanttd_core/models/bl_town_{name}.obj"),
         export_selected_objects=True,export_materials=False,export_uv=True,
         export_normals=True,export_triangulated_mesh=True,global_scale=1,
         forward_axis="NEGATIVE_Z",up_axis="Y",

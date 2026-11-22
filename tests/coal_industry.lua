@@ -1,10 +1,10 @@
 -- SPDX-License-Identifier: GPL-2.0-only
-local dir="mods/bayline/openttd/"
+local dir="mods/luanttd_core/openttd/"
 local Packets=dofile(dir.."passengers.lua")
 local Rating=dofile(dir.."station_rating.lua")
 local Catchment=dofile(dir.."station_catchment.lua")(Packets,Rating)
 local Income=dofile(dir.."income.lua")
-local RatingRuntime=dofile("mods/bayline/station_rating_runtime.lua")({},Rating,Packets)
+local RatingRuntime=dofile("mods/luanttd_core/station_rating_runtime.lua")({},Rating,Packets)
 local C=dofile(dir.."coal_industry.lua")(Packets,Rating,Catchment,Income)
 local function station(id,x,z,kind,owner)
   return {id=id,tile=z*64+x,x=x,z=z,town=4,owner=owner or 1,tiles={{x=x,y=z,kind=kind}}}

@@ -1,5 +1,5 @@
-local S=dofile("mods/bayline/sim.lua")
-local M=dofile("mods/bayline/road_motion.lua")
+local S=dofile("mods/luanttd_core/sim.lua")
+local M=dofile("mods/luanttd_core/road_motion.lua")
 local route={S.id(6,6),S.id(7,6),S.id(7,7)}
 local function close(a,b) assert(math.abs(a-b)<1e-7,tostring(a).." ~= "..b) end
 local x,z,dx,dz,id=M.corner(route,2,S.xy)

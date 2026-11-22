@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Real stock world clocks, ship motion, house production, cash and restart.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local src=root.."openttd/"
 local Sim=dofile(root.."sim.lua")
 local Track=dofile(src.."rail_track.lua")

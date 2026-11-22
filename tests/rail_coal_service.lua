@@ -1,6 +1,6 @@
 -- Real campaign footprint and one landscape loop; no rail runner is
 -- mounted here. Clock/work order matches actual native callbacks.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function mod(n) return dofile(root..n..".lua") end
 local Sim,Terrain,Packets,Income=mod("sim"),mod("openttd/terrain"),mod("openttd/passengers"),mod("openttd/income")
 local Rating=mod("openttd/station_rating")

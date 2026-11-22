@@ -16,8 +16,8 @@ from small_airport_art import hull
 from witcombe_wood_truck_art import data_table
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
-TEXTURES=ROOT/"mods/bayline/textures"
+MODELS=ROOT/"mods/luanttd_core/models"
+TEXTURES=ROOT/"mods/luanttd_core/textures"
 GRAIN="hereford_grain_truck"
 LOADED=GRAIN+"_loaded"
 VAN="talbott_livestock_van"

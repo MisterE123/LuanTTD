@@ -108,7 +108,7 @@ int main() {
 }
 """
 LUA = r"""
-local N=dofile("mods/bayline/openttd/stock_town_name.lua")
+local N=dofile("mods/luanttd_core/openttd/stock_town_name.lua")
 local used,actual={},{}
 for line in io.lines() do
   local a={}

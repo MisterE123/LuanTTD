@@ -97,7 +97,7 @@ int main(){
 }
 '''
 program=r'''
-local I=dofile("mods/bayline/openttd/landscape_index.lua")
+local I=dofile("mods/luanttd_core/openttd/landscape_index.lua")
 local worlds={}
 local function read(x,z)
   local key=x*16+z

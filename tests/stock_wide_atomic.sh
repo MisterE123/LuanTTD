@@ -5,12 +5,12 @@ cd "$(dirname "$0")/.."
 out=$1
 mkdir "$out"
 out=$(realpath "$out")
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp -r "${BAYLINE_NATIVE_EXACT_GAME:-.}"/game.conf "${BAYLINE_NATIVE_EXACT_GAME:-.}"/mods "$game/"
-printf '\n' >> "$game/mods/bayline/init.lua"
-cat tests/stock_wide_atomic_append.lua >> "$game/mods/bayline/init.lua"
-printf 'gameid = bayline\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
+printf '\n' >> "$game/mods/luanttd_core/init.lua"
+cat tests/stock_wide_atomic_append.lua >> "$game/mods/luanttd_core/init.lua"
+printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   tools=$(realpath "$BAYLINE_NATIVE_TOOLS")
@@ -22,7 +22,7 @@ write_config() {
   printf 'port = %s\nserver_announce = false\nbind_address = 127.0.0.1\nserver_map_save_interval = 600\nbayline_offline_economy = false\nbayline_native_atomic_phase = %s\nbayline_stock_generated_world = %s\nbayline_generated_map_size = %s\nbayline_generated_relief = 3\nbayline_generated_rivers = 1\nbayline_generated_mixed_freight = true\n' \
     "${BAYLINE_NATIVE_PORT:-42887}" "$phase" "$new" "$size" > "$out/server.conf"
 }
-args=(--config "$out/server.conf" --world "$out/world" --gameid bayline --logfile '')
+args=(--config "$out/server.conf" --world "$out/world" --gameid luanttd --logfile '')
 write_config baseline
 timeout 35 luantiserver "${args[@]}" > "$out/baseline.log" 2>&1
 # Simulate starting an existing 128² preview when only its SQL data exists.

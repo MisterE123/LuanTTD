@@ -54,19 +54,19 @@ core.register_on_joinplayer(function(p)
     local visited=0
     for _,kit in ipairs(kits) do
       local family,z=kit[1],kit[2]
-      assert(node(21,4,z,0,0)=="bayline:stock_"..family.."_span_0")
-      assert(node(21,3,z,1,1)=="bayline:stock_"..family.."_foot_0_1")
+      assert(node(21,4,z,0,0)=="luanttd_core:stock_"..family.."_span_0")
+      assert(node(21,3,z,1,1)=="luanttd_core:stock_"..family.."_foot_0_1")
       assert(node(21,3,z,0,0):match("slope"),node(21,3,z,0,0))
       if kit[4]==32 then
-        assert(node(22,3,z,0,0)=="bayline:stock_"..family.."_pier_0")
-        assert(node(22,2,z,1,1)=="bayline:stock_"..family.."_foot_0_1")
+        assert(node(22,3,z,0,0)=="luanttd_core:stock_"..family.."_pier_0")
+        assert(node(22,2,z,1,1)=="luanttd_core:stock_"..family.."_foot_0_1")
         assert(node(25,0,z,1,1):match("ocean_top"),node(25,0,z,1,1))
-        assert(node(25,1,z,1,1)=="bayline:stock_"..family.."_foot_0_water")
+        assert(node(25,1,z,1,1)=="luanttd_core:stock_"..family.."_foot_0_water")
       end
       for x=22,math.min(23,kit[4]-1) do
         local _,lo,hi=terrain_mod.tile(profile_grid,x,z)
         if hi-lo==2 then
-          assert(node(x,hi,z,1,1)=="bayline:stock_"..family.."_foot_0_2")
+          assert(node(x,hi,z,1,1)=="luanttd_core:stock_"..family.."_foot_0_2")
           visited=visited+1
         end
       end

@@ -28,7 +28,7 @@ def verify(server, home, data, points, port):
     (game / "game.conf").write_text("title = OpenTTD sparse baseline probe\n")
     (mod / "mod.conf").write_text("name = sparseprobe\n")
     shutil.copyfile(TESTS / "openttd_sparse_luanti.lua", mod / "init.lua")
-    modules = REPO / "mods" / "bayline"
+    modules = REPO / "mods" / "luanttd_core"
     for file in (modules / "openttd" / "terrain.lua", modules / "openttd" / "slope.lua",
                  modules / "import" / "openttd_map.lua", modules / "import" / "openttd_sparse.lua",
                  modules / "world_storage.lua"):

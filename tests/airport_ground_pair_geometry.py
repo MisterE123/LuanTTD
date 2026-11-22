@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-MODEL = ROOT / "mods/bayline/models/bl_bayshore_trimotor.obj"
+MODEL = ROOT / "mods/luanttd_core/models/bl_bayshore_trimotor.obj"
 
 
 def minimum_segment(a,b):

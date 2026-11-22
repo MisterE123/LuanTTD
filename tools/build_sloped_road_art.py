@@ -11,7 +11,7 @@ from random import Random
 
 from PIL import Image, ImageDraw
 
-TEXTURES = Path(__file__).resolve().parents[1] / "mods/bayline/textures"
+TEXTURES = Path(__file__).resolve().parents[1] / "mods/luanttd_core/textures"
 SIZE = 32
 FLIP_V = Image.Transpose.FLIP_TOP_BOTTOM
 ASPHALT = (79, 82, 85)

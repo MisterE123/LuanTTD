@@ -11,7 +11,7 @@ location arbitration. No upstream art or pixel reference is copied.
 
 ## Runtime mount contract
 
-`mods/bayline/rail_catenary_art.lua` is a free-standing presentation
+`mods/luanttd_core/rail_catenary_art.lua` is a free-standing presentation
 selector, not a track builder or source power rule:
 
 ```lua

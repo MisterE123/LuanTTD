@@ -173,7 +173,7 @@ def write_tunnels(root):
 
 
 if __name__ == "__main__":
-    out = Path(__file__).resolve().parents[1] / "mods/bayline/textures"
+    out = Path(__file__).resolve().parents[1] / "mods/luanttd_core/textures"
     for name, image in texture_set():
         image.save(out / f"bl_{name}.png", optimize=True)
     write_tunnels(out)

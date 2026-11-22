@@ -12,7 +12,7 @@ import sys
 from small_airport_art import obj,cut,intersects,hull
 
 ROOT=Path(__file__).resolve().parents[1]
-M=ROOT/"mods/bayline/models"
+M=ROOT/"mods/luanttd_core/models"
 FOOTPRINT=((7,7,7,10),(9,8,8,10))
 XMIN,XMAX,ZMIN,ZMAX=-.5,7.5,-.5,3.5
 APRON="Southern_industrial_carriage_and_rail_service_apron"
@@ -121,7 +121,7 @@ def approach(groups):
     # A tail centered at the terminal delivery pose overlaps the grate, so
     # the checked approach actually reaches the intended discharge station.
     assert 5.95 < 6.45+min(z for _,z in truck)<6.367
-    atlas=(ROOT/"mods/bayline/textures/bl_power_station_atlas.png").read_bytes()
+    atlas=(ROOT/"mods/luanttd_core/textures/bl_power_station_atlas.png").read_bytes()
     assert atlas[:8]==b"\x89PNG\r\n\x1a\n" and 256<int.from_bytes(atlas[16:20],"big")<1024
     assert (ROOT/"art/riverbend_power_station.blend").stat().st_size>80000
 

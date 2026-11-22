@@ -1,4 +1,4 @@
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function load(p) return dofile(root..p..".lua") end
 local Sim,Terrain,Track=load("sim"),load("openttd/terrain"),load("openttd/rail_track")
 local C=load("openttd/level_crossing")(Track)

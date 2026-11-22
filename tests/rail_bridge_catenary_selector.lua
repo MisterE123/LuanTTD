@@ -1,6 +1,6 @@
 -- Verify asset availability and chosen world-wire coordinates against the
--- real Harbor Valley wooden-rail quote, not a fake span/height fixture.
-local mod="mods/bayline/"
+-- real coastal test circuit wooden-rail quote, not a fake span/height fixture.
+local mod="mods/luanttd_core/"
 local function load(p) return dofile(mod..p..".lua") end
 local Art=load("rail_bridge_catenary_art")
 local Plain=load("rail_catenary_art")
@@ -23,7 +23,7 @@ local W=load("rail_span_world")(Sim,Terrain,H,B,U,Track)
 local s=Sim.new(1751)
 load("town_layout")(Sim,s)
 local old=load("terrain_preview")(Sim,Terrain,s)
-s.corner_grid=load("harbor_valley_seed")(Sim,Terrain,s,old)
+s.corner_grid=dofile("tests/coastal_corridor_fixture.lua")(Sim,Terrain,s,old)
 s.rail_span_enabled=true
 local q=assert(W.quote_bridge(s,"Bridge art QA",Sim.id(21,15),Sim.id(27,15)))
 assert(q.bridge_type==0 and q.deck==2 and q.axis==0 and #q.middle==5)

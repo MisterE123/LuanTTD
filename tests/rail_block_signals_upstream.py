@@ -157,7 +157,7 @@ int main(){
 """
 
 LUA = r"""
-local dir="mods/bayline/openttd/"
+local dir="mods/luanttd_core/openttd/"
 local T=dofile(dir.."rail_track.lua")
 local R=dofile(dir.."rail_signals.lua")(T)
 local B=dofile(dir.."rail_block_signals.lua")(T,R)

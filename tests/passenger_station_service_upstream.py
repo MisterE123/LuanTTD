@@ -52,8 +52,8 @@ int main(){
 }
 """
 LUA=r"""
-local S=dofile('mods/bayline/passenger_station_service.lua')(
-  {},{},{},{},{},function()return {} end,dofile('mods/bayline/openttd/loading_timing.lua'))
+local S=dofile('mods/luanttd_core/passenger_station_service.lua')(
+  {},{},{},{},{},function()return {} end,dofile('mods/luanttd_core/openttd/loading_timing.lua'))
 for _,mode in ipairs({"rail","ship"}) do
   local d=S.stock[mode]
   print(string.format("%d %d %d %d",d.engine,d.cap,d.slice,d.aging))

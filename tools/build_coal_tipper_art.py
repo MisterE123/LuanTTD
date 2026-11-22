@@ -255,7 +255,7 @@ def palette():
         return struct.pack(">I",len(data))+tag+data+struct.pack(">I",zlib.crc32(tag+data))
     img=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",256,8,8,2,0,0,0))
     img+=chunk(b"IDAT",zlib.compress((b"\0"+row)*8))+chunk(b"IEND",b"")
-    (ROOT/"mods/bayline/textures/bl_coal_tipper_palette.png").write_bytes(img)
+    (ROOT/"mods/luanttd_core/textures/bl_coal_tipper_palette.png").write_bytes(img)
 
 
 def joined(objects):
@@ -281,7 +281,7 @@ def export(stem,objects):
         for loop in face.loop_indices:
             uv.data[loop].uv=((idx+.5)/32,.5)
     ob.data.update()
-    bpy.ops.wm.obj_export(filepath=str(ROOT/f"mods/bayline/models/bl_{stem}.obj"),
+    bpy.ops.wm.obj_export(filepath=str(ROOT/f"mods/luanttd_core/models/bl_{stem}.obj"),
         export_selected_objects=True,export_materials=False,export_uv=True,export_normals=True,
         export_triangulated_mesh=True,global_scale=10,forward_axis="NEGATIVE_Z",up_axis="Y")
 

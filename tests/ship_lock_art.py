@@ -21,7 +21,7 @@ def compare_seam(a,b,d,A,B):
 
 
 def main():
-    atlas=ROOT/"mods/bayline/textures/bl_ship_lock_atlas.png"
+    atlas=ROOT/"mods/luanttd_core/textures/bl_ship_lock_atlas.png"
     assert struct.unpack(">II",atlas.read_bytes()[16:24])==(512,64)
     ferry=points(read("harbor_ferry",True))
     ship_beam=max(abs(x) for x,z,h in ferry)

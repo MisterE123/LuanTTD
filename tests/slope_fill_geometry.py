@@ -1,7 +1,7 @@
 """Natural slope triangles stay exact while their supporting cube has no top."""
 from pathlib import Path
 
-models = Path(__file__).resolve().parents[1] / "mods/bayline/models"
+models = Path(__file__).resolve().parents[1] / "mods/luanttd_core/models"
 
 
 def obj(name):

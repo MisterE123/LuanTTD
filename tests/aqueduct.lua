@@ -1,9 +1,9 @@
 -- Pure command acceptance and ship topology tests. No Luanti world writes.
-local S=dofile("mods/bayline/openttd/slope.lua")
-local Bridge=dofile("mods/bayline/openttd/road_bridge.lua")(S)
-local A=dofile("mods/bayline/openttd/aqueduct.lua")(Bridge)
-local Track=dofile("mods/bayline/openttd/rail_track.lua")
-local W=dofile("mods/bayline/openttd/ship_follow.lua")(Track)
+local S=dofile("mods/luanttd_core/openttd/slope.lua")
+local Bridge=dofile("mods/luanttd_core/openttd/road_bridge.lua")(S)
+local A=dofile("mods/luanttd_core/openttd/aqueduct.lua")(Bridge)
+local Track=dofile("mods/luanttd_core/openttd/rail_track.lua")
+local W=dofile("mods/luanttd_core/openttd/ship_follow.lua")(Track)
 local function make(axis,middle,base)
   local grid,ids,loc,cleared={},{},{},{}
   local function pos(i) return axis==0 and i or 1,axis==1 and i or 1 end

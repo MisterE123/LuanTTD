@@ -2,7 +2,7 @@
 from pathlib import Path
 from math import isclose
 
-assets = Path(__file__).resolve().parents[1] / "mods/bayline/models"
+assets = Path(__file__).resolve().parents[1] / "mods/luanttd_core/models"
 
 def model(stem):
     rows = (assets / f"bl_{stem}.obj").read_text().splitlines()

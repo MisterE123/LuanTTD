@@ -1,5 +1,5 @@
 -- Compare detached mutable owner with real H.advance_houses stock walk.
-local p="mods/bayline/"
+local p="mods/luanttd_core/"
 local function m(n) return dofile(p..n..".lua") end
 local H,I=m("openttd/town_passengers"),m("openttd/landscape_index")
 local D=m("openttd/landscape_dynamic")(I)

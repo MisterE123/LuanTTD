@@ -1,4 +1,4 @@
-local p="mods/bayline/openttd/"
+local p="mods/luanttd_core/openttd/"
 local F=dofile(p.."tree_worldgen.lua")
 local Slope=dofile(p.."slope.lua")
 local G=dofile(p.."terragenesis.lua")(Slope)

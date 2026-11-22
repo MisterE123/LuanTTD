@@ -21,8 +21,8 @@ import bpy
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[1]
-MODELS = ROOT / "mods/bayline/models"
-TEXTURES = ROOT / "mods/bayline/textures"
+MODELS = ROOT / "mods/luanttd_core/models"
+TEXTURES = ROOT / "mods/luanttd_core/textures"
 GEOMETRY_PRECISION = 1e-6
 # Railhead centres fit the two wheel-tread centres of the editable train art.
 GAUGE = .424

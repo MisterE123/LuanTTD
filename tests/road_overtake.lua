@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
-local dir="mods/bayline/openttd/"
+local dir="mods/luanttd_core/openttd/"
 local O=dofile(dir.."road_overtake.lua")
 local F=dofile(dir.."yapf_road_follow.lua")
 local Speed=dofile(dir.."road_speed.lua")

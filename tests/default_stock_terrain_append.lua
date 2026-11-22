@@ -25,11 +25,11 @@ core.after(0,function()
 
   local persisted=storage:get_string("default-terrain-proof")
   if key=="plain" and persisted=="" then
-    assert(core.settings:get("bayline_stock_generated_world")==nil and core.settings:get("bayline_harbor_valley")==nil
+    assert(core.settings:get("bayline_stock_generated_world")==nil
       and core.settings:get("bayline_seed")==nil and core.settings:get("bayline_stock_coastal_flood")==nil)
     local profile=assert(S.stock_generated_profile)
     assert(api.generated_world and S.seed==1751 and Sim.W==64 and Sim.H==64 and #S.corner_grid.levels==65^2
-      and not S.harbor_valley and profile.terrain=="terragenesis-14.1" and profile.towns==2)
+      and not S.qa_coastal and profile.terrain=="terragenesis-14.1" and profile.towns==2)
     assert(api.terrain and api.coastal_flood_tools and S.stock_coastal_flood and api.structure_tools and api.road_bay_tools
       and api.rail_build_tools and api.rail_owned_tools and api.ship_tools and api.airport_tools and api.freight_tools)
     local slopes,peak,water,shore,void=counts()
@@ -62,40 +62,28 @@ core.after(0,function()
     report(("%s %dx%d; %d slope tiles (peak %d), %d sea, %d shore, %d void; real $40250 raise then void-fed coast by tick %d; ordinary workbenches active")
       :format(profile.terrain,Sim.W,Sim.H,slopes,peak,water,shore,void,event))
   elseif key=="plain" then
-    assert(core.settings:get_bool("bayline_harbor_valley",false) and api.generated_world and not S.harbor_valley)
+    assert(core.settings:get("bayline_scenario")=="coastal" and api.generated_world and not S.qa_coastal)
     assert(core.sha256(string.char(unpack(S.corner_grid.levels)))==persisted)
     assert(S.tiles[Sim.id(2,2)].coastal_water and api.coastal_flood_tools)
-    report("saved stock world and new coast retained despite explicit Harbor setting")
-  elseif key=="harbor" then
-    if persisted=="" then
-      assert(S.harbor_valley and not api.generated_world and Sim.W==48 and Sim.H==36 and S.stock_coastal_flood)
-      local slopes,peak,water,shore=counts()
-      local bank0={}
-      for i,t in ipairs(S.tiles) do
-        local m,b=api.terrain.tile(i)
-        if m==0 and b==0 and t.terrain~="water" then bank0[i]=true end
-      end
-      local old=S.passenger_house_clock.counter
-      for _=1,16 do Sim.daily(S) end
-      assert(S.passenger_house_clock.counter==old+16*74)
-      local _,_,water2,shore2=counts()
-      local flooded=0
-      for i in pairs(bank0) do if S.tiles[i].terrain=="water" then flooded=flooded+1 end end
-      storage:set_string("default-terrain-proof","harbor")
-      api.save()
-      report(("authored 48x36, exact supported stock coastal clock %d ticks: water %d -> %d; graded shore %d -> %d; formerly dry flat-zero tiles newly wet %d")
-        :format(16*74,water,water2,shore,shore2,flooded))
-    else
-      assert(core.settings:get("bayline_harbor_valley")==nil and S.harbor_valley and not api.generated_world and Sim.W==48)
-      assert(api.archived_map and api.world_origin():match("Archived authored map"))
-    report("saved authored world kept and explicitly identified as archived")
-    end
+    report("saved stock world and new coast retained despite a different scenario setting")
   elseif key=="obsolete" then
-    assert(core.settings:get_bool("bayline_harbor_valley",false)
-      and core.settings:get_bool("bayline_stock_generated_world",true)==false)
-    assert(api.generated_world and S.stock_generated_profile.terrain=="terragenesis-14.1" and not S.harbor_valley)
-    assert(api.world_origin():match("TerraGenesis") and S.sites[1].name~="Port Alder")
-    report("obsolete map and feature flags cannot silently select an authored island")
+    assert(core.settings:get_bool("luanttd_qa_coastal_layout",false) and core.settings:get_bool("luanttd_qa_plain_layout",false) and core.settings:get_bool("bayline_stock_generated_world",true)==false)
+    assert(api.generated_world and S.stock_generated_profile.terrain=="terragenesis-14.1" and not S.qa_coastal)
+    assert(api.world_origin():match("TerraGenesis"))
+    report("test layout flags are ignored without QA support")
+  elseif key=="all_on" then
+    assert(api.generated_world and not api.oil_tools and S.stock_bus_market and S.road_mail and
+      S.road_stock_loading and S.road_junction_clearance and S.stock_town_growth and api.offline_economy)
+    for _,field in ipairs({"road_bay_tools","structure_tools","oneway_tools","rail_build_tools","rail_span_tools",
+        "rail_owned_tools","rail_owned_pair_tools","rail_block_tools","crossing_tools","electric_tools",
+        "ship_tools","ship_coal_tools","tram_tools","airport_tools","freight_tools","rail_coal_tools","rail_goods_tools"}) do
+      assert(api[field],"Missing ordinary feature: "..field)
+    end
+    assert(S.ship_paid_service and S.rail_paid_service and S.air_paid_service and S.air_owned_preview and S.air_fleet_preview)
+    for _,name in ipairs({"roads","road_stops","railworks","railsignals","railfreight","harbor","harbor_ops","tramway","airfields"}) do
+      assert(api.world.has_menu(name),"Missing ordinary hotbar: "..name)
+    end
+    report("former opt-outs ignored; core modes, paid services and freight tools mounted without opt-in")
   elseif key=="archipelago" then
     assert(api.generated_world and S.seed==23 and #S.sites>=2)
     local seen,areas={},{}
@@ -120,23 +108,20 @@ core.after(0,function()
     assert(areas[1]==817 and areas[2]==281 and areas[3]==199)
     report(("TerraGenesis seed 23 / sea High: separate 817, 281 and 199 land-tile islands with real towns"))
   elseif key=="invalid" then
-    assert(api.generated_world and not api.archived_map and not S.harbor_valley)
-    report("unrecognized scenario resolves to generated terrain, not an authored fallback")
+    assert(api.generated_world and not S.qa_coastal)
+    report("unrecognized scenario resolves to generated terrain")
   elseif key=="farm" then
-    assert(not api.generated_world and not S.harbor_valley and api.farm_tools and Sim.W==48)
+    assert(not api.generated_world and not S.qa_coastal and api.farm_tools and api.ship_tools and api.rail_build_tools and api.airport_tools and Sim.W==48)
     report("explicit Farm wins over generated world")
   elseif key=="oil" then
-    assert(not api.generated_world and not S.harbor_valley and api.oil_tools and Sim.W==48)
+    assert(not api.generated_world and not S.qa_coastal and api.oil_tools and api.rail_oil_tools and api.ship_tools and api.airport_tools and Sim.W==48)
     report("explicit Oil wins over generated world")
   elseif key=="coast" then
-    assert(not api.generated_world and not S.harbor_valley and api.coastal_flood_tools and Sim.W==48)
+    assert(not api.generated_world and not S.qa_coastal and api.coastal_flood_tools and Sim.W==48)
     report("explicit Coastal Landscaping wins over generated world")
   elseif key=="south" then
-    assert(not api.generated_world and not S.harbor_valley and S.stock_coal_scenario=="south_coast_1751" and Sim.W==48)
+    assert(not api.generated_world and not S.qa_coastal and S.stock_coal_scenario=="south_coast_1751" and Sim.W==48)
     report("explicit South Coast Coal wins over generated world")
-  elseif key=="lab" then
-    assert(not api.generated_world and not api.road_first and not S.harbor_valley and Sim.W==48)
-    report("explicit Development Lab wins over generated world")
   else error("Bad terrain proof world: "..tostring(key)) end
   core.request_shutdown("Default terrain qualified",false,0)
 end)

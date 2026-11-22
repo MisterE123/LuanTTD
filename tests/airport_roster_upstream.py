@@ -62,7 +62,7 @@ def main():
     fixed=re.search(r"CommandCost cost\(EXPENSES_AIRCRAFT_RUN, (.*?)\);",aircraft)[1].replace(
         "this->GetRunningCost()","GetPrice(1, running, nullptr, 0)").replace(
         "this->running_ticks","t").replace("CalendarTime::DAYS_IN_YEAR",days).replace("Ticks::DAY_TICKS",day)
-    lua=["local R=dofile('mods/bayline/openttd/airport_roster.lua')","local Z=0"]
+    lua=["local R=dofile('mods/luanttd_core/openttd/airport_roster.lua')","local Z=0"]
     cpp=r'''
 #include <cstdint>
 #include <cstdio>

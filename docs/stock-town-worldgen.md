@@ -1,7 +1,7 @@
 # Stock town world generation
 
 This is the temperate ordinary-OpenTTD town placement and creation
-controller, not the Harbor Valley town map. The source reference is
+controller. The source reference is
 [OpenTTD 14.1 `town_cmd.cpp`](https://github.com/OpenTTD/OpenTTD/blob/14.1/src/town_cmd.cpp)
 and [`map.cpp`](https://github.com/OpenTTD/OpenTTD/blob/14.1/src/map.cpp).
 

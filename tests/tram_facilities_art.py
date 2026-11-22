@@ -5,7 +5,7 @@ from math import isclose
 import struct
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
+MODELS=ROOT/"mods/luanttd_core/models"
 ORTHOGONAL=((-1,0),(0,1),(1,0),(0,-1))
 EPS=2e-6
 ROLLING=("Paved_rail_grooves","Road_flush_tram_rail","Live_overhead_contact_wire")
@@ -60,7 +60,7 @@ def intersects(groups,dx,dz,x0,y,z0,z1):
 
 
 def main():
-    atlas=ROOT/"mods/bayline/textures/bl_tram_facilities_atlas.png"
+    atlas=ROOT/"mods/luanttd_core/textures/bl_tram_facilities_atlas.png"
     assert struct.unpack(">II",atlas.read_bytes()[16:24])==(36*8,8)
     baseline=[]
     names=("bl_tram_rails_5.obj","bl_tram_wire_5.obj")

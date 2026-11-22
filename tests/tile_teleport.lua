@@ -7,7 +7,7 @@ local api={Sim=Sim,s={tiles=tiles,bridge_above={[2]=6},stock_road_bridges={[6]={
   terrain={},render={uses_slope=function(id)return id==1 end,
   surface=function(id,x,z)assert(id==1 and x==4.5 and z==6.5);return 6.5 end},
   save=function()error("Teleporting must not edit the simulation")end}
-local U=dofile("mods/bayline/ui.lua")(api)
+local U=dofile("mods/luanttd_core/ui.lua")(api)
 local p={get_player_name=function()return "QA" end,
   set_pos=function(_,pos)calls[#calls+1]=pos end,
   set_look_vertical=function()error("must preserve pitch")end,

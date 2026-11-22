@@ -8,7 +8,7 @@ local function audit()
   assert(api.tram_tools and api.tram and api.tram_view and api.world.has_menu("tramway"))
   assert(api.road_bay_tools and api.world.has_menu("road_stops") and Sim.road_stock_service_active(S))
   for _,tool in ipairs({"tram_order","tram_clear","tram_track","tram_stop","tram_depot","tram_bit"}) do
-    assert(core.registered_tools["bayline:menu_"..tool],tool)
+    assert(core.registered_tools["luanttd_core:menu_"..tool],tool)
   end
   -- Report actual rows in the live formspec, not startup guesswork.
   local index=dofile(mod.."/workbench_index.lua")(api)
@@ -53,7 +53,7 @@ local function native_mesh()
   local _,base=api.terrain.tile(frame[4])
   for _,obj in ipairs(core.get_objects_inside_radius({x=2*x+.5,y=base+.512,z=2*z+.5},2.4)) do
     local entity=obj:get_luaentity()
-    if entity and entity.name=="bayline:tram_preview_vehicle" then
+    if entity and entity.name=="luanttd_core:tram_preview_vehicle" then
       local props=obj:get_properties()
       assert(props.mesh=="bl_streetcar.obj" and props.textures[1]=="bl_tram_palette.png")
       return obj
@@ -152,3 +152,13 @@ core.after(0,function()
       if remaining==0 then core.after(0,main,x,z,level) end
     end)
 end)
+-- This probe is appended to the only game mod, inside a clean native server.
+assert(core.get_current_modname()=="luanttd_core")
+for _,registry in ipairs({core.registered_items,core.registered_entities}) do
+  for name in pairs(registry) do
+    -- Engine entries include both bare names and __builtin:falling_node.
+    assert(not name:find(":",1,true) or name:match("^__builtin:") or name:match("^luanttd_core:"),
+      "unexpected game content namespace: "..name)
+  end
+end
+assert(core.registered_nodes["luanttd_core:bedrock"])

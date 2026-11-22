@@ -123,7 +123,7 @@ int main() {
 }
 """
 LUA = r"""
-local C=dofile("mods/bayline/openttd/clear_area.lua")
+local C=dofile("mods/luanttd_core/openttd/clear_area.lua")
 for line in io.lines() do
   local a={}
   for v in line:gmatch("%-?%d+") do a[#a+1]=tonumber(v) end

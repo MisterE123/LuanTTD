@@ -8,7 +8,7 @@ from math import isclose
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
+MODELS=ROOT/"mods/luanttd_core/models"
 REQ={(1,1,0),(1,2,2),(0,0,5),(1,0,6),(2,0,3),(2,2,3)}
 AXLE=(2.5,2.42,2.395)
 EPS=2e-6
@@ -40,7 +40,7 @@ def seam(a,b,tag,dim,x):
 
 def check(lua,header):
     data=subprocess.check_output([lua,"-"],cwd=ROOT,input='''
-local t=dofile("mods/bayline/openttd/coal_industry.lua")().mine_layouts[0]
+local t=dofile("mods/luanttd_core/openttd/coal_industry.lua")().mine_layouts[0]
 for _,r in ipairs(t) do print(r[1],r[2],r[3]) end
 ''',text=True)
     assert {tuple(map(int,line.split())) for line in data.splitlines()}==REQ
@@ -81,7 +81,7 @@ for _,r in ipairs(t) do print(r[1],r[2],r[3]) end
     assert "Actual_open_bunker_rim_thickness" in parts[(1,0)]
     assert "Coal_stockpile_main_tapered_body_broken_coal_lumps" in parts[(2,0)]
     assert "Rope_winch_steel_cable_drum" in parts[(1,2)]
-    w,h=struct.unpack(">II",(ROOT/"mods/bayline/textures/bl_coal_mine_atlas.png").read_bytes()[16:24])
+    w,h=struct.unpack(">II",(ROOT/"mods/luanttd_core/textures/bl_coal_mine_atlas.png").read_bytes()[16:24])
     assert h==8 and w%8==0
     print("PASS: exact six stock occupied tile meshes; four continuous stock-layout belt or cable seams; original hollow bins, winding gear and open road/rail loading frontages")
 

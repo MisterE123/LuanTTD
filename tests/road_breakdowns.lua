@@ -1,5 +1,5 @@
-local B=dofile("mods/bayline/openttd/road_breakdowns.lua")
-local E=dofile("mods/bayline/openttd/stock_engine_calendar.lua")
+local B=dofile("mods/luanttd_core/openttd/road_breakdowns.lua")
+local E=dofile("mods/luanttd_core/openttd/stock_engine_calendar.lua")
 local function copy(t) local out={};for k,v in pairs(t) do out[k]=v end;return out end
 local function forbidden() error("stock Random() must not be consumed here") end
 

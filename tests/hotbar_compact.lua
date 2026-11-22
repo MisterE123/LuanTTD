@@ -1,5 +1,5 @@
 -- Verify authored routes remain intact when displayed as physical slots.
-local H=dofile("mods/bayline/hotbar.lua")
+local H=dofile("mods/luanttd_core/hotbar.lua")
 H.enable_structures(true);H.enable_trams();H.enable_ships();H.enable_airfields(true)
 H.enable_freight();H.enable_railworks(true,true,true);H.enable_electric_rail();H.enable_rail_pair()
 H.enable_rail_block();H.enable_ship_coal();H.enable_bay_termini();H.enable_oneway()
@@ -51,7 +51,7 @@ local builds,picks,finishes,teleports,inspections=0,0,0,0,0
 local cancel_pending=false
 core={
   register_tool=function(id,def) registered[id]=def end,
-  get_modpath=function() return "mods/bayline" end,
+  get_modpath=function() return "mods/luanttd_core" end,
   get_us_time=function() return now end,
   register_chatcommand=function() end,
   register_allow_player_inventory_action=function() end,
@@ -91,10 +91,10 @@ local ui={
   choose_order_stop=function()picks=picks+1 end,
   finish_order_pick=function()finishes=finishes+1;order=false;W.end_order_selection(p) end,
 }
-W=dofile("mods/bayline/world.lua")(api,ui)
+W=dofile("mods/luanttd_core/world.lua")(api,ui)
 W.spawn(p)
 local function at(name)
-  for i=1,cap do if stacks[i]:get_name()=="bayline:menu_"..name then return i end end
+  for i=1,cap do if stacks[i]:get_name()=="luanttd_core:menu_"..name then return i end end
   error("Not present: "..name)
 end
 local function press(slot,last,method)

@@ -3,7 +3,7 @@
 local receive,form,notice
 core={
   formspec_escape=function(s)return s end,
-  show_formspec=function(_,id,body) assert(id=="bayline:rail_fleet");form=body end,
+  show_formspec=function(_,id,body) assert(id=="luanttd_core:rail_fleet");form=body end,
   close_formspec=function()end,
   register_on_player_receive_fields=function(f)receive=f end,
   register_on_leaveplayer=function()end,
@@ -49,8 +49,8 @@ function O.start_goods(s,n,id,load,unload)
 end
 function O.toggle(s,n,id) assert(id==7 and n=="A");calls.toggles=calls.toggles+1;return true,"Stopped." end
 local api={s=w,Sim=Sim,rail_owned=O,rail_goods_tools=true,save=function()calls.saves=calls.saves+1 end}
-local U=dofile("mods/bayline/rail_owned_ui.lua")(api,function(_,s)notice=s end)
-local function press(key) assert(receive(p,"bayline:rail_fleet",{[key]=true})) end
+local U=dofile("mods/luanttd_core/rail_owned_ui.lua")(api,function(_,s)notice=s end)
+local function press(key) assert(receive(p,"luanttd_core:rail_fleet",{[key]=true})) end
 local function has(str) return form and form:find(str,1,true) end
 U.open(p,1)
 assert(has("purchase_goods") and has("25-crate Goods Van") and has("$12421") and not has("purchase_oil"))

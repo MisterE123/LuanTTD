@@ -61,7 +61,7 @@ int main(){
 }
 '''
 port = r'''
-local drag=dofile("mods/bayline/openttd/rail_drag_build.lua")
+local drag=dofile("mods/luanttd_core/openttd/rail_drag_build.lua")
 for line in io.lines() do
   local strict,cells=line:match("(%d) (%a+)")
   local map,used,seen={}, {}, {}

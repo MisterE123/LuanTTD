@@ -93,7 +93,7 @@ def verify(a):
     assert (ROOT/"art"/(NAME+".blend")).stat().st_size>150_000
     b=BytesIO()
     with ZipFile(b,"w",ZIP_DEFLATED,compresslevel=9) as z:
-        for f in (ROOT/"mods/bayline/models"/f"bl_{NAME}.obj",ROOT/"mods/bayline/textures"/f"bl_{NAME}.png"):
+        for f in (ROOT/"mods/luanttd_core/models"/f"bl_{NAME}.obj",ROOT/"mods/luanttd_core/textures"/f"bl_{NAME}.png"):
             z.write(f,f.name)
     assert struct.unpack_from(">II",f.read_bytes(),16)==(312,8)
     print(f"MANLEY_MOREL_ART_PASS #11, 8 tread contacts per half, {tread_clearance(wheels):,} true rail overlaps, "+

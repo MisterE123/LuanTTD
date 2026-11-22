@@ -45,4 +45,4 @@ Regenerate: `blender -b -t 2 --python-exit-code 1 --python tools/build_rail_sh_c
 reassembly with the old runtime models and real shoe intersections
 at both steady grades and axes. `tests/rail_bridge_catenary_native.sh --sprung`
 exercises parent/child scale and rotation in the actual Linux client
-with both opposing Harbor Valley ramp meshes and the ordinary bridge deck.
+with both opposing coastal rail test fixture ramp meshes and the ordinary bridge deck.

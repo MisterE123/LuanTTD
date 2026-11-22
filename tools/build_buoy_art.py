@@ -4,7 +4,7 @@ from math import cos, pi, sin
 from pathlib import Path
 from PIL import Image
 
-base = Path(__file__).resolve().parents[1] / "mods/bayline"
+base = Path(__file__).resolve().parents[1] / "mods/luanttd_core"
 colours = ["8a4930", "dda749", "f2c554", "b86f36", "f0e5aa", "273c41", "4f6267", "ffeab1"]
 palette=Image.new("RGB",(8*len(colours),8))
 for i,colour in enumerate(colours):

@@ -1,4 +1,4 @@
-local L=dofile("mods/bayline/ship_lock_presentation.lua")
+local L=dofile("mods/luanttd_core/ship_lock_presentation.lua")
 local step={[0]={-1,0},{0,1},{1,0},{0,-1}}
 for dir=0,3 do
   local lock={middle=5,dir=dir}

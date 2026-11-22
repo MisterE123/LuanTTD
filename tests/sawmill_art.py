@@ -17,7 +17,7 @@ def test(upstream):
         native={(int(x),int(z)):int(gfx) for x,z,gfx in re.findall(r'MK\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)',match[1])}
         assert native==LAYOUT
     files={tuple(map(int,p.stem.split("_")[-2:])) for p in
-           (ROOT/"mods/bayline/models").glob("bl_sawmill_0_*.obj")}
+           (ROOT/"mods/luanttd_core/models").glob("bl_sawmill_0_*.obj")}
     assert files==set(LAYOUT),files
     records={}
     for (x,z),gfx in LAYOUT.items():

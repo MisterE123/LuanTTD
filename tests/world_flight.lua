@@ -31,7 +31,7 @@ local p={
   hud_add=function()next_hud=next_hud+1;return next_hud end,
 }
 core={
-  get_modpath=function()return "mods/bayline" end,get_us_time=function()return now end,
+  get_modpath=function()return "mods/luanttd_core" end,get_us_time=function()return now end,
   get_connected_players=function()return {p} end,
   register_tool=noop,register_chatcommand=noop,register_allow_player_inventory_action=noop,
 }
@@ -44,7 +44,7 @@ local ui={
   begin_demolition=function(_,id)assert(id==1);demolishing=true;return true end,
   end_demolition=function(_,id,is_diagonal)assert(demolishing and id==1);diagonal=is_diagonal;demolishing=false end,
 }
-local W=dofile("mods/bayline/world.lua")({
+local W=dofile("mods/luanttd_core/world.lua")({
   road_first=true,
   s={tiles={{h=1}},sites={},stations={},corner_grid={}},
   Sim={id=function()return 1 end,xy=function()return 1,1 end},
@@ -60,7 +60,7 @@ W.go_menu(p,"roads")
 for physical,authored in ipairs(W.hotbar_layout(p)) do
   if authored==9 then index=physical;break end
 end
-assert(contents[index]=="bayline:menu_clear","find Bulldoze in the compact layout")
+assert(contents[index]=="luanttd_core:menu_clear","find Bulldoze in the compact layout")
 step(2) -- model the client settling after the menu's inventory update
 assert(override.speed_walk==2 and override.speed_crouch==5.9 and physics_calls==1)
 keys={dig=true};step()

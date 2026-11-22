@@ -70,8 +70,8 @@ def verify(a):
             roof=min(along_ray(bore,2,x,z))
             assert h+.114-.5+.035<roof,(x,z,h,roof)
     assert (ROOT/"art"/f"{NAME}.blend").stat().st_size>130000
-    obj=ROOT/"mods/bayline/models"/f"bl_{NAME}.obj"
-    atlas=ROOT/"mods/bayline/textures"/f"bl_{NAME}.png"
+    obj=ROOT/"mods/luanttd_core/models"/f"bl_{NAME}.obj"
+    atlas=ROOT/"mods/luanttd_core/textures"/f"bl_{NAME}.png"
     a=atlas.read_bytes()
     assert a[:8]==b"\x89PNG\r\n\x1a\n" and struct.unpack_from(">II",a,16)==(336,8)
     buf=BytesIO()

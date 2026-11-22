@@ -38,9 +38,9 @@ host.rail_owned={
   running=function() if orders then return {passengers=11,stopped=stop,running_expense=15} end end,
   toggle=function(s,n,id)assert(id==15);stop=not stop;return true,"Toggled queued consist." end,
 }
-local ui=dofile("mods/bayline/rail_owned_ui.lua")(host,function(_,text)last=text end)
+local ui=dofile("mods/luanttd_core/rail_owned_ui.lua")(host,function(_,text)last=text end)
 assert(not ui.open(other,1) and not ui.open(owner,2))
-assert(handler(owner,"bayline:rail_fleet",{purchase=true}) and saves==0)
+assert(handler(owner,"luanttd_core:rail_fleet",{purchase=true}) and saves==0)
 assert(ui.open(owner,1) and panel.markup:find("$12866",1,true))
 assert(handler(other,panel.key,{purchase=true}) and saves==0)
 assert(handler(owner,panel.key,{purchase=true}) and saves==1 and panel.markup:find("Purchased train",1,true))

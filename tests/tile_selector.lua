@@ -1,4 +1,4 @@
-local slopes=dofile("mods/bayline/openttd/slope.lua")
+local slopes=dofile("mods/luanttd_core/openttd/slope.lua")
 local registered,instances={},{}
 local function set(p,entry)
   for k,v in pairs(entry) do p[k]=v end
@@ -14,7 +14,7 @@ for _,name in ipairs({"one","two"}) do
 end
 core={
   register_entity=function(name,def) registered[name]=def end,
-  get_modpath=function() return "mods/bayline" end,
+  get_modpath=function() return "mods/luanttd_core" end,
   get_player_by_name=function(n) return players[n] end,
   add_entity=function(pos,id,n)
     local def=assert(registered[id])
@@ -40,7 +40,7 @@ function api.render.surface(id,x,z)
   local a,b=Sim.xy(id)
   return cell.base+slopes.surface((x-2*a+.5)/2,(z-2*b+.5)/2,cell.slope)
 end
-local sel=dofile("mods/bayline/tile_selector.lua")(api)
+local sel=dofile("mods/luanttd_core/tile_selector.lua")(api)
 sel.show(players.one,1,"inspect")
 local main=instances[1]
 assert(main.props.mesh=="bl_selector_29.obj" and main.props.textures[1]=="bl_selector_inspect.png")
@@ -76,7 +76,7 @@ assert(not other:get_pos())
 for mask=0,30 do
   if mask<15 or mask==23 or mask==27 or mask==29 or mask==30 then
     local paths={}
-    for line in io.lines("mods/bayline/models/bl_selector_"..mask..".obj") do
+    for line in io.lines("mods/luanttd_core/models/bl_selector_"..mask..".obj") do
       if line:sub(1,2)=="v " then
         local a,b,c=line:match("^v ([^ ]+) ([^ ]+) ([^ ]+)$")
         local x,y,z=-tonumber(a)/10,tonumber(b)/10,tonumber(c)/10

@@ -9,11 +9,8 @@ terrain readable for building. The moon is original procedural art:
 - `time_speed` still sets clock speed (Luanti default 72, a 20-minute
   full day). An explicit `time_speed = 0` stays frozen at its selected
   world time.
-- `bayline_moonlight_ratio` controls nighttime terrain lighting. Its
-  default is 0.53; lower is darker, higher is brighter. Daylight still
-  rises toward full brightness, with a smooth twilight transition.
-- Turning off `bayline_coastal_haze` disables optional fog and clouds,
-  not the day/night cycle, moon or stars.
+- Moonlight, clouds and coastal haze are built in. Lighting transitions
+  smoothly between readable nights and bright days.
 
 This is presentation only: it does not change production, service
 schedules, map saves, or the separate Original terrain survey mode. An

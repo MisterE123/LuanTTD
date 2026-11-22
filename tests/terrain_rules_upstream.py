@@ -121,7 +121,7 @@ int main(){
 """
 
 lua = """
-local T=dofile('mods/bayline/openttd/terrain.lua')
+local T=dofile('mods/luanttd_core/openttd/terrain.lua')
 local code={ALREADY_AT_SEA_LEVEL=1,TOO_HIGH=2,TOO_CLOSE_TO_EDGE=3,NO_EFFECT=4}
 for line in io.lines() do
   local a={}

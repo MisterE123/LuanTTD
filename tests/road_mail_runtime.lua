@@ -1,4 +1,4 @@
-local base="mods/bayline/"
+local base="mods/luanttd_core/"
 local Sim=dofile(base.."sim.lua")
 local H=dofile(base.."openttd/town_passengers.lua")
 local P=dofile(base.."openttd/passengers.lua")

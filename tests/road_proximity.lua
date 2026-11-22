@@ -1,4 +1,4 @@
-local P=dofile("mods/bayline/openttd/road_proximity.lua")
+local P=dofile("mods/luanttd_core/openttd/road_proximity.lua")
 local front={blocked_ctr=4,reverse_ctr=0}
 local bus={id=1,first=1, type="road",x=12,y=12,z=0,direction=5}
 local function other(id,x,y,z,d,kind,depot,first)

@@ -2,7 +2,7 @@
 -- Real generated 64² campaign, native construction commands and stock
 -- YAPF both ways. Ordinary orders, no injected road, cargo or industries.
 -- Clean-room host integration, using real source-port modules, not Harbor seeds.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function load(name) return dofile(root..name..".lua") end
 local Sim,Terrain,Slope=load("sim"),load("openttd/terrain"),load("openttd/slope")
 local TG=load("openttd/terragenesis")(Slope)

@@ -1,12 +1,12 @@
 -- Fixed vehicle art mapping at actual paid dispatcher presentation layer.
-local View=dofile("mods/bayline/rail_dispatch_view.lua")
-local WAGON="bayline:dispatch_oil_tanker"
+local View=dofile("mods/luanttd_core/rail_dispatch_view.lua")
+local WAGON="luanttd_core:dispatch_oil_tanker"
 local function fixture(missing_file,electric)
   local d={runs={},signals={records={}}}
   local s={tiles={[1]={h=0},[2]={h=0}},speed=1,coal=0,oil=0,stock_electrification=electric}
   local registered,actors,mounted,motions={},{},{},{}
   core={
-    get_modpath=function()return "mods/bayline" end,
+    get_modpath=function()return "mods/luanttd_core" end,
     register_entity=function(name,props)
       assert(not registered[name],name)
       registered[name]=props.initial_properties
@@ -71,7 +71,7 @@ local dtrain={id="stock paid train",fleet_id=91,paid_clock=true,stock_engine=15,
               consist={parts={{},{}}}}
 
 local V,d,s,catalog,actors,motions=fixture()
-assert(not catalog["bayline:dispatch_sh_30"])
+assert(not catalog["luanttd_core:dispatch_sh_30"])
 local p=assert(catalog[WAGON])
 assert(V.oil_wagon_ready() and p.mesh=="bl_rail_oil_tanker.obj")
 assert(p.textures[1]=="bl_rail_oil_tanker.png")
@@ -79,7 +79,7 @@ assert(p.visual_size.x==1 and p.visual_size.y==1 and p.visual_size.z==1 and p.ba
 assert(p.static_save==false and p.physical==false and p.collide_with_objects==false)
 d.runs[1]=dtrain
 step(V)
-assert(#actors==2 and actors[1].name=="bayline:dispatch_floss" and actors[2].name==WAGON)
+assert(#actors==2 and actors[1].name=="luanttd_core:dispatch_floss" and actors[2].name==WAGON)
 assert(actors[2].pos.x==4.625 and math.abs(actors[2].pos.y-1.434)<1e-7 and actors[2].pos.z==6.95)
 assert(actors[2].rot.x==-.125 and actors[2].rot.y==math.pi)
 for _,amount in ipairs({6,15,30,0}) do
@@ -91,29 +91,29 @@ end
 assert(#motions==5)
 dtrain.stock_wagon=29
 step(V)
-assert(#actors==3 and not actors[2]:get_pos() and actors[3].name=="bayline:dispatch_coal_empty")
+assert(#actors==3 and not actors[2]:get_pos() and actors[3].name=="luanttd_core:dispatch_coal_empty")
 s.coal=18
 step(V)
-assert(#actors==4 and not actors[3]:get_pos() and actors[4].name=="bayline:dispatch_coal_loaded")
+assert(#actors==4 and not actors[3]:get_pos() and actors[4].name=="luanttd_core:dispatch_coal_loaded")
 dtrain.stock_wagon=27
 step(V)
-assert(#actors==5 and not actors[4]:get_pos() and actors[5].name=="bayline:dispatch_wagon")
+assert(#actors==5 and not actors[4]:get_pos() and actors[5].name=="luanttd_core:dispatch_wagon")
 
 local EV,ED,_,ecatalog,eactors=fixture(nil,true)
-assert(ecatalog["bayline:dispatch_sh_30"].mesh=="bl_rail_sh_30.obj")
+assert(ecatalog["luanttd_core:dispatch_sh_30"].mesh=="bl_rail_sh_30.obj")
 ED.runs[1]={id="electric",fleet_id=91,paid_clock=true,stock_engine=23,stock_wagon=27,
   consist={parts={{},{}}}}
 step(EV)
-assert(#eactors==2 and eactors[1].name=="bayline:dispatch_sh_30" and
-  eactors[2].name=="bayline:dispatch_wagon")
-if ecatalog["bayline:dispatch_sh_40"] then
-  assert(ecatalog["bayline:dispatch_sh_40"].mesh=="bl_rail_sh_40.obj")
+assert(#eactors==2 and eactors[1].name=="luanttd_core:dispatch_sh_30" and
+  eactors[2].name=="luanttd_core:dispatch_wagon")
+if ecatalog["luanttd_core:dispatch_sh_40"] then
+  assert(ecatalog["luanttd_core:dispatch_sh_40"].mesh=="bl_rail_sh_40.obj")
   ED.runs[1]={id="electric-later",fleet_id=91,paid_clock=true,stock_engine=24,stock_wagon=27,
     consist={parts={{},{}}}}
   step(EV)
-  assert(eactors[3].name=="bayline:dispatch_sh_40" and eactors[4].name=="bayline:dispatch_wagon")
+  assert(eactors[3].name=="luanttd_core:dispatch_sh_40" and eactors[4].name=="luanttd_core:dispatch_wagon")
   local _,_,_,missing=fixture("bl_rail_sh_40.obj",true)
-  assert(not missing["bayline:dispatch_sh_40"] and missing["bayline:dispatch_sh_30"])
+  assert(not missing["luanttd_core:dispatch_sh_40"] and missing["luanttd_core:dispatch_sh_30"])
 end
 
 for _,file in ipairs({"bl_rail_oil_tanker.obj","bl_rail_oil_tanker.png"}) do
@@ -125,6 +125,6 @@ for _,file in ipairs({"bl_rail_oil_tanker.obj","bl_rail_oil_tanker.png"}) do
   assert(#fleet==0, "a missing wagon must not masquerade as a coach")
   dtrain.stock_wagon=27
   step(U)
-  assert(#fleet==2 and fleet[2].name=="bayline:dispatch_wagon")
+  assert(#fleet==2 and fleet[2].name=="luanttd_core:dispatch_wagon")
 end
 print("RAIL_DISPATCH_VIEW_PASS: paid Oil #30 uses the sealed original at all cargo, missing mesh/atlas detected, unchanged Coal #29 and Passenger #27.")

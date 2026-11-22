@@ -74,7 +74,7 @@ local function stamp()
     api.rail_dispatch_view.step(.1,true,fraction)
     local tx,tz=Sim.xy(tile)
     local powered=i==1 or manley and i==physical_count
-    local expected=powered and ("bayline:dispatch_"..kind..(bridge and "_body" or "")) or "bayline:dispatch_wagon"
+    local expected=powered and ("luanttd_core:dispatch_"..kind..(bridge and "_body" or "")) or "luanttd_core:dispatch_wagon"
     local mesh=powered and (art..(bridge and "_body" or "")..".obj") or "bl_rail_passenger_wagon.obj"
     local _,level=api.terrain.tile(tile)
     for _,obj in ipairs(core.get_objects_inside_radius({x=2*tx+.5,y=level+.614,z=2*tz+.5},1.7)) do
@@ -99,8 +99,8 @@ local function stamp()
     local cabs,coaches={},0
     for _,obj in ipairs(core.get_objects_inside_radius({x=2*x+.5,y=level+.614,z=2*z+.5},4)) do
       local ent=obj:get_luaentity()
-      if ent and ent.name=="bayline:dispatch_manley" then cabs[#cabs+1]=obj
-      elseif ent and ent.name=="bayline:dispatch_wagon" then coaches=coaches+1 end
+      if ent and ent.name=="luanttd_core:dispatch_manley" then cabs[#cabs+1]=obj
+      elseif ent and ent.name=="luanttd_core:dispatch_wagon" then coaches=coaches+1 end
     end
     assert(#cabs==2 and coaches==(coach and 1 or 0),"Incorrect independent native body meshes")
     local yaw=cabs[1]:get_rotation().y-cabs[2]:get_rotation().y
@@ -116,8 +116,8 @@ local function stamp()
       assert(Sim.date(S,0)==(sh40 and 1978 or 1970) and current().engine_railtype==1 and current().traction_railtypes[1] and
         not current().traction_railtypes[0])
       assert(S.tiles[id(20)].rail_type==1 and S.tiles[id(2)].rail_type==1)
-      assert(core.get_node({x=40,y=bridge and 3 or 2,z=20}).name=="bayline:rail_catenary_1_1")
-      assert(core.get_node({x=44,y=bridge and 3 or 2,z=20}).name=="bayline:rail_catenary_1_0")
+      assert(core.get_node({x=40,y=bridge and 3 or 2,z=20}).name=="luanttd_core:rail_catenary_1_1")
+      assert(core.get_node({x=44,y=bridge and 3 or 2,z=20}).name=="luanttd_core:rail_catenary_1_0")
       if bridge then
         assert(current().bridge_collectors and api.rail_spans.by_portal(S,id(15)).railtype==1)
         assert(core.get_node({x=34,y=3,z=20}).name:find("rail_bridge_catenary",1,true))
@@ -266,7 +266,7 @@ local function stamp()
   if manley then
     local saved=core.show_formspec
     local ticket
-    core.show_formspec=function(_,form,body) if form=="bayline:rail_fleet" then ticket=body end end
+    core.show_formspec=function(_,form,body) if form=="luanttd_core:rail_fleet" then ticket=body end end
     assert(api.owned_rail_ui.open({get_player_name=function() return owner end},id(2)))
     core.show_formspec=saved
     assert(ticket and ticket:find("purchase_manley",1,true) and ticket:find("76 seats",1,true))

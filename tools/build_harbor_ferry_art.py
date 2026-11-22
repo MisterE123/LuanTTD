@@ -299,7 +299,7 @@ def palette():
         return struct.pack(">I",len(d))+k+d+struct.pack(">I",zlib.crc32(k+d))
     data=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",256,8,8,2,0,0,0))
     data+=chunk(b"IDAT",zlib.compress((b"\0"+row)*8))+chunk(b"IEND",b"")
-    (ROOT/"mods/bayline/textures/bl_harbor_ferry_palette.png").write_bytes(data)
+    (ROOT/"mods/luanttd_core/textures/bl_harbor_ferry_palette.png").write_bytes(data)
 
 def merge(shapes):
     bpy.ops.object.select_all(action="DESELECT")
@@ -326,7 +326,7 @@ def export():
         for l in p.loop_indices:
             uv.data[l].uv=((idx+.5)/32,.5)
     o.data.update()
-    bpy.ops.wm.obj_export(filepath=str(ROOT/"mods/bayline/models/bl_harbor_ferry.obj"),
+    bpy.ops.wm.obj_export(filepath=str(ROOT/"mods/luanttd_core/models/bl_harbor_ferry.obj"),
         export_selected_objects=True,export_materials=False,export_uv=True,export_normals=True,
         export_triangulated_mesh=True,global_scale=10,forward_axis="NEGATIVE_Z",up_axis="Y")
 

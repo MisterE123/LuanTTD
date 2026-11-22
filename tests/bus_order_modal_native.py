@@ -10,7 +10,7 @@ def exercise(harness, a, b, depot):
     click = harness["click"]
     choose = harness["choose"]
     shot = harness["screenshot"]
-    form = "bayline:service"
+    form = "luanttd_core:service"
 
     # Reopen from the depot using a right-click while Bulldoze is selected.
     # Before the fix that tool consumed ordinary world-click destinations.
@@ -23,7 +23,7 @@ def exercise(harness, a, b, depot):
     choose(form, "service_pick", "order-modal-open-from-bulldoze")
     picking = wait("opening the real order hotbar from Bulldoze",
                    lambda s: s.get("menu") == "vehicle_orders" and not s.get("form")
-                   and s.get("wield_item") == "bayline:menu_order_pick")
+                   and s.get("wield_item") == "luanttd_core:menu_order_pick")
     assert len(picking["hotbar_layout"]) == 2 and not picking.get("orders")
 
     # Mistaking the depot for a stop must not demolish it or change
@@ -56,7 +56,7 @@ def exercise(harness, a, b, depot):
     # automatically selected physical slot.
     choose(form, "service_pick", "order-modal-reopen")
     wait("mode entry always selects Pick, never Done",
-         lambda s: s.get("menu") == "vehicle_orders" and s.get("wield_item") == "bayline:menu_order_pick")
+         lambda s: s.get("menu") == "vehicle_orders" and s.get("wield_item") == "luanttd_core:menu_order_pick")
     click()  # the previous stop again, a deliberate duplicate rejection
     assert get()["menu"] == "vehicle_orders" and get()["orders"] == [1, 2]
     click(3)

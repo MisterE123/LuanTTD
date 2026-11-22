@@ -9,13 +9,13 @@ if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
 fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-airport-pair.XXXXXX")
 echo "Native airfield pair logs: $out"
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp game.conf "$game"
 cp -R mods "$game/"
-cat tests/airport_ground_pair_native.lua >> "$game/mods/bayline/init.lua"
+cat tests/airport_ground_pair_native.lua >> "$game/mods/luanttd_core/init.lua"
 cat > "$out/world/world.mt" <<'CONF'
-gameid = bayline
+gameid = luanttd
 backend = sqlite3
 player_backend = sqlite3
 auth_backend = sqlite3
@@ -29,11 +29,11 @@ server_announce = false
 EOF_CONF
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache"
 export LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
-timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid bayline --logfile "" >"$out/server.log" 2>&1 || {
+timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/server.log" 2>&1 || {
   cat "$out/server.log"; exit 1;
 }
 grep -q AIRPORT_PAIR_NATIVE_SAVED_HOLD "$out/server.log" || { cat "$out/server.log"; exit 1; }
-timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid bayline --logfile "" >"$out/reload.log" 2>&1 || {
+timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/reload.log" 2>&1 || {
   cat "$out/reload.log"; exit 1;
 }
 grep -q AIRPORT_PAIR_NATIVE_PASS "$out/reload.log" || { cat "$out/reload.log"; exit 1; }

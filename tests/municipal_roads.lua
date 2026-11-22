@@ -1,5 +1,5 @@
-local M=dofile("mods/bayline/sim.lua")
-local T=dofile("mods/bayline/openttd/terrain.lua")
+local M=dofile("mods/luanttd_core/sim.lua")
+local T=dofile("mods/luanttd_core/openttd/terrain.lua")
 local s=M.new(1751)
 local function id(x,z) return M.id(x,z) end
 for z=7,14 do for x=6,23 do

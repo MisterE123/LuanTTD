@@ -17,8 +17,8 @@ from small_airport_art import intersects
 
 ROOT=Path(__file__).resolve().parents[1]
 NAME="rail_oil_tanker"
-OBJ=ROOT/"mods/bayline/models"/f"bl_{NAME}.obj"
-ATLAS=ROOT/"mods/bayline/textures"/f"bl_{NAME}.png"
+OBJ=ROOT/"mods/luanttd_core/models"/f"bl_{NAME}.obj"
+ATLAS=ROOT/"mods/luanttd_core/textures"/f"bl_{NAME}.png"
 END1="Sealed_front_dished_end"
 END2="Sealed_rear_dished_end"
 SHELL="Long_cylindrical_tank_shell_with_dished_shoulders"

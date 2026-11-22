@@ -10,7 +10,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 
 ROOT=Path(__file__).resolve().parents[1]
-MOD=ROOT/"mods/bayline"
+MOD=ROOT/"mods/luanttd_core"
 MODELS=MOD/"models"
 
 

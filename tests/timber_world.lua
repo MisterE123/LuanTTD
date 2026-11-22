@@ -1,6 +1,6 @@
 -- Actual default 1751 geometry with unmodified town houses, public
 -- streets, shared corners and the separate established coal footprint.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function load(p)return dofile(root..p..".lua")end
 local Sim,Terrain,P,I,K=load("sim"),load("openttd/terrain"),load("openttd/passengers"),load("openttd/income"),load("openttd/station_rating")
 local House,Goods=load("openttd/town_passengers"),load("openttd/town_goods")

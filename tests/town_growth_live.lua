@@ -1,4 +1,4 @@
-local p="mods/bayline/"
+local p="mods/luanttd_core/"
 local Sim=dofile(p.."sim.lua")
 local Terrain=dofile(p.."openttd/terrain.lua")
 local G=dofile(p.."openttd/town_growth.lua")

@@ -197,8 +197,8 @@ int main() {
 }
 """
 LUA = r"""
-local T=dofile("mods/bayline/openttd/terrain.lua")
-local L=dofile("mods/bayline/openttd/landscaping.lua")(T)
+local T=dofile("mods/luanttd_core/openttd/terrain.lua")
+local L=dofile("mods/luanttd_core/openttd/landscaping.lua")(T)
 local codes={ALREADY_AT_SEA_LEVEL=1,TOO_HIGH=2,TOO_CLOSE_TO_EDGE=3,MUST_DEMOLISH_BRIDGE_FIRST=4,
   BRIDGE_TOO_HIGH_AFTER_LOWER_LAND=5,EXCAVATION_WOULD_DAMAGE_TUNNEL=6,TERRAFORM_LIMIT_REACHED=7,
   ALREADY_LEVELLED=8,PROTECTED_TILE=9,INVALID_SELECTION=10,NO_EFFECT=10}

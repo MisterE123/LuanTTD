@@ -1,5 +1,5 @@
 -- Exercise the real build/preview/controller callbacks behind direct tools.
-core={formspec_escape=function(s)return s end,get_modpath=function()return "mods/bayline" end}
+core={formspec_escape=function(s)return s end,get_modpath=function()return "mods/luanttd_core" end}
 local p={get_player_name=function()return "Alex" end}
 local s={tiles={[1]={},[2]={},[3]={},[4]={road_bridge_id=1},[5]={},[6]={rail_span_id=1}}}
 local seen,changes={},{}
@@ -45,7 +45,7 @@ local api={Sim=Sim,s=s,render=R,road_first=true,structure_tools=true,rail_span_t
     return false,"Clear the running train before editing spans."
   end},
 }
-local U=dofile("mods/bayline/ui.lua")(api)
+local U=dofile("mods/luanttd_core/ui.lua")(api)
 local function status()return select(2,U.world_status(p)) end
 assert(U.is_world_tool("road_bridge_picker"))
 assert(U.is_world_tool("rail_bridge_picker"))

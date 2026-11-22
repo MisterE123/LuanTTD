@@ -145,7 +145,7 @@ int main() {
 }
 """
 LUA = r"""
-local r="mods/bayline/"
+local r="mods/luanttd_core/"
 local function m(n) return dofile(r..n..".lua") end
 local Coal=m("openttd/coal_industry")()
 local F=m("openttd/farm_factory_industry")(nil,nil,nil,nil,Coal)

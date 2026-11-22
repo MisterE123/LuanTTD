@@ -2,7 +2,7 @@
 -- Actual optional stock mixed industries, not a resized Harbor layout:
 -- native road quote/build, ordinary directed YAPF stops, stock producer
 -- and receipt clocks, two repeating goods against one shared network.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function m(path) return dofile(root..path..".lua") end
 local Sim,Terrain=m("sim"),m("openttd/terrain")
 local TG=m("openttd/terragenesis")(m("openttd/slope"))

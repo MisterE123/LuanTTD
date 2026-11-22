@@ -149,7 +149,7 @@ int main(){
 }
 """.replace("#CONSTANTS#"," ".join(str(v) for v in defaults.values()))
 lua = r"""
-local B=dofile('mods/bayline/openttd/road_bridge.lua')(dofile('mods/bayline/openttd/slope.lua'))
+local B=dofile('mods/luanttd_core/openttd/road_bridge.lua')(dofile('mods/luanttd_core/openttd/slope.lua'))
 local bv=B.base_prices
 print(table.concat({B.default_max_length,B.default_max_height,bv.road,bv.clear_road,bv.bridge,
   bv.clear_bridge,bv.foundation,B.roadtypes[0].id,B.roadtypes[1].id},' '))

@@ -161,7 +161,7 @@ int main(){
 }
 """
 lua=r"""
-local path="mods/bayline/openttd/"
+local path="mods/luanttd_core/openttd/"
 local A=dofile(path.."airport_small.lua")
 local Move=dofile(path.."airport_motion.lua")(A)
 local n={m=0,p=0,t=0,b=0,c=0,e=0,s=0,h=0}

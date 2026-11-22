@@ -29,7 +29,7 @@ int main() {
 }
 '''
 LUA = '''
-local M=dofile("mods/bayline/openttd/road_speed.lua")
+local M=dofile("mods/luanttd_core/openttd/road_speed.lua")
 for line in io.lines() do
   local a={}
   for n in line:gmatch("-?%d+") do a[#a+1]=tonumber(n) end

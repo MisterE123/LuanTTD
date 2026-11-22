@@ -19,30 +19,30 @@ CAP = 20 * 1024 * 1024
 REPO = Path(__file__).resolve().parents[1]
 # Keep the playable zip install-sized; the companion .git.bundle carries
 # all Blender scenes, porting tools, test programs and version history.
-GUIDES = {"README.md", "PORTING.md", "CHANGELOG.md", "IMPORTING.md", "TIMBER_WORLD.md",
-          "TESTING.md", "ROADMAP.md", "COPYING.OpenTTD.md", "RAIL_SPAN_PREVIEW.md",
+GUIDES = {"README.md", "docs/PORTING.md", "docs/porting-method.md", "docs/reference-target.md", "docs/CHANGELOG.md", "docs/IMPORTING.md", "docs/TIMBER_WORLD.md",
+          "docs/TESTING.md", "docs/ROADMAP.md", "docs/COPYING.OpenTTD.md", "docs/RAIL_SPAN_PREVIEW.md",
           "docs/original-terrain.md", "docs/original-terrain-exploration.md",
-          "TERRAIN_STREAM.md", "STOCK_ENGINE_CALENDAR.md", "RAIL_BLOCK_DISPATCH.md",
-          "RAIL_BLOCK_SIGNALS.md", "FARM_FACTORY_WORLD.md", "FARM_FACTORY_PORT.md",
-          "ROAD_ORDER_LISTS.md", "ROAD_BREAKDOWNS.md", "ROAD_DEPOT_SERVICE.md",
-          "OIL_INDUSTRY_PORT.md", "OIL_FREIGHT_WORLD.md",
+          "docs/TERRAIN_STREAM.md", "docs/STOCK_ENGINE_CALENDAR.md", "docs/RAIL_BLOCK_DISPATCH.md",
+          "docs/RAIL_BLOCK_SIGNALS.md", "docs/FARM_FACTORY_WORLD.md", "docs/FARM_FACTORY_PORT.md",
+          "docs/ROAD_ORDER_LISTS.md", "docs/ROAD_BREAKDOWNS.md", "docs/ROAD_DEPOT_SERVICE.md",
+          "docs/OIL_INDUSTRY_PORT.md", "docs/OIL_FREIGHT_WORLD.md",
           "docs/generated-campaign.md", "docs/terragenesis-port.md",
           "docs/stock-river-worldgen.md", "docs/stock-town-worldgen.md",
           "docs/stock-industry-worldgen.md", "docs/scenery-object-worldgen-port.md",
-          "docs/tree-worldgen-port.md", "docs/harbor-valley.md",
+          "docs/tree-worldgen-port.md",
           "docs/generated-world-scale-audit.md",
           "docs/electric-rail.md", "docs/railtype-port.md",
           "docs/rail-electrification-world.md",
           "docs/hotbar-layout.md", "docs/autorail.md", "docs/build-in-3d.md",
-          "LEVEL_CROSSING_WORLD.md",
-          "STOCK_AREA_DEMOLITION.md",
+          "docs/LEVEL_CROSSING_WORLD.md",
+          "docs/STOCK_AREA_DEMOLITION.md",
           "tools/extract_original_terrain_masks.py"}
 
 
 def playable_member(name):
-    if not name.startswith("bayline/"):
+    if not name.startswith("luanttd/"):
         return False
-    rel = name[len("bayline/"):]
+    rel = name[len("luanttd/"):]
     return rel.startswith("mods/") or rel in {"game.conf", "settingtypes.txt"} or rel in GUIDES
 
 
@@ -268,7 +268,7 @@ def package(out, start, evidence, revision="HEAD", history_base=None, dense_play
         source = out / f"LuanTTD-source-and-Linux-playtests-{short}.zip"
         bundle = out / f"LuanTTD-dev-{short}.git.bundle"
         tracked = p / "tracked.zip"
-        git("archive", "--format=zip", "--prefix=bayline/", "--output", str(tracked), ref)
+        git("archive", "--format=zip", "--prefix=luanttd/", "--output", str(tracked), ref)
         git("bundle", "create", str(bundle), "HEAD", "main", "--tags")
         clone = p / "clone"
         git("clone", "-q", str(bundle), str(clone))
@@ -284,8 +284,8 @@ def package(out, start, evidence, revision="HEAD", history_base=None, dense_play
                 if playable_member(member.filename):
                     level = 14 if dense_playable and member.filename.endswith(".obj") and member.file_size >= 65536 else 9
                     z.writestr(member, src.read(member), compress_type=zipfile.ZIP_DEFLATED, compresslevel=level)
-            assert {"bayline/game.conf", "bayline/mods/bayline/init.lua",
-                    "bayline/docs/generated-campaign.md"}.issubset(z.namelist())
+            assert {"luanttd/game.conf", "luanttd/mods/luanttd_core/init.lua",
+                    "luanttd/docs/generated-campaign.md"}.issubset(z.namelist())
         with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as z:
             z.write(bundle, f"LuanTTD-source-{short}.git.bundle")
             names = set()

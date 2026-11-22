@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Real Country Airfield FTA, shared stock world clock and passengers.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function mod(p) return dofile(root..p..".lua") end
 local Sim=mod("sim")
 local Terrain=mod("openttd/terrain")

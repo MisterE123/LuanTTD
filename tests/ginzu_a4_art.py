@@ -74,8 +74,8 @@ def verify(args):
         for q in (.65,.77,.92):
             hh=min(along_ray(bore,2,x,q))
             assert y+.114-.5+.035<hh,(x,y,q,hh)
-    t=ROOT/"mods/bayline/textures"/("bl_"+NAME+".png")
-    obj=ROOT/"mods/bayline/models"/("bl_"+NAME+".obj")
+    t=ROOT/"mods/luanttd_core/textures"/("bl_"+NAME+".png")
+    obj=ROOT/"mods/luanttd_core/models"/("bl_"+NAME+".obj")
     atlas=t.read_bytes()
     assert atlas[:8]==b"\x89PNG\r\n\x1a\n" and struct.unpack_from(">II",atlas,16)==(320,8)
     output=BytesIO()

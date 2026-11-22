@@ -11,13 +11,15 @@ server=${BAYLINE_LUANTI_SERVER:-luantiserver}
 command -v "$server" >/dev/null
 q=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-campaign-offscreen.XXXXXX")
 echo "Native headless evidence: $q"
-mod="$q/games/bayline/mods/bayline"
-mkdir -p "$q/world" "$q/games/bayline" "$q/home"
-cp -r game.conf mods "$q/games/bayline/"
+mod="$q/games/luanttd/mods/luanttd_core"
+mkdir -p "$q/world" "$q/games/luanttd" "$q/home"
+cp -r game.conf mods "$q/games/luanttd/"
 cp tests/campaign_offscreen_probe.lua "$mod/"
 printf '\ndofile(mod.."/campaign_offscreen_probe.lua")(api)\n' >> "$mod/init.lua"
+cp tests/qa_layout.lua "$mod/qa_layout.lua"
+cp tests/coastal_corridor_fixture.lua "$mod/qa_coastal_corridor.lua"
 cat > "$q/world/world.mt" <<'EOF_WORLD'
-gameid = bayline
+gameid = luanttd
 backend = sqlite3
 player_backend = sqlite3
 auth_backend = sqlite3
@@ -35,13 +37,13 @@ server_announce = false
 bayline_offline_economy = $enabled
 bayline_seconds_per_day = 0.2
 bayline_seed = 1751
-bayline_fixture_harbor_valley = true
+luanttd_qa_coastal_layout = true
 bayline_stock_regal_preview = true
 bayline_road_oil_preview = $([[ ${BAYLINE_NATIVE_OFFSCREEN_OIL:-0} == 1 ]] && echo true || echo false)
 bayline_offline_fixture_stage = $i
 bayline_offline_fixture_result = $q/world/stage-$i.json
 EOF_CONF
-  timeout 65s "$server" --world "$q/world" --gameid bayline --config "$q/server-$i.conf" > "$q/stage-$i.log" 2>&1 ||
+  timeout 65s "$server" --world "$q/world" --gameid luanttd --config "$q/server-$i.conf" > "$q/stage-$i.log" 2>&1 ||
     { cat "$q/stage-$i.log";exit 1; }
   grep -F "NATIVE OFFSCREEN ECONOMY PASS stage=$i" "$q/stage-$i.log"
 done

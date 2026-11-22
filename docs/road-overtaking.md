@@ -1,6 +1,6 @@
 # Stock road overtaking kernel
 
-`mods/bayline/openttd/road_overtake.lua` ports the ordinary road-vehicle
+`mods/luanttd_core/openttd/road_overtake.lua` ports the ordinary road-vehicle
 overtaking branches from OpenTTD 14.1 `src/roadveh_cmd.cpp`. The
 right-driving campaign integrates it in `road_pass_runtime.lua` and the
 74-tick road clock. The adapter advances the live stock movement row

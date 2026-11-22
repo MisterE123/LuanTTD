@@ -1,4 +1,4 @@
-local base="mods/bayline/"
+local base="mods/luanttd_core/"
 local P=dofile(base.."openttd/passengers.lua")
 local Timing=dofile(base.."openttd/loading_timing.lua")
 local L=dofile(base.."road_loading_runtime.lua")(Timing,P)

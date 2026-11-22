@@ -1,6 +1,6 @@
 -- Rendering geometry only. Use the exact one-unit rise per two-node
--- ramp and Harbor Valley's deck of 2. No flat-grade motion claims.
-local P=dofile("mods/bayline/rail_pantograph.lua")
+-- ramp and coastal test circuit's deck of 2. No flat-grade motion claims.
+local P=dofile("mods/luanttd_core/rail_pantograph.lua")
 local rise,deck,track=1,2,.614
 local shoe,pivot,shoe_z=.784,.580,.031
 local center=2*21+.5

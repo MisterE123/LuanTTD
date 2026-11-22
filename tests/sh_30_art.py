@@ -63,8 +63,8 @@ def verify(a):
                 assert a0 and max(a0)-min(a0)>.014
                 widths.append((min(a0),max(a0)))
             assert all(w[1]<v[0] for w,v in zip(widths,widths[1:]))
-        old_atlas=(ROOT/"mods/bayline/textures/bl_rail_sh_30.png").read_bytes()
-        assert old_atlas!=(ROOT/"mods/bayline/textures/bl_rail_sh_40.png").read_bytes()
+        old_atlas=(ROOT/"mods/luanttd_core/textures/bl_rail_sh_30.png").read_bytes()
+        assert old_atlas!=(ROOT/"mods/luanttd_core/textures/bl_rail_sh_40.png").read_bytes()
     required=("One_distinctive_near-upright_faceted_cab_face_each_end","Two_bright_recessed_yellow_warning_faces",
         "Long_hood_dark_slatted_cooler_bank","Four_pairs_of_independent_resilient_wheel_discs",
         "Two_independent_B0-B0_cast_electric_bogie_sideframes","Genuine_turned_stacked_roof_ceramic_standoffs")
@@ -110,7 +110,7 @@ def verify(a):
             assert h+.114-.5+.035<min(along_ray(bore,2,x,z)),(x,h,z)
     b=BytesIO()
     with ZipFile(b,"w",ZIP_DEFLATED,compresslevel=9) as z:
-        for p in (ROOT/"mods/bayline/models"/f"bl_{name}.obj",ROOT/"mods/bayline/textures"/f"bl_{name}.png"):
+        for p in (ROOT/"mods/luanttd_core/models"/f"bl_{name}.obj",ROOT/"mods/luanttd_core/textures"/f"bl_{name}.png"):
             z.write(p,p.name)
     assert struct.unpack_from(">II",p.read_bytes(),16)==(296,8)
     assert (ROOT/"art"/f"{name}.blend").stat().st_size>120_000

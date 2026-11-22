@@ -1,4 +1,4 @@
-local B=dofile("mods/bayline/openttd/road_bridge.lua")(dofile("mods/bayline/openttd/slope.lua"))
+local B=dofile("mods/luanttd_core/openttd/road_bridge.lua")(dofile("mods/luanttd_core/openttd/slope.lua"))
 local tiles,calls={},{}
 local function id(x,z)
   if x<1 or z<1 or x>16 or z>12 then return nil end

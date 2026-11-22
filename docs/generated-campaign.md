@@ -2,11 +2,9 @@
 
 Create a **fresh ordinary LuanTTD world**, with no special settings.
 It starts with a 64×64 temperate landscape made by the OpenTTD 14.1
-TerraGenesis port, not the authored Harbor Valley starter map. Set
+TerraGenesis port. Set
 `bayline_generated_map_size = 128` before generation for a larger map.
-The authored Harbor Valley starter is no longer a new-world option.
-Farm, Oil, South Coast Coal, Coastal Landscaping, the Original survey, and development
-scenarios are separate and override the ordinary default. Reopening a
+Farm, Oil, South Coast Coal, Coastal Landscaping and the Original survey are separate and override the ordinary default. Reopening a
 save always keeps the recorded geography rather than re-running either
 generator when settings change.
 
@@ -34,13 +32,6 @@ for reaching zero. Ramps and banks render as 3D meshes on shared
 corners, not as cubes painted on a flat plane. The native port only
 changes supported ground and coastal tiles and preserves protected
 structures; it does not yet implement every stock shore or tree case.
-
-Harbor Valley is *authored*, not evidence of generation or hydro
-parity. It is not frozen: in the untouched seed-1751 scenario, 1,184
-native stock-clock ticks changed 353 to 354 sea tiles and wetted 120
-graded shore tiles. This measures this version's conservative flood
-adapter, not what an unchanged OpenTTD installation would do to the
-authored map.
 
 - `bayline_seed` selects the stock 32-bit seed, default 1751.
 - `bayline_generated_relief` selects flat through mountainous relief.

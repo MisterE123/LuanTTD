@@ -66,7 +66,7 @@ def test():
             exported.append(prefix)
             timber=load(f"{DECK}_head_{name}_{d}")
             # Match all edge sections at world heights on the genuine
-            # Harbor Valley level difference and alternate absolute decks;
+            # coastal test circuit level difference and alternate absolute decks;
             # also join a zero-middle head pair.
             for part in (WIRE,MESSENGER):
                 for deck in (1,2,9):

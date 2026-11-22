@@ -231,7 +231,7 @@ int main(){
 """
 
 lua=r"""
-local R=dofile('mods/bayline/openttd/yapf_road_follow.lua')
+local R=dofile('mods/luanttd_core/openttd/yapf_road_follow.lua')
 local kinds={[0]='void','road','crossing','depot','bay_stop','drive_stop','bridge','tunnel'}
 local function bool(b) return b and 1 or 0 end
 for line in io.lines() do

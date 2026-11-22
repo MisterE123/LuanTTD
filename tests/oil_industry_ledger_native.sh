@@ -9,15 +9,15 @@ if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
 fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-oil-industry-ledger.XXXXXX")
 echo "Native wells/refinery ledger: $out"
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp game.conf "$game"
 cp -R mods "$game/"
-fixture="$game/mods/bayline/oil_industry_native_fixture.lua"
+fixture="$game/mods/luanttd_core/oil_industry_native_fixture.lua"
 cp tests/oil_industry_ledger.lua "$fixture"
-cat >> "$game/mods/bayline/init.lua" <<'LUA'
+cat >> "$game/mods/luanttd_core/init.lua" <<'LUA'
 core.after(0,function()
-  local dir=core.get_modpath("bayline").."/"
+  local dir=core.get_modpath("luanttd_core").."/"
   local test=assert(loadfile(dir.."oil_industry_native_fixture.lua"))(dir)
   local memory=storage
   local saved=memory:get_string("oil_industry_ledger_qa")
@@ -33,7 +33,7 @@ core.after(0,function()
 end)
 LUA
 cat > "$out/world/world.mt" <<'CONF'
-gameid = bayline
+gameid = luanttd
 backend = sqlite3
 player_backend = sqlite3
 auth_backend = sqlite3
@@ -46,11 +46,11 @@ server_announce = false
 CONF
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache"
 export LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
-timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid bayline --logfile "" >"$out/stage.log" 2>&1 || {
+timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/stage.log" 2>&1 || {
   cat "$out/stage.log"; exit 1;
 }
 grep -q OIL_INDUSTRY_LEDGER_STAGED_TEST "$out/stage.log" || { cat "$out/stage.log"; exit 1; }
-timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid bayline --logfile "" >"$out/reload.log" 2>&1 || {
+timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/reload.log" 2>&1 || {
   cat "$out/reload.log"; exit 1;
 }
 grep OIL_INDUSTRY_LEDGER_SETTLED_TEST "$out/reload.log" || { cat "$out/reload.log"; exit 1; }

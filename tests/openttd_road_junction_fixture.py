@@ -327,7 +327,7 @@ def luanti_differential(server, port, trace, author=None):
         (game / "game.conf").write_text("title = Stock Road Junction Differential\n")
         (mod / "mod.conf").write_text("name = junction_qa\n")
         shutil.copyfile(Path(__file__).with_name("openttd_road_junction_native.lua"), mod / "init.lua")
-        kernels = Path(__file__).resolve().parents[1] / "mods" / "bayline" / "openttd"
+        kernels = Path(__file__).resolve().parents[1] / "mods" / "luanttd_core" / "openttd"
         for module in ("road_motion", "road_motion_data", "road_speed", "road_proximity", "road_overtake"):
             shutil.copyfile(kernels / (module+".lua"), mod / (module+".lua"))
         (mod / "input.json").write_text(json.dumps(spec))

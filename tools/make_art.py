@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 from road_surface_raster import road_raster
 from terrain_rock_raster import texture_set, write_tunnels
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "mods/bayline/textures"
+OUT = ROOT / "mods/luanttd_core/textures"
 OUT.mkdir(parents=True, exist_ok=True)
 def canvas(fill=None):
     im = Image.new("RGBA", (32,32), fill)

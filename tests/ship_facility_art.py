@@ -5,8 +5,8 @@ from pathlib import Path
 import struct
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
-TEXTURES=ROOT/"mods/bayline/textures"
+MODELS=ROOT/"mods/luanttd_core/models"
+TEXTURES=ROOT/"mods/luanttd_core/textures"
 DIRS=((-1,0),(0,1),(1,0),(0,-1))
 EPS=2e-6
 

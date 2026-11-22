@@ -10,7 +10,7 @@ import tempfile
 ROOT=Path(__file__).resolve().parents[1]
 DIGEST="a6925280753e551f4426a92d76a8c57f49171a519c860d855b3cd29946c817d7"
 LUA="""
-local M=dofile("mods/bayline/road_station_service.lua")()
+local M=dofile("mods/luanttd_core/road_station_service.lua")()
 for id=0,109 do print(M.house_passenger_acceptance(id)) end
 """
 

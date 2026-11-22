@@ -1,4 +1,4 @@
-local A=dofile("mods/bayline/atmosphere.lua")
+local A=dofile("mods/luanttd_core/atmosphere.lua")
 local function eq(a,b) return math.abs(a-b)<.00001 end
 local midday=A.sample(.5,.53)
 local moon=A.sample(0,.53)
@@ -13,7 +13,7 @@ for i=0,9999 do
 end
 assert(eq(A.sample(.9999,.53).ratio,A.sample(.0001,.53).ratio))
 
-local function lifecycle(haze,configured)
+local function lifecycle()
   local phase,step,leave=.5
   local player,lookup={},{}
   local p=player
@@ -35,21 +35,14 @@ local function lifecycle(haze,configured)
     get_player_by_name=function(name) return lookup[name] end,
     set_timeofday=function() error("atmosphere must not drive world time") end,
   }
-  local settings={
-    get_bool=function(_,name,default)
-      assert(name=="bayline_coastal_haze" and default==true);return haze
-    end,
-    get=function(_,name) assert(name=="bayline_moonlight_ratio");return configured end,
-    set=function() error("atmosphere must not change user settings") end,
-  }
-  local open=A.start(core,settings)
+  local open=A.start(core)
   step(2)
   assert(methods.sky==0,"placement players managed before opening")
   open(p)
   assert(p.sun.visible and p.moon.visible and p.stars.visible)
   assert(p.moon.texture=="bl_coastal_moon.png" and p.sky.type=="regular")
-  assert(p.sky.clouds==haze and p.sky.body_orbit_tilt==20)
-  assert(methods.clouds==(haze and 1 or 0))
+  assert(p.sky.clouds==true and p.sky.body_orbit_tilt==20)
+  assert(methods.clouds==1)
   local nightFog=p.sky.fog.fog_color
   assert(eq(p.ratio,.98))
   step(10)
@@ -61,10 +54,10 @@ local function lifecycle(haze,configured)
   assert(sunset<.98 and sunset>.53)
   phase=0
   step(.61)
-  local expected=configured and .70 or .53
+  local expected=.53
   assert(eq(p.ratio,expected) and p.ratio<sunset)
   assert(methods.sky==3 and methods.moon==1)
-  assert((nightFog~=p.sky.fog.fog_color)==haze)
+  assert(nightFog~=p.sky.fog.fog_color)
   leave(p)
   phase=.4
   step(4)
@@ -73,6 +66,5 @@ local function lifecycle(haze,configured)
   assert(eq(p.ratio,.98) and methods.moon==2)
   assert(methods.sky==4)
 end
-lifecycle(true)
-lifecycle(false,"2")
+lifecycle()
 print("Atmosphere: smooth day/night, visible moon, haze independent, frozen/advancing clocks, reconnect and no setting or clock writes")

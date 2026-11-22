@@ -92,7 +92,7 @@ int main() {{
 }}
 """
     lua = """
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function m(name) return dofile(root..name..".lua") end
 local Roster,Timing=m("openttd/rail_roster"),m("openttd/loading_timing")
 local Coal=m("openttd/coal_industry")()

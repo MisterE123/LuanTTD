@@ -1,4 +1,4 @@
-local mod="mods/bayline/"
+local mod="mods/luanttd_core/"
 local S=dofile(mod.."sim.lua")
 local T=dofile(mod.."openttd/terrain.lua")
 local E=dofile(mod.."openttd/stock_engine_calendar.lua")

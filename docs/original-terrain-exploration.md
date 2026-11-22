@@ -11,18 +11,9 @@ rough-ground or industries are added.
 
 ## Configure a separate world
 
-Use a **fresh SQLite world**. In its Luanti configuration set only:
-
-```ini
-bayline_original_terrain_exploration = true
-```
-
-For example, add `bayline_original_terrain_width = 512` and
-`bayline_original_terrain_depth = 256` for a rectangular survey;
-`bayline_original_terrain_seed` controls the uint32 world seed.
-Treat width, depth and seed as permanent for that exploration save.
-The packed height base is generated at startup. Luanti generates
-only requested scene mapblocks near viewers, not the entire map.
+Create a new world and choose **Original Terrain Survey**. Choose
+the side length and seed in the setup screen. The packed height base
+is generated at startup; Luanti builds scene mapblocks near viewers.
 
 Before launch, put the verified mask bank named `original-mapgen.bin`
 inside that world's folder. It is a local numeric input, not project
@@ -37,13 +28,8 @@ GRF. The startup gate independently verifies the mask bank SHA-256.
 No GRF, masks, pre-generated map, or screenshots from external assets
 are distributed with the game. See [Original terrain source provenance](original-terrain.md).
 
-The game mounts the exploration gate before starting the normal
-campaign. An identified exploration world refuses to reopen with the
-setting disabled instead of silently writing a normal campaign over it.
-An enabled gate refuses a normal campaign save, a pre-existing SQLite
-map without an exploration marker, a wrong backend, a missing or altered
-mask bank, and a mismatch with the saved world identity. Keep the
-setting and local mask file in place on every restart.
+The survey is a read-only world type, not a company campaign.
+The setup screen checks for the verified local mask bank.
 
 ## Fly the map
 

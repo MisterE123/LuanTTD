@@ -2,7 +2,7 @@
 """Combine flange, contact-wire and mast assets into one Luanti node per tile."""
 from pathlib import Path
 
-MODELS = Path(__file__).resolve().parents[1] / "mods/bayline/models"
+MODELS = Path(__file__).resolve().parents[1] / "mods/luanttd_core/models"
 TYPES = ("v", "vt", "vn")
 
 

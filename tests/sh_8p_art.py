@@ -69,7 +69,7 @@ def verify(a):
     count,cosmetic=coupling(m)
     b=BytesIO()
     with ZipFile(b,"w",ZIP_DEFLATED,compresslevel=9) as z:
-        for f in (ROOT/"mods/bayline/models"/f"bl_{NAME}.obj",ROOT/"mods/bayline/textures"/f"bl_{NAME}.png"):
+        for f in (ROOT/"mods/luanttd_core/models"/f"bl_{NAME}.obj",ROOT/"mods/luanttd_core/textures"/f"bl_{NAME}.png"):
             z.write(f,f.name)
     assert struct.unpack_from(">II",f.read_bytes(),16)==(304,8)
     assert (ROOT/"art"/f"{NAME}.blend").stat().st_size>170_000

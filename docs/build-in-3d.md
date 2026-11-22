@@ -10,22 +10,14 @@ Choose the seed, size, landscape and population options. For a
 mainland-style map, open **Landscape options** and choose **No forced
 coast** or pick which edges to make coastal. Then click **Save and return**. This ends the local setup session:
 press **Play** again on the same world to load the new terrain. Wait
-for the placement screen to finish. Saves opened with the first
-wizard preview get their empty mapblocks repaired automatically when
-reopened in this build; their generator choices and company stay put.
-You do not need to make a second world. Dedicated servers continue to
-use their config; the local setup can be skipped with
-`bayline_world_setup = false`.
+for the placement screen to finish. Dedicated servers generate automatically
+from their OpenTTD world-generation options.
 
 This is not the full OpenTTD industry, vehicle, or terrain
 ruleset; see [the generated world guide](generated-campaign.md).
 
-Type **/world_origin** to identify the loaded map. If you see
-**Port Alder** or **Mason Quay**, you are on an old authored layout or an
-explicit specialty map. A previously created world keeps its map even
-after updating the game; use **New** in Luanti and select **LuanTTD** to
-start with TerraGenesis. Old feature flags no longer select a map.
-Specialty maps require an explicit `bayline_scenario` choice before creation.
+Type **/world_origin** to report your map generator, seed, and size.
+Choose a named scenario in the setup screen instead of **Generate a world** to use a fixed industry or coast layout.
 
 ## Moving around
 

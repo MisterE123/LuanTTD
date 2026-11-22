@@ -23,7 +23,7 @@ def configure(home,save,reference,visual=False,third_station=False,depot_reserve
     (mod/"mod.conf").write_text("name = triptest\n")
     (game/"game.conf").write_text("title = Isolated stock bus first delivery\n")
     shutil.copyfile(TESTS/"openttd_bus_first_delivery_native.lua",mod/"init.lua")
-    modules=REPO/"mods"/"bayline"
+    modules=REPO/"mods"/"luanttd_core"
     for file in ("world_storage.lua","import/openttd_map.lua","import/openttd_sparse.lua",
                  "import/openttd_bus_checkpoint.lua","import/openttd_bus_first_delivery.lua",
                  "road_loading_runtime.lua","import/openttd_bus_order_intent.lua",

@@ -125,8 +125,8 @@ int main(){{
 }}
 """
 lua=r"""
-local Bridge=dofile("mods/bayline/openttd/road_bridge.lua")(dofile("mods/bayline/openttd/slope.lua"))
-local A=dofile("mods/bayline/openttd/aqueduct.lua")(Bridge)
+local Bridge=dofile("mods/luanttd_core/openttd/road_bridge.lua")(dofile("mods/luanttd_core/openttd/slope.lua"))
+local A=dofile("mods/luanttd_core/openttd/aqueduct.lua")(Bridge)
 print(table.concat({A.base_prices.aqueduct,A.base_prices.clear_aqueduct,Bridge.default_max_length,A.INFRASTRUCTURE_FACTOR}," "))
 for line in io.lines() do
  local n={}; for v in line:gmatch("%d+") do n[#n+1]=tonumber(v) end

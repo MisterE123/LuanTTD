@@ -7,7 +7,7 @@ import re
 
 from PIL import Image
 
-ROOT=Path(__file__).resolve().parents[1]/"mods"/"bayline"
+ROOT=Path(__file__).resolve().parents[1]/"mods"/"luanttd_core"
 MODELS=ROOT/"models"
 PREFIX="bl_road_tunnel_portal"
 DIR=((-1,0),(0,1),(1,0),(0,-1))

@@ -5,7 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 from PIL import Image
 
-ROOT=Path(__file__).resolve().parents[1]/"mods"/"bayline"
+ROOT=Path(__file__).resolve().parents[1]/"mods"/"luanttd_core"
 MODELS=ROOT/"models"
 ASSEMBLY="bl_road_bridge_girder"
 SURFACE=("Running_asphalt","Shoulder_slab","Inlaid_centre_markings")

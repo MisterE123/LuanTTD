@@ -47,5 +47,5 @@ def moon_raster():
 
 
 if __name__ == "__main__":
-    out=Path(__file__).resolve().parents[1]/"mods/bayline/textures/bl_coastal_moon.png"
+    out=Path(__file__).resolve().parents[1]/"mods/luanttd_core/textures/bl_coastal_moon.png"
     moon_raster().save(out,optimize=True)

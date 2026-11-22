@@ -16,7 +16,7 @@ STEM = "bl_bakewell_cotswald"
 
 
 def read_obj(suffix):
-    p = ROOT / "mods/bayline/models" / f"{STEM}{suffix}.obj"
+    p = ROOT / "mods/luanttd_core/models" / f"{STEM}{suffix}.obj"
     points, palette, faces = [], [], []
     for line in p.read_text().splitlines():
         tag, *values = line.split()
@@ -36,7 +36,7 @@ def read_obj(suffix):
 
 
 def main():
-    png=ROOT/"mods/bayline/textures"/f"{STEM}_atlas.png"
+    png=ROOT/"mods/luanttd_core/textures"/f"{STEM}_atlas.png"
     assert struct.unpack(">II",png.read_bytes()[16:24]) == (256,8)
     d,p,down = read_obj("")
     u,q,up = read_obj("_flight")

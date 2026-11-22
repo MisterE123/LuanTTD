@@ -1,7 +1,7 @@
 -- Seeds actual game roads, stops, companies, authored houses and vans/buses.
 -- A test-only movement handoff checks one routed leg and supplies its
 -- arrival, since road_speed_runtime's shared clock is integrated separately.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local Sim=dofile(root.."sim.lua")
 local Terrain=dofile(root.."openttd/terrain.lua")
 local H=dofile(root.."openttd/town_passengers.lua")

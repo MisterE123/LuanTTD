@@ -1,4 +1,4 @@
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local R=dofile(root.."rail_roster.lua")
 local Calendar=dofile(root.."stock_engine_calendar.lua")
 local Types=dofile(root.."rail_types.lua")

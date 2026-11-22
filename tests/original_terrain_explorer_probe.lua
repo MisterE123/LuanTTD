@@ -22,7 +22,7 @@ local function verify()
     local name=core.get_node({x=2*x,y=t.base+1,z=2*z}).name
     local v=(x*17+z*11+x*z*3)%4
     local expected=t.class==7 and "air" or
-      ("bayline:original_%s_%d_%d"):format(t.class==6 and "coast" or "land",t.mask,v)
+      ("luanttd_core:original_%s_%d_%d"):format(t.class==6 and "coast" or "land",t.mask,v)
     assert(name==expected,("native anchor %d, %d is %s not %s"):format(x,z,name,expected))
     local kind=t.class+16*t.ground
     counts[kind]=(counts[kind] or 0)+1

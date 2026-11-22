@@ -29,7 +29,7 @@ def check_assets():
     total = 0
     loaded = {}
     for name, generated in water_strips():
-        path = ROOT / f"mods/bayline/textures/bl_water_{name}_anim.png"
+        path = ROOT / f"mods/luanttd_core/textures/bl_water_{name}_anim.png"
         total += path.stat().st_size
         image = Image.open(path).convert("RGBA")
         assert image.size == (SIZE, FRAMES * SIZE)

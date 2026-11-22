@@ -53,7 +53,7 @@ int main() {
 }
 '''
 LUA = '''
-local P=dofile("mods/bayline/openttd/road_proximity.lua")
+local P=dofile("mods/luanttd_core/openttd/road_proximity.lua")
 local function get()
   local str=io.read()
   if not str then return end

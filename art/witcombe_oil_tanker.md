@@ -14,8 +14,8 @@ with the same exterior at every load. Only one runtime mesh is needed.
   with sealed dished ends, two bolted band saddles, twin inspection lids and narrow
   tread boards. An open rear ladder, hose spool and capped transfer manifold remain
   separately editable. Plumbing shapes are intentionally stylized, not functional plans.
-- Runtime: `mods/bayline/models/bl_witcombe_oil_tanker.obj` and
-  `mods/bayline/textures/bl_witcombe_oil_tanker_atlas.png`; one original color atlas,
+- Runtime: `mods/luanttd_core/models/bl_witcombe_oil_tanker.obj` and
+  `mods/luanttd_core/textures/bl_witcombe_oil_tanker_atlas.png`; one original color atlas,
   no texture dependencies. Use a uniform .42 visual size and the existing Witcombe
   road vehicle transform. Y=0 is tire contact; native nose -Z. At .42 scale the
   total envelope is .25830 wide × .27778 high × .66675 long in Luanti nodes.

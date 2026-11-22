@@ -1,8 +1,8 @@
-local T=dofile("mods/bayline/openttd/slope.lua")
-local Road=dofile("mods/bayline/openttd/road_slope.lua")
+local T=dofile("mods/luanttd_core/openttd/slope.lua")
+local Road=dofile("mods/luanttd_core/openttd/road_slope.lua")
 local generated=0
 for _,mask in ipairs{3,6,9,12} do
-  local path=("mods/bayline/models/bl_road_grade_foundation_%d.obj"):format(mask)
+  local path=("mods/luanttd_core/models/bl_road_grade_foundation_%d.obj"):format(mask)
   local model=assert(io.open(path))
   local v,tex,mtl,tri={},{},nil,{Road={},Retaining={}}
   for l in model:lines() do

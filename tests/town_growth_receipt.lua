@@ -1,6 +1,6 @@
 -- Actual native service, stock TownTick and landscape house writer;
 -- only the fixture substitutes the landscape walker and adds receipts.
-local p="mods/bayline/"
+local p="mods/luanttd_core/"
 local function m(n) return dofile(p..n..".lua") end
 local H,T,G=m("openttd/town_passengers"),m("openttd/terrain"),m("openttd/town_growth")
 local IA=m("openttd/landscape_index")

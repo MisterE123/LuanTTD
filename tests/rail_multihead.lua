@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
-local dir="mods/bayline/"
+local dir="mods/luanttd_core/"
 local R=dofile(dir.."openttd/rail_roster.lua")
 local Sim=dofile(dir.."sim.lua")
 local Track=dofile(dir.."openttd/rail_track.lua")

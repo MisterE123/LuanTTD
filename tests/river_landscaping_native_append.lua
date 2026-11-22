@@ -13,7 +13,7 @@ core.after(0,function()
   end
   local function still_river(cell,id,shape,variant)
     assert(cell.class=="river" and cell.slope==shape and cell.variant==variant)
-    assert(cell.node:find(shape==0 and "bayline:stock_river_flat" or "bayline:stock_river_"..shape,1,true)==1,
+    assert(cell.node:find(shape==0 and "luanttd_core:stock_river_flat" or "luanttd_core:stock_river_"..shape,1,true)==1,
       "Missing native river mesh at "..id..": "..cell.node)
   end
   local function cut(owner,x,z,cost)

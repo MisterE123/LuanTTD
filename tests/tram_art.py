@@ -4,7 +4,7 @@ from math import isclose
 import struct
 
 ROOT=Path(__file__).resolve().parents[1]
-MODEL=ROOT/"mods/bayline/models"
+MODEL=ROOT/"mods/luanttd_core/models"
 EDGES=((1,-.5,0),(0,1.5,1),(1,1.5,2),(0,-.5,3)) # x/z plane, boundary, bit
 LANE=.155
 GAUGE=.106
@@ -98,7 +98,7 @@ def check_overlay():
 
 
 if __name__=="__main__":
-    palette=(ROOT/"mods/bayline/textures/bl_tram_palette.png").read_bytes()
+    palette=(ROOT/"mods/luanttd_core/textures/bl_tram_palette.png").read_bytes()
     assert palette.startswith(b"\x89PNG\r\n\x1a\n")
     assert struct.unpack(">II",palette[16:24])==(256,8)
     assert (ROOT/"art/streetcar.blend").is_file()

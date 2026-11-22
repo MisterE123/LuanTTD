@@ -1,4 +1,4 @@
-local F=dofile("tests/road_overtake_fixture.lua")("mods/bayline/")
+local F=dofile("tests/road_overtake_fixture.lua")("mods/luanttd_core/")
 local function copy(value)
   if type(value)~="table" then return value end
   local out={}

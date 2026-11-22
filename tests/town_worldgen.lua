@@ -1,4 +1,4 @@
-local mod="mods/bayline/"
+local mod="mods/luanttd_core/"
 local function m(n)return dofile(mod..n..".lua")end
 local G=m("openttd/town_growth")
 local Build=m("openttd/town_growth_build")(G,m("openttd/town_growth_houses"))

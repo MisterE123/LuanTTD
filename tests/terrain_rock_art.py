@@ -7,7 +7,7 @@ import sys
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ROOT / "mods/bayline/textures"
+ASSETS = ROOT / "mods/luanttd_core/textures"
 sys.path.insert(0, str(ROOT / "tools"))
 from terrain_rock_raster import SIZE, texture_set, rock_surface, tunnel_sheet
 

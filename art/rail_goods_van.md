@@ -26,8 +26,8 @@ loading doors, steel end corrugations and handbrake.
 - Editable source: `art/rail_goods_van.blend`. Independent axle
   pivots and named collections for doors, body, roof, and suspended
   underframe. The runtime OBJ does not encode opening doors or spin.
-- Runtime: `mods/bayline/models/bl_rail_goods_van.obj` and
-  `mods/bayline/textures/bl_rail_goods_van.png`. Standard unit size,
+- Runtime: `mods/luanttd_core/models/bl_rail_goods_van.obj` and
+  `mods/luanttd_core/textures/bl_rail_goods_van.png`. Standard unit size,
   local −Z and Y=0 tire datum; +.614 over flat base-zero rail,
   .424 gauge and stock one-unit center-to-center length. Coupler
   points ±.499, centered at Y=.157. No separate loaded geometry.

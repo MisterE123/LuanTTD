@@ -1,6 +1,6 @@
 # Ordinary rail to electrified rail
 
-This is a detached **OpenTTD 14.1** source port, not a currently exposed building tool. The main standard-gauge game runs unchanged. Use `mods/bayline/openttd/rail_types.lua`.
+This is a detached **OpenTTD 14.1** source port, not a currently exposed building tool. The main standard-gauge game runs unchanged. Use `mods/luanttd_core/openttd/rail_types.lua`.
 
 ## Three separate rail checks
 

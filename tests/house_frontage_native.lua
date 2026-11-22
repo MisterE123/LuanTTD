@@ -31,7 +31,7 @@ return function(api)
       local p={x=2*q.x+dx,y=3,z=2*q.z+dz}
       local n=core.get_node(p)
       if dx==q.dx and dz==q.dz then
-        assert(n.name=="bayline:"..q.name and n.param2==q.f,
+        assert(n.name=="luanttd_core:"..q.name and n.param2==q.f,
           table.concat({q.name,n.name,n.param2,q.f,dx,dz}," / "))
         if q.name~="town_green" and q.name~="town_market" then
           local f=core.facedir_to_dir(n.param2)

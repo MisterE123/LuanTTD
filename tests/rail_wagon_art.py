@@ -6,7 +6,7 @@ from pathlib import Path
 import struct
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
+MODELS=ROOT/"mods/luanttd_core/models"
 EPS=1e-6
 
 
@@ -56,7 +56,7 @@ def locomotive_longitudinal_envelope(key):
 
 
 def main():
-    atlas=ROOT/"mods/bayline/textures/bl_rail_wagon_atlas.png"
+    atlas=ROOT/"mods/luanttd_core/textures/bl_rail_wagon_atlas.png"
     assert struct.unpack(">II",atlas.read_bytes()[16:24])==(35*8,8)
     a=check("rail_passenger_wagon",(-.355,-.239,.239,.355))
     b=check("rail_open_wagon",(-.288,.288))

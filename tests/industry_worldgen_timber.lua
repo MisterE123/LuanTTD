@@ -1,4 +1,4 @@
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local function m(n) return dofile(root..n..".lua") end
 local P,R,Income=m("passengers"),m("station_rating"),m("income")
 local Cat=m("station_catchment")(P,R)

@@ -12,8 +12,8 @@ from PIL import Image
 from small_airport_art import obj,cut,hull,intersects
 
 ROOT=Path(__file__).absolute().parents[1]
-M=ROOT/"mods/bayline/models"
-T=ROOT/"mods/bayline/textures"
+M=ROOT/"mods/luanttd_core/models"
+T=ROOT/"mods/luanttd_core/textures"
 TOP=.114
 DECK=.108
 EDGE=.3125

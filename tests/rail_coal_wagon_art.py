@@ -10,7 +10,7 @@ from rail_coal_stage_art import basis
 from rail_wagon_art import mesh
 
 ROOT=Path(__file__).resolve().parents[1]
-DIR=ROOT/"mods/bayline/models"
+DIR=ROOT/"mods/luanttd_core/models"
 NAME="rail_coal_wagon"
 AXLES=(-.269,.269)
 EPS=3.e-6

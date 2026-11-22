@@ -26,10 +26,10 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD SH %s art fixture\n' "$variant" > "$out/games/rail_art/game.conf"
 printf 'name = railpreview\n' > "$mod/mod.conf"
 { printf 'local fixture_sh_variant = "%s"\n' "$variant"; cat tests/sh_30_art_native.lua; } > "$mod/init.lua"
-cp mods/bayline/models/{bl_rail_track_1.obj,bl_rail_track_2.obj,bl_rail_track_3.obj,bl_rail_track_32.obj,bl_rail_track_33.obj,bl_rail_depot_1.obj,bl_rail_catenary_2_0.obj,bl_rail_catenary_2_1.obj,bl_rail_open_wagon.obj,bl_rail_passenger_wagon.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_rail_atlas,bl_rail_architecture_atlas,bl_rail_wagon_atlas,bl_rail_catenary_atlas,bl_grass*,bl_panel}.png "$mod/textures/"
-cp "mods/bayline/models/bl_rail_sh_$variant.obj" "$mod/models/"
-cp "mods/bayline/textures/bl_rail_sh_$variant.png" "$mod/textures/"
+cp mods/luanttd_core/models/{bl_rail_track_1.obj,bl_rail_track_2.obj,bl_rail_track_3.obj,bl_rail_track_32.obj,bl_rail_track_33.obj,bl_rail_depot_1.obj,bl_rail_catenary_2_0.obj,bl_rail_catenary_2_1.obj,bl_rail_open_wagon.obj,bl_rail_passenger_wagon.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_rail_atlas,bl_rail_architecture_atlas,bl_rail_wagon_atlas,bl_rail_catenary_atlas,bl_grass*,bl_panel}.png "$mod/textures/"
+cp "mods/luanttd_core/models/bl_rail_sh_$variant.obj" "$mod/models/"
+cp "mods/luanttd_core/textures/bl_rail_sh_$variant.png" "$mod/textures/"
 printf 'gameid = rail_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

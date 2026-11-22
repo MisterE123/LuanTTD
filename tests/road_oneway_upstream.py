@@ -219,7 +219,7 @@ int main(){
 }
 """
 program=r"""
-local d="mods/bayline/openttd/"
+local d="mods/luanttd_core/openttd/"
 local F=dofile(d.."yapf_road_follow.lua")
 local R=dofile(d.."road_oneway.lua")(dofile(d.."road_slope.lua"),F)
 local codes={PARAMETERS=1,UNSUPPORTED_TILE=2,ROAD_WORKS_IN_PROGRESS=3,ONEWAY_JUNCTION=4,

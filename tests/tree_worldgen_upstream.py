@@ -172,7 +172,7 @@ int main(){
 }
 """
 lua=r"""
-local p="mods/bayline/openttd/"
+local p="mods/luanttd_core/openttd/"
 local Slope=dofile(p.."slope.lua")
 local TGP=dofile(p.."terragenesis.lua")(Slope)
 local Clear=dofile(p.."terragenesis_clear.lua")

@@ -22,7 +22,7 @@ DIGEST.update({
 })
 
 LUA=r"""
-local base="mods/bayline/openttd/"
+local base="mods/luanttd_core/openttd/"
 local T=dofile(base.."rail_track.lua")
 local S=dofile(base.."rail_signals.lua")(T)
 local Q=dofile(base.."rail_construction.lua")(T,S)

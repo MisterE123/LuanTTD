@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Exact untreated seed 1751, actual source route frames and stock loader.
-local prefix="mods/bayline/"
+local prefix="mods/luanttd_core/"
 local function m(p) return dofile(prefix..p..".lua") end
 local Sim,Terrain,Packets,Income,K=m("sim"),m("openttd/terrain"),m("openttd/passengers"),m("openttd/income"),m("openttd/station_rating")
 local C=m("openttd/station_catchment")(Packets,K)

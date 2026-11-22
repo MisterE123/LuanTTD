@@ -26,8 +26,8 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD Witcombe Goods Truck art fixture\n' > "$out/games/wood_art/game.conf"
 printf 'name = woodart\n' > "$mod/mod.conf"
 cp tests/witcombe_wood_truck_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_witcombe_wood_truck.obj,bl_witcombe_wood_truck_loaded.obj,bl_scenery_mill.obj,bl_road_freight_stop_straight_0.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_witcombe_wood_truck_atlas,bl_scenery_palette,bl_road_freight_stop,bl_grass*,bl_road_{5,9,10}_plain_q*}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_witcombe_wood_truck.obj,bl_witcombe_wood_truck_loaded.obj,bl_scenery_mill.obj,bl_road_freight_stop_straight_0.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_witcombe_wood_truck_atlas,bl_scenery_palette,bl_road_freight_stop,bl_grass*,bl_road_{5,9,10}_plain_q*}.png "$mod/textures/"
 printf 'gameid = wood_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

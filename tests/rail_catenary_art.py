@@ -13,7 +13,7 @@ from rail_wagon_art import mesh
 from ship_facility_art import read
 
 ROOT=Path(__file__).resolve().parents[1]
-MOD=ROOT/"mods/bayline"
+MOD=ROOT/"mods/luanttd_core"
 WIRE="Continuous_shaped_contact_wire_underside_aligned_to_SH30_shoe"
 MESS="Independently_suspended_messenger_catenary_cable"
 SUBSET=(1,2,4,8,16,32)

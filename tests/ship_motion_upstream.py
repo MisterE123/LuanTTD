@@ -123,7 +123,7 @@ int main(){
 }
 """
 LUA=r"""
-local ref="mods/bayline/openttd/"
+local ref="mods/luanttd_core/openttd/"
 local T=dofile(ref.."rail_track.lua")
 local M=dofile(ref.."ship_motion.lua")(T,dofile(ref.."ship_follow.lua")(T))
 local n={e=0,p=0,x=0,r=0,a=0,l=0}

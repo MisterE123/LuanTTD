@@ -1,4 +1,4 @@
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local S=dofile(root.."sim.lua")
 local function upstream(n) return dofile(root.."openttd/"..n..".lua") end
 local Terrain=upstream("terrain")

@@ -170,7 +170,7 @@ LABELS={
     "STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST":"MUST_DEMOLISH_BRIDGE_FIRST",
 }
 LUA=r"""
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local B=dofile(root.."road_bridge.lua")(dofile(root.."slope.lua"))
 local T=dofile(root.."tram_construction.lua")(dofile(root.."road_slope.lua"),B.roadtypes)
 local n={p=0,d=0,b=0,s=0}

@@ -1,5 +1,5 @@
 -- Clean-room host integration, using real source-port modules, not Harbor seeds.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function load(name) return dofile(root..name..".lua") end
 local Sim,Terrain,Slope=load("sim"),load("openttd/terrain"),load("openttd/slope")
 local TG=load("openttd/terragenesis")(Slope)

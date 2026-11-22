@@ -256,7 +256,7 @@ int main(){
 }
 """
 program=r"""
-local d="mods/bayline/openttd/"
+local d="mods/luanttd_core/openttd/"
 local Motion=dofile(d.."road_motion.lua")(dofile(d.."road_motion_data.lua"))
 local O=dofile(d.."road_stop_occupancy.lua")(Motion)
 local function has(n,v) return math.floor(n/v)%2==1 end

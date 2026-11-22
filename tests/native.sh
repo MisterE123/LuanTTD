@@ -28,37 +28,39 @@ cleanup() {
   wait || true
 }
 trap cleanup EXIT
-mkdir -p "$out"/{world,games/bayline,home,cache}
+mkdir -p "$out"/{world,games/luanttd,home,cache}
 if [[ -n ${BAYLINE_NATIVE_CACHE_SEED:-} ]]; then
   seed=$(realpath "$BAYLINE_NATIVE_CACHE_SEED")
   if [[ -d "$seed/minetest" ]]; then cp -R "$seed/minetest" "$out/cache/"; fi
 fi
 if [[ -n ${BAYLINE_NATIVE_EXACT_GAME:-} ]]; then
   game=$(realpath "$BAYLINE_NATIVE_EXACT_GAME")
-  cp -r "$game/game.conf" "$game/mods" "$out/games/bayline/"
+  cp -r "$game/game.conf" "$game/mods" "$out/games/luanttd/"
 else
-  cp -r game.conf mods "$out/games/bayline/"
+  cp -r game.conf mods "$out/games/luanttd/"
 fi
-cp -r tests/native_probe.lua "$out/games/bayline/mods/bayline/"
+cp -r tests/native_probe.lua "$out/games/luanttd/mods/luanttd_core/"
 if [[ ${BAYLINE_NATIVE_COAST:-0} == 1 ]]; then
-  cp tests/native_coastal_probe.lua "$out/games/bayline/mods/bayline/"
+  cp tests/native_coastal_probe.lua "$out/games/luanttd/mods/luanttd_core/"
 fi
 if [[ ${BAYLINE_NATIVE_RAIL_OIL:-0} == 1 ]]; then
-  cp tests/{native_rail_oil_probe,rail_oil_live_layout}.lua "$out/games/bayline/mods/bayline/"
+  cp tests/{native_rail_oil_probe,rail_oil_live_layout}.lua "$out/games/luanttd/mods/luanttd_core/"
 fi
 if [[ ${BAYLINE_NATIVE_RAIL_PAIR:-0} == 1 ]]; then
-  cp tests/rail_owned_pair_fixture.lua "$out/games/bayline/mods/bayline/"
+  cp tests/rail_owned_pair_fixture.lua "$out/games/luanttd/mods/luanttd_core/"
 fi
 if [[ ${BAYLINE_NATIVE_JUNCTION_CLEARANCE:-0} == 1 ]]; then
-  cp tests/road_junction_fixture.lua "$out/games/bayline/mods/bayline/"
+  cp tests/road_junction_fixture.lua "$out/games/luanttd/mods/luanttd_core/"
 fi
 if [[ -n ${BAYLINE_NATIVE_OVERTAKE:-} ]]; then
   [[ ${BAYLINE_NATIVE_OVERTAKE} == stopped || ${BAYLINE_NATIVE_OVERTAKE} == moving ]]
-  cp tests/road_overtake_fixture.lua "$out/games/bayline/mods/bayline/"
+  cp tests/road_overtake_fixture.lua "$out/games/luanttd/mods/luanttd_core/"
 fi
-printf '\ndofile(mod.."/native_probe.lua")(api,ui)\n' >> "$out/games/bayline/mods/bayline/init.lua"
+printf '\ndofile(mod.."/native_probe.lua")(api,ui)\n' >> "$out/games/luanttd/mods/luanttd_core/init.lua"
+cp tests/qa_layout.lua "$out/games/luanttd/mods/luanttd_core/qa_layout.lua"
+cp tests/coastal_corridor_fixture.lua "$out/games/luanttd/mods/luanttd_core/qa_coastal_corridor.lua"
 cat > "$out/world/world.mt" <<'EOF'
-gameid = bayline
+gameid = luanttd
 backend = sqlite3
 player_backend = sqlite3
 auth_backend = sqlite3
@@ -129,8 +131,8 @@ bayline_native_passing = $([[ ${BAYLINE_NATIVE_PASSING:-0} == 1 ]] && echo true 
 bayline_native_overtake = ${BAYLINE_NATIVE_OVERTAKE:-off}
 bayline_native_turns = $([[ ${BAYLINE_NATIVE_TURNS:-0} == 1 ]] && echo true || echo false)
 bayline_stock_workbenches = false
-bayline_fixture_harbor_valley = false
-bayline_fixture_legacy_layout = true
+luanttd_qa_coastal_layout = false
+luanttd_qa_plain_layout = true
 bayline_stock_coastal_flood = $([[ ${BAYLINE_NATIVE_COAST:-0} == 1 ]] && echo true || echo false)
 debug_log_level = $([[ ${BAYLINE_NATIVE_CAMERA:-0} == 1 ]] && echo verbose || echo action)
 EOF
@@ -142,11 +144,11 @@ if [[ ${BAYLINE_NATIVE_ALL_WORKBENCHES:-0} == 1 ]]; then
   sed -i -E '/^(bayline_.*_preview|bayline_preview_paid_(rail|ferry|air)|bayline_preview_coal_industry|bayline_stock_workbenches) = false$/d' "$out/server.conf"
   printf 'bayline_stock_workbenches = true\n' >> "$out/server.conf"
 fi
-if [[ ${BAYLINE_NATIVE_HARBOR_VALLEY:-0} == 1 || ${BAYLINE_NATIVE_CLEAR_AREA:-0} == 1 || ${BAYLINE_NATIVE_AUTORAIL:-0} == 1 || ${BAYLINE_NATIVE_ROAD_BEND:-0} == 1 || ${BAYLINE_NATIVE_ELECTRIC_GUI:-0} == 1 ]]; then
-  # These legacy fixtures use known Harbor Valley coordinates and the
+if [[ ${BAYLINE_NATIVE_COASTAL_CIRCUIT:-0} == 1 || ${BAYLINE_NATIVE_CLEAR_AREA:-0} == 1 || ${BAYLINE_NATIVE_AUTORAIL:-0} == 1 || ${BAYLINE_NATIVE_ROAD_BEND:-0} == 1 || ${BAYLINE_NATIVE_ELECTRIC_GUI:-0} == 1 ]]; then
+  # These legacy fixtures use known coastal test circuit coordinates and the
   # stock feature defaults. Set the scenario explicitly.
   sed -i -E '/^bayline_/ { /^bayline_seconds_per_day = /!d; }' "$out/server.conf"
-  printf 'bayline_fixture_harbor_valley = true\n' >> "$out/server.conf"
+  printf 'luanttd_qa_coastal_layout = true\n' >> "$out/server.conf"
 fi
 if [[ ${BAYLINE_NATIVE_AUTORAIL:-0} == 1 || ${BAYLINE_NATIVE_ROAD_BEND:-0} == 1 || ${BAYLINE_NATIVE_ORDER_MODAL:-0} == 1 ]]; then
   # Compare actual construction and order debits without unrelated month-end costs.
@@ -220,11 +222,11 @@ if [[ -n ${BAYLINE_NATIVE_STOCK_HOUSES:-} ]]; then
   printf 'bayline_preview_stock_house_supply = %s\n' "$([[ $BAYLINE_NATIVE_STOCK_HOUSES == 1 ]] && echo true || echo false)" >> "$out/server.conf"
 fi
 if [[ ${BAYLINE_NATIVE_GRADE:-0} == 1 ]]; then
-  dir="$out/games/bayline/mods/bayline"
+  dir="$out/games/luanttd/mods/luanttd_core"
   mv "$dir/terrain_preview.lua" "$dir/terrain_preview_original.lua"
   cp tests/native_grade_preset.lua "$dir/"
   cat > "$dir/terrain_preview.lua" <<'LUA'
-local folder=core.get_modpath("bayline")
+local folder=core.get_modpath("luanttd_core")
 return dofile(folder.."/native_grade_preset.lua")(dofile(folder.."/terrain_preview_original.lua"))
 LUA
   sed -i "s/bayline_seconds_per_day = .*/bayline_seconds_per_day = 1.12/" "$out/server.conf"

@@ -1,5 +1,5 @@
 -- Optional rough Lua 5.1 measurement for the detached 4096-square path.
-local p="mods/bayline/openttd/"
+local p="mods/luanttd_core/openttd/"
 local H=dofile(p.."town_passengers.lua")
 local M=dofile(p.."landscape_index.lua")
 local function mem() collectgarbage("collect");return collectgarbage("count") end

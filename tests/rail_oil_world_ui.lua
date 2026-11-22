@@ -37,7 +37,7 @@ local api={
     end,
   },
 }
-local U=dofile("mods/bayline/ui.lua")(api)
+local U=dofile("mods/luanttd_core/ui.lua")(api)
 local p={get_player_name=function()return "Alex" end}
 local function can(id) return select(2,U.preview(p,id)) end
 assert(U.is_world_tool("rail_oil_load") and U.is_world_tool("rail_oil_unload"))
@@ -60,7 +60,7 @@ assert(raw[2].oil_role=="unload" and calls==3 and updates==2 and save_count==2)
 U.select_tool(p,"rail_coal_load")
 assert(not can(10) and select(3,U.preview(p,10)):find("without an oil stage",1,true))
 U.service(p,"rail_platform_state",1)
-assert(forms[2]=="bayline:service" and forms[3]:find("23,000 L waiting",1,true))
+assert(forms[2]=="luanttd_core:service" and forms[3]:find("23,000 L waiting",1,true))
 U.service(p,"rail_platform_state",2)
 assert(forms[3]:find("Goods for road freight",1,true))
 reports[2].accepts=false

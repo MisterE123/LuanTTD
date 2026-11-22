@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Two genuinely purchased Sampsons sharing a real Country FTA and the
 -- same house/stock clock. Simulation only; native presentation separate.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function mod(p) return dofile(root..p..".lua") end
 local Sim=mod("sim")
 local Terrain=mod("openttd/terrain")

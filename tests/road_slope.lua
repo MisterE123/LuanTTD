@@ -1,5 +1,5 @@
-local R=dofile("mods/bayline/openttd/road_slope.lua")
-local S=dofile("mods/bayline/openttd/slope.lua")
+local R=dofile("mods/luanttd_core/openttd/road_slope.lua")
+local S=dofile("mods/luanttd_core/openttd/slope.lua")
 local b,fee=R.prepare(3,8,0,0,true) -- SLOPE_SW, ROAD_NE
 assert(b==10 and fee==false and R.foundation(3,b)=="none","autocompletes uphill")
 b,fee=R.prepare(3,5,0,0,true)

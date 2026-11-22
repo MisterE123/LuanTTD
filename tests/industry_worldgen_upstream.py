@@ -295,7 +295,7 @@ int main(){
 }
 '''
 runner=r'''
-local m="mods/bayline/openttd/"
+local m="mods/luanttd_core/openttd/"
 local function load(n)return dofile(m..n..".lua")end
 local P,Rate,Inc=load("passengers"),load("station_rating"),load("income")
 local Coal=load("coal_industry")(P,Rate,load("station_catchment")(P,Rate),Inc)

@@ -1,4 +1,4 @@
-local hotbar="mods/bayline/hotbar.lua"
+local hotbar="mods/luanttd_core/hotbar.lua"
 local function check(H,menu,slot,expected)
   local path=assert(H.path(menu),menu)
   local k,got=H.choose(path,slot)

@@ -1,4 +1,4 @@
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local Speed=dofile(root.."openttd/road_speed.lua")
 local Prox=dofile(root.."openttd/road_proximity.lua")
 local R=dofile(root.."road_speed_runtime.lua")(Speed,Prox,function() return 0 end,

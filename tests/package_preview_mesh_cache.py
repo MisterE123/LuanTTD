@@ -11,8 +11,8 @@ spec = importlib.util.spec_from_file_location(
     "package_preview", Path(__file__).resolve().parents[1] / "tools/package_preview.py")
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
-asset = "bayline/mods/bayline/models/first.obj"
-new_path = "bayline/mods/bayline/models/renamed.obj"
+asset = "luanttd/mods/luanttd_core/models/first.obj"
+new_path = "luanttd/mods/luanttd_core/models/renamed.obj"
 prior = b"v 0.4 0 1\n" * 7000
 changed = prior + b"v 0 0 1\n"
 

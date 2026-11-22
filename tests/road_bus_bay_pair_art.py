@@ -15,7 +15,7 @@ import road_freight_stop_art as stock_trace
 from small_airport_art import obj,cut,hull,intersects
 
 ROOT=Path(__file__).absolute().parents[1]
-MODEL=ROOT/"mods/bayline/models"
+MODEL=ROOT/"mods/luanttd_core/models"
 RIM="Continuous_flush_two-bay_concrete_hardstand"
 REQUIRED=("Marked_stopping_bay_1_at_exact_projected_parking_throat",
           "Marked_stopping_bay_2_at_exact_projected_parking_throat",
@@ -24,7 +24,7 @@ REQUIRED=("Marked_stopping_bay_1_at_exact_projected_parking_throat",
           "Tinted_glazing_in_waiting_shelter_partition","Terminal_raised_BUS_STATION_route_identity",
           "Pitched_two-part_standing_seam_shelter_roof")
 SOURCE=r'''
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local M=dofile(root.."openttd/road_motion.lua")(dofile(root.."openttd/road_motion_data.lua"))
 local P=dofile(root.."road_motion_presentation.lua")(dofile(root.."road_lanes.lua"))
 local fd=assert(io.open(OUTPUT_PATH, "w"))
@@ -171,7 +171,7 @@ if __name__=="__main__":
     if len(sys.argv)>1:source(Path(sys.argv[1]))
     p,poses=stock_poses()
     n,observed=clearance(build_refs(),p,poses)
-    tex=(ROOT/"mods/bayline/textures/bl_road_bus_bay_pair.png").read_bytes()
+    tex=(ROOT/"mods/luanttd_core/textures/bl_road_bus_bay_pair.png").read_bytes()
     assert tex[:8]==b"\x89PNG\r\n\x1a\n" and int.from_bytes(tex[16:20],"big")==256
     print(f"PASS: stock-only four entrance orientations; 16 exact parked positions and all full vehicle pairs clear; {n:,} swept bus poses paved and clear of fixed equipment.")
     print("Conservative moving-body intersections with stationary sibling when all stock poses are replayed unconditionally:",dict(observed))

@@ -1,4 +1,4 @@
-local path="mods/bayline"
+local path="mods/luanttd_core"
 local F=dofile("tests/terrain_river_fixture.lua")(path)
 local W,D,T,P=F.storage,F.words,F.stream,F.protocol
 local worker=dofile(path.."/world_async_worker.lua")(P,F.slope,F.terrain)

@@ -19,7 +19,7 @@ def test(upstream):
             rows=[tuple(map(int,row)) for row in re.findall(r'MK\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)',array)]
             assert {(x,z) for x,z,gfx in rows if gfx==16}==layout and len(rows)==len(layout)
         files={tuple(map(int,p.stem.split("_")[-2:])) for p in
-               (ROOT/"mods/bayline/models").glob(f"bl_forest_{i}_*.obj")}
+               (ROOT/"mods/luanttd_core/models").glob(f"bl_forest_{i}_*.obj")}
         assert files==layout
         total=0
         for x,z in sorted(layout):

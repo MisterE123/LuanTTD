@@ -23,9 +23,9 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD day-night atmosphere fixture\n' > "$out/games/atmosphere_test/game.conf"
 printf 'name = atmosphere\n' > "$mod/mod.conf"
 cp tests/atmosphere_native.lua "$mod/init.lua"
-cp mods/bayline/atmosphere.lua "$mod/atmosphere.lua"
-cp mods/bayline/textures/{bl_coastal_moon,bl_grass2,bl_grass_side,bl_hill_side,bl_water_sea_anim}.png "$mod/textures/"
-cp mods/bayline/models/bl_land_3.obj "$mod/models/"
+cp mods/luanttd_core/atmosphere.lua "$mod/atmosphere.lua"
+cp mods/luanttd_core/textures/{bl_coastal_moon,bl_grass2,bl_grass_side,bl_hill_side,bl_water_sea_anim}.png "$mod/textures/"
+cp mods/luanttd_core/models/bl_land_3.obj "$mod/models/"
 python3 - "$mod/textures/calibration.png" <<'PYQA'
 from PIL import Image, ImageDraw
 from sys import argv

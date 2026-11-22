@@ -1,4 +1,4 @@
-local base="mods/bayline/openttd/"
+local base="mods/luanttd_core/openttd/"
 local Service=dofile(base.."road_depot_service.lua")
 local B=dofile(base.."road_breakdowns.lua")
 local F=dofile(base.."yapf_road_follow.lua")

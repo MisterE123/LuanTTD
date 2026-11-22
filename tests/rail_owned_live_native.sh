@@ -9,22 +9,24 @@ if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
 fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-rail-owned-live.XXXXXX")
 echo "Native owned rail logs: $out"
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp "${BAYLINE_NATIVE_EXACT_GAME:-.}/game.conf" "$game"
 if [[ -n ${BAYLINE_NATIVE_ASSET_MOD:-} ]]; then
   # Sparse worktrees can use unchanged art without copying an entire game.
-  mkdir -p "$game/mods/bayline"
-  cp -R "${BAYLINE_NATIVE_EXACT_GAME:-.}/mods/bayline/." "$game/mods/bayline/"
+  mkdir -p "$game/mods/luanttd_core"
+  cp -R "${BAYLINE_NATIVE_EXACT_GAME:-.}/mods/luanttd_core/." "$game/mods/luanttd_core/"
   for kind in models textures; do
-    cp -al "$(realpath "$BAYLINE_NATIVE_ASSET_MOD/$kind")" "$game/mods/bayline/$kind"
+    cp -al "$(realpath "$BAYLINE_NATIVE_ASSET_MOD/$kind")" "$game/mods/luanttd_core/$kind"
   done
 else
   cp -R "${BAYLINE_NATIVE_EXACT_GAME:-.}/mods" "$game/"
 fi
-cat tests/rail_owned_live_native.lua >> "$game/mods/bayline/init.lua"
+cat tests/rail_owned_live_native.lua >> "$game/mods/luanttd_core/init.lua"
+cp tests/qa_layout.lua "$game/mods/luanttd_core/qa_layout.lua"
+cp tests/coastal_corridor_fixture.lua "$game/mods/luanttd_core/qa_coastal_corridor.lua"
 cat > "$out/world/world.mt" <<'CONF'
-gameid = bayline
+gameid = luanttd
 backend = sqlite3
 player_backend = sqlite3
 auth_backend = sqlite3
@@ -33,7 +35,7 @@ CONF
 use_market=false
 if [[ ${BAYLINE_NATIVE_SH_8P:-false} == true || ${BAYLINE_NATIVE_MANLEY:-false} == true || ${BAYLINE_NATIVE_MANLEY_COACH:-false} == true || ${BAYLINE_NATIVE_ELECTRIC:-false} == true || ${BAYLINE_NATIVE_SH_40:-false} == true ]]; then use_market=true; fi
 cat > "$out/native.conf" <<EOF_CONF
-bayline_fixture_harbor_valley = true
+luanttd_qa_coastal_layout = true
 bayline_offline_economy = false
 bayline_rail_owned_preview = true
 bayline_native_jubilee_probe = ${BAYLINE_NATIVE_JUBILEE:-false}
@@ -57,11 +59,11 @@ server_announce = false
 EOF_CONF
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache"
 export LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
-timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid bayline --logfile "" >"$out/server.log" 2>&1 || {
+timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/server.log" 2>&1 || {
   cat "$out/server.log"; exit 1;
 }
 grep -q OWNED_RAIL_SAVE_LOADING "$out/server.log" || { cat "$out/server.log"; exit 1; }
-timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid bayline --logfile "" >"$out/reload.log" 2>&1 || {
+timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/reload.log" 2>&1 || {
   cat "$out/reload.log"; exit 1;
 }
 grep -q OWNED_RAIL_LIVE_NATIVE_PASS "$out/reload.log" || { cat "$out/reload.log"; exit 1; }

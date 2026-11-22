@@ -1,4 +1,4 @@
-local M=dofile("mods/bayline/world_setup.lua")
+local M=dofile("mods/luanttd_core/world_setup.lua")
 local params={bayline_seed="4294967295",bayline_generated_map_size="128",
   bayline_generated_relief="99",bayline_generated_town_layout="grid3"}
 local settings={get=function(_,name)return params[name] end}
@@ -10,6 +10,11 @@ assert(cfg.seed==12345678 and cfg.size==64 and cfg.relief==2 and cfg.rivers==1 a
 assert(cfg.layout=="grid3" and defaults.size==128)
 assert(cfg.coast==0 and cfg.smooth==2 and cfg.variety==3)
 assert(not M.parse(defaults,{setup_seed="2.5"}))
+assert(M.parse(defaults,{setup_scenario="2"}).scenario=="farm")
+assert(M.parse(defaults,{setup_scenario="3"}).scenario=="oil")
+assert(M.parse(defaults,{setup_scenario="6",setup_survey_size="7"}).survey_size==4096)
+assert(not M.parse(defaults,{setup_scenario="7"}))
+assert(not M.parse(defaults,{setup_scenario="6",setup_survey_size="8"}))
 assert(not M.parse(defaults,{setup_rivers="5"}))
 assert(not M.parse(defaults,{setup_sea="-1"}))
 assert(not M.parse(defaults,{setup_seed="4294967296"}))

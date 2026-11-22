@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-ROOT=Path(__file__).resolve().parents[1]/"mods"/"bayline"
+ROOT=Path(__file__).resolve().parents[1]/"mods"/"luanttd_core"
 P="bl_road_bridge_wood"
 DIR=((-1,0),(0,1),(1,0),(0,-1))
 SURFACE=("Running_asphalt","Shoulder_slab","Inlaid_centre_markings")

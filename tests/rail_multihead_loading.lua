@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Two genuine packet lists, one stock station visit. Includes full-load
 -- reservation and replay independent of the real native order fixture.
-local function m(path) return dofile("mods/bayline/"..path..".lua") end
+local function m(path) return dofile("mods/luanttd_core/"..path..".lua") end
 local P,Income,Rating=m("openttd/passengers"),m("openttd/income"),m("openttd/station_rating")
 local Queue=m("station_rating_runtime")(nil,Rating,P)
 local Catch=m("openttd/station_catchment")(P,Rating,

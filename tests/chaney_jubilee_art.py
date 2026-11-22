@@ -170,7 +170,7 @@ def verify(a):
         for q in (.65,.77,.92):
             hh=min(along_ray(bore,2,x,q))
             assert y+.114-.5+.035<hh,(x,y,q,hh)
-    path=ROOT/"mods/bayline/textures"/("bl_"+NAME+".png")
+    path=ROOT/"mods/luanttd_core/textures"/("bl_"+NAME+".png")
     atlas=path.read_bytes()
     assert atlas[:8]==b"\x89PNG\r\n\x1a\n" and struct.unpack_from(">II",atlas,16)==(352,8)
     assert (ROOT/"art/chaney_jubilee.blend").stat().st_size>100000

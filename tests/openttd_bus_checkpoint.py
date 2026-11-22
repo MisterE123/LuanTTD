@@ -30,7 +30,7 @@ def verify(server, save, port, reference=None):
         (mod/"mod.conf").write_text("name = buscheckpoint\n")
         (game/"game.conf").write_text("title = OpenTTD paused bus acceptance probe\n")
         shutil.copyfile(TESTS/"openttd_bus_checkpoint_native.lua",mod/"init.lua")
-        modules=REPO/"mods"/"bayline"
+        modules=REPO/"mods"/"luanttd_core"
         for file in ("world_storage.lua","import/openttd_map.lua","import/openttd_sparse.lua",
                      "import/openttd_bus_checkpoint.lua",
                      *("openttd/"+x+".lua" for x in ("slope","road_slope","road_motion","road_motion_data",

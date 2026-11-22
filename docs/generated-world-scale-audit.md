@@ -63,7 +63,7 @@ authority.
 2. **The real landscape clock.** `town_passenger_runtime.start` must
    derive axis exponents for generated maps and keep the real river head:
    6/6 for 64², 7/7 for 128². On restore, verify saved logs and in-range
-   head as well as the state profile. Leave the 48×36 authored map's
+   head as well as the state profile. Leave the smaller specialty scenarios’
    deliberate 64² padded clock intact. The port in
    `openttd/town_passengers.lua` already supports all stock exponents.
 3. **Measure gameplay, not just generation.** Launch two fresh native

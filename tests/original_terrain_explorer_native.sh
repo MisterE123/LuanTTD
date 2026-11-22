@@ -20,17 +20,17 @@ for dep in "$client" "$server" Xvfb xdotool xauth xdpyinfo import; do
   command -v "$dep" >/dev/null || { echo "Missing dependency: $dep" >&2; exit 1; }
 done
 mkdir "$out"
-mod="$out/games/bayline/mods/bayline"
+mod="$out/games/luanttd/mods/luanttd_core"
 mkdir -p "$mod/"{models,textures,openttd} "$out/"{world,home,cache}
-cp game.conf "$out/games/bayline/"
-cp mods/bayline/mod.conf "$mod/"
-cp mods/bayline/{original_terrain_explorer,original_terrain_stream,terrain_stream,terrain_word,world_storage}.lua "$mod/"
-cp mods/bayline/openttd/{original_terrain,slope}.lua "$mod/openttd/"
-cp mods/bayline/models/{bl_land_*,bl_original_coast_*}.obj "$mod/models/"
-cp mods/bayline/textures/{bl_grass*,bl_original_coast_*}.png "$mod/textures/"
+cp game.conf "$out/games/luanttd/"
+cp mods/luanttd_core/mod.conf "$mod/"
+cp mods/luanttd_core/{original_terrain_explorer,original_terrain_stream,terrain_stream,terrain_word,world_storage}.lua "$mod/"
+cp mods/luanttd_core/openttd/{original_terrain,slope}.lua "$mod/openttd/"
+cp mods/luanttd_core/models/{bl_land_*,bl_original_coast_*}.obj "$mod/models/"
+cp mods/luanttd_core/textures/{bl_grass*,bl_original_coast_*}.png "$mod/textures/"
 cp tests/original_terrain_explorer_probe.lua "$mod/init.lua"
 python3 tools/extract_original_terrain_masks.py "$grf" "$out/world/original-mapgen.bin"
-printf 'gameid = bayline\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
+printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-39652}
 disp=${BAYLINE_NATIVE_DISPLAY:-165}
 width=${BAYLINE_NATIVE_ORIGINAL_WIDTH:-64}
@@ -97,7 +97,7 @@ wait_log() {
   cat "$out/server.log"; [[ ! -f "$out/client.log" ]] || tail -60 "$out/client.log"
   return 1
 }
-"$server" --world "$out/world" --config "$out/server.conf" --gameid bayline --logfile '' >"$out/server.log" 2>&1 &
+"$server" --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' >"$out/server.log" 2>&1 &
 server_pid=$!
 pids+=("$server_pid")
 wait_log 'listening'
@@ -136,7 +136,7 @@ kill -TERM "$client_pid" "$server_pid"
 wait "$client_pid" || true
 wait "$server_pid"
 printf '\nbayline_explorer_probe_restart = true\n' >> "$out/server.conf"
-timeout 110 "$server" --world "$out/world" --config "$out/server.conf" --gameid bayline --logfile '' >"$out/restart.log" 2>&1 || {
+timeout 110 "$server" --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' >"$out/restart.log" 2>&1 || {
   cat "$out/restart.log"; exit 1;
 }
 grep -E 'ORIGINAL TERRAIN SQLITE RESTART SAME [0-9]+ TILES' "$out/restart.log"

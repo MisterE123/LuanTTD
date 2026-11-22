@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-OUT = Path(__file__).resolve().parents[1] / "mods/bayline/textures"
+OUT = Path(__file__).resolve().parents[1] / "mods/luanttd_core/textures"
 # Mid-century transport enamel: steel blue, cream lettering, muted glass and red brick.
 INK="#0d202a"; EDGE="#55777d"; WELL="#172d38"; WELL_LIGHT="#253f49"
 CREAM="#ffe9be"; BRASS="#dea956"; TEAL="#75ad9f"; TEAL_DARK="#386a61"

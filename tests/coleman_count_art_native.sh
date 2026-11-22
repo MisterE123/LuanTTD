@@ -24,8 +24,8 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD Coleman Count art fixture\n' > "$out/games/coleman_art/game.conf"
 printf 'name = coleman\n' > "$mod/mod.conf"
 cp tests/coleman_count_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_coleman_count.obj,bl_coleman_count_flight.obj,bl_bayshore_trimotor.obj,bl_small_airport_?_?.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_coleman_count_atlas,bl_bayshore_trimotor_palette,bl_small_airport_atlas,bl_grass?,bl_grass_side}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_coleman_count.obj,bl_coleman_count_flight.obj,bl_bayshore_trimotor.obj,bl_small_airport_?_?.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_coleman_count_atlas,bl_bayshore_trimotor_palette,bl_small_airport_atlas,bl_grass?,bl_grass_side}.png "$mod/textures/"
 printf 'gameid = coleman_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

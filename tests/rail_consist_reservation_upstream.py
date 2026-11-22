@@ -16,7 +16,7 @@ from rail_track_upstream import ROOT, DIGEST, block, declarations, src
 DIGEST["train_cmd.cpp"]="206171b133fc9bed8c3fe21ccb3a9134317461597b0120fa77340f0b0cdbc059"
 
 LUA=r"""
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local T=dofile(root.."rail_track.lua")
 local F=dofile(root.."rail_follow.lua")(T)
 local C=dofile(root.."rail_yapf_cost.lua")(T,F)

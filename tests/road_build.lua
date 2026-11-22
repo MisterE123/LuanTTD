@@ -1,5 +1,5 @@
-local M=dofile('mods/bayline/sim.lua')
-local T=dofile('mods/bayline/openttd/terrain.lua')
+local M=dofile('mods/luanttd_core/sim.lua')
+local T=dofile('mods/luanttd_core/openttd/terrain.lua')
 local function fresh(field)
   local s=M.new(1751)
   s.corner_grid=T.new(M.W,M.H,field)

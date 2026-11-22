@@ -1,4 +1,4 @@
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local T=dofile(root.."rail_track.lua")
 local Water=dofile(root.."ship_follow.lua")(T)
 local C=dofile(root.."water_construction.lua")(T,Water)

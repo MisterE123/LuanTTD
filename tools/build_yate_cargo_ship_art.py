@@ -366,7 +366,7 @@ def atlas():
         return struct.pack(">I",len(d))+k+d+struct.pack(">I",zlib.crc32(k+d))
     encoded=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",256,8,8,2,0,0,0))
     encoded+=chunk(b"IDAT",zlib.compress((b"\0"+row)*8))+chunk(b"IEND",b"")
-    (ROOT/"mods/bayline/textures"/f"{STEM}_atlas.png").write_bytes(encoded)
+    (ROOT/"mods/luanttd_core/textures"/f"{STEM}_atlas.png").write_bytes(encoded)
 
 
 def export():
@@ -404,7 +404,7 @@ def export():
         for l in p.loop_indices:
             uv.data[l].uv=((idx+.5)/len(KEYS),.5)
     ob.data.update()
-    bpy.ops.wm.obj_export(filepath=str(ROOT/"mods/bayline/models"/f"{STEM}.obj"),
+    bpy.ops.wm.obj_export(filepath=str(ROOT/"mods/luanttd_core/models"/f"{STEM}.obj"),
       export_selected_objects=True,export_materials=False,export_uv=True,export_normals=True,
       export_triangulated_mesh=True,global_scale=10,forward_axis="NEGATIVE_Z",up_axis="Y")
 

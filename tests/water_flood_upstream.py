@@ -128,7 +128,7 @@ int main(){
 }
 """
 program=r"""
-local F=dofile("mods/bayline/openttd/water_flood.lua")
+local F=dofile("mods/luanttd_core/openttd/water_flood.lua")
 local kinds={[0]="clear","sea","coast","canal","river","protected","void",
              "station","station","industry","object"}
 for line in io.lines() do

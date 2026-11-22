@@ -24,8 +24,8 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD Floss 47 art fixture\n' > "$out/games/rail_art/game.conf"
 printf 'name = railpreview\n' > "$mod/mod.conf"
 cp tests/floss_47_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_rail_track_1.obj,bl_rail_track_2.obj,bl_rail_track_3.obj,bl_rail_track_32.obj,bl_rail_track_33.obj,bl_rail_depot_1.obj,bl_rail_floss_47.obj,bl_rail_open_wagon.obj,bl_rail_passenger_wagon.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_rail_atlas,bl_rail_architecture_atlas,bl_rail_wagon_atlas,bl_rail_floss_47,bl_grass*}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_rail_track_1.obj,bl_rail_track_2.obj,bl_rail_track_3.obj,bl_rail_track_32.obj,bl_rail_track_33.obj,bl_rail_depot_1.obj,bl_rail_floss_47.obj,bl_rail_open_wagon.obj,bl_rail_passenger_wagon.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_rail_atlas,bl_rail_architecture_atlas,bl_rail_wagon_atlas,bl_rail_floss_47,bl_grass*}.png "$mod/textures/"
 printf 'gameid = rail_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

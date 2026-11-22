@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PIL import Image
 
-textures = Path(__file__).resolve().parents[1] / "mods/bayline/textures"
+textures = Path(__file__).resolve().parents[1] / "mods/luanttd_core/textures"
 with Image.open(textures / "bl_road_surface_retaining.png") as raw:
     wall = raw.convert("RGB")
 assert wall.size == (32, 32)

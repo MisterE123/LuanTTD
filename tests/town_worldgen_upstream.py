@@ -291,7 +291,7 @@ int main(){
 '''
 
 runner=r'''
-local mod="mods/bayline/openttd/"
+local mod="mods/luanttd_core/openttd/"
 local function load(n)return dofile(mod..n..".lua")end
 local G=load("town_growth")
 local W=load("town_worldgen")(G,nil)

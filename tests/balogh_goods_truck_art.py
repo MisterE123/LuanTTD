@@ -59,7 +59,7 @@ def verify(engines,rv_source):
         row=re.search(r'_roadveh_full_adder\[\]\s*=\s*{(.*?)};',text,re.S)
         assert row and [int(n) for n in re.findall(r'\b\d+\b',row[1])][5]==0
     assert (ROOT/"art"/(B+".blend")).stat().st_size>100000
-    atlas=ROOT/"mods/bayline/textures"/("bl_"+B+"_atlas.png")
+    atlas=ROOT/"mods/luanttd_core/textures"/("bl_"+B+"_atlas.png")
     data=atlas.read_bytes()
     assert data[:8]==b"\x89PNG\r\n\x1a\n" and struct.unpack_from(">II",data,16)==(312,8)
     groups=mesh(B)

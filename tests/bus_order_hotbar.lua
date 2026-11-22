@@ -1,6 +1,6 @@
 -- Modal inventory entries and its world dispatch remain independent of
 -- the normal hotbar state, even if the old slot was a section or back.
-local H=dofile("mods/bayline/hotbar.lua")
+local H=dofile("mods/luanttd_core/hotbar.lua")
 for slot=1,H.size do
   local menu,done,map=H.order_overlay(slot)
   local clamped=math.min(slot,2)
@@ -10,7 +10,7 @@ for slot=1,H.size do
   assert(not H.path("vehicle_orders"))
 end
 for _,item in ipairs({H.order_pick,H.order_done}) do
-  local f=assert(io.open("mods/bayline/textures/"..item[3],"rb"))
+  local f=assert(io.open("mods/luanttd_core/textures/"..item[3],"rb"))
   assert(f:read(8)=="\137PNG\r\n\026\n");f:close()
 end
 assert(H.order_done[3]~=H.order_pick[3])

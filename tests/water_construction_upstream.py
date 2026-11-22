@@ -199,7 +199,7 @@ int main(){
 }
 """
 lua=r"""
-local path="mods/bayline/openttd/"
+local path="mods/luanttd_core/openttd/"
 local T=dofile(path.."rail_track.lua")
 local W=dofile(path.."ship_follow.lua")(T)
 local C=dofile(path.."water_construction.lua")(T,W)

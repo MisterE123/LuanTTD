@@ -1,4 +1,4 @@
-local path="mods/bayline"
+local path="mods/luanttd_core"
 local function load(name) return dofile(path.."/"..name..".lua") end
 local W,P,S,T=load("world_storage"),load("world_async_protocol"),load("openttd/slope"),load("openttd/terrain")
 local Worker=load("world_async_worker")(P,S,T)

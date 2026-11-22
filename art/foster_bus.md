@@ -21,8 +21,8 @@ Paint is fixed on this exported atlas; the upstream sprite is recolorable.
 
 ## Use
 
-- Mesh `mods/bayline/models/bl_foster_bus.obj`, palette atlas
-  `mods/bayline/textures/bl_foster_bus_atlas.png`.
+- Mesh `mods/luanttd_core/models/bl_foster_bus.obj`, palette atlas
+  `mods/luanttd_core/textures/bl_foster_bus_atlas.png`.
 - Uniform native vehicle visual size **.40** (same as Leopard), native
   **−Z nose** and **Y=0 tire contact**. There is no visual offset.
   Blender axes are +Y nose and +Z up; the exporter writes 10 OBJ units per

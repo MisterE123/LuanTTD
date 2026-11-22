@@ -1,7 +1,7 @@
 -- Stock host clock/ledger integration. Only Run's motion is substituted;
 -- rail depot/route mechanics have independent native probes. Physical rail
 -- records and the road depot, Goods truck and rail station ledger are real.
-local mod="mods/bayline/"
+local mod="mods/luanttd_core/"
 local function m(name) return dofile(mod..name..".lua") end
 local Sim,Terrain,Roster=m("sim"),m("openttd/terrain"),m("openttd/rail_roster")
 local s=Sim.new(1751)

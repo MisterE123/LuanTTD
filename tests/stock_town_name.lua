@@ -1,4 +1,4 @@
-local Name=dofile("mods/bayline/openttd/stock_town_name.lua")
+local Name=dofile("mods/luanttd_core/openttd/stock_town_name.lua")
 assert(Name.display(0)=="Invenville")
 assert(Name.display(4294967295)=="Fort Wenfingburg Springs")
 assert(Name.display(2147483648)==Name.display(0))

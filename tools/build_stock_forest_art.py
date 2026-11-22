@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
+MODELS=ROOT/"mods/luanttd_core/models"
 AUTHOR_ROOT_Y=-.5
 SCALE=.72
 LEVELS=5

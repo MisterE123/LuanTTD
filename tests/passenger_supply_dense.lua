@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Release regression: do not replace real authored towns with one house.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function mod(p) return dofile(root..p..".lua") end
 local Sim=mod("sim")
 local Terrain=mod("openttd/terrain")

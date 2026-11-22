@@ -24,11 +24,11 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD Oil Well and Refinery art fixture\n' > "$out/games/goods_art/game.conf"
 printf 'name = goodsart\n' > "$mod/mod.conf"
 cp tests/stock_oil_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_industry_oil_well_*_*.obj,bl_industry_oil_refinery_*_*.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_industry_oil_well_atlas,bl_industry_oil_refinery_atlas,bl_grass*,bl_road_5_plain_q*}.png "$mod/textures/"
-if [[ -r mods/bayline/models/bl_witcombe_oil_tanker.obj && -r mods/bayline/textures/bl_witcombe_oil_tanker_atlas.png ]]; then
-  cp mods/bayline/models/bl_witcombe_oil_tanker.obj "$mod/models/"
-  cp mods/bayline/textures/bl_witcombe_oil_tanker_atlas.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_industry_oil_well_*_*.obj,bl_industry_oil_refinery_*_*.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_industry_oil_well_atlas,bl_industry_oil_refinery_atlas,bl_grass*,bl_road_5_plain_q*}.png "$mod/textures/"
+if [[ -r mods/luanttd_core/models/bl_witcombe_oil_tanker.obj && -r mods/luanttd_core/textures/bl_witcombe_oil_tanker_atlas.png ]]; then
+  cp mods/luanttd_core/models/bl_witcombe_oil_tanker.obj "$mod/models/"
+  cp mods/luanttd_core/textures/bl_witcombe_oil_tanker_atlas.png "$mod/textures/"
   tanker=true
 else
   tanker=false

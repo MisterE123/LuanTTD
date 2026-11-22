@@ -184,7 +184,7 @@ int main(int argc,char **argv){
 }
 """
 program=r"""
-local p="mods/bayline/openttd/"
+local p="mods/luanttd_core/openttd/"
 local G=dofile(p.."original_terrain.lua")(dofile(p.."slope.lua"))
 local file=assert(io.open(arg[1],"rb"))
 local bank=assert(G.read_masks(file:read("*a")));file:close()

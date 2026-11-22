@@ -1,6 +1,6 @@
 -- Exact forest → wood packet → sawmill → goods packet → town lifecycle.
 -- Uses the stock shared map cursor, no independent secondary clock.
-local r="mods/bayline/"
+local r="mods/luanttd_core/"
 local function m(n)return dofile(r..n..".lua")end
 local P,I,K,H=m("openttd/passengers"),m("openttd/income"),m("openttd/station_rating"),m("openttd/town_passengers")
 local A=m("openttd/station_catchment")(P,K)

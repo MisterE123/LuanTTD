@@ -1,5 +1,5 @@
 local dir=(arg and arg[1]) or "."
-local function load(name) return dofile(dir.."/mods/bayline/"..name..".lua") end
+local function load(name) return dofile(dir.."/mods/luanttd_core/"..name..".lua") end
 local W,S=load("world_storage"),load("openttd/slope")
 local T=load("terrain_stream")(S)
 local C=T.cover

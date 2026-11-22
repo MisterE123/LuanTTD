@@ -1,4 +1,4 @@
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function m(n) return dofile(root..n..".lua") end
 local Sim,T,H,F=m("sim"),m("openttd/terrain"),m("openttd/town_passengers"),m("openttd/water_flood")
 local I=m("openttd/landscape_index")

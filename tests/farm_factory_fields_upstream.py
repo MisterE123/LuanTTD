@@ -125,7 +125,7 @@ int main() {
 }
 """
 LUA=r"""
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local C=dofile(root.."coal_industry.lua")()
 local F=dofile(root.."farm_factory_fields.lua")(C)
 local floor=math.floor

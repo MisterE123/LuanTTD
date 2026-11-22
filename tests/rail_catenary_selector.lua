@@ -1,11 +1,11 @@
 -- The returned file paths and offsets are the presentation contract.
-local A=dofile("mods/bayline/rail_catenary_art.lua")
+local A=dofile("mods/luanttd_core/rail_catenary_art.lua")
 assert(A.atlas=="bl_rail_catenary_atlas.png")
 for _,t in ipairs({{1,0},{2,0},{4,0},{8,0},{16,0},{32,0},{1,1},{1,2},{2,3},{2,4}}) do
   local mask,grade=t[1],t[2]
   local a=assert(A.overlay(mask,grade,"plain",0,0))
   assert(a.pole and a.offset==(grade==0 and 2 or 3))
-  assert(io.open("mods/bayline/models/"..a.mesh,"rb")):close()
+  assert(io.open("mods/luanttd_core/models/"..a.mesh,"rb")):close()
 end
 for x=0,9 do
   assert(A.overlay(1,0,"plain",x,0).pole==(x%2==0))

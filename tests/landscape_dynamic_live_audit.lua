@@ -1,6 +1,6 @@
 -- Detached instrumentation of actual Sim.daily, replacing only the Lua
 -- dependency's walker in this process. Neither game nor save is modified.
-local p="mods/bayline/"
+local p="mods/luanttd_core/"
 local function m(n) return dofile(p..n..".lua") end
 local H,Terrain,Flood=m("openttd/town_passengers"),m("openttd/terrain"),m("openttd/water_flood")
 local Dynamic=m("openttd/landscape_dynamic")(m("openttd/landscape_index"))

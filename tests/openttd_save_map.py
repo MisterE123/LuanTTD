@@ -202,7 +202,7 @@ def check_luanti(server, home, snapshot_path, points, port):
     (game/"game.conf").write_text("title = OpenTTD map adapter probe\n")
     (mod/"mod.conf").write_text("name = map_probe\n")
     shutil.copyfile(HERE.with_name("openttd_save_map_luanti.lua"),mod/"init.lua")
-    modules = HERE.parents[1]/"mods"/"bayline"
+    modules = HERE.parents[1]/"mods"/"luanttd_core"
     for file in (modules/"openttd"/"terrain.lua", modules/"openttd"/"slope.lua",
                  modules/"import"/"openttd_map.lua"):
         shutil.copyfile(file,mod/file.name)

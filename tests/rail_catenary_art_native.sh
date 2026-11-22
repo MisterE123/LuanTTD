@@ -24,9 +24,9 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD rail catenary art fixture\n' > "$out/games/wire_art/game.conf"
 printf 'name = wireart\n' > "$mod/mod.conf"
 cp tests/rail_catenary_art_native.lua "$mod/init.lua"
-cp mods/bayline/rail_catenary_art.lua "$mod/"
-cp mods/bayline/models/{bl_rail_catenary*,bl_rail_track_[1248],bl_rail_track_16,bl_rail_track_32,bl_rail_grade_[1-4],bl_rail_sh_30,bl_rail_platform_[1-2],bl_land_3,bl_land_6,bl_land_9,bl_land_12}.obj "$mod/models/"
-cp mods/bayline/textures/{bl_rail_catenary_atlas,bl_rail_atlas,bl_rail_architecture_atlas,bl_rail_sh_30,bl_grass1,bl_grass_side}.png "$mod/textures/"
+cp mods/luanttd_core/rail_catenary_art.lua "$mod/"
+cp mods/luanttd_core/models/{bl_rail_catenary*,bl_rail_track_[1248],bl_rail_track_16,bl_rail_track_32,bl_rail_grade_[1-4],bl_rail_sh_30,bl_rail_platform_[1-2],bl_land_3,bl_land_6,bl_land_9,bl_land_12}.obj "$mod/models/"
+cp mods/luanttd_core/textures/{bl_rail_catenary_atlas,bl_rail_atlas,bl_rail_architecture_atlas,bl_rail_sh_30,bl_grass1,bl_grass_side}.png "$mod/textures/"
 printf 'gameid = wire_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

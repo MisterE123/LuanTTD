@@ -15,7 +15,7 @@ from openttd_save_ground import ground_sidecar
 from openttd_save_map import snapshot
 from openttd_save_inspect import LIMIT
 
-MODULES = REPO/"mods"/"bayline"
+MODULES = REPO/"mods"/"luanttd_core"
 MASKS = (*range(15),23,27,29,30)
 
 

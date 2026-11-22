@@ -476,7 +476,7 @@ int main(){
     }
 }'''
 runner=r'''
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local function m(n)return dofile(root..n..".lua")end
 local Slope=m("slope");local R=m("river_worldgen")(Slope);local TG=m("terragenesis")(Slope)
 local abs,floor,min,max=math.abs,math.floor,math.min,math.max
@@ -576,7 +576,7 @@ with tempfile.TemporaryDirectory(prefix="river-worldgen-source-") as folder:
         (64,64,101,0,16,0,98,5,2,15),
     ]
     (d/"stage.lua").write_text(r'''
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local function m(n)return dofile(root..n..".lua")end
 local Slope=m("slope");local R=m("river_worldgen")(Slope);local TG=m("terragenesis")(Slope)
 for input in io.lines() do

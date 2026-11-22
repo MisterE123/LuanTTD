@@ -1,5 +1,5 @@
 -- Published seed with actual independent vehicles and no injected cargo.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local S=dofile(root.."sim.lua")
 local Terrain=dofile(root.."openttd/terrain.lua")
 local s=S.new(1751)

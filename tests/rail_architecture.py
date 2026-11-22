@@ -6,7 +6,7 @@ from math import isclose
 import struct
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
+MODELS=ROOT/"mods/luanttd_core/models"
 GAUGE=(-.242,-.182,.182,.242)
 DIRECTIONS=((-1,0),(0,1),(1,0),(0,-1))
 
@@ -125,7 +125,7 @@ def along_portal(g,dx,dz,x0,h,z0,z1):
 
 
 def main():
-    atlas=ROOT/"mods/bayline/textures/bl_rail_architecture_atlas.png"
+    atlas=ROOT/"mods/luanttd_core/textures/bl_rail_architecture_atlas.png"
     assert struct.unpack(">II",atlas.read_bytes()[16:24])==(42*8,8)
     for i in (1,2):
         g=read(f"platform_{i}")

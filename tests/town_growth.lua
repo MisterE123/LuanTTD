@@ -1,4 +1,4 @@
-local p="mods/bayline/openttd/"
+local p="mods/luanttd_core/openttd/"
 local G=dofile(p.."town_growth.lua")
 local Catalog=dofile(p.."town_growth_houses.lua")
 local H=dofile(p.."town_passengers.lua")

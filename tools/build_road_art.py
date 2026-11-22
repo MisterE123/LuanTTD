@@ -136,7 +136,7 @@ def export(key, geometry, variants):
         for i, co in zip(mesh.vertices, coords):
             i.co=turn @ scale @ (world @ co)+shift
         mesh.update()
-        bpy.ops.wm.obj_export(filepath=str(ROOT/f"mods/bayline/models/bl_{key}{suffix}.obj"),
+        bpy.ops.wm.obj_export(filepath=str(ROOT/f"mods/luanttd_core/models/bl_{key}{suffix}.obj"),
             export_selected_objects=True, export_materials=False, export_uv=True, export_normals=True,
             export_triangulated_mesh=True, global_scale=1, forward_axis="NEGATIVE_Z", up_axis="Y")
 
@@ -147,7 +147,7 @@ def png_palette():
     pixels=b"".join(c*8 for c in colors)
     payload=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",128,8,8,2,0,0,0))
     payload+=chunk(b"IDAT",zlib.compress((b"\0"+pixels)*8))+chunk(b"IEND",b"")
-    (ROOT/"mods/bayline/textures/bl_road_architecture.png").write_bytes(payload)
+    (ROOT/"mods/luanttd_core/textures/bl_road_architecture.png").write_bytes(payload)
 
 png_palette()
 export("bus_shelter", shelter, [

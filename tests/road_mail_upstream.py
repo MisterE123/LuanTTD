@@ -9,7 +9,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 LUA = r"""
-local base="mods/bayline/"
+local base="mods/luanttd_core/"
 local H=dofile(base.."openttd/town_passengers.lua")
 local mail=dofile(base.."road_mail_runtime.lua")({},H)
 local c,e=mail.cargo,mail.engine

@@ -1,4 +1,4 @@
-local p="mods/bayline/"
+local p="mods/luanttd_core/"
 local function m(n) return dofile(p..n..".lua") end
 local A,H,IX=m("openttd/landscape_authority"),m("openttd/town_passengers"),m("openttd/landscape_index")
 local Dyn=m("openttd/landscape_dynamic")(IX)

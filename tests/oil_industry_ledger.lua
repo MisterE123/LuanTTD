@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Isolated source landscape and station ledger, runnable in Lua and
 -- in two native Luanti processes across a SQLite snapshot.
-local prefix=(... and type(...)=="string") and ... or "mods/bayline/"
+local prefix=(... and type(...)=="string") and ... or "mods/luanttd_core/"
 local function m(n) return dofile(prefix..n..".lua") end
 local P,Rating,Income=m("openttd/passengers"),m("openttd/station_rating"),m("openttd/income")
 local C=m("openttd/station_catchment")(P,Rating)

@@ -179,7 +179,7 @@ for n in range(8000):
                  cases.randrange(2),cases.randrange(2)])
 rows.append([2])
 lua_program = r"""
-local d="mods/bayline/openttd/"
+local d="mods/luanttd_core/openttd/"
 local P,R=dofile(d.."passengers.lua"),dofile(d.."station_rating.lua")
 local C=dofile(d.."coal_industry.lua")(P,R,dofile(d.."station_catchment.lua")(P,R),dofile(d.."income.lua"))
 local function owner(a) if a~=-1 then return a end end

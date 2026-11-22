@@ -1,5 +1,5 @@
 -- Adapter contracts not covered by the upstream geometry harness.
-local T=dofile('mods/bayline/openttd/terrain.lua')
+local T=dofile('mods/luanttd_core/openttd/terrain.lua')
 local options={max_height=9,unit_cost=50}
 local g=T.new(9,8,function() return 2 end,options)
 local p=assert(T.plan(g,5,5,8,true))

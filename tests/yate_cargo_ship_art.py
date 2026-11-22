@@ -28,7 +28,7 @@ def source(root):
 
 
 def main():
-    atlas = ROOT/"mods/bayline/textures/bl_yate_cargo_ship_atlas.png"
+    atlas = ROOT/"mods/luanttd_core/textures/bl_yate_cargo_ship_atlas.png"
     assert struct.unpack(">II",atlas.read_bytes()[16:24]) == (256,8)
     mesh=read("yate_cargo_ship",True)
     assert "Yate_Cargo_Ship_211" in mesh

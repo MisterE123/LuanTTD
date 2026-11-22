@@ -288,10 +288,10 @@ def main():
     for suffix,turn in zip(KEYS,TURN):
         mesh=(bay if suffix.startswith("bay") else straight).transformed(turn%4)
         raw=P.payload(mesh,suffix)
-        p=ROOT/"mods/bayline/models"/f"bl_road_freight_stop_{suffix}.obj"
+        p=ROOT/"mods/luanttd_core/models"/f"bl_road_freight_stop_{suffix}.obj"
         p.write_text(raw.replace(raw.splitlines()[0],
             f"# Original coal freight stop, {suffix}, post stop anchor. tools/build_road_freight_stop.py",1))
-    (ROOT/"mods/bayline/textures/bl_road_freight_stop.png").write_bytes(P.atlas())
+    (ROOT/"mods/luanttd_core/textures/bl_road_freight_stop.png").write_bytes(P.atlas())
     mats=P.make_materials()
     first=bpy.context.scene
     first.name="Drive Through"

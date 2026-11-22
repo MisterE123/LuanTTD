@@ -4,7 +4,7 @@ from pathlib import Path
 import struct
 import zlib
 
-out = Path(__file__).resolve().parents[1] / "mods" / "bayline" / "textures"
+out = Path(__file__).resolve().parents[1] / "mods" / "luanttd_core" / "textures"
 dark = bytes.fromhex("172733")
 colors = {"inspect": "e2f3f8", "valid": "baf39b", "invalid": "ff947d", "anchor": "ffd579"}
 

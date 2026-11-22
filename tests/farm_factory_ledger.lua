@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Pure Lua and native SQLite share these exact production/delivery cases.
-local module_root=(... and type(...)=="string") and ... or "mods/bayline/"
+local module_root=(... and type(...)=="string") and ... or "mods/luanttd_core/"
 local function m(n) return dofile(module_root..n..".lua") end
 local P,Rate,I=m("openttd/passengers"),m("openttd/station_rating"),m("openttd/income")
 local Catch=m("openttd/station_catchment")(P,Rate)

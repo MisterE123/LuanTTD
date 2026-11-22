@@ -18,8 +18,8 @@ own recognizable silhouette rather than recoloring the Jubilee.
 - Editable source `art/rail_sh_8p.blend` keeps nine independent editable
   axle pivots with the body and running equipment in named geometry.
   No runtime axle animation is implicit in the OBJ.
-- `mods/bayline/models/bl_rail_sh_8p.obj` and
-  `mods/bayline/textures/bl_rail_sh_8p.png` mount at unit scale,
+- `mods/luanttd_core/models/bl_rail_sh_8p.obj` and
+  `mods/luanttd_core/textures/bl_rail_sh_8p.png` mount at unit scale,
   -Z native nose, tire tread local Y=0, .424 rail centers,
   world +.614 at flat base-zero track. Coupling tips reach ±.499,
   centered on Y=.157 at the stock unit spacing.

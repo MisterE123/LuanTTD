@@ -12,7 +12,7 @@ from pathlib import Path
 
 from PIL import Image
 
-TEXTURES = Path(__file__).resolve().parents[1] / "mods/bayline/textures"
+TEXTURES = Path(__file__).resolve().parents[1] / "mods/luanttd_core/textures"
 FLIP = Image.Transpose.FLIP_TOP_BOTTOM
 CORNERS = {6: 0, 12: 1, 9: 2, 3: 3}  # clockwise rotations of +X/+Z
 DIRS = ((0, -1), (1, 0), (0, 1), (-1, 0))

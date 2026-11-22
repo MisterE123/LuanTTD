@@ -1,4 +1,4 @@
-local ROOT="mods/bayline/"
+local ROOT="mods/luanttd_core/"
 local Sim=dofile(ROOT.."sim.lua")
 local Kernel=dofile(ROOT.."openttd/station_rating.lua")
 local Packets=dofile(ROOT.."openttd/passengers.lua")

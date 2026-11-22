@@ -1,0 +1,62 @@
+# State of the Port
+
+**Port target:** [OpenTTD 16.0-RC1](https://github.com/OpenTTD/OpenTTD/releases/tag/16.0-RC1), upstream commit `07b339c`. Updated November 22, 2026.
+
+**Evidence baseline:** Unless a row names 16.0-RC1, its implementation evidence is from [OpenTTD 14.1](https://github.com/OpenTTD/OpenTTD/tree/14.1) or LuanTTD-native tests. Existing completion estimates are retained as 14.1 estimates, not as claims of 16.0-RC1 parity. Revalidate the scoped tests against 16.0-RC1 before marking a row verified for the new target. The first RC1 comparisons are [listed here](reference-target.md).
+
+| Tag | Meaning |
+| --- | --- |
+| `FULLY PORTED` | Source behavior is implemented and verified for the feature **as named**, not the entire subsystem. |
+| `IN PROGRESS` | A working port or prototype exists, but implementation, coverage, or playtest evidence is incomplete. |
+| `MODIFIED` | Deliberately built differently for Luanti. Percentage is progress toward the stated native design. |
+| `UNSTARTED` | No working port for the named feature. |
+
+**Completion is a rounded estimate, not a measured score.** It applies only to the named row. Don’t average the rows into an overall parity number. **Ordinary** means a fresh default campaign; **scenario** means a separate profile; **lab** means test or tooling only. See the [native playtest notes](native-qa-2026-11-22.md) and [verification method](porting-method.md).
+
+## Terrain, world generation, and construction
+
+| Feature | Status | Completion | Description |
+| --- | --- | ---: | --- |
+| Integer shared-corner slope classification and height sampling | `FULLY PORTED` | 100% | Kernel. [Slope comparison](../tests/slope_upstream.py). Applies to stock integer slope and tile-height calculations, not the 3D renderer or all build permissions. |
+| Temperate TerraGenesis height and coastline algorithm; temperate clear-ground pass | `FULLY PORTED` | 100% | Kernel; **ordinary** integration on supported maps. [Generator and reference tests](terragenesis-port.md). Fixed-point heights, coastline and ground classes are in scope; rivers, towns, industries, other climates, and overall seed-to-play parity are separate. |
+| Original generator and large playable maps | `IN PROGRESS` | 35% | Exploration and **ordinary** as separate paths. The [Original terrain viewer](original-terrain-exploration.md) is a separate survey mode, not a generated campaign. Ordinary generation uses TerraGenesis and supports 64×64 and 128×128; exploration or storage capacity is not proof of stock-sized economy/gameplay. See the [scale audit](generated-world-scale-audit.md). |
+| Rivers, canals, and coastal water rules | `IN PROGRESS` | 65% | **Ordinary** support; rivers require a nonzero setting. [River generation](stock-river-worldgen.md), [flood comparison](../tests/water_flood_upstream.py), and [landscaping guide](coastal-landscaping.md). Connected water advances on the landscape clock, and canals and locks can be built; not every shore, vegetation, water-edit, or structure interaction is covered. |
+| English (Original) town names | `FULLY PORTED` | 100% | Kernel and **ordinary**. [Town name port](STOCK_TOWN_NAMES.md) verifies spelling, collisions and the retry limit against upstream. Does not cover other language generators or imply global seed parity. |
+| Town generation, houses, and growth | `IN PROGRESS` | 65% | **Ordinary**. [Stock placement and initial growth](stock-town-worldgen.md), [live growth](town-growth-authority.md). Includes stock placement/growth branches and named layout choices; only a subset of terrain, road/build cases and house content. |
+| Industry, landmarks, and trees at generation | `IN PROGRESS` | 45% | **Ordinary** for the included roster. [Industry generation](stock-industry-worldgen.md), [landmarks](scenery-object-worldgen-port.md), [trees](tree-worldgen-port.md). Includes the ordinary coal/timber chains and selected temperate placements. Not the full industry/layout roster, climate handling, or stock forest lifecycle. |
+| Landscaping, clearance, and foundations | `IN PROGRESS` | 65% | **Ordinary**. [Landscape commands](landscape-command-receipts.md), [area demolition](STOCK_AREA_DEMOLITION.md), [road slope comparison](../tests/road_slope_upstream.py). Shared-corner editing, grade decisions, and clearance checks work for supported tiles; some clearance/foundation and protected-object cases remain. |
+| Six stock rail pieces and AutoRail drag selection | `FULLY PORTED` | 100% | Narrowly for topology/selection kernels. [Rail piece comparison](../tests/rail_track_upstream.py), [AutoRail drag comparison](../tests/autorail_drag_upstream.py). This is not a claim of complete rail construction, crossings, or routing. |
+| AutoRoad click hotspot | `FULLY PORTED` | 100% | Verified against 16.0-RC1: the source tie-break rule applies at all 256 fractional coordinates. Covers clicks within one tile, not drag routing or tool parity. [Test](../tests/ordinary_level_crossing.lua). |
+| Road/rail construction, bridges, tunnels and crossings | `IN PROGRESS` | 60% | **Ordinary** construction tools plus **scenario** proofs. [Build guide](build-in-3d.md), [level crossings](LEVEL_CROSSING_PORT.md), [rail spans](RAIL_SPAN_PORT.md). Selected span/portal types, foundations, combined crossing tiles, and cost/clearance rules exist. Do not infer arbitrary bridge type, slope, bore, underpass, or crossing parity. |
+
+## Vehicles, orders, and economy
+
+| Feature | Status | Completion | Description |
+| --- | --- | ---: | --- |
+| Bus and truck movement, YAPF, and traffic | `IN PROGRESS` | 70% | **Ordinary**. [Port details](PORTING.md), [overtaking](road-overtaking.md), [stop occupancy](road-stop-occupancy.md). Directional source motion and YAPF, depot/leader/occupancy checks, and supported overtaking cases run; not every per-junction reroute, articulation, or stop and traffic interaction. |
+| Road orders, maintenance, and paid service | `IN PROGRESS` | 65% | **Ordinary**. [Order lists](ROAD_ORDER_LISTS.md), [depot service](ROAD_DEPOT_SERVICE.md), [breakdowns](ROAD_BREAKDOWNS.md). A Regal earned $10 and a wood truck delivered 160 t for $1,824 in native QA. Road coal and other branches are separate proofs, not rerun in that session. |
+| Rail motion, pathfinding, signals, and electrification | `IN PROGRESS` | 60% | **Ordinary** selected tools and **scenario** coverage. [Dispatch](RAIL_BLOCK_DISPATCH.md), [signals](RAIL_BLOCK_SIGNALS.md), [electrification](electric-rail.md), [rail YAPF comparison](../tests/rail_yapf_search_upstream.py). Selected follower, motion, reservation, and power rules work; not complete signal, track, train, or mixed-traffic parity. |
+| Owned trains, passenger and freight services | `IN PROGRESS` | 55% | **Ordinary** passenger and Goods support; additional **scenarios**. [Owned service](RAIL_OWNED_SERVICE.md), [default Goods route](generated-campaign.md#extend-mixed-freight-with-the-rail-goods-van), [coal](RAIL_COAL_PORT.md), [oil](RAIL_OIL_PORT.md). In native manual QA, actual UI supported building, buying and picking orders, but the tested arrangement was rejected for no safe stopping point. Scripted service proofs are separate from that manual result. |
+| Ships, docks, and waterways | `IN PROGRESS` | 50% | **Ordinary** passenger ferry; freight in a **scenario**. [Buoys](FERRY_BUOYS.md), [coal shipping](SHIP_COAL_PORT.md), [coastal QA](native-qa-2026-11-22.md#follow-up-all-transport-modes-in-native-luanti). Corrected generated coastal dock classification; two $390 docks supported a 19-passenger/$93 trip. Not a general ship roster or ordinary freight shipping. |
+| Aircraft and airports | `IN PROGRESS` | 50% | **Ordinary** country-airfield service and selected fleet support. [Ground movement](AIRPORT_GROUND_PAIR.md), [paid fleet](AIR_PAID_FLEET_RUNTIME.md). A purchased Sampson made five terminal stops and earned $68 in native QA. Not the full airport/aircraft roster or comparable post-dispatch order editing. |
+| Trams | `IN PROGRESS` | 40% | **Ordinary** construction and test operation. [Port details](PORTING.md) and [native QA](native-qa-2026-11-22.md#follow-up-all-transport-modes-in-native-luanti). The test streetcar resumed after reload with two visits and 130 movement steps; it is free, carries no passengers and earns no fares. Shared-road commercial arbitration remains incomplete. |
+| Production, rating, loading and fares | `IN PROGRESS` | 45% | **Ordinary** selected cargo and vehicle paths plus **scenarios**. [Campaign chains](generated-campaign.md), [farm/factory workbench](FARM_FACTORY_PORT.md), and [source/runtime map](PORTING.md). Stock-derived production, rating, loading or payment pieces run where noted; this does not establish all transfers, industry chains, or global economy parity. |
+| Engine chronology and catalogs | `IN PROGRESS` | 55% | Selected stock data. [Engine calendar](STOCK_ENGINE_CALENDAR.md) and [rail roster](RAIL_ROSTER_PORT.md). A source-derived calendar or roster entry does not by itself mean the vehicle is modeled, purchasable and operational in regular play. |
+| CargoDist links and routing | `UNSTARTED` | 0% | No stock link-graph scheduling or demand-based cargo distribution. Existing station packet and fare rules do not implement CargoDist. |
+| Stock company management | `UNSTARTED` | 0% | Finance and a single-company control desk exist, but not the fuller stock company and competition systems. |
+| OpenTTD AI and GameScript | `UNSTARTED` | 0% | No usable stock scripting interface or AI competitor port. |
+| Additional climate mechanics and base rosters | `UNSTARTED` | 0% | The playable campaign targets temperate content. Other climates and their cargo chains are not implemented as playable systems. |
+| NewGRF content loading | `UNSTARTED` | 0% | Remembering stock IDs or detecting save metadata does not load or execute NewGRF content. |
+
+## Native UX and save interchange
+
+| Feature | Status | Completion | Description |
+| --- | --- | ---: | --- |
+| 3D terrain, buildings, vehicles, passengers, and environment presentation | `MODIFIED` | 75% | **Ordinary**. [Build in 3D](build-in-3d.md), [day/night](day-night.md), [art provenance](../art/README.md). Original meshes, tile projection, visual passengers, lighting and water are native; underlying heights, waiting counts and simulation rules are separate from the visuals. |
+| Camera, tile picking, hotbar, HUD, and order selection | `MODIFIED` | 70% | **Ordinary**. [Hotbar layout](hotbar-layout.md) and [native QA](native-qa-2026-11-22.md). Order tools are shared, but selecting an eligible destination is not a reachability preview. Dispatch still validates the route; labels can overlap and the Fleet menu is not unified. |
+| World storage, landscape streaming, and setup | `MODIFIED` | 70% | **Ordinary**. [World storage](WORLD_STORAGE.md), [terrain streaming](TERRAIN_STREAM.md), [native QA](native-qa-2026-11-22.md). Native world persistence and setup are not OpenTTD save compatibility. First-run options save before generation; reopen the same world to generate it. |
+| Playable OpenTTD ↔ LuanTTD saves | `IN PROGRESS` | 25% | **lab only**. [Interchange notes](IMPORTING.md). Map reading and targeted stock read/write fixtures exist, but no general playable round trip. A map import or success on one route fixture is not seamless interchange. |
+
+## Updating this list
+
+With each preview, update the affected item’s tag, estimate and short description. Name the remaining limitation and link a source comparison or native playtest when available. Split broad items rather than marking an entire subsystem complete because one kernel works. See the [roadmap](ROADMAP.md) for priorities.

@@ -1,10 +1,10 @@
-local base="mods/bayline/"
+local base="mods/luanttd_core/"
 local function load(n)return dofile(base..n..".lua")end
 local Sim,Terrain=load("sim"),load("openttd/terrain")
 local s=Sim.new(1751)
 load("town_layout")(Sim,s)
 local stats
-s.corner_grid,stats=load("harbor_valley_seed")(Sim,Terrain,s,load("terrain_preview")(Sim,Terrain,s))
+s.corner_grid,stats=dofile("tests/coastal_corridor_fixture.lua")(Sim,Terrain,s,load("terrain_preview")(Sim,Terrain,s))
 local c=Sim.company(s,"Bridge Builder")
 local id=Sim.id
 local wet=stats.bridge

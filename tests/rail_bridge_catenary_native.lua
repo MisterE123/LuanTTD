@@ -1,4 +1,4 @@
--- Isolated geometry fixture: both axes and the exact Harbor Valley bridge
+-- Isolated geometry fixture: both axes and the exact coastal test circuit bridge
 -- heads/deck/river datums. No game rules or route are loaded here.
 local sprung=fixture_sprung_collector==true
 local mod=core.get_modpath("railpreview")
@@ -92,7 +92,7 @@ local function build()
       end
     end
   end end
-  -- Harbor Valley seed 1751; see exact source quote fixture.
+  -- coastal test circuit seed 1751; see exact source quote fixture.
   for _,x in ipairs({18,19,20,28,29,30}) do ordinary(x,15,1,0) end
   part(21,15,"head_ramp",2)
   part(27,15,"head_ramp",0)

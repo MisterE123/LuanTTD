@@ -2,8 +2,8 @@
 
 This is the stock **Original** generator, not TerraGenesis and not the
 authored starter map. The source port is in
-`mods/bayline/openttd/original_terrain.lua`; the detached storage/renderer
-adapter is `mods/bayline/original_terrain_stream.lua`. Neither is mounted
+`mods/luanttd_core/openttd/original_terrain.lua`; the detached storage/renderer
+adapter is `mods/luanttd_core/original_terrain_stream.lua`. Neither is mounted
 by the ordinary campaign.
 
 ## Source boundary and provenance
@@ -119,7 +119,7 @@ end
   nibble, ground in the next nibble. Extra adapter properties can use
   higher bits without aliasing the descriptor.
 - A render profile has the stock steep mask and two true triangular
-  terrain faces (see [terrain stream](../TERRAIN_STREAM.md)). Sea and
+  terrain faces (see [terrain stream](TERRAIN_STREAM.md)). Sea and
   shore terrain are classified independently of visual surfaces.
   Apply a separate water surface at the stock level using the coast land
   mask, not a cube covering every mixed coastal tile. Void has no mesh.

@@ -1,5 +1,5 @@
 local base_dir=(arg and arg[1]) or "."
-local W=dofile(base_dir.."/mods/bayline/world_storage.lua")
+local W=dofile(base_dir.."/mods/luanttd_core/world_storage.lua")
 local samples=0
 local function corner(seed,x,z)
   assert(x>=1 and z>=1 and x<=4097 and z<=4097)

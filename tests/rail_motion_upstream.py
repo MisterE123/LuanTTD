@@ -17,8 +17,8 @@ DIGEST.update({
 })
 
 LUA = r"""
-local T=dofile("mods/bayline/openttd/rail_track.lua")
-local M=dofile("mods/bayline/openttd/rail_motion.lua")(T)
+local T=dofile("mods/luanttd_core/openttd/rail_track.lua")
+local M=dofile("mods/luanttd_core/openttd/rail_motion.lua")(T)
 local function print_pose(tag,p)
   print(table.concat({tag,p.tx,p.ty,p.x,p.y,p.direction,p.td,p.enterdir or -1}," "))
 end

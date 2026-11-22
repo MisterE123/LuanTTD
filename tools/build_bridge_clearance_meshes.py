@@ -4,7 +4,7 @@
 from argparse import ArgumentParser
 from pathlib import Path
 
-MODELS = Path(__file__).resolve().parents[1] / "mods/bayline/models"
+MODELS = Path(__file__).resolve().parents[1] / "mods/luanttd_core/models"
 BEARING_GROUPS = {
     "road_bridge_wood": {"Pier_cap_timber", "Pier_cap_king_posts"},
     "road_bridge_concrete": {"Integral_bent_support_head", "Tapered_cast_shoulder", "Continue_to_pier_course"},

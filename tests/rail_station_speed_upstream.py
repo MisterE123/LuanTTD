@@ -21,9 +21,9 @@ DIGEST.update({
 })
 
 LUA = r"""
-local T=dofile("mods/bayline/openttd/rail_track.lua")
-local F=dofile("mods/bayline/openttd/rail_follow.lua")(T)
-local R=dofile("mods/bayline/openttd/rail_station_speed.lua")(T,F)
+local T=dofile("mods/luanttd_core/openttd/rail_track.lua")
+local F=dofile("mods/luanttd_core/openttd/rail_follow.lua")(T)
+local R=dofile("mods/luanttd_core/openttd/rail_station_speed.lua")(T,F)
 local names={[0]="tile","station","depot","waypoint"}
 for line in io.lines() do
   local n={}

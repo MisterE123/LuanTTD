@@ -9,18 +9,7 @@ tanker; it does not yet provide general freight consists.
 
 ## Set up the oil world
 
-Use a fresh seed **1751** corner-terrain world with the stock oil
-industry and owned rail service enabled. The preview uses these
-Luanti settings:
-
-```ini
-bayline_seed = 1751
-bayline_scenario = oil
-bayline_rail_owned_preview = true
-bayline_rail_oil_preview = true
-```
-
-Keep the factory/farm and timber previews off for this test. The stock
+Choose **Oil and Refinery** in the new-world setup screen. The
 oil fixture places the well near **(11,2)** and the refinery near
 **(15,17)**. These are industry anchors, not platform or track placement
 instructions. Inspect each catchment before laying the platforms.

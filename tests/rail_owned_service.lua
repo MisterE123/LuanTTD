@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Purchased stock steam, a real coach, paid orders and shared clock.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local src=root.."openttd/"
 local function port(name,...) return dofile(src..name..".lua")(...) end
 local Sim=dofile(root.."sim.lua")

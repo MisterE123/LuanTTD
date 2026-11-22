@@ -30,7 +30,7 @@ DIGEST.update({
 })
 
 LUA=r'''
-local R=dofile("mods/bayline/openttd/rail_types.lua")
+local R=dofile("mods/luanttd_core/openttd/rail_types.lua")
 local kinds={[0]="clear","rail","signals","depot","station","crossing","bridge","tunnel","station","waypoint"}
 local function yn(v) return v and 1 or 0 end
 for line in io.lines() do

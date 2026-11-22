@@ -1,4 +1,4 @@
-local M=dofile("mods/bayline/campaign_step.lua")
+local M=dofile("mods/luanttd_core/campaign_step.lua")
 local world={day=0,speed=1}
 local seen,captures,effects={},0,0
 local hooks={advance=function(s)

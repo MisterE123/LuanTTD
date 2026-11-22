@@ -1,6 +1,6 @@
 -- Source stock stations and actual ShipMotion/YAPF across an ordinary
 -- route, one original mine offer clock and competing truck/rail queues.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function mod(n) return dofile(root..n..".lua") end
 local S,Terrain,Track=mod("sim"),mod("openttd/terrain"),mod("openttd/rail_track")
 local Water=mod("openttd/ship_follow")(Track)

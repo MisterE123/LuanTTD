@@ -58,7 +58,7 @@ def main():
     parser.add_argument("header",type=Path)
     parser.add_argument("--check",action="store_true")
     args=parser.parse_args()
-    out=Path(__file__).resolve().parents[1]/"mods/bayline/openttd/tram_motion_data.lua"
+    out=Path(__file__).resolve().parents[1]/"mods/luanttd_core/openttd/tram_motion_data.lua"
     content=generate(args.header)
     if args.check:
         assert out.read_text()==content,"Tram motion rows differ from compiled stock header"

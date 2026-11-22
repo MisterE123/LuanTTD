@@ -1,4 +1,4 @@
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local B=dofile(root.."road_bridge.lua")(dofile(root.."slope.lua"))
 local T=dofile(root.."tram_construction.lua")(dofile(root.."road_slope.lua"),B.roadtypes)
 local rt=1

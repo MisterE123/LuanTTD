@@ -11,8 +11,8 @@ from foster_bus_art import TRACE, cast, runner
 from small_airport_art import obj
 
 ROOT=Path(__file__).resolve().parents[1]
-TEX=ROOT/"mods/bayline/textures"
-MODEL=ROOT/"mods/bayline/models"
+TEX=ROOT/"mods/luanttd_core/textures"
+MODEL=ROOT/"mods/luanttd_core/models"
 sys.path.insert(0,str(ROOT/"tools"))
 
 from road_surface_raster import ASPHALT, CORNERS, STRIPE, connector, road_raster, rotate, straight_pixel

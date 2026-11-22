@@ -8,8 +8,8 @@ import re
 import struct
 
 ROOT=Path(__file__).resolve().parents[1]
-M=ROOT/"mods/bayline/models"
-T=ROOT/"mods/bayline/textures"
+M=ROOT/"mods/luanttd_core/models"
+T=ROOT/"mods/luanttd_core/textures"
 LAYOUTS={
     "oil_well":{(0,0):29,(1,0):29,(2,0):29,(0,1):29,(0,2):29},
     "oil_refinery":{(0,0):20,(0,1):21,(0,2):22,(0,3):21,(1,0):20,(1,1):19,(1,2):22,

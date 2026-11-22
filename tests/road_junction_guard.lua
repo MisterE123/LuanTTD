@@ -1,6 +1,6 @@
 -- Native-only 3D clearance, deliberately not asserted to equal 14.1
 -- viewport behavior. Exercise whole rotated model radius vs. a live T.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local Sim=dofile(root.."sim.lua")
 local Terrain=dofile(root.."openttd/terrain.lua")
 local L=dofile(root.."road_lanes.lua")

@@ -1,5 +1,5 @@
-local H=dofile("mods/bayline/house_frontage.lua")
-local Sim=dofile("mods/bayline/sim.lua")
+local H=dofile("mods/luanttd_core/house_frontage.lua")
+local Sim=dofile("mods/luanttd_core/sim.lua")
 local id=Sim.id(10,10)
 local house={house=true,h=1}
 local expected={{1,1,2},{0,1,1},{0,0,0},{1,0,3}}

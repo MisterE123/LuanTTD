@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Actual company Sim records, Trackworks construction, depot ownership and
 -- reservation schema; no live tool or stock train consumes typed rail yet.
-local base="mods/bayline/"
+local base="mods/luanttd_core/"
 local function m(f) return dofile(base..f..".lua") end
 local function p(f,...) return m("openttd/"..f)(...) end
 local Sim,Terrain,Track,Slope=m("sim"),m("openttd/terrain"),m("openttd/rail_track"),m("openttd/slope")

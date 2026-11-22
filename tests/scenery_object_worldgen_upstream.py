@@ -274,7 +274,7 @@ int main(){
 '''
 
 lua = r'''
-local p="mods/bayline/"
+local p="mods/luanttd_core/"
 local function load(n) return dofile(p..n..".lua") end
 local Slope=load("openttd/slope")
 local TG=load("openttd/terragenesis")(Slope)

@@ -2,7 +2,7 @@
 -- Actual generated 64² mixed industry seed1751. This host test uses the same
 -- priced company build commands, owned rail dispatch and 74-tick ledger as
 -- the game. Good batches are sourced only by actual Wood truck deliveries.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function m(path) return dofile(root..path..".lua") end
 local Sim,Terrain=m("sim"),m("openttd/terrain")
 local TG=m("openttd/terragenesis")(m("openttd/slope"))

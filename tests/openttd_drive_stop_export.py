@@ -49,7 +49,7 @@ def quote(luanti,root,port,blob,data,board):
     (game/"game.conf").write_text("title = Stock drive-through stop quote\n")
     (mod/"mod.conf").write_text("name = drive_stop_lab\n")
     shutil.copyfile(HOME/"openttd_drive_stop_native.lua",mod/"init.lua")
-    repo=HOME.parent/"mods"/"bayline"
+    repo=HOME.parent/"mods"/"luanttd_core"
     for name in ("openttd/terrain.lua","openttd/slope.lua","openttd/road_slope.lua",
                  "openttd/road_bridge.lua","openttd/yapf_road_follow.lua","import/openttd_map.lua"):
         shutil.copyfile(repo/name,mod/Path(name).name)

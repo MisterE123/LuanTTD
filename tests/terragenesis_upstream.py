@@ -189,7 +189,7 @@ int main() {
 '''
 
 lua_program=r'''
-local path="mods/bayline/openttd/"
+local path="mods/luanttd_core/openttd/"
 local Slope=dofile(path.."slope.lua")
 local G=dofile(path.."terragenesis.lua")(Slope)
 local C=dofile(path.."terragenesis_clear.lua")

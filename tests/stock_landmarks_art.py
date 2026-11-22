@@ -11,7 +11,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from ship_facility_art import read
 
 ROOT=Path(__file__).resolve().parents[1]
-MOD=ROOT/"mods/bayline"
+MOD=ROOT/"mods/luanttd_core"
 
 
 def verify(args):

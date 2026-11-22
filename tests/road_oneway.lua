@@ -1,4 +1,4 @@
-local dir="mods/bayline/openttd/"
+local dir="mods/luanttd_core/openttd/"
 local Follow=dofile(dir.."yapf_road_follow.lua")
 local Cost=dofile(dir.."yapf_road_cost.lua")(Follow)
 local Search=dofile(dir.."yapf_road_search.lua")(Follow,Cost)

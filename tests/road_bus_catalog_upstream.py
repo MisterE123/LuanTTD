@@ -63,7 +63,7 @@ def main():
         .replace("this->GetRunningCost()","GetPrice(1,running_factor,nullptr,0)").replace("this->running_ticks","running")
         .replace("CalendarTime::DAYS_IN_YEAR",days).replace("Ticks::DAY_TICKS",ticks))
     lua=r"""
-local B=dofile("mods/bayline/openttd/road_bus_catalog.lua")
+local B=dofile("mods/luanttd_core/openttd/road_bus_catalog.lua")
 local count=0;local f,last_price,balance
 for l in io.lines() do
   local n={};for v in l:gmatch("%d+") do n[#n+1]=tonumber(v) end

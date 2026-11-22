@@ -155,7 +155,7 @@ int main() {
 }
 """
 lua_program = r"""
-local O=dofile("mods/bayline/openttd/road_overtake.lua")
+local O=dofile("mods/luanttd_core/openttd/road_overtake.lua")
 for line in io.lines() do
   local a={}
   for n in line:gmatch("%S+") do a[#a+1]=tonumber(n) end

@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
-local T=dofile("mods/bayline/openttd/rail_track.lua")
-local C=dofile("mods/bayline/openttd/level_crossing.lua")(T)
-local Road=dofile("mods/bayline/openttd/yapf_road_follow.lua")
+local T=dofile("mods/luanttd_core/openttd/rail_track.lua")
+local C=dofile("mods/luanttd_core/openttd/level_crossing.lua")(T)
+local Road=dofile("mods/luanttd_core/openttd/yapf_road_follow.lua")
 local req={kind="rail",owner="track",track=0,railtype=0}
 local road={kind="road",owner="road",road_owner="road",roadtype=0,road_bits=4,slope=7,base=2,town=2}
 local c,why=C.quote(road,req);assert(c,why)

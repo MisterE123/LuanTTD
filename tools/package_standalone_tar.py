@@ -9,7 +9,7 @@ import subprocess
 import tarfile
 
 ALLOW = {
-    "LICENSE", "NOTICE.md", "README.md", "PORTING.md", "COPYING.OpenTTD.md", "LEVEL_CROSSING_WORLD.md", "STOCK_AREA_DEMOLITION.md",
+    "LICENSE", "docs/NOTICE.md", "README.md", "docs/PORTING.md", "docs/porting-method.md", "docs/reference-target.md", "docs/COPYING.OpenTTD.md", "docs/LEVEL_CROSSING_WORLD.md", "docs/STOCK_AREA_DEMOLITION.md",
     "docs/build-in-3d.md", "docs/generated-campaign.md", "docs/hotbar-layout.md",
     "docs/electric-rail.md", "docs/autorail.md", "docs/coastal-landscaping.md",
     "docs/day-night.md", "docs/rail-waypoints.md", "docs/harbor-buoys.md", "docs/native-qa-2026-11-22.md",
@@ -23,13 +23,13 @@ args=parser.parse_args()
 repo=Path(__file__).resolve().parents[1]
 archive=args.archive.resolve()
 expected={}
-with subprocess.Popen(["git","archive","--prefix=bayline/",args.ref],cwd=repo,stdout=subprocess.PIPE) as git:
+with subprocess.Popen(["git","archive","--prefix=luanttd/",args.ref],cwd=repo,stdout=subprocess.PIPE) as git:
     with tarfile.open(fileobj=git.stdout,mode="r|") as src, lzma.open(archive,"wb",preset=6) as compressed, tarfile.open(fileobj=compressed,mode="w|") as dst:
         guide=args.start_here.read_bytes()
         member=tarfile.TarInfo("START-HERE.txt");member.size=len(guide);member.mode=0o644
         dst.addfile(member,io.BytesIO(guide))
         for item in src:
-            relative=item.name.removeprefix("bayline/")
+            relative=item.name.removeprefix("luanttd/")
             if not item.isfile() or not (relative.startswith("mods/") or relative in ALLOW): continue
             with src.extractfile(item) as stream:
                 data=stream.read()

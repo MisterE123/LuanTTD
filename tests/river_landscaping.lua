@@ -1,5 +1,5 @@
 -- Real LuanTTD terrain commands and water clock. No generated river auto-remake.
-local function m(n) return dofile("mods/bayline/"..n..".lua") end
+local function m(n) return dofile("mods/luanttd_core/"..n..".lua") end
 local Sim,T=m("sim"),m("openttd/terrain")
 local F=m("openttd/water_flood")
 local W=m("water_flood_world")(Sim,T,F)

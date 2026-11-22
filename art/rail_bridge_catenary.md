@@ -44,7 +44,7 @@ local mid = Art.overlay("span", axis, middle_ordinal, count_middle)
   ordinary catenary. Messenger has the same exact seam profile.
   `Art.wire_edge(kind, direction_or_axis, edge, deck)` queries that
   edge, not slope or rail compatibility.
-- Harbor Valley seed 1751, **(21,15)–(27,15)**, is stock Wooden type 0,
+- coastal rail test fixture seed 1751, **(21,15)–(27,15)**, is stock Wooden type 0,
   deck 2 with five middle tiles and **two real 1-in-2 ramp heads**.
   Look for an outer wire underside of 2.398 and flat deck contact of
   3.398. The regular SH '30'/'40' rigid shoe touches flat wire only.
@@ -62,10 +62,10 @@ local mid = Art.overlay("span", axis, middle_ordinal, count_middle)
   elevations, real load-bearing bracket overlap, structure clearance,
   and tested flat SH '30'/'40' contact against exported model geometry.
 - `lua5.1 tests/rail_bridge_catenary_selector.lua`: quotes the real
-  generated Harbor Valley bridge and cross-checks the absolute height
+  generated coastal rail test fixture bridge and cross-checks the absolute height
   values and native selector. This does not dispatch rolling stock.
 - `tests/rail_bridge_catenary_native.sh`: compact Linux visual fixture,
-  recreating the exact source-checked Harbor Valley bridge span and
+  recreating the exact source-checked coastal rail test fixture bridge span and
   both head grades, plus a separate orthogonal span with both types
   of heads. Luanti frames include both axes, sightline from water,
   physical clamped support and stationary shoe contact on the deck.

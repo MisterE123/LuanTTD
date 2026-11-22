@@ -10,7 +10,7 @@ import sys
 from small_airport_art import obj,hull,intersects
 
 ROOT=Path(__file__).absolute().parents[1]
-M=ROOT/"mods/bayline/models"
+M=ROOT/"mods/luanttd_core/models"
 DIRECTIONS=((-1,0),(0,1),(1,0),(0,-1))
 COMPATIBLE=((0,3,12),(0,6,9))
 ARROW_HEAD="Raised_original_tapered_one-way_arrow_heads"
@@ -129,7 +129,7 @@ def clearance(g,d):
     return 73*2*len(VEHICLES)
 
 def main():
-    atlas=(ROOT/"mods/bayline/textures/bl_oneway_atlas.png").read_bytes()
+    atlas=(ROOT/"mods/luanttd_core/textures/bl_oneway_atlas.png").read_bytes()
     assert atlas.startswith(b"\x89PNG\r\n\x1a\n") and int.from_bytes(atlas[16:20],"big")==224
     assert (ROOT/"art/oneway_road.blend").stat().st_size>80000
     total=0

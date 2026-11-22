@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Production construction entry points used by Road, straight rail and AutoRail.
-local base="mods/bayline/"
+local base="mods/luanttd_core/"
 local function m(f)return dofile(base..f..".lua")end
 local function up(f,...)return m("openttd/"..f)(...)end
 local Sim,Terrain,Track,Slope=m("sim"),m("openttd/terrain"),m("openttd/rail_track"),m("openttd/slope")
@@ -186,6 +186,17 @@ for _,k in ipairs({{29,30,36,31,33},{30,36,30,36,35}}) do
 end
 
 local point=function(x,z,fx,fz) return {x=x*2-.5+fx/8,z=z*2-.5+fz/8} end
+-- OpenTTD 16.0-RC1 #16101: coordinates on either side of the 15/16
+-- diagonal must not introduce a one-sided X hotspot. Test the native
+-- 3D-to-tile fractional projection for every stock click pixel.
+local stock_click=at(40,31)
+for x=0,15 do for z=0,15 do
+  local hit=point(40,31,x,z)
+  local target,axis,first,last=Sim.autoroad_selection(stock_click,hit,stock_click,hit)
+  local rc1_x=(x<z and z<=15-x) or (x>z and z>=15-x)
+  assert(target==stock_click and axis==(rc1_x and 0 or 1))
+  assert(first==last and last==((rc1_x and x or z)>=8))
+end end
 local id,axis,h0,h1=Sim.autoroad_selection(at(40,31),point(40,31,2,9),at(44,32),point(44,32,12,1))
 assert(id==at(44,31) and axis==0 and not h0 and h1)
 id,axis,h0,h1=Sim.autoroad_selection(at(40,31),point(40,31,7,12),at(41,32),point(41,32,8,8))

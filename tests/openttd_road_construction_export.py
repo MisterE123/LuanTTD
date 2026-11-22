@@ -129,7 +129,7 @@ def quote(luanti,root,port,blob,data,tiles):
     (game/"game.conf").write_text("title = Private stock road construction quote\n")
     (mod/"mod.conf").write_text("name = road_author\n")
     shutil.copyfile(HOME/"openttd_road_construction_native.lua",mod/"init.lua")
-    kernels=HOME.parent/"mods"/"bayline"/"openttd"
+    kernels=HOME.parent/"mods"/"luanttd_core"/"openttd"
     for source in ("road_slope","road_oneway","yapf_road_follow","road_bridge"):
         shutil.copyfile(kernels/(source+".lua"),mod/(source+".lua"))
     setting=next(iter(data[b"PATS"].values()))

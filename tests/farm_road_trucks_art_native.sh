@@ -26,11 +26,11 @@ printf 'name = farmtrucks\n' > "$mod/mod.conf"
 cp tests/farm_road_trucks_art_native.lua "$mod/init.lua"
 mkdir -p "$mod/source/openttd"
 cp tests/foster_bus_route.lua "$mod/"
-cp mods/bayline/{road_lanes.lua,road_motion_presentation.lua,road_motion_leg.lua,road_bridge_motion.lua} "$mod/source/"
-cp mods/bayline/openttd/{yapf_road_follow.lua,road_motion.lua,road_motion_data.lua} "$mod/source/openttd/"
-cp mods/bayline/models/{bl_hereford_grain_truck*.obj,bl_talbott_livestock_van.obj,bl_industry_farm_?_?.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_hereford_grain_truck_atlas,bl_talbott_livestock_van_atlas,bl_industry_farm_atlas,bl_grass?,bl_grass_side}.png "$mod/textures/"
-for mask in 3 5 6 9 10 12; do cp mods/bayline/textures/bl_road_${mask}_plain_q?.png "$mod/textures/"; done
+cp mods/luanttd_core/{road_lanes.lua,road_motion_presentation.lua,road_motion_leg.lua,road_bridge_motion.lua} "$mod/source/"
+cp mods/luanttd_core/openttd/{yapf_road_follow.lua,road_motion.lua,road_motion_data.lua} "$mod/source/openttd/"
+cp mods/luanttd_core/models/{bl_hereford_grain_truck*.obj,bl_talbott_livestock_van.obj,bl_industry_farm_?_?.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_hereford_grain_truck_atlas,bl_talbott_livestock_van_atlas,bl_industry_farm_atlas,bl_grass?,bl_grass_side}.png "$mod/textures/"
+for mask in 3 5 6 9 10 12; do cp mods/luanttd_core/textures/bl_road_${mask}_plain_q?.png "$mod/textures/"; done
 printf 'gameid = farm_truck_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

@@ -1,6 +1,6 @@
 -- Exercise every tunnel travel direction and independent short/long bores.
-local Worm=dofile("mods/bayline/road_bridge_motion.lua")
-local Plan=dofile("mods/bayline/openttd/road_tunnel.lua")
+local Worm=dofile("mods/luanttd_core/road_bridge_motion.lua")
+local Plan=dofile("mods/luanttd_core/openttd/road_tunnel.lua")
 local delta={[0]={-1,0},{0,1},{1,0},{0,-1}}
 local slopes={[0]=12,6,3,9}
 local hide={[0]=12,8,8,12}

@@ -110,7 +110,7 @@ int main(){
 }
 '''
 program=r'''
-local F=dofile("mods/bayline/openttd/water_flood.lua")
+local F=dofile("mods/luanttd_core/openttd/water_flood.lua")
 local cls={[0]="sea","river","canal","coast"}
 local owners={[0]="none","water","own","other"}
 local code={CAN_T_BUILD_ON_WATER=1,TOO_CLOSE_TO_EDGE_OF_MAP=2,VEHICLE_IN_THE_WAY=3,OWNED_BY_ANOTHER=4,

@@ -62,7 +62,7 @@ int main() {
 """
 
 LUA = """
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local R=dofile(root.."station_rating_runtime.lua")(nil,dofile(root.."openttd/station_rating.lua"))
 for line in io.lines() do
   local words={}

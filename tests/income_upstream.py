@@ -39,7 +39,7 @@ int main() {
 }
 """
 lua=r"""
-local I=dofile("mods/bayline/openttd/income.lua")
+local I=dofile("mods/luanttd_core/openttd/income.lua")
 local names={"passenger","coal","mail","goods","grain","steel"}
 local count=0
 for line in io.lines() do

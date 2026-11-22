@@ -16,11 +16,11 @@ from small_airport_art import hull, intersects, obj
 import road_freight_stop_art as runner
 
 ROOT=Path(__file__).resolve().parents[1]
-TEX=ROOT/"mods/bayline/textures"
+TEX=ROOT/"mods/luanttd_core/textures"
 SCALE=.40
 PAINT={(79,82,85),(154,147,126),(239,227,182)}
 TRACE=r'''
-local R=dofile("tests/foster_bus_route.lua")("mods/bayline/")
+local R=dofile("tests/foster_bus_route.lua")("mods/luanttd_core/")
 local io=assert(io.open(OUTPUT_PATH,"w"))
 for a=0,3 do
   for delta=-1,1 do
@@ -42,7 +42,7 @@ io:close()
 '''
 
 def inspect():
-    p=ROOT/"mods/bayline/models/bl_foster_bus.obj"
+    p=ROOT/"mods/luanttd_core/models/bl_foster_bus.obj"
     vertices,uv,faces=[],[],[]
     tag=None
     for row in p.read_text().splitlines():
@@ -155,7 +155,7 @@ def main():
     # The two ends of each tyre contact edge protect the full width.
     poses,worst,outside=native_sweep([(x,z) for x,h,z in contact],envelope)
     if len(sys.argv)>1:source(sys.argv[1])
-    leopard,_=obj(ROOT/"mods/bayline/models/bl_leopard_bus.obj")
+    leopard,_=obj(ROOT/"mods/luanttd_core/models/bl_leopard_bus.obj")
     floor_y=min(y for _,y,_ in leopard)
     ref,ref_edge,edge_contacts=native_sweep(
         {(x*SCALE,z*SCALE) for x,y,z in leopard if abs(y-floor_y)<1e-7},

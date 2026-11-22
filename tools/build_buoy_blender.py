@@ -22,7 +22,7 @@ for label,color in zip(labels,colors):
     shader.inputs["Roughness"].default_value=.72
     materials.append(m)
 vertices,faces=[],[]
-for line in (base/"mods/bayline/models/bl_ship_buoy.obj").read_text().splitlines():
+for line in (base/"mods/luanttd_core/models/bl_ship_buoy.obj").read_text().splitlines():
     bits=line.split()
     if not bits: continue
     if bits[0]=="v":

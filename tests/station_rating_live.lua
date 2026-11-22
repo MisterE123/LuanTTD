@@ -1,8 +1,8 @@
 -- End-to-end simulation fixture. The real daily path must drive demand,
 -- boarding, stock rating updates, expiry and reactivation.
-local M=dofile("mods/bayline/sim.lua")
-local T=dofile("mods/bayline/openttd/terrain.lua")
-local P=dofile("mods/bayline/openttd/passengers.lua")
+local M=dofile("mods/luanttd_core/sim.lua")
+local T=dofile("mods/luanttd_core/openttd/terrain.lua")
+local P=dofile("mods/luanttd_core/openttd/passengers.lua")
 local s=M.new(1751)
 s.corner_grid=T.new(M.W,M.H)
 s.road_economy=true

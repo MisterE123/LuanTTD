@@ -464,7 +464,7 @@ def export_palette():
     pixels = b"".join(bytes.fromhex(SWATCH[key])*4 for key in values)
     png = b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR", struct.pack(">IIBBBBB",width,height,8,2,0,0,0))
     png += chunk(b"IDAT",zlib.compress((b"\0"+pixels)*height))+chunk(b"IEND",b"")
-    (ROOT/"mods/bayline/textures/bl_scenery_palette.png").write_bytes(png)
+    (ROOT/"mods/luanttd_core/textures/bl_scenery_palette.png").write_bytes(png)
 
 def output_asset(stem, geometry, centered=False):
     # Blender objects keep editability and materials; runtime is one triangle mesh.
@@ -490,7 +490,7 @@ def output_asset(stem, geometry, centered=False):
         for i in p.loop_indices:
             uv.data[i].uv=((idx+.5)/64,.5)
     o.data.update()
-    bpy.ops.wm.obj_export(filepath=str(ROOT/f"mods/bayline/models/bl_scenery_{stem}.obj"),
+    bpy.ops.wm.obj_export(filepath=str(ROOT/f"mods/luanttd_core/models/bl_scenery_{stem}.obj"),
         export_selected_objects=True,export_materials=False,export_uv=True,export_normals=True,
         export_triangulated_mesh=True,global_scale=1,forward_axis="NEGATIVE_Z",up_axis="Y")
 

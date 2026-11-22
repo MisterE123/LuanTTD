@@ -1,4 +1,4 @@
-local E=dofile("mods/bayline/original_terrain_explorer.lua")
+local E=dofile("mods/luanttd_core/original_terrain_explorer.lua")
 local function gate(enabled,marker,campaign,world)
   local untouched=true
   local core={settings={get_bool=function(_,key,default)

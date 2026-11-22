@@ -11,18 +11,18 @@ if [[ "$server" == */* ]]; then server=$(realpath "$server"); fi
 out=$2
 mkdir "$out"
 out=$(realpath "$out")
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game/mods" "$out/world" "$out/home"
 cp game.conf settingtypes.txt "$game/"
-cp -r mods/bayline "$game/mods/"
-printf '\n' >> "$game/mods/bayline/init.lua"
-cat tests/water_flood_native_append.lua >> "$game/mods/bayline/init.lua"
-printf 'gameid = bayline\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
+cp -r mods/luanttd_core "$game/mods/"
+printf '\n' >> "$game/mods/luanttd_core/init.lua"
+cat tests/water_flood_native_append.lua >> "$game/mods/luanttd_core/init.lua"
+printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 port=${BAYLINE_NATIVE_PORT:-39708}
 for phase in SAVE RESTORE; do
   printf 'port = %d\nserver_announce = false\nbind_address = 127.0.0.1\nprometheus_listener_address = 127.0.0.1:%d\nbayline_seed = 1751\nbayline_scenario = coastal\nbayline_water_flood_native_phase = %s\n' "$port" "$port" "$phase" > "$out/server.conf"
-  if ! timeout 35 "$server" --config "$out/server.conf" --world "$out/world" --gameid bayline --logfile '' >"$out/$phase.log" 2>&1; then
+  if ! timeout 35 "$server" --config "$out/server.conf" --world "$out/world" --gameid luanttd --logfile '' >"$out/$phase.log" 2>&1; then
     cat "$out/$phase.log";exit 1
   fi
   grep "COASTAL LANDSCAPING NATIVE $phase" "$out/$phase.log" || { cat "$out/$phase.log";exit 1; }

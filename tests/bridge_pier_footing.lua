@@ -4,7 +4,7 @@ local base,top=1,2
 local function architecture(name,asset,prefix)
   assert(name=="stock_"..asset and asset:match("^"..prefix))
   assert(not registered[name]);registered[name]=true
-  local f=assert(io.open("mods/bayline/models/bl_"..asset..".obj"))
+  local f=assert(io.open("mods/luanttd_core/models/bl_"..asset..".obj"))
   local count,hi,lo=0,-9,9
   for line in f:lines() do
     local x,y,z=line:match("^v ([^ ]+) ([^ ]+) ([^ ]+)")
@@ -25,7 +25,7 @@ end
 local road={[0]="road_bridge_wood",[1]="road_bridge_concrete",[2]="road_bridge_girder"}
 local slope=3
 local terrain={tile=function(id)assert(id==9);return slope,base,top end}
-local renderer=dofile("mods/bayline/bridge_pier_render.lua")
+local renderer=dofile("mods/luanttd_core/bridge_pier_render.lua")
 local road_foot=renderer(architecture,terrain,road)
 local rail_foot=renderer(architecture,terrain,{"rail_bridge_wood"})
 for axis=0,1 do for dep=1,2 do

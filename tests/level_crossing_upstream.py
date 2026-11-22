@@ -205,8 +205,8 @@ int main(){
 """
 
 LUA=r"""
-local T=dofile("mods/bayline/openttd/rail_track.lua")
-local C=dofile("mods/bayline/openttd/level_crossing.lua")(T)
+local T=dofile("mods/luanttd_core/openttd/rail_track.lua")
+local C=dofile("mods/luanttd_core/openttd/level_crossing.lua")(T)
 local function owner(i)
   return i==-2 and "town" or i==-3 and "deity" or i==-1 and "none" or i
 end

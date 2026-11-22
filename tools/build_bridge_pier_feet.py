@@ -7,7 +7,7 @@ data come from the existing editable bridge art exports.
 """
 from pathlib import Path
 
-MODELS = Path(__file__).resolve().parents[1] / "mods/bayline/models"
+MODELS = Path(__file__).resolve().parents[1] / "mods/luanttd_core/models"
 COLUMNS = {
     "road_bridge_wood": "Trestle_legs",
     "road_bridge_concrete": "Pier_stack_load-bearing_core",

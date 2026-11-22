@@ -37,8 +37,8 @@ core.after(0,function()
   core.emerge_area({x=17,y=0,z=35},{x=53,y=5,z=41},function(_,_,remaining)
     if remaining~=0 then return end
     core.after(0,function()
-      assert(core.get_node({x=30,y=1,z=36}).name:match("^bayline:stock_river_flat"))
-      assert(core.get_node({x=18,y=1,z=36}).name:match("^bayline:stock_river_3"))
+      assert(core.get_node({x=30,y=1,z=36}).name:match("^luanttd_core:stock_river_flat"))
+      assert(core.get_node({x=18,y=1,z=36}).name:match("^luanttd_core:stock_river_3"))
       if phase=="save" then
         local company=Sim.company(S,"riverQA")
         local cash=company.cash

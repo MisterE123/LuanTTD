@@ -5,20 +5,20 @@ cd "$(dirname "$0")/.."
 out=$1
 mkdir "$out"
 out=$(realpath "$out")
-game="$out/games/bayline"
+game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp -r "${BAYLINE_NATIVE_EXACT_GAME:-.}"/game.conf "${BAYLINE_NATIVE_EXACT_GAME:-.}"/mods "$game/"
-printf '\n' >> "$game/mods/bayline/init.lua"
+printf '\n' >> "$game/mods/luanttd_core/init.lua"
 if [[ ${BAYLINE_NATIVE_GENERATED_SCALE:-0} == 1 ]]; then
-  cat tests/stock_generated_scale_append.lua >> "$game/mods/bayline/init.lua"
+  cat tests/stock_generated_scale_append.lua >> "$game/mods/luanttd_core/init.lua"
 elif [[ ${BAYLINE_NATIVE_RIVER_LANDSCAPING:-0} == 1 ]]; then
-  cat tests/river_landscaping_native_append.lua >> "$game/mods/bayline/init.lua"
+  cat tests/river_landscaping_native_append.lua >> "$game/mods/luanttd_core/init.lua"
 elif [[ ${BAYLINE_NATIVE_GENERATED_RIVER:-0} == 1 ]]; then
-  cat tests/stock_generated_river_append.lua >> "$game/mods/bayline/init.lua"
+  cat tests/stock_generated_river_append.lua >> "$game/mods/luanttd_core/init.lua"
 else
-  cat tests/stock_generated_native_append.lua >> "$game/mods/bayline/init.lua"
+  cat tests/stock_generated_native_append.lua >> "$game/mods/luanttd_core/init.lua"
 fi
-printf 'gameid = bayline\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
+printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
  tools=$(realpath "$BAYLINE_NATIVE_TOOLS")
@@ -41,7 +41,7 @@ for phase in save restore; do
     printf 'bayline_generated_map_size = %s\nbayline_generated_relief = 3\nbayline_generated_rivers = 1\nbayline_generated_mixed_freight = true\n' \
       "$([[ $phase = save ]] && echo 128 || echo 64)" >> "$out/server.conf"
   fi
-  timeout 35 luantiserver --config "$out/server.conf" --world "$out/world" --gameid bayline --logfile '' > "$out/$phase.log" 2>&1 || { tail -40 "$out/$phase.log"; exit 1; }
+  timeout 35 luantiserver --config "$out/server.conf" --world "$out/world" --gameid luanttd --logfile '' > "$out/$phase.log" 2>&1 || { tail -40 "$out/$phase.log"; exit 1; }
   grep "STOCK GENERATED NATIVE $phase" "$out/$phase.log"
   if grep -E 'ERROR\[' "$out/$phase.log"; then exit 1; fi
   [[ -s "$out/world/mod_storage.sqlite" ]]

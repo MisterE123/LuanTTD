@@ -197,7 +197,7 @@ int main(){
 """
 
 LUA = r"""
-local S=dofile("mods/bayline/openttd/road_depot_service.lua")
+local S=dofile("mods/luanttd_core/openttd/road_depot_service.lua")
 local kind={[0]="nothing","goto_station","goto_depot","loading","leave","dummy"}
 local number={};for k,v in pairs(kind) do number[v]=k end
 local action={none=0,service_here=1,cancel=2,keep=3,route=4}

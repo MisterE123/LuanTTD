@@ -130,8 +130,8 @@ int main() {
 }
 """
 lua = r"""
-local F=dofile("mods/bayline/openttd/yapf_road_follow.lua")
-local C=dofile("mods/bayline/openttd/yapf_road_cost.lua")(F)
+local F=dofile("mods/luanttd_core/openttd/yapf_road_follow.lua")
+local C=dofile("mods/luanttd_core/openttd/yapf_road_cost.lua")(F)
 local function read() return assert(io.read("*n")) end
 local kd={[0]="road","crossing","drive_stop","bay_stop","depot"}
 while true do

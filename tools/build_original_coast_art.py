@@ -10,7 +10,7 @@ from pathlib import Path
 
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[1] / "mods" / "bayline"
+ROOT = Path(__file__).resolve().parents[1] / "mods" / "luanttd_core"
 MASKS = (1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 23, 27, 29, 30)
 SEA = -0.488
 SHINGLE = -0.365

@@ -70,7 +70,7 @@ def verify(args):
     rail=wheel_contact(m)
     c,contacts=coupled(m)
     pair_count=pair(m)
-    asset=ROOT/"mods/bayline"
+    asset=ROOT/"mods/luanttd_core"
     out=BytesIO()
     with ZipFile(out,"w",ZIP_DEFLATED,compresslevel=9) as z:
         for f in (asset/"models"/f"bl_{NAME}.obj",asset/"textures"/f"bl_{NAME}.png"):

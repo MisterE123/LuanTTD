@@ -43,7 +43,7 @@ def main():
     aging=re.search(r"CARGO_AGING_TICKS\s*=\s*(\d+)",timer)[1]
     expected=f"123,{capacity[5]},{capacity[4]},{props[4]},{aging},{delays[1]},{coal[0]},{coal[5]},{coal[6]},{coal[7]}"
     fixture=r"""
-local r="mods/bayline/"
+local r="mods/luanttd_core/"
 local c=dofile(r.."openttd/coal_industry.lua")()
 local t=dofile(r.."openttd/loading_timing.lua")
 local a=dofile(r.."road_coal_service.lua")(nil,c)

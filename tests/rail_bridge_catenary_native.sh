@@ -27,11 +27,11 @@ printf 'title = LuanTTD rail bridge catenary fixture\n' > "$out/games/rail_art/g
 printf 'name = railpreview\n' > "$mod/mod.conf"
 { printf 'local fixture_sprung_collector = %s\n' "$sprung"; cat tests/rail_bridge_catenary_native.lua; } > "$mod/init.lua"
 if $sprung; then
-  cp mods/bayline/models/{bl_rail_sh_{30,40}_body.obj,bl_rail_sh_collector.obj} "$mod/models/"
+  cp mods/luanttd_core/models/{bl_rail_sh_{30,40}_body.obj,bl_rail_sh_collector.obj} "$mod/models/"
 fi
-cp mods/bayline/models/{bl_rail_track_1.obj,bl_rail_track_2.obj,bl_land_3.obj,bl_land_6.obj,bl_land_9.obj,bl_land_12.obj,bl_rail_sh_{30,40}.obj,bl_rail_passenger_wagon.obj,bl_rail_bridge_wood_*,bl_rail_bridge_catenary_*,bl_rail_catenary_{1,2}_{0,1}.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_rail_atlas,bl_rail_wagon_atlas,bl_grass*,bl_water*,bl_rail_bridge_wood,bl_rail_catenary_atlas,bl_rail_sh_{30,40}}.png "$mod/textures/"
-cp mods/bayline/rail{_bridge,}_catenary_art.lua "$mod/"
+cp mods/luanttd_core/models/{bl_rail_track_1.obj,bl_rail_track_2.obj,bl_land_3.obj,bl_land_6.obj,bl_land_9.obj,bl_land_12.obj,bl_rail_sh_{30,40}.obj,bl_rail_passenger_wagon.obj,bl_rail_bridge_wood_*,bl_rail_bridge_catenary_*,bl_rail_catenary_{1,2}_{0,1}.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_rail_atlas,bl_rail_wagon_atlas,bl_grass*,bl_water*,bl_rail_bridge_wood,bl_rail_catenary_atlas,bl_rail_sh_{30,40}}.png "$mod/textures/"
+cp mods/luanttd_core/rail{_bridge,}_catenary_art.lua "$mod/"
 printf 'gameid = rail_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

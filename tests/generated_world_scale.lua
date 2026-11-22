@@ -1,6 +1,6 @@
 -- Detached 64/128 audit. No engine callbacks, shared runtime edits, or app copy.
 -- Optional argv[1] is the installed Luanti builtin/common/serialize.lua.
-local p="mods/bayline/"
+local p="mods/luanttd_core/"
 local function m(n) return dofile(p..n..".lua") end
 local Sim,Terrain,Slope=m("sim"),m("openttd/terrain"),m("openttd/slope")
 local Cam,TGP,Clear=m("generated_campaign"),m("openttd/terragenesis")(Slope),m("openttd/terragenesis_clear")

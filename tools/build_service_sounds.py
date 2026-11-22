@@ -8,7 +8,7 @@ import tempfile
 import wave
 
 RATE = 24000
-SOUNDS = Path(__file__).resolve().parents[1] / "mods/bayline/sounds"
+SOUNDS = Path(__file__).resolve().parents[1] / "mods/luanttd_core/sounds"
 scores = {
     "first_arrival": (0.38, [(0.0, 392, .19, 8), (.14, 523.25, .15, 10)]),
     "fare": (.25, [(0.0, 659.25, .14, 14), (.063, 880, .13, 16)]),

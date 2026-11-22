@@ -85,7 +85,7 @@ int main() {
 """
 
 LUA = r"""
-local R=dofile("mods/bayline/openttd/rail_roster.lua")
+local R=dofile("mods/luanttd_core/openttd/rail_roster.lua")
 for line in io.lines() do
   local n={}
   for s in line:gmatch("%d+") do n[#n+1]=tonumber(s) end

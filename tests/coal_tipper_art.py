@@ -14,7 +14,7 @@ COAL = set(range(26,30))
 def parse(stem):
     vertices, uv, normals = [], [], []
     grouped = Counter()
-    source = ROOT/"mods/bayline/models"/f"bl_{stem}.obj"
+    source = ROOT/"mods/luanttd_core/models"/f"bl_{stem}.obj"
     for line in source.read_text().splitlines():
         if not line or line.startswith("#"):
             continue
@@ -83,7 +83,7 @@ def turn_check(lo,hi):
 
 def main():
     assert (ROOT/"art/coal_tipper.blend").stat().st_size>100_000
-    palette=(ROOT/"mods/bayline/textures/bl_coal_tipper_palette.png").read_bytes()
+    palette=(ROOT/"mods/luanttd_core/textures/bl_coal_tipper_palette.png").read_bytes()
     assert palette.startswith(b"\x89PNG\r\n\x1a\n")
     assert struct.unpack(">II",palette[16:24])==(256,8)
     empty,empty_faces=parse("coal_tipper")

@@ -1,4 +1,4 @@
-local M=dofile("mods/bayline/sim.lua")
+local M=dofile("mods/luanttd_core/sim.lua")
 local done=0
 local function check(condition,message) assert(condition,message);done=done+1 end
 local function at(x,z) return assert(M.id(x,z)) end

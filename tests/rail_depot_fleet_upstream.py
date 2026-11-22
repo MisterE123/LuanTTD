@@ -11,8 +11,8 @@ import tempfile
 from rail_roster_upstream import ROOT, block, src
 
 LUA=r"""
-local R=dofile("mods/bayline/openttd/rail_roster.lua")
-local F=dofile("mods/bayline/rail_depot_fleet.lua")({}, {}, R)
+local R=dofile("mods/luanttd_core/openttd/rail_roster.lua")
+local F=dofile("mods/luanttd_core/rail_depot_fleet.lua")({}, {}, R)
 for line in io.lines() do
   local a={}
   for n in line:gmatch("%d+") do a[#a+1]=tonumber(n) end

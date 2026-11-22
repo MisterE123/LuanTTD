@@ -1,4 +1,4 @@
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local Sim=dofile(root.."sim.lua")
 local F=dofile(root.."openttd/yapf_road_follow.lua")
 local C=dofile(root.."openttd/yapf_road_cost.lua")(F)

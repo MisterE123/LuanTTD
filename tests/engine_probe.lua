@@ -20,14 +20,14 @@ return function(api,ui)
           local shelter=false
           for dz=0,1 do for dx=0,1 do
             local at=core.get_node({x=x+dx,y=1,z=z+dz})
-            if at.name:match("^bayline:stop_shelter") then shelter=true end
-            assert(core.get_node({x=x+dx,y=0,z=z+dz}).name:match("^bayline:road_"))
+            if at.name:match("^luanttd_core:stop_shelter") then shelter=true end
+            assert(core.get_node({x=x+dx,y=0,z=z+dz}).name:match("^luanttd_core:road_"))
           end end
           assert(shelter,"missing 3D shelter over the continuous road")
           for _,suffix in ipairs({"stop_shelter","stop_shelter_quarter","stop_shelter_corner","depot_0","depot_1","depot_2","depot_3"}) do
-            local def=core.registered_nodes["bayline:"..suffix]
+            local def=core.registered_nodes["luanttd_core:"..suffix]
             assert(def and def.drawtype=="mesh")
-            local model=assert(io.open(core.get_modpath("bayline").."/models/"..def.mesh,"r"))
+            local model=assert(io.open(core.get_modpath("luanttd_core").."/models/"..def.mesh,"r"))
             assert(model:read("*l"));model:close()
           end
           api.save()
@@ -66,9 +66,9 @@ return function(api,ui)
       ui.build_world(p,b)
       assert(s.tiles[b].station and s.stations[s.tiles[b].station].owner=="Builder")
       for id in pairs(M.vehicles) do
-        local entity=core.registered_entities["bayline:vehicle_"..id]
+        local entity=core.registered_entities["luanttd_core:vehicle_"..id]
         assert(entity and entity.initial_properties.visual=="mesh")
-        local obj=assert(io.open(core.get_modpath("bayline").."/models/"..entity.initial_properties.mesh,"r"))
+        local obj=assert(io.open(core.get_modpath("luanttd_core").."/models/"..entity.initial_properties.mesh,"r"))
         assert(obj:read("*l"));obj:close()
       end
       finish("world-picked road and terminal build; all ten vehicle models registered")

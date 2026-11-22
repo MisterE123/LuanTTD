@@ -9,7 +9,7 @@ local function reset(n)
   S.tiles={}
   for i=1,n*n do S.tiles[i]={terrain="grass",h=1} end
 end
-local M=dofile("mods/bayline/jump_map.lua")({Sim=Sim,s=S})
+local M=dofile("mods/luanttd_core/jump_map.lua")({Sim=Sim,s=S})
 reset(64)
 S.tiles[1].stock_void=true
 S.tiles[Sim.id(42,49)].station=1

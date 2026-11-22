@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
-MODELS=ROOT/"mods/bayline/models"
+MODELS=ROOT/"mods/luanttd_core/models"
 DIRS=((-1,0),(0,1),(1,0),(0,-1))
 EPS=3e-6
 

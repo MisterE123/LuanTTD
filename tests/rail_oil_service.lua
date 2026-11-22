@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- A #30 leg and road Goods wagon share a single industry/station ledger.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function m(n) return dofile(root..n..".lua") end
 local Sim,Terrain=m("sim"),m("openttd/terrain")
 local P,Rate,Income=m("openttd/passengers"),m("openttd/station_rating"),m("openttd/income")

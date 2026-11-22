@@ -52,7 +52,7 @@ farther from the bank and watch for a propagation clearance charge.
 
 ## Try it in a fresh coastal world
 
-Enable `bayline_scenario = coastal` in a **fresh** world.
+Choose **Coastal Landscaping** from the new-world setup screen.
 Do not enable a preplaced industry profile in the same world. This
 prepares a raised shelf behind the starter coast before starting the
 campaign. Old saves are not reshaped or migrated. On the otherwise

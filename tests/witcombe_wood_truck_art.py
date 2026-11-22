@@ -57,7 +57,7 @@ def vertices(groups):
     return [(x*S,h*S,z*S) for ps in groups.values() for x,z,h in ps]
 
 def faces(n):
-    paths=ROOT/"mods/bayline/models"/f"bl_{n}.obj"
+    paths=ROOT/"mods/luanttd_core/models"/f"bl_{n}.obj"
     pts=[];uv=[];normals=[];names={};g=None
     for line in paths.read_text().splitlines():
         t,*p=line.split()
@@ -118,7 +118,7 @@ def verify(e,r,ogg,sheet):
         tris=sum(sum(v.values()) for v in model.values())
         assert 10_000<tris<21_000,(stem,tris)
     assert (ROOT/"art/witcombe_wood_truck.blend").stat().st_size>100000
-    atlas=(ROOT/"mods/bayline/textures/bl_witcombe_wood_truck_atlas.png").read_bytes()
+    atlas=(ROOT/"mods/luanttd_core/textures/bl_witcombe_wood_truck_atlas.png").read_bytes()
     assert atlas[:8]==b"\x89PNG\r\n\x1a\n" and struct.unpack_from(">II",atlas,16)==(336,8)
     freight=freight_fits(full)
     print(f"WITCOMBE_ART_PASS #144/road28/image7+48; true empty and load, 4 contacts, native x/h/z {tuple(round(b-a,4) for a,b in zip(lo,hi))}; both lanes and eased turns, {freight:,} exact stock freight-stop sweeps.")

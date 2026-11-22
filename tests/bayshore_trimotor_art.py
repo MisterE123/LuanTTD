@@ -12,7 +12,7 @@ STARBOARD_LIGHT=26
 
 
 def model():
-    p=ROOT/"mods/bayline/models/bl_bayshore_trimotor.obj"
+    p=ROOT/"mods/luanttd_core/models/bl_bayshore_trimotor.obj"
     verts, tex, normal, faces = [], [], [], []
     for line in p.read_text().splitlines():
         if not line or line.startswith("#"):
@@ -129,6 +129,6 @@ if __name__=="__main__":
     # https://github.com/OpenTTD/OpenTTD/blob/14.1/src/table/engines.h#L320
     # https://github.com/OpenTTD/OpenTTD/blob/14.1/src/table/engines.h#L610
     assert (ROOT/"art/bayshore_trimotor.blend").stat().st_size>150_000
-    a=(ROOT/"mods/bayline/textures/bl_bayshore_trimotor_palette.png").read_bytes()
+    a=(ROOT/"mods/luanttd_core/textures/bl_bayshore_trimotor_palette.png").read_bytes()
     assert a.startswith(b"\x89PNG\r\n\x1a\n") and struct.unpack(">II",a[16:24])==(256,8)
     bounded_rotating()

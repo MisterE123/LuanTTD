@@ -64,7 +64,7 @@ int main() {
 }
 """
 LUA=r"""
-local W=dofile("mods/bayline/openttd/rail_waypoint.lua")
+local W=dofile("mods/luanttd_core/openttd/rail_waypoint.lua")
 local kinds={[0]="rail","signals","depot","station","waypoint","clear"}
 local errors={NO_SUITABLE_RAILROAD_TRACK=1,OWNED_BY_ANOTHER=2,VEHICLE_IN_THE_WAY=3,
   FLAT_LAND_REQUIRED=4,MUST_DEMOLISH_BRIDGE_FIRST=5,STATION_IN_WAY=7}

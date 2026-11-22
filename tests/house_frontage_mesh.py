@@ -1,7 +1,7 @@
 """Check the shipped porch/door models stay on the same parcel after rotation."""
 from pathlib import Path
 
-root = Path(__file__).resolve().parents[1] / "mods/bayline/models"
+root = Path(__file__).resolve().parents[1] / "mods/luanttd_core/models"
 names = (
     *(f"scenery_house_{n}" for n in range(4)),
     "town_shop",

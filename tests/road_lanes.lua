@@ -1,5 +1,5 @@
-local L = dofile("mods/bayline/road_lanes.lua")
-local M = dofile("mods/bayline/road_motion.lua")
+local L = dofile("mods/luanttd_core/road_lanes.lua")
+local M = dofile("mods/luanttd_core/road_motion.lua")
 
 local function near(a,b)
   assert(math.abs(a-b)<1e-8, tostring(a).." ~= "..tostring(b))
@@ -9,7 +9,7 @@ local bounds = {}
 for _,pair in ipairs(specs) do
   local engine,key=pair[1],pair[2]
   local mnx,mxx,mnz,mxz
-  for line in io.lines("mods/bayline/models/bl_"..key..".obj") do
+  for line in io.lines("mods/luanttd_core/models/bl_"..key..".obj") do
     if line:sub(1,2)=="v " then
       local x,_,z = line:match("^v%s+(%S+)%s+(%S+)%s+(%S+)")
       x,z=tonumber(x)/10,tonumber(z)/10

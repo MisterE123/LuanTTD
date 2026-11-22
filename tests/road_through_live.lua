@@ -1,5 +1,5 @@
 -- Real parked stock bus contributes length only in its own running direction.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local S=dofile(root.."sim.lua")
 local T=dofile(root.."openttd/terrain.lua")
 local s=S.new(1751)

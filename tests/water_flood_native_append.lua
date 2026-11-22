@@ -7,7 +7,7 @@ do
     local slope,base=Terrain.tile(S.corner_grid,x,z)
     assert(t.terrain==kind and slope==0 and base==0)
     local actual=core.get_node({x=2*x,y=0,z=2*z}).name
-    assert(actual=="bayline:"..kind..t.variant,actual)
+    assert(actual=="luanttd_core:"..kind..t.variant,actual)
   end
   local function shore_count()
     local n=0
@@ -16,7 +16,7 @@ do
       if t.coastal_water then
         local mask,base=Terrain.tile(S.corner_grid,x,z)
         local actual=core.get_node({x=2*x,y=base+1,z=2*z}).name
-        assert(actual==("bayline:stock_shore_%d_%d"):format(mask,t.variant),actual)
+        assert(actual==("luanttd_core:stock_shore_%d_%d"):format(mask,t.variant),actual)
         n=n+1
       end
     end end

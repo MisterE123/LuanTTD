@@ -24,8 +24,8 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD bridge art fixture\n' > "$out/games/bridge_art/game.conf"
 printf 'name = bridgepreview\n' > "$mod/mod.conf"
 cp tests/road_bridge_art_native.lua "$mod/init.lua"
-cp mods/bayline/models/{bl_road_bridge_wood_*,bl_town_flyer.obj} "$mod/models/"
-cp mods/bayline/textures/{bl_road_bridge_wood,bl_grass*,bl_road_10_plain_q*,bl_water0,bl_vehicle_palette}.png "$mod/textures/"
+cp mods/luanttd_core/models/{bl_road_bridge_wood_*,bl_town_flyer.obj} "$mod/models/"
+cp mods/luanttd_core/textures/{bl_road_bridge_wood,bl_grass*,bl_road_10_plain_q*,bl_water0,bl_vehicle_palette}.png "$mod/textures/"
 printf 'gameid = bridge_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

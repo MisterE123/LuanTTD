@@ -18,8 +18,8 @@ import time
 
 ROOT=Path(__file__).resolve().parents[1]
 SCRIPT=r"""
-local A=dofile('mods/bayline/openttd/aqueduct.lua')(
-  dofile('mods/bayline/openttd/road_bridge.lua')(dofile('mods/bayline/openttd/slope.lua')))
+local A=dofile('mods/luanttd_core/openttd/aqueduct.lua')(
+  dofile('mods/luanttd_core/openttd/road_bridge.lua')(dofile('mods/luanttd_core/openttd/slope.lua')))
 for line in io.lines() do
   local n={}
   for i in line:gmatch("%d+") do n[#n+1]=tonumber(i) end

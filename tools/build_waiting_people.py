@@ -2,7 +2,7 @@
 """Original 1950s pedestrian silhouettes for a small station-platform crowd."""
 from pathlib import Path
 from PIL import Image, ImageDraw
-out=Path(__file__).resolve().parents[1]/"mods/bayline/textures"
+out=Path(__file__).resolve().parents[1]/"mods/luanttd_core/textures"
 pal=[
     ("#d8ad7c","#346358","#cfa352"),
     ("#a86444","#8c4331","#debc80"),

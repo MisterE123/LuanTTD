@@ -14,8 +14,8 @@ import bpy
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[1]
-MODELS = ROOT/"mods"/"bayline"/"models"
-TEXTURES = ROOT/"mods"/"bayline"/"textures"
+MODELS = ROOT/"mods"/"luanttd_core"/"models"
+TEXTURES = ROOT/"mods"/"luanttd_core"/"textures"
 PREFIX = "bl_road_bridge_wood"
 COLORS = {
     "Asphalt": "4f5255", "Road shoulder": "9a937e", "Road centre marking": "efe3b6",

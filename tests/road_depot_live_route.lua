@@ -1,5 +1,5 @@
 -- The proposal begins at the existing exact traveled sub-tile frame.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function m(n) return dofile(root..n..".lua") end
 local Sim,T=m("sim"),m("openttd/terrain")
 local F=m("openttd/yapf_road_follow")

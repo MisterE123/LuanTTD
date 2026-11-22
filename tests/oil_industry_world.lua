@@ -1,16 +1,16 @@
-local Sim=dofile("mods/bayline/sim.lua")
-local Terrain=dofile("mods/bayline/openttd/terrain.lua")
-local function m(p) return dofile("mods/bayline/"..p..".lua") end
+local Sim=dofile("mods/luanttd_core/sim.lua")
+local Terrain=dofile("mods/luanttd_core/openttd/terrain.lua")
+local function m(p) return dofile("mods/luanttd_core/"..p..".lua") end
 local P,Rating,Income=m("openttd/passengers"),m("openttd/station_rating"),m("openttd/income")
 local C=m("openttd/station_catchment")(P,Rating)
 local Coal=m("openttd/coal_industry")(P,Rating,C,Income)
 local Timber=m("openttd/timber_industry")(P,C,Rating,Income,Coal,m("openttd/town_goods"))
 local Rules=m("openttd/oil_industry")(m("openttd/farm_factory_industry"),P,C,Rating,Income,Coal,Timber)
-local W=dofile("mods/bayline/oil_industry_world.lua")(Sim,Terrain,Rules)
+local W=dofile("mods/luanttd_core/oil_industry_world.lua")(Sim,Terrain,Rules)
 local function build_world()
   local s=Sim.new(1751)
-  dofile("mods/bayline/town_layout.lua")(Sim,s)
-  s.corner_grid=dofile("mods/bayline/terrain_preview.lua")(Sim,Terrain,s)
+  dofile("mods/luanttd_core/town_layout.lua")(Sim,s)
+  s.corner_grid=dofile("mods/luanttd_core/terrain_preview.lua")(Sim,Terrain,s)
   s.road_economy,s.road_stock_loading,s.road_stock_clock,s.road_stock_house_supply=true,true,true,true
   for kind,data in pairs(W.facilities) do Sim.facilities[kind]=data end
   return s

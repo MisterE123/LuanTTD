@@ -1,4 +1,4 @@
-local Y=dofile("mods/bayline/openttd/yapf_road_follow.lua")
+local Y=dofile("mods/luanttd_core/openttd/yapf_road_follow.lua")
 local function road(bits)
   return {kind="road",road_bits=bits,roadtype=0,owner="city"}
 end

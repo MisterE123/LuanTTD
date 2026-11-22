@@ -142,9 +142,9 @@ int main(){
 }
 """
 lua = r"""
-local F=dofile("mods/bayline/openttd/yapf_road_follow.lua")
+local F=dofile("mods/luanttd_core/openttd/yapf_road_follow.lua")
 local C={}
-local S=dofile("mods/bayline/openttd/yapf_road_search.lua")(F,C)
+local S=dofile("mods/luanttd_core/openttd/yapf_road_search.lua")(F,C)
 local function r() return assert(io.read("*n")) end
 local tds={0,1,2,3,4,5,8,9,10,11,12,13}
 while true do

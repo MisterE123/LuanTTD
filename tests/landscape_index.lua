@@ -1,5 +1,5 @@
 -- Pinned landscape compatibility and sparse replay, no live mounting.
-local path="mods/bayline/openttd/"
+local path="mods/luanttd_core/openttd/"
 local function m(n) return dofile(path..n..".lua") end
 local H=m("town_passengers")
 local J=m("landscape_index")

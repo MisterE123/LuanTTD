@@ -7,8 +7,8 @@ import struct
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ["house_0", "house_1", "house_2", "house_3", "town",
           "tree_0", "tree_1", "tree_2", "tree_3", "mine", "farm", "mill", "factory"]
-model_path = ROOT/"mods/bayline/models"
-palette = (ROOT/"mods/bayline/textures/bl_scenery_palette.png").read_bytes()
+model_path = ROOT/"mods/luanttd_core/models"
+palette = (ROOT/"mods/luanttd_core/textures/bl_scenery_palette.png").read_bytes()
 assert palette.startswith(b"\x89PNG\r\n\x1a\n")
 assert struct.unpack(">II",palette[16:24]) == (256,8)
 

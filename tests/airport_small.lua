@@ -1,4 +1,4 @@
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local A=dofile(root.."airport_small.lua")
 local Move=dofile(root.."airport_motion.lua")(A)
 local S,B=A.state,A.block

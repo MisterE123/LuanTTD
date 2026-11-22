@@ -3,7 +3,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from road_surface_raster import CORNERS, connector
-tex=Path(__file__).resolve().parents[1]/"mods/bayline/textures"
+tex=Path(__file__).resolve().parents[1]/"mods/luanttd_core/textures"
 flipped=Image.Transpose.FLIP_TOP_BOTTOM
 for mask in range(16):
     with Image.open(tex/"bl_grass0.png") as grass:

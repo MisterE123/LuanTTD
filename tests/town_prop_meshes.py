@@ -8,7 +8,7 @@ NAMES = {"market": (.78,.85), "shop": (1.30,1.44), "green": (.90,1.01)}
 def inspect():
     for key, (height_min, height_max) in NAMES.items():
         assert (ROOT/f"art/town_{key}.blend").stat().st_size>20_000
-        obj = ROOT/f"mods/bayline/models/bl_town_{key}.obj"
+        obj = ROOT/f"mods/luanttd_core/models/bl_town_{key}.obj"
         pos, tex, triangles = [], [], []
         for line in obj.read_text().splitlines():
             if line.startswith("v "):

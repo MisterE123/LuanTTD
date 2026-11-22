@@ -21,7 +21,7 @@ DIGEST.update({
 })
 
 LUA=r"""
-local root="mods/bayline/openttd/"
+local root="mods/luanttd_core/openttd/"
 local T=dofile(root.."rail_track.lua")
 local R=dofile(root.."rail_signals.lua")(T)
 local kinds={[0]="void","rail","signals","crossing","depot","station","waypoint","bridge","tunnel"}

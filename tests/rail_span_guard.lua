@@ -1,5 +1,5 @@
 -- A separate bridge/tunnel layer cannot be deleted or replaced by old tools.
-local root="mods/bayline/"
+local root="mods/luanttd_core/"
 local function m(p) return dofile(root..p..".lua") end
 local S=m("sim")
 local T=m("openttd/terrain")

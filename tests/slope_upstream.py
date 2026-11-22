@@ -64,7 +64,7 @@ int main(){
 }
 """
 lua = r"""
-local T=dofile('mods/bayline/openttd/slope.lua')
+local T=dofile('mods/luanttd_core/openttd/slope.lua')
 local n=0
 for line in io.lines() do
   local parts={}

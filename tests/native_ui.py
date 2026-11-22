@@ -61,7 +61,7 @@ def join(name):
     global server_process, client_process
     trace.unlink(missing_ok=True)
     server_process = start(server, ["--world", str(out / "world"),
-                                   "--config", str(out / "server.conf"), "--gameid", "bayline"], f"server-{name}.log")
+                                   "--config", str(out / "server.conf"), "--gameid", "luanttd"], f"server-{name}.log")
     await_state("server to update the test observer", lambda s: not s["present"])
     client_process = start(client, ["--config", str(out / "client.conf"), "--go", "--address",
                                    "127.0.0.1", "--port", port, "--name", user,
@@ -180,7 +180,7 @@ def slot(n):
     inspect_via_teleport=n==1 and wanted==11
     layout=snapshot.get("hotbar_layout") or list(range(1,11))
     physical = layout.index(wanted) + 1
-    if wanted==9 and snapshot.get("hotbar")==physical and snapshot.get("wield_item")=="bayline:menu_clear":
+    if wanted==9 and snapshot.get("hotbar")==physical and snapshot.get("wield_item")=="luanttd_core:menu_clear":
         # Selecting an already-highlighted inherited slot isn't an
         # engine selection event. Explicitly reselect it for build tests.
         alternate=1 if physical!=1 else 2
@@ -208,10 +208,10 @@ def leave_rail_engineering():
 
 
 def choose_bridge_type(style=0):
-    state_now=await_state("bridge type picker",lambda s:s.get("form")=="bayline:bridge_picker")
+    state_now=await_state("bridge type picker",lambda s:s.get("form")=="luanttd_core:bridge_picker")
     candidates=[f for f in state_now["buttons"] if f.startswith("bridge_") and f.endswith(f"_{style}")]
     assert len(candidates)==1,state_now["buttons"]
-    choose("bayline:bridge_picker",candidates[0],"choose-mode-specific-bridge-type")
+    choose("luanttd_core:bridge_picker",candidates[0],"choose-mode-specific-bridge-type")
 
 
 def rotate_rail_fitting(times):
@@ -276,8 +276,8 @@ def ramp_nodes(s):
     if not ramp_shapes(s):
         return False
     g=s["grade_tiles"]
-    return (g["13"].get("node") == "bayline:road_grade_3"
-            and g["17"].get("node") == "bayline:road_grade_12"
+    return (g["13"].get("node") == "luanttd_core:road_grade_3"
+            and g["17"].get("node") == "luanttd_core:road_grade_12"
             and all(v.get("road") == v["shape"] and v.get("road_base") == v["base"] for v in g.values()))
 
 
@@ -387,7 +387,7 @@ try:
             return await_state(menu,lambda s:s.get("menu")==menu)
         def verify(key,item,shot=None):
             slot(key)
-            record=await_state(item,lambda s:s.get("wield_item")=="bayline:menu_"+item)
+            record=await_state(item,lambda s:s.get("wield_item")=="luanttd_core:menu_"+item)
             if shot:
                 time.sleep(.4);screenshot(shot)
             return record.get("cash")
@@ -437,9 +437,9 @@ try:
                 abs(s["camera"]["pos"]["z"]-(z*2-8))<.1)
         survey_water(15,18)
         proof=await_state("flat and inclined river render through native water nodes",lambda s:
-            (s.get("water_fx") or {}).get("plain","").startswith("bayline:ocean_top_") and
-            s["water_fx"].get("river","").startswith("bayline:stock_river_flat") and
-            s["water_fx"].get("slope","").startswith("bayline:stock_river_3"))["water_fx"]
+            (s.get("water_fx") or {}).get("plain","").startswith("luanttd_core:ocean_top_") and
+            s["water_fx"].get("river","").startswith("luanttd_core:stock_river_flat") and
+            s["water_fx"].get("slope","").startswith("luanttd_core:stock_river_3"))["water_fx"]
         assert proof["waving"]==3 and abs(proof["fog"]["fog_start"]-.65)<.02,proof
         time.sleep(.8)
         screenshot("01-river-animated-with-haze")
@@ -487,7 +487,7 @@ try:
         await_state("Navigation menu",lambda s:s.get("menu")=="navigation")
         slot(5);click()
         opened=await_state("the native overview has nearly every playable cell",lambda s:
-            s.get("form")=="bayline:dispatch" and (s.get("jump_map") or {}).get("count",0)>=3800)
+            s.get("form")=="luanttd_core:dispatch" and (s.get("jump_map") or {}).get("count",0)>=3800)
         # The server's form record precedes the client raster/GUI build.
         time.sleep(.75)
         snap=screenshot("dense-native-jump-map")
@@ -630,7 +630,7 @@ try:
         chat("/qa_existing_crossing");chat("/survey 13 12")
         before=await_state("existing crossing and unconnected west half-road",lambda s:
             (s.get("existing_crossing") or {}).get("road")==8 and
-            (s.get("existing_crossing") or {}).get("mesh")=="bayline:level_crossing_1_open")
+            (s.get("existing_crossing") or {}).get("mesh")=="luanttd_core:level_crossing_1_open")
         assert not before["existing_crossing"].get("connected")
         screenshot("01-crossing-missing-approach")
         slot(2);click()
@@ -656,14 +656,14 @@ try:
         sys.exit(0)
     if os.environ.get("BAYLINE_NATIVE_ELECTRIC_BRIDGE_GUI")=="1":
         assert fresh["electric"]["available"] and fresh["electric"]["year"]==1978
-        assert fresh["starter_map"]["name"]=="Harbor Valley"
-        phase="mouse-build the true timber bridge across the Harbor Valley channel"
+        assert fresh["starter_map"]["name"]=="coastal test circuit"
+        phase="mouse-build the true timber bridge across the coastal test circuit channel"
         chat("/survey 24 15")
         def rail_at(x): native_aim(x,15,1.5);click()
         slot(8);click()
         await_state("Railworks",lambda s:s.get("menu")=="railworks")
         slot(10);rail_at(21);rail_at(27)
-        if state().get("form")=="bayline:bridge_picker":
+        if state().get("form")=="luanttd_core:bridge_picker":
             choose_bridge_type()
         plain=await_state("seven real wooden bridge cells",lambda s:
             (s["electric"].get("bridges") or {}).get("21,15",{}).get("length")==7)
@@ -703,11 +703,11 @@ try:
             len(s.get("track_nodes") or {})==15 and
             all(v.get("railtype")==1 for v in s["track_nodes"].values()))
         native_aim(24,15,3.4,framing=True)
-        screenshot("01-native-wired-Harbor-Valley-bridge")
+        screenshot("01-native-wired-Coastal-Circuit-bridge")
         phase="buy the stock SH 40 and drive the actual route through the span"
         slot(1);rail_at(15)
-        choose("bayline:rail_fleet","purchase_sh_40","02-buy-the-bridge-electric")
-        choose("bayline:rail_fleet","unit_1","03-order-the-bridge-electric")
+        choose("luanttd_core:rail_fleet","purchase_sh_40","02-buy-the-bridge-electric")
+        choose("luanttd_core:rail_fleet","unit_1","03-order-the-bridge-electric")
         rail_at(35);rail_at(18);slot(8);click()
         native_aim(24,15,3.4,framing=True)
         def over(s):
@@ -715,7 +715,7 @@ try:
             c=rail.get("collector") or {}
             return rail.get("sprung") and 42.2<c.get("x",0)<54.8 and abs(c.get("z",0)-30.5)<1
         on=await_state("visible native roof collector on either ramp or across the deck",over,90)
-        screenshot("04-native-collector-over-Harbor-Valley")
+        screenshot("04-native-collector-over-Coastal-Circuit")
         assert on["electric"]["traction"] and "bl_rail_sh_collector.obj" in on["electric"]["meshes"]
         stop_server(client_first=True)
         after=join("bridge-electric-restored")
@@ -729,12 +729,12 @@ try:
         print(f"PASS: normal GUI wooden bridge construction, conversion from either end, sprung SH40 across the channel and SQLite: {out}")
         sys.exit(0)
     if os.environ.get("BAYLINE_NATIVE_ELECTRIC_GUI")=="1":
-        phase="build an owned flat railway in the default Harbor Valley start"
+        phase="build an owned flat railway in the default coastal test circuit start"
         market_year=int(os.environ.get("BAYLINE_NATIVE_ELECTRIC_YEAR","1970"))
         newer=os.environ.get("BAYLINE_NATIVE_SH_40_GUI")=="1"
         electric_engine,electric_model=(24,"sh_40") if newer else (23,"sh_30")
         assert fresh["electric"]["available"] and fresh["electric"]["year"]==market_year
-        assert fresh["starter_map"]["name"]=="Harbor Valley"
+        assert fresh["starter_map"]["name"]=="coastal test circuit"
         slot(8);click()
         await_state("native Railworks",lambda s:s.get("menu")=="railworks")
         chat("/survey 33 14")
@@ -760,12 +760,12 @@ try:
         slot(2);rail_at(28);rail_at(37)
         wired=await_state("ten electrically typed pieces with original wire over two platforms",lambda s:
             sum(v.get("railtype")==1 for v in (s.get("track_nodes") or {}).values())==10 and
-            (s.get("track_nodes") or {}).get("31,14",{}).get("wire")=="bayline:rail_catenary_1_0")
+            (s.get("track_nodes") or {}).get("31,14",{}).get("wire")=="luanttd_core:rail_catenary_1_0")
         screenshot("01-native-electrified-corridor")
         phase=f"buy and dispatch the actual {electric_model} from the electrified depot"
         slot(1);rail_at(28)
-        choose("bayline:rail_fleet",f"purchase_{electric_model}","02-buy-the-electric")
-        choose("bayline:rail_fleet","unit_1","03-order-the-electric")
+        choose("luanttd_core:rail_fleet",f"purchase_{electric_model}","02-buy-the-electric")
+        choose("luanttd_core:rail_fleet","unit_1","03-order-the-electric")
         rail_at(36);rail_at(31);slot(8);click()
         rolling=await_state(f"native {electric_model} and coach running on powered rails",lambda s:
             (s.get("electric") or {}).get("steps",0)>24 and
@@ -823,8 +823,8 @@ try:
         phase="survey an actual TerraGenesis river"
         chat("/survey 25 20")
         flow=await_state("native mapgen river and slope meshes exposed",lambda s:
-            (s.get("generated") or {}).get("river",{}).get("middle","").startswith("bayline:stock_river_3") and
-            s["generated"]["river"].get("flat","").startswith("bayline:stock_river_flat"))["generated"]["river"]
+            (s.get("generated") or {}).get("river",{}).get("middle","").startswith("luanttd_core:stock_river_3") and
+            s["generated"]["river"].get("flat","").startswith("luanttd_core:stock_river_flat"))["generated"]["river"]
         assert flow["stats"]["rivers"]==2 and flow["stats"]["terraform_committed"]==2 and flow["cursor"]==2899
         assert flow["typed"]=="river" and not flow.get("lock")
         time.sleep(.6);screenshot("01-stock-terragenesis-native-river")
@@ -839,7 +839,7 @@ try:
         native_aim(25,20,2.0);click()
         made=await_state("a paid three-tile lock replaces only the incline mesh",lambda s:
             (s["generated"]["river"].get("lock") or {}).get("tiles")==3 and
-            s["generated"]["river"].get("middle","").startswith("bayline:ship_lock_middle_"))
+            s["generated"]["river"].get("middle","").startswith("luanttd_core:ship_lock_middle_"))
         assert made["cash"]==fresh["cash"]-17500
         assert made["generated"]["river"]["typed"]=="river"
         slot(1);time.sleep(.35)
@@ -949,14 +949,14 @@ try:
             await_state("actual generated route depot",lambda s:tile(s,depot)=="road_depot")
             phase="purchase, order, and earn real freight income on the generated world"
             slot(1);field(depot)
-            choose("bayline:service","depot_buy_wood" if mixed else "depot_buy_coal",f"Buy the {cargo} truck")
+            choose("luanttd_core:service","depot_buy_wood" if mixed else "depot_buy_coal",f"Buy the {cargo} truck")
             await_state("stock freight truck in the player fleet",
                 lambda s:s.get("engine")==("wood_truck" if mixed else "coal_tipper"))
-            choose("bayline:service","service_pick","Add stops")
+            choose("luanttd_core:service","service_pick","Add stops")
             field(load);field(unload);click(3)
             await_state("two orders for generated freight",lambda s:len(s.get("orders") or [])==2)
-            choose("bayline:service","service_cycle_load","First stop: full load")
-            choose("bayline:service","service_toggle",f"Start the loaded {cargo} truck")
+            choose("luanttd_core:service","service_cycle_load","First stop: full load")
+            choose("luanttd_core:service","service_toggle",f"Start the loaded {cargo} truck")
             delivery=await_state("cash and receipts for 20 tons at the generated stock industry",lambda s:
                 s["generated"][cargo+"_received"]>=20 and s.get("revenue",0)>0,110)
             chat(f"/survey {unload[0]} {unload[1]}")
@@ -988,7 +988,7 @@ try:
         sys.exit(0)
     if os.environ.get("BAYLINE_NATIVE_ROAD_BEND")=="1":
         phase="hold the actual AutoRoad tool across both axes"
-        assert fresh["starter_map"]["name"]=="Harbor Valley"
+        assert fresh["starter_map"]["name"]=="coastal test circuit"
         slot(2);click();await_state("Roadworks",lambda s:s.get("menu")=="roads")
         fixture=await_state("the dry, level test plaza",lambda s:s.get("road_bend",{}).get("link")==0)
         a,b=([int(v) for v in fixture["road_bend"][k]] for k in ["a","b"])
@@ -1008,7 +1008,7 @@ try:
         screenshot("01-priced-bend-before-release")
         xdo("mouseup",1)
         built=await_state("both approaches meet through the real rendered elbow",lambda s:
-            s["road_bend"]["link"]==7 and s["road_bend"]["elbow"].startswith("bayline:road_12_"))
+            s["road_bend"]["link"]==7 and s["road_bend"]["elbow"].startswith("luanttd_core:road_12_"))
         xdo("keyup","e");time.sleep(1.2)
         assert built["road_bend"]["masks"][4]==12 and built["road_bend"]["stock"]==0
         assert before["cash"]-built["cash"]==876 and not built["road_bend"]["anchor"]
@@ -1016,7 +1016,7 @@ try:
         phase="direct tile teleport from the compact Roadworks tools"
         slot(11)
         await_state("the shared teleport tool is selected",lambda s:
-            s["wield_item"]=="bayline:menu_teleport_tile")
+            s["wield_item"]=="luanttd_core:menu_teleport_tile")
         native_aim(*b,1.5)
         angle=state()["camera"]
         click()
@@ -1043,7 +1043,7 @@ try:
         sys.exit(0)
     if os.environ.get("BAYLINE_NATIVE_AUTORAIL")=="1":
         phase="open Railworks directly and preview the original six-piece selection"
-        assert (fresh["starter_map"] or {}).get("name")=="Harbor Valley"
+        assert (fresh["starter_map"] or {}).get("name")=="coastal test circuit"
         slot(8);click()
         await_state("direct Railworks",lambda s:s.get("menu")=="railworks")
         chat("/survey 32 16");time.sleep(.75)
@@ -1110,28 +1110,28 @@ try:
         stop_server()
         print(f"PASS: direct AutoRail, genuine 3D snapped ghost, clean cancel, stock diagonal and straight construction, manual pieces and Back: {out}")
         sys.exit(0)
-    if os.environ.get("BAYLINE_NATIVE_HARBOR_VALLEY")=="1":
-        phase="start the explicit Harbor Valley scenario with no feature overrides"
+    if os.environ.get("BAYLINE_NATIVE_COASTAL_CIRCUIT")=="1":
+        phase="start the explicit coastal test circuit scenario with no feature overrides"
         cfg=(out/"server.conf").read_text()
         overrides=[line for line in cfg.splitlines() if line.startswith("bayline_") and
-                   not line.startswith("bayline_seconds_per_day =") and line!="bayline_fixture_harbor_valley = true"]
+                   not line.startswith("bayline_seconds_per_day =") and line!="luanttd_qa_coastal_layout = true"]
         assert overrides==[], overrides
-        profile=await_state("Harbor Valley map with every compatible workbench available",lambda s:
-            (s.get("starter_map") or {}).get("name")=="Harbor Valley" and
+        profile=await_state("coastal test circuit map with every compatible workbench available",lambda s:
+            (s.get("starter_map") or {}).get("name")=="coastal test circuit" and
             all((s.get("stock_workbenches") or {}).get(k) for k in
                 ("bridges","rail","rail_owned","rail_spans","crossings","rail_coal","ship","air","tram","freight",
                  "oneway","bays","mail","paid_air","paid_ship","paid_rail")) and
             len((s["stock_workbenches"].get("ordinary") or {}))==9 and
             all(s["stock_workbenches"]["ordinary"].values()))
         assert profile["starter_map"]["peak"]>=5 and profile["starter_map"]["shore"]>=60
-        screenshot("00-harbor-valley-new-campaign")
+        screenshot("00-coastal-circuit-new-campaign")
         phase="use the native workbenches index, not a config file, to examine the available systems"
         slot(6);click()
         await_state("Controls hotbar",lambda s:s.get("menu")=="options")
         slot(2);click()
-        choose("bayline:workbenches","wb_tab_scenarios","01-workbenches-and-scenarios")
+        choose("luanttd_core:workbenches","wb_tab_scenarios","01-workbenches-and-scenarios")
         screenshot("02-native-world-scenarios")
-        choose("bayline:workbenches","wb_back","03-return-from-scenarios")
+        choose("luanttd_core:workbenches","wb_back","03-return-from-scenarios")
         slot(8);click()
         await_state("Home with a direct Railworks entry",lambda s:s.get("menu")=="home")
         phase="build the actual paid timber bridge from the Road Construction toolbar"
@@ -1139,11 +1139,11 @@ try:
         await_state("Road Construction mounted automatically",lambda s:s.get("menu")=="roads")
         chat("/survey 24 13");time.sleep(.75)
         slot(10)
-        if state()["wield_item"]=="bayline:menu_road_bridge_picker":
+        if state()["wield_item"]=="luanttd_core:menu_road_bridge_picker":
             cash=state()["cash"]
             aim(21,13);click();aim(27,13);click()
             await_state("span selected before style, with no purchase",
-                        lambda s:s.get("form")=="bayline:bridge_picker" and cash-s["cash"]<2447
+                        lambda s:s.get("form")=="luanttd_core:bridge_picker" and cash-s["cash"]<2447
                         and not s["starter"].get("bridge"))
             choose_bridge_type()
         else:
@@ -1162,7 +1162,7 @@ try:
         slot(8);click()
         await_state("Rail Construction mounted automatically",lambda s:s.get("menu")=="railworks")
         slot(9)
-        assert state()["wield_item"]=="bayline:menu_clear"
+        assert state()["wield_item"]=="luanttd_core:menu_clear"
         aim(21,13);click()
         await_state("paired bridge removal cleared the bridge and only its heads",
                     lambda s:not (s.get("starter") or {}).get("bridge"))
@@ -1174,15 +1174,15 @@ try:
             (s.get("track_nodes") or {}).get("28,14",{}).get("depot") is not None)
         slot(1);aim(28,14);click()
         await_state("sawmill-coach Goods Van offer on the real default depot panel",lambda s:
-            s.get("form")=="bayline:rail_fleet" and "purchase_goods" in (s.get("buttons") or {}))
-        choose("bayline:rail_fleet","purchase","05-buy-an-original-kirby-from-new-map")
+            s.get("form")=="luanttd_core:rail_fleet" and "purchase_goods" in (s.get("buttons") or {}))
+        choose("luanttd_core:rail_fleet","purchase","05-buy-an-original-kirby-from-new-map")
         bought=await_state("stock Kirby and passenger carriage persisted",lambda s:bool((s["starter"] or {}).get("units")))
         assert bought["starter"]["units"][0]["stock_ids"]==[0,27] and bought["starter"]["units"][0]["price"]==12866
-        (out/"harbor-valley-native.json").write_text(json.dumps(dict(
+        (out/"coastal-circuit-native.json").write_text(json.dumps(dict(
             defaults=profile["stock_workbenches"],map=profile["starter_map"],
             bridge=bridge_state["starter"]["bridge"],purchased=bought["starter"]["units"][0]),indent=2))
         stop_server()
-        print(f"PASS: default Harbor Valley, in-game scenario index, paid timber bridge and stock train purchase, zero configuration overrides: {out}")
+        print(f"PASS: default coastal test circuit, in-game scenario index, paid timber bridge and stock train purchase, zero configuration overrides: {out}")
         sys.exit(0)
     if os.environ.get("BAYLINE_NATIVE_COAST")=="1":
         phase="dig a real dry inland trench with the native stock Lower area tool"
@@ -1264,20 +1264,20 @@ try:
         await_state("depot",lambda s:tile(s,D)=="road_depot")
         for i in range(1,4):
             slot(1);aim(*D);click()
-            choose("bayline:service","depot_buy",f"buy-bay-bus-{i}")
+            choose("luanttd_core:service","depot_buy",f"buy-bay-bus-{i}")
             if os.environ.get("BAYLINE_NATIVE_ORDER_MODAL")=="1":
                 from bus_order_modal_native import exercise
                 exercise(globals(),A,B,D)
                 sys.exit(0)
-            choose("bayline:service","service_pick",f"two-bay-orders-{i}")
+            choose("luanttd_core:service","service_pick",f"two-bay-orders-{i}")
             await_state("world selects orders",lambda s:not s.get("form"))
             for target in (A,B):
                 aim(*target);click()
             click(3)
-            choose("bayline:service","service_cycle_load",f"full-load-bay-bus-{i}")
+            choose("luanttd_core:service","service_cycle_load",f"full-load-bay-bus-{i}")
             await_state("stock full-load order edited",lambda s:
                 s["bus_bay"]["fleet"].get(str(i),{}).get("first_order")=="full")
-            choose("bayline:service","service_back",f"leave-bay-bus-{i}")
+            choose("luanttd_core:service","service_back",f"leave-bay-bus-{i}")
             await_state("back to depot",lambda s:not s.get("form"))
         slot(8);click()
         await_state("home from roadworks",lambda s:s.get("menu")=="home")
@@ -1285,8 +1285,8 @@ try:
         await_state("Fleet",lambda s:s.get("menu")=="fleet")
         for i in range(1,4):
             slot(3);click()
-            choose("bayline:service",f"vehicle_{i}",f"fleet-bay-bus-{i}")
-            choose("bayline:service","service_toggle",f"start-bay-bus-{i}")
+            choose("luanttd_core:service",f"vehicle_{i}",f"fleet-bay-bus-{i}")
+            choose("luanttd_core:service","service_toggle",f"start-bay-bus-{i}")
             await_state("vehicle running",lambda s:not s.get("form"))
         def both_parked(s):
             bay=s["bus_bay"];f=bay["fleet"];a=bay.get("status") or {}
@@ -1300,7 +1300,7 @@ try:
         before=await_state("both stock models parked",both_parked,45)["bus_bay"]
         m,n=before["meshes"]
         assert abs(math.dist((m["x"],m["z"]),(n["x"],n["z"]))-.5)<.018,before
-        assert before["node"]=="bayline:road_bus_bay_pair_2",before
+        assert before["node"]=="luanttd_core:road_bus_bay_pair_2",before
         assert before["fleet"]["3"]["position"]!=before["id"],before
         chat("/qa_bay_photo");time.sleep(.5)
         screenshot("01f-mouse-built-stock-bay-pair")
@@ -1333,16 +1333,16 @@ try:
         await_state("Roadworks",lambda s:s.get("menu")=="roads")
         for index,(depot,origin) in enumerate((((9,13),(8,12)),((16,16),(15,20))),1):
             slot(1);aim(*depot);click()
-            choose("bayline:service","depot_buy",f"buy-merge-bus-{index}")
-            choose("bayline:service","service_pick",f"order-merge-bus-{index}")
+            choose("luanttd_core:service","depot_buy",f"buy-merge-bus-{index}")
+            choose("luanttd_core:service","service_pick",f"order-merge-bus-{index}")
             aim(23,12);click();aim(*origin);click();click(3)
-            choose("bayline:service","service_back",f"return-merge-bus-{index}")
+            choose("luanttd_core:service","service_back",f"return-merge-bus-{index}")
         slot(8);click();slot(3);click()
         await_state("Fleet",lambda s:s.get("menu")=="fleet")
         for index in (1,2):
             slot(3);click()
-            choose("bayline:service",f"vehicle_{index}",f"choose-merge-bus-{index}")
-            choose("bayline:service","service_toggle",f"dispatch-merge-bus-{index}")
+            choose("luanttd_core:service",f"vehicle_{index}",f"choose-merge-bus-{index}")
+            choose("luanttd_core:service","service_toggle",f"dispatch-merge-bus-{index}")
             await_state("back in the world",lambda s:not s.get("form"))
             if index==1:
                 chat("/qa_junction one")
@@ -1431,10 +1431,10 @@ try:
         chat("/qa_oil wells")
         start_oil=await_state("native oil wells and refinery, with stock footprint hole",lambda s:
             s.get("oil") and s["oil"].get("framed")=="wells"
-            and s["oil"]["stores"].get("wells")=="bayline:industry_oil_well_0_0"
-            and s["oil"]["stores"].get("refinery")=="bayline:industry_oil_refinery_0_0"
-            and s["oil"]["stores"].get("refinery_gate")=="bayline:industry_oil_refinery_1_0"
-            and not (s["oil"]["stores"].get("refinery_hole") or "").startswith("bayline:industry"),45)["oil"]
+            and s["oil"]["stores"].get("wells")=="luanttd_core:industry_oil_well_0_0"
+            and s["oil"]["stores"].get("refinery")=="luanttd_core:industry_oil_refinery_0_0"
+            and s["oil"]["stores"].get("refinery_gate")=="luanttd_core:industry_oil_refinery_1_0"
+            and not (s["oil"]["stores"].get("refinery_hole") or "").startswith("luanttd_core:industry"),45)["oil"]
         time.sleep(.68);screenshot("00pe-native-oil-wells-survey")
         phase="mouse-build the real oil and finished Goods route"
         chat("/survey 14 9");time.sleep(.45)
@@ -1462,12 +1462,12 @@ try:
         trucks=(("oil_tanker","depot_buy_oil",F,R),("goods_truck","depot_buy_goods",R,T))
         for engine,offer,a,b in trucks:
             slot(1);aim(*D);click()
-            choose("bayline:service",offer,"native-buy-"+engine)
-            choose("bayline:service","service_pick","native-orders-"+engine)
+            choose("luanttd_core:service",offer,"native-buy-"+engine)
+            choose("luanttd_core:service","service_pick","native-orders-"+engine)
             for p in (a,b): aim(*p);click()
             click(3)
             await_state("actual orders for "+engine,lambda s:s["oil"]["working"][engine]["orders"]==2)
-            choose("bayline:service","service_back","oil-depot-return-"+engine)
+            choose("luanttd_core:service","service_back","oil-depot-return-"+engine)
             await_state("world restored",lambda s:not s.get("form"))
             time.sleep(.60)
         slot(8);click();await_state("Road Construction",lambda s:s.get("menu")=="roads")
@@ -1475,8 +1475,8 @@ try:
         slot(3);click();await_state("Fleet operations",lambda s:s.get("menu")=="fleet")
         for n,(engine,*_) in enumerate(trucks,1):
             slot(3);click()
-            choose("bayline:service","vehicle_"+str(n),"oil-fleet-"+str(n))
-            choose("bayline:service","service_toggle","oil-dispatch-"+str(n))
+            choose("luanttd_core:service","vehicle_"+str(n),"oil-fleet-"+str(n))
+            choose("luanttd_core:service","service_toggle","oil-dispatch-"+str(n))
             await_state("vehicle is dispatched and menu closed",lambda s:
               not s.get("form") and s["oil"]["working"][engine]["active"])
             time.sleep(.60)
@@ -1514,8 +1514,8 @@ try:
         chat("/qa_farm farm")
         first=await_state("stock farm, stock factory and actual planted fields render",lambda s:
             (s.get("farm") or {}).get("fields",0)>=100 and s["farm"]["fences"]>0 and
-            s["farm"]["mesh"].get("farm")=="bayline:industry_farm_0_0" and
-            s["farm"]["mesh"].get("factory")=="bayline:industry_factory_0_0" and
+            s["farm"]["mesh"].get("farm")=="luanttd_core:industry_farm_0_0" and
+            s["farm"]["mesh"].get("factory")=="luanttd_core:industry_factory_0_0" and
             s["farm"].get("framed")=="farm",45)["farm"]
         time.sleep(.65)
         screenshot("00ad-native-highfield-farm-survey")
@@ -1553,17 +1553,17 @@ try:
         ]
         for engine,button,a,b in roster:
             slot(1);aim(*D);click()
-            choose("bayline:service",button,"buy-"+engine+"-native")
-            choose("bayline:service","service_pick","first-order-"+engine)
+            choose("luanttd_core:service",button,"buy-"+engine+"-native")
+            choose("luanttd_core:service","service_pick","first-order-"+engine)
             for p in (a,b):
                 aim(*p);click()
             click(3)
             await_state("both actual stop picks committed",lambda s:
                 s["farm"]["vehicles"][engine]["orders"]==2)
             if engine!="goods_truck":
-                choose("bayline:service","service_back","return-"+engine)
+                choose("luanttd_core:service","service_back","return-"+engine)
             else:
-                choose("bayline:service","service_back","return-farm-goods")
+                choose("luanttd_core:service","service_back","return-farm-goods")
         for _ in range(3):
             if state().get("menu")=="home": break
             before_menu=state().get("menu")
@@ -1572,8 +1572,8 @@ try:
         slot(3);click();await_state("fleet operations",lambda s:s.get("menu")=="fleet")
         for idx in range(1,4):
             slot(3);click()
-            choose("bayline:service",f"vehicle_{idx}",f"farm-select-vehicle-{idx}")
-            choose("bayline:service","service_toggle",f"farm-start-vehicle-{idx}")
+            choose("luanttd_core:service",f"vehicle_{idx}",f"farm-select-vehicle-{idx}")
+            choose("luanttd_core:service","service_toggle",f"farm-start-vehicle-{idx}")
             engine=roster[idx-1][0]
             await_state("dispatch complete and world input restored", lambda s:
                 not s.get("form") and s["farm"]["vehicles"][engine]["active"])
@@ -1622,8 +1622,8 @@ try:
         forest,wood_in,goods_out,town,depot=(16,2),(15,17),(12,15),(14,8),(11,12)
         base=await_state("stock industry meshes on the persistent map",lambda s:
             s["timber"]["enabled"] and
-            s["timber"]["ind"].get("forest",{}).get("mesh")=="bayline:forest_0_0_0" and
-            s["timber"]["ind"].get("sawmill",{}).get("mesh")=="bayline:sawmill_0_0_0")
+            s["timber"]["ind"].get("forest",{}).get("mesh")=="luanttd_core:forest_0_0_0" and
+            s["timber"]["ind"].get("sawmill",{}).get("mesh")=="luanttd_core:sawmill_0_0_0")
         assert base["timber"]["ind"]["forest"]["n"]==18 and base["timber"]["ind"]["sawmill"]["n"]==8
         slot(2);click();slot(5);click()
         await_state("Freight Roadworks",lambda s:s.get("menu")=="freight")
@@ -1655,14 +1655,14 @@ try:
             ("goods_truck","depot_buy_goods",(goods_out,town)),
         ):
             slot(1);aim(*depot);click()
-            choose("bayline:service",control,engine+"-purchase")
-            choose("bayline:service","service_pick",engine+"-pick")
+            choose("luanttd_core:service",control,engine+"-purchase")
+            choose("luanttd_core:service","service_pick",engine+"-pick")
             for pos in order: aim(*pos);click()
             click(3)
-            choose("bayline:service","service_cycle_load",engine+"-full")
+            choose("luanttd_core:service","service_cycle_load",engine+"-full")
             await_state("real full-load order",lambda s:
                 s["timber"]["vehicles"][engine]["orders"]==2 and s["timber"]["vehicles"][engine]["order"]=="full")
-            choose("bayline:service","service_toggle",engine+"-dispatch")
+            choose("luanttd_core:service","service_toggle",engine+"-dispatch")
         chat("/qa_timber go")
         phase="loaded logging model visibly changes at ten tons and survives SQLite reload"
         first=await_state("actual original truck's loaded OBJ",lambda s:s["timber"].get("loaded"),105)["timber"]
@@ -1679,7 +1679,7 @@ try:
             s["timber"]["vehicles"]["goods_truck"]["delivered"]>=28,150)["timber"]
         assert final["ind"]["sawmill"]["received"]>=40
         assert all(v["revenue"]>0 and v["expense"]>0 for v in final["vehicles"].values())
-        assert final["mesh"]["bayline:vehicle_goods_truck"]["obj"]=="bl_balogh_goods_truck.obj"
+        assert final["mesh"]["luanttd_core:vehicle_goods_truck"]["obj"]=="bl_balogh_goods_truck.obj"
         chat("/qa_timber sawmill");time.sleep(.55);screenshot("02t-tidewater-sawmill-and-two-road-approaches")
         (out/"timber-desktop-native.json").write_text(json.dumps({"loaded":first,"reload":resume,"after":final},indent=2))
         stop_server()
@@ -1694,9 +1694,9 @@ try:
         await_state("Railworks",lambda s:s.get("menu")=="railworks")
         for i,dep in enumerate(((2,14),(8,9)),1):
             slot(1);aim(*dep);click()
-            choose("bayline:rail_fleet","purchase_a4" if i==2 and mixed else "purchase",f"buy-paired-engine-{i}")
+            choose("luanttd_core:rail_fleet","purchase_a4" if i==2 and mixed else "purchase",f"buy-paired-engine-{i}")
             await_state(f"owned train {i}",lambda s:f"unit_{i}" in (s.get("buttons") or {}))
-            choose("bayline:rail_fleet","back",f"close-rail-depot-{i}")
+            choose("luanttd_core:rail_fleet","back",f"close-rail-depot-{i}")
         slot(7);click()
         await_state("Rail Operations",lambda s:s.get("menu")=="railops")
         slot(6);click()
@@ -1716,13 +1716,13 @@ try:
         slot(8);click()
         await_state("Railworks",lambda s:s.get("menu")=="railworks")
         slot(1);aim(8,9);click()
-        choose("bayline:rail_fleet","unit_2","01ra-hold-the-second-purchased-train")
-        choose("bayline:rail_fleet","back","01ra-leave-the-held-train-depot")
+        choose("luanttd_core:rail_fleet","unit_2","01ra-hold-the-second-purchased-train")
+        choose("luanttd_core:rail_fleet","back","01ra-leave-the-held-train-depot")
         chat("/qa_pair one")
         await_state("one ordinary shared economy day advanced",lambda s:s["rail_pair"].get("manual_day"))
         aim(8,9);click()
-        choose("bayline:rail_fleet","unit_2","01rb-resume-the-second-purchased-train")
-        choose("bayline:rail_fleet","back","01rc-return-to-railway")
+        choose("luanttd_core:rail_fleet","unit_2","01rb-resume-the-second-purchased-train")
+        choose("luanttd_core:rail_fleet","back","01rc-return-to-railway")
         chat("/qa_pair go")
         phase="two original stock coaches visible; the second waits while only the first wagon holds the merge"
         def held(s):
@@ -1773,10 +1773,10 @@ try:
         phase="pay for Kirby and tanker, then pick both physical platforms"
         chat("/qa_railoil layout")
         slot(1);aim(14,5);click()
-        choose("bayline:rail_fleet","purchase_oil","03-buy-kirby-and-oil-tanker")
+        choose("luanttd_core:rail_fleet","purchase_oil","03-buy-kirby-and-oil-tanker")
         buy=await_state("the purchased Oil Tanker is not a substitute",lambda s:
             ((s.get("rail_oil") or {}).get("unit") or {}).get("stock_ids")==[0,30])
-        choose("bayline:rail_fleet","unit_1","04-order-oil-train")
+        choose("luanttd_core:rail_fleet","unit_1","04-order-oil-train")
         aim(11,5);click()
         await_state("the first picked platform sets the refinery order prompt",lambda s:
             "Refinery unloading platform" in (s["rail_oil"].get("toast") or ""))
@@ -1787,7 +1787,7 @@ try:
         chat("/qa_railoil go")
         first=await_state("a physically rendered stock tanker loads actual oil",lambda s:
             (s.get("rail_oil") or {}).get("partial"),100)["rail_oil"]
-        assert first["partial"]["kind"]=="bayline:dispatch_oil_tanker"
+        assert first["partial"]["kind"]=="luanttd_core:dispatch_oil_tanker"
         assert 0<first["partial"]["oil"]<30 and first["oil"]==0
         chat("/qa_railoil photo");time.sleep(.8);screenshot("05-real-oil-tanker-loading")
         phase="restore loading and physically deliver to the refinery and town"
@@ -1831,23 +1831,23 @@ try:
         slot(2);aim(30,15);click()
         slot(3);aim(41,15);click()
         stages=await_state("loader and receiver assets are different real native meshes",lambda s:
-            (s["rail_coal"].get("stages") or {}).get("load",{}).get("model")=="bayline:rail_coal_stage_load_0_mirror" and
-            s["rail_coal"]["stages"].get("unload",{}).get("model")=="bayline:rail_coal_stage_unload_0_mirror")
+            (s["rail_coal"].get("stages") or {}).get("load",{}).get("model")=="luanttd_core:rail_coal_stage_load_0_mirror" and
+            s["rail_coal"]["stages"].get("unload",{}).get("model")=="luanttd_core:rail_coal_stage_unload_0_mirror")
         initial=stages["cash"]
         slot(1);aim(44,15);click()
         await_state("the owner can buy the actual coal wagon from the depot",lambda s:
-            s.get("form")=="bayline:rail_fleet" and "purchase_coal" in (s.get("buttons") or {}))
-        choose("bayline:rail_fleet","purchase_coal","00q-real-coal-train-purchase")
+            s.get("form")=="luanttd_core:rail_fleet" and "purchase_coal" in (s.get("buttons") or {}))
+        choose("luanttd_core:rail_fleet","purchase_coal","00q-real-coal-train-purchase")
         buy=await_state("stock #0 locomotive and stock #29 coal wagon bought together",lambda s:
             (s["rail_coal"].get("unit") or {}).get("stock_ids")==[0,29] and "unit_1" in (s.get("buttons") or {}))
         assert buy["rail_coal"]["unit"]["price"]==12312 and buy["cash"]==initial-12312
-        choose("bayline:rail_fleet","unit_1","Set rail-coal orders")
+        choose("luanttd_core:rail_fleet","unit_1","Set rail-coal orders")
         aim(30,15);click();aim(41,15);click();slot(8);click()
         await_state("ordered true owned coal on exact designated stages and no passenger alias",lambda s:
             (s["rail_coal"].get("coal") or {}).get("phase")=="depot" and not s.get("form"))
         chat("/qa_railcoal go")
         first=await_state("real model fills with stock coal and saves in the native scene",lambda s:
-            s["rail_coal"].get("loaded") and s["rail_coal"].get("wagon_mesh")=="bayline:dispatch_coal_loaded",85)["rail_coal"]
+            s["rail_coal"].get("loaded") and s["rail_coal"].get("wagon_mesh")=="luanttd_core:dispatch_coal_loaded",85)["rail_coal"]
         assert first["loaded"]["units"]>0 and abs(first["loaded"]["wagon"]["y"]-.614)<.025
         chat("/qa_railcoal photo");time.sleep(.8);screenshot("01q-coal-wagon-filled-in-native-game")
         phase="restore the same real coal wagon, reverse and deliver at the power plant"
@@ -1868,12 +1868,12 @@ try:
             slot(8);click()
         await_state("Railworks visible on reconnect",lambda s:s.get("menu")=="railworks")
         slot(1);aim(44,15);click()
-        choose("bayline:rail_fleet","park_coal","01qb-park-coal-after-second-delivery")
+        choose("luanttd_core:rail_fleet","park_coal","01qb-park-coal-after-second-delivery")
         await_state("park option now saved",lambda s:s["rail_coal"]["coal"].get("parking"))
-        choose("bayline:rail_fleet","back","01qc-return-to-coal-world")
+        choose("luanttd_core:rail_fleet","back","01qc-return-to-coal-world")
         chat("/qa_railcoal resume")
         end=await_state("rail coal pays for exactly what the actual power plant received",lambda s:
-            (s["rail_coal"].get("coal") or {}).get("finished") and s["rail_coal"].get("wagon_mesh")=="bayline:dispatch_coal_empty",105)["rail_coal"]
+            (s["rail_coal"].get("coal") or {}).get("finished") and s["rail_coal"].get("wagon_mesh")=="luanttd_core:dispatch_coal_empty",105)["rail_coal"]
         assert end["coal"]["cycles"]==2 and end["coal"]["delivered"]==60==end["received"]
         assert end["coal"]["fare"]>again["coal"]["fare"]>0 and end["coal"]["running_expense"]>0
         assert end["coal"]["tick"]==end["house_tick"]
@@ -1938,7 +1938,7 @@ try:
             click()
             def painted(s):
                 q=(s.get("owned_rail") or {}).get("waypoint") or {}
-                return q.get("node")=="bayline:rail_waypoint_0" and q.get("track")==1 and q.get("id")
+                return q.get("node")=="luanttd_core:rail_waypoint_0" and q.get("track")==1 and q.get("id")
             made=await_state("real waypoint node, two-sided model, and unchanged underlying track",painted)
             assert made["cash"]==before_wp-600
             time.sleep(.8);screenshot("01-rail-waypoint-built")
@@ -1953,13 +1953,13 @@ try:
         initial=state()["cash"]
         slot(1);aim(2,rail_z);click()
         await_state("actual depot offers a priced train",lambda s:
-            s.get("form")=="bayline:rail_fleet" and buy_button in (s.get("buttons") or {}))
-        choose("bayline:rail_fleet",buy_button,"00p-purchased-stock-train")
+            s.get("form")=="luanttd_core:rail_fleet" and buy_button in (s.get("buttons") or {}))
+        choose("luanttd_core:rail_fleet",buy_button,"00p-purchased-stock-train")
         bought=await_state("owned stock train and coach persist with exact price",
             lambda s:(s.get("owned_rail") or {}).get("count")==1 and "unit_1" in (s.get("buttons") or {}))
         record=bought["owned_rail"]["unit"]
         assert record["stock_ids"]==[stock,27] and record["price"]==price and bought["cash"]==initial-price
-        choose("bayline:rail_fleet","unit_1","Start owned steam orders")
+        choose("luanttd_core:rail_fleet","unit_1","Start owned steam orders")
         await_state("pick real platforms from the 3D world",lambda s:not s.get("form"))
         aim(east,rail_z);click()
         if waypoint:
@@ -2017,8 +2017,8 @@ try:
         open_direction();mark()
         east=await_state("real sign pair, arrows and east-only source route",lambda s:
             s["oneway"].get("dir")==2 and s["oneway"]["route_east"] and not s["oneway"]["route_west"] and
-            s["oneway"].get("surface")=="bayline:oneway_paint_2_g0")["oneway"]
-        assert east["entry"]=="bayline:oneway_2_g0"
+            s["oneway"].get("surface")=="luanttd_core:oneway_paint_2_g0")["oneway"]
+        assert east["entry"]=="luanttd_core:oneway_2_g0"
         chat("/qa_oneway street");time.sleep(.7);screenshot("01o-oneway-signed-road")
         chat("/qa_oneway overview");mark()
         await_state("same drag removes the sign and restores both directions",lambda s:
@@ -2088,22 +2088,22 @@ try:
         freight=await_state("two loading stops with a real mine and power-station catchment",
            lambda s:len((s.get("coal_view") or {}).get("stops") or [])==2,25)["coal_view"]
         assert not freight["stops"][0]["accepts"] and freight["stops"][1]["accepts"],freight
-        assert freight["mine"]==15 and freight["meshes"]["mine"].startswith("bayline:coal_mine_0_")
-        assert freight["meshes"]["plant"].startswith("bayline:power_station_")
+        assert freight["mine"]==15 and freight["meshes"]["mine"].startswith("luanttd_core:coal_mine_0_")
+        assert freight["meshes"]["plant"].startswith("luanttd_core:power_station_")
         slot(1);native_aim(30,11,target_height=1.5);click()
-        await_state("inspect the true source mine",lambda s:s.get("form")=="bayline:service" and "Mine" in (s.get("service_title") or ""))
+        await_state("inspect the true source mine",lambda s:s.get("form")=="luanttd_core:service" and "Mine" in (s.get("service_title") or ""))
         screenshot("01l-coal-mine-inspector")
         xdo("key","Escape")
         aim(32,15);click()
         await_state("coal tipper in the real road depot",lambda s: "depot_buy_coal" in (s.get("buttons") or {}))
-        choose("bayline:service","depot_buy_coal","Buy Coal Tipper")
+        choose("luanttd_core:service","depot_buy_coal","Buy Coal Tipper")
         await_state("buy the original coal tipper",lambda s:s.get("engine")=="coal_tipper")
-        choose("bayline:service","service_pick","Go to…")
+        choose("luanttd_core:service","service_pick","Go to…")
         await_state("vehicle ordering returned to world",lambda s:s.get("form") is None or s.get("form")=="")
         aim(31,14);click();aim(41,14);click()
         click(3)
         await_state("actual coal truck has both stock freight stops",lambda s:len(s.get("orders") or [])==2)
-        choose("bayline:service","service_toggle","Start service")
+        choose("luanttd_core:service","service_toggle","Start service")
         chat("/qa_coal_view freight")
         first=await_state("original loaded mesh moves and real coal income posts",lambda s:
             (s.get("coal_view") or {}).get("revenue",0)>0 and s["coal_view"].get("loaded"),95)["coal_view"]
@@ -2130,20 +2130,20 @@ try:
         def stops_ok(s):
             stops=s.get("postal_stops") or {}
             return all(stops.get(k,{}).get("accept") and
-                stops[k].get("node","").startswith("bayline:stock_road_post_stop_")
+                stops[k].get("node","").startswith("luanttd_core:stock_road_post_stop_")
                 for k in ["11,12","17,12"])
         await_state("two modeled accepting loading stops",stops_ok)
         slot(2);click()
         await_state("road tools opened",lambda s:s.get("menu")=="roads")
         slot(1);aim(12,13)
         click()
-        choose("bayline:service","depot_buy_mail","postal-van-purchase")
+        choose("luanttd_core:service","depot_buy_mail","postal-van-purchase")
         await_state("bought the actual van",lambda s:s.get("engine")=="mail_van")
-        choose("bayline:service","service_pick","postal-orders")
+        choose("luanttd_core:service","service_pick","postal-orders")
         for x in (11,17):
             aim(x,12);click()
         click(3)
-        choose("bayline:service","service_toggle","postal-dispatch")
+        choose("luanttd_core:service","service_toggle","postal-dispatch")
         p=await_state("mail has a mesh, boards and pays",lambda s:s.get("postal_mesh") and s.get("paid_units",0)>0,50)
         screenshot("postal-service")
         stop_server()
@@ -2212,7 +2212,7 @@ try:
         slot(4);click();await_state("Waterworks",lambda s:s.get("menu")=="waterworks")
         slot(6);aim(*marker);baseline=state()["cash"];click()
         planted=await_state("original buoy mesh with a public navigation record",lambda s:
-            s["ship_view"].get("buoy") and s["ship_view"]["buoy_mesh"]=="bayline:ship_buoy")
+            s["ship_view"].get("buoy") and s["ship_view"]["buoy_mesh"]=="luanttd_core:ship_buoy")
         assert baseline-planted["cash"]==350
         slot(7);click()
         cleared=await_state("standalone buoy removed without changing water",lambda s:not s["ship_view"].get("buoy"))
@@ -2294,7 +2294,7 @@ try:
             await_state(f"built ordinary twelve-tile airfield {i}",lambda s:s["air_fleet"]["airports"]==i)
         for i,point in enumerate(((10,12),(33,11)),1):
             slot(1);aim(*point);click()
-            choose("bayline:service","buy_aircraft_215",f"air-fleet-{i}-native-hangar")
+            choose("luanttd_core:service","buy_aircraft_215",f"air-fleet-{i}-native-hangar")
             receipt=await_state(f"owned aircraft {i} purchased into its distinct hangar",
                  lambda s:len(s["air_fleet"]["owned"] or [])==i)["air_fleet"]
             assert receipt["expense"]==3*7200+i*38281
@@ -2334,7 +2334,7 @@ try:
         slot(10);click();slot(3);click()
         await_state("Airfields re-opened after restart",lambda s:s.get("menu")=="airfields")
         slot(1);aim(22,13);click()
-        await_state("shared inspector lists both quoted flights",lambda s:s.get("form")=="bayline:service")
+        await_state("shared inspector lists both quoted flights",lambda s:s.get("form")=="luanttd_core:service")
         screenshot("02aa-two-owned-aircraft-shared-fares")
         (out/"air-owned-fleet-desktop.json").write_text(json.dumps(dict(bought=receipt,ready=ready,
           waiting=holding,reopened=opened,paid=paid),indent=2))
@@ -2362,12 +2362,12 @@ try:
         aim(*two);click()
         both=await_state("purpose-built hangar and both runway ends",lambda s:
             (s.get("air_view") or {}).get("fields")==2 and
-            (s["air_view"].get("academy") or {}).get("runway_east")=="bayline:small_airport_3_2",15)["air_view"]
-        assert both["academy"]["hangar"]=="bayline:small_airport_3_0" and both["academy"]["runway_west"]=="bayline:small_airport_0_2"
+            (s["air_view"].get("academy") or {}).get("runway_east")=="luanttd_core:small_airport_3_2",15)["air_view"]
+        assert both["academy"]["hangar"]=="luanttd_core:small_airport_3_0" and both["academy"]["runway_west"]=="luanttd_core:small_airport_0_2"
         if air_owned:
             phase="buy a stock aircraft directly from its purchased country hangar"
             slot(1);aim(10,12);click()
-            choose("bayline:service",f"buy_aircraft_{plane_id}",f"00h-{plane_art}-priced-hangar")
+            choose("luanttd_core:service",f"buy_aircraft_{plane_id}",f"00h-{plane_art}-priced-hangar")
             purchase=await_state("bought the stock aircraft into this hangar",lambda s:
               ((s.get("air_view") or {}).get("owned") or {}).get("stock_id")==plane_id)["air_view"]
             assert purchase["owned"]["status"]=="hangar" and purchase["owned"]["hangar"]==1
@@ -2448,7 +2448,7 @@ try:
         await_state("Waterworks submenu",lambda s:s.get("menu")=="waterworks")
         slot(3);aim(22,20);click()
         await_state("built native middle lock tile at the true incline",
-           lambda s:(s.get("ship_view") or {}).get("lock_mesh")=="bayline:ship_lock_middle_2",25)
+           lambda s:(s.get("ship_view") or {}).get("lock_mesh")=="luanttd_core:ship_lock_middle_2",25)
         chat("/shipyard dock 17 18")
         chat("/shipyard dock 28 18")
         chat("/shipyard depot 15 21 x")
@@ -2479,7 +2479,7 @@ try:
         chat("/qa_ship_photo aqueduct")
         chat("/shipyard aqueduct 20 20 24 20")
         made=await_state("span mesh with the unmodified river and road underneath",
-            lambda s:(s.get("ship_view") or {}).get("span")=="bayline:aqueduct_span_0",20)["ship_view"]
+            lambda s:(s.get("ship_view") or {}).get("span")=="luanttd_core:aqueduct_span_0",20)["ship_view"]
         assert made["aqueduct"]==1 and "water" in made["river"] and "road" in made["road"],made
         chat("/shipyard canal 19 20 19 20")
         await_state("stock-built canal connects the dry west head",
@@ -2517,14 +2517,14 @@ try:
             (s.get("ship_view") or {}).get("docks")==2 and s["ship_view"]["depots"]==1)
         initial=state()["cash"]
         slot(1);aim(*depot);click()
-        choose("bayline:service","buy_yate","00v-native-yate-purchase")
+        choose("luanttd_core:service","buy_yate","00v-native-yate-purchase")
         quote=await_state("stock cargo vessel receipt charges purchase once",lambda s:
             (s["yate"].get("vessel") or {}).get("cargo")==5 and "refit_yate" in (s.get("buttons") or {}))
         assert quote["yate"]["vessel"]["engine"]==211 and quote["cash"]==initial-32500
-        choose("bayline:service","refit_yate","01v-refit-owned-yate")
+        choose("luanttd_core:service","refit_yate","01v-refit-owned-yate")
         refitted=await_state("same owned ship now carries stock coal",lambda s:s["yate"]["vessel"].get("cargo")==1)
         assert refitted["cash"]==quote["cash"]-507
-        choose("bayline:service","service_back","01v-leave-yate-depot")
+        choose("luanttd_core:service","service_back","01v-leave-yate-depot")
         slot(7);click()
         await_state("Vessel Operations",lambda s:s.get("menu")=="harbor_ops")
         slot(3);click();slot(1);aim(*dock_mine);click();aim(*dock_plant);click();slot(8);click()
@@ -2565,9 +2565,9 @@ try:
         facilities=await_state("two docks and both halves of the ship depot",
             lambda s:(s.get("ship_view") or {}).get("docks")==2 and
                       s["ship_view"]["depots"]==1 and s["ship_view"].get("nodes",{}).get("shed"),20)["ship_view"]
-        assert facilities["nodes"]["shore"]=="bayline:ship_dock_ramp_1",facilities
-        assert facilities["nodes"]["pier"]=="bayline:ship_dock_pier_1",facilities
-        assert facilities["nodes"]["shed"]=="bayline:ship_depot_0_0",facilities
+        assert facilities["nodes"]["shore"]=="luanttd_core:ship_dock_ramp_1",facilities
+        assert facilities["nodes"]["pier"]=="luanttd_core:ship_dock_pier_1",facilities
+        assert facilities["nodes"]["shed"]=="luanttd_core:ship_depot_0_0",facilities
         slot(7);click()
         await_state("Ferry Operations hotbar",lambda s:s.get("menu")=="harbor_ops")
         slot(2);click();slot(1);aim(11,35);click();aim(5,32);click();aim(8,32);click();slot(8);click()
@@ -2604,7 +2604,7 @@ try:
         initial=state()["cash"]
         slot(4);aim(14,12);click()
         opened=await_state("actual open arms and ordinary source cost",lambda s:
-            (s.get("crossing_view") or {}).get("mesh")=="bayline:level_crossing_1_open")
+            (s.get("crossing_view") or {}).get("mesh")=="luanttd_core:level_crossing_1_open")
         assert opened["cash"]==initial-100
         time.sleep(.7);screenshot("00n-level-crossing-open")
         chat("/qa_crossing arrange")
@@ -2625,7 +2625,7 @@ try:
                        abs(bus["z"]-rail["z"])-.13398-length)
         held=await_state("train waits and red arms are lowered",lambda s:
             s["crossing_view"].get("held") and s["crossing_view"].get("gate")=="road_draining" and
-            s["crossing_view"].get("mesh")=="bayline:level_crossing_1_closed" and
+            s["crossing_view"].get("mesh")=="luanttd_core:level_crossing_1_closed" and
             s["crossing_view"].get("road_mesh") and s["crossing_view"].get("engine_mesh"),45)["crossing_view"]
         assert held["checked_road_tile"]==held["cross_tile"]
         assert physical_gap(held["road_mesh"],held["engine_mesh"],.2665,.4752)>.04,held
@@ -2640,7 +2640,7 @@ try:
         chat("/qa_crossing release")
         tail=await_state("gate still closed for the rear carriage after the engine left",lambda s:
             s["crossing_view"].get("tail") and s["crossing_view"].get("gate")=="rail_occupied" and
-            s["crossing_view"].get("mesh")=="bayline:level_crossing_1_closed" and
+            s["crossing_view"].get("mesh")=="luanttd_core:level_crossing_1_closed" and
             s["crossing_view"].get("road_mesh") and s["crossing_view"].get("wagon_mesh"),45)["crossing_view"]
         assert physical_gap(tail["road_mesh"],tail["wagon_mesh"],.261,.499)>.04,tail
         time.sleep(.7);screenshot("02n-level-crossing-tail-holds")
@@ -2661,18 +2661,18 @@ try:
         slot(8);click()
         await_state("Railworks",lambda s:s.get("menu")=="railworks")
         slot(10);native_aim(5,10,4.5);click();native_aim(9,10,4.5);click()
-        if state().get("form")=="bayline:bridge_picker":
+        if state().get("form")=="luanttd_core:bridge_picker":
             choose_bridge_type()
         bridge=await_state("stock timber trestle terraced and drawn",lambda s:
             (s.get("rail_span_view",{}).get("routes") or {}).get("bridge") and
-            (s["rail_span_view"].get("meshes") or {}).get("deck")=="bayline:stock_rail_bridge_wood_span_0")
+            (s["rail_span_view"].get("meshes") or {}).get("deck")=="luanttd_core:stock_rail_bridge_wood_span_0")
         assert bridge["rail_span_view"]["routes"]["bridge"]["level"]==5
-        assert bridge["rail_span_view"]["meshes"]["pier"]=="bayline:stock_rail_bridge_wood_pier_0"
+        assert bridge["rail_span_view"]["meshes"]["pier"]=="luanttd_core:stock_rail_bridge_wood_pier_0"
         chat("/qa_rail_span rail")
         slot(6);native_aim(13,10,5.0);click()
         tunnel=await_state("true masonry portals at both ends",lambda s:
             (s.get("rail_span_view",{}).get("routes") or {}).get("tunnel") and
-            (s["rail_span_view"].get("meshes") or {}).get("exit")=="bayline:stock_rail_tunnel_portal_0")
+            (s["rail_span_view"].get("meshes") or {}).get("exit")=="luanttd_core:stock_rail_tunnel_portal_0")
         assert tunnel["rail_span_view"]["routes"]["tunnel"]["level"]==4
         slot(7);click()
         await_state("Rail Operations",lambda s:s.get("menu")=="railops")
@@ -2837,9 +2837,9 @@ try:
         slot(6);click()  # rotate X to Z
         slot(3);aim(8,8);click();aim(8,13);click()
         artwork=await_state("complete atlas-backed depot, junction and platform nodes",
-            lambda s: (s.get("tram",{}).get("nodes") or {}).get("8,13")=="bayline:tram_stop_1",15)["tram"]["nodes"]
-        assert artwork["5,10"]=="bayline:tram_depot_2"
-        assert artwork["8,10"]=="bayline:tramway_13"
+            lambda s: (s.get("tram",{}).get("nodes") or {}).get("8,13")=="luanttd_core:tram_stop_1",15)["tram"]["nodes"]
+        assert artwork["5,10"]=="luanttd_core:tram_depot_2"
+        assert artwork["8,10"]=="luanttd_core:tramway_13"
         screenshot("01a-dedicated-tramway")
         chat("/trampilot 5 10 8 8 8 13")
         first=await_state("streetcar arrives at north platform after a stock turn",lambda s:
@@ -2911,7 +2911,7 @@ try:
         await_state("returned to main hotbar",lambda s:s.get("menu")=="home")
         slot(2);click();await_state("Road Construction",lambda s:s.get("menu")=="roads")
         slot(10)
-        if state()["wield_item"]=="bayline:menu_road_bridge_picker":
+        if state()["wield_item"]=="luanttd_core:menu_road_bridge_picker":
             slot(7);click();await_state("Road Options",lambda s:s.get("menu")=="road_direction")
             slot(3);click()
         else:
@@ -2927,9 +2927,9 @@ try:
             b=t.get("bridge") or {}
             nodes=t.get("meshes") or {}
             return (t.get("corner")==1 and b.get("length")==13 and b.get("price")>0 and
-                nodes.get("17")=="bayline:stock_road_bridge_wood_head_ramp_2" and
-                nodes.get("29")=="bayline:stock_road_bridge_wood_head_flat_0" and
-                all(nodes.get(str(x))=="bayline:stock_road_bridge_wood_span_0" for x in range(18,29)))
+                nodes.get("17")=="luanttd_core:stock_road_bridge_wood_head_ramp_2" and
+                nodes.get("29")=="luanttd_core:stock_road_bridge_wood_head_flat_0" and
+                all(nodes.get(str(x))=="luanttd_core:stock_road_bridge_wood_span_0" for x in range(18,29)))
         result=await_state("all wooden heads and 11 continuous mesh spans",built,20)
         assert result["cash"]<100000-result["terrain_construction"]["bridge"]["price"]
         screenshot("wood-bridge-built")
@@ -2956,7 +2956,7 @@ try:
         expected={}
         for x,z,_,bits in pieces:
             suffix=f"grade_{rail_grades[(x,z)]}" if (x,z) in rail_grades else str(bits)
-            expected[f"{x},{z}"]={"mask":bits,"node":f"bayline:stock_rail_{suffix}"}
+            expected[f"{x},{z}"]={"mask":bits,"node":f"luanttd_core:stock_rail_{suffix}"}
         def expected_nodes(s):
             return s.get("track_nodes")==expected
         result=await_state("mesh node for each rail piece",expected_nodes)
@@ -2983,9 +2983,9 @@ try:
             chat("/trackrun clear")
             chat("/trackfacility 14 16 depot east")
             chat("/trackfacility 14 18 platform 15 18")
-            expected["14,16"]={"mask":1,"node":"bayline:stock_rail_depot_2","depot":2}
+            expected["14,16"]={"mask":1,"node":"luanttd_core:stock_rail_depot_2","depot":2}
             for coord in ["14,18","15,18"]:
-                expected[coord]={"mask":1,"node":"bayline:stock_rail_platform_1","station":1}
+                expected[coord]={"mask":1,"node":"luanttd_core:stock_rail_platform_1","station":1}
             result=await_state("built complete rail facility meshes",expected_nodes)
             actual=await_state("source route reaches the real platform",
                 lambda s:(s.get("facility_route") or {}).get("tiles")==route["tiles"])["facility_route"]
@@ -3027,7 +3027,7 @@ try:
         slot(8);click()
         await_state("Back to Sections",lambda s:s.get("menu")=="home")
         slot(2);click()
-        await_state("Roadworks reordered icons",lambda s:s.get("wield_item")=="bayline:menu_road" and s.get("menu")=="roads")
+        await_state("Roadworks reordered icons",lambda s:s.get("wield_item")=="luanttd_core:menu_road" and s.get("menu")=="roads")
         phase="build and bulldoze a temporary spur"
         aim(8,12);click();click()
         await_state("temporary player road",lambda s:tile(s,(8,12))=="road")
@@ -3084,7 +3084,7 @@ try:
     else:
         aim(*D)
         click(3)
-        choose("bayline:context","tool_road_depot","02-build-palette")
+        choose("luanttd_core:context","tool_road_depot","02-build-palette")
         await_state("palette closed after choosing depot", lambda s: not s.get("form"))
         slot(6)
         aim(*D)
@@ -3102,7 +3102,7 @@ try:
     slot(1)
     click()
     model="foster_bus" if native_foster else "leopard_bus" if os.environ.get("BAYLINE_NATIVE_LEOPARD")=="1" else "bus"
-    choose("bayline:service",{"leopard_bus":"depot_buy_leopard","foster_bus":"depot_buy_foster"}.get(model,"depot_buy"),"03-depot-buy")
+    choose("luanttd_core:service",{"leopard_bus":"depot_buy_leopard","foster_bus":"depot_buy_foster"}.get(model,"depot_buy"),"03-depot-buy")
     bought=await_state("purchased bus", lambda s: s["fleets"] == 1 and s.get("engine")==model and not s["operating"])
     if native_regal:
         r=bought["regal"]
@@ -3115,7 +3115,7 @@ try:
         assert w["offers"]["foster_bus"]=="available" and w["offers"]["bus"]=="retired"
         assert bought["cash"]==pre_buy["cash"]-8203 and w["finance"]["annual_fp"]==284800
     phase = "add two orders in the world"
-    choose("bayline:service","service_pick","04-select-orders")
+    choose("luanttd_core:service","service_pick","04-select-orders")
     await_state("world selection",lambda s: not s.get("form"))
     for count, placement in enumerate((A, B),1):
         aim(*placement)
@@ -3131,37 +3131,37 @@ try:
             return all((so(s).get("v"+str(i),{}).get("orders") or [{}])[0].get("action")==a
                        for i,a in zip(range(1,count+1),wanted))
         def close_vehicle():
-            choose("bayline:service","service_back","shared-orders-close-vehicle")
+            choose("luanttd_core:service","service_back","shared-orders-close-vehicle")
             await_state("returned to the world",lambda s:not s.get("form"))
             time.sleep(.70)
         def inspect_depot():
             slot(1);aim(*D);time.sleep(.24);click()
         for i,op in ((2,"share"),(3,"copy")):
             close_vehicle();inspect_depot()
-            choose("bayline:service","depot_buy",f"shared-orders-buy-bus-{i}")
-            choose("bayline:service","order_list_open",f"open-copy-share-bus-{i}")
-            choose("bayline:service","order_list_"+op,f"apply-{op}-from-first-bus")
+            choose("luanttd_core:service","depot_buy",f"shared-orders-buy-bus-{i}")
+            choose("luanttd_core:service","order_list_open",f"open-copy-share-bus-{i}")
+            choose("luanttd_core:service","order_list_"+op,f"apply-{op}-from-first-bus")
             await_state(f"list applied to bus {i}",lambda s:
                len(so(s).get("v"+str(i),{}).get("orders") or [])==2)
             if i==2:
                 linked=state()
                 assert so(linked)["v1"]["same"] and so(linked)["v2"]["group"]==so(linked)["v1"]["group"]
-                choose("bayline:service","service_cycle_load","edit-shared-full-load-on-second")
+                choose("luanttd_core:service","service_cycle_load","edit-shared-full-load-on-second")
                 await_state("both linked vehicles use Full load",lambda s:acts(s,2,["full","full"]))
         before=await_state("copy of the shared list is independent",lambda s:
             acts(s,3,["full","full","full"]) and not so(s)["v3"].get("group"))
         close_vehicle();inspect_depot()
-        choose("bayline:service","vehicle_2","select-second-shared-bus")
-        choose("bayline:service","service_cycle_load","edit-linked-list-before-declone")
+        choose("luanttd_core:service","vehicle_2","select-second-shared-bus")
+        choose("luanttd_core:service","service_cycle_load","edit-linked-list-before-declone")
         diverged=await_state("two linked orders changed but the third stayed Full load",lambda s:
             acts(s,3,["normal","normal","full"]))
-        choose("bayline:service","order_list_open","open-list-for-declone")
-        choose("bayline:service","order_list_unshare","declone-clears-only-second-bus")
+        choose("luanttd_core:service","order_list_open","open-list-for-declone")
+        choose("luanttd_core:service","order_list_unshare","declone-clears-only-second-bus")
         cleared=await_state("only the decloned vehicle has an empty list",lambda s:
             not (so(s)["v2"].get("orders") or []) and not so(s)["v1"].get("group")
             and len(so(s)["v1"]["orders"])==len(so(s)["v3"]["orders"])==2)
-        choose("bayline:service","order_list_open","reopen-list-for-reshare")
-        choose("bayline:service","order_list_share","reshare-before-native-save")
+        choose("luanttd_core:service","order_list_open","reopen-list-for-reshare")
+        choose("luanttd_core:service","order_list_share","reshare-before-native-save")
         await_state("linked group restored before save",lambda s:
             bool(so(s)["v2"].get("group")))
         stop_server()
@@ -3173,8 +3173,8 @@ try:
         if state()["menu"]=="home":
             slot(2);click();await_state("Roadworks again",lambda s:s.get("menu")=="roads")
         inspect_depot()
-        choose("bayline:service","vehicle_1","open-reopened-shared-bus")
-        choose("bayline:service","service_toggle","start-shared-orders-after-save")
+        choose("luanttd_core:service","vehicle_1","open-reopened-shared-bus")
+        choose("luanttd_core:service","service_toggle","start-shared-orders-after-save")
         paid=await_state("the first linked vehicle earns an actual fare while second remains stopped",lambda s:
             so(s).get("v1",{}).get("paid",0)>0 and not so(s).get("v2",{}).get("active"),100)
         (out/"road-shared-orders-desktop.json").write_text(json.dumps(
@@ -3183,7 +3183,7 @@ try:
         print("PASS: copied and linked source orders through native UI; declone, reload and actual fare.")
         sys.exit(0)
     phase = "dispatch and first fare"
-    choose("bayline:service","service_toggle","05-dispatch-orders")
+    choose("luanttd_core:service","service_toggle","05-dispatch-orders")
     await_state("dispatched bus",lambda s: s["operating"])
     if os.environ.get("BAYLINE_NATIVE_ROAD_SERVICE")=="1":
         assert native_foster
@@ -3198,7 +3198,7 @@ try:
         assert diverted["orders"]==outbound["orders"] and q["units"]==q["requested"]["units"]
         slot(8);click();await_state("home to inspect",lambda s:s.get("menu")=="home")
         slot(3);click();await_state("Fleet while automatic depot order is active",lambda s:s.get("menu")=="fleet")
-        slot(3);click();choose("bayline:service","vehicle_1","automatic-depot-selected-foster")
+        slot(3);click();choose("luanttd_core:service","vehicle_1","automatic-depot-selected-foster")
         time.sleep(.7);screenshot("01pd-native-automatic-depot-in-service")
         stop_server()
         phase="resume exact saved service diversion and then complete the interrupted passenger order"
@@ -3231,7 +3231,7 @@ try:
             slot(8);click();await_state("Home to check the broken bus",lambda s:s.get("menu")=="home")
         slot(3);click();await_state("Fleet status while broken",lambda s:s.get("menu")=="fleet")
         slot(3);click()
-        choose("bayline:service","vehicle_1","road-fault-fleet-select")
+        choose("luanttd_core:service","vehicle_1","road-fault-fleet-select")
         await_state("actual inspector of broken bus",lambda s:"service_back" in (s.get("buttons") or {}))
         time.sleep(.75);screenshot("01pc-native-foster-broken-inspector")
         phase="reopen the exact repair pose and survive the real recovery tick"
@@ -3332,11 +3332,11 @@ try:
     if os.environ.get("BAYLINE_NATIVE_TOWN_GROWTH")=="1":
         phase="paid bus route enables a visible stock house construction"
         original=await_state("source ordered construction, stage 0",lambda s:
-            (s.get("growth") or {}).get("node")=="bayline:house_build_stage_0",105)["growth"]
+            (s.get("growth") or {}).get("node")=="luanttd_core:house_build_stage_0",105)["growth"]
         assert original["reason"]=="serviced" and not original.get("first_cargo")
         chat("/qa_growth photo");time.sleep(.6);screenshot("01u-served-town-foundation")
         saved=await_state("timber framing with population unchanged",lambda s:
-            (s.get("growth") or {}).get("node")=="bayline:house_build_stage_1" and s["growth"].get("paused"),75)["growth"]
+            (s.get("growth") or {}).get("node")=="luanttd_core:house_build_stage_1" and s["growth"].get("paused"),75)["growth"]
         assert saved["population"]==original["population"] and not saved.get("first_cargo")
         screenshot("02u-stock-house-frame")
         stop_server()
@@ -3344,12 +3344,12 @@ try:
         cfg.write_text(cfg.read_text().replace("bayline_stock_town_growth = true","bayline_stock_town_growth = false"))
         join("grown-town-restarted")
         retained=await_state("the saved framing survives when new growth is disabled",lambda s:
-            (s.get("growth") or {}).get("node")=="bayline:house_build_stage_1",45)["growth"]
+            (s.get("growth") or {}).get("node")=="luanttd_core:house_build_stage_1",45)["growth"]
         assert retained["built"]==saved["built"] and retained["population"]==saved["population"]
         chat("/qa_growth photo");chat("/qa_growth go")
         phase="same house gains roof and inhabitants before eventual real cargo"
         roof=await_state("partly roofed stage after restart",lambda s:
-            (s.get("growth") or {}).get("node")=="bayline:house_build_stage_2",65)["growth"]
+            (s.get("growth") or {}).get("node")=="luanttd_core:house_build_stage_2",65)["growth"]
         assert roof["population"]==saved["population"] and not roof.get("first_cargo")
         screenshot("03u-house-roof-after-restart")
         mature=await_state("completed mature real house",lambda s:
@@ -3444,14 +3444,14 @@ try:
             (s.get("depot_return") or {}).get("latch"),45)
         slot(8);click();slot(3);click()
         await_state("Fleet menu",lambda s:s.get("menu")=="fleet")
-        slot(3);click();choose("bayline:service","vehicle_1","depot-return-select-bus")
-        choose("bayline:service","service_toggle","depot-return-stop-after-paid-trip")
+        slot(3);click();choose("luanttd_core:service","vehicle_1","depot-return-select-bus")
+        choose("luanttd_core:service","service_toggle","depot-return-stop-after-paid-trip")
         chat("/qa_depot_return go")
         at_stop=await_state("bus stopped after really unloading",lambda s:
             (s.get("depot_return") or {}).get("park"),45)
         assert at_stop["depot_return"]["station"]==2 and at_stop["vehicle_revenue"]>=final["vehicle_revenue"]
-        slot(3);click();choose("bayline:service","vehicle_1","depot-return-select-parked")
-        choose("bayline:service","service_park","depot-return-choose-nearest")
+        slot(3);click();choose("luanttd_core:service","vehicle_1","depot-return-select-parked")
+        choose("luanttd_core:service","service_park","depot-return-choose-nearest")
         numbered=(E[1]-1)*48+E[0]
         arriving=await_state("bus enters nearer depot and vanishes at the original door frame",lambda s:
             s["depot_return"].get("depot")==numbered and not s["depot_return"].get("mesh"),35)
@@ -3464,8 +3464,8 @@ try:
         assert again["depot_return"]["depot"]==numbered and not again["depot_return"].get("pose")
         slot(2);click();await_state("Roadworks ready",lambda s:s.get("menu")=="roads")
         slot(1);aim(*E);click()
-        choose("bayline:service","vehicle_1","depot-return-hidden-bus-in-its-depot")
-        choose("bayline:service","service_toggle","depot-return-resume-previous-orders")
+        choose("luanttd_core:service","vehicle_1","depot-return-hidden-bus-in-its-depot")
+        choose("luanttd_core:service","service_toggle","depot-return-resume-previous-orders")
         later=await_state("restored bus earns money again",lambda s:
             s["vehicle_revenue"]>again["vehicle_revenue"],70)
         assert later["orders"]==again["orders"] and later["depot_return"]["road_tick"]==again["depot_return"]["road_tick"]
