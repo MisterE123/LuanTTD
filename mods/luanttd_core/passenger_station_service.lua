@@ -12,12 +12,14 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     ship={engine=206,cap=100,slice=10,aging=185,wait=10},
     air={engine=215,cap=25,slice=20,aging=185,wait=20},
   }}
+  local ffp={engine=207,cap=130,slice=10,aging=185,wait=10}
   local coleman={engine=216,cap=65,slice=20,aging=185,wait=20}
   local bakewell={engine=219,cap=30,slice=20,aging=185,wait=20}
 
   local manley={engine=11,cap=76,slice=5,aging=185,wait=40}
   local manley_coach={engine=11,cap=116,slice=5,aging=185,wait=40}
   function S.stock_for(mode,engine,coach)
+    if mode=="ship" and engine==207 then return ffp end
     if mode=="rail" and engine==11 then return coach and manley_coach or manley end
     if mode=="air" and engine then
       if engine==216 then return coleman end

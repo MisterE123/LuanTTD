@@ -29,6 +29,10 @@ return function(api,Network,Run)
     NO_CHANNEL_TO_FIRST_DOCK="No navigable route from the depot to the first dock.",
     PILOT_ALREADY_EXISTS="Clear the existing ferry pilot first.",
     NO_OWN_PILOT="You do not have a ferry pilot.",
+    BUY_PASSENGER_FERRY_FIRST="Buy a passenger ferry at this depot first.",
+    OWNED_FERRY_CANNOT_BE_CLEARED="Use the ship depot to stop or resume your purchased ferry.",
+    DEPOT_HAS_PASSENGER_FERRY="This depot contains your purchased passenger ferry.",
+    NO_RETURN_CHANNEL="The ferry needs a navigable route both ways between the docks.",
     STOCK_HOUSE_CLOCK_REQUIRED="Paid ferry service needs stock house production enabled.",
     SELECT_OWN_FACILITY="Choose either half of your own dock or depot.",
     FERRY_FREIGHT_SHARED_DEPOT="The coal ship and ferry cannot share a depot in this workbench.",
@@ -38,7 +42,9 @@ return function(api,Network,Run)
   local function text(reason) return messages[reason] or ("Ferry pilot: "..tostring(reason)) end
   local function at(x,z) return x and z and Sim.id(tonumber(x),tonumber(z)) end
   local function start(name,depot,first,second,via_tile)
-    local run,why=Run.start(S,name,depot,first,second,via_tile)
+    local run,why
+    if api.passenger_ferry then run,why=api.passenger_ferry.start(name,depot,first,second,via_tile)
+    else run,why=Run.start(S,name,depot,first,second,via_tile) end
     if not run then return nil,text(why) end
     api.save()
     if run.via then

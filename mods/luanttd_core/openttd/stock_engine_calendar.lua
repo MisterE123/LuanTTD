@@ -94,7 +94,7 @@ end
 -- Build one original road model. Exposed for same-intro comparisons and
 -- an eventual separately verified roster; not a NewGRF adapter.
 function E.prepare_original(row,cfg)
-  if type(row)~="table" or not uint(row.stock_id,65535) or row.vehicle_type~=E.VEH_ROAD or
+  if type(row)~="table" or not uint(row.stock_id,65535) or (row.vehicle_type~=E.VEH_ROAD and row.vehicle_type~=2) or
       not uint(row.intro_after_1920,65535) or not uint(row.decay_speed,255) or
       not uint(row.life,255) or not uint(row.base_life,255) or not uint(row.climates,15) or
       not uint(row.retire_early or 0,127) or (row.grfid or 0)~=0 or row.variant_id~=nil then

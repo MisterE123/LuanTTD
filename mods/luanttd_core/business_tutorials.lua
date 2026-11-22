@@ -24,7 +24,8 @@ return function(api)
     boat={name="Boat business",steps={
       {"Build two passenger docks","harbor","Find two neighborhoods near the same connected waterway. Build Dock on a straight shoreline slope facing two flat water tiles. Each dock needs nearby houses and clear water beside the pier for boarding. Do not build the pier on the open-water tile itself."},
       {"Build a ship depot","harbor","Place a Ship depot on two adjacent open-water tiles connected to both docks. Use Rotate ship depot if the footprint is wrong. Leave water around the entrance; the ferry must be able to depart and turn."},
-      {"Order the ferry","harbor_ops","Choose Order ferry, then pick your ship depot and both docks. Or inspect the depot and choose passenger ferry orders there. Select Dispatch. Ordering starts the passenger ferry in the current game; there is no separate purchase step for this ferry. If navigation fails, check the water really connects and that a sloping river has a lock."},
+      {"Buy a passenger ferry",nil,"Inspect your ship depot, open Passenger ferries and buy an available vessel. In a 1950 start, try the MPS Passenger Ferry. In 1980, you can buy the faster FFP. It stays in the depot until you give it orders."},
+      {"Order the ferry","harbor_ops","Open Passenger ferries at the depot and choose its orders, then pick your two docks and select Dispatch. If navigation fails, check both water approaches connect and the vessel can travel both directions. A sloping river needs a lock."},
       {"Earn a passenger fare",nil,"Unpause. Wait for the ferry to board and deliver to the other dock. Inspect a dock for passenger acceptance, waiting people and total fares. A scenic pier with no house catchment can be connected but earn nothing."},
     }},
   }
@@ -112,12 +113,12 @@ return function(api)
     else
       local paid=Sim.ferry_paid_status and Sim.ferry_paid_status(S)
       if paid and paid.owner==n then
-        if paid.delivered>0 and paid.fare>0 then return 5,paid.fare end
-        return 4
+        if paid.delivered>0 and paid.fare>0 then return 6,paid.fare end
+        return 5
       end
       if own_count(S.stock_ship_stations,n)<2 then return 1 end
       if own_count(S.stock_ship_depots,n)==0 then return 2 end
-      return 3
+      return S.stock_owned_ferry and S.stock_owned_ferry.owner==n and 4 or 3
     end
   end
   local function player(p)

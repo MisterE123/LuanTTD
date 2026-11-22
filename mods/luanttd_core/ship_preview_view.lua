@@ -1,11 +1,14 @@
 -- Native waterline presentation of the original Harbor Ferry.
 return function(api,Run,RoadVisual,seconds_per_day)
   local M={}
-  local name="luanttd_core:stock_harbor_ferry"
-  core.register_entity(name,{initial_properties={physical=false,pointable=false,
-    collide_with_objects=false,static_save=false,visual="mesh",mesh="bl_harbor_ferry.obj",
-    textures={"bl_harbor_ferry_palette.png"},shaded=true,backface_culling=true,
-    visual_size={x=1,y=1,z=1}}})
+  local names={[206]="luanttd_core:stock_harbor_ferry",[207]="luanttd_core:stock_ffp_passenger_ferry"}
+  local meshes={[206]="bl_harbor_ferry.obj",[207]="bl_ffp_passenger_ferry.obj"}
+  for id,name in pairs(names) do
+    core.register_entity(name,{initial_properties={physical=false,pointable=false,
+      collide_with_objects=false,static_save=false,visual="mesh",mesh=meshes[id],
+      textures={"bl_harbor_ferry_palette.png"},shaded=true,backface_culling=true,
+      visual_size={x=1,y=1,z=1}}})
+  end
   local acc,ref,yaw=0,nil,nil
   local function stop()
     if ref and ref:get_pos() then ref:remove() end
@@ -15,7 +18,8 @@ return function(api,Run,RoadVisual,seconds_per_day)
     if not online then acc=0;return end
     local s=api.s
     local p=Run.current(s)
-    if not p then stop();acc=0;return end
+    if not p or Run.paid_art_ready and not Run.paid_art_ready(s,p) then stop();acc=0;return end
+    local name=names[p.engine_id or 206]
     if s.speed>0 and not p.paid_clock then
       acc=math.min(148,acc+dt*74*s.speed/seconds_per_day)
       local ticks=math.floor(acc)
@@ -31,6 +35,7 @@ return function(api,Run,RoadVisual,seconds_per_day)
       if a and (a.x-pos.x)^2+(a.z-pos.z)^2<112^2 then nearby=true;break end
     end
     if not nearby then stop();return end
+    if ref and ref:get_luaentity().name~=name then stop() end
     if not ref or not ref:get_pos() then ref=core.add_entity(pos,name);yaw=nil end
     if ref then
       ref:move_to(pos,true)

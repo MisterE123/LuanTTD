@@ -407,8 +407,26 @@ if api.ship_tools then
   local Network=dofile(mod.."/ship_network.lua")(Sim,Terrain,Water,Facilities)
   local Motion=dofile(source.."ship_motion.lua")(Track,Water)
   local Regions=dofile(source.."ship_regions.lua")
+  local Roster=dofile(source.."passenger_ship_roster.lua")
+  local Calendar=dofile(source.."stock_engine_calendar.lua")
   local Run=dofile(mod.."/ship_preview_run.lua")(Network,Track,Water,Y,Motion,Regions,
-    {width=Sim.W,height=Sim.H,x0=1,z0=1})
+    {width=Sim.W,height=Sim.H,x0=1,z0=1},{engine=Roster.model(206),engine_for=Roster.model,validate_both=true})
+  local art={}
+  local missing={}
+  for _,key in ipairs(core.get_dir_list(mod.."/models",false)) do missing[key]=true end
+  for _,key in ipairs(core.get_dir_list(mod.."/textures",false)) do missing[key]=true end
+  art[206]=missing["bl_harbor_ferry_palette.png"] and missing["bl_harbor_ferry.obj"]
+  art[207]=missing["bl_harbor_ferry_palette.png"] and missing["bl_ffp_passenger_ferry.obj"]
+  local Depot=dofile(mod.."/passenger_ship_depot.lua")(Sim,Roster,Calendar,Run,function(id) return art[id] end)
+  Run.settle_owned_day,Run.count_owned_tick,Run.paid_art_ready=Depot.settle,Depot.count_tick,Depot.ready
+  api.passenger_ferry={
+    catalog=Roster.order,quote=function(n,depot,id) return Depot.quote(S,n,depot,id) end,
+    model=Roster.model,
+    buy=function(n,depot,id) local v,msg=Depot.buy(S,n,depot,id);if v then api.save() end;return v,msg end,
+    staged=function(n,depot) return Depot.staged(S,n,depot) end,
+    start=function(n,depot,a,b,via) return Depot.start(S,n,depot,a,b,via) end,
+    stop=function(n,stop) local ok,msg=Depot.stop(S,n,stop);if ok then api.save() end;return ok,msg end,
+  }
   S.ship_paid_service=true
   Sim.mount_paid_ferry(S,Run)
   if S.ship_coal_service or S.stock_coal_ship then

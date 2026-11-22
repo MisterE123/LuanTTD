@@ -272,6 +272,8 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       if v.mode=="air" then return air_ready[v.id] end
       return base_vehicle_active(v)
     end
+    local ship_ready=active.ship and p and (not Ship.paid_art_ready or Ship.paid_art_ready(s,p))
+    if ship_ready and Ship.settle_owned_day then Ship.settle_owned_day(s,p) end
     local run=p and p.paid_clock
     local frame=view(s)
     frame.ship_samples={Ship and ship_sample(Ship,run and p or nil) or false}
@@ -294,7 +296,8 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     end
     if Ship then
       reconcile("active_serial",run,run and {id=run,mode="ship",owner=p.owner,
-        speed=Ship.engine.max_speed,built=Sim.date(s,p.paid_built_day or s.day)})
+        engine=p.engine_id,speed=(Ship.engine_for and Ship.engine_for(p) or Ship.engine).max_speed,
+        built=p.paid_build_year or Sim.date(s,p.paid_built_day or s.day)})
     end
     if Rail then
       Actors.reconcile(c,rails,ctx,first_tick,function(r)
@@ -311,7 +314,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     local function before(tick)
       if run then
         local ship=assert(service.vehicles[run])
-        ship.stopped=p.phase=="blocked" or p.vehicle.stopped or nil
+        ship.stopped=not ship_ready or p.stopped or p.phase=="blocked" or p.vehicle.stopped or nil
         ship.broken=p.vehicle.breakdown or nil
       end
       Actors.controls(c,rails)
@@ -340,7 +343,8 @@ return function(Sim,Service,Mux,credit,news,RailActors)
         local vehicle=service.vehicles[id]
         return ready[id] and Service.leave(service,id,vehicle.visit,tick,ctx,events) or false
       end
-      if run and active.ship then
+      if run and ship_ready then
+        if Ship.count_owned_tick then Ship.count_owned_tick(s,p) end
         Ship.advance_paid(s,{
           leave=function() return leave(run) end,
           arrive=function(q)
@@ -481,7 +485,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       waiting[id]={waiting=visible,available=available,accepts=st and st.passenger_acceptance>=8 or false}
     end
     local load=vehicle and vehicle.load_state
-    local finance=rail and p.passenger_finance or mode_=="air" and p.finance
+    local finance=rail and p.passenger_finance or mode_=="air" and p.finance or mode_=="ship" and p.owned and s.stock_owned_ferry
     local bodies
     if vehicle and vehicle.carrying_parts then
       bodies={}

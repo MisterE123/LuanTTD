@@ -4,6 +4,7 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
   config=config or {}
   local key,serial=config.key or "ship_pilot",config.serial or "next_paid_ferry_run"
   local R={VERSION=1,engine=config.engine or {id=206,max_speed=64,acceleration=1,capacity=100}}
+  function R.engine_for(p) return config.engine_for and config.engine_for(p and p.engine_id) or R.engine end
   local function paid_mode(s) return config.paid and config.paid(s) or not config.paid and s.ship_paid_service end
   local function route_order(v)
     local o=v.order
@@ -50,7 +51,7 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
     return {kind="waypoint",id=via.id,tile=via.tile,next_station=id}
   end
   local function station_order(id) return {kind="station",id=id} end
-  function R.quote(s,owner,depot,first,second,via_tile)
+  function R.quote(s,owner,depot,first,second,via_tile,engine_id)
     if R.current(s) then return nil,"PILOT_ALREADY_EXISTS" end
     if paid_mode(s) and not (s.road_stock_house_supply and s.corner_grid) then
       return nil,"STOCK_HOUSE_CLOCK_REQUIRED"
@@ -59,6 +60,8 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
     local S=s.stock_ship_stations or {}
     if not (D[depot] and S[first] and S[second] and first~=second and D[depot].owner==owner and
         S[first].owner==owner and S[second].owner==owner) then return nil,"OWN_DEPOT_AND_TWO_DOCKS_REQUIRED" end
+    local model=R.engine_for({engine_id=engine_id})
+    if engine_id and model.id~=engine_id then return nil,"UNKNOWN_PASSENGER_FERRY" end
     local board,region=lookup(s)
     local via
     if via_tile~=nil then
@@ -73,10 +76,10 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
     end
     local depot_tile,axis=D[depot].tiles[1],D[depot].axis
     local v=Motion.new(board,depot_tile,Track.diagonal_trackdir(axis==0 and Track.SW or Track.SE),{
-      owner=owner,order={kind="station",id=first},max_speed=R.engine.max_speed,
-      acceleration=R.engine.acceleration,in_depot=true})
+      owner=owner,order={kind="station",id=first},max_speed=model.max_speed,
+      acceleration=model.acceleration,in_depot=true})
     if not v then return nil,"INVALID_DEPOT" end
-    v.ocean_speed_frac,v.canal_speed_frac=R.engine.ocean_speed_frac or 0,R.engine.canal_speed_frac or 0
+    v.ocean_speed_frac,v.canal_speed_frac=model.ocean_speed_frac or 0,model.canal_speed_frac or 0
     local left,right=depot_options(board,axis,v,region)
     if not left and not right then return nil,"NO_CHANNEL_TO_FIRST_DOCK" end
     if via then
@@ -123,10 +126,10 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
       end
     end
     return {version=R.VERSION,owner=owner,depot=depot,first=first,second=second,vehicle=v,via=via,
-      topology=s.topology,arrivals=0,steps=0,phase="depot",dwell=0}
+      engine_id=engine_id,topology=s.topology,arrivals=0,steps=0,phase="depot",dwell=0}
   end
-  function R.start(s,owner,depot,first,second,via_tile)
-    local p,why=R.quote(s,owner,depot,first,second,via_tile)
+  function R.start(s,owner,depot,first,second,via_tile,engine_id)
+    local p,why=R.quote(s,owner,depot,first,second,via_tile,engine_id)
     if not p then return nil,why end
     if paid_mode(s) and s.road_stock_house_supply and s.corner_grid then
       p.paid_clock=s[serial] or 1
@@ -139,6 +142,7 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
   function R.clear(s,owner)
     local p=R.current(s)
     if not p or p.owner~=owner then return nil,"NO_OWN_PILOT" end
+    if p.owned then return nil,"OWNED_FERRY_CANNOT_BE_CLEARED" end
     s[key]=nil
     return true
   end

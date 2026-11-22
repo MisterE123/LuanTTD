@@ -165,7 +165,7 @@ return function(api)
       "Build a dock and ship depot. Open Waterworks for a canal, lock or aqueduct. A lock changes the vessel's height while the gates control transit.",
     },
     {"ferry","Ferry & passenger fares","harbor_ops",function() return api.ship_tools end,
-      "Pick one owned ship depot and two reachable docks. With houses in both dock catchments, a ferry loads passengers and earns fares.",
+      "Inspect a ship depot and buy a passenger ferry. Select two reachable docks with houses nearby, then Dispatch. Inspect the depot for fares, running costs, and stop or resume.",
       nil},
     {"yate","Yate coal ship & refit","harbor_ops",native("ship_coal_tools"),
       "Buy the Yate at an owned depot, refit its hold to coal, then use Order Yate coal ship to pick the mine dock followed by the power dock.",

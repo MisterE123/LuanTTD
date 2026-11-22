@@ -22,8 +22,14 @@ local Lab=dofile(root.."trackworks.lua")(Sim,T,F,{},C,Search)
 local Rail=dofile(root.."rail_dispatch_run.lua")(T,F,C,Search,PBS,Life,Signal,Consist,D,Speed,Lab,nil,Reverse)
 local W=stock("ship_follow",T)
 local Network=dofile(root.."ship_network.lua")(Sim,Terrain,W,stock("ship_facilities",T,W))
+local Roster=dofile(root.."openttd/passenger_ship_roster.lua")
+local Calendar=dofile(root.."openttd/stock_engine_calendar.lua")
+local ship_model=arg and tonumber(arg[1])
 local Ship=dofile(root.."ship_preview_run.lua")(Network,T,W,stock("ship_yapf",T,W,dofile(root.."openttd/yapf_road_search.lua")),
-  stock("ship_motion",T,W),dofile(root.."openttd/ship_regions.lua"),{width=Sim.W,height=Sim.H,x0=1,z0=1})
+  stock("ship_motion",T,W),dofile(root.."openttd/ship_regions.lua"),{width=Sim.W,height=Sim.H,x0=1,z0=1},
+  {engine=Roster.model(206),engine_for=Roster.model,validate_both=ship_model~=nil})
+local Depot=dofile(root.."passenger_ship_depot.lua")(Sim,Roster,Calendar,Ship,function() return true end)
+if ship_model then Ship.settle_owned_day,Ship.count_owned_tick,Ship.paid_art_ready=Depot.settle,Depot.count_tick,Depot.ready end
 
 local with_air=arg and arg[1]=="air"
 local Air,AirNet
@@ -47,6 +53,7 @@ local function mount(s)
   if Air then Sim.mount_paid_air(s,Air) end
 end
 local s=Sim.new(1751)
+if ship_model then Sim.mount_road_bus_market(s,Calendar,ship_model==207 and 1980 or 1950,true) end
 s.rail_paid_service=true;s.ship_paid_service=true;s.air_paid_service=with_air
 s.road_economy=true;s.road_stock_clock=true;s.road_stock_loading=true;s.road_stock_house_supply=true
 s.corner_grid=Terrain.new(Sim.W,Sim.H,function(x) return x<19 and 1 or 0 end)
@@ -73,7 +80,7 @@ s.sites[1].tile=id(11,11);s.sites[2].tile=id(16,13)
 assert(Sim.build(s,"Coach","road",Sim.line(road_a,road_b)))
 assert(Sim.build(s,"Coach","road_station",{road_a,road_b}))
 assert(Sim.build(s,"Coach","road_depot",{road_depot}))
-local bus=assert(Sim.purchase(s,"Coach","bus","passenger",nil,road_depot))
+local bus=assert(Sim.purchase(s,"Coach",ship_model==207 and "leopard_bus" or "bus","passenger",nil,road_depot))
 assert(Sim.add_order(s,"Coach",bus,s.tiles[road_a].station))
 assert(Sim.add_order(s,"Coach",bus,s.tiles[road_b].station))
 assert(Sim.toggle(s,"Coach",bus))
@@ -93,7 +100,21 @@ end
 mount(s)
 local ok,msg,run=Rail.start_shuttle(s,"Rail",id(2,5),s.tiles[second].rail_station_id,s.tiles[first].rail_station_id)
 assert(ok and run.paid_clock,msg)
-local ferry=assert(Ship.start(s,"Ferry",ship_depot.id,dock_a.id,dock_b.id))
+local ferry
+if ship_model then
+  assert(not Depot.start(s,"Ferry",ship_depot.id,dock_a.id,dock_b.id))
+  assert(not Depot.buy(s,"Coach",ship_depot.id,ship_model))
+  local c=Sim.company(s,"Ferry")
+  local start_cash=c.cash
+  local u=assert(Depot.buy(s,"Ferry",ship_depot.id,ship_model))
+  local price=ship_model==207 and 28437 or 24375
+  assert(u.price==price and c.cash==start_cash-price)
+  assert(not Depot.buy(s,"Ferry",ship_depot.id,ship_model) and not Network.remove(s,"Ferry",ship_depot.tiles[1]))
+  assert(not Depot.start(s,"Ferry",ship_depot.id,dock_a.id,dock_a.id))
+  ferry=assert(Depot.start(s,"Ferry",ship_depot.id,dock_a.id,dock_b.id))
+  assert(ferry.engine_id==ship_model and ferry.vehicle.max_speed==(ship_model==207 and 128 or 64))
+  assert(not Ship.clear(s,"Ferry") and not Depot.stop(s,"Coach",true))
+else ferry=assert(Ship.start(s,"Ferry",ship_depot.id,dock_a.id,dock_b.id)) end
 assert(ferry.paid_clock)
 local aircraft
 if Air then
@@ -246,6 +267,20 @@ local tutorial=dofile(root.."business_tutorials.lua")({s=s,Sim=Sim})
 local road_goal,road_total=tutorial.progress("Coach","road")
 local boat_goal,boat_total=tutorial.progress("Ferry","boat")
 assert(road_goal==6 and road_total>=fares.Coach)
-assert(boat_goal==5 and boat_total>=fares.Ferry)
+assert(boat_goal==6 and boat_total>=fares.Ferry)
 assert(tutorial.progress("Stranger","boat")==1)
 print("PASS real paid bus and ferry complete only the correct company's lesson")
+core=nil
+
+if ship_model then
+  local u=assert(s.stock_owned_ferry)
+  assert(Sim.ferry_paid_status(s).capacity==(ship_model==207 and 130 or 100))
+  assert(u.running_ticks>0 and u.charged_ticks>0 and u.expense>0)
+  assert(Depot.stop(s,"Ferry",true))
+  local ticks=u.running_ticks
+  Sim.daily(s);Sim.daily(s)
+  assert(u.running_ticks==ticks and u.charged_ticks==ticks)
+  assert(Depot.stop(s,"Ferry",false));Sim.daily(s)
+  assert(u.running_ticks>ticks)
+  print(("PASS owned ferry %d; correct purchase, cargo, route restore, running costs and stop/resume"):format(ship_model))
+end

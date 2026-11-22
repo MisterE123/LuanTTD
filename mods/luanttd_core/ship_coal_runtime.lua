@@ -96,7 +96,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
     if s.stock_coal_ship then return nil,"ONE_STOCK_COAL_SHIP_ONLY" end
     local d=depot(s,dep)
     if not d or d.owner~=owner then return nil,"OWN_SHIP_DEPOT_REQUIRED" end
-    local p=bindings[s].passenger.current(s)
+    local p=bindings[s].passenger.current(s) or s.stock_owned_ferry
     if p and p.depot==dep then return nil,"FERRY_FREIGHT_SHARED_DEPOT" end
     local q=Roster.quote(Roster.default_cargo,s.stock_ship_purchase_base)
     local c=Sim.company(s,owner)

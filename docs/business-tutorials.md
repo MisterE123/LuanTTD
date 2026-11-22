@@ -13,7 +13,7 @@ resumes when you rejoin. **Stop coaching** clears its HUD.
   passenger carriage, order it to the far and near stations, and earn
   a fare.
 - **Boat business:** place two docks on a connected waterway with houses
-  nearby, build a ship depot, dispatch a ferry and watch passenger fares.
+  nearby, build a ship depot, buy and dispatch a ferry and watch passenger fares.
 
 The lessons do not change the map, lend money or dispatch anything on
 your behalf. They use real construction and passenger service. Progress

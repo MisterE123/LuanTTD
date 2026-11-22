@@ -1137,6 +1137,9 @@ local function ship_order_target(n,V,id)
   local part=S.tiles[id].ship
   if not V.ferry_depot then
     local valid=part and part.owner==n and part.depot
+    if valid and api.passenger_ferry and not api.passenger_ferry.staged(n,valid) then
+      return nil,"Inspect this depot and buy a passenger ferry first."
+    end
     return valid,valid and "Click your ship depot." or "Choose one of your two-tile ship depots."
   end
   if V.ferry_first and part and part.kind=="buoy" then
@@ -2364,7 +2367,29 @@ function U.service(p,kind,id)
         label(.4,3.02,number(coal.waiting or 0).." t of coal waiting")
         label(.4,3.55,coal.accepts and "Accepts coal at a power station." or "No coal recipient in this catchment.")
       end
-    elseif r.kind=="ship_depot" and api.ship_coal_tools then
+    elseif r.kind=="ship_depot" and r.owner==n and api.passenger_ferry then
+      label(.4,1.22,"Build two docks on the same waterway, near houses.")
+      button(.4,1.77,8.6,"open_passenger_depot","Passenger ferries")
+      if api.ship_coal_tools then button(.4,2.49,8.6,"open_cargo_depot","Yate cargo ships") end
+    elseif r.kind=="ship_depot" and r.owner==n and api.shipyard then
+      if api.shipyard.current() then
+        label(.4,1.18,"A passenger ferry already has orders in this world.")
+      else
+        label(.4,1.18,"Build two connected docks near houses.")
+        button(.4,1.77,8.6,"order_ferry_here","Choose passenger ferry orders")
+      end
+    elseif r.kind=="lock" then
+      local lock=S.stock_ship_locks and S.stock_ship_locks[r.lock_middle]
+      local frame=lock and lock.presentation
+      if frame then
+        label(.4,1.18,("Chamber level %d%%  ·  %s"):format(math.floor(frame.phase*100+.5),
+          frame.lower and "lower gates open" or frame.upper and "upper gates open" or "both gates closed"))
+      end
+    end
+  elseif kind=="cargo_depot" then
+    local r=S.tiles[id] and S.tiles[id].ship
+    if not r or r.kind~="ship_depot" or r.owner~=n or not api.ship_coal_tools then return end
+    label(.4,.45,"Ship depot / Cargo ships")
       local vessel=api.ship_coal.status()
       if not vessel then
         label(.4,1.20,"Yate Cargo Ship   /   160 cargo units   /   24 km/h")
@@ -2387,21 +2412,43 @@ function U.service(p,kind,id)
             vessel.stopped and "Resume this coal ship" or "Stop this coal ship") end
         end
       else label(.4,1.20,"The cargo preview already has one Yate assigned to another depot.") end
-    elseif r.kind=="ship_depot" and r.owner==n and api.shipyard then
-      if api.shipyard.current() then
-        label(.4,1.18,"A passenger ferry already has orders in this world.")
-      else
-        label(.4,1.18,"Build two connected docks near houses.")
+    button(.4,4.32,8.6,"back_to_harbor","Back to ship depot")
+  elseif kind=="passenger_depot" then
+    local r=S.tiles[id] and S.tiles[id].ship
+    local service=api.passenger_ferry
+    if not r or r.kind~="ship_depot" or r.owner~=n or not service then return end
+    label(.4,.45,"Ship depot / Passenger ferries")
+    local u=S.stock_owned_ferry
+    local run=api.shipyard.current()
+    if u and u.owner==n and u.depot==r.depot then
+      local model=service.model(u.engine_id)
+      label(.4,1.23,model.name.."  ·  "..model.capacity.." seats")
+      if not run and service.staged(n,r.depot) then
         button(.4,1.77,8.6,"order_ferry_here","Choose passenger ferry orders")
+      elseif run and run.owned then
+        local paid=Sim.ferry_paid_status(S)
+        label(.4,1.92,("Passenger fares %s  ·  Operating costs %s"):format(
+          dollars(paid and paid.fare or 0),dollars(u.expense or 0)))
+        label(.4,2.52,run.failure and ("Route blocked: "..api.shipyard.reason(run.failure))
+          or run.stopped and "Stopped" or "In service")
+        if not run.failure then button(.4,3.05,8.6,run.stopped and "resume_ferry" or "stop_ferry",
+          run.stopped and "Resume passenger ferry" or "Stop passenger ferry") end
+      else label(.4,1.90,"The ferry model is not available in this installation.") end
+    elseif u or run then
+      label(.4,1.22,"This world currently supports one owned passenger ferry.")
+    else
+      local count=0
+      for _,engine in ipairs(service.catalog) do
+        local model=service.quote(n,r.depot,engine)
+        if model then
+          button(.4,1.12+count*.71,8.6,"buy_passenger_ferry_"..engine,
+            ("Buy %s  /  %d seats  /  %s"):format(model.name,model.capacity,dollars(model.price)))
+          count=count+1
+        end
       end
-    elseif r.kind=="lock" then
-      local lock=S.stock_ship_locks and S.stock_ship_locks[r.lock_middle]
-      local frame=lock and lock.presentation
-      if frame then
-        label(.4,1.18,("Chamber level %d%%  ·  %s"):format(math.floor(frame.phase*100+.5),
-          frame.lower and "lower gates open" or frame.upper and "upper gates open" or "both gates closed"))
-      end
+      if count==0 then label(.4,1.22,"No passenger ferry is available at this depot.") end
     end
+    button(.4,4.32,8.6,"back_to_harbor","Back to ship depot")
   elseif kind=="airfield_status" then
     local field=S.stock_small_airports and S.stock_small_airports[id]
     if not field then return end
@@ -2710,12 +2757,19 @@ function U.service_fields(p,f)
       core.close_formspec(n,"luanttd_core:service")
       return true
     end
-  elseif kind=="harbor_status" then
+  elseif kind=="harbor_status" or kind=="passenger_depot" or kind=="cargo_depot" then
     local part=id and S.tiles[id] and S.tiles[id].ship
     if part and part.kind=="ship_depot" and part.owner==n then
-      local c=api.ship_coal_tools and api.ship_coal
+      if kind=="harbor_status" then
+        if f.open_passenger_depot and api.passenger_ferry then V.service_note=nil;U.service(p,"passenger_depot",id);return true end
+        if f.open_cargo_depot and api.ship_coal_tools then V.service_note=nil;U.service(p,"cargo_depot",id);return true end
+      elseif f.back_to_harbor then V.service_note=nil;U.service(p,"harbor_status",id);return true end
+      local ferry=api.passenger_ferry
+      local c=kind=="cargo_depot" and api.ship_coal_tools and api.ship_coal
       local vessel=c and c.status()
-      local order=f.order_ferry_here and api.shipyard and not api.shipyard.current() and "ship_order" or
+      local can_order=ferry and kind=="passenger_depot" and ferry.staged(n,part.depot)
+        or not ferry and kind=="harbor_status" and api.shipyard and not api.shipyard.current()
+      local order=f.order_ferry_here and can_order and "ship_order" or
         f.order_yate_here and vessel and vessel.owner==n and vessel.depot==part.depot and not vessel.mine and
         (vessel.cargo=="coal" or vessel.cargo==1) and "ship_coal_order"
       if order and api.world and api.world.begin_order_selection then
@@ -2727,7 +2781,15 @@ function U.service_fields(p,f)
         return true
       end
       local receipt,note
-      if c and f.buy_yate then receipt,note=c.buy(n,part.depot)
+      if kind=="passenger_depot" and ferry then
+        for _,engine in ipairs(ferry.catalog) do
+          if f["buy_passenger_ferry_"..engine] then receipt,note=ferry.buy(n,part.depot,engine);break end
+        end
+        local u=S.stock_owned_ferry
+        if (f.stop_ferry or f.resume_ferry) and u and u.depot==part.depot then
+          receipt,note=ferry.stop(n,not not f.stop_ferry)
+        end
+      elseif c and f.buy_yate then receipt,note=c.buy(n,part.depot)
       elseif vessel and vessel.owner==n and vessel.depot==part.depot then
         if f.refit_yate then receipt,note=c.refit(n)
         elseif f.stop_yate then receipt,note=c.set_stopped(n,true)

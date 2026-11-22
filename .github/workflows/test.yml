@@ -38,6 +38,7 @@ jobs:
             lua5.1 "tests/$t.lua"
           done
           lua5.1 tests/road_timber_live.lua craighead
+          for ship in 206 207; do lua5.1 tests/rail_paid_runtime.lua "$ship"; done
       - name: Run native startup, feature availability and SQLite checks
         run: |
           export PATH="/usr/games:$PATH"
@@ -49,3 +50,4 @@ jobs:
             BAYLINE_NATIVE_GOODS_ENGINE="$n" BAYLINE_NATIVE_GOODS_YEAR=1968 bash tests/rail_goods_live_native.sh
           done
           BAYLINE_NATIVE_GOODS_ENGINE=13 BAYLINE_NATIVE_GOODS_YEAR=1976 LUANTTD_NATIVE_CRAIGHEAD=true bash tests/rail_goods_live_native.sh
+          for year in 1950 1980; do LUANTTD_NATIVE_FERRY_YEAR="$year" bash tests/ship_coal_live_native.sh; done

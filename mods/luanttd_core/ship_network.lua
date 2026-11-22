@@ -159,6 +159,7 @@ return function(Sim,Terrain,Water,Facilities)
       p=entries and entries[t.depot]
       if not p then return nil,"INVALID_FACILITY" end
       if s.stock_coal_ship and s.stock_coal_ship.depot==p.id then return nil,"DEPOT_HAS_OWNED_SHIP" end
+      if s.stock_owned_ferry and s.stock_owned_ferry.depot==p.id then return nil,"DEPOT_HAS_PASSENGER_FERRY" end
       tiles,cost=p.tiles,90 -- PR_CLEAR_DEPOT_SHIP
     elseif t.kind=="dock" then
       entries=s.stock_ship_stations
