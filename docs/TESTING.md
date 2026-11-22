@@ -853,3 +853,12 @@ source YAPF choices and normal lane following are unchanged.
   earns a new fare with nobody connected, then proves that opting
   out pauses the same saved world. No graphical client or worker
   thread acts on the authoritative campaign.
+
+## GitHub Actions
+
+[LuanTTD tests](../.github/workflows/test.yml) runs Lua syntax and regression
+checks plus the native fresh-world, all-features, and tram/SQLite tests
+on pushes and pull requests to `main`. The runner uses Debian's Luanti
+5.10 server. Run the same shell scripts on Linux to reproduce a failure.
+Camera feel, visual assets, and building and ordering routes through the UI
+still require graphical playtesting.

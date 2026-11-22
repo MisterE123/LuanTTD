@@ -1,0 +1,43 @@
+name: LuanTTD tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Lua and headless Luanti
+    runs-on: ubuntu-24.04
+    container: debian:13
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install test tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git lua5.1 luanti-server python3
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check Lua syntax and run focused tests
+        run: |
+          find mods/luanttd_core -type f -name '*.lua' -print0 | xargs -0 -r -n 1 luac5.1 -p
+          for t in sim world_setup workbench_index atmosphere hotbar ordinary_level_crossing \
+            bridge_picker rail_bridge_catenary_selector generated_coast_dock \
+            coastal_corridor_seed coastal_corridor_freight rail_owned_default; do
+            lua5.1 "tests/$t.lua"
+          done
+      - name: Run native startup, feature availability and SQLite checks
+        run: |
+          export PATH="/usr/games:$PATH"
+          luantiserver --version
+          bash tests/default_stock_terrain_native.sh
+          bash tests/default_tram_native.sh
