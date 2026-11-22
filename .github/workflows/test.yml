@@ -33,7 +33,8 @@ jobs:
           for t in sim world_setup workbench_index atmosphere hotbar ordinary_level_crossing \
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight rail_owned_default \
-            rail_depot_fleet rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals; do
+            rail_depot_fleet rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
+            road_bay_live road_terminus_town_limits; do
             lua5.1 "tests/$t.lua"
           done
       - name: Run native startup, feature availability and SQLite checks

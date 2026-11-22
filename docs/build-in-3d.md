@@ -41,6 +41,14 @@ Settings. Its stock shader reflects sky and sunlight, not silhouettes
 of nearby houses. Set **Waving liquids wave height** to about **0.16**
 for small waves. Game updates do not change your client settings.
 
+## Bus stops and termini
+
+A stop does not have to be within an arbitrary radius of the town center.
+Its name comes from the nearby town, while nearby houses determine
+passenger acceptance. Check the placement preview before building.
+A two-bay terminus still needs flat ground and exactly one road approach;
+choose a drive-through stop for a through road.
+
 ## Construction at a glance
 
 - **Roadworks** and **Railworks** are the primary construction menus.

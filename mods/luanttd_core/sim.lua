@@ -992,6 +992,17 @@ function M.nearest_town(s,id)
   end
   return best,distance
 end
+-- Station-to-town association is not passenger catchment. OpenTTD's
+-- BuildRoadStop places a station on a legal site, and its station record
+-- names a nearby town regardless of which houses fall inside the stop.
+local function road_stop_site(s,id)
+  local near,served=site_radius(s,id)
+  if not (s.road_stock_house_supply and M.road_stock_service_active(s)) then
+    return near,served,false
+  end
+  local town=M.nearest_town(s,id)
+  return town and town.id or near,served,true
+end
 local function road_terminal_plan(s,owner,tool,ids)
   local pair=tool=="road_bay_pair"
   if pair then
@@ -1022,7 +1033,9 @@ local function road_terminal_plan(s,owner,tool,ids)
       if t.build and (tool~="road_station" or t.build~="road") then return nil,"Clear the existing structure first." end
       local item={id=id,tool=tool,build=tool,owner=owner,road_bits=0,road_town=t.road_town,h=t.h}
       if tool=="road_station" then
-        if not site_radius(s,id) then return nil,"Build within five tiles of a town or industry." end
+        local associated,served,stock=road_stop_site(s,id)
+        if not stock and not associated then return nil,"Build within five tiles of a town or industry." end
+        item.station_site,item.station_served=associated,served
         if t.build then
           item.road_bits=bits_for(s,id,t)
           -- OpenTTD 14.1 station_cmd.cpp CheckFlatLandRoadStop rejects
@@ -1330,10 +1343,12 @@ local function apply_build(s,owner,changes,cost)
       end
       if station_tools[k] then
         local sid=s.next_station;s.next_station=sid+1
-        local best,served=site_radius(s,id)
+        local best,served=item.station_site,item.station_served
+        if not served then best,served=site_radius(s,id) end
         local site=s.sites[best]
         local label=tile.road_stop_pair and "Bus terminus" or M.tools[k].name
-        s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,name=site.name.." "..label.." #"..sid,site=best,served=served,stock={},last_service={}}
+        s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,
+          name=(site and site.name.." " or "")..label.." #"..sid,site=best,served=served,stock={},last_service={}}
         tile.station=sid
         if tile.road_stop_pair then M.install_road_bay(s,id) end
       end
@@ -2303,7 +2318,8 @@ function M.build_truck_stop(s,owner,id)
   if ok then
     local st=s.stations[s.tiles[id].station]
     st.stop_type="truck"
-    st.name=s.sites[st.site].name.." Loading Stop #"..st.id
+    local near=s.sites[st.site]
+    st.name=(near and near.name.." " or "").."Loading Stop #"..st.id
   end
   return ok,msg,changed
 end
@@ -2319,6 +2335,11 @@ function M.mail_stop_status(s,st)
 end
 local function road_passenger(s,v)
   return s.road_economy and v.cargo=="passenger" and M.vehicles[v.engine].mode=="road"
+end
+function M.road_passenger_acceptance(s,id)
+  if not (s.road_stock_house_supply and M.road_stock_service_active(s)) then return end
+  passenger_modules()
+  return station_service.acceptance(s,{tile=id,mode="road"},"passenger")
 end
 function M.waiting_passengers(s,st)
   if not st then return 0 end

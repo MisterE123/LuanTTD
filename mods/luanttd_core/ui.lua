@@ -1660,13 +1660,17 @@ function U.preview(p,id,hit)
   local action=V.tool=="clear" and "Bulldoze" or Sim.linear[V.tool] and not V.anchor and "Mark start" or "Build"
   if #changes==0 then return ids,true,action.."   |   Already built" end
   if api.road_first and (V.tool=="road_station" or V.tool=="road_bay_pair") then
-    local center=Sim.site_radius(S,id)
-    local site=center and S.sites[center]
     local part=changes[1]
+    local site=part and S.sites[part.station_site]
     local kind=V.tool=="road_bay_pair" and "Two-bay bus terminus" or
       part and (part.stop_axis and "Through bus stop" or part.road_bits==0 and "Unconnected bus stop") or "Bus stop"
     if part and part.road_bits==0 then
       return ids,true,kind.."  |  "..dollars(cost).."  ·  Connect a road before ordering buses"
+    end
+    local acceptance=Sim.road_passenger_acceptance and Sim.road_passenger_acceptance(S,id)
+    if acceptance then
+      return ids,true,("%s  |  %s  ·  %s"):format(kind,dollars(cost),
+        acceptance>=8 and "Accepts passengers" or "No passenger acceptance here")
     end
     if site then return ids,true,("%s  |  %s  ·  Serves %s"):format(kind,dollars(cost),site.name) end
   elseif api.road_first and V.tool=="road_depot" then
@@ -2571,7 +2575,14 @@ function U.service(p,kind,id)
       for _,sid in ipairs(st.served) do waiting=waiting+(S.sites[sid].stock.passenger or 0) end
       label(.4,1.22,number(waiting).." passengers available in catchment")
     end
-    label(.4,1.7,"Serves: "..S.sites[st.site].name)
+    local town=S.sites[st.site]
+    local acceptance=Sim.road_passenger_acceptance and Sim.road_passenger_acceptance(S,st.tile)
+    if acceptance then
+      label(.4,1.7,(town and "Near "..town.name.."  ·  " or "")..
+        (acceptance>=8 and "Accepts passengers" or "No passenger acceptance"))
+    elseif town then
+      label(.4,1.7,"Serves: "..town.name)
+    end
     local bay=Sim.road_bay_status and Sim.road_bay_status(S,st.tile)
     if bay then
       label(.4,3.26,("Bay 1: %s   /   Bay 2: %s"):format(bay.first and "occupied" or "free",bay.second and "occupied" or "free"))

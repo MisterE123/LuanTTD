@@ -13,6 +13,10 @@ reports `OpenTTD 16.0-RC1`; it is not included with LuanTTD.
   Signals can be purchased on either stock straight grade, with the mast base
   sampled at its exact source anchor rather than the tile's lowest corner.
   This does not add signal heads on curves or overlapping track.
+- **Compared:** road-stop eligibility in [station_cmd.cpp](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/station_cmd.cpp).
+  Town association does not impose a five-tile build radius. The station
+  catchment, not the distance to a town sign, determines the native passenger
+  acceptance shown by the tool. This does not claim parity for authority ratings.
 - **Compared:** retained world-generation options have counterparts in
   [world settings](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/table/settings/world_settings.ini)
   and [difficulty settings](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/table/settings/difficulty_settings.ini).
