@@ -4,6 +4,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo=$PWD
+cargo_lorry=${LUANTTD_GOODS_ART_MODEL:-balogh_goods_truck}
+case "$cargo_lorry" in balogh_goods_truck|craighead_goods_truck) ;; *) echo "Unknown goods lorry fixture" >&2; exit 2 ;; esac
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   tools=$(realpath "$BAYLINE_NATIVE_TOOLS")
   export PATH="$tools/run/bin:$tools/usr/bin:$PATH"
@@ -24,11 +26,12 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD Balogh Goods Truck art fixture\n' > "$out/games/goods_art/game.conf"
 printf 'name = goodsart\n' > "$mod/mod.conf"
 cp tests/balogh_goods_truck_art_native.lua "$mod/init.lua"
-cp mods/luanttd_core/models/{bl_balogh_goods_truck.obj,bl_coal_tipper_loaded.obj,bl_scenery_factory.obj,bl_road_freight_stop_straight_0.obj} "$mod/models/"
-cp mods/luanttd_core/textures/{bl_balogh_goods_truck_atlas,bl_coal_tipper_palette,bl_scenery_palette,bl_road_freight_stop,bl_grass*,bl_road_{5,9,10}_plain_q*}.png "$mod/textures/"
+cp "mods/luanttd_core/models/bl_$cargo_lorry.obj" mods/luanttd_core/models/{bl_coal_tipper_loaded.obj,bl_scenery_factory.obj,bl_road_freight_stop_straight_0.obj} "$mod/models/"
+cp "mods/luanttd_core/textures/bl_${cargo_lorry}_atlas.png" mods/luanttd_core/textures/{bl_coal_tipper_palette,bl_scenery_palette,bl_road_freight_stop,bl_grass*,bl_road_{5,9,10}_plain_q*}.png "$mod/textures/"
 printf 'gameid = goods_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port
+luanttd_qa_goods_art_model = $cargo_lorry
 prometheus_listener_address = 127.0.0.1:$port
 server_announce = false
 bind_address = 127.0.0.1
@@ -44,6 +47,7 @@ EOF
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache" XDG_CONFIG_HOME="$out/home/.config" \
   LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games" \
   LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
+export MESA_SHADER_CACHE_DISABLE=1
 export DISPLAY=":$disp" XAUTHORITY="$out/Xauthority"
 opts=(-nolisten tcp)
 lib=()
@@ -78,7 +82,7 @@ sleep 2
 for shot in street rear survey bend; do
   xdotool key t; sleep .2; xdotool type "/showgoods $shot"; xdotool key Return
   sleep 2.6
-  import -window root "$out/goods-$shot.png"
+  import -window root -quality 95 "$out/goods-$shot.jpg"
 done
 ! grep -Ei 'error|could not load' "$out/client.log"
 python3 - "$out" <<'PYQA'
@@ -86,7 +90,7 @@ from PIL import Image
 from pathlib import Path
 import sys
 for name in ("street","rear","survey","bend"):
-    i=Image.open(Path(sys.argv[1])/f"goods-{name}.png").convert("RGB").crop((235,120,1080,810))
+    i=Image.open(Path(sys.argv[1])/f"goods-{name}.jpg").convert("RGB").crop((235,120,1080,810))
     pixels=i.get_flattened_data() if hasattr(i,"get_flattened_data") else i.getdata()
     enamel=sum(36<r<148 and 70<g<181 and 98<b<213 and g>r+19 and b>g+14 for r,g,b in pixels)
     assert enamel>250,(name,enamel)

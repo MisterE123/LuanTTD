@@ -17,8 +17,9 @@ for q=0,3 do
 end
 mesh("yard","bl_scenery_factory","bl_scenery_palette")
 mesh("freight","bl_road_freight_stop_straight_0","bl_road_freight_stop")
+local cargo_lorry=core.settings:get("luanttd_qa_goods_art_model") or "balogh_goods_truck"
 for _,item in ipairs({
-  {"lorry","bl_balogh_goods_truck.obj","bl_balogh_goods_truck_atlas.png"},
+  {"lorry","bl_"..cargo_lorry..".obj","bl_"..cargo_lorry.."_atlas.png"},
   {"tipper","bl_coal_tipper_loaded.obj","bl_coal_tipper_palette.png"},
 }) do
   core.register_entity("goodsart:"..item[1],{

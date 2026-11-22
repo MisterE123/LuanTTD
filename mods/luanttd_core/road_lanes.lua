@@ -10,7 +10,7 @@ M.corner_radius = .18    -- index-space radius in road_motion.lua
 -- Existing editable meshes use ten OBJ units per Luanti entity node.
 -- Bus width .638, truck .629, coach .629 at native unit visual_size.
 local scales = { bus=.42, truck=.40, coach=.42, leopard_bus=.40, foster_bus=.40, mail_van=.43, coal_tipper=.42,
-  wood_truck=.42,goods_truck=.42,grain_truck=.42,livestock_van=.42,oil_tanker=.42 }
+  wood_truck=.42,goods_truck=.42,craighead_goods_truck=.42,grain_truck=.42,livestock_van=.42,oil_tanker=.42 }
 
 function M.visual_size(engine)
   local scale = scales[engine] or 1

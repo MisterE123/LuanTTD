@@ -37,6 +37,7 @@ jobs:
             road_bay_live road_terminus_town_limits; do
             lua5.1 "tests/$t.lua"
           done
+          lua5.1 tests/road_timber_live.lua craighead
       - name: Run native startup, feature availability and SQLite checks
         run: |
           export PATH="/usr/games:$PATH"
@@ -47,3 +48,4 @@ jobs:
           for n in 13 14; do
             BAYLINE_NATIVE_GOODS_ENGINE="$n" BAYLINE_NATIVE_GOODS_YEAR=1968 bash tests/rail_goods_live_native.sh
           done
+          BAYLINE_NATIVE_GOODS_ENGINE=13 BAYLINE_NATIVE_GOODS_YEAR=1976 LUANTTD_NATIVE_CRAIGHEAD=true bash tests/rail_goods_live_native.sh

@@ -3,6 +3,9 @@ local root="mods/luanttd_core/"
 local S=dofile(root.."sim.lua")
 local Terrain=dofile(root.."openttd/terrain.lua")
 local s=S.new(1751)
+local later=arg and arg[1]=="craighead"
+local Calendar=dofile(root.."openttd/stock_engine_calendar.lua")
+if later then S.mount_road_bus_market(s,Calendar,1976,true,true) end
 s.corner_grid=dofile(root.."terrain_preview.lua")(S,Terrain,s)
 dofile(root.."town_layout.lua")(S,s)
 s.road_economy,s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading=true,true,true,true
@@ -42,7 +45,47 @@ local function buy(engine,cargo,from,to)
   return id
 end
 local w=buy("wood_truck","wood",p.forest_stop,p.sawmill_stop)
-local g=buy("goods_truck","goods",mill_goods,p.goods_stop)
+local goods_model=later and "craighead_goods_truck" or "goods_truck"
+local capacity=later and 16 or 14
+if later then
+  assert(S.vehicle_available(s,goods_model))
+  local offer=S.vehicle_offer(s,goods_model)
+  assert(offer.stock_engine_id==139 and offer.speed==176 and offer.capacity==16 and offer.cost==7109)
+  local earlier=S.new(1751)
+  earlier.road_timber=true
+  S.mount_road_bus_market(earlier,Calendar,1950,true,true)
+  assert(not S.vehicle_available(earlier,goods_model))
+  local stub=dofile(root.."openttd/road_freight_catalog.lua")
+  local row=assert(stub.row(goods_model))
+  assert(row.life==15 and row.base_life==55 and row.intro_after_1920==19724 and
+    row.climates==7 and row.running_factor==168 and row.weight_quarters==48 and row.power_tens_hp==22)
+  assert(not S.purchase(s,"Wood Route",goods_model,"coal",nil,p.depot))
+  assert(not S.purchase(s,"Wrong Owner",goods_model,"goods",nil,p.depot))
+end
+local g
+if later then
+  local form,closed
+  core={formspec_escape=function(x) return x end,
+    get_modpath=function() return "mods/luanttd_core" end,
+    show_formspec=function(_,name,markup) assert(name=="luanttd_core:service");form=markup end,
+    close_formspec=function(_,name) closed=name end}
+  local player={get_player_name=function()return "Wood Route" end}
+  local api={Sim=S,s=s,road_first=true,timber_tools=true,save=function()end}
+  local U=dofile(root.."ui.lua")(api)
+  U.service(player,"depot",p.depot)
+  assert(form:find("depot_buy_craighead;Buy Craighead Goods Truck",1,true))
+  local before=S.company(s,"Wood Route").cash
+  g=s.next_vehicle
+  assert(U.fields(player,"luanttd_core:service",{depot_buy_craighead=true}))
+  assert(s.fleet[g].engine==goods_model and S.company(s,"Wood Route").cash==before-7109)
+  assert(form:find("0 / 16 aboard",1,true))
+  assert(U.fields(player,"luanttd_core:service",{depot_buy_craighead=true}))
+  assert(s.next_vehicle==g+1 and not closed)
+  assert(S.add_order(s,"Wood Route",g,station(mill_goods).id,"full"))
+  assert(S.add_order(s,"Wood Route",g,station(p.goods_stop).id,"unload"))
+  local ok,why=S.toggle(s,"Wood Route",g);assert(ok,why)
+  core=nil
+else g=buy(goods_model,"goods",mill_goods,p.goods_stop) end
 assert(S.vehicles.wood_truck.stock_engine_id==144 and S.vehicles.wood_truck.capacity==20)
 assert(S.vehicles.goods_truck.stock_engine_id==138 and S.vehicles.goods_truck.capacity==14)
 local function clone(a,seen)
@@ -68,19 +111,20 @@ for i=1,190 do
       wood_first=wood_first or e.data.tick
     end
     if e.kind=="fare" and e.vehicle==g then
-      assert(e.data.units==14 and e.data.amount>0)
+      assert(e.data.units==capacity and e.data.amount>0)
       goods_first=goods_first or e.data.tick
     end
   end
   if not reload and a.units>=10 and a.delivered==0 then
     assert(mill.wood_received==nil)
     s=clone(s);reload=true
+    if later then S.mount_road_bus_market(s,Calendar,1976,true,true) end
   end
-  if reload and wood_first and goods_first and b.delivered>=28 then break end
+  if reload and wood_first and goods_first and b.delivered>=capacity*2 then break end
 end
 local a,b=s.fleet[w],s.fleet[g]
 assert(reload and wood_first and goods_first and wood_first<goods_first)
-assert(a.delivered>=20 and b.delivered==28 and a.expense>0 and b.expense>0)
+assert(a.delivered>=20 and b.delivered==capacity*2 and a.expense>0 and b.expense>0)
 assert((s.sites[station(p.goods_stop).site].received.goods or 0)==b.delivered)
 assert(s.companies["Wood Route"].revenue==a.revenue+b.revenue)
 assert(not (station(p.sawmill_stop).stock or {}).wood,"Stock wood leaked into the legacy prototype queue")

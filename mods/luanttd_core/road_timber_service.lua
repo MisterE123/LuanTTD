@@ -7,7 +7,8 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
   local ordered={"goods","wood"} -- CargoID 5 then 7.
   local floor,max=math.floor,math.max
   function R.supported_vehicle(v)
-    return v and pairs_by_cargo[v.cargo]~=nil and pairs_by_cargo[v.cargo]==v.engine or false
+    return v and pairs_by_cargo[v.cargo]~=nil and (pairs_by_cargo[v.cargo]==v.engine or
+      v.engine=="craighead_goods_truck" and v.cargo=="goods") or false
   end
   function R.truck_stop(st) return st and st.mode=="road" and st.stop_type=="truck" end
   function R.bind(s,options)
@@ -199,7 +200,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
         end,
         attempt=function(st,v,capacity)
           local q=Rules.trucks[v.cargo]
-          Rating.observe_loading(Rules.goods(st,v.cargo),floor(q.speed/2),
+          Rating.observe_loading(Rules.goods(st,v.cargo),(Sim.vehicles[v.engine].display_speed or floor(q.speed/2)),
             Sim.date(s)-Sim.date(s,v.bought or s.day),capacity)
         end,
         loaded=function(st,v,n)

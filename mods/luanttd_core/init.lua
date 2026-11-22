@@ -122,7 +122,8 @@ do
   end
   Sim.mount_road_bus_market(S,dofile(mod.."/openttd/stock_engine_calendar.lua"),
     world_options and world_options.year or tonumber(settings:get("bayline_stock_bus_start_year")) or 1950,
-    files["bl_foster_bus.obj"] and files["bl_foster_bus_atlas.png"])
+    files["bl_foster_bus.obj"] and files["bl_foster_bus_atlas.png"],
+    files["bl_craighead_goods_truck.obj"] and files["bl_craighead_goods_truck_atlas.png"])
   api.bus_breakdowns=tonumber(settings:get("bayline_stock_bus_breakdowns")) or 2
   api.bus_service_interval=tonumber(settings:get("bayline_stock_bus_service_interval")) or 150
   Sim.mount_road_faults(S,dofile(mod.."/openttd/road_breakdowns.lua"),

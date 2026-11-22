@@ -2,6 +2,7 @@
 -- board, full authoritative stock day, one SQLite world, and real assets.
 local owner,at="Harbor Goods QA",Sim.id
 local engine=tonumber(core.settings:get("bayline_rail_goods_qa_engine")) or 0
+local craighead=core.settings:get_bool("bayline_native_craighead_goods",false)
 local empty_mass,full_mass,purchase_price=68,80,12421
 if engine==8 then empty_mass,full_mass,purchase_price=152,164,21796 end
 if engine==13 then empty_mass,full_mass,purchase_price=93,105,24921 end
@@ -91,7 +92,14 @@ local function proof_goods()
         local mill=S.stock_timber_industries[qa.mill]
         local town=S.sites[qa.town]
         local road_crates,road_money=road_goods and road_goods.delivered or 0,road_goods and road_goods.revenue or 0
-        if road_goods then assert(road_crates>0 and road_money>0 and road_goods.expense>0) end
+        if road_goods then
+          assert(road_crates>0 and road_money>0 and road_goods.expense>0)
+          if craighead then
+            assert(road_goods.engine=="craighead_goods_truck" and road_crates%16==0)
+            local def=assert(core.registered_entities["luanttd_core:vehicle_craighead_goods_truck"]).initial_properties
+            assert(def.mesh=="bl_craighead_goods_truck.obj" and def.textures[1]=="bl_craighead_goods_truck_atlas.png")
+          end
+        end
         assert(charge>0 and phase.fare==charge and delivered==phase.delivered and delivered%25==0 and peak==full_mass)
         assert(phase.running_expense>0 and r.running_ticks_total>qa.ticks)
         assert(mill.wood_received>=25 and truck.delivered>0 and truck.revenue>0 and truck.expense>0)
@@ -151,7 +159,7 @@ local function proof_goods()
   assert(Sim.add_order(S,owner,truck,S.tiles[seed.sawmill_stop].station,"unload"))
   assert(Sim.toggle(S,owner,truck))
   local second_truck
-  if core.settings:get_bool("bayline_native_rail_goods_competition",false) then
+  if craighead or core.settings:get_bool("bayline_native_rail_goods_competition",false) then
     -- Stay north of the rail corridor when closing the optional road
     -- turnaround loop; use the existing Mill loading spur.
     local mill_stop,town_stop=seed.mill_goods_stop,seed.goods_stop
@@ -160,7 +168,9 @@ local function proof_goods()
     assert(Sim.build(S,owner,"road",Sim.line(at(15,11),at(12,11))))
     assert(Sim.build_truck_stop(S,owner,mill_stop))
     assert(Sim.build_truck_stop(S,owner,town_stop))
-    second_truck=assert(Sim.purchase(S,owner,"goods_truck","goods",nil,seed.depot))
+    local model=craighead and "craighead_goods_truck" or "goods_truck"
+    assert(Sim.vehicle_available(S,model))
+    second_truck=assert(Sim.purchase(S,owner,model,"goods",nil,seed.depot))
     assert(Sim.add_order(S,owner,second_truck,S.tiles[mill_stop].station,"full"))
     assert(Sim.add_order(S,owner,second_truck,S.tiles[town_stop].station,"unload"))
     assert(Sim.toggle(S,owner,second_truck))

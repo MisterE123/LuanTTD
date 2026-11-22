@@ -1066,9 +1066,10 @@ return function(api)
     for id in pairs(set) do update_tile(id) end
   end
   local models={bus="town_flyer",leopard_bus="leopard_bus",mail_van="mail_van",coal_tipper="coal_tipper",truck="truck",coach="coach",
-    wood_truck="witcombe_wood_truck",goods_truck="balogh_goods_truck",
+    wood_truck="witcombe_wood_truck",goods_truck="balogh_goods_truck",craighead_goods_truck="craighead_goods_truck",
     steam="steam",diesel="diesel",electric="electric",ferry="ferry",freighter="freighter",prop="prop",jet="jet"}
   local paint={wood_truck="bl_witcombe_wood_truck_atlas.png",goods_truck="bl_balogh_goods_truck_atlas.png",
+    craighead_goods_truck="bl_craighead_goods_truck_atlas.png",
     coal_tipper="bl_coal_tipper_palette.png",leopard_bus="bl_road_fleet_palette.png",mail_van="bl_road_fleet_palette.png",
     foster_bus="bl_foster_bus_atlas.png"}
   if Sim.foster_art_ready(S) then models.foster_bus="foster_bus" end

@@ -55,3 +55,5 @@ No OpenTTD sound assets are included. Set `bayline_service_sounds = false`
 to mute the milestone cues independently of the client master volume.
 
 - [SH/Hendry 25 and UU 37 (editable diesel fleet)](rail_early_diesels.md)
+
+- [Craighead Goods Truck (editable rigid van)](craighead_goods_truck.md)

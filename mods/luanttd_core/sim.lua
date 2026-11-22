@@ -1591,13 +1591,33 @@ function M.signal(s,owner,id)
   t.closed=not t.closed
   return true,t.closed and "Signal set to hold departures." or "Signal reopened."
 end
+local function road_freight_catalog()
+  if M.source_freight_catalog then return M.source_freight_catalog end
+  local source=debug and debug.getinfo(1,"S").source
+  local base=source and source:match("^@(.*/)sim%.lua$")
+  base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+  M.source_freight_catalog=dofile(base.."openttd/road_freight_catalog.lua")
+  return M.source_freight_catalog
+end
+local craighead="craighead_goods_truck"
+M.vehicles[craighead]=road_freight_catalog().offer(craighead)
+table.insert(M.vehicle_order,#M.vehicle_order-4,craighead)
+local freight_art_mount=setmetatable({},{__mode="k"})
+local function goods_engine(engine)
+  return engine=="goods_truck" or engine==craighead
+end
+function M.road_freight_cargo(engine)
+  return M.vehicles[engine] and M.vehicles[engine].cargo or
+    ({wood_truck="wood",goods_truck="goods",coal_tipper="coal",mail_van="mail",
+      grain_truck="grain",livestock_van="livestock",oil_tanker="oil"})[engine]
+end
 local function timber_engine(engine)
-  return engine=="wood_truck" or engine=="goods_truck"
+  return engine=="wood_truck" or goods_engine(engine)
 end
 local function farm_engine(engine)
-  return engine=="grain_truck" or engine=="livestock_van" or engine=="goods_truck"
+  return engine=="grain_truck" or engine=="livestock_van" or goods_engine(engine)
 end
-local function oil_engine(engine) return engine=="oil_tanker" or engine=="goods_truck" end
+local function oil_engine(engine) return engine=="oil_tanker" or goods_engine(engine) end
 local function industry_truck(engine) return timber_engine(engine) or farm_engine(engine) or oil_engine(engine) end
 local function allowed(engine,cargo)
   if engine=="leopard_bus" or engine=="foster_bus" then return cargo=="passenger" end
@@ -1606,7 +1626,7 @@ local function allowed(engine,cargo)
   if engine=="wood_truck" then return cargo=="wood" end
   if engine=="grain_truck" then return cargo=="grain" end
   if engine=="livestock_van" then return cargo=="livestock" end
-  if engine=="goods_truck" then return cargo=="goods" end
+  if goods_engine(engine) then return cargo=="goods" end
   if engine=="oil_tanker" or cargo=="oil" then return engine=="oil_tanker" and cargo=="oil" end
   if engine=="bus" or engine=="coach" or engine=="ferry" or engine=="prop" or engine=="jet" then return cargo=="passenger" or cargo=="mail" end
   if engine=="truck" or engine=="freighter" then return cargo~="passenger" end
@@ -1626,7 +1646,7 @@ local function road_bus_catalog()
   end
   return M.source_bus_catalog
 end
-function M.mount_road_bus_market(s,Calendar,starting_year,has_foster)
+function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighead)
   M.engine_calendar=Calendar
   if not s.stock_bus_market then
     assert(s.day==0 and not next(s.fleet),"Start the stock depot market in a fresh world.")
@@ -1646,6 +1666,10 @@ function M.mount_road_bus_market(s,Calendar,starting_year,has_foster)
   end
   assert(s.stock_bus_market.version==1,"Unsupported saved stock road market.")
   foster_art_mount[s]=not not has_foster
+  freight_art_mount[s]=not not has_craighead
+  local market=s.stock_bus_market
+  local r=road_freight_catalog().row(craighead)
+  market.models[r.stock_id]=market.models[r.stock_id] or assert(Calendar.prepare_original(r,market.settings))
 end
 function M.foster_art_ready(s)
   return foster_art_mount[s]
@@ -1689,6 +1713,12 @@ function M.vehicle_capacity(v)
   return s and road_bus_catalog().capacity(s.stock_id) or M.vehicles[v.engine].capacity
 end
 function M.vehicle_available(s,engine)
+  if engine==craighead then
+    local market=s.stock_bus_market
+    if not (market and freight_art_mount[s] and M.road_stock_service_active(s)) then return false end
+    local model=M.engine_calendar.snapshot(market.models[139],market.epoch+s.day)
+    return not not (model.public and (M.road_timber_active(s) or M.road_farm_active(s) or M.road_oil_active(s)))
+  end
   if s.stock_bus_market and engine=="coach" then return false end
   if s.stock_bus_market and road_bus_catalog().stock_id(engine) then
     local model=M.stock_road_offer(s,engine)

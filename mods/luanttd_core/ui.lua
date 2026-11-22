@@ -1401,9 +1401,7 @@ local function order_stop_target(n,V,id)
   if S.road_economy and engine.mode=="road" and v.cargo=="passenger" and st.stop_type=="truck" then
     return nil,"Buses need passenger stops, not loading stops."
   end
-  if S.road_economy and engine.mode=="road" and (v.engine=="mail_van" or v.engine=="coal_tipper" or
-      v.engine=="wood_truck" or v.engine=="goods_truck" or v.engine=="oil_tanker" or
-      v.engine=="grain_truck" or v.engine=="livestock_van") and st.stop_type~="truck" then
+  if S.road_economy and engine.mode=="road" and Sim.road_freight_cargo(v.engine) and st.stop_type~="truck" then
     return nil,"This vehicle needs a truck loading stop."
   end
   if #v.orders>=16 then return nil,"Limit of 16 orders." end
@@ -2523,6 +2521,12 @@ function U.service(p,kind,id)
         S.road_mail and ("Buy coal tipper / "..dollars(truck.cost)) or ("Buy "..truck.name.."  /  "..truck.capacity.." tons  /  "..dollars(truck.cost)))
     end
     if S.road_mail or freight then y=y+.62 end
+    if t.owner==n and Sim.vehicle_available(S,"craighead_goods_truck") then
+      local truck=Sim.vehicle_offer(S,"craighead_goods_truck")
+      button(.4,y,8.45,"depot_buy_craighead",("Buy Craighead Goods Truck  /  %d crates  /  %s"):format(
+        truck.capacity,dollars(truck.cost)))
+      y=y+.62
+    end
     local parked={}
     for _,i in ipairs(sorted(S.fleet)) do
       local v=S.fleet[i]
@@ -2757,13 +2761,12 @@ function U.service_fields(p,f)
     local t=S.tiles[id]
     if not t or t.owner~=n or t.build~="road_depot" then return true end
     if f.depot_buy or f.depot_buy_leopard or f.depot_buy_foster or f.depot_buy_mail or f.depot_buy_coal or
-        f.depot_buy_wood or f.depot_buy_goods or f.depot_buy_grain or f.depot_buy_livestock or f.depot_buy_oil then
-      local model=f.depot_buy_oil and "oil_tanker" or f.depot_buy_grain and "grain_truck" or f.depot_buy_livestock and "livestock_van" or
+        f.depot_buy_wood or f.depot_buy_goods or f.depot_buy_grain or f.depot_buy_livestock or f.depot_buy_oil or f.depot_buy_craighead then
+      local model=f.depot_buy_craighead and "craighead_goods_truck" or f.depot_buy_oil and "oil_tanker" or f.depot_buy_grain and "grain_truck" or f.depot_buy_livestock and "livestock_van" or
         f.depot_buy_wood and "wood_truck" or f.depot_buy_goods and "goods_truck" or
         f.depot_buy_coal and "coal_tipper" or f.depot_buy_mail and "mail_van" or f.depot_buy_leopard and "leopard_bus" or
         f.depot_buy_foster and "foster_bus" or "bus"
-      local cargo=({wood_truck="wood",goods_truck="goods",coal_tipper="coal",mail_van="mail",
-        grain_truck="grain",livestock_van="livestock",oil_tanker="oil"})[model] or "passenger"
+      local cargo=Sim.road_freight_cargo(model) or "passenger"
       local v,note=Sim.purchase(S,n,model,cargo,nil,id)
       V.service_note=note
       if v then api.save();U.service(p,"vehicle",v);return true end

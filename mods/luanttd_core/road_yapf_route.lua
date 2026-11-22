@@ -4,7 +4,7 @@
 return function(Sim,F,C,Search,Board,Motion,MotionLeg)
   local R={}
   local speed={bus=112,coach=144,leopard_bus=176,foster_bus=224,mail_van=96,truck=96,coal_tipper=96,
-    wood_truck=96,goods_truck=96,grain_truck=96,livestock_van=96,oil_tanker=96} -- display-scale OpenTTD half-km/h units
+    wood_truck=96,goods_truck=96,craighead_goods_truck=176,grain_truck=96,livestock_van=96,oil_tanker=96} -- display-scale OpenTTD half-km/h units
   function R.frames(board,trace,origin,departure_bay)
     local last=trace[#trace]
     local dest=last and board.tile(last.tile)
