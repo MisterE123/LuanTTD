@@ -6,8 +6,8 @@ return function(api,status)
   local panels,orders={},{}
   local form="luanttd_core:rail_fleet"
   local esc=core.formspec_escape
-  local model_short={[0]="Kirby",[8]="Jubilee",[9]="Ginzu A4",[10]="SH 8P",[11]="Manley–Morel",[15]="Floss 47",[23]="SH '30'",[24]="SH '40'"}
-  local orderable={{id=8,key="purchase_jubilee"},{id=9,key="purchase_a4"},{id=10,key="purchase_sh_8p"},{id=11,key="purchase_manley",dmu=true},{id=15,key="purchase_floss"},
+  local model_short={[0]="Kirby",[8]="Jubilee",[9]="Ginzu A4",[10]="SH 8P",[11]="Manley–Morel",[13]="Hendry 25",[14]="UU 37",[15]="Floss 47",[23]="SH '30'",[24]="SH '40'"}
+  local orderable={{id=8,key="purchase_jubilee"},{id=9,key="purchase_a4"},{id=10,key="purchase_sh_8p"},{id=11,key="purchase_manley",dmu=true},{id=13,key="purchase_hendry_25"},{id=14,key="purchase_uu_37"},{id=15,key="purchase_floss"},
     {id=23,key="purchase_sh_30",electric=true},{id=24,key="purchase_sh_40",electric=true}}
   local function money(n) return "$"..string.format("%d",math.floor(n)) end
   local function litres(units)
@@ -45,6 +45,7 @@ return function(api,status)
     GINZU_MODEL_NOT_AVAILABLE="This installation is missing the Ginzu 'A4' model.",
     SH_8P_MODEL_NOT_AVAILABLE="This installation is missing the SH '8P' model.",
     MANLEY_MODEL_NOT_AVAILABLE="This installation is missing the Manley–Morel DMU model.",
+    DIESEL_MODEL_NOT_AVAILABLE="This installation is missing that diesel locomotive model.",
     FLOSS_MODEL_NOT_AVAILABLE="This installation is missing the Floss '47' model.",
     SH_30_MODEL_NOT_AVAILABLE="This installation is missing the SH '30' electric model.",
     SH_40_MODEL_NOT_AVAILABLE="This installation is missing the SH '40' electric model.",
@@ -105,7 +106,7 @@ return function(api,status)
       local representative=api.rail_coal_tools and 29 or available("oil") and 30 or 32
       -- Quote first: on-sale models and depot traction matter, not just
       -- whether an asset is recognized by the renderer.
-      for _,engine in ipairs({0,8,9,10,15,23,24}) do
+      for _,engine in ipairs({0,8,9,10,13,14,15,23,24}) do
         local row=catalogue[engine]
         if freight_engine(engine) and (engine==0 or row and row.availability and row.availability.public) and
           owned.quote(S,n,id,{engine,representative}) then

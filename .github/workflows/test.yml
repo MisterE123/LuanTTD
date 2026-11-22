@@ -43,4 +43,7 @@ jobs:
           luantiserver --version
           bash tests/default_stock_terrain_native.sh
           bash tests/default_tram_native.sh
-          BAYLINE_NATIVE_GOODS_ENGINE=8 bash tests/rail_goods_live_native.sh
+          python3 tests/rail_early_diesel_art.py
+          for n in 13 14; do
+            BAYLINE_NATIVE_GOODS_ENGINE="$n" BAYLINE_NATIVE_GOODS_YEAR=1968 bash tests/rail_goods_live_native.sh
+          done

@@ -8,7 +8,7 @@
 local R={VEHICLE_LENGTH=8,TILE_SIZE=16,DAY_TICKS=74,DAYS_IN_YEAR=365,CARGO_AGE_TICKS=185,
   GRADUAL_WAIT=40,RETRY_WAIT=20,DEFAULT_MAX_TRAIN_TILES=7}
 local floor,min,max=math.floor,math.min,math.max
-local order={0,1,8,9,10,11,15,27,29,30,32}
+local order={0,1,8,9,10,11,13,14,15,27,29,30,32}
 local rows={
   [0]={name="Kirby Paul Tank",kind="engine",visual="steam",image_index=2,engine_class="steam",
     cost_factor=7,speed=64,power=300,tare=47,running_factor=50,running_class="run_steam",
@@ -29,6 +29,13 @@ local rows={
     multiheaded=true,multiple_unit=true,cost_factor=11,speed=112,power=600,tare=32,
     running_factor=85,running_class="run_diesel",capacity=38,cargo="passenger",
     climates=1,base_intro=13149,decay_speed=20,vehicle_life=12,model_life=30,purchase_enabled=false},
+  -- OpenTTD 16.0-RC1 table/engines.h: MT and RVI rows #13 and #14.
+  [13]={name="SH/Hendry '25'",kind="engine",visual="hendry_25",image_index=4,engine_class="diesel",
+    cost_factor=15,speed=128,power=1250,tare=72,running_factor=95,running_class="run_diesel",
+    capacity=0,climates=1,base_intro=14976,decay_speed=20,vehicle_life=18,model_life=28},
+  [14]={name="UU '37'",kind="engine",visual="uu_37",image_index=5,engine_class="diesel",
+    cost_factor=17,speed=144,power=1750,tare=101,running_factor=120,running_class="run_diesel",
+    capacity=0,climates=1,base_intro=14245,decay_speed=20,vehicle_life=20,model_life=30},
   [15]={name="Floss '47'",kind="engine",visual="floss47",image_index=4,engine_class="diesel",
     cost_factor=18,speed=160,power=2580,tare=112,running_factor=140,running_class="run_diesel",
     capacity=0,climates=1,base_intro=15341,decay_speed=20,vehicle_life=22,model_life=33},

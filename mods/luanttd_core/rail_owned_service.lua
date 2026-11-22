@@ -32,6 +32,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     if id==9 and not Run.owned_passenger_engine(id) then return "GINZU_MODEL_NOT_AVAILABLE" end
     if id==10 and not Run.owned_passenger_engine(id) then return "SH_8P_MODEL_NOT_AVAILABLE" end
     if id==11 and not Run.owned_passenger_engine(id) then return "MANLEY_MODEL_NOT_AVAILABLE" end
+    if (id==13 or id==14) and not Run.owned_passenger_engine(id) then return "DIESEL_MODEL_NOT_AVAILABLE" end
     if id==15 and not Run.owned_passenger_engine(id) then return "FLOSS_MODEL_NOT_AVAILABLE" end
     if id==23 and not Run.owned_passenger_engine(id) then return "SH_30_MODEL_NOT_AVAILABLE" end
     if id==24 and not Run.owned_passenger_engine(id) then return "SH_40_MODEL_NOT_AVAILABLE" end

@@ -139,7 +139,7 @@ return function(api)
       "Build two owned platforms in house catchments, then use the paid two-platform shuttle order or order a purchased locomotive. Inspect waiting passengers and fares.",
     },
     {"ownedrail","Owned rail depot roster","railworks",function() return api.rail_owned and rail() end,
-      "Inspect an owned rail depot. Buy an available engine with a passenger carriage and select two platforms. The Kirby, Jubilee, Ginzu A4 and Floss 47 use their own stock numbers and models.",
+      "Inspect an owned rail depot. Buy an available engine with a passenger carriage and select two platforms. The depot uses each locomotive’s stock speed, power, costs and model.",
       nil,"The engines on sale depend on the game's year.",
       detail=fleet_details},
     {"electricrail","Electrified rail and SH '30'","railtypes",native("electric_tools"),

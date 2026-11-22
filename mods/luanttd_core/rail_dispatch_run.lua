@@ -17,7 +17,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local bridge_collectors_ready
   function R.mount_bridge_collectors(ready) bridge_collectors_ready=ready end
   function R.mount_owned_model(id)
-    if id==8 or id==9 or id==10 or id==11 or id==15 or Roster and Roster.electric_engine(id) then
+    if id==8 or id==9 or id==10 or id==11 or id==13 or id==14 or id==15 or Roster and Roster.electric_engine(id) then
       model_ready[id]=true
       return true
     end

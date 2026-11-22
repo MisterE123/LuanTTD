@@ -4,6 +4,8 @@ local owner,at="Harbor Goods QA",Sim.id
 local engine=tonumber(core.settings:get("bayline_rail_goods_qa_engine")) or 0
 local empty_mass,full_mass,purchase_price=68,80,12421
 if engine==8 then empty_mass,full_mass,purchase_price=152,164,21796 end
+if engine==13 then empty_mass,full_mass,purchase_price=93,105,24921 end
+if engine==14 then empty_mass,full_mass,purchase_price=122,134,28046 end
 local function proof_goods()
   local Run,Build,View=assert(api.rail_dispatch_controller),assert(api.rail_build),assert(api.rail_dispatch_view)
   local Owned=assert(api.rail_owned)
@@ -25,6 +27,23 @@ local function proof_goods()
     return st
   end
   local function art(unit)
+    local shape,kind=engine==13 and "hendry_25" or engine==14 and "uu_37",engine==13 and "hendry" or "uu37"
+    if shape then
+      local t=assert(Sim.rail_paid_pose(S,1,1,unit))
+      local hx,hz=Sim.xy(t)
+      local _,hy=api.terrain.tile(t)
+      api.rail_dispatch_view.step(.1,true,1)
+      local found
+      for _,obj in ipairs(core.get_objects_inside_radius({x=2*hx+.5,y=hy+.614,z=2*hz+.5},2.1)) do
+        local e=obj:get_luaentity()
+        if e and e.name=="luanttd_core:dispatch_"..kind then
+          local pr=obj:get_properties()
+          assert(pr.mesh=="bl_rail_"..shape..".obj" and pr.textures[1]=="bl_rail_"..shape..".png")
+          found=true
+        end
+      end
+      assert(found,"The purchased diesel is missing its own moving mesh")
+    end
     local tile,td=Sim.rail_paid_pose(S,2,1,unit)
     assert(tile and td,"No carrying wagon position")
     api.rail_dispatch_view.step(.1,true,1)

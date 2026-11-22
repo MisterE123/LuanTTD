@@ -53,3 +53,5 @@ The two short arrival and fare sounds are original synthesizer scores
 in `tools/build_service_sounds.py`, rendered to mono Ogg Vorbis for Luanti.
 No OpenTTD sound assets are included. Set `bayline_service_sounds = false`
 to mute the milestone cues independently of the client master volume.
+
+- [SH/Hendry 25 and UU 37 (editable diesel fleet)](rail_early_diesels.md)

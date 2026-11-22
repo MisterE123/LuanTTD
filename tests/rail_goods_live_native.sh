@@ -34,6 +34,7 @@ luanttd_qa_coastal_layout = true
 bayline_road_timber_preview = true
 bayline_native_rail_goods_competition = ${BAYLINE_NATIVE_GOODS_COMPETITION:-false}
 bayline_rail_goods_qa_engine = ${BAYLINE_NATIVE_GOODS_ENGINE:-0}
+bayline_stock_bus_start_year = ${BAYLINE_NATIVE_GOODS_YEAR:-1950}
 port = ${BAYLINE_NATIVE_PORT:-41488}
 bind_address = 127.0.0.1
 server_announce = false
