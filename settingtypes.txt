@@ -1,0 +1,160 @@
+[Rendering]
+bayline_coastal_haze (Soft coastal distance fog and clouds) bool true
+# Raise or lower the minimum ambient moonlight while preserving the world clock.
+bayline_moonlight_ratio (Moonlight brightness) float 0.53 0.25 0.70
+
+[Preview workbenches]
+# Ordinary worlds open all compatible native road, rail, air, harbor and freight workbenches.
+# Explicit individual overrides still win. Some workbenches require industries or other facilities.
+# Farm, Oil, South Coast and survey are separate maps.
+bayline_stock_workbenches (Open compatible stock workbenches) bool true
+
+# Ordinary fresh worlds use the OpenTTD 14.1 TerraGenesis port.
+# Explicit scenarios override generation; existing saves keep their map.
+bayline_world_setup (Show generator setup when opening a new local world) bool true
+bayline_generated_map_size (Generated playable map side length) enum 64 64,128
+bayline_electric_rail_preview (Enable the electric railway workbench) bool true
+bayline_electric_bridge_preview (Electrification of owned empty timber rail bridges) bool true
+bayline_generated_relief (Generated landscape terrain type) int 1 0 4
+bayline_generated_smoothness (Generated landscape smoothness) int 1 0 3
+bayline_generated_coasts (Forced coastal edge mask, 16 random) int 15 0 16
+bayline_generated_variety (Generated regional landscape variety) int 0 0 5
+bayline_generated_sea (Generated landscape sea level) int 0 0 3
+bayline_generated_rivers (Generated rivers: 0 none, 1 few, 2 normal, 3 many) int 0 0 3
+bayline_generated_min_river_length (Generated minimum river length) int 16 2 255
+bayline_generated_towns (Generated town density) int 2 0 3
+bayline_generated_town_layout (Generated town layout) enum original original,better,grid2,grid3,random
+bayline_generated_industries (Generated industry density) int 4 0 6
+bayline_generated_mixed_freight (Add stock forest and sawmill to generated regions) bool true
+bayline_generated_industry_count (Generated custom industry target at density 6) int 1 1 64
+bayline_generated_tree_placer (Generated forest placer) enum 2 0,1,2
+
+# Generated is the normal world. Changes only apply when creating a world.
+bayline_scenario (New world scenario) enum generated generated,farm,oil,coastal,south_coast
+
+# Adds stock directional drags, painted arrows and physical roadside signs.
+bayline_road_oneway_preview (One-way roads) bool true
+
+# Adds a one-entrance passenger terminus with two independent stock bays.
+bayline_road_bay_preview (Build two-bay bus termini from Roadworks) bool true
+
+# Fresh campaigns use 3D junction clearance. Approaching meshes wait
+# until a preceding vehicle clears. Set false for exact stock viewport rules.
+bayline_road_3d_junction_clearance (Protect 3D road junction clearance) bool true
+
+# Use a separate fresh SQLite world and supply the verified local
+# Original terrain bank. This mode has flight and inspection, not a company.
+bayline_original_terrain_exploration (Original terrain exploration) bool false
+
+# These settings apply only to Original terrain exploration and are
+# fixed for each SQLite world. Each axis must be a power of two.
+bayline_original_terrain_width (Original survey width) int 64 64 4096
+bayline_original_terrain_depth (Original survey depth) int 64 64 4096
+bayline_original_terrain_seed (Original survey seed) int 1751 0 4294967295
+
+# Verified single-tile house construction on the source landscape clock.
+# Starts with existing roads. Turning off stops new projects, not work in progress.
+bayline_stock_town_growth (Stock town house growth) bool true
+
+# Wood and Goods service when the map has a forest and sawmill.
+# Generation of those sites is controlled separately above.
+bayline_road_timber_preview (Forest, sawmill and town Goods) bool true
+
+# Adds the tested timber, concrete and steel road bridges and the road tunnel.
+bayline_bridge_construction_preview (Bridges and tunnels) bool true
+
+# Adds the track, platform, depot, path-signal and shuttle construction tools.
+bayline_rail_construction_preview (Build and order trains) bool true
+
+# Adds ordinary wooden railway bridges and stock paired tunnel portals.
+# Enable Build and order trains; runs one exclusive depot-to-platform pilot.
+bayline_rail_span_preview (Timber rail bridges and railway tunnels) bool true
+
+# Same-tile crossing with original striped barriers and safe admission.
+# Enable Build and order trains to use the tool. Flat owned tiles only.
+bayline_rail_crossing_preview (Road and rail level crossings) bool true
+
+# Allows the coupled rail preview to run on ordinary stock track grades.
+bayline_rail_grade_preview (Rail grades) bool true
+
+# Run the stock passenger clock and earnings for the two-platform shuttle.
+# Enable Build and order trains as well.
+bayline_preview_paid_rail (Passenger fares on rail shuttles) bool true
+
+# Starts the 1950 stock temperate roster, rail depot purchases and one
+# authentic Kirby steam passenger shuttle. Includes Railworks and defaults
+# to paid rail service while it is not explicitly disabled.
+bayline_rail_owned_preview (Purchase and run the Kirby steam shuttle) bool true
+
+# Order two separately purchased steam trains onto one signed railway.
+# Requires the owned steam workbench; supported same-direction routes only.
+bayline_rail_pair_preview (Paired steam passenger services) bool true
+
+# Adds a purchased Kirby with 30-ton wagon and repeating mine-to-power orders.
+# Enable the purchased steam workbench; stock road/housing clock required.
+bayline_rail_coal_preview (Mine-to-power rail coal freight) bool true
+bayline_rail_oil_preview (Wells-to-refinery rail Oil Tanker freight in the Oil world) bool true
+bayline_rail_goods_preview (Sawmill-to-town rail Goods freight) bool true
+
+# Adds original masts, tramway, single-platform stops and depot.
+bayline_tram_preview (Electric tramways) bool true
+
+# Adds docks, ship depots, canal, lock and aqueduct construction.
+bayline_ship_preview (Harbor and ferry tools) bool true
+bayline_ship_coal_preview (Owned stock Yate coal ship) bool false
+
+# Route fares are enabled for the ferry. Docks need nearby houses.
+# Enable Harbor and ferry tools as well.
+bayline_preview_paid_ferry (Passenger fares on ferries) bool true
+
+# Offer the stock 1950 MPS Regal in the road depot, with 31 seats and
+# original purchase/running/depreciation rules instead of Town Flyer pricing.
+bayline_stock_regal_preview (Original MPS Regal bus) bool true
+
+# Fresh campaign market for the three original road buses. Uses exact
+# stock calendar/availability, prices, gradual loading and running costs.
+bayline_stock_bus_catalog (Original road bus market) bool true
+
+# Original catalogue only. 0 off, 1 reduced, 2 normal. An ongoing failure
+# keeps repairing if you lower difficulty in the middle of a saved trip.
+bayline_stock_bus_breakdowns (Original bus breakdown difficulty) int 2 0 2
+
+# Same original bus catalogue; automatic services are optional.
+# Interval is days by default; 0 disables new automatic orders.
+bayline_stock_bus_service_interval (Original bus service interval) int 150 0 800
+bayline_stock_bus_service_percent (Service interval is a reliability percentage) bool false
+bayline_stock_bus_start_year (Original bus market start year) int 1950 1950 2050
+
+# A dedicated server can keep the actual campaign ticking with nobody
+# connected. Interactive games still pause offscreen unless opted in.
+bayline_offline_economy (Advance paid economy with no players) bool false
+
+# Two one-way empty consists with stock conventional interlocking.
+# Use a separate pure block-signal railway; not mixed with PBS.
+bayline_rail_block_preview (Conventional rail block signals) bool true
+
+# Adds the 4 × 3 country airfield and a single original fixed-wing trimotor.
+bayline_airport_preview (Country airfields and trimotor) bool true
+
+# Load and earn stock passenger fares. Both airports need house catchments.
+# Enable Country airfields and trimotor as well.
+bayline_preview_paid_air (Passenger fares on country aircraft) bool true
+
+# Buy and order one actual Sampson U52 or Coleman Count from its company
+# hangar; original fixed-wing movement, passenger capacity and running cost.
+# Implies the country-airfield workbench and paid flights by default.
+bayline_air_owned_preview (Buy original country aircraft) bool true
+
+# Two purchased Sampsons, one per hangar, sharing true country airfield
+# blocks and passenger queues. Implies paid owned flights by default.
+bayline_air_fleet_preview (Two purchased aircraft on shared airfields) bool true
+
+# Enable coal service when a mine and power station are available.
+bayline_preview_coal_industry (Coal mine, power station and freight trucks) bool true
+
+# Adds the post van and postal stations to the stock town economy.
+bayline_mail_preview (Town mail and postal routes) bool true
+
+# Ports ordinary timed loading and unloading for road services.
+# Used by the normal generated game; some vehicles modernize it automatically.
+bayline_preview_stock_road_loading (Timed stock road vehicle loading) bool true

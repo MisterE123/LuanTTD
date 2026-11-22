@@ -1,0 +1,28 @@
+local root="mods/bayline/"
+local Sim=dofile(root.."sim.lua")
+local T=dofile(root.."openttd/terrain.lua")
+local s=Sim.new(1751)
+dofile(root.."town_layout.lua")(Sim,s)
+s.corner_grid=dofile(root.."terrain_preview.lua")(Sim,T,s)
+local A=Sim.company(s,"A")
+local cash=A.cash
+local ok,msg,dirty=Sim.landscape(s,"A","raise",6,15)
+assert(ok,msg)
+assert(T.corner(s.corner_grid,6,15)==1 and #dirty==4 and A.cash==cash-250)
+local before=A.cash
+assert(Sim.landscape(s,"A","lower",6,15))
+assert(T.corner(s.corner_grid,6,15)==0 and A.cash==before-250)
+local bridge_start,bridge_end=Sim.id(17,3),Sim.id(29,3)
+assert(not Sim.wood_bridge(s,"A",bridge_start,Sim.id(29,4)))
+before=A.cash
+local ok,err,changed,deck=Sim.wood_bridge(s,"A",bridge_start,bridge_end)
+assert(ok,err)
+assert(#changed==13 and deck==1)
+assert(s.stock_road_bridges[1].start==bridge_start and s.stock_road_bridges[1]["end"]==bridge_end)
+assert(s.bridge_above[Sim.id(19,3)]==1 and s.stock_road_bridges[1].middle_length==11)
+assert(A.cash==before-s.stock_road_bridges[1].price)
+assert(not Sim.build(s,"A","clear",{bridge_start}))
+assert(not Sim.remove_wood_bridge(s,"B",bridge_end))
+assert(Sim.remove_wood_bridge(s,"A",bridge_end))
+assert(not next(s.bridge_above) and not s.tiles[bridge_start].road_bridge_id and not s.tiles[bridge_end].build)
+print("PASS: actual charged terrain commands, protected tiles, complete paid timber spans, and atomic removal")

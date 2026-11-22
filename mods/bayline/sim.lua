@@ -1,0 +1,3323 @@
+-- Bayline's simulation does not depend on Luanti. The game adapter owns UI and storage.
+local M = {}
+M.W,M.H = 48,36
+M.modes = {"rail","road","water","air"}
+M.dir = {{0,-1},{1,0},{0,1},{-1,0}}
+local town_growth_mount=setmetatable({},{__mode="k"})
+local foster_art_mount=setmetatable({},{__mode="k"})
+local road_faults_mount=setmetatable({},{__mode="k"})
+M.month_days = 30
+M.cargo = {
+  mail={name="Mail",rate=11}, passenger={name="Passengers",rate=9},
+  coal={name="Coal",rate=8}, grain={name="Grain",rate=8},
+  steel={name="Steel",rate=13}, goods={name="Goods",rate=15},wood={name="Wood",rate=9},
+}
+M.cargo.livestock={name="Livestock",rate=10}
+M.cargo.oil={name="Oil",rate=0} -- Actual stock pressure uses a dedicated loader.
+M.cargo_order={"passenger","mail","coal","grain","steel","goods","wood","livestock","oil"}
+M.vehicles = {
+  steam={name="4-4-0 Atlantic",mode="rail",cost=12500,speed=1.45,capacity=72,daily=45,year=1950},
+  diesel={name="Bayliner Diesel",mode="rail",cost=20500,speed=2.35,capacity=104,daily=61,year=1958},
+  electric={name="Twin Coast Express",mode="rail",cost=36000,speed=3.7,capacity=155,daily=112,year=1970},
+  bus={name="Town Flyer Bus",mode="road",cost=3500,speed=1.6,capacity=30,daily=15,year=1950},
+  truck={name="Mack Freight Truck",mode="road",cost=4600,speed=1.3,capacity=35,daily=17,year=1950},
+  coach={name="Intercity Coach",mode="road",cost=8000,speed=2.7,capacity=50,daily=25,year=1956},
+  leopard_bus={name="Coastal Leopard",mode="road",cost=5400,speed=2.5,capacity=35,daily=21,year=1964},
+  foster_bus={name="Foster Bus",mode="road",cost=8203,speed=224,capacity=37,year=1986,development=true},
+  mail_van={name="Harbor Post Van",mode="road",cost=4200,speed=1.3,capacity=22,daily=15,year=1935,development=true},
+  coal_tipper={name="Kestrel Coal Tipper",mode="road",cost=5906,speed=96,capacity=20,daily=2,year=1935,
+    development=true,stock_engine_id=123,display_speed=48,load_amount=5,cargo_age_ticks=185,
+    weight_quarters=38,power_tens_hp=12,buy_factor=108,running_factor=90,
+    tractive_effort=76,air_drag=0,life_years=15,intro_days_after_1920=5479},
+  goods_truck={name="Balogh Goods Truck",mode="road",cost=5851,speed=96,capacity=14,daily=2,year=1950,
+    development=true,stock_engine_id=138,display_speed=48,load_amount=5,cargo_age_ticks=185,
+    weight_quarters=38,power_tens_hp=12,buy_factor=107,running_factor=90,intro_days_after_1920=5479},
+  wood_truck={name="Witcombe Wood Truck",mode="road",cost=6453,speed=96,capacity=20,daily=2,year=1950,
+    development=true,stock_engine_id=144,display_speed=48,load_amount=5,cargo_age_ticks=185,
+    weight_quarters=38,power_tens_hp=12,buy_factor=118,running_factor=90,intro_days_after_1920=5479},
+  grain_truck={name="Hereford Grain Truck",mode="road",cost=6234,speed=96,capacity=20,year=1935,
+    development=true,stock_engine_id=141,display_speed=48,load_amount=5,cargo_age_ticks=185,
+    weight_quarters=38,power_tens_hp=12,buy_factor=114,running_factor=90,intro_days_after_1920=5479},
+  livestock_van={name="Talbott Livestock Van",mode="road",cost=5742,speed=96,capacity=14,year=1935,
+    development=true,stock_engine_id=135,display_speed=48,load_amount=5,cargo_age_ticks=185,
+    weight_quarters=38,power_tens_hp=12,buy_factor=105,running_factor=90,intro_days_after_1920=5479},
+  oil_tanker={name="Witcombe Oil Tanker",mode="road",cost=6015,speed=96,capacity=21,year=1935,
+    development=true,stock_engine_id=132,display_speed=48,load_amount=5,cargo_age_ticks=185,
+    weight_quarters=38,power_tens_hp=12,buy_factor=110,running_factor=90,intro_days_after_1920=5479},
+  ferry={name="Sound Ferry",mode="water",cost=10500,speed=1.2,capacity=95,daily=44,year=1950},
+  freighter={name="Coastal Freighter",mode="water",cost=15300,speed=1.05,capacity=155,daily=55,year=1950},
+  prop={name="Island Hopper",mode="air",cost=24000,speed=6,capacity=60,daily=110,year=1950},
+  jet={name="Bayline Jet",mode="air",cost=49000,speed=9,capacity=120,daily=175,year=1962},
+}
+M.vehicle_order={"steam","diesel","electric","bus","truck","coach","leopard_bus","foster_bus","coal_tipper","wood_truck","grain_truck","livestock_van","goods_truck","oil_tanker","ferry","freighter","prop","jet"}
+M.facilities={
+  town={name="Town",produces={passenger=14,mail=6},takes={passenger=true,mail=true,goods=true}},
+  mine={name="Coal mine",produces={coal=24},takes={}},
+  farm={name="Farm",produces={grain=19},takes={}},
+  mill={name="Steel mill",produces={},takes={coal=true},output="steel",ratio=0.6},
+  factory={name="Factory",produces={},takes={grain=true,steel=true},output="goods",ratio=0.8},
+  stock_coal_mine={name="Coal Mine",produces={},takes={}},
+  stock_power_station={name="Coal Power Station",produces={},takes={}},
+  stock_forest={name="Forest",produces={},takes={}},
+  stock_sawmill={name="Sawmill",produces={},takes={}},
+}
+M.tools={
+  inspect={name="Inspect"}, tram_track={name="Tramway"}, tram_stop={name="Tram platform"},
+  tram_depot={name="Tram depot"},tram_bit={name="Tramway half-piece"},
+  ship_dock={name="Build dock"},ship_depot={name="Ship depot"},ship_aqueduct={name="Aqueduct"},ship_canal={name="Canal"},ship_lock={name="Ship lock"},ship_remove={name="Dismantle facility"}, landscape_raise={name="Raise corner"},
+  landscape_lower={name="Lower corner"}, landscape_level={name="Level area"},
+  structure_wood={name="Timber bridge"}, structure_concrete={name="Concrete bridge"}, structure_steel={name="Steel girder"}, structure_tunnel={name="Road tunnel"}, stock_rail={name="Trackworks",price=220}, stock_road_bridge={name="Road bridge",price=1200,mode="road"}, stock_road_tunnel={name="Road tunnel",price=450,mode="road"}, rail={name="Track",price=220,mode="rail"}, road={name="Road",price=125,mode="road"},
+  rail_bridge={name="Rail bridge",price=620,mode="rail"}, road_bridge={name="Road bridge",price=440,mode="road"},
+  rail_tunnel={name="Rail tunnel",price=680,mode="rail"}, road_tunnel={name="Road tunnel",price=510,mode="road"},
+  rail_station={name="Rail station",price=1400,mode="rail"}, road_station={name="Road stop",price=550,mode="road"},
+  road_bay_pair={name="Two-bay bus terminus",price=550,mode="road"},
+  road_depot={name="Road depot",price=950,mode="road"},
+  dock={name="Dock",price=1200,mode="water"}, airport={name="Airport",price=7200,mode="air"},
+  signal={name="Rail signal",price=90,mode="rail"}, canal={name="Canal",price=500,mode="water"},
+  grade={name="Grade hillside",price=350}, clear={name="Bulldoze",price=80},
+}
+M.tool_order={"inspect","rail","road","rail_bridge","road_bridge","rail_tunnel","road_tunnel","rail_station","road_station","dock","airport","signal","canal","grade","clear","road_depot"}
+local station_tools={rail_station=true,road_station=true,dock=true,airport=true}
+local linear={rail=true,road=true,rail_bridge=true,road_bridge=true,rail_tunnel=true,road_tunnel=true,canal=true}
+M.linear=linear
+local function rng(seed)
+  local s=seed%2147483647
+  if s<1 then s=1 end
+  return function(n) s=s*16807%2147483647; return s%n end
+end
+function M.id(x,z)
+  if x<1 or z<1 or x>M.W or z>M.H then return nil end
+  return (z-1)*M.W+x
+end
+function M.xy(id)
+  return (id-1)%M.W+1,math.floor((id-1)/M.W)+1
+end
+function M.distance(a,b)
+  local x,z=M.xy(a);local u,v=M.xy(b)
+  return math.abs(x-u)+math.abs(z-v)
+end
+local function adjacent(id, direction)
+  local x,z=M.xy(id)
+  local d=M.dir[direction]
+  return M.id(x+d[1],z+d[2])
+end
+M.adjacent=adjacent
+local function push(s,msg)
+  table.insert(s.news,1,msg)
+  if #s.news>24 then table.remove(s.news) end
+end
+function M.date(s,at_day)
+  local day=at_day or s.day
+  if s.stock_bus_market then return M.engine_calendar.ymd(s.stock_bus_market.epoch+day) end
+  local month=math.floor(day/30)
+  return 1950+math.floor(month/12),month%12+1,day%30+1
+end
+function M.new(seed)
+  seed=math.floor(tonumber(seed) or 1751)
+  local rand=rng(seed)
+  local s={version=1, seed=seed, day=0, tiles={}, sites={}, companies={}, stations={}, fleet={}, next_station=1,next_vehicle=1,
+    topology=0,subsidies={},news={"1950: A new transportation charter opens on the coast."},speed=1,chair=nil}
+  local shift=rand(3)-1
+  for z=1,M.H do
+    for x=1,M.W do
+      local river=24+math.floor(2.8*math.sin(z/7))+shift
+      local coastal=z>=32+math.floor(2*math.sin(x/6))
+      local water= coastal or math.abs(x-river)<=2
+      local height=0
+      if not water then
+        local hills=math.sin(x/4+0.5)*math.sin(z/5+0.6)+0.41*math.sin(x/3+z/6)
+        if (z>=20 or x>=29) and hills>0.62 then height=1 end
+        if (z>=20 or x>=29) and hills>0.87 then height=2 end
+      end
+      local wood=(not water and height==0 and (math.sin(x/2.8+seed%9)*math.cos(z/3.7)>0.43 or x<5)) or nil
+      s.tiles[M.id(x,z)]={terrain=water and "water" or height>0 and "hill" or "grass",h=height,variant=rand(4),wood=wood}
+    end
+  end
+  local function site(name,kind,x,z)
+    local id=#s.sites+1
+    local a=M.id(x,z)
+    local info={id=id,name=name,kind=kind,tile=a,stock={},produced={},received={},population=kind=="town" and 270+rand(250) or nil,service=0}
+    s.sites[id]=info
+    local t=s.tiles[a]; t.terrain="grass";t.h=0;t.site=id
+    for dz=-3,3 do for dx=-3,3 do
+      local i=M.id(x+dx,z+dz);local q=i and s.tiles[i]
+      if q and q.terrain~="water" and math.abs(dx)+math.abs(dz)<=5 then q.terrain="grass";q.h=0;q.wood=nil end
+      if kind=="town" and q and q.terrain~="water" and not q.site and math.abs(dx)+math.abs(dz)<=3 and rand(3)==0 then q.house=true end
+    end end
+    for k,n in pairs(M.facilities[kind].produces) do info.stock[k]=n*3 end
+  end
+  site("Port Alder","town",9,9)
+  site("Mason Quay","town",18,9)
+  site("Eastport","town",31,9)
+  site("Tern Island","town",37,27)
+  site("Copper Ridge","town",12,24)
+  site("Old Quarry","mine",6,19)
+  site("Alder Steel","mill",17,21)
+  site("Meridian Farms","farm",34,16)
+  site("Harbor Works","factory",42,10)
+  site("Southwick Farms","farm",15,28)
+  site("Cedar Coal","mine",42,23)
+  site("Tern Steel","mill",32,25)
+  -- Reserve the original charter’s proposed demonstration right of way.
+  for x=9,18 do s.tiles[M.id(x,12)].house=nil end
+  s.subsidies={
+    {src=1,dst=2,cargo="passenger",until_day=360},
+    {src=6,dst=7,cargo="coal",until_day=540},
+    {src=8,dst=9,cargo="grain",until_day=720},
+  }
+  return s
+end
+function M.company(s,owner)
+  if not s.companies[owner] then
+    s.companies[owner]={cash=100000,loan=50000,revenue=0,expense=0,month_rev=0,month_exp=0,history={},units=0,paid_units=0,rating={},tutorial=false}
+    if not s.chair then s.chair=owner end
+    push(s,owner.." opened a transport company.")
+  end
+  return s.companies[owner]
+end
+local function debit(c,amount)
+  c.cash=c.cash-amount;c.expense=c.expense+amount;c.month_exp=c.month_exp+amount
+end
+local function credit(c,amount)
+  c.cash=c.cash+amount;c.revenue=c.revenue+amount;c.month_rev=c.month_rev+amount
+end
+function M.loan(s,owner,amount)
+  local c=M.company(s,owner)
+  if amount==10000 and c.loan+amount<=200000 or amount==-10000 and c.cash>=10000 and c.loan>=10000 then
+    c.loan=c.loan+amount;c.cash=c.cash+amount
+    return true, amount>0 and "Borrowed $10,000." or "Repaid $10,000."
+  end
+  return false,"Loan limit reached or no money to repay."
+end
+-- Station ownership and ownership of the underlying street can differ.
+local function road_access(t,owner)
+  return t and (t.road_town~=nil or t.owner==owner)
+end
+local function compatible_road_owners(a,b)
+  return a.road_town~=nil or b.road_town~=nil or a.owner==b.owner
+end
+local function mode_on(s,id,mode,owner)
+  local t=s.tiles[id]
+  if not t or t.stock_void then return false end
+  if mode=="water" and (t.terrain=="water" or t.build=="canal") then return not t.coastal_water end
+  local b=M.tools[t.build]
+  return b and b.mode==mode and (t.owner==owner or t.build=="canal" or (mode=="road" and t.road_town~=nil)) or false
+end
+M.mode_on=mode_on
+local function wet(s,id)
+  local t=s.tiles[id]
+  return t.terrain=="water" or t.build=="canal"
+end
+-- The shared-corner branch is opt-in. Version 1 saves without a grid keep
+-- the original adjacency-only construction and route behavior.
+local terrain_rules, slope_rules, road_rules, landscape_rules, bridge_rules, tunnel_rules, coastal_world, clear_area_rules, long_road_rules
+local function load_road_rules()
+  if terrain_rules then return end
+  local source=debug and debug.getinfo(1,"S").source
+  local base=source and source:match("^@(.*/)sim%.lua$")
+  base=base or (core and core.get_modpath("bayline").."/") or "mods/bayline/"
+  terrain_rules=dofile(base.."openttd/terrain.lua")
+  slope_rules=dofile(base.."openttd/slope.lua")
+  road_rules=dofile(base.."openttd/road_slope.lua")
+  long_road_rules=dofile(base.."openttd/road_oneway.lua")(road_rules)
+  landscape_rules=dofile(base.."openttd/landscaping.lua")(terrain_rules)
+  clear_area_rules=dofile(base.."openttd/clear_area.lua")
+  coastal_world=dofile(base.."water_flood_world.lua")(M,terrain_rules,dofile(base.."openttd/water_flood.lua"))
+  bridge_rules=dofile(base.."openttd/road_bridge.lua")(slope_rules)
+  tunnel_rules=dofile(base.."openttd/road_tunnel.lua")
+end
+local crossing_bindings=setmetatable({},{__mode="k"})
+function M.mount_crossings(s,Runtime,rail,survey_clear)
+  crossing_bindings[s]={runtime=Runtime,rail=rail,survey_clear=survey_clear}
+end
+local crossing_errors={
+  FALLBACK_CLEAR="Road and rail must cross at right angles on straight track.",
+  PROTECTED_TILE="A station, roadworks, signal or protected structure blocks the crossing.",
+  HOST_FLAT_ONLY="This crossing requires level ground.",
+  VEHICLE_IN_THE_WAY="Wait for the vehicle to clear the crossing.",
+  OWNED_BY_ANOTHER="This crossing requires an existing way owned by your company.",
+  ROAD_POSE_UNKNOWN="Wait for road traffic position to be confirmed.",
+  RESERVATION_UNKNOWN="Wait for the rail reservation to be confirmed.",
+  OCCUPANCY_UNKNOWN="Wait for crossing traffic position to be confirmed.",
+  ELECTRIC_CROSSING_NOT_MOUNTED="Electrified crossings are not available yet.",
+  CROSSING_ON_ONEWAY_ROAD="Remove the one-way restriction before building a crossing.",
+  CLEAR_EXCLUSIVE_RAIL_PILOT="Clear the running train pilot before building the crossing.",
+  CLEAR_SURVEYED_TRAIN="Clear the surveyed train before building the crossing.",
+  NEEDS_STOCK_ROAD_CLOCK="The crossing needs the stock road traffic clock.",
+  NOT_ENOUGH_MONEY="Not enough cash.",
+}
+function M.crossing_construction_error(why)
+  return crossing_errors[why] or ("Cannot build level crossing: "..tostring(why))
+end
+function M.crossing_construction_quote(s,owner,id,request)
+  local c=crossing_bindings[s]
+  if not c or not s.level_crossing_enabled then return nil,"LEVEL_CROSSING_DISABLED" end
+  if c.survey_clear and not c.survey_clear() then return nil,"CLEAR_SURVEYED_TRAIN" end
+  return c.runtime.quote(s,owner,id,request,c.rail(s))
+end
+function M.apply_crossing_construction(s,p)
+  local c=assert(crossing_bindings[s])
+  return c.runtime.apply(s,p,c.rail(s))
+end
+function M.refresh_crossing_construction(s)
+  local c=crossing_bindings[s]
+  if c then c.runtime.refresh(s,c.rail(s)) end
+end
+function M.crossing_protected(s,id)
+  local t=id~=nil and s.tiles[id]
+  return t and t.level_crossing~=nil or false
+end
+local function crossing_road_board(s,b)
+  local c=crossing_bindings[s]
+  return c and c.runtime.road_board(s,b) or b
+end
+local function crossing_road_step(s,world,from,to,td,commit)
+  if not (M.crossing_protected(s,from) or M.crossing_protected(s,to)) then return commit() end
+  local c=crossing_bindings[s]
+  if not c then return false end
+  return c.runtime.road_step(s,c.rail(s),world,from,to,td,commit)
+end
+local oneway_bindings=setmetatable({},{__mode="k"})
+local auto_oneway
+function M.mount_road_oneway(s,W)
+  oneway_bindings[s]=W
+end
+local function oneway_world(s)
+  local w=oneway_bindings[s]
+  if w or not s.road_oneway_revision then return w end
+  -- Persisted traffic rules remain authoritative even with the UI disabled
+  -- or after the campaign is deserialized into a fresh Sim instance.
+  if not auto_oneway then
+    load_road_rules()
+    local source=debug and debug.getinfo(1,"S").source
+    local base=source and source:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("bayline").."/") or "mods/bayline/"
+    local Follow=dofile(base.."openttd/yapf_road_follow.lua")
+    local OneWay=dofile(base.."openttd/road_oneway.lua")(road_rules,Follow)
+    auto_oneway=dofile(base.."road_oneway_world.lua")(M,terrain_rules,Follow,OneWay)
+  end
+  return auto_oneway
+end
+local function road_traffic_board(s,b)
+  b=crossing_road_board(s,b)
+  local w=oneway_world(s)
+  return w and w.path_board(s,b) or b
+end
+local function road_sign(t)
+  return t and t.build=="road" and (t.road_disallowed or t.disallowed or 0) or 0
+end
+local function one_way_pose(s,from,to)
+  local w=oneway_world(s)
+  if w then
+    local ok,why,at=w.guard(s,from,to)
+    if not ok then return false,why,at end
+    local removed=s.road_oneway_removed
+    local id=to and to[4]
+    if removed and id and removed[id] and not (to[10] or to[12] or to[13] or to[14]) then
+      local t=s.tiles[id]
+      if not (t and (t.build=="road" or t.build=="road_station" or t.build=="road_depot" or t.level_crossing)) then
+        return false,"ONEWAY_ROAD_LAYOUT_CHANGED",id
+      end
+    end
+  end
+  return true
+end
+local function one_way_edit(s,id,removed)
+  s.road_oneway_revision=(s.road_oneway_revision or 0)+1
+  if removed then
+    s.road_oneway_removed=s.road_oneway_removed or {}
+    s.road_oneway_removed[id]=true
+  elseif s.road_oneway_removed then
+    s.road_oneway_removed[id]=nil
+  end
+end
+-- Shared clearance predicate for existing protected rail infrastructure.
+-- Other construction adapters use this historical name for immutable
+-- native rail layers (including supported same-tile road/rail crossings).
+function M.rail_span_protected(s,id)
+  local t=s.tiles[id]
+  return not not (t and (t.rail_span_id or t.level_crossing or t.rail_waypoint_id) or s.rail_bridge_above and s.rail_bridge_above[id]
+    or s.rail_tunnel_below and s.rail_tunnel_below[id])
+end
+local coastal_occupied=setmetatable({},{__mode="k"})
+function M.mount_coastal_flood(s,occupied)
+  assert(s.corner_grid and s.road_economy and s.road_stock_house_supply,
+    "Stock coastal flooding requires shared corners and the source landscape clock.")
+  assert(occupied==nil or type(occupied)=="function")
+  coastal_occupied[s]=occupied
+  s.stock_coastal_flood=true
+end
+local function coastal_active(s)
+  return s.stock_coastal_flood and s.corner_grid and s.road_economy and s.road_stock_house_supply
+end
+local function coastal_visit(s)
+  if not coastal_active(s) then return end
+  load_road_rules()
+  local board=coastal_world.board(s)
+  return function(x,z) coastal_world.visit(s,x+1,z+1,board) end
+end
+local function coastal_tile_occupied(s,id)
+  local extra=coastal_occupied[s]
+  if extra and extra(id) then return true end
+  local function vessel(run)
+    if not run then return false end
+    local v=run.vehicle
+    if not v then return true end -- unknown reservation, don't invalidate it
+    if v.tile==id then return true end
+    -- The host validates its already-issued directed trace on a topology
+    -- change. Preserve this suffix, not every unrelated sea/river tile.
+    for i=math.max(1,(v.path_index or 2)-1),#(v.path or {}) do
+      if v.path[i].tile==id then return true end
+    end
+    return false
+  end
+  if vessel(s.ship_pilot) or vessel(s.stock_coal_ship_run) then return true end
+  for _,v in pairs(s.fleet) do
+    local e=M.vehicles[v.engine]
+    if e and e.mode=="water" and M.position(s,v)==id then return true end
+  end
+  return false
+end
+local water_clear_errors={
+  OUTSIDE_MAP="Outside the playable map.",
+  TOO_CLOSE_TO_EDGE_OF_MAP="Too close to the map edge.",
+  OWNED_BY_ANOTHER="Another company owns that tile.",
+  CAN_T_BUILD_ON_WATER="Can't build on water.",
+  VEHICLE_IN_THE_WAY="A vessel is in the way or has reserved this stretch.",
+  PROTECTED_TILE="A protected structure occupies this tile.",
+}
+local function quote_water_clear(s,owner,id)
+  load_road_rules()
+  return coastal_world.clear_quote(s,owner,id,function(at) return coastal_tile_occupied(s,at) end)
+end
+function M.clear_water(s,owner,id,quote_only)
+  local t=s.tiles[id]
+  if not s.corner_grid or not t then return nil,"OUTSIDE_MAP" end
+  local price,why=quote_water_clear(s,owner,id)
+  if not price then return nil,why end
+  local account=s.companies[owner]
+  if (account and account.cash or 100000)<price then return nil,"NOT_ENOUGH_MONEY" end
+  if not quote_only then
+    local c=M.company(s,owner)
+    coastal_world.clear_apply(s,id)
+    s.topology=s.topology+1
+    debit(c,price)
+  end
+  return {id},price
+end
+function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
+  if not s.corner_grid then return false,"Enable shared-corner terrain first." end
+  load_road_rules()
+  -- Detached callers can request the actual command footprint without
+  -- opening a company or otherwise enacting the planned land edit.
+  if quote_only=="footprint" and not (s.companies and s.companies[owner]) then
+    return false,"Open a company before quoting the landscape footprint."
+  end
+  local company=M.company(s,owner)
+  local g=s.corner_grid
+  local opts={cash=company.cash,allowance=landscape_rules.replenish(company.terraform_limit,0),max_height=32}
+  local coast=coastal_world.terraform(s,owner,function(id) return coastal_tile_occupied(s,id) end)
+  opts.after_step=coast.stage
+  opts.void=function(tx,tz) return s.tiles[M.id(tx,tz)].stock_void end
+  opts.validate_tile=function(_,tx,tz)
+    local t=s.tiles[M.id(tx,tz)]
+    local id=M.id(tx,tz)
+    if coastal_world.is_water(t) then return coast.quote(tx,tz) end
+    if not t or t.terrain=="water" or t.wood or t.site or t.stock_industry or t.stock_landmark or t.house or t.build or t.tram or t.ship or t.airfield or
+        M.rail_span_protected(s,id) or (s.bridge_above and s.bridge_above[id]) or (s.aqueduct_above and s.aqueduct_above[id]) or
+        (s.tunnel_below and s.tunnel_below[id]) or (t.owner and t.owner~=owner) then
+      return nil,"PROTECTED_TILE"
+    end
+    return 0
+  end
+  local plan,reason,px,pz
+  if not u and (mode=="raise" or mode=="lower") then
+    plan,reason,px,pz=landscape_rules.corner(g,x,z,mode=="raise",opts)
+  elseif u and v then
+    plan,reason,px,pz=landscape_rules.level(g,x,z,u,v,mode,diagonal,opts)
+  else return false,"Select the corner(s) to change." end
+  if not plan or #plan.changes==0 then
+    local why=(plan and plan.halted) or reason
+    local explanations={PROTECTED_TILE="Clear forest first; a building or protected infrastructure blocks this corner.",
+      NOT_ENOUGH_MONEY="Not enough money for the next change.",ALREADY_AT_SEA_LEVEL="Already at sea level.",
+      ALREADY_LEVELLED="Already level.",TOO_HIGH="The edit exceeds this world's height limit.",
+      MUST_DEMOLISH_CANAL_FIRST="Dismantle the canal before landscaping.",VEHICLE_IN_THE_WAY="A vessel is in the way or has reserved the waterway."}
+    return false,(explanations[why] or water_clear_errors[why] or tostring(why or "Nothing changed."))
+      ..(px and pz and (" (%d,%d)"):format(px,pz) or "")
+  end
+  if quote_only=="footprint" then
+    return true,plan.cost,{corners=plan.changes,tiles=plan.dirty,terrain_revision=g.revision,
+      topology=s.topology,allowance_after=plan.allowance_after}
+  end
+  if quote_only then return true,plan.cost end
+  local okay,msg=landscape_rules.apply(g,plan)
+  if not okay then return false,msg end
+  coast.commit(plan)
+  company.terraform_limit=plan.allowance_after
+  debit(company,plan.cost)
+  local changed={}
+  local peak=0
+  for _,corner in ipairs(plan.changes) do peak=math.max(peak,corner.height) end
+  for _,d in ipairs(plan.dirty) do
+    local id=M.id(d.x,d.z)
+    if id then
+      local _,base=terrain_rules.tile(g,d.x,d.z)
+      s.tiles[id].h=base
+      changed[#changed+1]=id
+    end
+  end
+  s.topology=s.topology+1
+  local extra=plan.skipped and #plan.skipped or 0
+  return true,("Landscaped for $%d; %d corners changed%s."):format(plan.cost,#plan.changes,
+    (extra>0 or plan.halted) and " (partial selection)" or ""),changed,peak
+end
+local bridge_names={[0]="Timber",[1]="Concrete",[2]="Steel girder"}
+function M.road_bridge(s,owner,first,last,style,quote_only)
+  if not bridge_names[style] then return false,"Choose timber, concrete, or steel girder." end
+  if not s.corner_grid or not first or not last then return false,"Select two bridgeheads on shared-corner terrain." end
+  load_road_rules()
+  local c=M.company(s,owner)
+  local board={xy=M.xy,id=M.id}
+  board.tile=function(id)
+    local t=s.tiles[id]
+    if not t then return end
+    local x,z=M.xy(id)
+    local slope,base,top=terrain_rules.tile(s.corner_grid,x,z)
+    local bridge=s.bridge_above and s.bridge_above[id]
+    local raised=s.aqueduct_above and s.aqueduct_above[id]
+    local existing=(bridge and s.stock_road_bridges[bridge]) or (raised and s.stock_aqueducts[raised])
+    local kind=(t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or M.rail_span_protected(s,id)) and "obstruction" or t.terrain=="water" and "water" or t.build=="road" and "road" or
+      (t.site or t.wood or t.house or t.build) and "obstruction" or "clear"
+    return {slope=slope,base=base,max_z=top,kind=kind,owner=t.owner,
+      overhead=existing and {axis=existing.axis,deck=existing.deck}}
+  end
+  board.clear_quote=function(_,t,role)
+    if t.kind=="clear" and (not t.owner or t.owner==owner) then return 0 end
+    return nil,role=="head" and "BRIDGEHEAD_NEEDS_CLEAR_LAND" or "BRIDGE_MIDDLE_OBSTRUCTED"
+  end
+  local plan,why,id=bridge_rules.plan(board,first,last,style,{owner=owner,budget=c.cash,year=M.date(s)})
+  if not plan then
+    local x,z
+    if id then x,z=M.xy(id) end
+    return false,why..(x and (" (%d,%d)"):format(x,z) or "")
+  end
+  if M.crossing_protected(s,plan.start) or M.crossing_protected(s,plan["end"]) then
+    return false,"That tile is a protected level crossing."
+  end
+  for _,id in ipairs(plan.middle) do
+    if M.crossing_protected(s,id) then return false,"The bridge would overlap a protected level crossing." end
+  end
+  if quote_only then return true,plan.price,plan end
+  local bridge=s.next_stock_road_bridge or 1
+  s.next_stock_road_bridge=bridge+1
+  s.stock_road_bridges=s.stock_road_bridges or {}
+  s.bridge_above=s.bridge_above or {}
+  s.stock_road_bridges[bridge]=plan
+  local dirty={plan.start,plan["end"]}
+  for _,head in ipairs(dirty) do
+    local t=s.tiles[head]
+    t.build="stock_road_bridge";t.owner=owner;t.road_bridge_id=bridge
+  end
+  for _,tile in ipairs(plan.middle) do s.bridge_above[tile]=bridge;dirty[#dirty+1]=tile end
+  s.topology=s.topology+1
+  debit(c,plan.price)
+  return true,("%s bridge #%d built for $%d. Connect a road to the outside of each ramp."):format(
+    bridge_names[style],bridge,plan.price),
+    dirty,plan.deck
+end
+function M.wood_bridge(s,owner,first,last) return M.road_bridge(s,owner,first,last,0) end
+function M.remove_wood_bridge(s,owner,id,quote_only)
+  local t=s.tiles[id]
+  local bridge=t and t.road_bridge_id
+  local span=bridge and s.stock_road_bridges[bridge]
+  if not span or span.owner~=owner then return false,"Select an end of your road bridge." end
+  for _,v in pairs(s.fleet) do
+    for _,route_tile in ipairs(v.route or {}) do
+      if route_tile==span.start or route_tile==span["end"] then
+        return false,"Wait for the current vehicle route to clear the bridge."
+      end
+    end
+  end
+  if quote_only then
+    local middle={}
+    for i,tile in ipairs(span.middle) do middle[i]=tile end
+    -- Native removal is free. Do not expose the live registry as a quote.
+    return true,0,{start=span.start,["end"]=span["end"],middle=middle,
+      deck=span.deck,owner=span.owner,bridge_type=span.bridge_type,replacement=span.replacement}
+  end
+  local dirty={span.start,span["end"]}
+  for _,head in ipairs(dirty) do
+    local tile=s.tiles[head]
+    tile.build=nil;tile.owner=nil;tile.road_bridge_id=nil
+  end
+  for _,tile in ipairs(span.middle) do s.bridge_above[tile]=nil;dirty[#dirty+1]=tile end
+  s.stock_road_bridges[bridge]=nil
+  s.topology=s.topology+1
+  return true,"Road bridge removed; land underneath retained.",dirty,span.deck
+end
+function M.road_tunnel(s,owner,start,quote_only)
+  if not s.corner_grid or not start then return false,"Select an uphill tile for the portal." end
+  load_road_rules()
+  local board={xy=M.xy,id=M.id}
+  board.tile=function(id)
+    local t=s.tiles[id]
+    if not t then return end
+    local x,z=M.xy(id)
+    local slope,base=terrain_rules.tile(s.corner_grid,x,z)
+    return {slope=slope,base=base,water=t.terrain=="water"}
+  end
+  board.clear=function(id)
+    local t=s.tiles[id]
+    if t and not (t.owner or t.build or t.tram or t.ship or t.airfield or t.site or t.stock_industry or t.stock_landmark or t.house or t.wood or t.terrain=="water"
+        or M.rail_span_protected(s,id)
+        or s.bridge_above and s.bridge_above[id] or s.tunnel_below and s.tunnel_below[id]) then return 0 end
+  end
+  board.blocked=function(id,depth)
+    local key=s.tunnel_below and s.tunnel_below[id]
+    return key and s.stock_road_tunnels[key].base==depth
+  end
+  local c=M.company(s,owner)
+  local plan,why,at=tunnel_rules.plan(board,start,{owner=owner,budget=c.cash})
+  if not plan then
+    local x,z
+    if at then x,z=M.xy(at) end
+    return false,why..(x and (" (%d,%d)"):format(x,z) or "")
+  end
+  -- Ground is left undisturbed and a single subsurface crossing layer is
+  -- kept in this host. Do not overwrite an older tunnel on another level.
+  local keys=s.tunnel_below or {}
+  for _,id in ipairs(plan.middle) do
+    if keys[id] or s.tiles[id].road_tunnel_id or M.rail_span_protected(s,id) then
+      return false,"This preview does not layer tunnels."
+    end
+  end
+  if quote_only then return true,plan.price,plan end
+  local key=s.next_stock_road_tunnel or 1
+  s.next_stock_road_tunnel=key+1
+  s.stock_road_tunnels=s.stock_road_tunnels or {}
+  s.tunnel_below=keys
+  s.stock_road_tunnels[key]=plan
+  local dirty={plan.start,plan["end"]}
+  for _,id in ipairs(dirty) do
+    local t=s.tiles[id]
+    t.build,t.owner,t.road_tunnel_id="stock_road_tunnel",owner,key
+  end
+  for _,id in ipairs(plan.middle) do keys[id]=key end
+  s.topology=s.topology+1
+  debit(c,plan.price)
+  return true,("Road tunnel #%d built for $%d. Connect the outer side of both portals."):format(key,plan.price),dirty
+end
+function M.remove_road_tunnel(s,owner,id)
+  local t=s.tiles[id]
+  local key=t and t.road_tunnel_id
+  local span=key and s.stock_road_tunnels[key]
+  if not span or span.owner~=owner then return false,"Select one of your tunnel portals." end
+  for _,v in pairs(s.fleet) do for _,tile in ipairs(v.route or {}) do
+    if tile==span.start or tile==span["end"] then return false,"Wait for vehicles using the tunnel." end
+  end end
+  local dirty={span.start,span["end"]}
+  for _,portal in ipairs(dirty) do
+    local h=s.tiles[portal];h.build,h.owner,h.road_tunnel_id=nil,nil,nil
+  end
+  for _,under in ipairs(span.middle) do s.tunnel_below[under]=nil end
+  s.stock_road_tunnels[key]=nil;s.topology=s.topology+1
+  return true,"Removed both tunnel portals; surface land preserved.",dirty
+end
+local road_flags={1,2,4,8}
+local function has_edge(bits,d)
+  return math.floor(bits/road_flags[d])%2==1
+end
+local function add_edge(bits,d)
+  return has_edge(bits,d) and bits or bits+road_flags[d]
+end
+local function opposite(d) return (d+1)%4+1 end
+local function road_axis(bits)
+  if bits==1 or bits==4 or bits==5 then return 5 end
+  if bits==2 or bits==8 or bits==10 then return 10 end
+end
+local function bridge_head(s,id,t)
+  local span=t and (t.road_bridge_id and s.stock_road_bridges[t.road_bridge_id]
+    or t.road_tunnel_id and s.stock_road_tunnels[t.road_tunnel_id])
+  if not span then return end
+  return id==span.start and span.head or span.tail,span
+end
+local function road_kind(t)
+  return t and M.tools[t.build] and M.tools[t.build].mode=="road"
+end
+local function bits_for(s,id,t)
+  if not road_kind(t) then return 0 end
+  local head=bridge_head(s,id,t)
+  if head then return road_flags[4-(head.inside_direction+2)%4] end
+  if t.build=="road_depot" and t.depot_dir then return road_flags[t.depot_dir] end
+  if t.road_bits~=nil then return t.road_bits end
+  -- Compatibility for a populated world newly opted into the preview.
+  -- Previously-built roads on this flat-only save have no half-tile bits.
+  local bits=0
+  for d=1,4 do
+    local near=s.tiles[adjacent(id,d)]
+    if road_kind(near) and compatible_road_owners(t,near) and
+       (not near.depot_dir or near.depot_dir==opposite(d)) then bits=add_edge(bits,d) end
+  end
+  return bits
+end
+local function ground_shape(s,id)
+  load_road_rules()
+  if not s.corner_grid then
+    local h=s.tiles[id].h
+    return 0,h,h
+  end
+  local x,z=M.xy(id)
+  return terrain_rules.tile(s.corner_grid,x,z)
+end
+local function road_shape(s,id,t)
+  if not road_kind(t) then return nil end
+  if t.level_crossing then
+    local q=t.level_crossing
+    return 0,q.top,q.foundation
+  end
+  local head=bridge_head(s,id,t)
+  if head then
+    if t.road_tunnel_id then return 0,s.stock_road_tunnels[t.road_tunnel_id].base,"none" end
+    return head.road_slope,head.road_base,head.foundation
+  end
+  if not s.corner_grid then return 0,t.h,"none" end
+  local mask,base=ground_shape(s,id)
+  if t.road_bits==nil or t.build=="road_bridge" or t.build=="road_tunnel" then return 0,t.h,"none" end
+  local foundation=road_rules.foundation(mask,t.road_bits)
+  local surface,rise=slope_rules.foundation(mask,foundation)
+  return surface,base+rise,foundation
+end
+function M.road_surface(s,id) return road_shape(s,id,s.tiles[id]) end
+function M.road_bits(s,id) return bits_for(s,id,s.tiles[id]) end
+function M.road_center_z(s,id)
+  load_road_rules()
+  local slope,base=road_shape(s,id,s.tiles[id])
+  return base*8+slope_rules.pixel(8,8,slope)
+end
+function M.road_edge(s,id,d)
+  local t=s.tiles[id]
+  return road_flags[d] and has_edge(bits_for(s,id,t),d) or false
+end
+local function profiles_match(s,a,ta,b,tb,d)
+  local sa,ha=road_shape(s,a,ta)
+  local sb,hb=road_shape(s,b,tb)
+  if not sa or not sb then return false end
+  -- Actual road edges always have a linear height profile. Compare both
+  -- ends as well as the center to catch transverse staircase joins.
+  for i=0,2 do
+    local p=i/2
+    local u,v=d==1 and p or d==2 and 1 or d==3 and p or 0,d==1 and 0 or d==2 and p or d==3 and 1 or p
+    local x,z=d==1 and p or d==2 and 0 or d==3 and p or 1,d==1 and 1 or d==2 and p or d==3 and 0 or p
+    if math.abs(ha+slope_rules.surface(u,v,sa)-(hb+slope_rules.surface(x,z,sb)))>1e-9 then return false end
+  end
+  return true
+end
+local function connected(s,id,d,plan)
+  local j=adjacent(id,d)
+  if not j then return false end
+  local a,b=plan and plan[id] or s.tiles[id],plan and plan[j] or s.tiles[j]
+  if not road_kind(a) or not road_kind(b) or not compatible_road_owners(a,b) then return false end
+  if not has_edge(bits_for(s,id,a),d) or not has_edge(bits_for(s,j,b),opposite(d)) then return false end
+  if s.corner_grid then return profiles_match(s,id,a,j,b,d) end
+  return not s.has_town_roads or a.h==b.h
+end
+-- Used by the YAPF adapter. This deals only with actual connected
+-- surfaces; stock road-vehicle access gates belong to the stock follower.
+function M.road_geometry_connected(s,id,d,j)
+  if not j or adjacent(id,d)~=j then return false end
+  local a,b=s.tiles[id],s.tiles[j]
+  if not road_kind(a) or not road_kind(b) then return false end
+  if not has_edge(bits_for(s,id,a),d) or not has_edge(bits_for(s,j,b),opposite(d)) then return false end
+  if s.corner_grid then return profiles_match(s,id,a,j,b,d) end
+  return a.h==b.h
+end
+function M.road_connected(s,id,d)
+  return road_flags[d] and connected(s,id,d) or false
+end
+M.road_foundation_price=150
+local function new_pieces(pieces,existing)
+  local added,n=existing,0
+  for d=1,4 do
+    if has_edge(pieces,d) and not has_edge(added,d) then added=add_edge(added,d);n=n+1 end
+  end
+  return added,n
+end
+-- Scenario authoring only: establishes public carriageway before play.
+-- OpenTTD can dynamically lay/extend town roads; this seeds authored layout.
+function M.seed_town_road(s,town_id,id,bits)
+  local town,t=s.sites[town_id],s.tiles[id]
+  if not town or town.kind~="town" or not t then return nil,"Invalid town road location." end
+  if type(bits)~="number" or bits<1 or bits>15 or bits~=math.floor(bits) then
+    return nil,"Invalid town road edges."
+  end
+  local existing=t.build=="road" and t.road_town==town_id
+  if t.owner or t.site or t.stock_industry or t.stock_landmark or t.house or t.tram or t.ship or t.airfield or wet(s,id) or (t.build and not existing) then
+    return nil,"The town has no clear right of way."
+  end
+  if (s.corner_grid and ground_shape(s,id)~=0) or (not s.corner_grid and t.h~=0) then
+    return nil,"Seed town roads on flat land."
+  end
+  t.build="road";t.road_town=town_id
+  local combined=new_pieces(bits,existing and t.road_bits or 0)
+  t.road_bits=combined;t.wood=nil
+  s.has_town_roads=true
+  return true
+end
+local function road_piece_plan(s,owner,id,t,request)
+  if t.level_crossing then
+    local q=t.level_crossing
+    local _,added=new_pieces(request,q.road_bits)
+    if q.road_owner~=owner then return nil,M.crossing_construction_error("OWNED_BY_ANOTHER") end
+    if added~=0 then return nil,M.crossing_construction_error("FALLBACK_CLEAR") end
+    return {id=id,tool="road",build="road",road_bits=q.road_bits,owner=t.owner,h=t.h},0
+  end
+  if s.level_crossing_enabled and t.build=="stock_rail" then
+    local q,why=M.crossing_construction_quote(s,owner,id,{kind="road",pieces=request})
+    if not q then return nil,M.crossing_construction_error(why) end
+    return {id=id,tool="road",build="road",road_bits=q.crossing.road_bits,owner=owner,h=t.h,
+      level_crossing=q.crossing,crossing_quote=q},q.price
+  end
+  if t.airfield then return nil,"That tile is part of the country airfield." end
+  if t.ship then return nil,"That tile is part of a ship facility." end
+  if t.tram and (not t.build or t.tram.kind~="road") then
+    return nil,"That tile has a dedicated tramway or tram facility."
+  end
+  if t.stock_landmark then return nil,"This landmark is protected." end
+  if t.site or t.stock_industry then return nil,"Cannot build on a town centre or industry." end
+  if t.owner and t.owner~=owner and not t.road_town then
+    return nil,"Another company owns that tile."
+  end
+  if t.house then return nil,"Bulldoze that building first." end
+  if wet(s,id) then return nil,"Use a bridge over open water." end
+  local existing=bits_for(s,id,t)
+  if road_sign(t)~=0 then
+    local combined=new_pieces(request,existing)
+    if combined~=5 and combined~=10 then
+      return nil,"One-way roads cannot have junctions. Remove the restriction first."
+    end
+  end
+  -- Like an OpenTTD drive-through stop, the underlying public carriageway
+  -- remains usable by any company, but cannot become a junction here.
+  if t.build=="road_station" and (t.stop_axis or t.road_town) then
+    local _,added=new_pieces(request,existing)
+    if added>0 then return nil,"Through stops need straight road. Join on an adjacent tile." end
+    return {id=id,tool=t.build,build=t.build,road_bits=existing,owner=t.owner,
+      road_town=t.road_town,h=t.h},0
+  end
+  if s.road_economy and t.build=="road_station" and existing~=0 then
+    local _,added=new_pieces(request,existing)
+    if added>0 then return nil,"A bay stop has one entrance. Connect the road on the adjacent tile." end
+    return {id=id,tool=t.build,build=t.build,road_bits=existing,owner=t.owner,h=t.h},0
+  end
+  if t.road_bridge_id or t.road_tunnel_id then
+    local _,added=new_pieces(request,existing)
+    if added~=0 then return nil,"Connect to the outside of a bridgehead, without turns on the ramp." end
+    return {id=id,tool=t.build,build=t.build,road_bits=existing,owner=t.owner,road_bridge_id=t.road_bridge_id,road_tunnel_id=t.road_tunnel_id},0
+  end
+  if t.build=="road_depot" then
+    if existing==request then return {id=id,tool=t.build,road_bits=existing,owner=owner},0 end
+    return nil,"A depot has only one entrance."
+  end
+  if t.build and t.build~="road" and t.build~="road_station" then
+    return nil,"Different infrastructure already occupies that tile."
+  end
+  local mask=ground_shape(s,id)
+  local pieces,foundation=road_rules.prepare(mask,request,existing,0,true)
+  if not pieces and foundation~="ALREADY_BUILT" then return nil,"Land sloped in the wrong direction." end
+  local combined,count=new_pieces(pieces or 0,existing)
+  local cost=math.ceil(M.tools.road.price*count/2)+(foundation==true and M.road_foundation_price or 0)
+  local proposed={id=id,tool=t.build or "road",build=t.build or "road",
+    road_bits=combined,owner=(not t.road_town and owner or nil),
+    road_town=t.road_town,depot_dir=t.depot_dir,h=t.h}
+  -- A change of foundation must not be made under a vehicle.
+  if cost>0 and t.build and (t.road_town or
+      road_rules.foundation(mask,existing)~=road_rules.foundation(mask,combined)) then
+    for _,v in pairs(s.fleet) do
+      if M.position(s,v)==id then return nil,"Wait for the vehicle to clear that tile." end
+    end
+  end
+  return proposed,cost
+end
+local function linking_errors(s,proposed)
+  for _,id in ipairs(proposed.order) do
+    local a=proposed[id]
+    for d=1,4 do
+      local j=adjacent(id,d)
+      local b=proposed[j] or s.tiles[j]
+      if j and road_kind(b) and compatible_road_owners(a,b) and
+        has_edge(a.road_bits,d) and has_edge(bits_for(s,j,b),opposite(d)) and
+        not connected(s,id,d,proposed) then
+        return "The road edges do not meet at the same level."
+      end
+    end
+  end
+end
+local function road_drag_plan(s,owner,ids)
+  local requested,order,proposed,result,total={}, {}, {order={}}, {}, 0
+  if #ids==0 then return result,total end
+  for i,id in ipairs(ids) do
+    if not s.tiles[id] then return nil,"Outside the region." end
+    if requested[id]==nil then order[#order+1]=id;requested[id]=0 end
+    local previous=ids[i-1]
+    if previous and previous~=id then
+      local direction
+      for k=1,4 do if adjacent(previous,k)==id then direction=k;break end end
+      if not direction then return nil,"Road drags must join neighboring tiles." end
+      requested[previous]=add_edge(requested[previous],direction)
+      requested[id]=add_edge(requested[id],opposite(direction))
+    end
+  end
+  if #order==1 then
+    local id=order[1]
+    for d=1,4 do
+      local j=adjacent(id,d)
+      if j and road_kind(s.tiles[j]) and road_access(s.tiles[j],owner) and M.road_edge(s,j,opposite(d)) then
+        requested[id]=add_edge(requested[id],d)
+      end
+    end
+    if requested[id]==0 then
+      local existing=bits_for(s,id,s.tiles[id])
+      local mask=ground_shape(s,id)
+      requested[id]=existing~=0 and existing or (road_rules.prepare(mask,10,0,0,true) and 10 or 5)
+    end
+  end
+  for _,id in ipairs(order) do
+    local proposal,cost=road_piece_plan(s,owner,id,s.tiles[id],requested[id])
+    if not proposal then return nil,cost end
+    -- Unchanged legacy roads keep their already-established surface.
+    if cost>0 then
+      total=total+cost
+      result[#result+1]=proposal
+      proposed[id]=proposal;proposed.order[#proposed.order+1]=id
+    end
+  end
+  local error_message=linking_errors(s,proposed)
+  if error_message then return nil,error_message end
+  if total>M.company(s,owner).cash then return nil,"Not enough cash." end
+  return result,total
+end
+-- OpenTTD 14.1 road_gui.cpp OnPlaceDrag and viewport.cpp VPM_X_OR_Y.
+-- Project onto one axis from the center of the pressed tile; a click on
+-- one tile uses the stock fractional-coordinate tests.
+function M.autoroad_selection(start,first,hover,last)
+  local x,z=M.xy(start)
+  local u,v=M.xy(hover)
+  local function fract(point,i,axis)
+    return math.max(0,math.min(15,math.floor((point[axis]-(i*2-.5))*8)))
+  end
+  local ex,ez=fract(last,u,"x"),fract(last,v,"z")
+  local gx,gz=16*(u-x)+ex-8,16*(v-z)+ez-8
+  local click=hover==start
+  local along_x
+  if click then
+    along_x=(ex<ez and ex+ez<16) or (ex>ez and ex+ez>16)
+  else
+    along_x=math.abs(gz)<math.abs(gx)
+  end
+  return along_x and M.id(u,z) or M.id(x,v),along_x and 0 or 1,
+    (along_x and fract(first,x,"x") or fract(first,z,"z"))>=8,
+    (along_x and ex or ez)>=8
+end
+
+-- OpenTTD 14.1 CmdBuildLongRoad (human GUI, default two-way road).
+-- The shared stock sweep is also used by the one-way tool. Use the native
+-- tile quote so it recognizes crossing layers, bridges and through stops.
+function M.autoroad_plan(s,owner,start,last,axis,start_half,end_half)
+  if not s.corner_grid or not s.tiles[start] or not s.tiles[last] then return nil,"Outside the region." end
+  load_road_rules()
+  if type(start_half)~="boolean" or type(end_half)~="boolean" then
+    return nil,"Select a road surface."
+  end
+  local board={xy=M.xy}
+  function board.adjacent(id,dir) return adjacent(id,4-dir) end
+  function board.connects(id,dir)
+    local neighbor=board.adjacent(id,dir)
+    local t=neighbor and s.tiles[neighbor]
+    return t and (t.roadtype or 0)==0 and M.road_edge(s,neighbor,opposite(4-dir))
+  end
+  local drag,why=long_road_rules.drag(board,start,last,axis,
+    {toggle=0,start_half=start_half,end_half=end_half})
+  if not drag then return nil,"Road drags must follow one axis." end
+  local proposed={order={}}
+  local q,err=long_road_rules.sweep(drag,function(req)
+    if req.bits==0 then return nil,"No road half selected." end
+    local id=req.tile
+    local t=s.tiles[id]
+    if t.stock_void then return nil,"Outside the playable map." end
+    if t.roadworks then return nil,"Road works block that tile." end
+    local proposal,cost=road_piece_plan(s,owner,id,t,req.bits)
+    if not proposal then return nil,cost end
+    if cost==0 then return nil,"ALREADY_BUILT" end
+    proposed[id]=proposal;proposed.order[#proposed.order+1]=id
+    return {changed=true,cost=cost,proposal=proposal}
+  end)
+  if not q then return nil,err=="ALREADY_BUILT" and "Already built." or err end
+  local bad=linking_errors(s,proposed)
+  if bad then return nil,bad end
+  local c=s.companies[owner]
+  if q.cost>(c and c.cash or 100000) then return nil,"Not enough cash." end
+  local changes,ids={},{}
+  for _,entry in ipairs(q.changes) do
+    changes[#changes+1]=entry.proposal
+    ids[#ids+1]=entry.proposal.id
+  end
+  return {changes=changes,ids=ids,cost=q.cost,stopped_at=q.stopped_at,skipped=q.skipped}
+end
+
+local function site_radius(s,id)
+  local best,dist
+  local served={}
+  for i,a in ipairs(s.sites) do
+    local d=M.distance(a.tile,id)
+    if not a.closed and d<=5 then
+      served[#served+1]=i
+      if not dist or d<dist then best,dist=i,d end
+    end
+  end
+  table.sort(served,function(a,b)
+    local da,db=M.distance(s.sites[a].tile,id),M.distance(s.sites[b].tile,id)
+    return da==db and a<b or da<db
+  end)
+  return best,served
+end
+M.site_radius=site_radius
+function M.nearest_town(s,id)
+  local best,distance
+  for _,site in ipairs(s.sites) do
+    if site.kind=="town" then
+      local d=M.distance(site.tile,id)
+      if not distance or d<distance then best,distance=site,d end
+    end
+  end
+  return best,distance
+end
+local function road_terminal_plan(s,owner,tool,ids)
+  local pair=tool=="road_bay_pair"
+  if pair then
+    if not (s.road_bay_build and M.road_stock_service_active(s)) then
+      return nil,"Enable the stock road bay workbench and road loading first."
+    end
+    tool="road_station"
+  end
+  local result,total,proposed={},0,{order={}}
+  local seen={}
+  for _,id in ipairs(ids) do
+    if not seen[id] then
+      seen[id]=true
+      local t=s.tiles[id]
+      if not t then return nil,"Outside the region." end
+      if t.stock_landmark then return nil,"This landmark is protected." end
+      if t.site or t.stock_industry then return nil,"Cannot build on a town centre or industry." end
+      if t.airfield then return nil,"Use the airfield tool on that airfield." end
+      if t.ship then return nil,"That tile is part of a ship facility." end
+      if t.tram then return nil,"Use the tram tool on that tramway." end
+      if t.owner and t.owner~=owner then return nil,"Another company owns that tile." end
+      if t.house then return nil,"Bulldoze that building first." end
+      local mask=ground_shape(s,id)
+      if mask~=0 or wet(s,id) then return nil,"Terminals need flat, dry ground." end
+      if t.airfield then return nil,"Use the airfield tool on that airfield." end
+      if t.ship then return nil,"That tile is part of a ship facility." end
+      if t.tram then return nil,"Use the tram tool on that tramway." end
+      if t.build and (tool~="road_station" or t.build~="road") then return nil,"Clear the existing structure first." end
+      local item={id=id,tool=tool,build=tool,owner=owner,road_bits=0,road_town=t.road_town,h=t.h}
+      if tool=="road_station" then
+        if not site_radius(s,id) then return nil,"Build within five tiles of a town or industry." end
+        if t.build then
+          item.road_bits=bits_for(s,id,t)
+          -- OpenTTD 14.1 station_cmd.cpp CheckFlatLandRoadStop rejects
+          -- transverse road bits, with distinct corner/junction errors.
+          -- Bayline automatically chooses the axis already on the street.
+          local axis=road_axis(item.road_bits)
+          if item.road_bits~=0 and not axis then
+            local _,count=new_pieces(item.road_bits,0)
+            return nil,count==2 and "A through stop cannot go on a corner." or
+              "A through stop cannot go on a junction."
+          end
+          if t.road_town or item.road_bits==axis then
+            item.stop_axis=axis
+            -- On a real through stop, OpenTTD completes a compatible half
+            -- of the axis; town ownership still covers the entire road.
+            if axis and item.road_bits~=axis then
+              item.road_bits=axis
+              total=total+math.ceil(M.tools.road.price/2)
+            end
+          end
+          -- Preserve Bayline's private one-half end-stop separately. It
+          -- is not the upstream terminal-bay model and has no through axis.
+        else
+          for d=1,4 do
+            local j=adjacent(id,d)
+            local near=proposed[j] or s.tiles[j]
+            if j and road_kind(near) and road_access(near,owner) and
+                has_edge(bits_for(s,j,near),opposite(d)) and profiles_match(s,id,item,j,near,d) then
+              item.road_bits=add_edge(item.road_bits,d)
+            end
+          end
+          if item.road_bits~=0 and not road_axis(item.road_bits) then
+            return nil,"Place a stop beside a single road axis."
+          end
+          if item.road_bits==5 or item.road_bits==10 then item.stop_axis=item.road_bits end
+        end
+      else
+        local best,best_cost
+        for d=1,4 do
+          local j=adjacent(id,d)
+          local near=proposed[j] or s.tiles[j]
+          if j and near and (near.build=="road" or near.build=="road_station") and road_access(near,owner) then
+            local p,cost=road_piece_plan(s,owner,j,near,road_flags[opposite(d)])
+            if p and profiles_match(s,id,item,j,p,d) and (not best_cost or cost<best_cost) then
+              item.depot_dir=d;item.road_bits=road_flags[d]
+              best,best_cost=p,cost
+            end
+          end
+        end
+        if not best then return nil,"The depot needs an adjacent road at the same level." end
+        if best_cost>0 then
+          -- Two adjacent depot purchases tapping the same road need only
+          -- write its final union; the planner has accumulated each cost.
+          if proposed[best.id] then
+            for i,l in ipairs(result) do if l.id==best.id then result[i]=best;break end end
+          else
+            result[#result+1]=best
+            proposed.order[#proposed.order+1]=best.id
+          end
+          proposed[best.id]=best
+          total=total+best_cost
+        end
+      end
+      if pair then
+        local half=item.road_bits
+        if item.stop_axis or t.road_town or not (half==1 or half==2 or half==4 or half==8) then
+          return nil,"A two-bay terminus needs exactly one road approach, on flat ground."
+        end
+        for _,v in pairs(s.fleet) do
+          for _,route_tile in ipairs(v.route or {}) do
+            if route_tile==id then return nil,"Wait for the active road service to leave this approach." end
+          end
+        end
+        item.road_stop_pair=true
+      end
+      total=total+M.tools[tool].price
+      result[#result+1]=item
+      proposed[id]=item;proposed.order[#proposed.order+1]=id
+    end
+  end
+  local error_message=linking_errors(s,proposed)
+  if error_message then return nil,error_message end
+  if total>M.company(s,owner).cash then return nil,"Not enough cash." end
+  return result,total
+end
+function M.plan(s,owner,tool,ids,quote_clear_only)
+  for _,id in ipairs(ids or {}) do
+    if M.crossing_protected(s,id) and tool~="road" then
+      return nil,"That tile is a protected level crossing."
+    end
+  end
+  local w=M.tools[tool]
+  if not w or not w.price then return nil,"Select a construction tool." end
+  for _,id in ipairs(ids) do
+    if M.rail_span_protected(s,id) and not (tool=="road" and M.crossing_protected(s,id)) then
+      return nil,"Rail bridge or tunnel protected. Use Rail Engineering to remove it."
+    end
+  end
+  if tool=="road_bay_pair" then return road_terminal_plan(s,owner,tool,ids) end
+  if s.corner_grid or s.has_town_roads then
+    if tool=="road" then return road_drag_plan(s,owner,ids) end
+    if tool=="road_station" or tool=="road_depot" then return road_terminal_plan(s,owner,tool,ids) end
+  end
+  if s.corner_grid then
+    if tool=="grade" then return nil,"Corner terraforming is not connected to this tool yet." end
+    if tool=="road_bridge" or tool=="road_tunnel" then return nil,"This structure is not available in the corner terrain preview." end
+  end
+  local result,seen,total={},{},0
+  for _,id in ipairs(ids) do
+    local t=s.tiles[id]
+    if not t or t.stock_void then return nil,"Outside the playable map." end
+    if not seen[id] then
+      seen[id]=true
+      local water=tool=="clear" and s.corner_grid and not t.wood and
+        (t.terrain=="water" or t.build=="canal" or t.stock_canal)
+      if water then
+        local price,why=quote_water_clear(s,owner,id)
+        if not price then return nil,water_clear_errors[why] or why end
+        result[#result+1]={id=id,tool=tool,water_clear=true}
+        total=total+price
+      else -- existing dry-land and special-structure rules
+      if t.stock_landmark then return nil,"This landmark is protected." end
+      if t.site or t.stock_industry then return nil,"Cannot build on a town centre or industry." end
+      if t.owner and t.owner~=owner then return nil,"Another company owns that tile." end
+      if tool=="clear" and t.stock_canal then return nil,"Use the Harbor bulldozer for stock canals." end
+      if tool=="clear" and t.road_tunnel_id then
+        return nil,"Use /roadtunnel X Z remove to remove both portals."
+      end
+      if tool=="clear" and t.road_bridge_id then
+        return nil,"Use /woodbridge X Z remove to remove both bridgeheads and the span together."
+      end
+      if tool=="clear" and t.rail_tracks and s.stock_rail_dispatch then
+        local d=s.stock_rail_dispatch
+        if #d.runs>0 or d.signals.records[id] then
+          return nil,"The rail dispatch pilot protects that track or path signal."
+        end
+      end
+      if tool=="clear" and (t.rail_station_id or t.rail_depot_dir) then
+        return nil,"Use /trackfacility X Z remove to remove the rail facility first."
+      end
+      if tool=="clear" and road_sign(t)~=0 then
+        local w=oneway_world(s)
+        if w and w.occupied(s,id) then return nil,"Wait for the vehicle to clear that one-way road." end
+      end
+      if tool=="clear" and t.road_town and not t.station then
+        return nil,"The town owns this public road."
+      end
+      if tool=="clear" and t.road_stop_pair then
+        local occupancy=M.road_bay_status(s,id)
+        if occupancy and (occupancy.first or occupancy.second or occupancy.entrance) then
+          return nil,"Wait for both bays and the shared entrance to clear."
+        end
+      end
+      local existing=t.build
+      local target=tool
+      local skip=false
+      local extra=t.house and 240 or 0
+      if t.house and tool=="clear" then
+        local town=M.nearest_town(s,id)
+        if town and ((M.company(s,owner).rating[town.id] or 48)<28) then
+          return nil,town.name.." refuses demolition. Deliver cargo there to rebuild your reputation."
+        end
+      end
+      if existing and tool=="clear" then
+        for _,v in pairs(s.fleet) do
+          if v.route and M.vehicles[v.engine].mode==M.tools[existing].mode then
+            if t.road_town then
+              if M.position(s,v)==id then return nil,"Wait for the vehicle to clear that tile." end
+            else
+              for _,tid in ipairs(v.route) do if tid==id then return nil,"Wait for the vehicle to clear that route." end end
+            end
+          end
+          if v.depot==id then return nil,"Sell or dispatch the vehicles parked in this depot." end
+          if t.station and v.station==t.station then return nil,"A vehicle is parked at that terminal." end
+        end
+      end
+      if t.house and tool~="clear" then return nil,"Bulldoze that building first." end
+      if tool=="road_depot" then
+        if t.h>0 or wet(s,id) or existing then return nil,"Build the depot on empty, flat land beside a road." end
+        local access=false
+        for d=1,4 do
+          local j=adjacent(id,d)
+          if j and s.tiles[j].build~="road_depot" and mode_on(s,j,"road",owner) then access=true end
+        end
+        if not access then return nil,"The depot needs an adjacent road you own." end
+      elseif station_tools[tool] then
+        if t.h>0 or wet(s,id) then return nil,"Terminals need flat, dry ground." end
+        if existing and existing~=w.mode then return nil,"Clear the existing structure first." end
+        if not site_radius(s,id) then return nil,"Build within five tiles of a town or industry." end
+        if tool=="dock" then
+          local shoreline=false
+          for k=1,4 do local j=adjacent(id,k);if j and wet(s,j) then shoreline=true end end
+          if not shoreline then return nil,"Docks need a neighboring water tile." end
+        end
+      elseif tool=="signal" then
+        if not mode_on(s,id,"rail",owner) or t.station then return nil,"Signals go on non-station track." end
+        skip=t.signal
+      elseif tool=="grade" then
+        if existing or wet(s,id) or t.h==0 then return nil,"Only unbuilt hills can be graded." end
+      elseif tool=="clear" then
+        if not existing and not t.house and not t.wood then skip=true end
+        if t.station then
+          for _,v in pairs(s.fleet) do
+            for _,order in ipairs(v.orders) do if order.station==t.station then return nil,"Remove the station from vehicle orders first." end end
+          end
+        end
+      elseif tool=="canal" then
+        if wet(s,id) and not existing then skip=true
+        elseif t.h>0 or (existing and existing~=tool) then return nil,"Canals need clear, level ground."
+        elseif existing==tool then skip=true end
+      else
+        if existing and M.tools[existing].mode==w.mode and not t.station then skip=true
+        elseif existing and M.tools[existing].mode==w.mode and t.station then skip=true
+        elseif existing then return nil,"Different infrastructure already occupies that tile."
+        elseif wet(s,id) then
+          if tool~=w.mode.."_bridge" or existing=="canal" then return nil,"Use a bridge over open water." end
+        elseif t.h>0 then
+          if tool~=w.mode.."_tunnel" then return nil,"Use a tunnel through the hill, or grade it." end
+        else target=w.mode end
+      end
+      if not skip then
+        total=total+M.tools[target].price+extra
+        result[#result+1]={id=id,tool=target}
+      end
+      end
+    end
+  end
+  if not (quote_clear_only and tool=="clear") and total>M.company(s,owner).cash then return nil,"Not enough cash." end
+  return result,total
+end
+function M.line(a,b,zfirst)
+  local x,z=M.xy(a);local u,v=M.xy(b)
+  local list={a}
+  local function go_x() while x~=u do x=x+(u>x and 1 or -1);list[#list+1]=M.id(x,z) end end
+  local function go_z() while z~=v do z=z+(v>z and 1 or -1);list[#list+1]=M.id(x,z) end end
+  if zfirst then go_z();go_x() else go_x();go_z() end
+  return list
+end
+-- LuanTTD convenience: the stock road command is one-axis only. Build a
+-- single orthogonal corner from ordinary, connected road half-pieces.
+-- Unlike a straight drag, an obstructed bend has no useful partial result.
+function M.autoroad_bend_plan(s,owner,start,last)
+  if not s.corner_grid or not s.tiles[start] or not s.tiles[last] then return nil,"Outside the region." end
+  local x,z=M.xy(start)
+  local u,v=M.xy(last)
+  if x==u or z==v then return nil,"Aim across both axes to make a bend." end
+  local path=M.line(start,last,math.abs(v-z)>math.abs(u-x))
+  for _,id in ipairs(path) do
+    if s.tiles[id].stock_void then return nil,"Outside the playable map.",path end
+  end
+  local changes,cost=M.plan(s,owner,"road",path)
+  if not changes then return nil,cost,path end
+  return {changes=changes,cost=cost,path=path},nil,path
+end
+local function apply_build(s,owner,changes,cost)
+  if #changes==0 then return true,"Nothing to change.",{} end
+  local c=M.company(s,owner);debit(c,cost)
+  local changed,crossing_changed={}
+  for _,item in ipairs(changes) do
+    local id,k=item.id,item.tool
+    local tile=s.tiles[id]
+    local had_sign=road_sign(tile)~=0
+    if item.crossing_quote then
+      M.apply_crossing_construction(s,item.crossing_quote)
+      crossing_changed=true
+    elseif item.water_clear then
+      coastal_world.clear_apply(s,id)
+    elseif k=="clear" then
+      if tile.road_stop_pair then
+        local bs=s.stock_road_bays and s.stock_road_bays.stops[id]
+        if bs then
+          assert(bs.status==3,"Cleared occupied two-bay road stop")
+          s.stock_road_bays.stops[id]=nil
+        end
+        tile.road_stop_pair=nil
+      end
+      if tile.station then s.stations[tile.station]=nil end
+      if tile.house then
+        local growth=town_growth_mount[s]
+        if growth then growth.world.remove(s,tile.source_house) end
+        local town=M.nearest_town(s,id)
+        if town then c.rating[town.id]=math.max(10,(c.rating[town.id] or 48)-10) end
+      end
+      if tile.road_town then
+        -- Remove the private stop without erasing the public through road.
+        tile.build="road";tile.station=nil;tile.owner=nil;tile.stop_axis=nil
+      else
+        tile.build=nil;tile.rail_tracks=nil;tile.rail_type=nil;tile.station=nil;tile.signal=nil;tile.closed=nil;tile.owner=nil;tile.depot_dir=nil;tile.road_bits=nil;tile.stop_axis=nil;tile.house=nil;tile.source_house=nil;tile.wood=nil
+      end
+    elseif k=="grade" then tile.h=tile.h-1;tile.terrain=tile.h==0 and "grass" or "hill"
+    elseif k=="signal" then tile.signal=true
+    elseif item.road_bits~=nil and tile.build==k then
+      -- Lay additional halves without recreating terminal entities.
+      tile.road_bits=item.road_bits
+    else
+      tile.build=k; tile.owner=owner; tile.wood=nil
+      tile.road_bits=item.road_bits;tile.road_town=item.road_town;tile.stop_axis=item.stop_axis
+      tile.road_stop_pair=item.road_stop_pair
+      if k=="road_depot" then
+        tile.depot_dir=item.depot_dir
+        for d=1,(tile.depot_dir and 0 or 4) do
+          local j=adjacent(id,d)
+          if j and s.tiles[j].build~="road_depot" and mode_on(s,j,"road",owner) then tile.depot_dir=d;break end
+        end
+      end
+      if station_tools[k] then
+        local sid=s.next_station;s.next_station=sid+1
+        local best,served=site_radius(s,id)
+        local site=s.sites[best]
+        local label=tile.road_stop_pair and "Bus terminus" or M.tools[k].name
+        s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,name=site.name.." "..label.." #"..sid,site=best,served=served,stock={},last_service={}}
+        tile.station=sid
+        if tile.road_stop_pair then M.install_road_bay(s,id) end
+      end
+    end
+    if tile.build~="road" then
+      tile.road_disallowed,tile.disallowed=nil,nil
+      if had_sign then one_way_edit(s,id,k=="clear") end
+    elseif s.road_oneway_removed and s.road_oneway_removed[id] then
+      one_way_edit(s,id,false)
+    end
+    changed[#changed+1]=id
+  end
+  s.topology=s.topology+1
+  if crossing_changed then M.refresh_crossing_construction(s) end
+  return true,("$%d spent on %d tile%s%s."):format(cost,#changes,#changes==1 and "" or "s",
+    crossing_changed and ", including level crossing work" or ""),changed
+end
+local function build(s,owner,tool,ids,funded_clear)
+  local changes,cost=M.plan(s,owner,tool,ids,funded_clear)
+  if not changes then return false,cost end
+  return apply_build(s,owner,changes,cost)
+end
+function M.build(s,owner,tool,ids) return build(s,owner,tool,ids) end
+function M.autoroad_bend_build(s,owner,start,last)
+  local q,why=M.autoroad_bend_plan(s,owner,start,last)
+  if not q then return false,why end
+  return apply_build(s,owner,q.changes,q.cost)
+end
+function M.autoroad_build(s,owner,start,last,axis,start_half,end_half)
+  local q,why=M.autoroad_plan(s,owner,start,last,axis,start_half,end_half)
+  if not q then return false,why end
+  local ok,note,ids=apply_build(s,owner,q.changes,q.cost)
+  return ok,note,ids,q
+end
+
+-- Area commands share the host's exact supported per-tile quote/apply
+-- adapters. Whole transport spans, footprints and persistent reservations
+-- keep their separate single-click dismantle commands; don't erase a host
+-- record below or on top of another transport layer via a drag.
+function M.clear_area(s,owner,first,last,diagonal,execute)
+  if not s.corner_grid then return nil,"Area demolition needs shared-corner terrain." end
+  load_road_rules()
+  local company=s.companies[owner]
+  local cash=company and company.cash or 100000
+  local quota=clear_area_rules.replenish(company and company.clear_limit,0)
+  local ids, dirty={},{}
+  local ctx={}
+  function ctx.quote(id)
+    local t=s.tiles[id]
+    if not t or t.stock_void then return nil,"Outside the playable map." end
+    if t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or t.ship or t.airfield or t.tram or
+        s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
+        s.tunnel_below and s.tunnel_below[id] then
+      return nil,"A protected transport structure occupies this tile."
+    end
+    local edits,cost=M.plan(s,owner,"clear",{id},true)
+    if not edits then return nil,cost end
+    return cost
+  end
+  function ctx.accepted(id) ids[#ids+1]=id end
+  if execute then
+    company=M.company(s,owner)
+    function ctx.apply(id)
+      local ok,note,touched=build(s,owner,"clear",{id},true)
+      -- The authority was quoted with live state immediately before this
+      -- call. Single-threaded execution must not introduce a new denial.
+      assert(ok,note)
+      for _,tile in ipairs(touched) do dirty[#dirty+1]=tile end
+    end
+  end
+  local q,why,attempt=clear_area_rules.run(M.W,M.H,first,last,diagonal,ctx,
+      {execute=true,limit=quota,money=cash})
+  if not q then return nil,why,attempt end
+  q.ids,q.dirty=ids,dirty
+  if execute and q.quota~=quota then company.clear_limit=q.quota end
+  return q
+end
+local source_speed
+local road_replan
+local road_visual=setmetatable({},{__mode="k"})
+function M.road_motion_timeline(s,id)
+  return road_visual[s] and road_visual[s][id]
+end
+function M.road_motion_frame(s,v)
+  local c=v.road_speed_state
+  if c and v.road_motion_frames and not c.depot_wait then
+    return c.lane_pose or v.road_motion_frames[c.index]
+  end
+  return v.road_stop_pose
+end
+local function road_clock()
+  if not source_speed then
+    load_road_rules()
+    local source=debug and debug.getinfo(1,"S").source
+    local base=source and source:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("bayline").."/") or "mods/bayline/"
+    local Speed=dofile(base.."openttd/road_speed.lua")
+    local Proximity=dofile(base.."openttd/road_proximity.lua")
+    local Follow=dofile(base.."openttd/yapf_road_follow.lua")
+    local Board=dofile(base.."road_yapf_board.lua")
+    local Motion=dofile(base.."openttd/road_motion.lua")(dofile(base.."openttd/road_motion_data.lua"))
+    local Occupancy=dofile(base.."openttd/road_stop_occupancy.lua")(Motion)
+    local Bay=dofile(base.."road_bay_runtime.lua")(Occupancy)
+    local presentation=dofile(base.."road_motion_presentation.lua")(dofile(base.."road_lanes.lua"))
+    local Junction=dofile(base.."road_junction_guard.lua")(M,presentation)
+    source_speed=dofile(base.."road_speed_runtime.lua")(Speed,Proximity,function(state,frame)
+      local tile=state.tiles[frame[4]]
+      if frame[14] then return state.stock_road_tunnels[frame[14]].base*8 end
+      local span=frame[10] and state.stock_road_bridges[frame[10]]
+      if span and (frame[12] or span.middle_by_tile[frame[4]]) then return span.deck*8 end
+      local shape,base=road_shape(state,frame[4],tile)
+      return (base or tile.h)*8+(shape and slope_rules.pixel(frame[1]%16,frame[2]%16,shape) or 0)
+    end,function(state,id)
+      local t=id and state.tiles[id]
+      if not t or t.build~="road_station" then return false end
+      local axis=t.stop_axis or M.road_bits(state,id)
+      return axis~=5 and axis~=10
+    end,function(state,id) return state.tiles[id].build=="road_depot" end,
+      function(state) return road_traffic_board(state,Board(M,state,Follow)) end,crossing_road_step,
+      one_way_pose,function(...) return road_replan(...) end,Bay,Junction)
+  end
+  return source_speed
+end
+function M.install_road_bay(s,id) road_clock().bay.install(s,id) end
+function M.road_bay_status(s,id) return s.stock_road_bays and road_clock().bay.report(s,id) end
+local function advance_road(s,moving)
+  local advance,samples=road_clock().day(s,moving)
+  road_visual[s]=samples
+  return advance
+end
+local source_route,source_routing
+local function road_routing()
+  if not source_routing then
+    local source=debug and debug.getinfo(1,"S").source
+    local base=source and source:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("bayline").."/") or "mods/bayline/"
+    local follow=dofile(base.."openttd/yapf_road_follow.lua")
+    local cost=dofile(base.."openttd/yapf_road_cost.lua")(follow)
+    local search=dofile(base.."openttd/yapf_road_search.lua")(follow,cost)
+    local board=dofile(base.."road_yapf_board.lua")
+    local motion=dofile(base.."openttd/road_motion.lua")(dofile(base.."openttd/road_motion_data.lua"))
+    local motion_leg=dofile(base.."road_motion_leg.lua")
+    local function framed_board(Sim,state,F,occupancy)
+      return road_traffic_board(state,board(Sim,state,F,occupancy))
+    end
+    source_route=dofile(base.."road_yapf_route.lua")(M,follow,cost,search,framed_board,motion,motion_leg)
+    source_routing={follow=follow,cost=cost,search=search,board=board,motion=motion,motion_leg=motion_leg,
+      occupancy=dofile(base.."road_occupancy_view.lua")}
+  end
+  return source_routing
+end
+local function road_departure(s,a,b,owner,vehicle)
+  local r=road_routing()
+  return source_route.route(s,a,b,owner,vehicle,r.occupancy(M,s))
+end
+road_replan=function(s,v,state,frames,current,vehicle_limit)
+  local revision=s.road_oneway_revision
+  if not revision or state.oneway_checked_rev==revision then return end
+  if state.depot_wait or state.lane_pose or (state.overtaking or 0)~=0 then return end
+  local t=s.tiles[current[4]]
+  if not current[15] or current[10] or current[12] or current[13] or current[14] or not t or
+      t.build~="road" or t.level_crossing then return end
+  state.oneway_checked_rev=revision
+  local w=oneway_world(s)
+  if not w then return end
+  local bad=false
+  for i=state.index+1,#frames do
+    if not one_way_pose(s,frames[i-1],frames[i]) then bad=true;break end
+  end
+  if not bad then return end
+  local r=road_routing()
+  local base=crossing_road_board(s,r.board(M,s,r.follow,r.occupancy(M,s)))
+  local alternate=w.reroute(s,v,current,base,r.search,r.cost,{display_max_speed=vehicle_limit,compatible={[0]=true}})
+  if not alternate then return end
+  local new,bays=source_route.frames(w.path_board(s,base),alternate.trace,alternate.origin_frame)
+  if v.road_bay_branch and not bays then return end
+  if not new or #new<2 then return end
+  -- Never replace a cursor if the road row/heading cannot meet at the
+  -- actual stock pose. A held actor still owns its old leg in that case.
+  local first=new[1]
+  for _,i in ipairs{1,2,3,4,6,15} do if first[i]~=current[i] then return end end
+  for i=2,#new do if not one_way_pose(s,new[i-1],new[i]) then return end end
+  local path={}
+  for _,n in ipairs(alternate.trace) do if path[#path]~=n.tile then path[#path+1]=n.tile end end
+  if #path<2 then return end
+  v.route,v.road_leg_td,v.road_route_cost,v.road_motion_frames=path,alternate.last_td,alternate.cost,new
+  v.road_bay_branch=bays
+  state.index,state.waiting,state.oneway_tile=1,nil,nil
+  state.oneway_reroutes=(state.oneway_reroutes or 0)+1
+  if v.status=="Waiting at one-way road" then v.status="En route" end
+  return new
+end
+function M.path(s,a,b,mode,owner,avoid,vehicle)
+  if not a or not b or not a.tile or not b.tile or a.mode~=mode or b.mode~=mode or a.owner~=owner or b.owner~=owner then return nil end
+  if mode=="road" and s.road_economy and s.corner_grid and not avoid then
+    return road_departure(s,a,b,owner,vehicle)
+  end
+  if a.tile==b.tile then return {a.tile} end
+  if mode=="air" then return M.line(a.tile,b.tile) end
+  local front,tail=1,1
+  local queue,prev={a.tile},{[a.tile]=0}
+  while front<=tail do
+    local i=queue[front];front=front+1
+    for k=1,4 do
+      local j=adjacent(i,k)
+      if j and prev[j]==nil and (not avoid or not avoid[j] or j==b.tile) then
+        local pass
+        if mode=="water" then pass=j==b.tile or wet(s,j)
+        else
+          local from,to=s.tiles[i],s.tiles[j]
+          local leaves=not from.depot_dir or adjacent(i,from.depot_dir)==j
+          local enters=to.build~="road_depot" or (j==b.tile and (not to.depot_dir or adjacent(j,to.depot_dir)==i))
+          pass=leaves and enters and mode_on(s,j,mode,owner)
+          if pass and mode=="road" and (s.corner_grid or s.has_town_roads) then
+            pass=road_access(from,owner) and connected(s,i,k)
+          end
+          if pass and mode=="road" and s.road_oneway_revision then
+            -- A legacy half-speed route cannot enforce source direction.
+            pass=road_sign(from)==0 and road_sign(to)==0
+          end
+        end
+        if pass then
+          prev[j]=i
+          if j==b.tile then
+            local rev={j};local cur=j
+            while prev[cur]~=0 do cur=prev[cur];rev[#rev+1]=cur end
+            local out={}
+            for m=#rev,1,-1 do out[#out+1]=rev[m] end
+            return out
+          end
+          tail=tail+1;queue[tail]=j
+        end
+      end
+    end
+  end
+end
+function M.signal(s,owner,id)
+  local t=s.tiles[id]
+  if not t or not t.signal or t.owner~=owner then return false,"Select one of your rail signals." end
+  t.closed=not t.closed
+  return true,t.closed and "Signal set to hold departures." or "Signal reopened."
+end
+local function timber_engine(engine)
+  return engine=="wood_truck" or engine=="goods_truck"
+end
+local function farm_engine(engine)
+  return engine=="grain_truck" or engine=="livestock_van" or engine=="goods_truck"
+end
+local function oil_engine(engine) return engine=="oil_tanker" or engine=="goods_truck" end
+local function industry_truck(engine) return timber_engine(engine) or farm_engine(engine) or oil_engine(engine) end
+local function allowed(engine,cargo)
+  if engine=="leopard_bus" or engine=="foster_bus" then return cargo=="passenger" end
+  if engine=="mail_van" then return cargo=="mail" end
+  if engine=="coal_tipper" then return cargo=="coal" end
+  if engine=="wood_truck" then return cargo=="wood" end
+  if engine=="grain_truck" then return cargo=="grain" end
+  if engine=="livestock_van" then return cargo=="livestock" end
+  if engine=="goods_truck" then return cargo=="goods" end
+  if engine=="oil_tanker" or cargo=="oil" then return engine=="oil_tanker" and cargo=="oil" end
+  if engine=="bus" or engine=="coach" or engine=="ferry" or engine=="prop" or engine=="jet" then return cargo=="passenger" or cargo=="mail" end
+  if engine=="truck" or engine=="freighter" then return cargo~="passenger" end
+  return true
+end
+M.allowed=allowed
+local function depot_endpoint(s,owner,id)
+  local t=s.tiles[id]
+  if t and t.owner==owner and t.build=="road_depot" then return {tile=id,owner=owner,mode="road"} end
+end
+local function road_bus_catalog()
+  if not M.source_bus_catalog then
+    local source=debug and debug.getinfo(1,"S").source
+    local base=source and source:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("bayline").."/") or "mods/bayline/"
+    M.source_bus_catalog=dofile(base.."openttd/road_bus_catalog.lua")
+  end
+  return M.source_bus_catalog
+end
+function M.mount_road_bus_market(s,Calendar,starting_year,has_foster)
+  M.engine_calendar=Calendar
+  if not s.stock_bus_market then
+    assert(s.day==0 and not next(s.fleet),"Start the stock depot market in a fresh world.")
+    assert(type(starting_year)=="number" and starting_year>=1950 and starting_year<=2050 and starting_year%1==0,
+      "Set bayline_stock_bus_start_year to an integer from 1950 to 2050.")
+    local gen=s.seed%2^32
+    local startup_seed=(gen*1664525+1013904223)%2^32
+    local settings={starting_year=starting_year,generation_seed=gen,startup_seed=startup_seed,
+      climate="temperate"}
+    local market={version=1,epoch=assert(Calendar.date(starting_year,1,1)),
+      settings=settings,models={}}
+    for _,stock_id in ipairs({116,117,118}) do
+      market.models[stock_id]=assert(Calendar.prepare(stock_id,settings))
+    end
+    s.stock_bus_market=market
+    s.news[1]=starting_year..": A new transportation charter opens on the coast."
+  end
+  assert(s.stock_bus_market.version==1,"Unsupported saved stock road market.")
+  foster_art_mount[s]=not not has_foster
+end
+function M.foster_art_ready(s)
+  return foster_art_mount[s]
+end
+function M.stock_road_offer(s,engine)
+  local market=s.stock_bus_market
+  local id=market and road_bus_catalog().stock_id(engine)
+  if not id then return end
+  if engine=="foster_bus" and not M.foster_art_ready(s) then return end
+  return assert(M.engine_calendar.snapshot(market.models[id],market.epoch+s.day))
+end
+function M.vehicle_offer(s,engine)
+  if s.stock_bus_market and M.road_stock_service_active(s) then
+    local catalog=road_bus_catalog()
+    local id=catalog.stock_id(engine)
+    if id then return catalog.quote(nil,nil,id) end
+  elseif engine=="bus" and s.road_regal_enabled and M.road_stock_service_active(s) then
+    return road_bus_catalog().quote()
+  end
+  return M.vehicles[engine]
+end
+function M.mount_road_faults(s,Kernel,Runtime,difficulty,service)
+  if not s.stock_bus_market then return end
+  local f=Runtime(Kernel,M,s,difficulty,function() return M.stock_random_u32(s) end)
+  if service then
+    assert(type(service.interval)=="number" and service.interval%1==0 and
+      (service.interval==0 or service.interval>=5 and service.interval<=(service.percent and 90 or 800)),
+      "Stock service interval must be 0 or within the supported day/percent range.")
+    if service.interval>0 then f.auto=service end
+  end
+  road_faults_mount[s]=f
+  return f
+end
+function M.road_fault_rating(s,v)
+  local f=road_faults_mount[s]
+  if f then return f.report(v) end
+end
+local function stock_bus(v) return v.stock_bus or v.stock_regal end
+function M.vehicle_capacity(v)
+  local s=stock_bus(v)
+  return s and road_bus_catalog().capacity(s.stock_id) or M.vehicles[v.engine].capacity
+end
+function M.vehicle_available(s,engine)
+  if s.stock_bus_market and engine=="coach" then return false end
+  if s.stock_bus_market and road_bus_catalog().stock_id(engine) then
+    local model=M.stock_road_offer(s,engine)
+    return not not (M.road_stock_service_active(s) and model and model.public)
+  end
+  local e=M.vehicles[engine]
+  if not e or M.date(s)<e.year then return false end
+  return not not (not e.development or
+    (engine=="mail_van" and s.road_mail and s.road_stock_house_supply) or
+    (engine=="coal_tipper" and M.road_coal_active(s)) or
+    (timber_engine(engine) and M.road_timber_active(s)) or
+    (farm_engine(engine) and M.road_farm_active(s)) or
+    (oil_engine(engine) and M.road_oil_active(s)))
+end
+function M.purchase(s,owner,engine,cargo,station,depot)
+  local c=M.company(s,owner)
+  local e=M.vehicle_offer(s,engine)
+  local st=s.stations[station]
+  if not e or not M.cargo[cargo] or not allowed(engine,cargo) then return nil,"That vehicle cannot carry this cargo." end
+  if not M.vehicle_available(s,engine) then return nil,"That model is not available." end
+  if e.stock_id and (cargo~="passenger" or not depot) then
+    return nil,"Buy the original passenger bus in an owned road depot."
+  end
+  if engine=="coal_tipper" and not depot then return nil,"Buy the coal tipper in an owned road depot." end
+  if industry_truck(engine) and not depot then return nil,"Buy this freight vehicle in an owned road depot." end
+  if depot then
+    if station or e.mode~="road" or not depot_endpoint(s,owner,depot) then return nil,"Select a road depot you own." end
+  elseif not st or st.owner~=owner or st.mode~=e.mode then return nil,"Select a compatible terminal you own." end
+  if st and s.tiles[st.tile].road_stop_pair then
+    return nil,"Buy this vehicle in a road depot, then order the two-bay terminus."
+  end
+  if c.cash<e.cost then return nil,"Not enough cash." end
+  local n=0;for _,v in pairs(s.fleet) do if v.owner==owner then n=n+1 end end
+  if n>=60 then return nil,"Company fleet limit reached (60)." end
+  debit(c,e.cost)
+  local id=s.next_vehicle;s.next_vehicle=id+1
+  s.fleet[id]={id=id,name=e.name.." #"..id,owner=owner,engine=engine,cargo=cargo,station=station,
+    depot=depot,orders=depot and {} or {{station=station,action="normal"}},index=1,units=0,revenue=0,expense=0,delivered=0, bought=s.day,
+    status="Stopped",running=false,progress=0,wait=0,condition=100}
+  if e.stock_id then
+    local key=s.stock_bus_market and "stock_bus" or "stock_regal"
+    local v=s.fleet[id]
+    v[key]=road_bus_catalog().new(e)
+    local f=road_faults_mount[s]
+    if f then f.purchased(v) end
+  end
+  return id,"Purchased "..s.fleet[id].name.."."
+end
+local order_lists
+local function orders_module()
+  if not order_lists then
+    local source=debug and debug.getinfo(1,"S").source
+    local base=source and source:sub(1,1)=="@" and source:sub(2):match("^(.*/)") or ""
+    if core and core.get_modpath then base=core.get_modpath("bayline").."/" end
+    order_lists=dofile(base.."openttd/road_order_list.lua")
+  end
+  return order_lists
+end
+local function is_road_vehicle(v) return M.vehicles[v.engine].mode=="road" end
+local function can_use_road_order(s,v,o)
+  local st=s.stations[o.station]
+  if not st or st.owner~=v.owner or st.mode~="road" then return false end
+  if not s.road_economy then return true end
+  local truck=st.stop_type=="truck"
+  if v.cargo=="passenger" then return not truck end
+  if v.engine=="mail_van" or v.engine=="coal_tipper" or industry_truck(v.engine) then return truck end
+  return true
+end
+local abort_stock_stop
+local function orders_changed(s,v,wipe_resume)
+  if wipe_resume then v.road_depot_resume=nil end
+  if v.load_state then abort_stock_stop(s,v) end
+  v.stock_loading_complete=nil
+end
+function M.restore_road_orders(s)
+  if s.next_road_order_group then orders_module().restore(s) end
+end
+function M.road_order_members(s,id)
+  local v=s.fleet[id]
+  if not v or not is_road_vehicle(v) then return {} end
+  return orders_module().members(s,v)
+end
+function M.clone_road_orders(s,owner,id,from,action)
+  local ok,note=orders_module().clone(s,owner,id,from,action,is_road_vehicle,
+    function(v,o) return can_use_road_order(s,v,o) end)
+  if ok then orders_changed(s,s.fleet[id],true) end
+  return ok,note
+end
+function M.add_order(s,owner,id,station,action)
+  local v,st=s.fleet[id],s.stations[station]
+  if not v or not st or v.owner~=owner or st.owner~=owner or st.mode~=M.vehicles[v.engine].mode then return false,"Choose a compatible terminal." end
+  if v.running or v.route then return false,"Stop at a terminal before changing orders." end
+  if s.road_economy and M.vehicles[v.engine].mode=="road" then
+    local truck=st.stop_type=="truck"
+    if v.cargo=="passenger" and truck then return false,"Buses need passenger stops." end
+    if v.engine=="mail_van" and not truck then return false,"Mail vans need truck loading stops." end
+    if v.engine=="coal_tipper" and not truck then return false,"Coal tippers need truck loading stops." end
+    if industry_truck(v.engine) and not truck then return false,"Freight needs truck loading stops." end
+  end
+  if v.order_group then
+    local members,note=orders_module().can_edit(s,v)
+    if not members then return false,note end
+    for _,other in ipairs(members) do
+      if not can_use_road_order(s,other,{station=station}) then
+        return false,"A vehicle sharing these orders cannot call at that stop."
+      end
+    end
+  end
+  if #v.orders>=16 then return false,"Limit of 16 orders." end
+  local prior=v.orders[#v.orders]
+  if prior and prior.station==station then return false,"That order repeats the previous terminal." end
+  if action~="transfer" and action~="full" and action~="unload" then action="normal" end
+  v.orders[#v.orders+1]={station=station,action=action}
+  if v.order_group then
+    for _,other in ipairs(orders_module().members(s,v)) do orders_changed(s,other,true) end
+  end
+  return true,"Added "..st.name.."."
+end
+function M.edit_order(s,owner,id,index,op)
+  local v=s.fleet[id];local o=v and v.orders[index]
+  if not v or v.owner~=owner or not o then return false,"Select one of your vehicle's orders." end
+  if v.running or v.route then return false,"Stop at a terminal before changing orders." end
+  local members,note
+  if v.order_group then
+    members,note=orders_module().can_edit(s,v)
+    if not members then return false,note end
+  end
+  local moved
+  if op=="remove" then table.remove(v.orders,index)
+  elseif op=="cycle_load" then
+    o.action=o.action=="full" and "normal" or "full"
+  elseif op=="up" and index>1 then
+    moved=index-1;v.orders[index],v.orders[moved]=v.orders[moved],o
+  elseif op=="down" and index<#v.orders then
+    moved=index+1;v.orders[index],v.orders[moved]=v.orders[moved],o
+  else return false,"Cannot move this order farther." end
+  if members then
+    for _,other in ipairs(members) do
+      if op=="remove" then orders_module().cursor_after_remove(other,index) end
+      if moved then orders_module().cursor_after_move(other,index,moved) end
+      orders_changed(s,other,op~="cycle_load")
+    end
+  else
+    if v.index>#v.orders then v.index=1 end
+    orders_changed(s,v,op~="cycle_load")
+  end
+  return true,op=="cycle_load" and (o.action=="full" and "Order waits for a full load." or "Order loads normally.") or "Orders updated."
+end
+function M.toggle(s,owner,id)
+  local v=s.fleet[id]
+  if not v or v.owner~=owner then return false,"Select your vehicle." end
+  if v.road_return_depot then return false,"This vehicle is returning to its depot." end
+  if v.stop_requested then v.stop_requested=nil;return true,"Scheduled stop cancelled." end
+  if v.running then
+    if v.route then v.stop_requested=true;return true,"Vehicle will stop at the next terminal." end
+    v.running=false;v.status="Stopped";return true,"Vehicle stopped."
+  end
+  if #v.orders<2 then return false,"Add at least two different terminal orders." end
+  local mode=M.vehicles[v.engine].mode
+  for i,o in ipairs(v.orders) do
+    local d=v.orders[i%#v.orders+1]
+    -- Validate from an unspecified approach at each stop. The driven
+    -- itinerary uses the actual arrival trackdir at the next departure.
+    local route_vehicle=mode=="road" and {engine=v.engine,cargo=v.cargo} or nil
+    if not M.path(s,s.stations[o.station],s.stations[d.station],mode,owner,nil,route_vehicle) then
+      return false,"No route from order "..i.." to its next terminal."
+    end
+  end
+  local resume=v.orders[v.road_depot_resume or 1] or v.orders[1]
+  if v.depot and not M.path(s,depot_endpoint(s,owner,v.depot),s.stations[resume.station],mode,owner,nil,v) then
+    return false,"The depot has no road connection to the first stop."
+  end
+  v.running=true;v.status=v.depot and "Leaving depot" or "Boarding";v.wait=0;v.loaded_at=nil;v.rail_wait_key=nil
+  return true,"Vehicle dispatched."
+end
+function M.sell(s,owner,id)
+  local v=s.fleet[id]
+  if not v or v.owner~=owner then return false,"Select your vehicle." end
+  if v.running or v.route or v.units>0 then return false,"Stop and unload the vehicle before selling." end
+  if v.road_bay_claim then return false,"A vehicle in an occupied two-bay terminus cannot be sold here." end
+  local bus=stock_bus(v)
+  if bus and not depot_endpoint(s,owner,v.depot) then
+    return false,"The bus must be stopped in its owned depot to sell."
+  end
+  local amount=bus and bus.value or math.floor(M.vehicles[v.engine].cost*math.max(0.2,0.72-(s.day-v.bought)*0.00015))
+  if v.load_state then abort_stock_stop(s,v) end
+  if v.order_group then orders_module().release(s,v) end
+  M.company(s,owner).cash=M.company(s,owner).cash+amount;s.fleet[id]=nil
+  return true,"Sold for $"..amount.."."
+end
+function M.service(s,owner,id)
+  local v=s.fleet[id]
+  if not v or v.owner~=owner or v.route then return false,"Vehicle must be at a terminal." end
+  if stock_bus(v) then return false,"Manual maintenance is not in the original-bus preview." end
+  local c=M.company(s,owner);local amount=math.floor(M.vehicles[v.engine].cost*0.05)
+  if c.cash<amount then return false,"Not enough cash." end
+  debit(c,amount);v.expense=v.expense+amount;v.condition=100
+  return true,"Vehicle serviced for $"..amount.."."
+end
+local passenger_rules,income_rules
+local rating_runtime,town_passengers,mail_runtime,station_service,paid_ferry,coal_service,rail_coal
+local timber_service,timber_rules,ship_coal
+local farm_service,farm_world
+local oil={reports=setmetatable({},{__mode="k"})}
+local goods={ready=setmetatable({},{__mode="k"})}
+local timber_day_bindings=setmetatable({},{__mode="k"})
+local coal_day_bindings=setmetatable({},{__mode="k"})
+local function timber_binding(s,force)
+  if timber_day_bindings[s] then return timber_day_bindings[s] end
+  if oil.service and s.stock_oil_industries and (force or M.road_oil_active(s)) then
+    return oil.binding(s)
+  end
+  if farm_service and farm_world and s.stock_farm_industries and (force or M.road_farm_active(s)) then
+    return farm_service.bind(s,{credit=credit,field_board=farm_world.field_board(s)})
+  end
+  if not timber_service or not s.stock_timber_industries or not (force or M.road_timber_active(s)) then return end
+  return goods.binding(s)
+end
+local function received_coal(world,plant,n)
+  local site=world.sites[plant.site_id or plant.site or 0]
+  if site and site.kind=="stock_power_station" then
+    site.received=site.received or {}
+    site.received.coal=(site.received.coal or 0)+n
+  end
+end
+local function coal_binding(s,force,freight,freighter)
+  local road=M.road_coal_active(s)
+  if not force and not road then return end
+  local function extend(stations,coverage)
+    if freight then freight.extend(stations,coverage) end
+    if freighter then freighter.extend(stations,coverage) end
+  end
+  local mixed=freight or freighter
+  return coal_day_bindings[s] or coal_service.bind(s,{credit=credit,separate_queue=true,
+    road_enabled=road or (force and not mixed) or false,
+    extend=mixed and extend,distribute=mixed and rail_coal.distribute,
+    select_goods=s.stock_select_goods,
+    scale=s.stock_coal_scale,recession=s.stock_coal_recession,
+    current_payment=s.stock_coal_payment,received=received_coal,
+  })
+end
+local paid_ferry_runs,paid_rail_runs=setmetatable({},{__mode="k"}),setmetatable({},{__mode="k"})
+local paid_air_runs=setmetatable({},{__mode="k"})
+local function passenger_modules()
+  if passenger_rules then return passenger_rules,income_rules end
+  local source=debug and debug.getinfo(1,"S").source
+  local base=source and source:match("^@(.*/)sim%.lua$")
+  base=base or (core and core.get_modpath("bayline").."/") or "mods/bayline/"
+  passenger_rules=dofile(base.."openttd/passengers.lua")
+  income_rules=dofile(base.."openttd/income.lua")
+  local kernel=dofile(base.."openttd/station_rating.lua")
+  local house=dofile(base.."openttd/town_passengers.lua")
+  rating_runtime=dofile(base.."station_rating_runtime.lua")(M,kernel,passenger_rules)
+  mail_runtime=dofile(base.."road_mail_runtime.lua")(M,house,passenger_rules,income_rules,kernel,rating_runtime)
+  town_passengers=dofile(base.."town_passenger_runtime.lua")(M,house,passenger_rules,rating_runtime,mail_runtime)
+  local timing=dofile(base.."openttd/loading_timing.lua")
+  local loading_factory=dofile(base.."road_loading_runtime.lua")
+  local loader=loading_factory(timing,passenger_rules)
+  station_service=dofile(base.."road_station_service.lua")(M,loader,passenger_rules,income_rules,rating_runtime,mail_runtime,
+    {credit=credit,news=push,coal=coal_binding,
+      coal_handles=function(s,v) return M.road_coal_active(s) and coal_service.supported_vehicle(v) end,
+      timber=timber_binding,timber_handles=function(s,v)
+        return (M.road_timber_active(s) and timber_service.supported_vehicle(v)) or
+          (M.road_farm_active(s) and farm_service and farm_service.supported_vehicle(v)) or
+          (M.road_oil_active(s) and oil.service.supported_vehicle(v))
+      end})
+  local catchment=dofile(base.."openttd/station_catchment.lua")(passenger_rules,kernel,
+    station_service.house_passenger_acceptance,mail_runtime.house_acceptance)
+  local coal=dofile(base.."openttd/coal_industry.lua")(passenger_rules,kernel,catchment,income_rules)
+  coal_service=dofile(base.."road_coal_service.lua")(M,coal,catchment,passenger_rules,income_rules,kernel,rating_runtime)
+  local houses=dofile(base.."openttd/town_goods.lua")
+  timber_rules=dofile(base.."openttd/timber_industry.lua")(passenger_rules,catchment,kernel,income_rules,coal,houses)
+  local timber_adapter=dofile(base.."timber_industry_runtime.lua")(timber_rules,catchment)
+  timber_service=dofile(base.."road_timber_service.lua")(M,timber_rules,timber_adapter,passenger_rules,income_rules,kernel,rating_runtime)
+  local roster=dofile(base.."openttd/rail_roster.lua")
+  local freight=dofile(base.."rail_coal_service.lua")(M,coal,catchment,roster,passenger_rules,kernel,
+    rating_runtime,income_rules,loading_factory,timing)
+  rail_coal=dofile(base.."rail_coal_runtime.lua")(M,freight,roster,debit,credit,received_coal)
+  local goods_rail=dofile(base.."rail_goods_service.lua")(M,timber_rules,catchment,roster,freight,
+    passenger_rules,kernel,rating_runtime,loading_factory,timing)
+  goods.runtime=dofile(base.."rail_goods_runtime.lua")(M,goods_rail,freight,roster,debit,credit,function(s)
+    return goods.ready[s] and goods.ready[s]() or false
+  end)
+  function goods.binding(s,probe)
+    return timber_service.bind(s,{credit=credit,station_union=goods.runtime.union(s,paid_rail_runs[s],probe)})
+  end
+  oil.mount=function(Terrain)
+    if oil.service then return end
+    oil.rules=dofile(base.."openttd/oil_industry.lua")(dofile(base.."openttd/farm_factory_industry.lua"),
+      passenger_rules,catchment,kernel,income_rules,coal,timber_rules)
+    oil.world=dofile(base.."oil_industry_world.lua")(M,Terrain,oil.rules)
+    oil.adapter=dofile(base.."oil_industry_runtime.lua")(oil.rules,dofile(base.."timber_industry_runtime.lua"),catchment)
+    oil.service=dofile(base.."road_farm_service.lua")(M,oil.rules,oil.adapter,passenger_rules,income_rules,kernel,rating_runtime,
+      {tag="oil",label="Oil chain",storage="stock_oil_industries",conflicts={"stock_timber_industries","stock_farm_industries"},
+       vehicles={oil="oil_tanker",goods="goods_truck"},cargo={"oil","goods"}})
+    local oil_rail=dofile(base.."rail_oil_service.lua")(M,oil.rules,catchment,roster,freight,passenger_rules,
+      kernel,rating_runtime,loading_factory,timing)
+    oil.runtime=dofile(base.."rail_oil_runtime.lua")(M,oil_rail,freight,roster,debit,credit)
+    for kind,record in pairs(oil.world.facilities) do M.facilities[kind]=record end
+    function oil.binding(s,probe)
+      local tiles={}
+      local saved=s.stock_oil_animated or {}
+      s.stock_oil_animated=saved
+      for _,firm in pairs(s.stock_oil_industries or {}) do
+        if not firm.removed then
+          for _,t in ipairs(firm.tiles) do tiles[M.id(t.x+1,t.z+1)]=t end
+        end
+      end
+      local function random() return rating_runtime.random_u32(s) end
+      return oil.service.bind(s,{credit=credit,random_u32=random,
+        station_union=oil.runtime.union(s,paid_rail_runs[s],probe),
+        animated=function(_,tile,on) saved[M.id(tile.x+1,tile.z+1)]=on or nil end,
+        each_tick=function(tick)
+          if tick%8~=0 then return end
+          local ids={}
+          for id in pairs(saved) do ids[#ids+1]=id end
+          table.sort(ids)
+          for _,id in ipairs(ids) do
+            local t=tiles[id]
+            if not t then saved[id]=nil
+            else
+              local changed,keep=oil.rules.animate(t,tick,random)
+              if changed and not keep then saved[id]=nil end
+            end
+          end
+        end})
+    end
+  end
+  local ships=dofile(base.."openttd/ship_roster.lua")
+  local coal_ship=dofile(base.."ship_coal_service.lua")(M,coal,catchment,ships,passenger_rules,kernel,
+    rating_runtime,income_rules,loading_factory,timing)
+  ship_coal=dofile(base.."ship_coal_runtime.lua")(M,coal_ship,ships,kernel,debit,credit,received_coal)
+  local commercial=dofile(base.."passenger_station_service.lua")(catchment,passenger_rules,income_rules,kernel,
+    rating_runtime,loading_factory,timing)
+  local mux=dofile(base.."passenger_supply_mux.lua")(M,catchment,passenger_rules,rating_runtime,kernel)
+  paid_ferry=dofile(base.."ship_paid_runtime.lua")(M,commercial,mux,credit,push,dofile(base.."rail_paid_actors.lua"))
+  return passenger_rules,income_rules
+end
+function M.stock_random_u32(s)
+  passenger_modules()
+  return rating_runtime.random_u32(s)
+end
+function M.mount_oil_world(s,Terrain,asset_ready)
+  if not asset_ready then return nil,"The native oil well, refinery or tanker assets are missing." end
+  if s.road_farm or s.road_timber or s.stock_farm_industries or s.stock_timber_industries then
+    return nil,"Oil, farm and timber each require a separate freight scenario."
+  end
+  passenger_modules()
+  oil.mount(Terrain)
+  town_passengers.start(s)
+  return oil.world
+end
+function M.oil_asset_shapes()
+  return oil.world and oil.world.visual_sources()
+end
+function M.mount_farm_world(s,Terrain,asset_ready)
+  if not asset_ready then return nil,"The native farm, factory or freight assets are missing." end
+  if s.stock_timber_industries or s.road_timber then return nil,"Farm and timber require separate scenario worlds." end
+  passenger_modules()
+  if not farm_service then
+    local source=debug and debug.getinfo(1,"S").source
+    local base=source and source:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("bayline").."/") or "mods/bayline/"
+    local kernel=dofile(base.."openttd/station_rating.lua")
+    local catchment=dofile(base.."openttd/station_catchment.lua")(passenger_rules,kernel,
+      station_service.house_passenger_acceptance,mail_runtime.house_acceptance)
+    local coal=dofile(base.."openttd/coal_industry.lua")(passenger_rules,kernel,catchment,income_rules)
+    local rules=dofile(base.."openttd/farm_factory_industry.lua")(passenger_rules,catchment,kernel,
+      income_rules,coal,timber_rules)
+    local fields=dofile(base.."openttd/farm_factory_fields.lua")(coal)
+    local adapter=dofile(base.."farm_factory_runtime.lua")(rules,fields,
+      dofile(base.."timber_industry_runtime.lua"),catchment)
+    farm_service=dofile(base.."road_farm_service.lua")(M,rules,adapter,passenger_rules,income_rules,kernel,rating_runtime)
+    farm_world=dofile(base.."farm_factory_world.lua")(M,Terrain,rules,fields,catchment)
+  end
+  for k,v in pairs(farm_world.facilities) do M.facilities[k]=v end
+  town_passengers.start(s)
+  return farm_world,function() return rating_runtime.random_u32(s) end
+end
+function M.mount_coal_ship(s,Run,Passenger,Network)
+  passenger_modules()
+  ship_coal.mount(s,Run,Passenger,Network)
+  return ship_coal
+end
+function M.ship_coal_active(s)
+  return ship_coal and ship_coal.active(s) or false
+end
+function M.mount_paid_ferry(s,Run)
+  paid_ferry_runs[s]=Run
+  passenger_modules()
+end
+function M.ferry_paid_status(s)
+  if not paid_ferry_runs[s] then return end
+  return paid_ferry.status(s,paid_ferry_runs[s],"ship")
+end
+function M.ferry_paid_pose(s,fraction)
+  if not paid_ferry_runs[s] then return end
+  return paid_ferry.pose(s,paid_ferry_runs[s],fraction)
+end
+function M.ferry_loading_events(s)
+  if not paid_ferry_runs[s] then return {} end
+  return paid_ferry.take_effects(s,"ship")
+end
+function M.mount_paid_rail(s,Run)
+  paid_rail_runs[s]=Run
+  passenger_modules()
+end
+function M.rail_coal_active(s)
+  return rail_coal and rail_coal.active(s,paid_rail_runs[s]) or false
+end
+function M.rail_coal_validate(s,owner,mine,power)
+  if not rail_coal then return false,"Rail Coal is not mounted." end
+  return rail_coal.validate(s,paid_rail_runs[s],owner,mine,power)
+end
+function M.rail_coal_designate(s,owner,id,role)
+  if not rail_coal then return false,"Rail Coal is not mounted." end
+  return rail_coal.designate(s,paid_rail_runs[s],owner,id,role)
+end
+function M.rail_coal_stop_status(s,id)
+  return rail_coal and rail_coal.report(s,paid_rail_runs[s],id)
+end
+function M.rail_coal_status(s)
+  return rail_coal and rail_coal.status(s,paid_rail_runs[s])
+end
+function M.rail_coal_loading_events(s)
+  return rail_coal and rail_coal.take(s,"events") or {}
+end
+function M.rail_oil_active(s)
+  return oil.runtime and oil.runtime.active(s,paid_rail_runs[s]) or false
+end
+function M.rail_oil_validate(s,owner,well,refinery)
+  if not oil.runtime then return false,"Rail Oil is not mounted." end
+  return oil.runtime.validate(s,paid_rail_runs[s],owner,well,refinery,function(probe) return oil.binding(s,probe) end)
+end
+function M.rail_oil_designate(s,owner,id,role)
+  if not oil.runtime then return false,"Rail Oil is not mounted." end
+  return oil.runtime.designate(s,paid_rail_runs[s],owner,id,role,function(probe) return oil.binding(s,probe) end)
+end
+function M.rail_oil_stop_status(s,id)
+  return oil.runtime and oil.runtime.report(s,paid_rail_runs[s],id,function(probe) return oil.binding(s,probe) end)
+end
+function M.rail_oil_status(s)
+  return oil.runtime and oil.runtime.status(s,paid_rail_runs[s])
+end
+function M.rail_oil_loading_events(s)
+  return oil.runtime and oil.runtime.take(s,"events") or {}
+end
+function M.mount_rail_goods(s,asset_ready)
+  assert(type(asset_ready)=="function","Rail Goods requires native mesh readiness")
+  passenger_modules()
+  goods.ready[s]=asset_ready
+end
+function M.rail_goods_active(s)
+  return goods.runtime and goods.runtime.active(s,paid_rail_runs[s]) or false
+end
+function M.rail_goods_validate(s,owner,mill,town)
+  if not goods.runtime then return false,"Rail Goods is not mounted." end
+  return goods.runtime.validate(s,paid_rail_runs[s],owner,mill,town,function(probe) return goods.binding(s,probe) end)
+end
+function M.rail_goods_designate(s,owner,id,role)
+  if not goods.runtime then return false,"Rail Goods is not mounted." end
+  return goods.runtime.designate(s,paid_rail_runs[s],owner,id,role,function(probe) return goods.binding(s,probe) end)
+end
+function M.rail_goods_stop_status(s,id)
+  return goods.runtime and goods.runtime.report(s,paid_rail_runs[s],id,function(probe) return goods.binding(s,probe) end)
+end
+function M.rail_goods_status(s)
+  return goods.runtime and goods.runtime.status(s,paid_rail_runs[s])
+end
+function M.rail_goods_loading_events(s)
+  return goods.runtime and goods.runtime.take(s,"events") or {}
+end
+function M.rail_paid_status(s,fleet_id)
+  if not paid_rail_runs[s] or rail_coal.present(s,paid_rail_runs[s]) or
+      (oil.runtime and oil.runtime.present(s,paid_rail_runs[s])) or
+      (goods.runtime and goods.runtime.present(s,paid_rail_runs[s])) then return end
+  return paid_ferry.status(s,paid_rail_runs[s],"rail",fleet_id)
+end
+function M.rail_paid_pose(s,part,fraction,fleet_id)
+  if not paid_rail_runs[s] then return end
+  local rail=paid_rail_runs[s]
+  if goods.runtime and goods.runtime.present(s,rail) then
+    if not fleet_id or rail.current_paid(s,fleet_id) then return goods.runtime.pose(s,rail,part,fraction) end
+    return
+  end
+  if oil.runtime and oil.runtime.present(s,rail) then
+    if not fleet_id or rail.current_paid(s,fleet_id) then return oil.runtime.pose(s,rail,part,fraction) end
+    return
+  end
+  if rail_coal.present(s,rail) then
+    if not fleet_id or rail.current_paid(s,fleet_id) then return rail_coal.pose(s,rail,part,fraction) end
+    return
+  end
+  return paid_ferry.rail_pose(s,rail,part,fraction,fleet_id)
+end
+function M.rail_loading_events(s)
+  if not paid_rail_runs[s] then return {} end
+  return paid_ferry.take_effects(s,"rail")
+end
+function M.rail_paid_motion_events(s)
+  if not paid_rail_runs[s] then return {} end
+  if goods.runtime and goods.runtime.present(s,paid_rail_runs[s]) then return goods.runtime.take(s,"motion") end
+  if oil.runtime and oil.runtime.present(s,paid_rail_runs[s]) then return oil.runtime.take(s,"motion") end
+  if rail_coal.present(s,paid_rail_runs[s]) then return rail_coal.take(s,"motion") end
+  return paid_ferry.take_rail_motion(s)
+end
+function M.mount_paid_air(s,Run)
+  paid_air_runs[s]=Run
+  passenger_modules()
+end
+function M.air_paid_status(s,paid_clock)
+  if not paid_air_runs[s] then return end
+  return paid_ferry.status(s,paid_air_runs[s],"air",paid_clock)
+end
+function M.air_paid_pose(s,fraction,paid_clock)
+  if not paid_air_runs[s] then return end
+  return paid_ferry.pose(s,paid_air_runs[s],fraction,"air",paid_clock)
+end
+function M.air_loading_events(s)
+  if not paid_air_runs[s] then return {} end
+  return paid_ferry.take_effects(s,"air")
+end
+function M.air_paid_motion_events(s)
+  if not paid_air_runs[s] then return {} end
+  return paid_ferry.take_air_motion(s)
+end
+local function paid_transport_day(s)
+  local Ship,Rail,Air=paid_ferry_runs[s],paid_rail_runs[s],paid_air_runs[s]
+  if not ((Ship or Rail or Air) and paid_ferry.active(s,Ship,Rail,Air)) then return end
+  town_passengers.start(s)
+  return paid_ferry.day(s,Ship,Rail,Air,s.passenger_house_clock.counter+1)
+end
+function M.mount_stock_town_growth(s,world,want_new)
+  assert(s.corner_grid and s.road_stock_clock and s.road_stock_house_supply and s.road_stock_loading and s.road_economy,
+    "Stock town growth requires the stock road/house landscape")
+  passenger_modules()
+  town_passengers.start(s)
+  if not s.stock_town_growth then
+    -- A legacy save can have houses added after the old clock started.
+    for id,t in ipairs(s.tiles) do
+      if t.house and not t.source_house then town_passengers.stamp(s,t,id) end
+    end
+  end
+  local state=world.start(s)
+  town_growth_mount[s]={world=world,new=want_new~=false}
+  return state
+end
+function M.road_stock_service_active(s)
+  return s.road_stock_loading and s.road_stock_clock and s.road_economy and s.corner_grid~=nil
+end
+function M.road_coal_active(s)
+  return not not (s.road_coal and s.road_stock_house_supply and M.road_stock_service_active(s))
+end
+function M.road_timber_active(s)
+  return not not (s.road_timber and s.road_stock_house_supply and s.stock_timber_industries and M.road_stock_service_active(s))
+end
+function M.road_farm_active(s)
+  return not not (s.road_farm and s.road_stock_house_supply and s.stock_farm_industries and farm_service and
+    not s.stock_timber_industries and M.road_stock_service_active(s))
+end
+function M.road_oil_active(s)
+  return not not (s.road_oil and s.road_stock_house_supply and s.stock_oil_industries and oil.service and
+    not s.stock_timber_industries and not s.stock_farm_industries and M.road_stock_service_active(s))
+end
+function M.oil_stop_status(s,st,cargo)
+  if not M.road_oil_active(s) or not st or st.mode~="road" or st.stop_type~="truck" or
+      (cargo~="oil" and cargo~="goods") then return end
+  local b=timber_day_bindings[s]
+  if not b then
+    local saved=oil.reports[s]
+    if not saved or saved.topology~=s.topology then
+      saved={topology=s.topology,binding=oil.binding(s)}
+      oil.reports[s]=saved
+    end
+    b=saved.binding
+  end
+  return b.display_waiting(st,cargo),b.report(st,cargo)
+end
+function M.farm_stop_status(s,st,cargo)
+  if not M.road_farm_active(s) or not st or st.mode~="road" or st.stop_type~="truck" or
+      not (cargo=="grain" or cargo=="livestock" or cargo=="goods") then return end
+  local b=timber_binding(s)
+  return b.display_waiting(st,cargo),b.report(st,cargo)
+end
+function M.timber_rules()
+  passenger_modules()
+  return timber_rules
+end
+function M.timber_stop_status(s,st,cargo)
+  if not M.road_timber_active(s) or not st or st.mode~="road" or st.stop_type~="truck" or
+      not (cargo=="wood" or cargo=="goods") then return end
+  passenger_modules()
+  town_passengers.start(s)
+  local b=timber_binding(s)
+  return b.display_waiting(st,cargo),b.report(st,cargo)
+end
+function M.coal_stop_status(s,st)
+  if not M.road_coal_active(s) or not st or st.mode~="road" or st.stop_type~="truck" then return end
+  passenger_modules()
+  local b=coal_binding(s)
+  local acceptance=b.report(st)
+  return b.display_waiting(st),acceptance.accepts,st.goods.coal.rating,acceptance
+end
+function M.road_loading_events(s)
+  if not M.road_stock_service_active(s) then return {} end
+  passenger_modules()
+  return station_service.take_effects(s)
+end
+function M.has_stock_road_service(s,v)
+  if not M.road_stock_service_active(s) then return false end
+  passenger_modules()
+  return station_service.handles(s,v)
+end
+abort_stock_stop=function(s,v)
+  passenger_modules()
+  station_service.leave(s,v,s.stock_load_tick or s.day*74)
+  v.stock_loading_complete=nil
+  v.loaded_at=nil
+end
+function M.build_truck_stop(s,owner,id)
+  if not (s.road_mail and s.road_stock_house_supply) and not M.road_coal_active(s) and not M.road_timber_active(s) and not M.road_farm_active(s) and not M.road_oil_active(s) then
+    return false,"Enable stock mail or freight to build truck stops."
+  end
+  local t=s.tiles[id]
+  if not t or t.station then return false,"Build a new truck loading stop rather than converting an active terminal." end
+  local ok,msg,changed=M.build(s,owner,"road_station",{id})
+  if ok then
+    local st=s.stations[s.tiles[id].station]
+    st.stop_type="truck"
+    st.name=s.sites[st.site].name.." Loading Stop #"..st.id
+  end
+  return ok,msg,changed
+end
+local function road_mail(s,v)
+  return s.road_economy and s.road_mail and v.cargo=="mail" and v.engine=="mail_van"
+end
+function M.mail_stop_status(s,st)
+  if not s.road_mail or not st or st.stop_type~="truck" then return end
+  passenger_modules()
+  town_passengers.start(s)
+  local waiting=M.road_stock_service_active(s) and station_service.display_waiting(s,st,"mail") or mail_runtime.waiting(st)
+  return waiting,mail_runtime.accepts(s,st),mail_runtime.status(st)
+end
+local function road_passenger(s,v)
+  return s.road_economy and v.cargo=="passenger" and M.vehicles[v.engine].mode=="road"
+end
+function M.waiting_passengers(s,st)
+  if not st then return 0 end
+  if s.road_economy and st.mode=="road" then
+    passenger_modules()
+    if M.road_stock_service_active(s) then return station_service.display_waiting(s,st,"passenger") end
+    return passenger_rules.waiting(st)
+  end
+  local waiting=0
+  for _,id in ipairs(st.served) do waiting=waiting+(s.sites[id].stock.passenger or 0) end
+  for _,batch in ipairs(st.stock.passenger or {}) do waiting=waiting+batch.units end
+  return waiting
+end
+function M.passenger_rating(s,st)
+  if not st or not s.road_economy or st.mode~="road" then return end
+  passenger_modules()
+  return rating_runtime.status(s,st)
+end
+local function visit_station(s,st,v,action)
+  if not road_passenger(s,v) then return end
+  local eligible=action~="transfer" and action~="unload"
+  local first=eligible and st.passenger_service_day==nil
+  if first then st.passenger_service_day=s.day end
+  v.last_arrival={tile=st.tile,day=s.day,first=first}
+end
+local function generate_passengers(s,supply)
+  local packets=passenger_modules()
+  local stations={}
+  for _,st in pairs(s.stations) do
+    if rating_runtime.offer(s,st) then stations[#stations+1]=st end
+  end
+  table.sort(stations,function(a,b) return a.id<b.id end)
+  local served={}
+  for _,st in ipairs(stations) do
+    local rating=rating_runtime.offer(s,st)
+    if rating>0 then
+      for _,id in ipairs(st.served) do
+        local list=served[id] or {}
+        list[#list+1]={st=st,rating=rating}
+        served[id]=list
+      end
+    end
+  end
+  for id,site in ipairs(s.sites) do
+    local amount,list=supply[id],served[id]
+    if amount and amount>0 and list then
+      packets.allocate(amount,list)
+      local moved=0
+      for _,entry in ipairs(list) do
+        local st=entry.st
+        local units=packets.whole_units(st,entry.fixed)
+        if units>0 then
+          packets.enqueue(st,{units=units,source=id,origin_station=st.id,age=0})
+          rating_runtime.generated(s,st,units)
+          moved=moved+units
+        end
+      end
+      -- Keep the old raw pool accounting for modes outside this opt-in
+      -- loop. Road passengers are distributed only from today's output.
+      site.stock.passenger=math.max(0,(site.stock.passenger or 0)-moved)
+    end
+  end
+end
+local function load_passengers(s,st,v,cap)
+  local packets=passenger_modules()
+  rating_runtime.observe_loading(s,st,v,cap-v.units)
+  local queue=st.stock.passenger or {}
+  local i,boarded=1,0
+  while queue[i] and v.units<cap do
+    local p=queue[i]
+    if p.units>0 and p.last_vehicle~=v.id then
+      local take=math.min(p.units,cap-v.units)
+      local board=packets.split(p,take)
+      if p==board then table.remove(queue,i) else i=i+1 end
+      -- Legacy save packets lacked the true loading tile. Keep their
+      -- old fare fallback instead of pretending a transfer was origin.
+      if board.origin_station then packets.pickup(board,st,M.xy) end
+      v.batches[#v.batches+1]=board
+      v.units=v.units+take;boarded=boarded+take
+    else
+      i=i+1
+    end
+  end
+  if boarded>0 then
+    rating_runtime.loaded(st)
+    st.last_service.passenger=s.day
+    v.last_board={tile=st.tile,day=s.day,units=boarded}
+  end
+end
+local function accepts(s,st,cargo,source)
+  for _,id in ipairs(st.served) do
+    if source~=id and M.facilities[s.sites[id].kind].takes[cargo] then return s.sites[id] end
+  end
+end
+local function transfer_batch(st,cargo,b)
+  st.stock[cargo]=st.stock[cargo] or {}
+  local stock=st.stock[cargo]
+  if #stock>=200 then
+    for _,prev in ipairs(stock) do
+      if prev.source==b.source then prev.units=math.min(1200,prev.units+b.units);return end
+    end
+    return
+  end
+  stock[#stock+1]=b
+end
+local function load_at(s,st,v,cap)
+  local cargo=v.cargo
+  v.batches=v.batches or {}
+  if road_passenger(s,v) then return load_passengers(s,st,v,cap) end
+  if road_mail(s,v) then
+    passenger_modules()
+    local count=mail_runtime.load(s,st,v,cap)
+    if count>0 then v.last_board={tile=st.tile,day=s.day,units=count} end
+    return
+  end
+  local queue=st.stock[cargo] or {}
+  for i=#queue,1,-1 do
+    local b=queue[i]
+    if b.units>0 and v.units<cap and b.last_vehicle~=v.id then
+      local take=math.min(b.units,cap-v.units)
+      b.units=b.units-take;v.units=v.units+take
+      v.batches[#v.batches+1]={units=take,source=b.source,day=b.day}
+      if b.units==0 then table.remove(queue,i) end
+    end
+  end
+  local feeder_ids={}
+  for id,feed in pairs(s.stations) do
+    if id~=st.id and feed.owner==st.owner and M.distance(st.tile,feed.tile)<=2 and feed.stock[cargo] then
+      feeder_ids[#feeder_ids+1]=id
+    end
+  end
+  table.sort(feeder_ids)
+  for _,id in ipairs(feeder_ids) do
+    local source=s.stations[id].stock[cargo]
+    for i=#source,1,-1 do
+      local b=source[i]
+      if v.units<cap and b.last_vehicle~=v.id then
+        local take=math.min(b.units,cap-v.units)
+        b.units=b.units-take;v.units=v.units+take
+        v.batches[#v.batches+1]={units=take,source=b.source,day=b.day}
+        if b.units==0 then table.remove(source,i) end
+      end
+    end
+  end
+  for _,id in ipairs(st.served) do
+    if v.units>=cap then break end
+    local site=s.sites[id]
+    local take=math.min(site.stock[cargo] or 0,cap-v.units)
+    if take>0 then
+      site.stock[cargo]=site.stock[cargo]-take;v.units=v.units+take
+      v.batches[#v.batches+1]={units=take,source=id,day=s.day}
+      st.last_service[cargo]=s.day
+    end
+  end
+end
+local function unload_mail(s,st,v,action)
+  passenger_modules()
+  local keep,paid,amount,removed={},0,0,0
+  for _,p in ipairs(v.batches or {}) do
+    local fare
+    if action~="transfer" then fare=mail_runtime.fare(s,st,p) end
+    if fare~=nil then
+      paid,amount,removed=paid+p.units,amount+fare,removed+p.units
+    elseif (action=="transfer" or action=="unload") and mail_runtime.transfer(s,st,p,v) then
+      removed=removed+p.units
+    else keep[#keep+1]=p end
+  end
+  v.batches=keep
+  v.units=v.units-removed
+  if removed>0 then rating_runtime.unloaded(st) end
+  if paid>0 then
+    local company=M.company(s,v.owner)
+    credit(company,amount)
+    v.last_fare={tile=st.tile,day=s.day,amount=amount,units=paid}
+    v.revenue=v.revenue+amount;v.delivered=v.delivered+paid
+    company.units=company.units+paid;company.paid_units=company.paid_units+paid
+    local site=s.sites[st.site]
+    if site then site.received.mail=(site.received.mail or 0)+paid end
+  end
+end
+local function unload_at(s,st,v,action)
+  if road_mail(s,v) then return unload_mail(s,st,v,action) end
+  local remaining,amount,delivered={},0,0
+  local company=M.company(s,v.owner)
+  local uses_packets=road_passenger(s,v)
+  local units_before=v.units
+  if uses_packets then passenger_modules() end
+  for _,b in ipairs(v.batches or {}) do
+    local canonical=uses_packets and b.origin_tile~=nil
+    local packets,income
+    local site
+    if canonical then
+      packets,income=passenger_modules()
+      -- Stock manual distribution accepts at a different station even
+      -- when both stations serve the very same town (CargoPacket::ChooseAction).
+      if action~="transfer" and packets.accept_at(b,st) then
+        for _,id in ipairs(st.served) do
+          local candidate=s.sites[id]
+          if M.facilities[candidate.kind].takes.passenger then site=candidate;break end
+        end
+      end
+    elseif action~="transfer" then
+      site=accepts(s,st,v.cargo,b.source)
+    end
+    if site then
+      local money
+      if canonical then
+        local dist=packets.distance(b,st.tile,M.xy)
+        local spec=income.temperate.passenger
+        money=income.regular(b.units,dist,b.age,spec[1],spec[2],spec[3])
+      else
+        local dist=M.distance(s.sites[b.source].tile,site.tile)
+        local age=math.max(1,s.day-b.day)
+        local rate=math.max(0.2,1-age/250)
+        money=math.floor(b.units*M.cargo[v.cargo].rate*(0.9+dist*0.12)*rate)
+      end
+      for _,offer in ipairs(s.subsidies or {}) do
+        if s.day<=offer.until_day and offer.src==b.source and offer.dst==site.id and offer.cargo==v.cargo then
+          if not offer.owner then offer.owner=v.owner;push(s,v.owner.." earned a route subsidy to "..site.name..".") end
+          if offer.owner==v.owner then money=math.floor(money*1.5) end
+          break
+        end
+      end
+      amount=amount+money;delivered=delivered+b.units
+      site.received[v.cargo]=(site.received[v.cargo] or 0)+b.units
+      local f=M.facilities[site.kind]
+      if f.output then
+        local qty=math.floor(b.units*f.ratio)
+        site.stock[f.output]=math.min(1200,(site.stock[f.output] or 0)+qty)
+        site.produced[f.output]=(site.produced[f.output] or 0)+qty
+      end
+      site.service=site.service+b.units
+      if site.kind=="town" then company.rating[site.id]=math.min(100,(company.rating[site.id] or 48)+math.max(1,math.floor(b.units/10))) end
+    elseif action=="transfer" or action=="unload" then
+      b.last_vehicle=v.id
+      if uses_packets then
+        packets=packets or passenger_modules()
+        if canonical then packets.drop(b,st,M.xy) end
+        rating_runtime.transferred(s,st)
+        packets.enqueue(st,b)
+      else
+        transfer_batch(st,v.cargo,b)
+      end
+    else remaining[#remaining+1]=b end
+  end
+  v.batches=remaining;v.units=0;for _,b in ipairs(remaining) do v.units=v.units+b.units end
+  if uses_packets and units_before>v.units then rating_runtime.unloaded(st) end
+  if delivered>0 then
+    credit(company,amount);v.last_fare={tile=st.tile,day=s.day,amount=amount,units=delivered};v.revenue=v.revenue+amount;v.delivered=v.delivered+delivered
+    company.units=company.units+delivered
+    if company.paid_units==0 then
+      push(s,v.owner.." made their first paid delivery: "..delivered.." "..M.cargo[v.cargo].name:lower().." for $"..amount..".")
+    end
+    company.paid_units=company.paid_units+delivered
+  end
+end
+function M.empty(s,owner,id)
+  local v=s.fleet[id]
+  local st=v and s.stations[v.station]
+  if not st or v.owner~=owner or v.running then return false,"Stop the vehicle at a terminal first." end
+  if v.engine=="coal_tipper" then return false,"Use an Unload order: stock coal unloads in timed truck-stop slices." end
+  if industry_truck(v.engine) then return false,"Use its stock truck-stop order to unload and receive payment." end
+  if v.load_state then abort_stock_stop(s,v) end
+  unload_at(s,st,v,"unload")
+  return true,"Vehicle emptied at its terminal."
+end
+function M.refit(s,owner,id,cargo)
+  local v=s.fleet[id]
+  if not v or v.owner~=owner or v.running or v.route or v.units>0 then return false,"Stop and empty the vehicle before refitting." end
+  if (stock_bus(v) and cargo~="passenger") or not M.cargo[cargo] or not allowed(v.engine,cargo) then
+    return false,"This model cannot carry that cargo."
+  end
+  if cargo==v.cargo then return false,"Vehicle already carries that cargo." end
+  local c=M.company(s,owner);local price=math.ceil(M.vehicles[v.engine].cost/25)
+  if c.cash<price then return false,"Not enough cash." end
+  if v.load_state then abort_stock_stop(s,v) end
+  debit(c,price);v.expense=v.expense+price;v.cargo=cargo
+  return true,"Refitted for "..M.cargo[cargo].name.." for $"..price.."."
+end
+local function vehicle_order(v,station)
+  for i,o in ipairs(v.orders) do if o.station==station then return i end end
+  return nil
+end
+local function launch(s,v,route,dest,index,arrival_td,route_cost,frames,bays)
+  v.road_motion_frames=frames;v.road_stop_pose=nil;v.road_speed_state=nil;v.stock_loading_complete=nil
+  v.road_leg_td=arrival_td;v.road_route_cost=route_cost
+  v.road_bay_branch=bays
+  v.route=route;v.dest=dest;v.dest_index=index;v.progress=1;v.station=nil;v.depot=nil;v.wait=0;v.loaded_at=nil;v.status="En route"
+end
+-- Adapts the OpenTTD concept of route reservations to Bayline's one
+-- track surface per tile. This is original Lua, not a YAPF/PBS translation.
+local HEADWAY=2
+local function route_key(r,reverse)
+  if not reverse then return table.concat(r,",") end
+  local b={}
+  for i=#r,1,-1 do b[#b+1]=r[i] end
+  return table.concat(b,",")
+end
+local function reserve(s,traffic,v)
+  local r=v.route
+  local key=route_key(r)
+  local lane=traffic.lanes[key]
+  if not lane then lane={};traffic.lanes[key]=lane end
+  lane[#lane+1]=v
+  for i=2,#r-1 do traffic.claims[r[i]]=key end
+end
+local function rail_route(s,traffic,v,st,dest,r)
+  local function conflict(route)
+    local key=route_key(route)
+    local lane=traffic.lanes[key]
+    local signaled=false
+    for i=2,#route-1 do if s.tiles[route[i]].signal then signaled=true end end
+    local join=signaled and lane and not traffic.waiting[route_key(route,true)]
+    if join then
+      for _,leader in ipairs(lane) do if leader.progress<1+HEADWAY then join=false;break end end
+    end
+    if lane and not join then return true end
+    for i=1,#route do
+      local tile=route[i]
+      local claim=traffic.claims[tile]
+      if s.tiles[tile].closed or (claim and (claim~=key or not join)) then return true end
+    end
+    return false
+  end
+  if not conflict(r) then return r end
+  -- Prefer a different route if all of its future junctions are clear.
+  local avoid={}
+  for tile in pairs(traffic.claims) do avoid[tile]=true end
+  for id,t in ipairs(s.tiles) do if t.closed then avoid[id]=true end end
+  local alternate=M.path(s,st,dest,"rail",v.owner,avoid)
+  if alternate and not conflict(alternate) then return alternate end
+  -- Mark this direction's waiting demand so opposite convoys cannot starve it.
+  traffic.waiting[route_key(r)]=true
+  v.rail_wait_key=route_key(r)
+end
+local function idle_or_plan(s,v,traffic)
+  if not v.running then return end
+  local e=M.vehicles[v.engine]
+  if v.depot then
+    local first=s.stations[v.orders[1] and v.orders[1].station]
+    local route,arrival_td,cost,frames,bays=M.path(s,depot_endpoint(s,v.owner,v.depot),first,e.mode,v.owner,nil,v)
+    if route then launch(s,v,route,first.id,1,arrival_td,cost,frames,bays) else v.status="No road from depot" end
+    return
+  end
+  local st=s.stations[v.station]
+  if not st then v.running=false;v.status="Missing terminal";return end
+  local cur=v.orders[v.index] and v.orders[v.index].station==st.id and v.index or vehicle_order(v,st.id)
+  local order=cur and v.orders[cur]
+  local action=order and order.action or "normal"
+  if v.loaded_at~=st.id then
+    visit_station(s,st,v,action)
+    unload_at(s,st,v,action);v.loaded_at=st.id
+  end
+  if action~="transfer" and action~="unload" then load_at(s,st,v,e.capacity) end
+  if v.stop_requested then v.stop_requested=nil;v.running=false;v.status="Stopped";return end
+  if action=="full" and v.units<e.capacity and v.wait<35 then
+    v.wait=v.wait+1;v.status="Waiting for full load";return
+  end
+  local next_index=cur and cur%#v.orders+1 or 1
+  local target=s.stations[v.orders[next_index].station]
+  local route,arrival_td,cost,frames,bays=M.path(s,st,target,e.mode,v.owner,nil,v)
+  if not route then v.status="No path";v.rail_wait_key=nil;return end
+  if e.mode=="rail" then
+    route=rail_route(s,traffic,v,st,target,route)
+    if not route then v.status="Waiting for clear track";return end
+  end
+  launch(s,v,route,target.id,next_index,arrival_td,cost,frames,bays)
+  v.rail_wait_key=nil
+  if e.mode=="rail" then reserve(s,traffic,v) end
+end
+local function stock_managed(s,v)
+  -- A running version-1 save may have only an old coarse route. Finish
+  -- that existing leg before taking over; new stock legs require frames.
+  return station_service.handles(s,v) and (not v.route or v.road_motion_frames~=nil)
+end
+function M.road_can_park(s,owner,id)
+  local v=s.fleet[id]
+  if not (v and v.owner==owner and not v.running and not v.route and not v.depot and v.units==0 and
+      v.road_stop_pose and s.stations[v.station] and M.road_stock_service_active(s)) then return false end
+  passenger_modules()
+  return stock_managed(s,v)
+end
+function M.park_road_vehicle(s,owner,id)
+  if not M.road_can_park(s,owner,id) then
+    return false,"Stop and empty the road vehicle at its terminal first."
+  end
+  local v=s.fleet[id]
+  local r=road_routing()
+  local path,tile,td,cost,frames=source_route.nearest_depot(s,s.stations[v.station],v,r.occupancy(M,s))
+  if not tile then return false,"No owned road depot is reachable from the stopped position." end
+  if v.load_state then abort_stock_stop(s,v) end
+  local ix=v.index or 1
+  v.road_depot_resume=#v.orders>0 and ix%#v.orders+1 or nil
+  launch(s,v,path,nil,nil,td,cost,frames)
+  v.road_return_depot=tile
+  v.running=true;v.stop_requested=nil;v.status="Returning to depot"
+  return true,"Returning to the nearest reachable owned road depot."
+end
+local function current_station_order(v,st)
+  local i=v.orders[v.index] and v.orders[v.index].station==st.id and v.index or vehicle_order(v,st.id)
+  return i,i and v.orders[i]
+end
+local function stock_next_plan(s,v,st)
+  local i=current_station_order(v,st)
+  local n=i and i%#v.orders+1 or 1
+  while i and n~=i and v.orders[n].station==st.id do n=n%#v.orders+1 end
+  local target=v.orders[n] and s.stations[v.orders[n].station]
+  if not target or target==st then return end
+  local path,td,cost,frames,bays=M.path(s,st,target,"road",v.owner,nil,v)
+  if path and frames and #path>1 then return path,td,cost,frames,target.id,n,bays end
+end
+local function stock_seed_parked_pose(s,v,st)
+  if v.road_stop_pose then return end
+  local _,_,_,frames=stock_next_plan(s,v,st)
+  if not frames then return end
+  local first=frames[1]
+  v.road_stop_pose=first
+  -- Drive-through origin following must keep the lane/heading with which
+  -- the initially spawned vehicle first appears. Bay turns use their own
+  -- approach trackdir, irrespective of the outward search origin.
+  if first[6]>=64 and first[6]<80 then v.road_arrival_td=first[6]-64 end
+end
+-- The decision kernel only receives a representable *current* native
+-- origin. Spans/special stop transitions have their own live state and
+-- are not snapped onto a plain road to force an early service detour.
+local function automatic_road_service(s,faults,v,f,difficulty,date,random)
+  local cfg=faults.auto
+  if not cfg or v.stop_requested or v.road_return_depot and not v.road_auto_service then return end
+  local engine=M.stock_road_offer(s,v.engine)
+  if not engine then return end
+  local c=v.road_speed_state
+  local frame=c and M.road_motion_frame(s,v)
+  local tile=v.depot or frame and frame[4]
+  local at_depot=v.depot and depot_endpoint(s,v.owner,v.depot)
+  local plain=frame and s.tiles[tile].build=="road" and not c.depot_wait and not c.lane_pose and
+    not frame[10] and not frame[12] and not frame[13] and not frame[14] and not s.tiles[tile].level_crossing
+  if not at_depot and not plain then return end
+  local order=v.load_state and {kind="loading"} or v.road_auto_service and v.road_auto_service.order
+    or {kind="goto_station"}
+  local routing
+  local function query(station)
+    routing=routing or road_routing()
+    return source_route.from_live_frame(s,v,frame,station,routing.occupancy(M,s))
+  end
+  local old=v.road_auto_service
+  local plan=cfg.kernel.plan(f,{engine_reliability=engine.reliability,interval=cfg.interval,
+    percent=cfg.percent,economy_date=date,company_service_interval=cfg.interval,
+    stopped=not v.running,crashed=v.crashed,difficulty=difficulty,current_order=order,
+    cur_speed=c and c.speed or 0,tile_is_road_depot=not not at_depot,depot_state=not not at_depot,
+    tile=tile,depot=at_depot and at_depot.tile,dest_tile=old and old.depot or
+      v.dest and s.stations[v.dest] and s.stations[v.dest].tile,orders=v.orders},
+    {random32=random,nearest=function()
+      local path,nearest,td,cost,frames=query()
+      if not path then return end
+      return {tile=nearest,depot=nearest,cost=cost,path=path,td=td,frames=frames}
+    end})
+  if plan.kind=="service_here" then
+    faults.service(v,s.stock_load_tick or s.day*74)
+  elseif plan.kind=="route" and plan.route.path then
+    if old and old.depot==plan.dest_tile then return end
+    local target,idx=old and old.station or v.dest,old and old.index or v.dest_index
+    if not target or not idx or not v.orders[idx] or v.orders[idx].station~=target then return end
+    local r=plan.route
+    launch(s,v,r.path,nil,nil,r.td,r.cost,r.frames)
+    v.road_speed_state=c;c.index=1
+    v.road_return_depot=plan.dest_tile
+    v.road_auto_service={station=target,index=idx,depot=plan.dest_tile,order=plan.order}
+    v.last_auto_depot={tile=plan.dest_tile,cost=r.cost,tick=s.stock_load_tick,station=target,index=idx}
+    v.status="Heading to depot for service"
+  elseif plan.kind=="cancel" and old then
+    local path,_,td,cost,frames,bays=query(old.station)
+    if not path then return end
+    launch(s,v,path,old.station,old.index,td,cost,frames,bays)
+    v.road_speed_state=c;c.index=1
+    v.road_auto_service,v.road_return_depot=nil,nil
+  end
+end
+local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train)
+  local clock
+  local faults=road_faults_mount[s]
+  local freight_ready,ship_ready,industry_ready
+  local growth=town_growth_mount[s]
+  local growth_random=growth and function() return rating_runtime.random_u32(s) end
+  local tide=coastal_visit(s)
+  if s.road_stock_house_supply then
+    town_passengers.start(s)
+    clock=function(callback)
+      if not commercial and not coal and not timber and not growth and not tide then return town_passengers.day(s,callback) end
+      local function landscape(x,z,tick)
+        if tide then tide(x,z) end
+        if coal then coal.tile_visit(x,z,tick) end
+        if timber then timber.tile_visit(x,z,tick) end
+      end
+      town_passengers.day(s,function(tick,finish_rating)
+        local ready,events
+        if commercial then ready,events=commercial.before(tick) end
+        if freighter then freighter.rating(tick) end
+        callback(tick)
+        if freight then freight.after(tick,freight_ready) end
+        if industry_train then industry_train.after(tick,industry_ready) end
+        if commercial then commercial.after(tick,ready,events) end
+        if freighter then freighter.after(tick,ship_ready) end
+        if growth and growth.new then growth.world.tick(s,tick,growth_random) end
+        if finish_rating then finish_rating() end
+        if coal then
+          for _,view in ipairs(coal.road_stations) do
+            local st=s.stations[view.id]
+            if st.passenger_rating_phase==0 then coal.step_rating(st) end
+          end
+          if freight then freight.post(tick) end
+          coal.after_vehicle_tick(tick)
+        end
+        if timber then
+          for _,view in ipairs(timber.stations) do
+            local st=s.stations[view.id]
+            if st.passenger_rating_phase==0 then timber.step_rating(st) end
+          end
+          -- The rail industry station ages and rates before shared
+          -- production; that producer has exactly one mixed StationID list.
+          if industry_train then industry_train.post(tick) end
+          -- Timber scene IDs begin in the next band after stock coal.
+          timber.after_vehicle_tick(tick)
+        end
+      end,{passenger=commercial and commercial.hooks.passenger,landscape_tile=landscape,
+        growth=growth and growth.world})
+    end
+  else
+    generate_passengers(s,legacy_supply)
+    local previous=s.stock_load_tick or (s.day-1)*74
+    clock=function(callback)
+      for i=1,74 do
+        rating_runtime.advance(s,1)
+        callback(previous+i)
+      end
+    end
+  end
+  local function begin(v,st,tick)
+    local _,order=current_station_order(v,st)
+    if v.stop_requested then
+      -- Stop at the next destination after unloading, don't strand a
+      -- scheduled stop indefinitely waiting for additional full cargo.
+      order={action=order and order.action,no_load=true,full=false}
+    end
+    local ok=station_service.begin(s,st,v,order,tick)
+    if not ok then v.running=false;v.status="Incompatible road stop" end
+  end
+  for _,v in pairs(s.fleet) do
+    if stock_managed(s,v) and v.running and not v.route and not v.depot then
+      local st=s.stations[v.station]
+      if st then stock_seed_parked_pose(s,v,st) end
+    end
+  end
+  local worked,samples=road_clock().live_day(s,clock,{
+    economy=function(tick)
+      local ready={}
+      local ids=station_service.tick(s,tick)
+      for _,id in ipairs(ids) do ready[id]=true end
+      if freight then freight_ready=freight.before(tick) end
+      if industry_train then industry_ready=industry_train.before(tick) end
+      if freighter then ship_ready=freighter.before(tick) end
+      return ready
+    end,
+    before=function(v,tick,leave)
+      if not stock_managed(s,v) then return end
+      local bus=stock_bus(v)
+      if bus and v.running then road_bus_catalog().tick(bus) end
+      if faults and faults.tick(v,tick) then return true end
+      if not v.running then return end
+      if v.engine=="coal_tipper" then v.stock_coal_running_ticks=(v.stock_coal_running_ticks or 0)+1 end
+      if industry_truck(v.engine) then v.stock_timber_running_ticks=(v.stock_timber_running_ticks or 0)+1 end
+      if v.route then return end
+      if v.depot then
+        local order=v.road_depot_resume or 1
+        if not v.orders[order] then order=1 end
+        local to=v.orders[order] and s.stations[v.orders[order].station]
+        local route,td,cost,frames,bays=M.path(s,depot_endpoint(s,v.owner,v.depot),to,"road",v.owner,nil,v)
+        if route and frames then
+          launch(s,v,route,to.id,order,td,cost,frames,bays)
+          v.road_depot_resume=nil;v.last_departure=s.day;v.last_departure_tick=tick
+        else v.status="No road from depot" end
+        return
+      end
+      local st=s.stations[v.station]
+      if not st then v.running=false;v.status="Missing terminal";return end
+      if leave and v.load_state then
+        station_service.leave(s,v,tick)
+        if not v.running then return end
+      end
+      if v.load_state then return end
+      if v.stock_loading_complete~=st.id then
+        stock_seed_parked_pose(s,v,st)
+        begin(v,st,tick)
+        return
+      end
+      local route,td,cost,frames,dest,index,bays=stock_next_plan(s,v,st)
+      if not route then v.status="No path";return end
+      local old,new=v.road_stop_pose,frames[1]
+      if old and (old[1]~=new[1] or old[2]~=new[2] or old[3]~=new[3] or old[4]~=new[4]) then
+        v.status="Road exit no longer matches the stopped pose"
+        return
+      end
+      launch(s,v,route,dest,index,td,cost,frames,bays);v.last_departure=s.day;v.last_departure_tick=tick
+    end,
+    exited=faults and function(v,tick) faults.service(v,tick) end or nil,
+    arrive=function(v,tick,frame)
+      if not stock_managed(s,v) then return false end
+      if v.road_return_depot then
+        local depot=assert(depot_endpoint(s,v.owner,v.road_return_depot),"Ordered road depot changed during its protected approach")
+        assert(frame[4]==depot.tile and frame[15]==road_routing().motion.DEPOT_STOP)
+        v.depot,v.last_depot_entry_tick=depot.tile,tick
+        v.road_return_depot,v.road_stop_pose,v.road_speed_state,v.road_motion_frames=nil,nil,nil,nil
+        v.road_bay_branch,v.road_leg_td,v.road_arrival_td,v.route,v.dest,v.dest_index=nil,nil,nil,nil,nil,nil
+        local auto=v.road_auto_service
+        v.road_auto_service=nil
+        if auto then v.road_depot_resume=auto.index end
+        v.progress,v.running,v.status=0,auto~=nil,auto and "Serviced; resuming route" or "Stopped in depot"
+        if faults then faults.service(v,tick) end
+        return true,true
+      end
+      if s.stock_road_bays then road_clock().bay.arrive(s,v,frame) end
+      v.station,v.index=v.dest,v.dest_index
+      v.last_road_arrival_tick=tick
+      v.road_arrival_td,v.road_leg_td=v.road_leg_td,nil
+      v.road_stop_pose=frame
+      v.road_motion_frames=nil;v.road_speed_state=nil;v.road_bay_branch=nil
+      v.route=nil;v.dest=nil;v.dest_index=nil;v.progress=0
+      local st=s.stations[v.station]
+      if st then begin(v,st,tick) else v.running=false;v.status="Missing terminal" end
+      return true
+    end,
+    age=function(v,tick)
+      if stock_managed(s,v) then station_service.age_vehicle(s,v,tick) end
+    end,
+  })
+  road_visual[s]=samples
+  return worked
+end
+function M.position(s,v)
+  if v.route then
+    if M.road_stock_service_active(s) and v.road_speed_state and v.road_motion_frames then
+      local frame=M.road_motion_frame(s,v)
+      if frame then return frame[4] end
+    end
+    if M.vehicles[v.engine].mode=="air" then
+      local x,z=M.xy(v.route[1]);local u,w=M.xy(v.route[#v.route])
+      local f=math.min(1,(v.progress-1)/math.max(1,#v.route-1))
+      return M.id(math.floor(x+(u-x)*f+0.5),math.floor(z+(w-z)*f+0.5))
+    end
+    return v.route[math.min(#v.route,math.floor(v.progress))]
+  end
+  return v.depot or (s.stations[v.station] and s.stations[v.station].tile)
+end
+function M.daily(s)
+  s.day=s.day+1
+  local faults=road_faults_mount[s]
+  if faults and M.road_stock_service_active(s) then
+    faults.daily(faults.auto and function(v,f,diff,date,rnd)
+      automatic_road_service(s,faults,v,f,diff,date,rnd)
+    end or nil)
+  end
+  local growth=town_growth_mount[s]
+  if growth then
+    growth.world.prepare_day(s,function() return rating_runtime.random_u32(s) end,growth.new)
+  end
+  if s.corner_grid then
+    load_road_rules()
+    for _,c in pairs(s.companies) do
+      if c.terraform_limit then c.terraform_limit=landscape_rules.replenish(c.terraform_limit,74) end
+      if c.clear_limit then c.clear_limit=clear_area_rules.replenish(c.clear_limit,74) end
+    end
+  end
+  local road_supply=s.road_economy and {}
+  for _,site in ipairs(s.sites) do
+    local f=M.facilities[site.kind]
+    for _,k in ipairs(M.cargo_order) do
+      local n=f.produces[k]
+      if n then
+        if site.population then n=n+math.floor(site.population/(k=="mail" and 100 or 48)) end
+        site.stock[k]=math.min(1200,(site.stock[k] or 0)+n)
+        site.produced[k]=(site.produced[k] or 0)+n
+        if road_supply and k=="passenger" then road_supply[site.id]=n end
+      end
+    end
+  end
+  local stock_service=M.road_stock_service_active(s)
+  local coal,freight,timber,freighter,industry_train
+  if M.rail_coal_active(s) then
+    town_passengers.start(s)
+    freight=rail_coal.day(s,paid_rail_runs[s],s.passenger_house_clock.counter+1)
+  end
+  if M.ship_coal_active(s) then
+    town_passengers.start(s)
+    freighter=ship_coal.day(s,s.passenger_house_clock.counter+1)
+  end
+  if M.road_coal_active(s) or freight or freighter then
+    passenger_modules()
+    coal=coal_binding(s,true,freight,freighter)
+    coal_day_bindings[s]=coal
+  end
+  if M.road_timber_active(s) or M.road_farm_active(s) or M.road_oil_active(s) then
+    passenger_modules()
+    timber=timber_binding(s)
+    timber_day_bindings[s]=timber
+    if timber and timber.rail then
+      town_passengers.start(s)
+      local controller=M.rail_goods_active(s) and goods.runtime or oil.runtime
+      industry_train=controller.day(s,paid_rail_runs[s],s.passenger_house_clock.counter+1,timber.rail)
+    end
+  end
+  for _,v in pairs(s.fleet) do
+    if v.engine=="coal_tipper" or industry_truck(v.engine) then
+      local is_timber=industry_truck(v.engine)
+      local enabled=(not is_timber and coal) or is_timber and timber and
+        (M.road_farm_active(s) and farm_engine(v.engine) or M.road_timber_active(s) and timber_engine(v.engine)
+          or M.road_oil_active(s) and oil_engine(v.engine))
+      local key=is_timber and "stock_timber_running_ticks" or "stock_coal_running_ticks"
+      local resume=is_timber and "stock_timber_resume" or "stock_coal_resume"
+      -- Running-tick cost at the next economy day, not an invented fee
+      -- for only moving. Source stores 8-bit corporate money fractions.
+      if v[key] and v[key]>0 then
+        local c=M.company(s,v.owner)
+        local amount=math.floor(1600*M.vehicles[v.engine].running_factor*v[key]/(365*74))
+        local old=c.stock_money_fraction or 0
+        local remainder=(old-amount%256)%256
+        c.stock_money_fraction=remainder
+        local whole=math.floor(amount/256)+(remainder>old and 1 or 0)
+        if whole~=0 then debit(c,whole);v.expense=v.expense+whole end
+        v[key]=0
+      end
+      if not enabled then
+        if v.load_state then abort_stock_stop(s,v) end
+        if v.running then
+          v[resume]=true;v.running=false
+          v.status=is_timber and "Stock industry freight disabled" or "Stock coal disabled"
+        end
+        v.stock_aged_tick=nil
+      elseif v[resume] then
+        v[resume]=nil;v.running=true
+      end
+    end
+  end
+  if not stock_service and s.stock_load_tick then
+    -- Turning a preview off between saves must not leave reserved cargo
+    -- inaccessible to the legacy station path or strand an aging clock.
+    for _,v in pairs(s.fleet) do
+      if v.load_state then abort_stock_stop(s,v) end
+      if v.stock_aged_tick then
+        v.passenger_age_ticks=185-(v.cargo_age_counter or 1)
+        v.stock_aged_tick=nil;v.cargo_age_counter=nil
+      end
+      v.stock_loading_complete=nil
+    end
+    s.stock_load_tick=nil
+  end
+  -- Charge the preceding stock day, once per active serial, in fleet
+  -- order. The company retains the same money fraction as other modes.
+  local regal_ids={}
+  for id,v in pairs(s.fleet) do if stock_bus(v) then regal_ids[#regal_ids+1]=id end end
+  table.sort(regal_ids)
+  for _,id in ipairs(regal_ids) do
+    local v=s.fleet[id]
+    local c=M.company(s,v.owner)
+    local whole,remainder=road_bus_catalog().day(stock_bus(v),c.stock_money_fraction or 0)
+    c.stock_money_fraction=remainder
+    if whole~=0 then debit(c,whole);v.expense=v.expense+whole end
+  end
+  local stock_work
+  local commercial=paid_transport_day(s)
+  if stock_service then
+    passenger_modules()
+    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train)
+  elseif commercial then
+    town_passengers.day(s,function(tick)
+      local ready,events=commercial.before(tick)
+      commercial.after(tick,ready,events)
+    end,{passenger=commercial.hooks.passenger,landscape_tile=coastal_visit(s)})
+  elseif road_supply then
+    passenger_modules()
+    if s.road_stock_house_supply then
+      town_passengers.day(s,nil,{landscape_tile=coastal_visit(s)})
+    else
+      rating_runtime.advance(s,rating_runtime.day_ticks)
+      generate_passengers(s,road_supply)
+    end
+  end
+  local moving,ready={},{}
+  local traffic={claims={},lanes={},waiting={}}
+  local limits={}
+  for id,v in pairs(s.fleet) do
+    if stock_service and stock_managed(s,v) then
+      if stock_work[id] then
+        local e=M.vehicles[v.engine]
+        if not stock_bus(v) and v.engine~="coal_tipper" and not industry_truck(v.engine) then
+          debit(M.company(s,v.owner),e.daily);v.expense=v.expense+e.daily
+        end
+        if not stock_bus(v) then v.condition=math.max(30,v.condition-0.06) end
+      end
+    elseif not stock_bus(v) and v.engine~="coal_tipper" and not industry_truck(v.engine) then
+      if road_passenger(s,v) then passenger_modules().age_vehicle(v,1)
+      elseif road_mail(s,v) then passenger_modules();mail_runtime.age_vehicle(v,1) end
+      if v.route then
+        moving[#moving+1]=id
+        if M.vehicles[v.engine].mode=="rail" then reserve(s,traffic,v) end
+      elseif v.running then
+        ready[#ready+1]=id
+        if v.rail_wait_key then traffic.waiting[v.rail_wait_key]=true end
+      end
+    end
+  end
+  for _,lane in pairs(traffic.lanes) do
+    table.sort(lane,function(a,b)
+      return a.progress==b.progress and a.id<b.id or a.progress>b.progress
+    end)
+    for i=2,#lane do limits[lane[i].id]=lane[i-1].progress-HEADWAY end
+  end
+  table.sort(moving)
+  table.sort(ready,function(a,b)
+    local av=s.fleet[a];local bv=s.fleet[b]
+    local al=av.last_departure or -1;local bl=bv.last_departure or -1
+    return al==bl and a<b or al<bl
+  end)
+  if not s.road_stock_clock then road_visual[s]=nil end
+  local road_progress={}
+  if stock_service then
+    -- Non-cargo road previews still use the shared movement run, but
+    -- retain their own old daily arrival policy.
+    for _,id in ipairs(moving) do
+      if stock_work[id] then road_progress[id]=s.fleet[id].progress end
+    end
+  elseif s.road_stock_clock then road_progress=advance_road(s,moving) end
+  for _,id in ipairs(moving) do
+    local v=s.fleet[id];local e=M.vehicles[v.engine]
+    local c=M.company(s,v.owner);debit(c,e.daily);v.expense=v.expense+e.daily
+    v.condition=math.max(30,v.condition-0.06)
+    local desired=road_progress[id] or v.progress+e.speed*(0.55+v.condition*0.0045)
+    local blocked,oneway_blocked=false,false
+    if e.mode=="road" and not road_progress[id] and (next(s.level_crossing_tiles or {}) or s.road_oneway_revision) then
+      for _,id in ipairs(v.route) do
+        if M.crossing_protected(s,id) then desired=v.progress;blocked=true;break end
+        if road_sign(s.tiles[id])~=0 or s.road_oneway_removed and s.road_oneway_removed[id] then
+          desired=v.progress;oneway_blocked=true;break
+        end
+      end
+    end
+    local ceiling=limits[id]
+    if ceiling and desired>ceiling then
+      v.progress=math.max(v.progress,ceiling)
+      v.status="Following train"
+    else
+      v.progress=desired
+      local waiting=v.road_speed_state and v.road_speed_state.waiting
+      v.status=blocked and "Road crossing needs a stock motion route" or
+        oneway_blocked and "One-way road needs a stock motion route" or
+        waiting=="oneway" and "Waiting at one-way road" or waiting=="crossing" and "Waiting at level crossing" or
+        waiting=="depot" and "Waiting in depot" or waiting=="bay" and "Waiting for a free bay"
+        or waiting=="junction" and "Waiting for junction clearance"
+        or waiting=="road" and "Following traffic" or "En route"
+    end
+    if v.progress>=#v.route then
+      v.station=v.dest;v.index=v.dest_index
+      v.road_arrival_td=v.road_leg_td;v.road_leg_td=nil
+      v.road_stop_pose=v.road_motion_frames and v.road_motion_frames[#v.road_motion_frames]
+      v.road_motion_frames=nil;v.road_speed_state=nil
+      v.route=nil;v.dest=nil;v.dest_index=nil;v.progress=0
+      v.status="At terminal"
+      local st=s.stations[v.station];local order=v.orders[v.index]
+      if st then
+        local action=order and order.action or "normal"
+        visit_station(s,st,v,action)
+        unload_at(s,st,v,action);v.loaded_at=st.id
+        if action~="transfer" and action~="unload" then
+          if road_passenger(s,v) then rating_runtime.observe_loading(s,st,v,e.capacity-v.units)
+          elseif road_mail(s,v) then mail_runtime.observe_loading(s,st,v,e.capacity-v.units) end
+        end
+      end
+      if v.stop_requested then v.running=false;v.stop_requested=nil;v.status="Stopped" end
+    end
+  end
+  for _,id in ipairs(ready) do
+    local v=s.fleet[id];idle_or_plan(s,v,traffic)
+    if v.route then v.last_departure=s.day end
+  end
+  local y,month,calendar_day=M.date(s)
+  local new_month=s.stock_bus_market and calendar_day==1 or not s.stock_bus_market and s.day%30==0
+  if new_month then
+    if coal then coal.month(M.date(s),{frozen=s.stock_coal_frozen}) end
+    -- The placed forest/sawmill preview keeps its scenario industries
+    -- active. Dynamic site opening/closure is a separate world command.
+    if timber then
+      if M.road_oil_active(s) then
+        s.stock_oil_month=(s.stock_oil_month or 0)+1
+        timber.month(s.stock_oil_month,y,{smooth=true,frozen=s.stock_oil_frozen==true})
+        s.changed=s.changed or {}
+        for _,id in ipairs(oil.world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+      elseif M.road_farm_active(s) then
+        s.stock_farm_month=(s.stock_farm_month or 0)+1
+        timber.month(s.stock_farm_month,y,{smooth=s.stock_farm_smooth~=false,frozen=s.stock_farm_frozen==true})
+      else
+        -- Calendar months are not 30 days long when the stock vehicle
+        -- market is mounted. One stable ordinal for the actual month.
+        timber.month(y*12+month,y,{frozen=true})
+      end
+    end
+    s.changed=s.changed or {}
+    for _,site in ipairs(s.sites) do
+      if not growth and site.population and site.service>=12 then
+        local previous=site.population
+        site.population=site.population+math.min(32,math.floor(site.service/12))
+        if math.floor(site.population/90)>math.floor(previous/90) then
+          local a,b=M.xy(site.tile)
+          local slots={}
+          for radius=1,4 do
+            for dz=-radius,radius do
+              for dx=-radius,radius do
+                if math.abs(dx)+math.abs(dz)==radius then
+                  local id=M.id(a+dx,b+dz)
+                  local t=id and s.tiles[id]
+                  if t and t.terrain=="grass" and not t.site and not t.stock_industry and not t.stock_landmark and not t.house and not t.build and not t.tram and not t.ship and not t.airfield then
+                    slots[#slots+1]=id
+                  end
+                end
+              end
+            end
+            if #slots>0 then break end
+          end
+          if #slots>0 then
+            local at=slots[(s.seed+s.day+site.id)%#slots+1]
+            s.tiles[at].house=true;s.tiles[at].wood=nil
+            s.changed[#s.changed+1]=at
+          end
+        end
+      end
+      site.service=0
+    end
+    local upkeep={}
+    for _,tile in ipairs(s.tiles) do
+      local legacy=tile.build and M.tools[tile.build]
+      -- Stock overlays are not legacy construction tools. Do not invent
+      -- monthly upkeep for them or dereference an absent legacy price.
+      if tile.owner and legacy and legacy.price then
+        upkeep[tile.owner]=(upkeep[tile.owner] or 0)+math.max(1,math.floor(legacy.price*.003))
+      end
+    end
+    for owner,c in pairs(s.companies) do
+      debit(c,math.floor(c.loan*0.004)+(upkeep[owner] or 0))
+      for sid,r in pairs(c.rating) do c.rating[sid]=math.max(10,r-2) end
+      table.insert(c.history,1,{day=s.day,revenue=c.month_rev,expenses=c.month_exp,cash=c.cash})
+      if #c.history>24 then table.remove(c.history) end
+      c.month_rev=0;c.month_exp=0
+      if c.cash<0 then push(s,owner.." is overdrawn. Review the Finance ledger.") end
+    end
+    if s.stock_bus_market then
+      for _,id in ipairs({"bus","leopard_bus","foster_bus"}) do
+        local model=M.stock_road_offer(s,id)
+        local old=model and M.engine_calendar.snapshot(s.stock_bus_market.models[model.stock_id],
+          s.stock_bus_market.epoch+s.day-1)
+        if model and model.public and old and not old.public then
+          push(s,"New model now available: "..M.vehicle_offer(s,id).name..".")
+        end
+      end
+    end
+    if month==1 and calendar_day==1 then
+      for _,id in ipairs(M.vehicle_order) do
+        if (not s.stock_bus_market or not road_bus_catalog().stock_id(id)) and M.vehicles[id].year==y and not M.vehicles[id].development then
+          push(s,"New model now available: "..M.vehicles[id].name..".")
+        end
+      end
+    end
+  end
+  coal_day_bindings[s]=nil
+  timber_day_bindings[s]=nil
+end
+function M.demo(s,owner)
+  if s.stock_generated_profile then return false,"Choose two of the generated towns and build a connection." end
+  if s.stock_bus_market or M.vehicle_offer(s,"bus").stock_id==116 then
+    return false,"Use the Roadworks walkthrough. The original bus must be purchased in a depot."
+  end
+  local c=M.company(s,owner)
+  if c.tutorial then return false,"Starter line already built for this company." end
+  local candidates={{9,18,11},{9,18,7},{9,18,12},{9,18,6},{9,18,10}}
+  for _,p in ipairs(candidates) do
+    local ids=M.line(M.id(p[1],p[3]),M.id(p[2],p[3]))
+    local clean=true
+    for _,id in ipairs(ids) do
+      local t=s.tiles[id]
+      if t.site or t.stock_industry or t.stock_landmark or t.house or t.build or t.h>0 or t.terrain~="grass" or
+        (s.corner_grid and ground_shape(s,id)~=0) then clean=false;break end
+    end
+    if clean and c.cash>=6100 then
+      local a,b=ids[1],ids[#ids]
+      M.build(s,owner,"road",ids)
+      M.build(s,owner,"road_station",{a,b})
+      local va=s.tiles[a].station;local vb=s.tiles[b].station
+      local id,msg=M.purchase(s,owner,"bus","passenger",va)
+      if not id then return false,msg end
+      M.add_order(s,owner,id,vb);M.toggle(s,owner,id)
+      c.tutorial=true;push(s,owner.." opened the Port Alder–Mason Quay bus line.")
+      return true,"Starter bus dispatched. Watch the road between Port Alder and Mason Quay.",ids
+    end
+  end
+  return false,"No clean starter alignment remains, or you need $6,100. Use the manual walkthrough."
+end
+return M

@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a reproducible LuanTTD bug or playability problem.
+title: "[Bug]: "
+body:
+  - type: input
+    id: versions
+    attributes:
+      label: LuanTTD tag or commit, Luanti version, and OS
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the world seed, generator and map size when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected and actual result
+      description: Include any visible error message or screenshot. Remove private information and never attach credentials.
+    validations:
+      required: true

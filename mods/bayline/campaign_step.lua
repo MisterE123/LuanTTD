@@ -1,0 +1,50 @@
+-- Playback time belongs to the authoritative campaign, not the client.
+-- The same daily entry point is used both with a player and on an
+-- explicitly enabled headless server; no second economy/routing clock.
+local M={}
+local min=math.min
+function M.new(s,interval,hooks)
+  assert(interval>0 and hooks.advance and hooks.refresh)
+  local U={}
+  local elapsed=0
+  local function note(ids)
+    if not ids or #ids==0 then return end
+    local set=s.offscreen_terrain_dirty or {}
+    for _,id in ipairs(ids) do set[id]=true end
+    s.offscreen_terrain_dirty=set
+  end
+  local function flush()
+    local set=s.offscreen_terrain_dirty
+    if not set then return end
+    local ids={}
+    for id in pairs(set) do ids[#ids+1]=id end
+    table.sort(ids)
+    if #ids>0 then hooks.refresh(ids) end
+    s.offscreen_terrain_dirty=nil
+  end
+  function U.step(dt,online,headless)
+    local speed=s.speed or 0
+    if online then flush() end
+    if not online and not headless or speed<=0 then
+      elapsed=0
+      return 1,0
+    end
+    elapsed=min(elapsed+dt,5*interval)
+    local step=interval/speed
+    local n=0
+    while elapsed>=step and n<12 do
+      if online and hooks.capture then hooks.capture() end
+      hooks.advance(s)
+      elapsed=elapsed-step;n=n+1
+      local edits=s.changed
+      if edits then
+        if online then hooks.refresh(edits) else note(edits) end
+        s.changed=nil
+      end
+      if not online and hooks.discard_effects then hooks.discard_effects() end
+    end
+    return min(1,elapsed/step),n
+  end
+  return U
+end
+return M

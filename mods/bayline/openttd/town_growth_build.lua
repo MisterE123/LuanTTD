@@ -1,0 +1,303 @@
+-- SPDX-License-Identifier: GPL-2.0-only
+-- 14.1 OpenTTD contributors: town_cmd.cpp GrowTown*, CanFollowRoad,
+-- GetTownRoadGridElement and BuildTownHouse; ordinary temperate branch.
+-- Nondestructive planning, no terraforming, waterways, rail crossing,
+-- structure construction or in-map destruction.
+return function(G,catalog)
+  local B={}
+  local floor=math.floor
+  local dx,dz={[0]=-1,0,1,0},{[0]=0,1,0,-1}
+  local bits={[0]=8,4,2,1}
+  local grid={grid2=3,grid3=4}
+  local walk_seed={{-1,0},{1,1},{1,-1},{-1,-1},{-1,0},{0,2},{2,0},{0,-2},{-1,-1},{-2,2},{2,2},{2,-2},{0,0}}
+  local corner={[9]={1,1},[6]={-1,-1},[12]={1,-1},[3]={-1,1}}
+  local slopes={[1]=3,[3]=7,[2]=6,[6]=14,[4]=12,[12]=13,[8]=9,[9]=11}
+  local function rev(d) return (d+2)%4 end
+  local function has(n,b) return floor(n/b)%2==1 end
+  local function join(a,b)
+    for _,i in pairs(bits) do if has(b,i) and not has(a,i) then a=a+i end end
+    return a
+  end
+  local function within(board,x,z) return x~=nil and z~=nil and board.tile(x,z) end
+  local function per(board,x,z,d) return x+dx[d],z+dz[d] end
+  local function road(t)
+    return t and (t.kind=="road" or t.kind=="drive_stop") and (t.road_bits or 0) or 0
+  end
+  local function disallowed(t)
+    return not t or t.kind=="void" or t.kind=="water" or t.water or t.protected
+  end
+  local function random_dir(random)
+    return G.range(4,random())
+  end
+
+  function B.grid_bits(t,x,z,d,slope)
+    local n=assert(grid[t.layout])
+    local bits2=((x-t.x)%n==0 and 5 or 0)+((z-t.z)%n==0 and 10 or 0)
+    if bits2~=15 then return bits2 end
+    local template=slopes[slope or 0] or ((slope or 0)>=16 and 0 or 15)
+    if d~=nil and not has(template,bits[rev(d)]) then return bits[d]+bits[rev(d)] end
+    return template
+  end
+  function B.house_on_layout(t,x,z,roads,square)
+    if not roads then return true end
+    if t.layout=="grid2" and square then return (t.x-x)%3==2 and (t.z-z)%3==2 end
+    if t.layout=="grid3" and square then return (t.x-x)%4>=2 and (t.z-z)%4>=2 end
+    local n=grid[t.layout]
+    return not n or ((x-t.x)%n~=0 and (z-t.z)%n~=0)
+  end
+  local function may_house(board,x,z,noslope,maxz)
+    local t=within(board,x,z)
+    if disallowed(t) or t.bridge_above or (t.slope or 0)>=16 or noslope and (t.slope or 0)~=0 then return false end
+    if board.house_roadtypes and not board.house_roadtypes(x,z) then return false end
+    if maxz~=nil and t.max_z~=maxz then return false end
+    -- Host-safety: never let a command quote clear or replace anything
+    -- in the live rollout. Trees, farmland and other classes may later
+    -- get explicit nondestructive policies, not a generic clear call.
+    if t.kind~="clear" or t.occupied or t.owner then return false end
+    return not board.clear_quote or board.clear_quote(x,z,"house")
+  end
+  local function footprint(board,t,x,z,roads,spec,first)
+    local w,d=spec[6],spec[7]
+    if w==1 and d==1 then return x,z end
+    local maxz=first.max_z
+    if maxz==nil then return end
+    if w*d==2 then
+      local ox,oz=w==2 and 1 or 0,d==2 and 1 or 0
+      if B.house_on_layout(t,x+ox,z+oz,roads) and may_house(board,x+ox,z+oz,false,maxz) then return x,z end
+      if B.house_on_layout(t,x-ox,z-oz,roads) and may_house(board,x-ox,z-oz,false,maxz) then return x-ox,z-oz end
+      return
+    end
+    for _,root in ipairs{{x,z},{x,z-1},{x-1,z-1},{x-1,z}} do
+      local u,v=root[1],root[2]
+      if B.house_on_layout(t,u,v,roads,true) and may_house(board,u,v,false,maxz) and may_house(board,u,v+1,false,maxz)
+          and may_house(board,u+1,v+1,false,maxz) and may_house(board,u+1,v,false,maxz) then return u,v end
+    end
+  end
+
+  function B.house(t,board,x,z,opts,random)
+    if not B.house_on_layout(t,x,z,opts.allow_roads) or not may_house(board,x,z,false) then return end
+    local zone,first=G.zone(t,x,z),board.tile(x,z)
+    local pool,total={},0
+    for _,spec in ipairs(catalog) do
+      if has(spec[2],2^zone) and (not t.house_counts or (t.house_counts[spec[1]] or 0)<65535) then
+        pool[#pool+1]=spec
+        total=total+spec[9]
+      end
+    end
+    while total>0 do
+      local q=G.range(total,random())
+      local idx=1
+      while q>=pool[idx][9] do q=q-pool[idx][9];idx=idx+1 end
+      local spec=pool[idx]
+      total=total-spec[9]
+      pool[idx]=pool[#pool];pool[#pool]=nil -- exact swap-remove order
+      if opts.year>=spec[3] and opts.year<=spec[4] and (not spec[8] or not (t.unique and t.unique[spec[8]])) then
+        local u,v=footprint(board,t,x,z,opts.allow_roads,spec,first)
+        if u~=nil and (not board.house_supported or board.house_supported(spec[1],u,v,spec)) then
+          local h=spec[1]
+          local props={kind="house",x=u,z=v,id=h,town=t.id,root_population=spec[5],
+            unique=spec[8],random_bits=random()%256,parts={{x=u,z=v,id=h,root=true}}}
+          if spec[7]==2 then h=h+1;props.parts[#props.parts+1]={x=u,z=v+1,id=h} end
+          if spec[6]==2 then h=h+1;props.parts[#props.parts+1]={x=u+1,z=v,id=h} end
+          if spec[6]*spec[7]==4 then h=h+1;props.parts[#props.parts+1]={x=u+1,z=v+1,id=h} end
+          for _,p in ipairs(props.parts) do
+            p.town,p.completed,p.stage,p.counter,p.root_x,p.root_z=t.id,false,0,0,u,v
+          end
+          return props
+        end
+      end
+    end
+  end
+
+  function B.can_follow(board,x,z,d,roads)
+    local a,b=per(board,x,z,d)
+    local t=within(board,a,b)
+    if disallowed(t) then return false end
+    local rb=road(t)
+    if not roads then
+      local back=bits[rev(d)]
+      return has(rb,back) and rb~=back
+    end
+    if t.kind=="road" then return rb~=0 end
+    if t.kind=="drive_stop" then return true end
+    if t.kind=="house" or t.kind=="industry" or t.kind=="object" or
+        t.kind=="bay_stop" or t.kind=="station" or t.kind=="depot" then return false end
+    if t.kind=="bridge" or t.kind=="tunnel" then return false end -- unsupported host layer
+    return true
+  end
+  local function plan_road(t,board,x,z,rb,d)
+    if rb==0 or not board.road_quote then return end
+    local current=board.tile(x,z)
+    if disallowed(current) or current.occupied or (current.road_disallowed or 0)~=0 or
+      current.kind~="road" and current.kind~="clear" or current.road_town and current.road_town~=t.id
+      or current.owner then return end
+    if d~=nil then
+      if not board.clean_road_bits then return end
+      rb=board.clean_road_bits(t,x,z,rb,d)
+    end
+    if rb==0 then return end
+    local q=board.road_quote(t,x,z,rb)
+    if q then return {kind="road",town=t.id,x=x,z=z,bits=rb,quote=q} end
+  end
+  local function extra(t,board,x,z,opts,random)
+    if not board.distance_to_edge or board.distance_to_edge(x,z)==0 then return end
+    local n=0
+    for d=0,3 do
+      local u,v=per(board,x,z,d)
+      local q=board.tile(u,v)
+      if not q or q.kind=="house" or q.kind=="void" then n=n+1 end
+      if n>=3 then return B.house(t,board,x,z,opts,random) end
+    end
+  end
+
+  local function grow_here(t,board,x,z,rb,from,opts,random)
+    local q=board.tile(x,z)
+    local roads=opts.allow_roads
+    if disallowed(q) then return nil,true end
+    local function allowed(a,b,d)
+      return board.road_allowed and board.road_allowed(t,a,b,d,random)
+    end
+    if rb==0 then
+      if not roads or from==nil then return nil,true end
+      -- Consume stock leveling lottery in the flat-only rollout, but
+      -- never terraform. A non-flat unsupported placement fails closed.
+      if opts.build_on_slopes~=false then G.chance(1,6,random()) end
+      if (q.slope or 0)~=0 then return nil,true end
+      local rcmd
+      if grid[t.layout] then rcmd=B.grid_bits(t,x,z,from,q.slope)
+      else
+        if not allowed(x,z,from) then return nil,true end
+        local src=rev(from)
+        if G.chance(1,4,random()) then
+          repeat from=random_dir(random) until from~=src
+        end
+        local u,v=per(board,x,z,from)
+        if not allowed(u,v,from) then
+          if from~=rev(src) then return nil,true end
+          local a,b=per(board,x,z,(from+1)%4)
+          local c,d=per(board,x,z,(from+3)%4)
+          local l,r=board.tile(a,b),board.tile(c,d)
+          if not (l and l.kind=="house" or r and r.kind=="house") then return nil,true end
+        end
+        rcmd=bits[from]+bits[src]
+      end
+      return plan_road(t,board,x,z,rcmd,from),true
+    end
+    if from~=nil and not has(rb,bits[rev(from)]) then
+      if not roads then return nil,true end
+      local rcmd=grid[t.layout] and B.grid_bits(t,x,z,from,q.slope) or bits[rev(from)]
+      return plan_road(t,board,x,z,rcmd,from),true
+    end
+
+    local d=random_dir(random)
+    local u,v
+    local b=bits[d]
+    if has(rb,b) then
+      if not has(10,b) or not corner[rb] then return end
+      local delta=corner[rb]
+      u,v,d=x+delta[1],z+delta[2],nil
+    else
+      u,v=per(board,x,z,d)
+    end
+    local h=board.tile(u,v)
+    if disallowed(h) then return end
+    local permit,rcmd=true,0
+    if d~=nil and roads then
+      if t.layout=="grid3" or t.layout=="better" then
+        local hx,hz=per(board,u,v,d)
+        local plan=extra(t,board,hx,hz,opts,random)
+        -- The source may continue after successful extra-house. Host
+        -- commits a single nondestructive plan per scheduler attempt.
+        if plan then return plan end
+      end
+      if grid[t.layout] then rcmd=B.grid_bits(t,x,z,d,q.slope);permit=not has(rcmd,b)
+      else rcmd=b;permit=not allowed(u,v,d) or G.chance(6,10,random()) end
+    end
+    if board.house_roadtypes and not board.house_roadtypes(u,v) then permit=false end
+    if permit then
+      if h.kind~="house" then
+        G.chance(1,6,random()) -- no actual terrain write in this port
+        return B.house(t,board,u,v,opts,random)
+      end
+      return
+    end
+    return plan_road(t,board,x,z,rcmd,d),true
+  end
+
+  function B.grow(t,board,opts,random)
+    opts=opts or {}
+    assert(opts.year,"Calendar year required for house availability")
+    local startx,startz=t.x,t.z
+    local x,z=startx,startz
+    for _,delta in ipairs(walk_seed) do
+      if road(board.tile(x,z))~=0 then
+        local from
+        local m=t.layout=="better" and 2 or grid[t.layout] and 1 or 4
+        local budget=10+floor(t.num_houses*m/9)
+        for _=0,budget do
+          local q=board.tile(x,z)
+          if disallowed(q) or q.road_town and q.road_town~=t.id then return end
+          local rb=road(q)
+          local plan,stop=grow_here(t,board,x,z,rb,from,opts,random)
+          if plan then return plan end
+          if from and has(rb,bits[rev(from)]) then rb=rb-bits[rev(from)] end
+          local next_dir
+          while rb~=0 do
+            local b
+            repeat next_dir=random_dir(random);b=bits[next_dir] until has(rb,b)
+            rb=rb-b
+            if B.can_follow(board,x,z,next_dir,opts.allow_roads) then break end
+            next_dir=nil
+          end
+          if next_dir==nil or stop then return end
+          x,z=per(board,x,z,next_dir)
+          from=next_dir
+        end
+        return
+      end
+      x,z=x+delta[1],z+delta[2]
+    end
+    if not opts.allow_roads then return end
+    x,z=startx,startz
+    for _,delta in ipairs(walk_seed) do
+      local q=board.tile(x,z)
+      if not disallowed(q) and q.kind=="clear" and (q.slope or 0)==0 and not q.owner and not q.occupied and
+          (not board.clear_quote or board.clear_quote(x,z,"road")) then
+        local r=random()
+        local a,b=r%4,floor(r/256)%4
+        if a==b then b=(b+2)%4 end
+        return plan_road(t,board,x,z,2^a+2^b,nil)
+      end
+      x,z=x+delta[1],z+delta[2]
+    end
+  end
+
+  function B.house_committed(t,proposal,stations,setting)
+    assert(proposal.town==t.id and proposal.kind=="house")
+    t.house_counts=t.house_counts or {}
+    for _,part in ipairs(proposal.parts) do t.house_counts[part.id]=(t.house_counts[part.id] or 0)+1 end
+    if proposal.unique then t.unique=t.unique or {};t.unique[proposal.unique]=true end
+    G.house_added(t,stations,setting)
+  end
+
+  -- Root tile alone advances all the parts; the host calls this on the
+  -- physical RunTileLoop visit BEFORE ordinary completed-house production.
+  -- Returning true means this visit was construction-only, including the
+  -- visit that completes stage 3. Do not produce cargo until a later visit.
+  function B.advance_house(h,parts,house_specs,on_complete)
+    if h.completed then return false end
+    if not h.root then return true end
+    for _,p in ipairs(parts) do
+      p.counter=(p.counter+1)%4
+      if p.counter==0 then
+        p.stage=p.stage+1
+        if p.stage==3 then
+          p.completed,p.age=true,0
+          if on_complete then on_complete(p,assert(house_specs[p.id])[1]) end
+        end
+      end
+    end
+    return true
+  end
+  return B
+end
