@@ -205,9 +205,11 @@ return function(api,Lab,Track,Run,prices)
     if not Run then return nil,"Enable the rail-dispatch preview to place path signals." end
     if signed(id) then return nil,"This tile already has a path signal." end
     local t=Lab.board(S).tile(id)
-    if not t or t.owner~=owner or t.kind~="rail" or t.slope~=0 or t.trackbits~=2^(dir%2) then
+    if not t or t.owner~=owner or t.kind~="rail" or t.trackbits~=2^(dir%2) then
       return nil,"Choose a plain straight rail tile that matches the signal direction."
     end
+    -- OpenTTD 16.0-RC1 CmdBuildSingleSignal permits existing plain
+    -- track on slopes. Grade support here supplies the matching 3D base.
     local value,why=prices.signal(t,dir,oneway,opts(owner))
     if value==nil then return nil,why end
     return budget(owner,{kind="signal",id=id,td=Track.diagonal_trackdir(dir),

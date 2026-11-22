@@ -641,8 +641,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       return false,"Enable the stock Rail Coal service first."
     end
     if not mine or not power or mine==power or not owned or owned.owner~=owner or
-        not owned.stock_ids or #owned.stock_ids~=2 or owned.stock_ids[1]~=0 or owned.stock_ids[2]~=29 then
-      return false,"Use one owned Kirby Paul Tank and exactly one Coal Truck wagon."
+        not owned.stock_ids or #owned.stock_ids~=2 or not Roster.freight_engine(owned.stock_ids[1]) or
+        not R.owned_passenger_engine(owned.stock_ids[1]) or owned.stock_ids[2]~=29 then
+      return false,"Use a modeled owned locomotive and one Coal Truck wagon."
     end
     return start(s,owner,owned.depot,mine,nil,false,owned,power)
   end
@@ -652,8 +653,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       return false,"Enable stock Rail Oil service in the Oil world first."
     end
     if not wells or not refinery or wells==refinery or not owned or owned.owner~=owner or
-        not owned.stock_ids or #owned.stock_ids~=2 or owned.stock_ids[1]~=0 or owned.stock_ids[2]~=30 then
-      return false,"Use one owned Kirby Paul Tank and exactly one Oil Tanker wagon."
+        not owned.stock_ids or #owned.stock_ids~=2 or not Roster.freight_engine(owned.stock_ids[1]) or
+        not R.owned_passenger_engine(owned.stock_ids[1]) or owned.stock_ids[2]~=30 then
+      return false,"Use a modeled owned locomotive and one Oil Tanker wagon."
     end
     return start(s,owner,owned.depot,wells,nil,false,owned,refinery,nil,nil,"oil")
   end
@@ -663,8 +665,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       return false,"Enable stock Rail Goods service on the Timber chain first."
     end
     if not mill or not town or mill==town or not owned or owned.owner~=owner or
-        not owned.stock_ids or #owned.stock_ids~=2 or owned.stock_ids[1]~=0 or owned.stock_ids[2]~=32 then
-      return false,"Use one owned Kirby Paul Tank and exactly one Goods Van."
+        not owned.stock_ids or #owned.stock_ids~=2 or not Roster.freight_engine(owned.stock_ids[1]) or
+        not R.owned_passenger_engine(owned.stock_ids[1]) or owned.stock_ids[2]~=32 then
+      return false,"Use a modeled owned locomotive and one Goods Van."
     end
     return start(s,owner,owned.depot,mill,nil,false,owned,town,nil,nil,"goods")
   end

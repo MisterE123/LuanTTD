@@ -9,6 +9,9 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     return Fleet.initialize(s,cfg)
   end
   function O.passenger_engine(id) return Run.owned_passenger_engine(id) end
+  function O.freight_engine(id)
+    return Roster.freight_engine(id) and Run.owned_passenger_engine(id)
+  end
   function O.pair_passenger_engine(id)
     return id~=11 and not Roster.electric_engine(id) and Run.owned_passenger_engine(id)
   end
@@ -115,8 +118,8 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     if not validate_coal or not s.rail_coal_service then return false,"Rail Coal service is disabled." end
     local unit,why=Fleet.prepare_dispatch(s,owner,id,hooks)
     if not unit then return false,why end
-    if #unit.stock_ids~=2 or unit.stock_ids[1]~=0 or unit.stock_ids[2]~=29 then
-      return false,"Buy or select a Kirby Paul Tank with exactly one Coal Truck wagon."
+    if #unit.stock_ids~=2 or not O.freight_engine(unit.stock_ids[1]) or unit.stock_ids[2]~=29 then
+      return false,"Choose a modeled locomotive and one Coal Truck."
     end
     local valid,reason=validate_coal(s,owner,mine,power)
     if not valid then return false,reason end
@@ -131,8 +134,8 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     end
     local unit,why=Fleet.prepare_dispatch(s,owner,id,mounted_hooks(hooks))
     if not unit then return false,why end
-    if #unit.stock_ids~=2 or unit.stock_ids[1]~=0 or unit.stock_ids[2]~=30 then
-      return false,"Buy or select a Kirby Paul Tank with exactly one Oil Tanker wagon."
+    if #unit.stock_ids~=2 or not O.freight_engine(unit.stock_ids[1]) or unit.stock_ids[2]~=30 then
+      return false,"Choose a modeled locomotive and one Oil Tanker."
     end
     local valid,reason=validate_oil(s,owner,wells,refinery)
     if not valid then return false,reason end
@@ -147,8 +150,8 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     end
     local unit,why=Fleet.prepare_dispatch(s,owner,id,mounted_hooks(hooks))
     if not unit then return false,why end
-    if #unit.stock_ids~=2 or unit.stock_ids[1]~=0 or unit.stock_ids[2]~=32 then
-      return false,"Buy or select a Kirby Paul Tank with one stock Goods Van."
+    if #unit.stock_ids~=2 or not O.freight_engine(unit.stock_ids[1]) or unit.stock_ids[2]~=32 then
+      return false,"Choose a modeled locomotive and one stock Goods Van."
     end
     local valid,reason=validate_goods(s,owner,mill,town)
     if not valid then return false,reason end

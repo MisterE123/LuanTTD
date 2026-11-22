@@ -4,8 +4,7 @@ Linux playtesting built the source rail/road route in seed 1751,
 designated its two platforms, purchased and ordered the real tanker
 from the native UI, and reopened the world during loading. The train
 delivered 30,000 L of crude, and a separate Goods truck carried the
-refinery output to town. This workbench runs a single Kirby with one
-tanker; it does not yet provide general freight consists.
+refinery output to town. This route supports one modeled locomotive and one tanker, not general freight consists.
 
 ## Set up the oil world
 

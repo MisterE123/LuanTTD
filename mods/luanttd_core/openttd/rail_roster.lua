@@ -338,6 +338,17 @@ function R.climate_ok(id,climate)
   return not not (row and uint(c,3) and floor(row.climates/2^c)%2==1)
 end
 
+-- The host's dedicated freight service handles a single powered locomotive
+-- and one wagon. Passenger DMUs add a second powered body and require a
+-- different freight layout; leave them to passenger operations.
+function R.freight_engine(id)
+  local row=rows[id]
+  return not not (row and row.kind=="engine" and not row.multiheaded and row.capacity==0)
+end
+local function supported_single_wagon(id)
+  return id==27 or id==29 or id==30 or id==32
+end
+
 -- Combined quote for explicit purchases at an owned depot; opts.available
 -- supplies the stock company engine-mask result. No silent free-wagon
 -- attachment, null-stock retirement guess, or fake climate override.
@@ -351,10 +362,10 @@ function R.quote(depot,owner,parts,opts)
     -- This stock row can be inspected/priced without licensing a live
     -- purchase until its actual freight orders and asset are mounted.
     if row.purchase_enabled==false and
-        not (row.stock_id==30 and opts.mount_oil_wagon==true and #parts==2 and stats.parts[1].stock_id==0) and
-        not (row.stock_id==32 and opts.mount_goods_wagon==true and #parts==2 and stats.parts[1].stock_id==0) and
+        not (row.stock_id==30 and opts.mount_oil_wagon==true and #parts==2 and R.freight_engine(stats.parts[1].stock_id)) and
+        not (row.stock_id==32 and opts.mount_goods_wagon==true and #parts==2 and R.freight_engine(stats.parts[1].stock_id)) and
         not (R.electric_engine(row.stock_id) and opts.mounted_electric and opts.mounted_electric[row.stock_id]==true and
-            index==1 and #parts==2 and stats.parts[2].stock_id==27) and
+            index==1 and #parts==2 and supported_single_wagon(stats.parts[2].stock_id)) and
         not (row.stock_id==11 and opts.mount_manley==true and stats.parts[1].stock_id==11 and
             (#parts==1 and #stats.parts==2 or #parts==2 and #stats.parts==3 and stats.parts[2].stock_id==27)) then
       return nil,"RAIL_VEHICLE_NOT_MOUNTED",index

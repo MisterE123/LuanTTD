@@ -8,6 +8,11 @@ reports `OpenTTD 16.0-RC1`; it is not included with LuanTTD.
 - **Compared:** the [AutoRoad hotspot fix](https://github.com/OpenTTD/OpenTTD/pull/16101)
   is ported for single-tile clicks. The native tile projection and half selection
   are checked over all 256 fractional positions.
+- **Compared:** the plain-track signal command and straight-track signal
+  height in [rail_cmd.cpp](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/rail_cmd.cpp).
+  Signals can be purchased on either stock straight grade, with the mast base
+  sampled at its exact source anchor rather than the tile's lowest corner.
+  This does not add signal heads on curves or overlapping track.
 - **Compared:** retained world-generation options have counterparts in
   [world settings](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/table/settings/world_settings.ini)
   and [difficulty settings](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/table/settings/difficulty_settings.ini).

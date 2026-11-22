@@ -866,7 +866,7 @@ do
         if slope_index==0 then return level end
       end)
     api.rail_dispatch_view=dofile(mod.."/rail_dispatch_view.lua").create(api,Pilot,Track,Pose,
-      dofile(mod.."/rail_signal_art.lua"),interval,presentation,bridge_profile)
+      dofile(mod.."/rail_signal_art.lua"),interval,presentation,bridge_profile,height)
     Pilot.mount_bridge_collectors(api.rail_dispatch_view.split_electric_ready)
     if S.rail_goods_service then
       Sim.mount_rail_goods(S,api.rail_dispatch_view.goods_wagon_ready)

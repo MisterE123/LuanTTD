@@ -12,7 +12,10 @@ echo "Native Goods rail logs: $out"
 game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp game.conf "$game"
-cp -R mods "$game/"
+cp -al mods "$game/" || cp -R mods "$game/"
+cp mods/luanttd_core/init.lua "$out/current-init.lua"
+mv "$out/current-init.lua" "$game/mods/luanttd_core/init.lua"
+printf '\n' >> "$game/mods/luanttd_core/init.lua"
 cat tests/rail_goods_live_native.lua >> "$game/mods/luanttd_core/init.lua"
 cp tests/qa_layout.lua "$game/mods/luanttd_core/qa_layout.lua"
 cp tests/coastal_corridor_fixture.lua "$game/mods/luanttd_core/qa_coastal_corridor.lua"
@@ -30,6 +33,7 @@ bayline_rail_construction_preview = true
 luanttd_qa_coastal_layout = true
 bayline_road_timber_preview = true
 bayline_native_rail_goods_competition = ${BAYLINE_NATIVE_GOODS_COMPETITION:-false}
+bayline_rail_goods_qa_engine = ${BAYLINE_NATIVE_GOODS_ENGINE:-0}
 port = ${BAYLINE_NATIVE_PORT:-41488}
 bind_address = 127.0.0.1
 server_announce = false

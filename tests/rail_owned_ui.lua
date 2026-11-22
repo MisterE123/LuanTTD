@@ -79,7 +79,7 @@ assert(ui.open(owner,1) and not panel.markup:find("coal train",1,true))
 assert(panel.markup:find("Parked",1,true))
 coal.finished=false;coal.paused=true
 assert(ui.open(owner,1) and not panel.markup:find("Stop coal train",1,true))
-assert(panel.markup:find("Disabled in settings",1,true))
+assert(panel.markup:find("Service unavailable",1,true))
 coal={fleet_id=16,onboard=19,delivered=444,fare=987}
 assert(ui.open(owner,1) and not panel.markup:find("444 t delivered",1,true))
 local model_ready,a4_ready=false,false
@@ -95,6 +95,25 @@ assert(panel.markup:find("112 km/h",1,true) and not panel.markup:find("purchase_
 a4_ready=true
 assert(ui.open(owner,1) and panel.markup:find("purchase_a4",1,true) and panel.markup:find("$31616",1,true))
 assert(panel.markup:find("128 km/h",1,true) and panel.markup:find("purchase_coal",1,true))
+
+-- A modeled engine on public sale can be selected for freight. Changing
+-- the dropdown must re-quote, never debit or start a train.
+local passenger_quote=host.rail_owned.quote
+host.rail_owned.freight_engine=function(id) return id==0 or id==8 end
+host.rail_owned.catalog=function() return {
+  {stock_id=8,name="Chaney 'Jubilee'",speed=112,passenger_model_ready=true,availability={public=true}},
+  {stock_id=9,name="Ginzu 'A4'",speed=128,passenger_model_ready=true,availability={public=true}},
+} end
+host.rail_owned.quote=function(state,name,depot,ids)
+  if ids[1]==8 and ids[2]==29 then return {price=21687,stock_ids=ids} end
+  return passenger_quote(state,name,depot,ids)
+end
+assert(ui.open(owner,1) and panel.markup:find("Freight locomotive",1,true))
+assert(panel.markup:find("Kirby,Jubilee",1,true))
+assert(handler(owner,panel.key,{freight_engine="2"}))
+assert(panel.markup:find("Jubilee + 30-ton coal wagon",1,true) and panel.markup:find("$21687",1,true))
+assert(saves==6)
+
 
 host.rail_owned_pair_tools=true
 s.tiles[7]={rail_depot_dir=1,owner="owner"}
@@ -211,7 +230,7 @@ oil_run.finished=false;oil_run.fleet_id=800;oil_run.delivered=900
 assert(ui.open(owner,1) and not panel.markup:find("900,000 L delivered",1,true))
 assert(panel.markup:find("Oil service status unavailable",1,true))
 host.rail_oil_tools=false
-assert(ui.open(owner,1) and panel.markup:find("Disabled in settings",1,true))
+assert(ui.open(owner,1) and panel.markup:find("Service unavailable",1,true))
 assert(not panel.markup:find("purchase_oil",1,true) and not panel.markup:find("Resume oil train",1,true))
 left(owner)
 print("PASS: Oil tanker price, real well/refinery stage selection, guarded stop and resume, and liters independent of Coal.")

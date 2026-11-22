@@ -15,11 +15,11 @@ return function(api,status)
   end
   local commercial={
     oil={wagon=30,title="Oil",noun="oil",source="Oil Wells",sink="Oil Refinery",unit=litres,
-      name="Kirby Paul Tank + 30,000 L Oil Tanker",short="Kirby + Oil Tanker",parked="Parked at refinery",
+      name="30,000 L Oil Tanker",short="Oil Tanker",parked="Parked at refinery",
       tip="Rail Freight: designate an Oil Wells loader and an Oil Refinery unloader before ordering this train."},
     goods={wagon=32,title="Goods",noun="Goods",source="Sawmill",sink="town Goods",sink_state="Unloading in town",
       unit=function(n) return string.format("%d crates",n or 0) end,
-      name="Kirby Paul Tank + 25-crate Goods Van",short="Kirby + Goods Van",parked="Parked in town",
+      name="25-crate Goods Van",short="Goods Van",parked="Parked in town",
       tip="Rail Freight: designate a Sawmill loading platform and a town Goods unloading platform."},
   }
   local function cargo_of(u)
@@ -27,8 +27,11 @@ return function(api,status)
     return id==30 and "oil" or id==32 and "goods" or nil
   end
   local function available(cargo) return api["rail_"..cargo.."_tools"] end
+  local function freight_engine(id)
+    return api.rail_owned.freight_engine and api.rail_owned.freight_engine(id) or id==0
+  end
   local function can_order(u,cargo)
-    return available(cargo) and api.rail_owned["start_"..cargo] and #u.stock_ids==2 and u.stock_ids[1]==0
+    return available(cargo) and api.rail_owned["start_"..cargo] and #u.stock_ids==2 and freight_engine(u.stock_ids[1])
   end
   local function commercial_status(u,cargo)
     local get=api.Sim["rail_"..cargo.."_status"]
@@ -48,7 +51,7 @@ return function(api,status)
     OIL_MODEL_NOT_AVAILABLE="This installation is missing the stock Oil Tanker model.",
     RAIL_OIL_MODEL_NOT_AVAILABLE="This installation is missing the stock Oil Tanker model.",
     RAIL_VEHICLE_NOT_MOUNTED="This train is not available in this workbench.",
-    OWNED_RAIL_DISABLED="Turn on purchased rail in this world's settings.",
+    OWNED_RAIL_DISABLED="Owned rail service is not available here.",
     INVALID_OWNED_DEPOT="Choose a rail depot owned by your company.",
     INCOMPATIBLE_DEPOT_RAIL="The depot does not supply power to that locomotive.",
     STALE_RAIL_FLEET_QUOTE="The depot or ledger changed. Review the new price.",
@@ -85,7 +88,7 @@ return function(api,status)
     end
     return q.first and "Click the second owned rail platform." or "Click the first owned rail platform."
   end
-  function U.open(p,id,note)
+  function U.open(p,id,note,freight_pick)
     local n=p:get_player_name()
     if not owned_depot(n,id) then return false end
     local owned=api.rail_owned
@@ -96,11 +99,33 @@ return function(api,status)
       if row.passenger_model_ready then catalogue[row.stock_id]=row end
     end
     local alternatives={}
-    if api.rail_coal_tools then alternatives[1]={key="purchase_coal",ids={0,29},name="Kirby Paul Tank + 30-ton coal wagon"} end
+    local has_freight=api.rail_coal_tools or available("oil") or available("goods")
+    local freight_ids,freight_names={},{}
+    if has_freight then
+      local representative=api.rail_coal_tools and 29 or available("oil") and 30 or 32
+      -- Quote first: on-sale models and depot traction matter, not just
+      -- whether an asset is recognized by the renderer.
+      for _,engine in ipairs({0,8,9,10,15,23,24}) do
+        local row=catalogue[engine]
+        if freight_engine(engine) and (engine==0 or row and row.availability and row.availability.public) and
+          owned.quote(S,n,id,{engine,representative}) then
+          freight_ids[#freight_ids+1]=engine
+          freight_names[#freight_names+1]=esc(model_short[engine])
+        end
+      end
+    end
+    local selected=1
+    for i,e in ipairs(freight_ids) do if e==freight_pick then selected=i;break end end
+    local engine=freight_ids[selected]
+    panel.freight_ids,panel.freight_pick=freight_ids,engine
+    local label=engine and model_short[engine]
+    if engine and api.rail_coal_tools then
+      alternatives[1]={key="purchase_coal",ids={engine,29},name=label.." + 30-ton coal wagon"}
+    end
     for _,cargo in ipairs({"oil","goods"}) do
       local f=commercial[cargo]
-      if available(cargo) then
-        alternatives[#alternatives+1]={key="purchase_"..cargo,cargo=cargo,ids={0,f.wagon},name=f.name,tip=f.tip}
+      if engine and available(cargo) then
+        alternatives[#alternatives+1]={key="purchase_"..cargo,cargo=cargo,ids={engine,f.wagon},name=label.." + "..f.name,tip=f.tip}
       end
     end
     for _,design in ipairs(orderable) do
@@ -120,7 +145,8 @@ return function(api,status)
       end
     end
     local extras=#alternatives
-    local height=math.max(0,extras-1)*.65
+    local freight_space=#freight_ids>1 and .73 or 0
+    local height=math.max(0,extras-1)*.65+freight_space
     local b={("formspec_version[7]size[10,%g]bgcolor[#152334;false]"):format(7.2+height),
       "style_type[button;bgimg=bl_button.png;bgimg_middle=6;border=false;textcolor=#E5ECEA]",
       "style_type[label;textcolor=#E5ECEA]"}
@@ -142,11 +168,16 @@ return function(api,status)
     else
       lab(.42,1.14,why=="RAIL_VEHICLE_NOT_AVAILABLE" and "Kirby Paul Tank is not on sale this year." or message(why))
     end
+    if freight_space>0 and #units<limit then
+      lab(.42,2.39,"Freight locomotive")
+      b[#b+1]=("dropdown[3.22,2.14;6.36,.55;freight_engine;%s;%d;true]"):format(
+        table.concat(freight_names,","),selected)
+    end
     panel.alternatives={}
     if #units<limit then
       for i,spec in ipairs(alternatives) do
         local offer,why=owned.quote(S,n,id,spec.ids)
-        local y=2.14+(i-1)*.65
+        local y=2.14+freight_space+(i-1)*.65
         if offer then
           panel.alternatives[spec.key]=offer
           local speed=spec.speed and ("   /   "..spec.speed.." km/h") or ""
@@ -160,7 +191,7 @@ return function(api,status)
     for i=1,math.min(#units,limit) do
       local u=units[i]
       panel["unit_"..u.id]=u.id
-      local shift=2.27+extras*.65+(i-1)*.86
+      local shift=2.27+freight_space+extras*.65+(i-1)*.86
       local run=owned.running(S,n,u.id)
       local coal=u.stock_ids[2]==29
       local cargo=cargo_of(u)
@@ -169,8 +200,8 @@ return function(api,status)
         local c=commercial_status(u,cargo)
         lab(.42,shift,("%s train %d  ·  %s aboard  ·  %s delivered"):format(
           f.title,u.unit_number,f.unit(c and c.onboard),f.unit(c and c.delivered)))
-        local state=not available(cargo) and "Disabled in settings" or not c and f.title.." service status unavailable" or
-          c.finished and f.parked or c.failure and "Blocked" or c.paused and "Disabled in settings" or
+        local state=not available(cargo) and "Service unavailable" or not c and f.title.." service status unavailable" or
+          c.finished and f.parked or c.failure and "Blocked" or c.paused and "Service unavailable" or
           run and run.stopped and "Stopped" or c.loading and c.last_platform==c.mine and "Loading at "..f.source or
           c.loading and c.last_platform==c.power and (f.sink_state or "Unloading at "..f.sink) or "In service"
         lab(.42,shift+.38,state.."   /   "..money(c and c.fare or 0).." earned   /   "..
@@ -187,7 +218,7 @@ return function(api,status)
         local esp=run and run.running_expense or c and c.running_expense or 0
         lab(.42,shift,("Train %d  ·  %d t aboard  ·  %d t delivered"):format(
           u.unit_number,c and c.onboard or 0,c and c.delivered or 0))
-        local state=c and c.finished and "Parked" or c and c.failure and "Blocked" or c and c.paused and "Disabled in settings"
+        local state=c and c.finished and "Parked" or c and c.failure and "Blocked" or c and c.paused and "Service unavailable"
           or run and run.stopped and "Stopped" or "In service"
         lab(.42,shift+.38,state.."   /   "..money(income).." earned   /   "..money(esp).." operating costs")
         if run and c and not (c.finished or c.paused or c.failure) then
@@ -209,7 +240,8 @@ return function(api,status)
           button(shift-.03,"unit_"..u.id,run.stopped and "Resume this shuttle" or "Pause this shuttle",6.8,2.78)
         end
       else
-        local stock=coal and "Kirby + coal wagon" or f and f.short or
+        local engine_name=model_short[u.stock_ids[1]] or "Stock engine"
+        local stock=coal and (engine_name.." + coal wagon") or f and (engine_name.." + "..f.short) or
           u.stock_ids[1]==11 and (u.stock_ids[2]==27 and "Manley–Morel DMU + carriage (116 seats)" or "Manley–Morel DMU (76 seats)") or
           (model_short[u.stock_ids[1]] or "Stock engine").." + carriage"
         lab(.42,shift,("Train %d  ·  %s  ·  %s"):format(u.unit_number,stock,money(u.price)))
@@ -372,6 +404,10 @@ return function(api,status)
     local a=panels[n]
     if f.quit or f.back then panels[n]=nil;core.close_formspec(n,form);return true end
     if not a or not owned_depot(n,a.depot) then return true end
+    local selected=tonumber(f.freight_engine)
+    if selected and a.freight_ids[selected] and a.freight_ids[selected]~=a.freight_pick then
+      return U.open(p,a.depot,nil,a.freight_ids[selected])
+    end
     local receipt=f.purchase and a.quote
     if not receipt then
       for key,quote in pairs(a.alternatives or {}) do
@@ -382,7 +418,7 @@ return function(api,status)
     if receipt then
       local unit,why=api.rail_owned.commit(S,n,receipt)
       if unit then api.save() end
-      U.open(p,a.depot,unit and ("Purchased train "..unit.unit_number.." for "..money(unit.price)..".") or message(why))
+      U.open(p,a.depot,unit and ("Purchased train "..unit.unit_number.." for "..money(unit.price)..".") or message(why),a.freight_pick)
       return true
     end
     if f.park_coal and a.park then

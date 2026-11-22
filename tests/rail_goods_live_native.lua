@@ -1,6 +1,9 @@
 -- Appended only to a private Luanti test copy; use the real Harbor
 -- board, full authoritative stock day, one SQLite world, and real assets.
 local owner,at="Harbor Goods QA",Sim.id
+local engine=tonumber(core.settings:get("bayline_rail_goods_qa_engine")) or 0
+local empty_mass,full_mass,purchase_price=68,80,12421
+if engine==8 then empty_mass,full_mass,purchase_price=152,164,21796 end
 local function proof_goods()
   local Run,Build,View=assert(api.rail_dispatch_controller),assert(api.rail_build),assert(api.rail_dispatch_view)
   local Owned=assert(api.rail_owned)
@@ -45,7 +48,7 @@ local function proof_goods()
     assert(first.onboard==qa.units and first.delivered==0 and first.loading and first.last_platform==qa.source)
     assert(c.cash==qa.cash and c.revenue==qa.revenue and c.expense==qa.expense)
     assert(not Owned.commit(S,owner,qa.quote))
-    assert(unit.status=="dispatched" and r.stock_wagon==32 and r.freight.cargo=="goods")
+    assert(unit.status=="dispatched" and r.stock_engine==engine and r.stock_wagon==32 and r.freight.cargo=="goods")
     assert(not Sim.rail_coal_status(S) and not Sim.rail_oil_status(S) and not Sim.rail_paid_status(S))
     local charge,delivered,peak=0,0,0
     art(unit.id)
@@ -70,7 +73,7 @@ local function proof_goods()
         local town=S.sites[qa.town]
         local road_crates,road_money=road_goods and road_goods.delivered or 0,road_goods and road_goods.revenue or 0
         if road_goods then assert(road_crates>0 and road_money>0 and road_goods.expense>0) end
-        assert(charge>0 and phase.fare==charge and delivered==phase.delivered and delivered%25==0 and peak==80)
+        assert(charge>0 and phase.fare==charge and delivered==phase.delivered and delivered%25==0 and peak==full_mass)
         assert(phase.running_expense>0 and r.running_ticks_total>qa.ticks)
         assert(mill.wood_received>=25 and truck.delivered>0 and truck.revenue>0 and truck.expense>0)
         assert(town.received.goods>=delivered and delivered_goods()==delivered+road_crates)
@@ -145,18 +148,18 @@ local function proof_goods()
   end
 
   Sim.mount_rail_goods(S,function() return false end)
-  assert(not Owned.quote(S,owner,depot,{0,32}))
+  assert(not Owned.quote(S,owner,depot,{engine,32}))
   Sim.mount_rail_goods(S,View.goods_wagon_ready)
   assert(not Owned.quote(S,owner,depot,{0,32,32}))
-  local q=assert(Owned.quote(S,owner,depot,{0,32}))
-  assert(q.price==12421 and q.stats.weight==68 and q.stats.max_weight==80 and q.stats.freight_trains==1)
+  local q=assert(Owned.quote(S,owner,depot,{engine,32}))
+  assert(q.price==purchase_price and q.stats.weight==empty_mass and q.stats.max_weight==full_mass and q.stats.freight_trains==1)
   local before=c.cash
   local unit=assert(Owned.commit(S,owner,q))
-  assert(unit.price==12421 and c.cash==before-12421 and not Owned.commit(S,owner,q))
+  assert(unit.price==purchase_price and c.cash==before-purchase_price and not Owned.commit(S,owner,q))
   assert(not Owned.start(S,owner,unit.id,source,sink))
   local ok,note,r=Owned.start_goods(S,owner,unit.id,source,sink)
   assert(ok,note)
-  assert(r.freight.repeat_route and r.freight.cargo=="goods" and r.consist_mass==68)
+  assert(r.freight.repeat_route and r.freight.cargo=="goods" and r.consist_mass==empty_mass and r.stock_engine==engine)
   for _=1,420 do
     local phase=day()
     if phase.loading and phase.onboard>0 and phase.onboard<25 then

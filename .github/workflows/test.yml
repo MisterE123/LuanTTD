@@ -32,7 +32,8 @@ jobs:
           find mods/luanttd_core -type f -name '*.lua' -print0 | xargs -0 -r -n 1 luac5.1 -p
           for t in sim world_setup workbench_index atmosphere hotbar ordinary_level_crossing \
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
-            coastal_corridor_seed coastal_corridor_freight rail_owned_default; do
+            coastal_corridor_seed coastal_corridor_freight rail_owned_default \
+            rail_depot_fleet rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals; do
             lua5.1 "tests/$t.lua"
           done
       - name: Run native startup, feature availability and SQLite checks
@@ -41,3 +42,4 @@ jobs:
           luantiserver --version
           bash tests/default_stock_terrain_native.sh
           bash tests/default_tram_native.sh
+          BAYLINE_NATIVE_GOODS_ENGINE=8 bash tests/rail_goods_live_native.sh

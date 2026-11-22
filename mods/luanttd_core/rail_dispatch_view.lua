@@ -19,7 +19,7 @@ local models={
 }
 local stock_kind={[0]="steam",[8]="jubilee",[9]="ginzu",[10]="sh_8p",[11]="manley",[15]="floss",[23]="sh_30",[24]="sh_40"}
 local stock_extra={jubilee=8,ginzu=9,sh_8p=10,manley=11,floss=15,sh_30=23,sh_40=24}
-function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire)
+function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire,signal_pixel)
   local V={}
   local Sim,S=api.Sim,api.s
   local refs,signs={},{}
@@ -180,7 +180,12 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
             if Track.has(mask,Track.track(td)) and Track.intersect(r.present_signals,signal)~=0 then
               local model=r.upper_variant==1 and "semaphore" or "light"
               local green=Track.intersect(r.green_signals,signal)~=0
-              local position,rotation=SignalArt.pose(tx,tz,board_base(id)+.5,td,false)
+              -- GetSafeSlopeZ in OpenTTD 16.0-RC1 samples the actual
+              -- signal anchor on straight track, not the tile origin.
+              local u,v=SignalArt.anchor(td,false)
+              local pixel=signal_pixel and signal_pixel(id,u,v)
+              local y=(pixel and pixel/8 or board_base(id))+.5
+              local position,rotation=SignalArt.pose(tx,tz,y,td,false)
               local key=id..":"..td
               pose(signs,key,"dispatch_signal_"..model.."_"..(green and "green" or "red"),position,rotation)
               show_signs[key]=true
