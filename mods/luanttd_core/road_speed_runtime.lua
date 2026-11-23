@@ -36,7 +36,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     local W={}
     local function at(x,y) return x..":"..y end
     local function bin(x,y) return at(floor(x/16),floor(y/16)) end
-    function W.put(record,f,opposite)
+    function W.put(record,f,opposite,z)
       opposite=not not opposite
       if opposite~=not not record.opposite_lane then exposed=exposed+(opposite and 1 or -1) end
       record.opposite_lane=opposite
@@ -57,7 +57,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         by_tile[tile][record.id]=record
       end
       if bay_tile(s,tile) and (not bay[tile] or record.id<bay[tile]) then bay[tile]=record.id end
-      record.x,record.y,record.z,record.direction,record.tile=f[1],f[2],road_z(s,f),f[3],tile
+      record.x,record.y,record.z,record.direction,record.tile=f[1],f[2],z or road_z(s,f),f[3],tile
     end
     function W.bay(id) return bay[id] end
     function W.exposed() return exposed>0 end
@@ -173,8 +173,9 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
           v.road_bay_guard_waits=(v.road_bay_guard_waits or 0)+1
           return false
         end
-        actual_z=road_z(s,b)
-        if not Junction.check(s,W,record,old,b,actual_z) then
+        local clear
+        clear,actual_z=Junction.check(s,W,record,old,b,nil,road_z)
+        if not clear then
           state.waiting,state.speed="junction",0
           v.status="Waiting for junction clearance"
           v.road_junction_waits=(v.road_junction_waits or 0)+1
@@ -209,7 +210,10 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         local permitted=math.min(limit[v.engine],b[11] or math.huge)
         if b[11] then state.speed=math.min(state.speed,permitted) end
         if state.heading~=b[3] then state.heading=b[3];Speed.turn(state) end
-        if old[1]~=b[1] or old[2]~=b[2] then Speed.grade(state,record.z,actual_z or road_z(s,b),permitted) end
+        if old[1]~=b[1] or old[2]~=b[2] then
+          actual_z=actual_z or road_z(s,b)
+          Speed.grade(state,record.z,actual_z,permitted)
+        end
         state.index=state.index+1
         old=b
         if Pass then Pass.accept(state,b,nominal) end
@@ -218,7 +222,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
           state.speed=0
           return false -- stop this movement budget until the stock depot-exit tick
         end
-        W.put(record,b,state.lane_pose~=nil)
+        W.put(record,b,state.lane_pose~=nil,actual_z)
         if state.index==#frames then state.speed=0 end
         return true
       end

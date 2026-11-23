@@ -21,12 +21,13 @@ return function(Sim,Presentation)
   local function board(s)
     local prev=cache[s]
     if prev and prev.topology==s.topology then return prev end
-    local junctions,I={},{}
+    local junctions,I,near={},{},{}
     for id in ipairs(s.tiles) do
       if is_junction(s,id) then junctions[id]=true end
     end
     for id in ipairs(s.tiles) do if junctions[id] and not I[id] then
       local cluster={tile={},scan={}}
+      local marked={}
       local queue={id}
       I[id]=cluster
       local q=1
@@ -36,6 +37,15 @@ return function(Sim,Presentation)
         cluster.tile[#cluster.tile+1]={x=x*2+.5,z=z*2+.5}
         for nx=x-1,x+1 do for nz=z-1,z+1 do
           local n=Sim.id(nx,nz);if n then cluster.scan[n]=true end
+          -- The candidate center can lie just beyond the map edge;
+          -- keep those keys too, unlike the in-map occupancy scan.
+          local xrow=near[nx]
+          if not xrow then xrow={};near[nx]=xrow end
+          local groups=xrow[nz]
+          if not groups then groups={};xrow[nz]=groups end
+          if not marked[groups] then
+            marked[groups]=true;groups[#groups+1]=cluster
+          end
         end end
         for d=1,4 do
           local n=Sim.adjacent(at,d)
@@ -45,7 +55,7 @@ return function(Sim,Presentation)
         end
       end
     end end
-    prev={topology=s.topology,junctions=I,aprons={}}
+    prev={topology=s.topology,junctions=I,near=near,aprons={}}
     cache[s]=prev
     return prev
   end
@@ -128,32 +138,33 @@ return function(Sim,Presentation)
     return not status or not (status.entrance or status.first and status.second or
       inbound_in_apron(s,W,place,branch.tile,v.id))
   end
-  function G.check(s,W,v,prev,next_pose,z)
-    if not s.road_junction_clearance or prev[12] or next_pose[12] then return true end
-    local groups=board(s).junctions
-    if not next(groups) then return true end
+  function G.check(s,W,v,prev,next_pose,z,road_z)
+    if not s.road_junction_clearance or prev[12] or next_pose[12] then return true,z end
+    local near=board(s).near
+    -- Screen out empty regions before doing a swept-envelope/height probe.
     local x,y=center(next_pose)
-    local tilex,tilez=floor((x+.5)/2),floor((y+.5)/2)
+    local row=near[floor((x+.5)/2)]
+    local candidates=row and row[floor((y+.5)/2)]
+    if not candidates then return true,z end
     local oldx,oldz=center(prev)
-    local tested={}
-    for nx=tilex-1,tilex+1 do for nz=tilez-1,tilez+1 do
-      local id=Sim.id(nx,nz)
-      local g=id and groups[id]
-      -- A vehicle already inside the cluster must be able to clear.
-      -- Separate clusters cannot both touch a model of this radius.
-      if g and not tested[g] and touches_cluster(x,y,g) and not touches_cluster(oldx,oldz,g) then
-        tested[g]=true
+    for _,g in ipairs(candidates) do
+      -- Same groups as the former 3x3 junction lookup, indexed once for
+      -- this topology. Already-admitted vehicles may clear the cluster.
+      if touches_cluster(x,y,g) and not touches_cluster(oldx,oldz,g) then
         for scan in pairs(g.scan) do
           for _,other in ipairs(W.vehicles_at(scan)) do
-            if other.id~=v.id and not other.frame[12] and abs(other.z-z)<6 then
-              local a,b=center(other.frame)
-              if touches_cluster(a,b,g) then return false end
+            if other.id~=v.id and not other.frame[12] then
+              z=z or road_z(s,next_pose)
+              if abs(other.z-z)<6 then
+                local a,b=center(other.frame)
+                if touches_cluster(a,b,g) then return false,z end
+              end
             end
           end
         end
       end
-    end end
-    return true
+    end
+    return true,z
   end
   return G
 end

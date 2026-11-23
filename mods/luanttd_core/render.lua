@@ -1188,32 +1188,48 @@ return function(api)
   end
   local function paint_region(vm,lo,hi,minp,maxp,mapgen)
     local xmax,zmax=Sim.W*2+1,Sim.H*2+1
-    local a=VoxelArea:new({MinEdge=lo,MaxEdge=hi})
+    local area=VoxelArea:new({MinEdge=lo,MaxEdge=hi})
     local d=vm:get_data()
     local param2=vm:get_param2_data()
+    local low,high=math.max(minp.y,-1),math.min(maxp.y,top_bound)
+    local tops,air=S.paint_tops,content("air")
+    local changed,changed_param2=false,false
+    local function put(i,node,facedir)
+      if d[i]~=node then d[i]=node;changed=true end
+      if param2[i]~=facedir then param2[i]=facedir;changed_param2=true end
+    end
     for z=math.max(minp.z,2-backdrop),math.min(maxp.z,zmax+backdrop) do
       for x=math.max(minp.x,2-backdrop),math.min(maxp.x,xmax+backdrop) do
         if x>=2 and x<=xmax and z>=2 and z<=zmax then
           local id=Sim.id(math.floor(x/2),math.floor(z/2))
           if S.tiles[id] then
-            for y=math.max(minp.y,-1),math.min(maxp.y,top_bound) do
-              local i=a:index(x,y,z)
-              local name,facedir=tile_node(id,x,y,z)
-              d[i],param2[i]=content(name),facedir or 0
+            local roof=tops and math.min(high,tops[id] or high) or high
+            local index=area:index(x,low,z)
+            local stride=area.ystride
+            for y=low,roof do
+              local node,facedir=tile_node(id,x,y,z)
+              put(index,content(node),facedir or 0)
+              index=index+stride
+            end
+            -- Still erase obsolete upper nodes when terrain or an
+            -- elevated bridge is lowered. Only skip the scene lookup.
+            for _=math.max(low,roof+1),high do
+              put(index,air,0)
+              index=index+stride
             end
           end
         elseif minp.y<=0 and maxp.y>=0 then
           -- The water backdrop is only scenery: no tile, no route, no target.
-          local i=a:index(x,0,z)
+          local i=area:index(x,0,z)
           local sea=content(ocean(x,z))
-          if d[i]~=sea then d[i],param2[i]=sea,0 end
+          if d[i]~=sea then put(i,sea,0) end
         end
       end
     end
-    vm:set_data(d)
-    vm:set_param2_data(param2)
+    if changed then vm:set_data(d) end
+    if changed_param2 then vm:set_param2_data(param2) end
     if mapgen then vm:calc_lighting() end
-    vm:write_to_map()
+    if mapgen or changed or changed_param2 then vm:write_to_map() end
   end
   core.register_on_generated(function(minp,maxp)
     if not within_world(minp,maxp) then return end

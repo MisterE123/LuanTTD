@@ -32,6 +32,36 @@ s.road_junction_clearance=true
 holder.frame=model(15*16+21,12*16+5,5,1)
 assert(G.check(s,W,{id=2},prev,enter,0),"release waited after the visible tail was clear")
 
+-- Only consult altitude after a model enters one of the same possible
+-- clusters and finds a plausible occupant. Altitude 0 is a valid result.
+holder.frame=model(15*16+8,12*16+5,5,1)
+local reads=0
+local function z_at(state,pose)
+  assert(state==s and pose==enter)
+  reads=reads+1;return 0
+end
+local far=model(6*16+8,8*16+5,5,1)
+assert(G.check(s,W,{id=2},prev,far,nil,z_at) and reads==0)
+assert(G.check(s,W,{id=1},prev,enter,nil,z_at) and reads==0)
+local clear,height=G.check(s,W,{id=2},prev,enter,nil,z_at)
+assert(not clear and height==0 and reads==1)
+local old_bits=s.tiles[joint].road_bits
+s.tiles[joint].road_bits=2;s.topology=s.topology+1
+assert(G.check(s,W,{id=2},prev,enter,nil,z_at) and reads==1,"removed junction retained a stale halo")
+s.tiles[joint].road_bits=old_bits;s.topology=s.topology+1
+assert(not G.check(s,W,{id=2},prev,enter,nil,z_at) and reads==2,"rebuilt junction missed its halo")
+
+-- Preserve candidate *centers* just off-map; occupancy scans themselves
+-- still query only playable tiles.
+local edge=id(1,5)
+s.tiles[edge]={build="road",road_bits=7}
+s.topology=s.topology+1
+local across_edge=model(15,5*16+8,5,1)
+local past_edge=model(11,5*16+8,5,1)
+local edge_holder={id=1,frame=model(1*16+8,5*16+8,5,1),z=0}
+local edge_world={vehicles_at=function(tile) return tile==edge and {edge_holder} or {} end}
+assert(not G.check(s,edge_world,{id=2},past_edge,across_edge,0),"missed junction just inside the map edge")
+
 local function copy(t)
   if type(t)~="table" then return t end
   local o={}
