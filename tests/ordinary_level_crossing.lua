@@ -361,3 +361,22 @@ assert(s.tiles[stopped].rail_depot_dir==Track.SW and s.tiles[adjacent].rail_trac
   s.tiles[adjacent].rail_tracks)
 assert(before-money.cash==receipt.price+200 and not s.tiles[at(42,20)].rail_tracks)
 print("PASS OpenTTD depot auto-attachment adds and charges only valid existing-mouth connections")
+
+-- A current world has a dispatch journal as soon as a signal or train
+-- exists, even if unrelated. AutoRoad aiming at a corner must not index
+-- reservation bits with the Boolean result of an axis lookup.
+s.stock_rail_dispatch={runs={},life={bits={}},signals={records={}}}
+p.get_player_control=function()return {} end
+for i,bits in ipairs({4,8,16,32,3,6,24,63}) do
+  local tile=at(40+i,25)
+  s.tiles[tile]={owner=owner,build="stock_rail",terrain="grass",h=0,rail_tracks=bits}
+  local quote,reason=Sim.crossing_construction_quote(s,owner,tile,{kind="road",pieces=10})
+  assert(not quote and reason=="FALLBACK_CLEAR")
+  local ui=U
+  ui.select_tool(p,"road")
+  local x,z=Sim.xy(tile)
+  local _,valid,desc=ui.preview(p,tile,{x=2*x+.25,y=.5,z=2*z+.68})
+  assert(not valid and desc:find("right angles",1,true))
+  assert(s.tiles[tile].rail_tracks==bits)
+end
+print("PASS AutoRoad preview rejects live-world curves and junctions without touching reservation bits")

@@ -89,12 +89,14 @@ return function(Sim,Terrain,Crossing,Track)
       if (r.disallowed or 0)~=0 then return nil,"CROSSING_ON_ONEWAY_ROAD" end
       base_record.kind="rail"
       base_record.trackbits,base_record.railtype=t.rail_tracks,0
-      local axis=t.rail_tracks==1 and 0 or t.rail_tracks==2 and 1
-      if axis~=nil then
-        local b=reservation(s,id,axis,ctx,false)
-        if b==nil then return nil,"RESERVATION_UNKNOWN" end
-        base_record.reserved_bits=b and 2^axis or 0
-      end
+      local axis=t.rail_tracks==1 and 0 or t.rail_tracks==2 and 1 or nil
+      -- Only one straight axis can cross a road. In Lua false is not
+      -- nil; passing it into the current reservation bits caused a crash
+      -- as soon as dispatch state existed elsewhere in a fresh world.
+      if axis==nil then return nil,"FALLBACK_CLEAR" end
+      local b=reservation(s,id,axis,ctx,false)
+      if b==nil then return nil,"RESERVATION_UNKNOWN" end
+      base_record.reserved_bits=b and 2^axis or 0
     else return nil,"NEEDS_PLAIN_ROAD_OR_RAIL" end
     local out,err=Crossing.quote(base_record,req,{cash=company.cash})
     if not out then return nil,err end
