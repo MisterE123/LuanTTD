@@ -32,6 +32,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
         assert(Run.mount_owned_model(p.engine))
         assert(Run.mount_advanced_wagon(p.passenger));assert(Run.mount_advanced_wagon(p.mail))
         for _,id in ipairs(p.stocks) do mounted[id]=true end
+        if ready[p.oil] then mounted[p.oil]=true;assert(Run.mount_advanced_wagon(p.oil)) end
       end
     end
     if not next(mounted) then return false end
@@ -216,7 +217,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     end
     local unit,why=Fleet.prepare_dispatch(s,owner,id,mounted_hooks(hooks))
     if not unit then return false,why end
-    if #unit.stock_ids~=2 or not O.freight_engine(unit.stock_ids[1]) or unit.stock_ids[2]~=30 then
+    if not Run.owned_oil_consist(unit) then
       return false,"Choose a modeled locomotive and one Oil Tanker."
     end
     local valid,reason=validate_oil(s,owner,wells,refinery)

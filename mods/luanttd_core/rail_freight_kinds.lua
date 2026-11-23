@@ -3,7 +3,7 @@
 local M={}
 M.all={"coal","oil","goods","iron_ore","steel","valuables","livestock","grain","wood"}
 M.industry={"oil","goods","iron_ore","steel","valuables","livestock","grain","wood"}
-M.wagons={[29]="coal",[30]="oil",[31]="livestock",[32]="goods",[33]="grain",[34]="wood",[35]="iron_ore",[36]="steel",[37]="valuables"}
+M.wagons={[29]="coal",[30]="oil",[31]="livestock",[32]="goods",[33]="grain",[34]="wood",[35]="iron_ore",[36]="steel",[37]="valuables",[60]="oil",[92]="oil"}
 M.profile_order={"iron_ore","steel","valuables","livestock","grain","wood"}
 M.profiles={
   iron_ore={wagon=35,max_wagons=2,stem="iron_ore_hopper",name="Iron Ore",source="Iron Ore Mine",sink="Steel Mill",

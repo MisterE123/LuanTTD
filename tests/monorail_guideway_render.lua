@@ -3,7 +3,7 @@
 local mod=core.get_modpath(core.get_current_modname())
 local function m(name) return dofile(mod.."/"..name..".lua") end
 local marker=assert(io.open(mod.."/qa-variant.txt"))
-local family=marker:read("*l");marker:close()
+local family,cargo=marker:read("*l","*l");marker:close()
 local gauge=family=="maglev" and 3 or 2
 local profile=assert(m("rail_guideway_profiles").by_gauge[gauge])
 local stem="bl_guideway_"..family
@@ -53,7 +53,8 @@ local function entity(name,assets)
     textures={assets[2]},shaded=true,backface_culling=true,visual_size={x=1,y=1,z=1},
   }})
 end
-local carriages={profile.engine_visual,profile.passenger_visual,profile.mail_visual}
+local carriages=cargo=="oil" and {profile.engine_visual,profile.oil_visual} or
+  {profile.engine_visual,profile.passenger_visual,profile.mail_visual}
 for _,name in ipairs(carriages) do
   entity(name.."_body",{"bl_rail_"..name.."_body.obj","bl_rail_"..name..".png"})
 end
@@ -118,7 +119,7 @@ local function diagonal_case()
     route[#route+1]={tile=one,td=2};route[#route+1]={tile=two,td=3}
   end
   local frame={parts={}}
-  for i=1,3 do
+  for i=1,#carriages do
     -- Straight 45-degree centerline: one stock model length per body.
     local f=.78-(i-1)/math.sqrt(2)
     local j=10

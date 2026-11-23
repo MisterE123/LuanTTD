@@ -67,6 +67,8 @@ function M.wagon(train,Sim,s)
   local id=train.stock_wagon
   if Roster.passenger_dmu(train.stock_engine) and not id then return stock_kind[train.stock_engine] end
   if id==28 then return "mail_van" end
+  local profile=Guide.by_stock[id]
+  if profile and id==profile.oil then return profile.oil_visual end
   local cargo=Freight.wagons[id]
   if cargo=="oil" then return "oil_tanker" end
   if cargo=="goods" then return "goods_van" end
@@ -143,6 +145,9 @@ function M.scan(path,electric,span)
     -- don't expose modes with missing asset or UI dependencies.
     if ready and (g==2 or complete and exists("textures/bl_dispatch_gauge_maglev.png")) then
       for _,id in ipairs(p.stocks) do art.advanced[id]=true end
+      if has_model(p.oil_visual) and exists("models/"..models[p.oil_visual].mesh:gsub("%.obj$","_body.obj")) then
+        art.advanced[p.oil]=true
+      end
     end
   end
   art.advanced_span=art.guideway_spans[2] or false

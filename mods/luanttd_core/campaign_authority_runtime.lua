@@ -156,6 +156,9 @@ return function(Sim,mod,s,cap)
             local part=bodies[body_index-(train.express_mail and 0 or 1)]
             body.stock_id=part and part.stock or train.stock_engine
             body.body_id=part and part.body_id or train.town_engine_body_id or train.freight_engine_body_id
+          elseif train.freight and train.freight_wagon_body_id then
+            body.stock_id=body_index==1 and train.stock_engine or train.stock_wagon
+            body.body_id=body_index==1 and train.freight_engine_body_id or train.freight_wagon_body_id
           end
           if exhaust.profiles[kind] then
             local index=p.wormhole and s.rail_tunnel_below and s.rail_tunnel_below[p.id]

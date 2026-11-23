@@ -50,6 +50,7 @@ jobs:
           python3 tests/monorail_span_art.py
           python3 tests/monorail_span_art.py maglev
           python3 tests/stock_lev1_art.py
+          python3 tests/guideway_tanker_art.py
           lua5.1 tests/rail_exhaust.lua
           lua5.1 tests/terrain_tile_lookup.lua
           lua5.1 tests/tunnel_bore.lua
@@ -149,6 +150,8 @@ jobs:
           BAYLINE_MIXED_FORM=monorail-spans bash tests/stock_mixed_town_rail_live_native.sh
           BAYLINE_MIXED_FORM=maglev bash tests/stock_mixed_town_rail_live_native.sh
           BAYLINE_MIXED_FORM=maglev-spans bash tests/stock_mixed_town_rail_live_native.sh
+          BAYLINE_OIL_GAUGE=2 bash tests/guideway_oil_worker_native.sh
+          BAYLINE_OIL_GAUGE=3 bash tests/guideway_oil_worker_native.sh
           bash tests/stock_aircraft_mail_live_native.sh
           LUANTTD_QA_PAID_AIRFRAME=218 bash tests/stock_aircraft_mail_live_native.sh
           bash tests/stock_rail_multi_ore_live_native.sh

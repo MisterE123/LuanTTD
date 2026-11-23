@@ -30,11 +30,19 @@ cleanup() {
 }
 trap cleanup EXIT
 mod="$out/games/rail_art/mods/luanttd_core"
+cargo=${BAYLINE_GUIDEWAY_CARGO:-town}
 mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD guideway art fixture\n' > "$out/games/rail_art/game.conf"
 printf 'name = luanttd_core\n' > "$mod/mod.conf"
 cp tests/monorail_guideway_render.lua "$mod/init.lua"
-cp "$one"/mixed-pose-{loading,reversed}.json "$mod/"
+if [[ "$cargo" == oil ]]; then
+  models+=("${family}_oil_tanker_body")
+  textures+=("${family}_oil_tanker")
+  cp "$one/guideway-oil-loaded-frame.json" "$mod/mixed-pose-loading.json"
+  cp "$one/guideway-oil-loaded-frame.json" "$mod/mixed-pose-reversed.json"
+else
+  cp "$one"/mixed-pose-{loading,reversed}.json "$mod/"
+fi
 cp "$repo"/mods/luanttd_core/{rail_diagonal,rail_guideway_bogies,rail_guideway_drawbar,rail_guideway_profiles,rail_pose,campaign_projected_actors,road_motion,road_stock_media,airport_rotor_view,road_fault_view}.lua "$mod/"
 cp "$repo"/mods/luanttd_core/openttd/rail_track.lua "$mod/"
 mkdir -p "$mod/openttd"
@@ -45,7 +53,7 @@ cp "$repo"/mods/luanttd_core/models/bl_guideway_"${family}"_{eased,flat,platform
 for m in "${models[@]}"; do cp "$repo/mods/luanttd_core/models/bl_rail_$m.obj" "$mod/models/"; done
 for t in "${textures[@]}"; do cp "$repo/mods/luanttd_core/textures/bl_rail_$t.png" "$mod/textures/"; done
 cp "$repo"/mods/luanttd_core/textures/{bl_grass1,"bl_guideway_${family}_atlas","bl_guideway_${family}_facility_atlas"}.png "$mod/textures/"
-printf '%s\n' "$family" > "$mod/qa-variant.txt"
+printf '%s\n%s\n' "$family" "$cargo" > "$mod/qa-variant.txt"
 printf 'gameid = rail_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

@@ -12,16 +12,24 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
     R.wagon=stock
   end
   local cargo_name=R.wagon.cargo
+  local accepted_wagons={[R.wagon.stock_id]=R.wagon}
+  for _,id in ipairs(profile.wagon_variants or {}) do
+    local variant=assert(Roster.entry(id))
+    assert(variant.kind=="wagon" and variant.cargo==cargo_name and not accepted_wagons[id])
+    accepted_wagons[id]=variant
+  end
+  function R.wagon_spec(id) return accepted_wagons[id] end
   local spec=assert(Rules.cargo[cargo_name])
   local sequence,accepted,route_tag=cargo_name.."_packet_sequence",cargo_name.."_accepted","rail_"..cargo_name
   local function uint(n) return type(n)=="number" and n>=0 and n%1==0 end
-  function R.mass(units,freight)
+  function R.mass(units,freight,id)
     freight=freight or 1
-    assert(uint(units) and units<=R.wagon.capacity and uint(freight) and freight>=1 and freight<=255)
+    local wagon=id and assert(R.wagon_spec(id)) or R.wagon
+    assert(uint(units) and units<=wagon.capacity and uint(freight) and freight>=1 and freight<=255)
     -- CargoSpec::WeightOfNUnitsInTrain applies the factor before integer
     -- weight conversion. Stock cargo provides its own sixteenths-of-ton weight.
     local cargo=math.floor(units*freight*spec.weight_16/16)
-    return R.wagon.tare+cargo,cargo
+    return wagon.tare+cargo,cargo
   end
   function R.new() return {version=R.version,stations={}} end
   R.index=RailStation.index
@@ -142,7 +150,7 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
     local function ops(tick)
       local tokens,moved=0,false
       local result={
-        slice=R.wagon.load_amount,gradual=s.stock_gradual_loading~=false,feeder_percent=s.stock_feeder_percent,
+        slice=(state.vehicle and assert(R.wagon_spec(state.vehicle.wagon)) or R.wagon).load_amount,gradual=s.stock_gradual_loading~=false,feeder_percent=s.stock_feeder_percent,
         consist=compartments,
         queue=function(st) return st.stock[cargo_name] end,
         accepts=function(st) return st.last_acceptance end,
@@ -155,7 +163,7 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
         end,
         loaded=function(st,v,n)
           Catchment.loaded(st,"rail",n)
-          event("board",st,v,tick,{units=n,weight=R.mass(v.units,s.stock_freight_trains)})
+          event("board",st,v,tick,{units=n,weight=R.mass(v.units,s.stock_freight_trains,v.stock or v.wagon)})
         end,
         unloaded=function(st) Station.unloaded(st) end,
         deliver=function(st,v,packet)
@@ -199,7 +207,8 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
     function B.vehicle(def)
       local parts=def.parts
       local count=parts and #parts or 1
-      if state.vehicle or def.wagon~=R.wagon.stock_id or def.length~=(count+1)*R.wagon.length
+      local wagon=R.wagon_spec(def.wagon)
+      if state.vehicle or not wagon or def.length~=(count+1)*wagon.length
           or parts and (count<2 or count>(profile.max_wagons or 1))
           or not uint(def.id) or not def.owner or not uint(def.built) or not uint(def.speed) then
         return nil,profile.single_error
@@ -210,13 +219,13 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
         local seen={}
         v.carrying_parts={}
         for i,part in ipairs(parts) do
-          if part.stock~=R.wagon.stock_id or part.index~=i+1 or not uint(part.body_id) or seen[part.body_id] then
+          if part.stock~=wagon.stock_id or part.index~=i+1 or not uint(part.body_id) or seen[part.body_id] then
             return nil,"INVALID_PHYSICAL_FREIGHT_WAGON"
           end
           seen[part.body_id]=true
           v.carrying_parts[i]={id=v.id,owner=v.owner,built=v.built,speed=v.speed,mode="rail",cargo=cargo_name,
-            body_id=part.body_id,part=part.index,stock=part.stock,capacity=R.wagon.capacity,
-            slice=R.wagon.load_amount,aging=R.wagon.cargo_age_ticks,cargo_age_counter=1,batches={},units=0}
+            body_id=part.body_id,part=part.index,stock=part.stock,capacity=wagon.capacity,
+            slice=wagon.load_amount,aging=wagon.cargo_age_ticks,cargo_age_counter=1,batches={},units=0}
         end
       end
       state.vehicle=v
@@ -259,7 +268,7 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
       local flags={full=st.role=="load",no_load=st.role=="unload"}
       local o=ops(tick)
       local l=v.carrying_parts and compartments.begin(st,v,tiles,flags,o,visit) or
-        Load.begin(st,v,R.wagon.capacity,flags,o)
+        Load.begin(st,v,assert(R.wagon_spec(v.wagon)).capacity,flags,o)
       l.arrived_tick,l.platform_tiles=tick,n
       event("arrive",st,v,tick,{head=head,platform_tiles=n})
       return l
@@ -317,8 +326,9 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
       if state.aged_tick==tick then return false end
       local v=state.vehicle
       if v then
-        if v.carrying_parts then compartments.age(v,R.wagon.cargo_age_ticks)
-        else Load.age_vehicle(v,1,R.wagon.cargo_age_ticks) end
+        local aging=assert(R.wagon_spec(v.wagon)).cargo_age_ticks
+        if v.carrying_parts then compartments.age(v,aging)
+        else Load.age_vehicle(v,1,aging) end
       end
       if ctx.rating then
         for _,st in ipairs(views) do

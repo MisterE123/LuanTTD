@@ -241,16 +241,17 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     local state=s[storage]
     local v=state and state.vehicle
     local l=v and v.load_state
+    local stock=assert(Service.wagon_spec(r.stock_wagon))
     local wagons
     if r.freight_parts then
       wagons={}
       for i,p in ipairs(r.freight_parts) do
         local vpart=v and v.carrying_parts[i]
         wagons[i]={index=p.index,body_id=p.body_id,stock_id=p.stock,tile=vpart and vpart.cargo_tile,
-          capacity=Service.wagon.capacity,onboard=vpart and vpart.units or 0}
+          capacity=stock.capacity,onboard=vpart and vpart.units or 0}
       end
     end
-    return {cargo=cargo,owner=r.owner,capacity=Service.wagon.capacity*(wagons and #wagons or 1),
+    return {cargo=cargo,owner=r.owner,capacity=stock.capacity*(wagons and #wagons or 1),
       wagons=wagons,onboard=v and v.units or 0,
       boarded=v and v.boarded or 0,delivered=v and v.delivered or 0,fare=v and v.revenue or 0,
       last_fare=v and v.last_fare,phase=r.phase,loading=l~=nil,finished=not not r.freight.complete,

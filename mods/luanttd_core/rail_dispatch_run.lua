@@ -46,7 +46,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local p=type(ids)=="table" and Guide.by_engine[ids[1]]
     if not p or not model_ready[p.engine] or #ids<2 or #ids>4 then return false end
     for i=2,#ids do
-      if Guide.by_stock[ids[i]]~=p or not advanced_wagons[ids[i]] then return false end
+      if (ids[i]~=p.passenger and ids[i]~=p.mail) or not advanced_wagons[ids[i]] then return false end
     end
     return p
   end
@@ -598,6 +598,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         consist.last_can_lead=true;run.dual_head=true
       end
       local engine_type=stats.parts[1].railtype
+      run.advanced_gauge=Guide.by_engine[run.stock_engine] and engine_type or nil
       if engine_type~=0 then
         run.engine_railtype,run.traction_railtypes=engine_type,stats.compatible
         if not run.traction_railtypes[dt.railtype] then return false,"The depot does not supply power to this locomotive." end
@@ -606,9 +607,12 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       run.max_track_speed,run.front_length,run.total_length=stats.max_track_speed,stats.front_length,stats.total_length
       run.acceleration,run.consist_mass,run.power=stats.acceleration,stats.weight,stats.power
       run.paid_build_year=owned.parts[1].build_year
+      if freight then
+        run.freight_engine_body_id=assert(owned.parts[1].body_id)
+        if #owned.stock_ids==2 then run.freight_wagon_body_id=assert(owned.parts[2].body_id) end
+      end
       if freight and #owned.stock_ids>2 then
         run.body_lengths,run.freight_parts=stats.lengths,{}
-        run.freight_engine_body_id=assert(owned.parts[1].body_id)
         for i=2,#owned.stock_ids do
           local p=owned.parts[i]
           assert(p.stock_id==owned.stock_ids[i])
@@ -626,7 +630,6 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         end
       elseif not freight and (Roster.mixed_town_consist(owned.stock_ids) or stock_guideway_service(owned.stock_ids)) then
         run.body_lengths,run.town_parts=stats.lengths,{}
-        run.advanced_gauge=engine_type>=2 and engine_type or nil
         run.town_engine_body_id=assert(owned.parts[1].body_id)
         for i=2,#owned.stock_ids do
           local p=owned.parts[i]
@@ -990,13 +993,18 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return start(s,owner,owned.depot,mine,nil,Block and Spans and s.rail_span_enabled or false,owned,power)
   end
 
+  function R.owned_oil_consist(owned)
+    local ids=owned and owned.stock_ids
+    return not not (ids and #ids==2 and Roster.freight_engine(ids[1]) and R.owned_passenger_engine(ids[1])
+      and (ids[2]==30 and not Guide.by_engine[ids[1]] or Guide.oil(ids[1],ids[2]) and advanced_wagons[ids[2]]))
+  end
+
   function R.start_owned_oil(s,owner,owned,wells,refinery)
     if not (Reverse and Roster and s.rail_oil_service and s.road_stock_house_supply and s.corner_grid) then
       return false,"Enable stock Rail Oil service in the Oil world first."
     end
     if not wells or not refinery or wells==refinery or not owned or owned.owner~=owner or
-        not owned.stock_ids or #owned.stock_ids~=2 or not Roster.freight_engine(owned.stock_ids[1]) or
-        not R.owned_passenger_engine(owned.stock_ids[1]) or owned.stock_ids[2]~=30 then
+        not R.owned_oil_consist(owned) then
       return false,"Use a modeled owned locomotive and one Oil Tanker wagon."
     end
     return start(s,owner,owned.depot,wells,nil,Block and Spans and s.rail_span_enabled or false,owned,refinery,nil,nil,"oil")

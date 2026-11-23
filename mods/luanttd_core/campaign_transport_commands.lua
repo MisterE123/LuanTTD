@@ -251,6 +251,12 @@ return function(Sim,R)
           add(title.." · Coach and Mail",{mode=mode,operation="buy",depot=key,parts=profile.stocks},
             Help.describe("rail","mixed",combo,{speed=engine.speed,capacity=coach.capacity,mail_capacity=mail.capacity}))
         end
+        local oil=catalogue[profile.oil]
+        if engine and oil and s.rail_oil_service then
+          local title=engine.name:gsub("^'(.*)'$","%1")
+          add(title.." · Oil Tanker",{mode=mode,operation="buy",depot=key,parts={engine.stock_id,oil.stock_id}},
+            Help.describe("rail","oil",oil.name,{speed=engine.speed,capacity=oil.capacity}))
+        end
       end
       local depot_cargos={"mail"}
       for _,cargo in ipairs(Freight.profile_order) do depot_cargos[#depot_cargos+1]=cargo end
@@ -295,7 +301,7 @@ return function(Sim,R)
         local engine=catalogue[unit.stock_ids[1]] or {}
         local profile=Freight.profiles[cargo]
         local unsupported=profile and R.rail.owned.profile_consist and not R.rail.owned.profile_consist(s,unit,cargo)
-        local car=profile and catalogue[profile.wagon]
+        local car=cargo and catalogue[unit.stock_ids[2]]
         local wagon_count=car and not unsupported and #unit.stock_ids-1 or nil
         local dmu=Roster.passenger_dmu(unit.stock_ids[1])
         local part=dmu and "dmu" or #unit.stock_ids==1 and "engine" or nil
@@ -306,7 +312,7 @@ return function(Sim,R)
           order_copy=unit.status=="depot" and (not cargo and R.rail.owned.passenger_consist(unit) or cargo=="mixed" or cargo=="mail") or nil,
           copied=unit.order_draft and #unit.order_draft.orders,
           draft_revision=unit.order_draft and "rail-parked:"..unit.order_draft.revision,
-          help=Help.describe("rail",mixed and "mixed" or Help.rail_cargo(unit.stock_ids[2]),engine.name,
+          help=Help.describe("rail",cargo or Help.rail_cargo(unit.stock_ids[2]),engine.name,
             {speed=engine.speed,capacity=wagon_count and car.capacity*wagon_count or seats,
               mail_capacity=unit.stock_ids[1]==22 and #unit.stock_ids==2 and unit.stock_ids[2]==27 and s.rail_mail_service and 8 or nil},part)}
       end
