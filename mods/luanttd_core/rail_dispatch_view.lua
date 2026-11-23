@@ -100,7 +100,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
           wagon="oil_tanker"
         end
         local parts=train.consist.parts
-        local push_pull=train.stock_engine==11 and #parts>1
+        local push_pull=(train.dual_head or train.stock_engine==11) and #parts>1
         local samples={}
         for i,_ in ipairs(parts) do
           local id,td,progress,reversed,wormhole

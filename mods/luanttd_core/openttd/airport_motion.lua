@@ -80,8 +80,9 @@ return function(FTA)
   -- Sounds, breakdown dispatch, station removal, and crashes are external.
   function M.move(a,v,h)
     h=h or {}
+    local field_layout=h.layout and h.layout(a) or FTA
     if v.helicopter then return nil,"fixed_wing_only" end
-    local x,z,f,exit=FTA.point(v.pos,a.rotation,a.width,a.height)
+    local x,z,f,exit=field_layout.point(v.pos,a.rotation,a.width,a.height)
     if not x then return nil,"invalid_position" end
     x,z=x+a.x,z+a.z
     if flag(f,F.HELI_RAISE) or flag(f,F.HELI_LOWER) then return nil,"heli_point" end
@@ -167,7 +168,7 @@ return function(FTA)
           before={loop=_,airport=a.id,flags=a.flags,pos=v.pos,previous=v.previous_pos,state=v.state,
             x=v.x,z=v.z,y=v.y,speed=v.speed,subspeed=v.subspeed}
         end
-        local event,next=FTA.arrive(a,v,h)
+        local event,next=(h.layout and h.layout(a) or FTA).arrive(a,v,h)
         if not event then return a,events,next end
         if before then
           before.kind,before.after_flags,before.after_pos,before.after_state=event,a.flags,v.pos,v.state

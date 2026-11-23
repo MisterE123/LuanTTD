@@ -34,7 +34,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   end
 
   function M.supported_vehicle(v)
-    return v and v.cargo=="mail" and v.engine=="mail_van"
+    return v and v.cargo=="mail" and (v.engine=="mail_van" or Sim.road_freight_cargo and Sim.road_freight_cargo(v.engine)=="mail")
   end
 
   -- The current game gives a truck stop one tile. Modified catchment, the
@@ -99,7 +99,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     if not M.truck_stop(st) or not M.supported_vehicle(v) then return end
     local build_year=Sim.date(s,v.bought or s.day)
     local running_year=Sim.date(s)
-    Kernel.observe_loading(goods(st),floor(M.engine.max_speed/2),running_year-build_year,capacity_left)
+    Kernel.observe_loading(goods(st),floor((Sim.vehicles and Sim.vehicles[v.engine] and Sim.vehicles[v.engine].display_speed or M.engine.max_speed/2)),running_year-build_year,capacity_left)
   end
 
   -- Call at the existing station's stock rating event (every 185 ticks),
@@ -136,17 +136,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   -- The shared TownGenerateCargo output is not aggregated by town/center.
   -- Feed each finished house emission, in stock tick order. x,z are
   -- zero-based coordinates from H.advance_houses; callbacks do no RNG.
-  function M.from_house(s,amount,x,z,record,stops)
-    if amount<=0 then return 0 end
-    assert(record and record.town,"Mail origin requires the emitting house's town")
-    local list={}
-    for _,st in ipairs(stops or M.stops(s)) do
-      local a,b=Sim.xy(st.tile)
-      if H.single_tile_catchment(a-x-1,b-z-1,radius) then
-        local rating=M.offer(st)
-        if rating then list[#list+1]={st=st,rating=rating} end
-      end
-    end
+  local function allocate(amount,record,list)
     if #list==0 then return 0 end
     Packets.allocate(amount,list)
     local moved=0
@@ -160,6 +150,61 @@ return function(Sim,H,Packets,Income,Kernel,Station)
       end
     end
     return moved
+  end
+  function M.from_house(s,amount,x,z,record,stops)
+    if amount<=0 then return 0 end
+    assert(record and record.town,"Mail origin requires the emitting house's town")
+    local list={}
+    for _,st in ipairs(stops or M.stops(s)) do
+      local a,b=Sim.xy(st.tile)
+      if H.single_tile_catchment(a-x-1,b-z-1,radius) then
+        local rating=M.offer(st)
+        if rating then list[#list+1]={st=st,rating=rating} end
+      end
+    end
+    return allocate(amount,record,list)
+  end
+
+  -- The stock StationFinder sees one sorted station set for one house
+  -- emission. Do not dispatch beside from_house: the two eligible modes
+  -- must compete in this single MoveGoodsToStation call.
+  function M.shared_allocator(Catchment,width,depth,physical,options)
+    local stations,by_id={},{}
+    for _,st in ipairs(physical) do
+      assert(not by_id[st.id],"Duplicate physical mail station")
+      local region=Catchment.build(st,width,depth,options and options.modified)
+      by_id[st.id]={st=st,region=region}
+      stations[#stations+1]=by_id[st.id]
+    end
+    table.sort(stations,function(a,b)return a.st.id<b.st.id end)
+    local S={}
+    local function lookup(id)
+      local x=assert(by_id[id],"Unknown shared mail station")
+      return x.st,x.region
+    end
+    function S.offer(amount,x,z,record)
+      if amount<=0 then return 0 end
+      assert(record and record.town,"Mail origin requires the emitting house's town")
+      local list={}
+      for _,q in ipairs(stations) do
+        local rank=Catchment.offer(q.st,q.region,"mail",x,z,goods,options)
+        if rank then list[#list+1]={st=q.st,rating=rank} end
+      end
+      return allocate(amount,record,list)
+    end
+    function S.acceptance(id,house_at)
+      local _,region=lookup(id)
+      return Catchment.acceptance(region,"mail",house_at)
+    end
+    function S.loading(id,mode,max_speed,year,built,space)
+      local st=lookup(id)
+      return Catchment.observe_loading(goods(st),mode,max_speed,year,built,space)
+    end
+    function S.near(id,x,z)
+      local _,region=lookup(id)
+      return Catchment.contains(region,x,z)
+    end
+    return S
   end
 
   -- Shares original available-FIFO packet semantics. A full truck can

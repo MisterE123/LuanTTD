@@ -58,7 +58,7 @@ local function inspect_views()
   end
 end
 local caps={road={start_year=1950,foster=true,craighead=true,breakdowns=0,service_interval=150},
-  air={[215]=true},ferry={[206]=true,[207]=true},rail={engines={},ready={},split={}}}
+  air={[215]=true},ferry={[206]=true,[207]=true,[208]=true},rail={engines={},ready={},split={}}}
 local Air,AirNet
 if with_air then
   local Small=dofile(root.."openttd/airport_small.lua")
@@ -87,7 +87,7 @@ local function mount(s)
   if Air then Sim.mount_paid_air(s,Air) end
 end
 local s=Sim.new(1751)
-if ship_model then Sim.mount_road_bus_market(s,Calendar,ship_model==207 and 1980 or 1950,true) end
+if ship_model then Sim.mount_road_bus_market(s,Calendar,ship_model~=206 and 1980 or 1950,true) end
 if authority then Sim.mount_road_bus_market(s,Calendar,1950,true,true) end
 s.rail_paid_service=true;s.ship_paid_service=true;s.air_paid_service=with_air
 s.road_economy=true;s.road_stock_clock=true;s.road_stock_loading=true;s.road_stock_house_supply=true
@@ -115,7 +115,7 @@ s.sites[1].tile=id(11,11);s.sites[2].tile=id(16,13)
 assert(Sim.build(s,"Coach","road",Sim.line(road_a,road_b)))
 assert(Sim.build(s,"Coach","road_station",{road_a,road_b}))
 assert(Sim.build(s,"Coach","road_depot",{road_depot}))
-local bus=assert(Sim.purchase(s,"Coach",ship_model==207 and "leopard_bus" or "bus","passenger",nil,road_depot))
+local bus=assert(Sim.purchase(s,"Coach",ship_model and ship_model~=206 and "leopard_bus" or "bus","passenger",nil,road_depot))
 assert(Sim.add_order(s,"Coach",bus,s.tiles[road_a].station))
 assert(Sim.add_order(s,"Coach",bus,s.tiles[road_b].station))
 assert(Sim.toggle(s,"Coach",bus))
@@ -142,12 +142,12 @@ if ship_model then
   local c=Sim.company(s,"Ferry")
   local start_cash=c.cash
   local u=assert(Depot.buy(s,"Ferry",ship_depot.id,ship_model))
-  local price=ship_model==207 and 28437 or 24375
+  local price=({[206]=24375,[207]=28437,[208]=37578})[ship_model]
   assert(u.price==price and c.cash==start_cash-price)
   assert(not Depot.buy(s,"Ferry",ship_depot.id,ship_model) and not Network.remove(s,"Ferry",ship_depot.tiles[1]))
   assert(not Depot.start(s,"Ferry",ship_depot.id,dock_a.id,dock_a.id))
   ferry=assert(Depot.start(s,"Ferry",ship_depot.id,dock_a.id,dock_b.id))
-  assert(ferry.engine_id==ship_model and ferry.vehicle.max_speed==(ship_model==207 and 128 or 64))
+  assert(ferry.engine_id==ship_model and ferry.vehicle.max_speed==({[206]=64,[207]=128,[208]=224})[ship_model])
   assert(not Ship.clear(s,"Ferry") and not Depot.stop(s,"Coach",true))
 else ferry=assert(Ship.start(s,"Ferry",ship_depot.id,dock_a.id,dock_b.id)) end
 assert(ferry.paid_clock)

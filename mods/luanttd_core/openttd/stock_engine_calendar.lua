@@ -5,7 +5,7 @@
 -- supplies both original seeds and an actual stock calendar day, never
 -- the fictional 30-day economy/HUD calendar or manufactured GRF state.
 local E={VERSION=1,ORIGINAL_BASE_YEAR=1920,MAX_YEAR=5000000,DEFAULT_AGING_STOP_YEAR=2050,
-  DAYS_IN_YEAR=365,DAYS_IN_LEAP_YEAR=366,VEH_ROAD=1}
+  DAYS_IN_YEAR=365,DAYS_IN_LEAP_YEAR=366,VEH_ROAD=1,VEH_AIRCRAFT=3}
 local floor,min,max=math.floor,math.min,math.max
 local U32=2^32
 local days={31,28,31,30,31,30,31,31,30,31,30,31}
@@ -14,6 +14,7 @@ local bus={
   [116]={stock_id=116,name="MPS Regal Bus",intro_after_1920=3378,decay_speed=20,life=12,base_life=40,climates=7},
   [117]={stock_id=117,name="Hereford Leopard Bus",intro_after_1920=16071,decay_speed=20,life=15,base_life=30,climates=7},
   [118]={stock_id=118,name="Foster Bus",intro_after_1920=24107,decay_speed=20,life=15,base_life=40,climates=7},
+  [119]={stock_id=119,name="Foster MkII Superbus",intro_after_1920=32142,decay_speed=20,life=15,base_life=80,climates=7},
 }
 for _,r in pairs(bus) do r.vehicle_type=E.VEH_ROAD;r.retire_early=0 end
 local function copy(t)
@@ -94,7 +95,7 @@ end
 -- Build one original road model. Exposed for same-intro comparisons and
 -- an eventual separately verified roster; not a NewGRF adapter.
 function E.prepare_original(row,cfg)
-  if type(row)~="table" or not uint(row.stock_id,65535) or (row.vehicle_type~=E.VEH_ROAD and row.vehicle_type~=2) or
+  if type(row)~="table" or not uint(row.stock_id,65535) or (row.vehicle_type~=E.VEH_ROAD and row.vehicle_type~=2 and row.vehicle_type~=E.VEH_AIRCRAFT) or
       not uint(row.intro_after_1920,65535) or not uint(row.decay_speed,255) or
       not uint(row.life,255) or not uint(row.base_life,255) or not uint(row.climates,15) or
       not uint(row.retire_early or 0,127) or (row.grfid or 0)~=0 or row.variant_id~=nil then

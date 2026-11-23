@@ -50,9 +50,9 @@ return function(Sim,R)
       return {request={mode=mode,operation=op,tile=cmd.tile,last=cmd.last,style=cmd.style},
         price=price,tiles=span_tiles(p),speed=p.spec and p.spec.speed}
     elseif op=="build" and mode=="air" and R.air and tile(cmd.tile) then
-      local q,why=R.air.network.quote(s,owner,cmd.tile)
+      local q,why=R.air.network.quote(s,owner,cmd.tile,cmd.layout)
       if not q then return nil,why end
-      return {request={mode=mode,operation=op,tile=cmd.tile},price=q.price,tiles=collect_tiles(q)}
+      return {request={mode=mode,operation=op,tile=cmd.tile,layout=q.layout},price=q.price,tiles=collect_tiles(q)}
     elseif op=="build" and mode=="tram" and R.tram and type(cmd.cells)=="table" and
       #cmd.cells>=1 and #cmd.cells<=128 then
       local cells={}
@@ -100,7 +100,20 @@ return function(Sim,R)
       local q,why=R.rail.owned.quote(s,owner,cmd.depot,parts)
       if not q then return nil,why end
       return {request={mode=mode,operation=op,depot=cmd.depot,parts=parts},price=q.price,tiles={cmd.depot}}
-    elseif op=="buy" and mode=="ship" and R.water and id(cmd.depot) and (cmd.engine==206 or cmd.engine==207) then
+    elseif mode=="ship" and R.water and R.water.coal and id(cmd.depot) and
+      (op=="buy" and (cmd.engine==211 or cmd.engine==212) or op=="refit" and cmd.cargo=="coal") then
+      local service=R.water.coal
+      local q,why
+      if op=="buy" then q,why=service.quote(s,owner,cmd.depot,cmd.engine)
+      else q,why=service.refit_quote(s,owner,cmd.depot) end
+      if not q then return nil,why end
+      return {request={mode=mode,operation=op,depot=cmd.depot,engine=cmd.engine,cargo=cmd.cargo},
+        price=op=="buy" and q.purchase or q.refit,tiles={}}
+    elseif op=="buy" and mode=="ship" and R.water and R.water.tanker and id(cmd.depot) and (cmd.engine==204 or cmd.engine==205) then
+      local q,why=R.water.tanker.quote(s,owner,cmd.depot,cmd.engine)
+      if not q then return nil,why end
+      return {request={mode=mode,operation=op,depot=cmd.depot,engine=cmd.engine},price=q.price,tiles={}}
+    elseif op=="buy" and mode=="ship" and R.water and id(cmd.depot) and (cmd.engine==206 or cmd.engine==207 or cmd.engine==208) then
       local q,why=R.water.depot.quote(s,owner,cmd.depot,cmd.engine)
       if not q then return nil,why end
       return {request={mode=mode,operation=op,depot=cmd.depot,engine=cmd.engine},price=q.price,tiles={}}
@@ -138,7 +151,7 @@ return function(Sim,R)
     end
     local unit,msg
     if req.operation=="build" and req.mode=="air" then
-      unit,msg=R.air.network.build(s,owner,req.tile)
+      unit,msg=R.air.network.build(s,owner,req.tile,req.layout)
     elseif req.operation=="build" and req.mode=="ship" then
       unit,msg=R.water.network.build(s,owner,req.kind,req.tile,req.axis)
     elseif req.mode=="rail" then
@@ -146,7 +159,14 @@ return function(Sim,R)
       if not q then return false,e end
       unit,msg=R.rail.owned.commit(s,owner,q)
     elseif req.mode=="ship" then
-      unit,msg=R.water.depot.buy(s,owner,req.depot,req.engine)
+      if req.operation=="refit" then
+        unit,msg=R.water.coal.refit(s,owner,req.depot)
+      elseif req.engine==211 or req.engine==212 then
+        unit,msg=R.water.coal.buy(s,owner,req.depot,req.engine)
+      else
+        local depot_model=(req.engine==204 or req.engine==205) and R.water.tanker or R.water.depot
+        unit,msg=depot_model.buy(s,owner,req.depot,req.engine)
+      end
     else
       local q,e=R.air.owned.quote(s,owner,req.depot,req.engine)
       if not q then return false,e end
@@ -157,6 +177,7 @@ return function(Sim,R)
   end
   function T.depot(owner,mode,key)
     local offers,vehicles,targets={},{},{}
+    local airframe
     local function add(name,cmd)
       local q=T.quote(owner,cmd)
       if q then offers[#offers+1]={name=name,price=q.price,request=q.request} end
@@ -197,12 +218,31 @@ return function(Sim,R)
     elseif mode=="ship" and R.water and id(key) then
       local t=s.stock_ship_depots and s.stock_ship_depots[key]
       if not t or t.owner~=owner then return nil,"Choose a ship depot you own." end
-      for _,engine in ipairs({206,207}) do
+      for _,engine in ipairs(R.water.roster.order or {206,207}) do
         local model=R.water.roster.model(engine)
         add(model.name,{mode=mode,operation="buy",depot=key,engine=engine})
       end
+      if R.water.coal then
+        local C=R.water.coal
+        for _,engine in ipairs(C.catalog) do
+          add(C.model(engine).name,{mode=mode,operation="buy",depot=key,engine=engine})
+        end
+        local c=C.status(s)
+        if c and c.depot==key and c.owner==owner then
+          vehicles[#vehicles+1]={id="coal",label=c.name,cargo=c.cargo==1 and "coal" or "goods"}
+          if c.cargo~=1 then add("Refit "..c.name.." to Coal",{mode=mode,operation="refit",depot=key,cargo="coal"}) end
+        end
+      end
+      if R.water.tanker then
+        local stock=R.water.tanker
+        for _,engine in ipairs(stock.catalog) do
+          add(stock.model(engine).name,{mode=mode,operation="buy",depot=key,engine=engine})
+        end
+        local t=R.water.tanker.status(s)
+        if t and t.depot==key and t.owner==owner then vehicles[#vehicles+1]={id=t.id,label=t.name,cargo="oil"} end
+      end
       local ferry=s.stock_owned_ferry
-      if ferry and ferry.depot==key then vehicles[1]={id="ferry",label="Passenger ferry"} end
+      if ferry and ferry.depot==key then vehicles[#vehicles+1]={id="ferry",label="Passenger ferry"} end
     elseif mode=="air" and R.air and id(key) then
       local t=s.stock_small_airports and s.stock_small_airports[key]
       if not t or t.owner~=owner then return nil,"Choose an airfield you own." end
@@ -210,18 +250,36 @@ return function(Sim,R)
         add(engine.name,{mode=mode,operation="buy",depot=key,engine=engine.stock_id})
       end
       local unit=R.air.owned.status(s,key)
-      if unit then vehicles[1]={id=unit.id,label=unit.name or "Aircraft"} end
+      if unit then
+        airframe=unit.stock_id
+        local d=R.air.roster.entry(unit.stock_id)
+        vehicles[1]={id=unit.id,label=d and d.name or "Aircraft"}
+      end
     else return nil,"DEPOT_UNAVAILABLE" end
     local listing=mode=="rail" and s.stock_rail_stations or mode=="air" and s.stock_small_airports
       or mode=="ship" and s.stock_ship_stations
     for key_,r in pairs(listing or {}) do
-      if r.owner==owner then
+      if r.owner==owner and (not airframe or not R.air.run.fits or R.air.run.fits(r,airframe)) then
         local cell=r.origin or r.land or r.tiles and r.tiles[1]
         local x,z
         if cell then x,z=Sim.xy(cell) end
         local cargo=r.coal_role and "coal" or r.oil_role and "oil" or r.goods_role and "goods"
-        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(mode=="rail" and "Station" or mode=="air" and "Airfield" or "Dock")
+        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or "Airfield") or "Dock")
           .." "..key_..(x and (" (%d, %d)"):format(x,z) or "")}
+        if mode=="ship" and R.water.coal then
+          local report=R.water.coal.order_report(s,key_)
+          if report then
+            if #report.sources>0 then targets[#targets+1]={id=key_,cargo="coal",role="load",label="Coal mine dock "..key_} end
+            if report.accepts then targets[#targets+1]={id=key_,cargo="coal",role="unload",label="Power plant dock "..key_} end
+          end
+        end
+        if mode=="ship" and R.water.tanker then
+          local report=R.water.tanker.report(s,key_)
+          if report then
+            if #report.sources>0 then targets[#targets+1]={id=key_,cargo="oil",role="load",label="Oil source dock "..key_} end
+            if report.accepts then targets[#targets+1]={id=key_,cargo="oil",role="unload",label="Refinery dock "..key_} end
+          end
+        end
       end
     end
     table.sort(targets,function(a,b) return a.id<b.id end)
@@ -264,6 +322,17 @@ return function(Sim,R)
       elseif req.cargo~=nil then return false,"Unsupported train cargo." end
       return start(s,owner,req.vehicle,req.first,req.second)
     elseif req.mode=="ship" and R.water and id(req.depot) and (req.via==nil or tile(req.via)) then
+      if req.cargo=="oil" and req.vehicle=="oil" and R.water.tanker then
+        local run,why=R.water.tanker.start(s,owner,req.depot,req.first,req.second)
+        return run~=nil,why
+      end
+      if req.cargo=="coal" and req.vehicle=="coal" and R.water.coal then
+        local c=R.water.coal.status(s)
+        if not c or c.depot~=req.depot then return false,"Choose the depot that owns this cargo ship." end
+        local run,why=R.water.coal.start(s,owner,req.first,req.second)
+        return run~=nil,why
+      end
+      if req.cargo~=nil then return false,"UNSUPPORTED_SHIP_CARGO" end
       local run,why=R.water.depot.start(s,owner,req.depot,req.first,req.second,req.via)
       return run~=nil,why
     elseif req.mode=="air" and R.air then

@@ -31,8 +31,9 @@ return function(Sim,H,Packets,Rating,Mail)
   function M.day(s,after_tick,hooks)
     M.start(s)
     local growth=hooks and hooks.growth
+    local shared_mail=hooks and hooks.mail
     local mail=s.road_mail and Mail
-    local truck_stops=mail and mail.stops(s)
+    local truck_stops=not shared_mail and mail and mail.stops(s)
     local stops={}
     for _,st in pairs(s.stations) do if st.mode=="road" and st.stop_type~="truck" then stops[#stops+1]=st end end
     table.sort(stops,function(a,b) return a.id<b.id end)
@@ -46,7 +47,10 @@ return function(Sim,H,Packets,Rating,Mail)
     end
     local function emit(cargo,amount,x,z,record,tick)
       if record.town_growth and not record.first_cargo_tick then record.first_cargo_tick=tick end
-      if cargo=="mail" and mail then mail.from_house(s,amount,x,z,record,truck_stops);return end
+      if cargo=="mail" then
+        if shared_mail then return shared_mail(s,amount,x,z,record,tick) end
+        if mail then return mail.from_house(s,amount,x,z,record,truck_stops) end
+      end
       if cargo~="passenger" or amount<=0 then return end
       if hooks and hooks.passenger then return hooks.passenger(s,amount,x,z,record,tick) end
       local list={}

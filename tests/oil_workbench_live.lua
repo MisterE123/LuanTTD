@@ -2,6 +2,15 @@ local mod="mods/luanttd_core/"
 local Sim=dofile(mod.."sim.lua")
 local Terrain=dofile(mod.."openttd/terrain.lua")
 local s=Sim.new(1751)
+local mode=arg and arg[1]
+local tanker=({mid="oil_foster",late="oil_perry"})[mode] or "oil_tanker"
+local carrier=mode=="late" and "goods_goss" or "goods_truck"
+local function market(w)
+  if mode then
+    Sim.mount_road_bus_market(w,dofile(mod.."openttd/stock_engine_calendar.lua"),mode=="late" and 2025 or 1985,true,true,{[tanker]=true,[carrier]=true})
+  end
+end
+market(s)
 s.road_stock_clock,s.road_stock_loading,s.road_stock_house_supply,s.road_economy=true,true,true,true
 s.road_oil,s.road_junction_clearance=true,true
 dofile(mod.."town_layout.lua")(Sim,s)
@@ -39,9 +48,9 @@ local function buy(engine,cargo,a,b)
  assert(Sim.toggle(s,"A",id))
  return id
 end
-local a=buy("oil_tanker","oil",1,2)
-local b=buy("goods_truck","goods",2,3)
-assert(s.fleet[a].speed==nil and Sim.vehicle_capacity(s.fleet[a])==21)
+local a=buy(tanker,"oil",1,2)
+local b=buy(carrier,"goods",2,3)
+assert(s.fleet[a].speed==nil and Sim.vehicle_capacity(s.fleet[a])==(mode=="late" and 27 or mode=="mid" and 25 or 21))
 local function cycle(w,a0,b0)
  local a,b=w.fleet[a],w.fleet[b]
  for _=1,400 do
@@ -63,6 +72,7 @@ local function copy(t)
  return out
 end
 s=copy(s)
+market(s)
 assert(Sim.mount_oil_world(s,Terrain,true))
 local after,after_goods,paid=cycle(s,first,goods)
 assert(after>first and after_goods>goods)

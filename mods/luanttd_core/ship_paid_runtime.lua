@@ -214,7 +214,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
         for _,part in ipairs(p.tiles) do
           local ref=s.tiles[part.id] and s.tiles[part.id].airfield
           if ref and ref.airport==id then
-            tiles[#tiles+1]=at("airport",part.id);valid[#valid+1]=part.id
+            tiles[#tiles+1]=at(p.layout=="city" and "airport_city" or "airport",part.id);valid[#valid+1]=part.id
           end
         end
         if #valid>0 then

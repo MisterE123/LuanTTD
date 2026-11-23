@@ -39,14 +39,14 @@ return function(Sim,mod,s,cap)
     for _,tick in ipairs(auxiliary) do tick(dt) end
   end
   if s.ship_paid_service then
-    local _,follow,net,roster,run,depot,freight,coal=B.water(s,network.track,function(id) return cap.ferry[id]==true end)
-    N.water={network=net,follow=follow,roster=roster,run=run,depot=depot,freight=freight,coal=coal}
+    local _,follow,net,roster,run,depot,freight,coal,tanker,tanker_run=B.water(s,network.track,function(id) return cap.ferry[id]==true end)
+    N.water={network=net,follow=follow,roster=roster,run=run,depot=depot,freight=freight,coal=coal,tanker=tanker,tanker_run=tanker_run}
     local Bridge=dofile(source.."road_bridge.lua")(Slope)
     local Aqua=dofile(source.."aqueduct.lua")(Bridge)
     N.water.aqueduct=dofile(mod.."/ship_aqueduct_world.lua")(Sim,Terrain,Aqua)
     local Construction=dofile(source.."water_construction.lua")(network.track,follow)
     N.water.works=dofile(mod.."/ship_water_world.lua")(Sim,net,Construction)
-    function N.water.busy() return run.uses_facilities(s) or coal and coal.busy(s) end
+    function N.water.busy() return run.uses_facilities(s) or coal and coal.busy(s) or tanker and tanker_run.uses_facilities(s) end
     pilot(function()
       local r=run.current(s)
       return r and not r.paid_clock and (r.engine_id==nil or cap.ferry[r.engine_id])
@@ -54,7 +54,7 @@ return function(Sim,mod,s,cap)
     end,function(n) run.tick(s,n) end)
   end
   if s.air_paid_service then
-    local net,run,owned,roster=B.air(s,Slope,function(id) return cap.air[id]==true end)
+    local net,run,owned,roster=B.air(s,Slope,function(id) return cap.air[id]==true end,cap.city_airport)
     N.air={network=net,run=run,owned=owned,roster=roster}
     pilot(function()
       local r=run.current(s)
@@ -121,7 +121,7 @@ return function(Sim,mod,s,cap)
     function N.rail.poses(train,fraction)
       local parts=train.consist.parts
       local samples={}
-      local push_pull=train.stock_engine==11 and #parts>1
+      local push_pull=(train.dual_head or train.stock_engine==11) and #parts>1
       for i=1,#parts do
         local id,td,f,reversed,wormhole
         if train.paid_clock then id,td,f,reversed,wormhole=Sim.rail_paid_pose(s,i,fraction,train.fleet_id)
@@ -243,7 +243,8 @@ return function(Sim,mod,s,cap)
     N.orders.rail=dofile(mod.."/rail_vehicle_orders.lua")(s,N.rail.owned,dofile(source.."rail_order_cargo.lua"))
   end
   local water_air=dofile(mod.."/water_air_orders.lua")(s,Sim,dofile(source.."rail_order_list.lua"),
-    N.water and N.water.run,N.water and N.water.freight,N.water and N.water.coal,N.air and N.air.run)
+    N.water and N.water.run,N.water and N.water.freight,N.water and N.water.coal,N.air and N.air.run,
+    N.water and N.water.tanker_run,N.water and N.water.tanker)
   N.orders.ship,N.orders.air=water_air.ship,water_air.air
   N.jump=dofile(mod.."/jump_map.lua")({Sim=Sim,s=s})
   N.passengers=dofile(mod.."/campaign_passenger_projection.lua")(Sim,s)

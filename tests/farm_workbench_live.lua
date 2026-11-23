@@ -2,6 +2,18 @@ local mod="mods/luanttd_core/"
 local S=dofile(mod.."sim.lua")
 local T=dofile(mod.."openttd/terrain.lua")
 local s=S.new(1751)
+local batch=arg and arg[1]
+local fleet={
+  mid={year=1985,grain="grain_thomas",stock_grain=142,grain_capacity=25,livestock="livestock_uhl",stock_livestock=136,livestock_capacity=16},
+  late={year=2025,grain="grain_goss",stock_grain=143,grain_capacity=30,livestock="livestock_foster",stock_livestock=137,livestock_capacity=18},
+}
+local spec=batch and assert(fleet[batch])
+local function market(w)
+  if spec then
+    S.mount_road_bus_market(w,dofile(mod.."openttd/stock_engine_calendar.lua"),spec.year,true,true,{[spec.grain]=true,[spec.livestock]=true})
+  end
+end
+market(s)
 s.road_stock_clock,s.road_stock_loading,s.road_stock_house_supply,s.road_economy=true,true,true,true
 s.road_farm,s.road_junction_clearance=true,true
 dofile(mod.."town_layout.lua")(S,s)
@@ -33,9 +45,16 @@ local function buy(engine,cargo,a,b)
  assert(S.toggle(s,"A",id))
  return id
 end
-local first=buy("grain_truck","grain",fa,fo)
-local second=buy("livestock_van","livestock",fa,fo)
+local first=buy(spec and spec.grain or "grain_truck","grain",fa,fo)
+local second=buy(spec and spec.livestock or "livestock_van","livestock",fa,fo)
 local third=buy("goods_truck","goods",fo,to)
+if spec then
+  for _,cargo in ipairs({"grain","livestock"}) do
+    local id=cargo=="grain" and first or second
+    local offer=S.vehicle_offer(s,spec[cargo])
+    assert(offer.stock_engine_id==spec["stock_"..cargo] and S.vehicle_capacity(s.fleet[id])==spec[cargo.."_capacity"])
+  end
+end
 local fs,ps=s.stock_farm_industries[8192],s.stock_farm_industries[8193]
 assert(fs and ps)
 local function copy(t)
@@ -64,7 +83,8 @@ local function distinct_payments(world,grow)
 end
 local a,b,c=distinct_payments(s)
 s=copy(s)
+market(s)
 assert(S.mount_farm_world(s,T,true))
 local x,y,z=distinct_payments(s)
 assert(x>a and y>b and z>c)
-print(("PASS: actual common road world from farm to factory to town, repeated after save: grain %d, livestock %d, goods %d"):format(x,y,z))
+print(("PASS: actual common road world from farm to factory to town, repeated after save (%s): grain %d, livestock %d, goods %d"):format(batch or "original",x,y,z))

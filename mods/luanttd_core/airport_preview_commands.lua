@@ -3,6 +3,11 @@ return function(api,Network,Run,Owned,Roster)
   local Sim,S=api.Sim,api.s
   local reasons={
     SELECT_AIRFIELD_ORIGIN="Choose the northwest corner of the four by three airfield.",
+    AIRPORT_TYPE_NOT_AVAILABLE="This stock airport has no native footprint in this installation.",
+    CITY_AIRPORT_NOT_INTRODUCED="The stock City Airport becomes available in 1955.",
+    CITY_AIRFIELD_SERVICE_ALREADY_ASSIGNED="That City Airport already has an assigned flight.",
+    LARGER_AIRFIELD_REQUIRED="This aircraft needs a City Airport at every stop.",
+    AIRCRAFT_NOT_INTRODUCED="That aircraft has not entered service in this world yet.",
     AIRPORT_OUTSIDE_REGION="The complete airfield must fit inside the region.",
     AIRPORT_NEEDS_LEVEL_FIELD="The full runway, taxiways and apron need level land at the same height.",
     AIRPORT_SITE_OCCUPIED="Clear trees and structures before building the airfield.",

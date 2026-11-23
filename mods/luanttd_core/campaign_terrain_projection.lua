@@ -78,7 +78,7 @@ function M.registries(s,ids)
       add(out,s,"stock_ship_stations",t.ship.station,{"owner","id","land","water"})
     end
     if t.airfield then
-      add(out,s,"stock_small_airports",t.airfield.airport,{"owner","id","origin","tiles"})
+      add(out,s,"stock_small_airports",t.airfield.airport,{"owner","id","origin","tiles","layout"})
     end
     add(out,s,"stock_farm_fields",id)
     if t.stock_industry then

@@ -39,10 +39,28 @@ jobs:
           done
           lua5.1 tests/coastal_corridor_freight.lua --async-tape
           lua5.1 tests/road_timber_live.lua craighead
+          lua5.1 tests/road_timber_live.lua wood_foster
+          lua5.1 tests/road_timber_live.lua wood_moreland
+          lua5.1 tests/farm_workbench_live.lua mid
+          lua5.1 tests/farm_workbench_live.lua late
+          lua5.1 tests/road_stock_market.lua superbus
+          python3 tests/recovered_road_stock_art.py
+          python3 tests/stock_late_freight_art.py
+          lua5.1 tests/road_coal_live.lua coal_uhl
+          lua5.1 tests/road_coal_live.lua coal_dw
+          lua5.1 tests/oil_workbench_live.lua mid
+          lua5.1 tests/oil_workbench_live.lua late
+          for model in mail_mps mail_reynard mail_perry; do lua5.1 tests/road_mail_service.lua "$model"; done
+          python3 tests/stock_late_industry_art.py
+          python3 tests/stock_road_fleet_d_art.py
+          python3 tests/stock_mail_companions_art.py
           lua5.1 tests/rail_owned_service.lua signal_free
           lua5.1 tests/rail_owned_service.lua depot_turnout
           lua5.1 tests/rail_owned_service.lua mixed_signals
           lua5.1 tests/rail_owned_service.lua two_coaches
+          lua5.1 tests/rail_owned_service.lua sh_125
+          lua5.1 tests/shared_mail_station_allocator.lua
+          python3 tests/stock_rail_f_art.py
           lua5.1 tests/rail_owned_service.lua three_stops
           lua5.1 tests/rail_owned_service.lua live_orders
           lua5.1 tests/rail_owned_service.lua live_pbs_orders
@@ -50,6 +68,8 @@ jobs:
           lua5.1 tests/rail_owned_multi.lua shared_depot
           lua5.1 tests/rail_owned_multi.lua collision
           lua5.1 tests/rail_owned_multi.lua live_construction
+          lua5.1 tests/stock_town_art.lua
+          python3 tests/stock_town_art.py
           python3 tests/landscape_visit_rc1.py
           python3 tests/rail_diagonal_art.py
           python3 tests/rail_signal_art.py
@@ -67,8 +87,26 @@ jobs:
           bash tests/campaign_generation_async_native.sh "$(command -v luantiserver)" "$(mktemp -d)/generation"
           bash tests/campaign_tick_worker_native.sh "$(command -v luantiserver)" "$(mktemp -d)/ticks"
           bash tests/campaign_ordinary_worker_native.sh
+          bash tests/stock_town_city_native.sh
+          lua5.1 tests/oil_ship_ordinary_worker.lua 204
+          lua5.1 tests/oil_ship_ordinary_worker.lua 205
+          lua5.1 tests/oil_ship_ordinary_worker.lua 204 mixed
+          lua5.1 tests/coal_ship_ordinary_worker.lua 211
+          lua5.1 tests/coal_ship_ordinary_worker.lua 212
+          lua5.1 tests/rail_paid_runtime.lua 208
+          python3 tests/stock_hovercraft_art.py
+          python3 tests/stock_bakewell_cargo_art.py
+          python3 tests/stock_oil_ships_art.py
           bash tests/generated_oil_freight_native.sh
           bash tests/mixed_freight_live_native.sh
+          lua5.1 tests/airport_city_paid.lua
+          lua5.1 tests/airport_city_paid.lua 217
+          lua5.1 tests/airport_city_paid.lua 225
+          python3 tests/stock_airliners_e_art.py
+          lua5.1 tests/airport_city_paid.lua 220
+          lua5.1 tests/airport_city_paid.lua 228
+          python3 tests/stock_airliners_g_art.py
+          python3 tests/city_airport_art.py
           python3 tests/rail_early_diesel_art.py
           for n in 13 14; do
             BAYLINE_NATIVE_GOODS_ENGINE="$n" BAYLINE_NATIVE_GOODS_YEAR=1968 bash tests/rail_goods_live_native.sh

@@ -131,9 +131,10 @@ function H.enable_ships()
     [7]=item("ship_buoy_remove","Remove buoy, keep water","ship_buoy_remove"),[8]=back}
   sync_sections()
 end
-function H.enable_airfields(owned)
+function H.enable_airfields(owned,city)
   H.menus.airfields={title="Airfields",[1]=inspect,[2]=item("airfield_build","Build country airfield","airfield"),
     [3]=item("airfield_order",owned and "Order aircraft" or "Order trimotor","trimotor"),
+    [4]=city and item("city_airport_build","Build City Airport","city_airport") or nil,
     [5]=item("airfield_remove","Dismantle airfield","airfield_remove"),
     [7]=not owned and item("airfield_clear","Clear flight pilot","airfield_clear") or nil,[8]=back}
   sync_sections()

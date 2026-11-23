@@ -119,6 +119,7 @@ do
   local capabilities={
     start_year=world_options and world_options.year or tonumber(settings:get("bayline_stock_bus_start_year")) or 1950,
     foster=files["bl_foster_bus.obj"] and files["bl_foster_bus_atlas.png"],
+    extra=dofile(mod.."/road_stock_media.lua").scan(files),
     craighead=files["bl_craighead_goods_truck.obj"] and files["bl_craighead_goods_truck_atlas.png"],
     breakdowns=api.bus_breakdowns,service_interval=api.bus_service_interval,
     service_percent=settings:get_bool("bayline_stock_bus_service_percent",false),
@@ -223,6 +224,7 @@ api.road_bay_tools=Sim.road_stock_service_active(S)
 api.structure_tools,api.tram_tools,api.ship_tools,api.airport_tools=true,true,true,true
 S.tram_enabled,S.ship_enabled,S.airport_enabled=true,true,true
 S.air_fleet_preview,S.air_owned_preview=true,true
+api.airframe_art,api.capabilities.city_airport=dofile(mod.."/airport_manifest.lua")(core,mod)
 api.rail_owned_tools=true
 do
   local files={}
@@ -342,6 +344,18 @@ if api.ship_tools then
   for _,key in ipairs(core.get_dir_list(mod.."/textures",false)) do missing[key]=true end
   art[206]=missing["bl_harbor_ferry_palette.png"] and missing["bl_harbor_ferry.obj"]
   art[207]=missing["bl_harbor_ferry_palette.png"] and missing["bl_ffp_passenger_ferry.obj"]
+  for id,stem in pairs({[204]="stock_mps_oil_tanker",[205]="stock_cs_inc_oil_tanker"}) do
+    local mesh,atlas="bl_"..stem..".obj","bl_"..stem.."_atlas.png"
+    if missing[mesh] and missing[atlas] then
+      art[id]=true
+      core.register_entity("luanttd_core:"..stem,{initial_properties={
+        physical=false,pointable=false,static_save=false,visual="mesh",mesh=mesh,textures={atlas},
+        collide_with_objects=false,shaded=true,backface_culling=true,visual_size={x=1,y=1,z=1}}})
+    end
+  end
+  art[208]=missing["bl_stock_bakewell_300_hovercraft.obj"] and missing["bl_stock_bakewell_300_hovercraft_atlas.png"]
+  art[211]=missing["bl_yate_cargo_ship.obj"] and missing["bl_yate_cargo_ship_atlas.png"]
+  art[212]=missing["bl_stock_bakewell_cargo_ship.obj"] and missing["bl_stock_bakewell_cargo_ship_atlas.png"]
   api.capabilities.ferry=art
   local Terrain,Water,Network,Roster,Run,Depot,cargo_run,C=simulation_bindings.water(S,Track,
     function(id) return art[id] end)
@@ -423,9 +437,10 @@ if api.ship_tools then
   dofile(mod.."/ship_preview_commands.lua")(api,Network,Run)
 end
 if api.airport_tools then
-  local art=dofile(mod.."/airport_manifest.lua")(core,mod)
+  local art=api.airframe_art
   for id in pairs(art) do api.capabilities.air[id]=true end
-  local Network,Run,Owned,Roster=simulation_bindings.air(S,api.slope,function(id) return art[id]~=nil end)
+  local Network,Run,Owned,Roster=simulation_bindings.air(S,api.slope,function(id) return art[id]~=nil end,
+    api.capabilities.city_airport)
   air_order_run=Run
   api.airport_view=dofile(mod.."/airport_preview_view.lua")(api,Run,dofile(mod.."/road_motion.lua"),art)
   pilot_clock(function()

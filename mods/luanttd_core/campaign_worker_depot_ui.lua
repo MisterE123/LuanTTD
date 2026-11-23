@@ -27,7 +27,11 @@ return function(core,client,build,money,assembly)
       "label[.45,.42;Company depot]","label[.45,1.05;Purchase offers]","label[5.55,1.05;Owned vehicles]",
       ("textlist[.45,1.35;4.8,3.30;%soffer;%s;%d;false]"):format(stem,table.concat(offers,","),p.offer or 1),
       ("textlist[5.55,1.35;4.8,3.30;%sunit;%s;%d;false]"):format(stem,table.concat(units,","),p.unit or 1)}
-    if #offers>0 then b[#b+1]="button[.45,4.84;4.8,.59;"..stem.."buy;Buy selected vehicle]" end
+    if #offers>0 then
+      local chosen=data.offers[p.offer or 1]
+      local action=chosen.request.operation=="refit" and "Apply selected refit" or "Buy selected vehicle"
+      b[#b+1]="button[.45,4.84;4.8,.59;"..stem.."buy;"..action.."]"
+    end
     if #units>0 then b[#b+1]="button[5.55,4.84;4.8,.59;"..stem.."orders;Open selected vehicle]" end
     local route_ok=cargo and #first>0 and #last>0 or not cargo and #first>=2
     if route_ok and #units>0 then
@@ -38,7 +42,10 @@ return function(core,client,build,money,assembly)
       b[#b+1]="button[7.06,5.62;3.3,.57;"..stem.."start;Start service]"
     end
     if cargo and not route_ok then
-      b[#b+1]="label[.45,5.62;Designate a loading and unloading platform for this cargo.]"
+      b[#b+1]=p.mode=="ship" and (cargo=="oil" and "label[.45,5.62;Build docks near an oil source and a refinery.]"
+          or cargo=="coal" and "label[.45,5.62;Build docks near a coal mine and a power plant.]"
+          or "label[.45,5.62;Select the Coal refit before starting this cargo service.]")
+        or "label[.45,5.62;Designate a loading and unloading platform for this cargo.]"
     end
     if p.mode=="rail" and assembly and p.data then
       b[#b+1]="button[.45,7.41;4.8,.58;"..stem.."assemble;Assemble wagons]"
@@ -69,6 +76,7 @@ return function(core,client,build,money,assembly)
     if not p.data or p.pending then return true end
     local stem="d"..p.serial.."_"
     local selected_before=p.unit
+    local offer_before=p.offer
     for kind,list in pairs({offer=p.data.offers,unit=p.data.vehicles}) do
       local key=stem..kind
       if f[key] then
@@ -98,14 +106,15 @@ return function(core,client,build,money,assembly)
       return true
     end
     if not f[stem.."buy"] then
-      if selected_before~=p.unit and p.mode=="rail" then p.from,p.to=nil,nil;draw(n,p) end
+      if (selected_before~=p.unit or offer_before~=p.offer) and (p.mode=="rail" or p.mode=="ship") then p.from,p.to=nil,nil;draw(n,p) end
       return true
     end
     local q=p.data.offers[p.offer or 1]
     if not q then return true end
     p.pending=true
     local function bought(ok,note)
-      if panels[n]==p then D.open(player,p.mode,p.depot,note or (ok and "Vehicle purchased." or "Not purchased."),p.vehicle_handler) end
+      local applied=q.request.operation=="refit" and "Refit applied." or "Vehicle purchased."
+      if panels[n]==p then D.open(player,p.mode,p.depot,note or (ok and applied or "Depot action did not go through."),p.vehicle_handler) end
     end
     local sent,why
     if q.request.kind=="road_buy" then

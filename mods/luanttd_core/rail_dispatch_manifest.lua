@@ -9,6 +9,7 @@ local models={
   hendry={mesh="bl_rail_hendry_25.obj",atlas="bl_rail_hendry_25.png",size={x=1,y=1,z=1},offset=.614},
   uu37={mesh="bl_rail_uu_37.obj",atlas="bl_rail_uu_37.png",size={x=1,y=1,z=1},offset=.614},
   floss={mesh="bl_rail_floss_47.obj",atlas="bl_rail_floss_47.png",size={x=1,y=1,z=1},offset=.614},
+  sh_125={mesh="bl_rail_sh_125.obj",atlas="bl_rail_sh_125.png",size={x=1,y=1,z=1},offset=.614},
   sh_30={mesh="bl_rail_sh_30.obj",atlas="bl_rail_sh_30.png",size={x=1,y=1,z=1},offset=.614},
   sh_40={mesh="bl_rail_sh_40.obj",atlas="bl_rail_sh_40.png",size={x=1,y=1,z=1},offset=.614},
   wagon={mesh="bl_rail_passenger_wagon.obj",atlas="bl_rail_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
@@ -17,8 +18,8 @@ local models={
   goods_van={mesh="bl_rail_goods_van.obj",atlas="bl_rail_goods_van.png",size={x=1,y=1,z=1},offset=.614},
   oil_tanker={mesh="bl_rail_oil_tanker.obj",atlas="bl_rail_oil_tanker.png",size={x=1,y=1,z=1},offset=.614},
 }
-local stock_kind={[0]="steam",[8]="jubilee",[9]="ginzu",[10]="sh_8p",[11]="manley",[13]="hendry",[14]="uu37",[15]="floss",[23]="sh_30",[24]="sh_40"}
-local stock_extra={jubilee=8,ginzu=9,sh_8p=10,manley=11,hendry=13,uu37=14,floss=15,sh_30=23,sh_40=24}
+local stock_kind={[0]="steam",[8]="jubilee",[9]="ginzu",[10]="sh_8p",[11]="manley",[13]="hendry",[14]="uu37",[15]="floss",[22]="sh_125",[23]="sh_30",[24]="sh_40"}
+local stock_extra={jubilee=8,ginzu=9,sh_8p=10,manley=11,hendry=13,uu37=14,floss=15,sh_125=22,sh_30=23,sh_40=24}
 local M={models=models,stock_kind=stock_kind}
 function M.scan(path,electric,span)
   local function exists(file)

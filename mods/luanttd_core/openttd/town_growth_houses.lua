@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- OpenTTD contributors, 14.1 src/table/town_land.h, _original_house_specs.
+-- OpenTTD contributors, src/table/town_land.h, _original_house_specs.
+-- Temperate roots verified against 16.0-RC1 (07b339c0aaeb0a87be9490b2f1c3f17c6b00b837).
 -- Temperate-buildable HouseIDs, original order; other climates omitted.
 -- id, zone mask, min/max year, population, width/depth, unique kind, probability
 return {

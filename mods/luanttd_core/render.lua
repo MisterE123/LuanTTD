@@ -280,13 +280,19 @@ return function(api)
   end
   local airfield_nodes={}
   if api.airport_tools then
-    for z=0,2 do
-      airfield_nodes[z]={}
-      for x=0,3 do
-        local asset=("small_airport_%d_%d"):format(x,z)
-        airfield_nodes[z][x]=architecture(asset,asset,"small_airport_atlas")
+    local function airport_media(kind,asset,w,h)
+      local nodes={}
+      airfield_nodes[kind]=nodes
+      for z=0,h-1 do
+        nodes[z]={}
+        for x=0,w-1 do
+          local cell=("%s_%d_%d"):format(asset,x,z)
+          nodes[z][x]=architecture(cell,cell,asset.."_atlas")
+        end
       end
     end
+    airport_media("country","small_airport",4,3)
+    if api.capabilities and api.capabilities.city_airport then airport_media("city","city_airport",6,6) end
   end
   local ship_docks,ship_piers,ship_depots={},{},{}
   local aqueduct_head,aqueduct_span,aqueduct_pier_head,aqueduct_pier={},{},{},{}
@@ -547,6 +553,36 @@ return function(api)
       {-.15,-.5,.12,1.17,.48,1.22})
     forest[v]=architecture("scenery_tree_"..v,"scenery_tree_"..v,"scenery_palette")
   end
+  local stock_house,stock_build={},{}
+  local stock_styles=dofile(modpath.."/stock_town_art.lua")
+  for id,style in pairs(stock_styles) do
+    if type(style)=="table" and style.asset then
+      local name=("town_stock_%02x"):format(id)
+      if style.width then
+        local parts={}
+        stock_house[id]=parts
+        local size=style.width..style.depth
+        stock_build[size]=stock_build[size] or {}
+        for x=0,style.width-1 do
+          for z=0,style.depth-1 do
+            local part=2*x+z
+            local asset=name.."_"..part
+            parts[part]=architecture(asset,asset,"scenery_palette",false,style.solid)
+            for progress=0,2 do
+              local stages=stock_build[size]
+              stages[progress]=stages[progress] or {}
+              if not stages[progress][part] then
+                local stage="town_stock_stage_"..size.."_"..progress.."_"..part
+                stages[progress][part]=architecture(stage,stage,"scenery_palette")
+              end
+            end
+          end
+        end
+      else
+        stock_house[id]=architecture(name,name,"scenery_palette",true,style.solid)
+      end
+    end
+  end
   local stock_scenery={forest={},quarters={[0]=0,2,3,1}}
   if api.ship_tools then stock_scenery.buoy=architecture("ship_buoy","ship_buoy","ship_buoy_palette") end
   stock_scenery.waypoint={}
@@ -631,12 +667,25 @@ return function(api)
   local function solid(t,id,x,z)
     if t.site or t.house then
       local record=t.source_house
+      -- Multipart buildings are split at real tile boundaries for
+      -- independently loaded worker sectors; their stock footprint is fixed.
+      local style=record and record.asset_root and stock_styles[record.asset_root]
+      if style then
+        if x%2==0 and z%2==0 then
+          local part=record.asset_part
+          local node=record.completed and stock_house[record.asset_root][part]
+            or stock_build[style.width..style.depth][record.stage][part]
+          return node,t.h+1,0
+        end
+        return gnames[t.terrain][t.variant],t.h
+      end
       local stage=record and record.town_growth and not record.completed and house_build[record.stage]
       local parcel=record and record.render_parcel or t.parcel
       local dx,dz,facedir=frontage.placement(Sim,S,id,t,stage,parcel)
       if x%2==dx and z%2==dz then
         local variant=record and record.render_variant or t.variant
-        return stage or (t.site and scenery[S.sites[t.site].kind] or parcels[parcel] or house[variant]),t.h+1,facedir
+        return stage or (record and stock_house[record.id]) or
+          (t.site and scenery[S.sites[t.site].kind] or parcels[parcel] or house[variant]),t.h+1,facedir
       end
       return gnames[t.terrain][t.variant],t.h
     end
@@ -821,7 +870,9 @@ return function(api)
     if api.airport_tools and t.airfield then
       local field=t.airfield
       local _,level=terrain.tile(id)
-      if y==level+1 and x%2==0 and z%2==0 then return airfield_nodes[field.z][field.x] end
+      local nodes=airfield_nodes[field.layout or "country"]
+      local row=nodes and nodes[field.z]
+      if row and y==level+1 and x%2==0 and z%2==0 then return row[field.x] or "air" end
       return y<=level and gnames.grass[t.variant] or "air"
     end
     if api.ship_tools and S.aqueduct_above and S.aqueduct_above[id] then
@@ -1242,6 +1293,12 @@ return function(api)
     coal_tipper="bl_coal_tipper_palette.png",leopard_bus="bl_road_fleet_palette.png",mail_van="bl_road_fleet_palette.png",
     foster_bus="bl_foster_bus_atlas.png"}
   if Sim.foster_art_ready(S) then models.foster_bus="foster_bus" end
+  local road_art=dofile(modpath.."/road_stock_media.lua")
+  local road_cap=api.capabilities and api.capabilities.road
+  for id in pairs(road_cap and road_cap.extra or {}) do
+    local model=road_art.models[id]
+    models[id],paint[id]=model,"bl_"..model.."_atlas.png"
+  end
   if api.farm_world then
     models.grain_truck,models.livestock_van="hereford_grain_truck","talbott_livestock_van"
     paint.grain_truck,paint.livestock_van="bl_hereford_grain_truck_atlas.png","bl_talbott_livestock_van_atlas.png"
@@ -1562,11 +1619,9 @@ return function(api)
         end
         if ref then
           if api.vehicle_ui then api.vehicle_ui.track("road",id,pos,ref) end
-          local visible_load=v.engine=="coal_tipper" and v.units>0 or
-            (v.engine=="wood_truck" or v.engine=="grain_truck") and v.units>=10
-          if (v.engine=="coal_tipper" or v.engine=="wood_truck" or v.engine=="grain_truck") and
-              (not last[id] or visible_load~=last[id].visible_load) then
-            ref:set_properties({mesh="bl_"..models[v.engine]..(visible_load and "_loaded" or "")..".obj"})
+          local visible_load=road_art.payload(v.engine,models[v.engine],v.units)
+          if visible_load and (not last[id] or visible_load~=last[id].visible_load) then
+            ref:set_properties({mesh=visible_load})
           end
           ref:move_to(pos,true)
           local turn=yaw

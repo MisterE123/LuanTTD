@@ -2,8 +2,10 @@
 -- the authority; this module never opens the world or advances a tick.
 return function(core,api,motion,models,airframes)
   local A={}
-  local active={}
-  local boats={[206]="stock_harbor_ferry",[207]="stock_ffp_passenger_ferry"}
+  local active,rail_members={},{}
+  local base=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local road_art=dofile(base.."/road_stock_media.lua")
+  local boats={[204]="stock_mps_oil_tanker",[205]="stock_cs_inc_oil_tanker",[206]="stock_harbor_ferry",[207]="stock_ffp_passenger_ferry",[208]="stock_bakewell_300_hovercraft"}
   local function remove(id)
     local a=active[id]
     if a and a.ref:get_pos() then a.ref:remove() end
@@ -12,15 +14,12 @@ return function(core,api,motion,models,airframes)
   local function definition(row)
     if row.mode=="road" and models[row.engine] and row.pos then
       local e=row.engine
-      local loaded=(e=="coal_tipper" and row.loaded>0) or
-        ((e=="wood_truck" or e=="grain_truck") and row.loaded>=10)
-      local special=e=="coal_tipper" or e=="wood_truck" or e=="grain_truck"
-      return "luanttd_core:vehicle_"..e,special and "bl_"..models[e]..(loaded and "_loaded" or "")..".obj",
-        row.yaw,row.pitch
+      return "luanttd_core:vehicle_"..e,road_art.payload(e,models[e],row.loaded),row.yaw,row.pitch
     elseif row.mode=="tram" then
       return "luanttd_core:tram_preview_vehicle",nil,row.yaw
     elseif row.mode=="ship" then
-      local name=row.id=="coal" and "stock_yate_cargo_ship" or boats[row.engine or 206]
+      local name=row.id=="coal" and (row.engine==212 and "stock_bakewell_cargo_ship" or "stock_yate_cargo_ship")
+        or boats[row.engine or 206]
       if name then return "luanttd_core:"..name,nil,row.dir end
     elseif row.mode=="air" then
       local art=airframes[row.engine or 215]
@@ -30,7 +29,7 @@ return function(core,api,motion,models,airframes)
   local collector
   function A.render(rows,dt,signals)
     local visible={}
-    local function present(key,row,name,mesh,pos,target,pitch,part)
+    local function present(key,row,name,mesh,pos,target,pitch,part,sync)
       if not name or not pos or core.registered_entities and not core.registered_entities[name] then return end
       local v=active[key]
       if v and (v.name~=name or not v.ref:get_pos()) then remove(key);v=nil end
@@ -42,7 +41,7 @@ return function(core,api,motion,models,airframes)
       visible[key]=true
       if mesh and v.mesh~=mesh then v.ref:set_properties({mesh=mesh});v.mesh=mesh end
       if part then
-        if v.flip~=nil and part.flip~=v.flip then v.ref:set_pos(pos)
+        if (sync or v.flip~=nil and part.flip~=v.flip) and v.ref.set_pos then v.ref:set_pos(pos)
         else v.ref:move_to(pos,true) end
         v.flip=part.flip
         v.ref:set_rotation(part.rotation)
@@ -59,8 +58,23 @@ return function(core,api,motion,models,airframes)
         api.vehicle_ui.track(row.mode,row.id,pos,v.ref,not part or part.index==1)
       end
     end
+    local next_rail={}
     for key,row in pairs(rows) do
       if row.mode=="rail" then
+        -- The client interpolates individual entities. When a rear head
+        -- emerges, a sector reveals another body, or the order reverses,
+        -- interpolate none of this train's bodies for that update rather
+        -- than stretching the temporary distance between old and new actors.
+        local last=rail_members[key] or {}
+        local members,snap={},false
+        for _,p in ipairs(row.parts) do
+          members[p.body_index]=true
+          if not last[p.body_index] then snap=true end
+          local prev=active[key..":"..p.body_index]
+          if prev and prev.flip~=nil and p.flip~=prev.flip then snap=true end
+        end
+        for i in pairs(last) do if not members[i] then snap=true end end
+        next_rail[key]=members
         for _,p in ipairs(row.parts) do
           local body=key..":"..p.body_index
           local name="luanttd_core:dispatch_"..p.kind
@@ -70,11 +84,11 @@ return function(core,api,motion,models,airframes)
             local move=c.rows and collector.mount(c.rows,c.axis,c.side,p.pos,p.rotation,vector.rotate,.03,.45)
             local heel=move and move.heel or vector.add(p.pos,vector.rotate(collector.heel,p.rotation))
             local scale=move and move.scale_y or c.rows and .03/collector.nominal_extension or 1
-            present(body,row,name.."_body",nil,p.pos,nil,nil,p)
+            present(body,row,name.."_body",nil,p.pos,nil,nil,p,snap)
             present(body..":collector",row,name.."_collector",nil,heel,nil,nil,
-              {visual_only=true,rotation=p.rotation,flip=p.flip,scale=scale})
+              {visual_only=true,rotation=p.rotation,flip=p.flip,scale=scale},snap)
           else
-            present(body,row,name,nil,p.pos,nil,nil,p)
+            present(body,row,name,nil,p.pos,nil,nil,p,snap)
           end
         end
       elseif row.mode=="rail_pilot" then
@@ -85,6 +99,7 @@ return function(core,api,motion,models,airframes)
         if type(target)=="number" then present(key,row,name,mesh,row.pos,target,pitch) end
       end
     end
+    rail_members=next_rail
     for key,lamp in pairs(signals or {}) do
       present("signal:"..key,{},"luanttd_core:dispatch_signal_"..lamp.model,nil,lamp.pos,nil,nil,
         {visual_only=true,rotation=lamp.rotation})

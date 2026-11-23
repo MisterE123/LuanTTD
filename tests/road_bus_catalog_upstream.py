@@ -84,7 +84,7 @@ print("PASS: stock OpenTTD 14.1 #116–118 catalog, five price regimes and 3,615
         fields={"stock_id":id_,"image":rv[0],"purchase_factor":rv[1],"running_factor":rv[2],
                 "intro_after_1920":mr[0],"life":mr[2],"base_life":mr[3],"model_life":mr[1],"capacity":rv[5],
                 "source_speed":rv[4],"weight_quarters":rv[6],"power_tens_hp":rv[7],
-                "tractive_effort":macro[9],"air_drag":macro[10],"load_amount":meta_macro[9],"age_ticks":ages}
+                "tractive_effort":macro[9],"air_drag":macro[10],"load_amount":meta_macro[4],"age_ticks":ages}
         lua+=f"\ndo local q=B.quote(nil,nil,{id_});assert("+" and ".join(
             f"q.{k}=={v}" for k,v in fields.items())+") end"
     cpp=r'''

@@ -14,7 +14,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
   local floor,max=math.floor,math.max
   function R.supported_vehicle(v)
     return v and pairs_by_cargo[v.cargo]~=nil and (pairs_by_cargo[v.cargo]==v.engine or
-      v.engine=="craighead_goods_truck" and v.cargo=="goods") or false
+      Sim.road_freight_cargo(v.engine)==v.cargo) or false
   end
   function R.truck_stop(st) return st and st.mode=="road" and st.stop_type=="truck" end
   function R.bind(s,options)
@@ -36,6 +36,17 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
         stations[#stations+1]=point;by_id[st.id]=point
       end
     end
+    -- Ship stations are bound into the same physical allocator as trucks
+    -- and trains. Filter their capacity to their actual carried cargo.
+    for _,st in ipairs(options.ship_stations or {}) do
+      assert(not by_id[st.id] and st.mode=="ship" and st.freight_cargo=="oil")
+      st[queue_key]=st[queue_key] or {}
+      st.goods=st.goods or {}
+      local x,z=xy(st.tile)
+      local point={id=st.id,st=st,tile=st.tile,x=x-1,z=z-1,town=st.town,owner=st.owner,
+        stock=st[queue_key],goods=st.goods,tiles=st.tiles,freight_cargo=st.freight_cargo}
+      stations[#stations+1]=point;by_id[st.id]=point
+    end
     table.sort(stations,function(a,b)return a.id<b.id end)
     local function house_at(x,z)
       local id=Sim.id(x+1,z+1)
@@ -45,6 +56,8 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
     local function random() return (options.random_u32 or Station.random_u32)(s) end
     local B,raw={},nil
     local function source_report(id,cargo)
+      local p=by_id[id]
+      if p and p.freight_cargo and p.freight_cargo~=cargo then return {accepts=false,eighths=0,sources={}} end
       local r=raw.report(id,cargo)
       if not r then return end
       r.sources={}
@@ -144,8 +157,8 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       end
       if next_rating.drop>0 then
         for id,count in pairs(Station.truncate(stock,n,next_rating.drop,random)) do
-          local src=s.stations[id]
-          src=R.truck_stop(src) and src or (rail_at and rail_at(id))
+          local point=by_id[id]
+          local src=point and point.st or (rail_at and rail_at(id))
           if src then
             local g0=Rules.goods(src,cargo)
             g0.max_waiting_cargo=max(g0.max_waiting_cargo,count)
@@ -201,8 +214,9 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
         if emit then emit(kind,st,v,p) end
       end
       local function carrier(v,st)
-        local id=options.cargo_tile and options.cargo_tile(s,v,st) or v.road_stop_pose and v.road_stop_pose[4]
-        assert(id and s.tiles[id],profile.label.." cargo requires the real occupied stock road stop tile")
+        local id=options.cargo_tile and options.cargo_tile(s,v,st) or
+          (v.mode=="ship" and v.cargo_tile) or v.road_stop_pose and v.road_stop_pose[4]
+        assert(id and s.tiles[id],profile.label.." cargo requires the real occupied station tile")
         return {id=st.id,tile=id}
       end
       return {
@@ -217,11 +231,17 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
         end,
         attempt=function(st,v,capacity)
           local q=Rules.trucks[v.cargo]
-          Rating.observe_loading(Rules.goods(st,v.cargo),(Sim.vehicles[v.engine].display_speed or floor(q.speed/2)),
-            Sim.date(s)-Sim.date(s,v.bought or s.day),capacity)
+          local speed,age
+          if v.mode=="ship" then
+            speed,age=v.cached_max_speed,Sim.date(s)-assert(v.built)
+          else
+            speed,age=Sim.vehicles[v.engine].display_speed or floor(q.speed/2),Sim.date(s)-Sim.date(s,v.bought or s.day)
+          end
+          Rating.observe_loading(Rules.goods(st,v.cargo),speed,age,capacity)
         end,
         loaded=function(st,v,n)
-          Station.loaded(st)
+          if v.mode=="ship" then st.time_since_load=0;st.last_vehicle_type="ship"
+          else Station.loaded(st) end
           st.last_service=st.last_service or {};st.last_service[v.cargo]=s.day
           event("board",st,v,{units=n})
         end,

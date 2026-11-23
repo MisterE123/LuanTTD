@@ -8,6 +8,15 @@ out=$(realpath "$out")
 game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp -r "${BAYLINE_NATIVE_EXACT_GAME:-.}"/game.conf "${BAYLINE_NATIVE_EXACT_GAME:-.}"/mods "$game/"
+# Preserve the narrow route fixture's exact seeded occupancy and finance
+# goldens without altering the ordinary catalogue. The city suite exercises
+# all enabled parcels on the actual worker-owned default game.
+art="$game/mods/luanttd_core/stock_town_art.lua"
+if [[ -f "$art" ]]; then
+  cp tests/fixed_parcel_footprint.lua "$game/mods/luanttd_core/fixed_parcel_footprint.lua"
+  sed 's|^return Art$|return dofile((debug.getinfo(1,"S").source:sub(2):match("^(.+/)")).."fixed_parcel_footprint.lua")(Art)|' "$art" > "$out/fixed-stock-art"
+  mv "$out/fixed-stock-art" "$art"
+fi
 printf '\n' >> "$game/mods/luanttd_core/init.lua"
 if [[ ${BAYLINE_NATIVE_GENERATED_SCALE:-0} == 1 ]]; then
   cat tests/stock_generated_scale_append.lua >> "$game/mods/luanttd_core/init.lua"

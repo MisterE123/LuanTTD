@@ -7,7 +7,8 @@ local engine={add_entity=function(pos,name)
   live[n]=ref
   function ref:get_pos() return self.pos end
   function ref:remove() self.pos=nil end
-  function ref:move_to(p) self.pos=p end
+  function ref:move_to(p) self.pos=p;self.snapped=false end
+  function ref:set_pos(p) self.pos=p;self.snapped=true end
   function ref:set_rotation(r) self.rotation=r end
   function ref:set_properties(p) self.mesh=p.mesh end
   return ref
@@ -39,6 +40,19 @@ rows["rail:5"].parts[1].flip=true
 A.render(rows,.5)
 assert(ref.snapped and ref.name=="luanttd_core:dispatch_steam")
 print("PASS projected train keeps the original locomotive and wagon identity at a reversal")
+local parts=rows["rail:5"].parts
+parts[1].pos={x=9,y=3,z=3};parts[2].pos={x=8,y=3,z=3}
+A.render(rows,.5)
+assert(not live[7].snapped and not live[8].snapped,"Connected moving train should interpolate")
+parts[1].pos={x=10,y=3,z=3};parts[2].pos={x=9,y=3,z=3}
+parts[3]={body_index=3,index=3,kind="sh_125",pos={x=8,y=3,z=3},rotation={x=0,y=1,z=0},flip=false}
+A.render(rows,.5)
+assert(live[7].snapped and live[8].snapped and live[9].snapped,"Snap all bodies when the rear becomes visible")
+parts[1].flip=false
+A.render(rows,.5)
+assert(live[7].snapped and live[8].snapped and live[9].snapped,"Snap all bodies together on a reversal")
+print("PASS rail engine, coaches and linked rear snap together after changes without discarding normal interpolation")
+
 local lamps={["8:0"]={model="light_red",pos={x=8,y=3,z=4},rotation={x=0,y=1,z=0}}}
 A.render(rows,.5,lamps)
 local mast=live[n]

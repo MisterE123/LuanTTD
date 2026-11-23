@@ -3,10 +3,14 @@ return function(api,Run,RoadVisual)
   local M={}
   local names={[206]="luanttd_core:stock_harbor_ferry",[207]="luanttd_core:stock_ffp_passenger_ferry"}
   local meshes={[206]="bl_harbor_ferry.obj",[207]="bl_ffp_passenger_ferry.obj"}
+  if api.capabilities and api.capabilities.ferry[208] then
+    names[208]="luanttd_core:stock_bakewell_300_hovercraft"
+    meshes[208]="bl_stock_bakewell_300_hovercraft.obj"
+  end
   for id,name in pairs(names) do
     core.register_entity(name,{initial_properties={physical=false,pointable=false,
       collide_with_objects=false,static_save=false,visual="mesh",mesh=meshes[id],
-      textures={"bl_harbor_ferry_palette.png"},shaded=true,backface_culling=true,
+      textures={id==208 and "bl_stock_bakewell_300_hovercraft_atlas.png" or "bl_harbor_ferry_palette.png"},shaded=true,backface_culling=true,
       visual_size={x=1,y=1,z=1}}})
   end
   local ref,yaw

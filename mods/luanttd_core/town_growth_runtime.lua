@@ -1,11 +1,10 @@
--- Preview adapter. House-only, original temperate 1x1 art, no map clearing.
+-- Live stock Temperate town growth, limited to original native assets.
+local source=debug and debug.getinfo(1,"S").source
+local path=(core and core.get_modpath and core.get_modpath("luanttd_core") and core.get_modpath("luanttd_core").."/")
+  or assert(source and source:sub(2):match("^(.+[\\/])"),"Cannot locate stock town assets")
 return function(Sim,Terrain,G,B,H)
   local W={}
-  local names={
-    [0x19]={variant=0,name="Cottage"}, [0x18]={variant=1,name="Old houses"},
-    [0x1A]={variant=2,name="Houses"}, [0x06]={variant=3,name="Town houses"},
-    [0x0E]={parcel="shop",name="Shops and offices"},
-  }
+  local names=dofile(path.."stock_town_art.lua")
   local function at(layer,id) return layer and layer[id] end
   local function record(t) return t and t.house and t.source_house or nil end
   local function protected(s,id,t)
@@ -138,14 +137,25 @@ return function(Sim,Terrain,G,B,H)
     if not h or not h.town_growth or h.completed then return false end
     local t=s.stock_town_growth.towns[h.town]
     local stage=h.stage
-    local suppress=B.advance_house(h,{h},H.specs,function(_,population)
+    if h.asset_root and not h.root then return true end
+    local members=names.footprint(Sim,s,h)
+    if h.asset_root and not members then return true end
+    local records={h}
+    if members then
+      for i,part in ipairs(members) do records[i]=part.record end
+    end
+    local suppress=B.advance_house(h,records,H.specs,function(p,population)
       t.population=t.population+population
       s.sites[h.town].population=t.population
-      h.completed_tick=s.passenger_house_clock.counter+1
+      p.completed_tick=s.passenger_house_clock.counter+1
     end)
-    if stage~=h.stage then visual_changed(s,id) end
+    if stage~=h.stage then
+      if members then for _,part in ipairs(members) do visual_changed(s,part.id) end
+      else visual_changed(s,id) end
+    end
     return suppress
   end
+  function W.footprint(s,h) return names.footprint(Sim,s,h) end
   function W.remove(s,h)
     local state=s.stock_town_growth
     local t=state and h and state.towns[h.town]
@@ -167,23 +177,25 @@ return function(Sim,Terrain,G,B,H)
   local function commit(s,t,proposal,views,tick,write_house)
     -- Everything is read-only until the exact proposal and occupancy
     -- recheck succeed. Do not issue a generic clear or terraform command.
-    if not proposal or proposal.kind~="house" or proposal.town~=t.id or #proposal.parts~=1 then return false end
+    if not proposal or proposal.kind~="house" or proposal.town~=t.id then return false end
     local style=names[proposal.id]
-    local id=Sim.id(proposal.x,proposal.z)
-    local level=style and id and base_if_clear(s,id)
-    if not level then return false end
-    local h=proposal.parts[1]
-    if not h.root or h.id~=proposal.id or h.x~=proposal.x or h.z~=proposal.z then return false end
+    local get_level=function(id) return base_if_clear(s,id) end
+    local parts,level=names.inspect(Sim,proposal,get_level)
+    if not parts then return false end
+    local root=parts[1]
+    local h,id=root.record,root.id
     local wrote=false
     local function native_write()
-      if wrote or write_house and base_if_clear(s,id)~=level then return false end
+      local recheck,current=names.inspect(Sim,proposal,get_level)
+      if wrote or not recheck or current~=level then return false end
       wrote=true
-      h.town_growth,h.built_tick,h.random_bits=true,tick,proposal.random_bits
-      local tile=s.tiles[id]
-      h.render_variant,h.render_parcel=style.variant,style.parcel
-      tile.house,tile.source_house,tile.h=true,h,level
+      for _,part in ipairs(parts) do
+        local tile=s.tiles[part.id]
+        names.stamp(part.record,proposal,style,part.index,tick)
+        tile.house,tile.source_house,tile.h=true,part.record,level
+        visual_changed(s,part.id)
+      end
       B.house_committed(t,proposal,views,2)
-      visual_changed(s,id)
       t.last_build={tile=id,house=h.id,tick=tick,name=style.name}
       return true
     end

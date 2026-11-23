@@ -84,11 +84,11 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
       return true
     end
     function B.vehicle(def)
-      if state.vehicle or def.engine~=Roster.id or def.cargo~=Roster.coal or
+      if state.vehicle or not def.engine or not Roster.model(def.engine) or def.cargo~=Roster.coal or
           type(def.id)~="number" or type(def.built)~="number" or not def.owner then
         return nil,"OWN_YATE_REFITTED_TO_COAL_REQUIRED"
       end
-      local v={id=def.id,owner=def.owner,mode="ship",engine=Roster.id,cargo="coal",built=def.built,
+      local v={id=def.id,owner=def.owner,mode="ship",engine=def.engine,cargo="coal",built=def.built,
         units=0,batches={},cargo_age_counter=1,delivered=0,revenue=0,
         profit_with_feeders=0,running_ticks=0,running_fixed=0}
       state.vehicle=v
@@ -183,7 +183,7 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
       -- leg, no load at power, and no forced transfer or auto refit.
       if order~="full" and order~="no_load" then return nil,"UNSUPPORTED_SHIP_ORDER" end
       v.visit,v.cargo_tile=visit,tile
-      local l=Loader.begin(st,v,Roster.capacity,{full=order=="full",no_load=order=="no_load"},options(tick))
+      local l=Loader.begin(st,v,Roster.model(v.engine).capacity,{full=order=="full",no_load=order=="no_load"},options(tick))
       l.arrived_tick=tick
       emit("arrive",st,v,tick)
       return l
@@ -254,7 +254,7 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
       state.settled_day=day
       local v=state.vehicle
       if not v then return 0 end
-      local cost=Roster.running_fixed(v.running_ticks,option("running_base",day))
+      local cost=Roster.running_fixed(v.running_ticks,option("running_base",day),v.engine)
       v.running_ticks=0;v.running_fixed=v.running_fixed+cost
       if cost>0 and ctx.charge_fixed then ctx.charge_fixed(s,v.owner,cost) end
       return cost

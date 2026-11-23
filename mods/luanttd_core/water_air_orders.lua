@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Adapters for live ship/aircraft orders. List index updates use the
 -- translated OpenTTD 16.0-RC1 order_cmd.cpp/vehicle_base.h rules.
-return function(s,Sim,O,Ship,Coal,C,Air)
+return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
   local function label(title,id,tile)
     local x,z
     if tile then x,z=Sim.xy(tile) end
@@ -23,21 +23,21 @@ return function(s,Sim,O,Ship,Coal,C,Air)
     end
     local st=registry(mode)[id]
     if not st or st.owner~=owner then return end
-    local title=mode=="air" and "Airfield" or "Dock"
+    local title=mode=="air" and (st.layout=="city" and "City Airport" or "Airfield") or "Dock"
     local o={kind="station",id=id}
-    if mode=="coal" then
-      local report=not saved_policy and C.order_report(s,id)
+    if mode=="coal" or mode=="oil" then
+      local report=not saved_policy and (mode=="coal" and C.order_report(s,id) or mode=="oil" and Tanker.report(s,id))
       if check and (not report or #report.sources==0 and not report.accepts) then return end
       if saved_policy=="full" or report and #report.sources>0 then
-        o.cargo_order="full";title="Full load at mine"
+        o.cargo_order="full";title=mode=="oil" and "Full load at oil dock" or "Full load at mine"
       elseif saved_policy=="no_load" or report and report.accepts then
-        o.cargo_order="no_load";title="Unload at power station"
+        o.cargo_order="no_load";title=mode=="oil" and "Unload at refinery" or "Unload at power station"
       end
     end
     return o,label(title,id,st.origin or st.land)
   end
   local function locate(mode,owner,id)
-    local run=mode=="ferry" and Ship or mode=="coal" and Coal or mode=="air" and Air
+    local run=mode=="ferry" and Ship or mode=="coal" and Coal or mode=="air" and Air or mode=="oil" and Oil
     if not run then return end
     local p
     if mode=="air" then
@@ -51,7 +51,7 @@ return function(s,Sim,O,Ship,Coal,C,Air)
     if p.transport_orders then return p.transport_orders,p.transport_order_cursor end
     local a=order(mode,owner,p.first) or {kind="station",id=p.first}
     local b=order(mode,owner,p.second) or {kind="station",id=p.second}
-    if mode=="coal" then a.cargo_order,b.cargo_order="full","no_load" end
+    if mode=="coal" or mode=="oil" then a.cargo_order,b.cargo_order="full","no_load" end
     local current=p.vehicle.order
     local list={a,b}
     local station=p.pending_buoy_dock or current and (current.next_station or current.id)
@@ -83,7 +83,9 @@ return function(s,Sim,O,Ship,Coal,C,Air)
       table.sort(ids)
       for _,i in ipairs(ids) do
         local o,desc=order(mode,owner,i,true)
-        if o then targets[#targets+1]={id=i,label=desc} end
+        if o and (mode~="air" or not Air.route_stop or Air.route_stop(s,registry(mode)[i],p.engine_id,p)) then
+          targets[#targets+1]={id=i,label=desc}
+        end
       end
       if mode=="ferry" then
         local buoys={}
@@ -96,7 +98,7 @@ return function(s,Sim,O,Ship,Coal,C,Air)
         end
       end
       return {items=items,targets=targets,revision=p.transport_orders_revision or 0,
-        active=cursor.real+1}
+        active=cursor.real+1,can_toggle=mode~="air",running=mode~="air" and not p.stopped or nil}
     end
     function A.edit(owner,id,revision,op,index,target)
       local mode=mode_of(id)
@@ -112,7 +114,9 @@ return function(s,Sim,O,Ship,Coal,C,Air)
       local current=index==c.real+1
       if op=="append" then
         local o=order(mode,owner,target,true)
-        if not o then return false,"Choose a compatible destination." end
+        if not o or mode=="air" and Air.route_stop and not Air.route_stop(s,registry(mode)[target],p.engine_id,p) then
+          return false,"Choose a compatible destination."
+        end
         if not O.insert(seq,c,#seq,o) then return false,"The order list is full." end
       elseif not strict_index(index) or index>#seq then return false,"Choose an order."
       elseif op=="up" or op=="down" then
@@ -137,7 +141,9 @@ return function(s,Sim,O,Ship,Coal,C,Air)
         end
       end
       if n<2 or not second then return false,"Keep two different stations in this service." end
-      if mode=="coal" and not (has_full and has_unload) then return false,"Keep a mine loading order and a power-station unloading order." end
+      if (mode=="coal" or mode=="oil") and not (has_full and has_unload) then
+        return false,mode=="oil" and "Keep an oil source and refinery order." or "Keep a mine loading order and a power-station unloading order."
+      end
       if op=="append" and run.check_order then
         local ok,why=run.check_order(s,p,seq)
         if not ok then return false,why end
@@ -154,6 +160,6 @@ return function(s,Sim,O,Ship,Coal,C,Air)
     end
     return A
   end
-  return {ship=create_selector(function(id) if id=="ferry" or id=="coal" then return id end end),
+  return {ship=create_selector(function(id) if id=="ferry" or id=="coal" or id=="oil" then return id end end),
           air=create_selector(function() return "air" end)}
 end

@@ -6,7 +6,7 @@ return function(Sim,mod)
   local source=mod.."/openttd/"
   function B.road(s,opts)
     Sim.mount_road_bus_market(s,dofile(source.."stock_engine_calendar.lua"),
-      opts.start_year,opts.foster,opts.craighead)
+      opts.start_year,opts.foster,opts.craighead,opts.extra)
     Sim.mount_road_faults(s,dofile(source.."road_breakdowns.lua"),
       dofile(mod.."/road_faults_runtime.lua"),opts.breakdowns,
       {kernel=dofile(source.."road_depot_service.lua"),interval=opts.service_interval,
@@ -27,11 +27,12 @@ return function(Sim,mod)
     Sim.mount_stock_town_growth(s,runtime,true)
     return runtime
   end
-  function B.air(s,slope,ready)
+  function B.air(s,slope,ready,city_ready)
     local terrain=dofile(source.."terrain.lua")
     local small=dofile(source.."airport_small.lua")
     local motion=dofile(source.."airport_motion.lua")(small)
-    local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small)
+    local city=city_ready and dofile(source.."airport_city.lua")
+    local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small,city or nil)
     local roster=dofile(source.."airport_roster.lua")
     local run=dofile(mod.."/airport_preview_run.lua")(Sim,net,small,motion,terrain,slope,roster)
     run.paid_art_ready=function(p) return not p or not p.engine_id or ready(p.engine_id) end
@@ -61,12 +62,17 @@ return function(Sim,mod)
     Sim.mount_paid_ferry(s,run)
     local cargo_run,coal
     if s.ship_coal_service or s.stock_coal_ship then
-      cargo_run=make({engine=dofile(source.."ship_roster.lua"),
+      local freight=dofile(source.."ship_roster.lua")
+      cargo_run=make({engine=freight.model(211),engine_for=freight.model,
         key="stock_coal_ship_run",serial="next_stock_coal_ship_run",paid=function() return true end,
         validate_both=true})
-      coal=Sim.mount_coal_ship(s,cargo_run,run,net)
+      coal=Sim.mount_coal_ship(s,cargo_run,run,net,ready)
     end
-    return terrain,water,net,roster,run,depot,cargo_run,coal
+    local tankers=dofile(source.."oil_ship_roster.lua")
+    local oil_run=make({engine=tankers.model(204),engine_for=tankers.model,key="stock_oil_ship_route",
+      serial="next_stock_oil_ship_route",paid=function()return true end,validate_both=true})
+    local oil=Sim.mount_oil_ship(s,net,oil_run,ready,run,cargo_run)
+    return terrain,water,net,roster,run,depot,cargo_run,coal,oil,oil_run
   end
   function B.networks(s,slope,terrain_tile,survey_clear)
     local track=dofile(source.."rail_track.lua")

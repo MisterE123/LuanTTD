@@ -34,6 +34,7 @@ local mode=arg and arg[1]
 local turnout=mode=="depot_turnout"
 local mixed=mode=="mixed_signals"
 local two_coaches=mode=="two_coaches"
+local sh_125=mode=="sh_125"
 local live_orders=mode=="live_orders" or mode=="live_pbs_orders"
 local three_stops=mode=="three_stops" or live_orders
 local spans_unreserved=mode=="spans_unreserved"
@@ -117,7 +118,7 @@ else
 end
 assert(Lab.station(s,owner,id(11),id(12)))
 assert(Lab.station(s,owner,id(22),id(24)))
-if mode~="signal_free" and not turnout and not mixed and not two_coaches and not spans_unreserved and not three_stops then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
+if mode~="signal_free" and not turnout and not mixed and not two_coaches and not sh_125 and not spans_unreserved and not three_stops then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
 local west,east=s.tiles[id(11)].rail_station_id,s.tiles[id(22)].rail_station_id
 s.sites[1].tile=id(10,13);s.sites[2].tile=id(24,13)
 for _,z in ipairs({7,8,12,13}) do
@@ -133,7 +134,7 @@ if mixed then
   assert(Run.place_signal(s,owner,id(14),8,Signal.BLOCK,true))
   assert(Run.place_signal(s,owner,id(18),8,Signal.PBS))
 end
-assert(Owned.initialize(s,{starting_year=1950,generation_seed=s.seed,startup_random=9001}))
+assert(Owned.initialize(s,{starting_year=sh_125 and 1987 or 1950,generation_seed=s.seed,startup_random=9001}))
 if mode=="live_pbs_orders" then
   assert(Run.place_signal(s,owner,id(8),8,Signal.PBS))
   assert(Run.place_signal(s,owner,id(19),8,Signal.PBS))
@@ -264,6 +265,54 @@ if three_stops then
     end
   end
   error("Station order cycle did not complete")
+end
+if sh_125 then
+  assert(not Owned.quote_part(s,owner,start_depot,22))
+  assert(Run.mount_owned_model(22))
+  company.cash=200000
+  local function buy(id)
+    return assert(Owned.commit(s,owner,assert(Owned.quote_part(s,owner,start_depot,id))))
+  end
+  local u=buy(22)
+  assert(not Owned.start(s,owner,u.id,east,west),"Power cars are not passenger carriages.")
+  local coach=buy(27)
+  local v=assert(Owned.get(s,owner,u.id))
+  assert(#v.parts==3 and v.parts[1].stock_id==22 and v.parts[3].stock_id==22 and v.parts[2].body_id==coach.body_id)
+  v.stats=assert(Roster.stats(v.stock_ids))
+  assert(v.stats.parts[1].role=="front" and v.stats.parts[3].role=="rear")
+  assert(v.stats.parts[1].mate==3 and v.stats.parts[3].mate==1)
+  assert(v.stats.power==4500 and v.stats.max_track_speed==200 and v.stats.weight==165)
+  local ok,msg,run=Owned.start(s,owner,u.id,east,west)
+  assert(ok,msg)
+  assert(run.dual_head and run.total_length==24 and run.passenger_coaches==1)
+  local loaded,reloaded=false,false
+  local function copy(t)
+    if type(t)~="table" then return t end
+    local out={};for k,v in pairs(t) do out[k]=copy(v) end;return out
+  end
+  for _=1,250 do
+    Sim.daily(s)
+    assert(not Run.current(s).failure,Run.current(s).failure)
+    local p=assert(Sim.rail_paid_status(s,u.id))
+    assert(p.capacity==40 and #p.carrying_parts==1)
+    assert(Motion.check_spacing(Run.board(s),run.consist))
+    if p.loading then assert(p.carrying_parts[1].tile==run.consist.parts[2].tile) end
+    if p.onboard>0 then
+      loaded=true
+      if not reloaded then
+        s=copy(s);mount()
+        run=assert(Run.current_paid(s,u.id))
+        assert(run.dual_head and Sim.rail_paid_status(s,u.id).onboard==p.onboard)
+        reloaded=true
+      end
+    end
+    if run.shuttle.reversals>=2 and p.fare>0 then
+      assert(loaded and reloaded and p.running_expense>0)
+      print(("PASS stock SH '125' has two reciprocal powered heads, a real 40-seat carriage, paid reversals and restore: $%d"):format(p.fare))
+      return
+    end
+  end
+  error("SH '125' passenger carriage service did not pay.")
 end
 if two_coaches then
   local before=company.cash

@@ -297,7 +297,7 @@ return function(Sim,R,max_days)
     return reply(true,nil,R.company_fleet.page(name,page))
   end
   function A.vehicle(name,mode,id,locate)
-    if not owner(name) or not s.companies[name] or not (index(id) or id=="ferry" or id=="coal") then
+    if not owner(name) or not s.companies[name] or not (index(id) or id=="ferry" or id=="coal" or id=="oil") then
       return reply(false,"VEHICLE_UNAVAILABLE")
     end
     local v=R.company_fleet.vehicle(name,mode,id)
@@ -471,6 +471,19 @@ return function(Sim,R,max_days)
         return reply(false,"NOT_YOUR_ROAD_VEHICLE")
       end
       ok,note=Sim.add_order(s,name,c.vehicle,c.station)
+    elseif c.kind=="ship_toggle" and R.water then
+      local water=R.water
+      if c.vehicle=="oil" and water.tanker then
+        ok,note=water.tanker.toggle(s,name)
+      elseif c.vehicle=="coal" and water.coal then
+        local v=water.coal.status(s)
+        if not v or v.owner~=name then return reply(false,"Choose your cargo ship.") end
+        ok,note=water.coal.set_stopped(s,name,not v.stopped)
+      elseif c.vehicle=="ferry" then
+        local v=water.run.current(s)
+        if not v or v.owner~=name then return reply(false,"Choose your active passenger vessel.") end
+        ok,note=water.depot.stop(s,name,not v.stopped)
+      else return reply(false,"Choose an active vessel.") end
     elseif c.kind=="road_toggle" and index(c.vehicle) then
       local v=s.fleet[c.vehicle]
       if not v or v.owner~=name or not Sim.vehicles[v.engine] or Sim.vehicles[v.engine].mode~="road" then

@@ -42,7 +42,7 @@ local function fixture(missing_file,electric,eased,reversal)
     rail_oil_status=function()error("sealed visual must not query the oil ledger")end,
   }
   local Run={current=function()return d end,mount_owned_model=function(id)
-    assert(id==8 or id==9 or id==10 or id==11 or id==13 or id==14 or id==15 or electric and (id==23 or id==24),
+    assert(id==8 or id==9 or id==10 or id==11 or id==13 or id==14 or id==15 or id==22 or electric and (id==23 or id==24),
       "cargo or inactive electric art must not be registered as engines")
     mounted[id]=true
     return true

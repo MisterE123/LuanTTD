@@ -10,7 +10,7 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
     return st and st.mode=="road" and st.stop_type=="truck"
   end
   function R.supported_vehicle(v)
-    return v and v.engine==R.engine_key and v.cargo=="coal"
+    return v and Sim.road_freight_cargo(v.engine)=="coal" and v.cargo=="coal"
   end
 
   local function ordered(map,predicate)
@@ -188,7 +188,7 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
         end,
         attempt=function(st,v,left)
           local byear=Sim.date(s,v.bought or s.day)
-          Coal.observe_loading(st,{mode="road",build_year=byear,max_speed=Coal.truck.speed},left,Sim.date(s))
+          Coal.observe_loading(st,{mode="road",build_year=byear,max_speed=Sim.vehicles[v.engine].speed},left,Sim.date(s))
         end,
         loaded=function(st,v,n)
           Station.loaded(st)

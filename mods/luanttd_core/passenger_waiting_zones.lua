@@ -56,6 +56,12 @@ return function(api)
   function Z.air(id)
     local st=S.stock_small_airports[id]
     if not st then return end
+    if st.layout=="city" then
+      local t=st.origin and S.tiles[st.origin]
+      if not (t and t.airfield and t.airfield.airport==id) then return end
+      local _,level=terrain(st.origin)
+      return {rect(st.origin,level+.526,1.665,-.09,.77,.74,east)}
+    end
     local out={}
     for _,part in ipairs(st.tiles) do
       local t=S.tiles[part.id]

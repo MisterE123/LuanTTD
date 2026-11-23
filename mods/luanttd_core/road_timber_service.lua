@@ -3,12 +3,10 @@
 -- station loader. Stock timing/economy remains in the shared kernels.
 return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
   local R={}
-  local pairs_by_cargo={wood="wood_truck",goods="goods_truck"}
   local ordered={"goods","wood"} -- CargoID 5 then 7.
   local floor,max=math.floor,math.max
   function R.supported_vehicle(v)
-    return v and pairs_by_cargo[v.cargo]~=nil and (pairs_by_cargo[v.cargo]==v.engine or
-      v.engine=="craighead_goods_truck" and v.cargo=="goods") or false
+    return v and (v.cargo=="wood" or v.cargo=="goods") and Sim.road_freight_cargo(v.engine)==v.cargo or false
   end
   function R.truck_stop(st) return st and st.mode=="road" and st.stop_type=="truck" end
   function R.bind(s,options)

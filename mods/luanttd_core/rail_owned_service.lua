@@ -13,7 +13,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     return Roster.freight_engine(id) and Run.owned_passenger_engine(id)
   end
   function O.pair_passenger_engine(id)
-    return id~=11 and not Roster.electric_engine(id) and Run.owned_passenger_engine(id)
+    return not Roster.dual_head(id) and not Roster.electric_engine(id) and Run.owned_passenger_engine(id)
   end
   function O.mount_electric(Types) power_rules=Types end
   function O.railtype_mask(s,owner,Types) return Fleet.railtype_mask(s,owner,Types) end
@@ -34,6 +34,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     if id==11 and not Run.owned_passenger_engine(id) then return "MANLEY_MODEL_NOT_AVAILABLE" end
     if (id==13 or id==14) and not Run.owned_passenger_engine(id) then return "DIESEL_MODEL_NOT_AVAILABLE" end
     if id==15 and not Run.owned_passenger_engine(id) then return "FLOSS_MODEL_NOT_AVAILABLE" end
+    if id==22 and not Run.owned_passenger_engine(id) then return "SH_125_MODEL_NOT_AVAILABLE" end
     if id==23 and not Run.owned_passenger_engine(id) then return "SH_30_MODEL_NOT_AVAILABLE" end
     if id==24 and not Run.owned_passenger_engine(id) then return "SH_40_MODEL_NOT_AVAILABLE" end
   end
@@ -43,6 +44,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     out.oil_wagon_ready=oil_wagon_ready
     out.goods_wagon_ready=goods_wagon_ready
     out.manley_ready=function() return Run.owned_passenger_engine(11) end
+    out.sh_125_ready=function() return Run.owned_passenger_engine(22) end
     out.electric_model_ready=function(id) return Run.owned_passenger_engine(id) end
     if power_rules and not out.company_railtypes then
       out.company_railtypes=function(s,owner) return power_rules.flags(Fleet.railtype_mask(s,owner,power_rules)) end

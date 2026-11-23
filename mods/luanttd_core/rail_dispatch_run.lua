@@ -21,7 +21,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local bridge_collectors_ready
   function R.mount_bridge_collectors(ready) bridge_collectors_ready=ready end
   function R.mount_owned_model(id)
-    if id==8 or id==9 or id==10 or id==11 or id==13 or id==14 or id==15 or Roster and Roster.electric_engine(id) then
+    if id==8 or id==9 or id==10 or id==11 or id==13 or id==14 or id==15 or id==22 or Roster and Roster.electric_engine(id) then
       model_ready[id]=true
       return true
     end
@@ -565,10 +565,12 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if owned then
       run.fleet_id,run.stock_engine,run.stock_wagon=owned.id,owned.stock_ids[1],owned.stock_ids[2]
       run.visual=stats.parts[1].visual
-      -- The mounted Manley-Morel's rear is a stock powered driving cab.
+      -- Either linked powered rear is a stock driving cab.
       -- The dispatcher stores travel order while commercial cargo stays
       -- with the same physical cab when the train backs up.
-      if owned.stock_ids[1]==11 then consist.last_can_lead=true end
+      if Roster.dual_head(owned.stock_ids[1]) then
+        consist.last_can_lead=true;run.dual_head=true
+      end
       if stats.parts[1].railtype==1 then
         run.engine_railtype,run.traction_railtypes=1,stats.compatible
         if not run.traction_railtypes[dt.railtype] then return false,"The depot does not supply power to this locomotive." end
@@ -577,7 +579,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       run.max_track_speed,run.front_length,run.total_length=stats.max_track_speed,stats.front_length,stats.total_length
       run.acceleration,run.consist_mass,run.power=stats.acceleration,stats.weight,stats.power
       run.paid_build_year=owned.parts[1].build_year
-      if not freight and #owned.stock_ids>2 and owned.stock_ids[1]~=11 then
+      if not freight and (#owned.stock_ids>2 and owned.stock_ids[1]~=11 or owned.stock_ids[1]==22) then
         run.body_lengths,run.passenger_coaches=stats.lengths,#owned.stock_ids-1
       end
       run.running_ticks_total,run.running_year_fp=0,stats.running_year_fp
@@ -1472,8 +1474,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
             if run.stock_engine==11 or run.passenger_coaches then
               cargo_tiles,visible={},true
               local first=run.passenger_coaches and 2 or 1
-              for i=first,#run.consist.parts do
-                local n=run.stock_engine==11 and run.consist.driving_backwards and #run.consist.parts-i+1 or i
+              local last=#run.consist.parts-(run.stock_engine==22 and 1 or 0)
+              for i=first,last do
+                local n=run.dual_head and run.consist.driving_backwards and #run.consist.parts-i+1 or i
                 local part=run.consist.parts[n]
                 cargo_tiles[#cargo_tiles+1]=part.tile
                 if part.hidden then visible=false end

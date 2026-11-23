@@ -12,6 +12,7 @@ local Gen={generate=function(o) return Clear.generate(TG.generate(o),TG.next_ran
 local Cam,Names=load("generated_campaign"),load("openttd/stock_town_name")
 local G=load("openttd/town_growth")
 local Build=load("openttd/town_growth_build")(G,load("openttd/town_growth_houses"))
+dofile("tests/fixed_parcel_footprint.lua")(Build)
 local Worldgen=load("openttd/town_worldgen")(G,Build)
 local landscape={width=64,depth=64,seed=1751,terrain_type=1,quantity_sea_lakes=0,tgen_smoothness=1,
   freeform_edges=true,water_borders=15,variety=0,rng_state=TG.startup_rng(1751)}

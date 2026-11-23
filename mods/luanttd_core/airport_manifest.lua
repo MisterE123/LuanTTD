@@ -10,5 +10,9 @@ return function(core,mod)
       assets[art.id]=art
     end
   end
-  return assets
+  local city=files["bl_city_airport_atlas.png"] and files["bl_dispatch_city_airport.png"]
+  for z=0,5 do for x=0,5 do
+    city=city and files[("bl_city_airport_%d_%d.obj"):format(x,z)]
+  end end
+  return assets,not not city
 end

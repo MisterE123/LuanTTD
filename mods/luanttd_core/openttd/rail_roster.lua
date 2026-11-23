@@ -8,7 +8,7 @@
 local R={VEHICLE_LENGTH=8,TILE_SIZE=16,DAY_TICKS=74,DAYS_IN_YEAR=365,CARGO_AGE_TICKS=185,
   GRADUAL_WAIT=40,RETRY_WAIT=20,DEFAULT_MAX_TRAIN_TILES=7}
 local floor,min,max=math.floor,math.min,math.max
-local order={0,1,8,9,10,11,13,14,15,27,29,30,32}
+local order={0,1,8,9,10,11,13,14,15,22,27,28,29,30,32}
 local rows={
   [0]={name="Kirby Paul Tank",kind="engine",visual="steam",image_index=2,engine_class="steam",
     cost_factor=7,speed=64,power=300,tare=47,running_factor=50,running_class="run_steam",
@@ -39,6 +39,10 @@ local rows={
   [15]={name="Floss '47'",kind="engine",visual="floss47",image_index=4,engine_class="diesel",
     cost_factor=18,speed=160,power=2580,tare=112,running_factor=140,running_class="run_diesel",
     capacity=0,climates=1,base_intro=15341,decay_speed=20,vehicle_life=22,model_life=33},
+  [22]={name="SH '125'",kind="engine",visual="sh_125",image_index=6,engine_class="diesel",
+    multiheaded=true,cost_factor=20,speed=200,power=4500,tare=70,running_factor=190,
+    running_class="run_diesel",capacity=4,cargo="mail",climates=1,base_intro=20820,
+    decay_speed=20,vehicle_life=20,model_life=25,purchase_enabled=false},
   [23]={name="SH '30'",kind="engine",visual="sh_30",image_index=20,engine_class="electric",railtype=1,
     cost_factor=26,speed=160,power=3600,tare=84,running_factor=180,running_class="run_electric",
     capacity=0,climates=1,base_intro=16437,decay_speed=20,vehicle_life=23,model_life=30,purchase_enabled=false},
@@ -48,6 +52,10 @@ local rows={
   [27]={name="Passenger Carriage",kind="wagon",visual="passenger_wagon",image_index=33,engine_class="steam",
     cost_factor=247,speed=0,power=0,tare=25,running_factor=0,
     capacity=40,cargo="passenger",climates=15,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255},
+  [28]={name="Mail Van",kind="wagon",visual="mail_van",image_index=35,engine_class="steam",
+    cost_factor=228,speed=0,power=0,tare=21,running_factor=0,capacity=30,cargo="mail",
+    climates=15,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,source_model_life=50,
+    purchase_enabled=false},
   [29]={name="Coal Truck",kind="wagon",visual="coal_wagon",image_index=34,engine_class="steam",
     cost_factor=176,speed=0,power=0,tare=18,running_factor=0,
     capacity=30,cargo="coal",climates=3,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255},
@@ -66,7 +74,7 @@ for id,row in pairs(rows) do
   row.cargo_age_ticks=R.CARGO_AGE_TICKS
 end
 local cargo={
-  passenger={weight=1,freight=false},
+  passenger={weight=1,freight=false},mail={weight=4,freight=false},
   coal={weight=16,freight=true},
   oil={weight=16,freight=true},
   goods={weight=8,freight=true},
@@ -92,6 +100,7 @@ function R.catalog(electric)
   if electric==true then table.insert(out,8,copy(rows[23]));table.insert(out,9,copy(rows[24])) end
   return out
 end
+function R.dual_head(id) return not not (rows[id] and rows[id].multiheaded) end
 function R.electric_engine(id)
   local row=rows[id]
   return not not (row and row.kind=="engine" and row.railtype==1)
@@ -376,6 +385,8 @@ function R.quote(depot,owner,parts,opts)
         not (R.electric_engine(row.stock_id) and opts.mounted_electric and opts.mounted_electric[row.stock_id]==true and
             index==1 and (opts.separate_depot_purchase and #parts==1 or
               #parts==2 and supported_single_wagon(stats.parts[2].stock_id))) and
+        not (row.stock_id==22 and opts.mount_sh_125==true and stats.parts[1].stock_id==22 and
+            (#parts==1 and #stats.parts==2 or #parts==2 and #stats.parts==3 and stats.parts[2].stock_id==27)) and
         not (row.stock_id==11 and opts.mount_manley==true and stats.parts[1].stock_id==11 and
             (#parts==1 and #stats.parts==2 or #parts==2 and #stats.parts==3 and stats.parts[2].stock_id==27)) then
       return nil,"RAIL_VEHICLE_NOT_MOUNTED",index

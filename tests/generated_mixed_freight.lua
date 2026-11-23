@@ -11,6 +11,7 @@ local Gen={generate=function(o) return Clear.generate(TG.generate(o),TG.next_ran
   describe=Clear.describe,next_random=TG.next_random}
 local Cam,G=m("generated_campaign"),m("openttd/town_growth")
 local Build=m("openttd/town_growth_build")(G,m("openttd/town_growth_houses"))
+dofile("tests/fixed_parcel_footprint.lua")(Build)
 local Calendar=m("openttd/stock_engine_calendar")
 local at=Sim.id
 local s=Cam.landscape(Sim,Terrain,Gen,{width=64,depth=64,seed=1751,terrain_type=1,quantity_sea_lakes=0,

@@ -56,7 +56,7 @@ return function(Service,key)
       if not saved[id] then
         Service.vehicle(service,{id=id,mode="rail",owner=r.owner,length=r.total_length,
           engine=r.stock_engine==11 and r.stock_engine or nil,coach=r.stock_engine==11 and r.stock_wagon==27 or nil,
-          passenger_coaches=r.passenger_coaches,speed=r.max_track_speed,built=build_year(r)})
+          dual_head=r.stock_engine==22,passenger_coaches=r.passenger_coaches,speed=r.max_track_speed,built=build_year(r)})
       else
         local v=service.vehicles[id]
         assert(v and v.owner==r.owner and v.mode=="rail" and v.total_length==r.total_length,

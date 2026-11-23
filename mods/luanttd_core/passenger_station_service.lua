@@ -7,25 +7,28 @@
 -- reserve/stage/load/drop/timetable and payment arithmetic. Side effects
 -- below are saved; all host geometry, events and hooks are injected.
 return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
+  local base=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+  local aircraft={}
+  for _,row in ipairs(dofile(base.."/openttd/airport_roster.lua").catalog()) do
+    aircraft[row.stock_id]={engine=row.stock_id,cap=row.passengers,slice=20,aging=185,wait=20}
+  end
+  local vessels={}
+  local ships=dofile(base.."/openttd/passenger_ship_roster.lua")
+  for _,id in ipairs(ships.order) do
+    vessels[id]={engine=id,cap=ships.model(id).capacity,slice=10,aging=185,wait=10}
+  end
   local S={version=1,stock={
     rail={engine=27,cap=40,slice=5,aging=185,wait=40},
-    ship={engine=206,cap=100,slice=10,aging=185,wait=10},
-    air={engine=215,cap=25,slice=20,aging=185,wait=20},
+    ship=vessels[206],
+    air=aircraft[215],
   }}
-  local ffp={engine=207,cap=130,slice=10,aging=185,wait=10}
-  local coleman={engine=216,cap=65,slice=20,aging=185,wait=20}
-  local bakewell={engine=219,cap=30,slice=20,aging=185,wait=20}
 
   local manley={engine=11,cap=76,slice=5,aging=185,wait=40}
   local manley_coach={engine=11,cap=116,slice=5,aging=185,wait=40}
   function S.stock_for(mode,engine,coach)
-    if mode=="ship" and engine==207 then return ffp end
+    if mode=="ship" and engine then return vessels[engine] end
     if mode=="rail" and engine==11 then return coach and manley_coach or manley end
-    if mode=="air" and engine then
-      if engine==216 then return coleman end
-      if engine==219 then return bakewell end
-      if engine~=215 then return nil end
-    end
+    if mode=="air" and engine then return aircraft[engine] end
     return S.stock[mode]
   end
   local floor,max=math.floor,math.max
@@ -40,7 +43,6 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     end,
   },Packets)
 
-  local base=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
   local DMU=dofile(base.."/openttd/rail_multihead_loading.lua").create(Loading,BaseTiming)
 
   local function keys(t,predicate)
@@ -121,7 +123,8 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       v.coach=def.coach or nil
       DMU.bodies(v,v.coach)
     elseif def.mode=="rail" and def.passenger_coaches then
-      assert(def.passenger_coaches>=2 and v.total_length==(def.passenger_coaches+1)*8,
+      local paired=def.dual_head==true
+      assert(def.passenger_coaches>=(paired and 1 or 2) and v.total_length==(def.passenger_coaches+(paired and 2 or 1))*8,
         "Invalid physical railway coach length")
       DMU.coaches(v,def.passenger_coaches)
     end

@@ -327,6 +327,10 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         else Packets.pickup(p,origin,Sim.xy) end
       end
     end
+    if v.cargo=="passenger" and Sim.vehicle_stock_load_amount then
+      arrival.slice=Sim.vehicle_stock_load_amount(v) or arrival.slice
+    end
+    if v.cargo=="mail" then arrival.slice=Sim.vehicles[v.engine].load_amount or Mail.engine.load_amount end
     if v.cargo=="coal" then arrival.slice=assert(host.coal(s)).timing(v) end
     if timber_cargo(v.cargo) then arrival.slice=assert(host.timber(s)).timing(v) end
     local capacity=Sim.vehicle_capacity and Sim.vehicle_capacity(v) or Sim.vehicles[v.engine].capacity

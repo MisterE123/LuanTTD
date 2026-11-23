@@ -23,7 +23,7 @@ return function(api,ui)
   if H and api.structure_tools then H.enable_structures(api.bridge_picker ~= nil) end
   if H and api.tram_tools then H.enable_trams() end
   if H and api.ship_tools then H.enable_ships() end
-  if H and api.airport_tools then H.enable_airfields(S.air_owned_preview) end
+  if H and api.airport_tools then H.enable_airfields(S.air_owned_preview,api.capabilities and api.capabilities.city_airport) end
   if H and api.rail_build_tools then H.enable_railworks(api.rail_span_tools,api.crossing_tools,api.bridge_picker ~= nil) end
   if H and api.rail_build_tools then H.enable_rail_waypoints() end
   if H and api.electric_tools then H.enable_electric_rail() end

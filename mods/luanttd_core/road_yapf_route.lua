@@ -3,8 +3,8 @@
 -- The stock per-tick vehicle controller still needs its own integration.
 return function(Sim,F,C,Search,Board,Motion,MotionLeg)
   local R={}
-  local speed={bus=112,coach=144,leopard_bus=176,foster_bus=224,mail_van=96,truck=96,coal_tipper=96,
-    wood_truck=96,goods_truck=96,craighead_goods_truck=176,grain_truck=96,livestock_van=96,oil_tanker=96} -- display-scale OpenTTD half-km/h units
+  local base=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local speed=dofile(base.."/road_stock_speeds.lua")
   function R.frames(board,trace,origin,departure_bay)
     local last=trace[#trace]
     local dest=last and board.tile(last.tile)
@@ -35,7 +35,7 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     if not source or not dest or not dest.station then return nil end
     local bus=vehicle==nil or vehicle.cargo=="passenger"
     if (source.pair or dest.pair) and vehicle and vehicle.engine~="bus" and
-        vehicle.engine~="leopard_bus" and vehicle.engine~="foster_bus" then return nil end
+        vehicle.engine~="leopard_bus" and vehicle.engine~="foster_bus" and vehicle.engine~="foster_mk2_bus" then return nil end
     local v={owner=owner,bus=bus,tile=a.tile,display_max_speed=speed[vehicle and vehicle.engine or "bus"]}
     if dest.stop_type~=(bus and "bus" or "truck") then return nil end
     if a.tile==b.tile then return {a.tile},vehicle and vehicle.road_arrival_td end

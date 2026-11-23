@@ -54,12 +54,10 @@ function M.landscape(Sim,Terrain,Generator,settings)
   return s
 end
 
--- Existing purpose-made asset styles only; unsupported house types
--- remain unbuilt, not replaced with arbitrary approximations.
-local art={
-  [0x19]={variant=0},[0x18]={variant=1},[0x1A]={variant=2},[0x06]={variant=3},
-  [0x0E]={parcel="shop"},
-}
+local source=debug and debug.getinfo(1,"S").source
+local path=(core and core.get_modpath and core.get_modpath("luanttd_core") and core.get_modpath("luanttd_core").."/")
+  or assert(source and source:sub(2):match("^(.+[\\/])"),"Cannot locate stock town assets")
+local art=dofile(path.."stock_town_art.lua")
 local dirx,dirz={[0]=-1,0,1,0},{[0]=0,1,0,-1}
 local function has(bits,bit) return math.floor(bits/bit)%2~=0 end
 local function edge(Sim,x,z)
@@ -156,14 +154,20 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         if ok then s.tiles[tile].stock_clear_ground=nil end
         return ok
       end
-      if p.kind~="house" or #p.parts~=1 or not art[p.id] then return false end
-      local h=p.parts[1]
-      local tile=Sim.id(h.x,h.z)
-      local t=s.tiles[tile]
-      remember(tile)
-      h.town_growth,h.random_bits=true,p.random_bits
-      h.render_variant,h.render_parcel=art[p.id].variant,art[p.id].parcel
-      t.house,t.source_house,t.wood,t.stock_clear_ground=true,h,nil,nil
+      if p.kind~="house" then return false end
+      local parts,level=art.inspect(Sim,p,function(id)
+        local x,z=Sim.xy(id)
+        local ground=growth.tile(x,z)
+        if ground and ground.kind=="clear" and ground.slope==0 then return ground.base end
+      end)
+      if not parts then return false end
+      for _,part in ipairs(parts) do
+        local tile,h=part.id,part.record
+        local t=s.tiles[tile]
+        remember(tile)
+        art.stamp(h,p,art[p.id],part.index)
+        t.house,t.source_house,t.wood,t.stock_clear_ground,t.h=true,h,nil,nil,level
+      end
       return true
     end
     Worldgen.initialize(town,growth,{year=settings.year,allow_roads=true,

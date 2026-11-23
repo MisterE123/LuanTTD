@@ -1149,6 +1149,13 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
     if not t or t.stock_void then return nil,"Outside the playable map." end
     if not seen[id] then
       seen[id]=true
+      local house_parts
+      if tool=="clear" and t.source_house and t.source_house.asset_root then
+        local growth=town_growth_mount[s]
+        house_parts=growth and growth.world.footprint(s,t.source_house)
+        if not house_parts then return nil,"This building footprint is incomplete." end
+        for _,part in ipairs(house_parts) do seen[part.id]=true end
+      end
       local water=tool=="clear" and s.corner_grid and not t.wood and
         (t.terrain=="water" or t.build=="canal" or t.stock_canal)
       if water then
@@ -1258,7 +1265,7 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
       end
       if not skip then
         total=total+M.tools[target].price+extra
-        result[#result+1]={id=id,tool=target}
+        result[#result+1]={id=id,tool=target,house_parts=house_parts}
       end
       end
     end
@@ -1315,7 +1322,14 @@ local function apply_build(s,owner,changes,cost)
       if tile.station then s.stations[tile.station]=nil end
       if tile.house then
         local growth=town_growth_mount[s]
-        if growth then growth.world.remove(s,tile.source_house) end
+        if item.house_parts then
+          for _,part in ipairs(item.house_parts) do
+            growth.world.remove(s,part.record)
+            local parcel=s.tiles[part.id]
+            parcel.house,parcel.source_house=nil,nil
+            if part.id~=id then changed[#changed+1]=part.id end
+          end
+        elseif growth then growth.world.remove(s,tile.source_house) end
         local town=M.nearest_town(s,id)
         if town then c.rating[town.id]=math.max(10,(c.rating[town.id] or 48)-10) end
       end
@@ -1407,8 +1421,9 @@ function M.clear_area(s,owner,first,last,diagonal,execute)
   local cash=company and company.cash or 100000
   local quota=clear_area_rules.replenish(company and company.clear_limit,0)
   local ids, dirty={},{}
-  local ctx={}
+  local ctx,quoted,covered={},{},{}
   function ctx.quote(id)
+    if covered[id] then return nil,"Building already included in this area." end
     local t=s.tiles[id]
     if not t or t.stock_void then return nil,"Outside the playable map." end
     if t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or t.ship or t.airfield or t.tram or
@@ -1421,9 +1436,13 @@ function M.clear_area(s,owner,first,last,diagonal,execute)
     end
     local edits,cost=M.plan(s,owner,"clear",{id},true)
     if not edits then return nil,cost end
+    quoted[id]=edits[1] and edits[1].house_parts
     return cost
   end
-  function ctx.accepted(id) ids[#ids+1]=id end
+  function ctx.accepted(id)
+    ids[#ids+1]=id
+    for _,part in ipairs(quoted[id] or {}) do covered[part.id]=true end
+  end
   if execute then
     company=M.company(s,owner)
     function ctx.apply(id)
@@ -1617,9 +1636,24 @@ end
 local craighead="craighead_goods_truck"
 M.vehicles[craighead]=road_freight_catalog().offer(craighead)
 table.insert(M.vehicle_order,#M.vehicle_order-4,craighead)
+M.vehicles.foster_mk2_bus={name="Foster MkII Superbus",mode="road",cost=8750,speed=255,capacity=40,year=2008,development=true}
+M.vehicle_order[#M.vehicle_order+1]="foster_mk2_bus"
+for _,key in ipairs(road_freight_catalog().road_order) do
+  local old=M.vehicles[key]
+  M.vehicles[key]=road_freight_catalog().offer(key)
+  if not old then M.vehicle_order[#M.vehicle_order+1]=key end
+end
+function M.road_extra_freight()
+  local out={}
+  for _,engine in ipairs(road_freight_catalog().road_order) do
+    if not M.vehicles[engine].year then out[#out+1]=engine end
+  end
+  return out
+end
 local freight_art_mount=setmetatable({},{__mode="k"})
+local extra_road_art=setmetatable({},{__mode="k"})
 local function goods_engine(engine)
-  return engine=="goods_truck" or engine==craighead
+  return engine=="goods_truck" or engine==craighead or engine=="goods_goss"
 end
 function M.road_freight_cargo(engine)
   return M.vehicles[engine] and M.vehicles[engine].cargo or
@@ -1627,20 +1661,22 @@ function M.road_freight_cargo(engine)
       grain_truck="grain",livestock_van="livestock",oil_tanker="oil"})[engine]
 end
 local function timber_engine(engine)
-  return engine=="wood_truck" or goods_engine(engine)
+  return M.road_freight_cargo(engine)=="wood" or goods_engine(engine)
 end
 local function farm_engine(engine)
-  return engine=="grain_truck" or engine=="livestock_van" or goods_engine(engine)
+  local cargo=M.road_freight_cargo(engine)
+  return cargo=="grain" or cargo=="livestock" or goods_engine(engine)
 end
-local function oil_engine(engine) return engine=="oil_tanker" or goods_engine(engine) end
+local function oil_engine(engine) return M.road_freight_cargo(engine)=="oil" or goods_engine(engine) end
+local function coal_engine(engine) return M.road_freight_cargo(engine)=="coal" end
+local function mail_engine(engine) return M.road_freight_cargo(engine)=="mail" end
+local function priced_mail(engine) return engine~="mail_van" and mail_engine(engine) end
 local function industry_truck(engine) return timber_engine(engine) or farm_engine(engine) or oil_engine(engine) end
 local function allowed(engine,cargo)
-  if engine=="leopard_bus" or engine=="foster_bus" then return cargo=="passenger" end
-  if engine=="mail_van" then return cargo=="mail" end
-  if engine=="coal_tipper" then return cargo=="coal" end
-  if engine=="wood_truck" then return cargo=="wood" end
-  if engine=="grain_truck" then return cargo=="grain" end
-  if engine=="livestock_van" then return cargo=="livestock" end
+  if engine=="leopard_bus" or engine=="foster_bus" or engine=="foster_mk2_bus" then return cargo=="passenger" end
+  if mail_engine(engine) then return cargo=="mail" end
+  if coal_engine(engine) then return cargo=="coal" end
+  if road_freight_catalog().farm(engine) or road_freight_catalog().additional(engine) then return M.road_freight_cargo(engine)==cargo end
   if goods_engine(engine) then return cargo=="goods" end
   if engine=="oil_tanker" or cargo=="oil" then return engine=="oil_tanker" and cargo=="oil" end
   if engine=="bus" or engine=="coach" or engine=="ferry" or engine=="prop" or engine=="jet" then return cargo=="passenger" or cargo=="mail" end
@@ -1661,7 +1697,7 @@ local function road_bus_catalog()
   end
   return M.source_bus_catalog
 end
-function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighead)
+function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighead,extra_models)
   M.engine_calendar=Calendar
   if not s.stock_bus_market then
     assert(s.day==0 and not next(s.fleet),"Start the stock depot market in a fresh world.")
@@ -1673,7 +1709,7 @@ function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighe
       climate="temperate"}
     local market={version=1,epoch=assert(Calendar.date(starting_year,1,1)),
       settings=settings,models={}}
-    for _,stock_id in ipairs({116,117,118}) do
+    for _,stock_id in ipairs({116,117,118,119}) do
       market.models[stock_id]=assert(Calendar.prepare(stock_id,settings))
     end
     s.stock_bus_market=market
@@ -1682,9 +1718,15 @@ function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighe
   assert(s.stock_bus_market.version==1,"Unsupported saved stock road market.")
   foster_art_mount[s]=not not has_foster
   freight_art_mount[s]=not not has_craighead
+  extra_road_art[s]=extra_models or {}
   local market=s.stock_bus_market
   local r=road_freight_catalog().row(craighead)
   market.models[r.stock_id]=market.models[r.stock_id] or assert(Calendar.prepare_original(r,market.settings))
+  market.models[119]=market.models[119] or assert(Calendar.prepare(119,market.settings))
+  for _,key in ipairs(road_freight_catalog().road_order) do
+    local row=road_freight_catalog().row(key)
+    market.models[row.stock_id]=market.models[row.stock_id] or assert(Calendar.prepare_original(row,market.settings))
+  end
 end
 function M.foster_art_ready(s)
   return foster_art_mount[s]
@@ -1694,6 +1736,7 @@ function M.stock_road_offer(s,engine)
   local id=market and road_bus_catalog().stock_id(engine)
   if not id then return end
   if engine=="foster_bus" and not M.foster_art_ready(s) then return end
+  if engine=="foster_mk2_bus" and not (extra_road_art[s] and extra_road_art[s][engine]) then return end
   return assert(M.engine_calendar.snapshot(market.models[id],market.epoch+s.day))
 end
 function M.vehicle_offer(s,engine)
@@ -1727,7 +1770,35 @@ function M.vehicle_capacity(v)
   local s=stock_bus(v)
   return s and road_bus_catalog().capacity(s.stock_id) or M.vehicles[v.engine].capacity
 end
+function M.vehicle_stock_load_amount(v)
+  local r=stock_bus(v)
+  return r and road_bus_catalog().quote(nil,nil,r.stock_id).load_amount
+end
 function M.vehicle_available(s,engine)
+  if road_freight_catalog().additional(engine) then
+    local market=s.stock_bus_market
+    if not (market and extra_road_art[s] and extra_road_art[s][engine] and M.road_stock_service_active(s)) then return false end
+    local cargo=M.road_freight_cargo(engine)
+    local enabled=(cargo=="coal" and M.road_coal_active(s)) or
+      (cargo=="oil" and M.road_oil_active(s)) or (cargo=="mail" and s.road_mail and s.road_stock_house_supply) or
+      (cargo=="goods" and (M.road_farm_active(s) or M.road_timber_active(s) or M.road_oil_active(s)))
+    return not not (enabled and M.engine_calendar.snapshot(market.models[M.vehicles[engine].stock_engine_id],market.epoch+s.day).public)
+  end
+  if engine=="mail_van" and s.stock_bus_market and extra_road_art[s] and extra_road_art[s].mail_mps then
+    return false -- model #126 replaces the generic fallback in a complete stock game.
+  end
+  if road_freight_catalog().farm(engine) then
+    local cargo=M.road_freight_cargo(engine)
+    if cargo=="wood" then
+      if not M.road_timber_active(s) then return false end
+    elseif not M.road_farm_active(s) then return false end
+    local early=M.vehicles[engine].year~=nil
+    local market=s.stock_bus_market
+    if not market then return early end
+    if not early and not (extra_road_art[s] and extra_road_art[s][engine]) then return false end
+    if not M.road_stock_service_active(s) then return false end
+    return M.engine_calendar.snapshot(market.models[M.vehicles[engine].stock_engine_id],market.epoch+s.day).public
+  end
   if engine==craighead then
     local market=s.stock_bus_market
     if not (market and freight_art_mount[s] and M.road_stock_service_active(s)) then return false end
@@ -1757,7 +1828,7 @@ function M.purchase(s,owner,engine,cargo,station,depot)
   if e.stock_id and (cargo~="passenger" or not depot) then
     return nil,"Buy the original passenger bus in an owned road depot."
   end
-  if engine=="coal_tipper" and not depot then return nil,"Buy the coal tipper in an owned road depot." end
+  if (coal_engine(engine) or priced_mail(engine)) and not depot then return nil,"Buy the truck in an owned road depot." end
   if industry_truck(engine) and not depot then return nil,"Buy this freight vehicle in an owned road depot." end
   if depot then
     if station or e.mode~="road" or not depot_endpoint(s,owner,depot) then return nil,"Select a road depot you own." end
@@ -1799,7 +1870,7 @@ local function can_use_road_order(s,v,o)
   if not s.road_economy then return true end
   local truck=st.stop_type=="truck"
   if v.cargo=="passenger" then return not truck end
-  if v.engine=="mail_van" or v.engine=="coal_tipper" or industry_truck(v.engine) then return truck end
+  if mail_engine(v.engine) or coal_engine(v.engine) or industry_truck(v.engine) then return truck end
   return true
 end
 local abort_stock_stop
@@ -2103,11 +2174,22 @@ local function passenger_modules()
           end
         end
     end
+    oil.ship=dofile(base.."ship_oil_runtime.lua")(M,
+      dofile(base.."ship_oil_service.lua")(M,dofile(base.."openttd/oil_ship_roster.lua"),
+        passenger_rules,kernel,loading_factory,timing),
+      dofile(base.."openttd/oil_ship_roster.lua"),dofile(base.."openttd/stock_engine_calendar.lua"),oil.rules,catchment,debit)
+    function oil.berths(s)
+      local list,by,map=oil.ship.stations(s)
+      return list,list and {by=by,map=map}
+    end
     function oil.binding(s,probe)
       if goods.mixed_enabled and goods.mixed_enabled(s) then return {rail=goods.mixed_binding(s,"oil",probe).rail.oil} end
       local animated,each_tick=oil.animation(s)
-      return oil.service.bind(s,{credit=credit,station_union=oil.runtime.union(s,paid_rail_runs[s],probe),
-        animated=animated,each_tick=each_tick})
+      local list,ports=oil.berths(s)
+      local B=oil.service.bind(s,{credit=credit,station_union=oil.runtime.union(s,paid_rail_runs[s],probe),
+        animated=animated,each_tick=each_tick,ship_stations=list})
+      B.oil_ship_binding=ports
+      return B
     end
   end
   goods.mount_mixed=function()
@@ -2151,18 +2233,19 @@ local function passenger_modules()
         end
         return rail
       end
-      local B=union.bind(s,{credit=credit,industries=all,field_board=enabled.farm and farm_world.field_board(s),
+      local list,ports=oil.berths(s)
+      local B=union.bind(s,{credit=credit,industries=all,ship_stations=list,field_board=enabled.farm and farm_world.field_board(s),
         station_union=station_union,animated=animated,each_tick=tick,forestry_changed=function(t)
           s.changed=s.changed or {};s.changed[#s.changed+1]=M.id(t.x+1,t.z+1)
         end})
-      B.mixed=true
+      B.mixed=true;B.oil_ship_binding=ports
       return B
     end
   end
   local ships=dofile(base.."openttd/ship_roster.lua")
   local coal_ship=dofile(base.."ship_coal_service.lua")(M,coal,catchment,ships,passenger_rules,kernel,
     rating_runtime,income_rules,loading_factory,timing)
-  ship_coal=dofile(base.."ship_coal_runtime.lua")(M,coal_ship,ships,kernel,debit,credit,received_coal)
+  ship_coal=dofile(base.."ship_coal_runtime.lua")(M,coal_ship,ships,kernel,debit,credit,received_coal,dofile(base.."openttd/stock_engine_calendar.lua"))
   local commercial=dofile(base.."passenger_station_service.lua")(catchment,passenger_rules,income_rules,kernel,
     rating_runtime,loading_factory,timing)
   local mux=dofile(base.."passenger_supply_mux.lua")(M,catchment,passenger_rules,rating_runtime,kernel)
@@ -2172,6 +2255,11 @@ end
 function M.stock_random_u32(s)
   passenger_modules()
   return rating_runtime.random_u32(s)
+end
+function M.mount_oil_ship(s,net,run,ready,ferry,coal)
+  if not oil.ship or not M.road_oil_active(s) then return end
+  oil.ship.mount(s,net,run,ready,ferry,coal)
+  return oil.ship
 end
 function M.mount_oil_world(s,Terrain,asset_ready)
   if not asset_ready then return nil,"The native oil well, refinery or tanker assets are missing." end
@@ -2212,9 +2300,9 @@ function M.mount_farm_world(s,Terrain,asset_ready)
   town_passengers.start(s)
   return farm_world,function() return rating_runtime.random_u32(s) end,farm.rules
 end
-function M.mount_coal_ship(s,Run,Passenger,Network)
+function M.mount_coal_ship(s,Run,Passenger,Network,art)
   passenger_modules()
-  ship_coal.mount(s,Run,Passenger,Network)
+  ship_coal.mount(s,Run,Passenger,Network,art)
   return ship_coal
 end
 function M.ship_coal_active(s)
@@ -2483,7 +2571,7 @@ function M.build_truck_stop(s,owner,id)
   return ok,msg,changed
 end
 local function road_mail(s,v)
-  return s.road_economy and s.road_mail and v.cargo=="mail" and v.engine=="mail_van"
+  return s.road_economy and s.road_mail and v.cargo=="mail" and mail_engine(v.engine)
 end
 function M.mail_stop_status(s,st)
   if not s.road_mail or not st or st.stop_type~="truck" then return end
@@ -2763,7 +2851,7 @@ function M.empty(s,owner,id)
   local v=s.fleet[id]
   local st=v and s.stations[v.station]
   if not st or v.owner~=owner or v.running then return false,"Stop the vehicle at a terminal first." end
-  if v.engine=="coal_tipper" then return false,"Use an Unload order: stock coal unloads in timed truck-stop slices." end
+  if coal_engine(v.engine) then return false,"Use an Unload order: stock coal unloads in timed truck-stop slices." end
   if industry_truck(v.engine) then return false,"Use its stock truck-stop order to unload and receive payment." end
   if v.load_state then abort_stock_stop(s,v) end
   unload_at(s,st,v,"unload")
@@ -3017,10 +3105,10 @@ local function rail_tick_broker(s)
   return register,advance,function() return flushed end
 end
 
-local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train,traverse)
+local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse)
   local clock
   local faults=road_faults_mount[s]
-  local freight_ready,ship_ready,industry_ready
+  local freight_ready,ship_ready,industry_ready,tanker_ready
   local growth=town_growth_mount[s]
   local growth_random=growth and function() return rating_runtime.random_u32(s) end
   local tide=coastal_visit(s)
@@ -3044,6 +3132,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if commercial then commercial.after(tick,ready,events,advance) end
         if advance and not flushed() then advance() end
         if freighter then freighter.after(tick,ship_ready) end
+        if tanker then tanker.after(tick,tanker_ready) end
         if growth and growth.new then growth.world.tick(s,tick,growth_random) end
         if finish_rating then finish_rating() end
         if coal then
@@ -3057,7 +3146,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if timber then
           for _,view in ipairs(timber.stations) do
             local st=s.stations[view.id]
-            if st.passenger_rating_phase==0 then timber.step_rating(st) end
+            if st and st.passenger_rating_phase==0 then timber.step_rating(st) end
           end
           -- The rail industry station ages and rates before shared
           -- production; that producer has exactly one mixed StationID list.
@@ -3102,6 +3191,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       if freight then freight_ready=freight.before(tick) end
       if industry_train then industry_ready=industry_train.before(tick) end
       if freighter then ship_ready=freighter.before(tick) end
+      if tanker then tanker_ready=tanker.before(tick) end
       return ready
     end,
     before=function(v,tick,leave)
@@ -3110,7 +3200,8 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       if bus and v.running then road_bus_catalog().tick(bus) end
       if faults and faults.tick(v,tick) then return true end
       if not v.running then return end
-      if v.engine=="coal_tipper" then v.stock_coal_running_ticks=(v.stock_coal_running_ticks or 0)+1 end
+      if coal_engine(v.engine) then v.stock_coal_running_ticks=(v.stock_coal_running_ticks or 0)+1 end
+      if priced_mail(v.engine) then v.stock_mail_running_ticks=(v.stock_mail_running_ticks or 0)+1 end
       if industry_truck(v.engine) then v.stock_timber_running_ticks=(v.stock_timber_running_ticks or 0)+1 end
       if v.route then
         local order=v.road_order_override and v.orders[v.road_order_override]
@@ -3306,13 +3397,14 @@ function M.daily(s,traverse)
     end
   end
   for _,v in pairs(s.fleet) do
-    if v.engine=="coal_tipper" or industry_truck(v.engine) then
+    if coal_engine(v.engine) or industry_truck(v.engine) or priced_mail(v.engine) then
       local is_timber=industry_truck(v.engine)
-      local enabled=(not is_timber and coal) or is_timber and timber and
+      local is_mail=priced_mail(v.engine)
+      local enabled=(is_mail and road_mail(s,v)) or (not is_timber and not is_mail and coal) or is_timber and timber and
         (M.road_farm_active(s) and farm_engine(v.engine) or M.road_timber_active(s) and timber_engine(v.engine)
           or M.road_oil_active(s) and oil_engine(v.engine))
-      local key=is_timber and "stock_timber_running_ticks" or "stock_coal_running_ticks"
-      local resume=is_timber and "stock_timber_resume" or "stock_coal_resume"
+      local key=is_mail and "stock_mail_running_ticks" or is_timber and "stock_timber_running_ticks" or "stock_coal_running_ticks"
+      local resume=is_mail and "stock_mail_resume" or is_timber and "stock_timber_resume" or "stock_coal_resume"
       -- Running-tick cost at the next economy day, not an invented fee
       -- for only moving. Source stores 8-bit corporate money fractions.
       if v[key] and v[key]>0 then
@@ -3329,7 +3421,7 @@ function M.daily(s,traverse)
         if v.load_state then abort_stock_stop(s,v) end
         if v.running then
           v[resume]=true;v.running=false
-          v.status=is_timber and "Stock industry freight disabled" or "Stock coal disabled"
+          v.status=is_mail and "Stock mail unavailable" or is_timber and "Stock industry freight disabled" or "Stock coal disabled"
         end
         v.stock_aged_tick=nil
       elseif v[resume] then
@@ -3366,7 +3458,8 @@ function M.daily(s,traverse)
   local commercial=paid_transport_day(s)
   if stock_service then
     passenger_modules()
-    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,traverse)
+    local tanker=oil.ship and timber and oil.ship.day(s,timber,s.passenger_house_clock.counter+1)
+    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse)
   elseif commercial then
     town_passengers.day(s,function(tick)
       local ready,events=commercial.before(tick)
@@ -3388,12 +3481,12 @@ function M.daily(s,traverse)
     if stock_service and stock_managed(s,v) then
       if stock_work[id] then
         local e=M.vehicles[v.engine]
-        if not stock_bus(v) and v.engine~="coal_tipper" and not industry_truck(v.engine) then
+        if not stock_bus(v) and not coal_engine(v.engine) and not priced_mail(v.engine) and not industry_truck(v.engine) then
           debit(M.company(s,v.owner),e.daily);v.expense=v.expense+e.daily
         end
         if not stock_bus(v) then v.condition=math.max(30,v.condition-0.06) end
       end
-    elseif not stock_bus(v) and v.engine~="coal_tipper" and not industry_truck(v.engine) then
+    elseif not stock_bus(v) and not coal_engine(v.engine) and not priced_mail(v.engine) and not industry_truck(v.engine) then
       if road_passenger(s,v) then passenger_modules().age_vehicle(v,1)
       elseif road_mail(s,v) then passenger_modules();mail_runtime.age_vehicle(v,1) end
       if v.route then
@@ -3564,7 +3657,7 @@ function M.daily(s,traverse)
       if c.cash<0 then push(s,owner.." is overdrawn. Review the Finance ledger.") end
     end
     if s.stock_bus_market then
-      for _,id in ipairs({"bus","leopard_bus","foster_bus"}) do
+      for _,id in ipairs(road_bus_catalog().order) do
         local model=M.stock_road_offer(s,id)
         local old=model and M.engine_calendar.snapshot(s.stock_bus_market.models[model.stock_id],
           s.stock_bus_market.epoch+s.day-1)

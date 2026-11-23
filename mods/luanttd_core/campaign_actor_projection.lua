@@ -70,13 +70,24 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       if ferry.paid_clock then p,dir=Sim.ferry_paid_pose(s,fraction)
       else p,dir=R.water.run.pose(ferry) end
       if point(p) then add("ship","ferry",{owner=ferry.owner,engine=ferry.engine_id,pos=xyz(p),dir=dir,
-        depot=ferry.depot,label=ferry.engine_id==207 and "FFP Passenger Ferry" or "MPS Passenger Ferry"}) end
+        depot=ferry.depot,label=ferry.engine_id==208 and "Bakewell 300 Hovercraft" or ferry.engine_id==207 and "FFP Passenger Ferry" or "MPS Passenger Ferry"}) end
+    end
+    if R.water.tanker then
+      local p,dir=R.water.tanker.pose(s,fraction)
+      if point(p) then
+        local hull=R.water.tanker.status(s)
+        add("ship","oil",{owner=hull.owner,engine=hull.engine,pos=xyz(p),dir=dir,depot=hull.depot,label=hull.name})
+      end
     end
     if R.water.freight and R.water.coal then
       local ship=R.water.freight.current(s)
       if ship then
         local p,dir=R.water.coal.pose(s,fraction)
-        if point(p) then add("ship","coal",{owner=ship.owner,pos=xyz(p),dir=dir,depot=ship.depot,label="Yate Cargo Ship"}) end
+        if point(p) then
+          local hull=R.water.coal.status(s)
+          add("ship","coal",{owner=ship.owner,engine=hull and hull.engine,pos=xyz(p),dir=dir,depot=ship.depot,
+            label=hull and hull.name or "Yate Cargo Ship"})
+        end
       end
     end
   end

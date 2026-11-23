@@ -54,7 +54,7 @@ return function(api)
         local record=S.stock_ship_depots and S.stock_ship_depots[source.depot]
         depot_key=source.depot
         depot=record and record.tiles[1]
-        label=id=="coal" and "Yate Cargo Ship" or source.engine_id==207 and "FFP Passenger Ferry" or "MPS Passenger Ferry"
+        label=id=="coal" and "Yate Cargo Ship" or source.engine_id==208 and "Bakewell 300 Hovercraft" or source.engine_id==207 and "FFP Passenger Ferry" or "MPS Passenger Ferry"
       end
     elseif kind=="air" then
       source=own((S.stock_owned_air_fleet or {})[id] or id==1 and S.stock_owned_aircraft,n)

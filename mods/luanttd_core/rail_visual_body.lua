@@ -4,7 +4,7 @@ return function(Sim,models,diagonal,stock,surface,fallback)
   return function(train,sample,i,engine,wagon)
     local id,td,f=sample.id,sample.td,sample.progress
     local count=#train.consist.parts
-    local push_pull=train.stock_engine==11 and count>1
+    local push_pull=(train.dual_head or train.stock_engine==11) and count>1
     local backing=push_pull and sample.reversed==true
     local body_index=backing and count-i+1 or i
     local rear=push_pull and body_index==count

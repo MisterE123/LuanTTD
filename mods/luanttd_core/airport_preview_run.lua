@@ -36,6 +36,29 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     end
     return R.engine
   end
+  function R.fits(field,engine)
+    if not field or not (Network.layout and Network.layout(field.layout) or not field.layout) then
+      return false
+    end
+    local design=engine and Roster and Roster.entry(engine)
+    return not (design and design.small==false) or field.layout=="city"
+  end
+  local function layout(field)
+    return Network.layout and assert(Network.layout(field.layout),"Unrecognized saved airport") or Small
+  end
+  function R.route_stop(s,field,engine,except)
+    if not R.fits(field,engine) then return false,"LARGER_AIRFIELD_REQUIRED" end
+    if field.layout=="city" then
+      -- 3D limitation, not stock FTA: two Darwin bodies can physically
+      -- overlap between stands 2 and 3. Leave both source paths intact.
+      for _,other in ipairs(R.all(s)) do
+        if other~=except and R.uses_airfield(other,field.id) then
+          return false,"CITY_AIRFIELD_SERVICE_ALREADY_ASSIGNED"
+        end
+      end
+    end
+    return true
+  end
   function R.start(s,owner,first,second,owned)
     if s.air_owned_preview and not owned then return nil,"PURCHASED_AIRCRAFT_REQUIRED" end
     local in_fleet=owned and owned.serial~=nil
@@ -46,6 +69,10 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     end
     local a,b=s.stock_small_airports and s.stock_small_airports[first],s.stock_small_airports and s.stock_small_airports[second]
     if not a or not b or a==b or a.owner~=owner or b.owner~=owner then return nil,"TWO_OWN_AIRFIELDS_REQUIRED" end
+    for _,field in ipairs({a,b}) do
+      local ok,why=R.route_stop(s,field,owned and owned.stock_id)
+      if not ok then return nil,why end
+    end
     -- Fleet aircraft contend for the actual FTA flags. A second filing
     -- from another hangar need not wait for its destination to be idle.
     if not in_fleet and (a.flags~=0 or b.flags~=0) then return nil,"AIRFIELD_BUSY" end
@@ -58,7 +85,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       p.finance={annual_fp=owned.annual_fp,ticks=0,charged_ticks=0,expense=0}
     end
     local engine=R.engine_for(p)
-    p.vehicle=Small.new(a,{owner=owner,order={kind="station",id=second},
+    p.vehicle=layout(a).new(a,{owner=owner,order={kind="station",id=second},
       max_speed=engine.max_speed,acceleration=engine.acceleration})
     if s.air_paid_service then
       p.paid_clock=in_fleet and owned.serial or s.next_paid_air_run or 1
@@ -101,7 +128,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     local v=p.vehicle
     local a=airports[p.target]
     if not a then p.phase,p.failure="blocked","AIRFIELD_CHANGED";return p end
-    local hooks={airports=airports,plane_speed=Motion.PLANE_SPEED,terrain_height=function(x,z)
+    local hooks={airports=airports,layout=layout,plane_speed=Motion.PLANE_SPEED,terrain_height=function(x,z)
       return R.terrain_under(s,x,z)
     end}
     local function find_order(advance)
@@ -141,7 +168,8 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
           if v.state==Small.state.FLYING and a.id~=order.id then
             local dest=airports[order.id]
             if not dest then p.phase,p.failure="blocked","AIRFIELD_CHANGED";return p end
-            Small.inbound(dest,v)
+            if not R.fits(dest,p.engine_id) then p.phase,p.failure="blocked","LARGER_AIRFIELD_REQUIRED";return p end
+            layout(dest).inbound(dest,v)
             a=dest
             p.target,p.phase=a.id,"flying"
           end

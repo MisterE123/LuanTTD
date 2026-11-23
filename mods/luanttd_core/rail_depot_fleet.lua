@@ -284,6 +284,8 @@ return function(Sim,Lab,Roster)
       hooks.goods_wagon_ready and hooks.goods_wagon_ready(s)==true or false
     opts.mount_manley=s.rail_paid_service==true and hooks and
       hooks.manley_ready and hooks.manley_ready(s)==true or false
+    opts.mount_sh_125=s.rail_paid_service==true and hooks and
+      hooks.sh_125_ready and hooks.sh_125_ready(s)==true or false
     opts.mounted_electric={}
     if s.stock_electrification==true and hooks and hooks.electric_model_ready then
       for _,id in ipairs(ids) do

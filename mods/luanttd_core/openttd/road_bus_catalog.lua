@@ -2,7 +2,7 @@
 -- OpenTTD 14.1: table/engines.h: MR/ROV #116–118, table/pricebase.h,
 -- engine.cpp::GetCost, RoadVehicle::{Tick,OnNewEconomyDay},
 -- vehicle.cpp::DecreaseVehicleValue and company_cmd.cpp.
--- The three original temperate buses, using the original acceleration model.
+-- The four original temperate buses, with the MkII row pinned to OpenTTD 16.0-RC1.
 local B={}
 local floor=math.floor
 local original={
@@ -15,8 +15,12 @@ local original={
   [118]={engine="foster_bus",name="Foster Bus",image=17,capacity=37,source_speed=224,
     life=15,base_life=40,intro_after_1920=24107,weight_quarters=70,power_tens_hp=15,
     purchase_factor=150,running_factor=178},
+  [119]={engine="foster_mk2_bus",name="Foster MkII Superbus",image=34,capacity=40,source_speed=255,
+    life=15,base_life=80,intro_after_1920=32142,weight_quarters=100,power_tens_hp=25,
+    purchase_factor=160,running_factor=240},
 }
-local ids={bus=116,leopard_bus=117,foster_bus=118}
+local ids={bus=116,leopard_bus=117,foster_bus=118,foster_mk2_bus=119}
+B.order={"bus","leopard_bus","foster_bus","foster_mk2_bus"}
 B.BUY_BASE,B.RUN_BASE=14000,1600
 B.CAPACITY=original[116].capacity
 B.DEPRECIATION_INTERVAL=8
@@ -30,7 +34,7 @@ function B.quote(buy,run,id)
   local entry=original[id]
   if not entry then return end
   local q={mode="road",stock_id=id,model_life=20,tractive_effort=76,air_drag=0,
-    depreciation_interval=B.DEPRECIATION_INTERVAL,load_amount=8,age_ticks=185}
+    depreciation_interval=B.DEPRECIATION_INTERVAL,load_amount=5,age_ticks=185}
   for k,v in pairs(entry) do q[k]=v end
   q.cost=floor((buy or B.BUY_BASE)*q.purchase_factor/256)
   q.annual_fp=(run or B.RUN_BASE)*q.running_factor

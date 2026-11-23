@@ -18,12 +18,20 @@ local function copy(t)
   return out
 end
 local s=Sim.new(1751)
+local model=arg and arg[1] or "coal_tipper"
+local dates={coal_uhl={1985,124,25,176},coal_dw={2025,125,28,224}}
+local spec=dates[model]
+local function market(w)
+  if spec then Sim.mount_road_bus_market(w,mod("openttd/stock_engine_calendar"),spec[1],true,true,{[model]=true}) end
+end
+market(s)
 mod("town_layout")(Sim,s)
 s.corner_grid=mod("terrain_preview")(Sim,Terrain,s)
 s.road_economy=true;s.road_stock_clock=true;s.road_stock_house_supply=true
 s.road_stock_loading=true
-local cap=Sim.vehicles.coal_tipper
-assert(cap.capacity==20 and cap.speed==96 and cap.stock_engine_id==123 and cap.cost==5906)
+local cap=Sim.vehicles[model]
+if spec then assert(cap.capacity==spec[3] and cap.speed==spec[4] and cap.stock_engine_id==spec[2])
+else assert(cap.capacity==20 and cap.speed==96 and cap.stock_engine_id==123 and cap.cost==5906) end
 assert(Sim.allowed("coal_tipper","coal") and not Sim.allowed("coal_tipper","mail"))
 s.road_coal=true
 assert(Sim.road_coal_active(s))
@@ -41,15 +49,15 @@ assert(Sim.build_truck_stop(s,"Miner",first))
 assert(Sim.build_truck_stop(s,"Miner",last))
 assert(Sim.build(s,"Miner","road_depot",{depot}))
 local first_stop,last_stop=s.tiles[first].station,s.tiles[last].station
-assert(not Sim.purchase(s,"Miner","coal_tipper","coal",first_stop))
-assert(not Sim.purchase(s,"Miner","coal_tipper","mail",nil,depot))
+assert(not Sim.purchase(s,"Miner",model,"coal",first_stop))
+assert(not Sim.purchase(s,"Miner",model,"mail",nil,depot))
 local c=Sim.company(s,"Miner")
 local before=c.cash
 s.road_coal=false
-assert(not Sim.vehicle_available(s,"coal_tipper") and not Sim.purchase(s,"Miner","coal_tipper","coal",nil,depot))
+assert(not Sim.vehicle_available(s,model) and not Sim.purchase(s,"Miner",model,"coal",nil,depot))
 assert(c.cash==before)
 s.road_coal=true
-local truck=assert(Sim.purchase(s,"Miner","coal_tipper","coal",nil,depot))
+local truck=assert(Sim.purchase(s,"Miner",model,"coal",nil,depot))
 assert(c.cash==before-cap.cost)
 assert(Sim.add_order(s,"Miner",truck,first_stop,"full"))
 assert(Sim.add_order(s,"Miner",truck,last_stop))
@@ -104,23 +112,25 @@ for _=1,240 do
   Sim.daily(s)
   local v=monitor()
   if v.last_road_arrival_tick then started=started or v.last_road_arrival_tick end
-  if not loaded_save and v.route and v.units==20 then
+  if not loaded_save and v.route and v.units==cap.capacity then
     assert(v.dest==last_stop and v.road_speed_state and #v.road_motion_frames>0)
     loaded_save={units=v.units,tick=v.road_speed_state.ticks}
     for _,p in ipairs(v.batches) do assert(p.source==source and p.source_type=="industry" and p.origin_tile==first) end
     s=copy(s)
+    market(s)
     assert(s.fleet[truck].road_speed_state.ticks==loaded_save.tick and #Sim.road_loading_events(s)==0)
   end
   if not first_delivery and s.sites[sink_site].received.coal then first_delivery=s.day end
   if not paid_save and fare>0 then
     paid_save={fare=fare,paid=paid}
     s=copy(s)
+    market(s)
     assert(s.fleet[truck].revenue==paid_save.fare and #Sim.road_loading_events(s)==0)
   end
   if loaded_save and paid_save and events>=2 then break end
 end
 assert(started and first_board and first_board>started and first_delivery and bay_timing and loaded_save and paid_save)
-assert(fare>paid_save.fare and paid>=40 and boarded>=paid and s.sites[sink_site].received.coal==paid)
+assert(fare>paid_save.fare and paid>=2*cap.capacity and boarded>=paid and s.sites[sink_site].received.coal==paid)
 assert(s.stock_coal_industries[plant].was_cargo_delivered)
 local vt=s.fleet[truck]
 local before_motion,before_fare=vt.progress,fare

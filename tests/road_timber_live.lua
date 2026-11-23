@@ -3,9 +3,21 @@ local root="mods/luanttd_core/"
 local S=dofile(root.."sim.lua")
 local Terrain=dofile(root.."openttd/terrain.lua")
 local s=S.new(1751)
-local later=arg and arg[1]=="craighead"
+local mode=arg and arg[1]
+local later=mode=="craighead"
+local stock={
+  wood_foster={1985,145,22},
+  wood_moreland={2025,146,24}
+}
+local wood_variant=stock[mode]
+local wood_model=wood_variant and mode or "wood_truck"
+local wood_capacity=wood_variant and wood_variant[3] or 20
 local Calendar=dofile(root.."openttd/stock_engine_calendar.lua")
-if later then S.mount_road_bus_market(s,Calendar,1976,true,true) end
+local function mount(w)
+  if later then S.mount_road_bus_market(w,Calendar,1976,true,true)
+  elseif wood_variant then S.mount_road_bus_market(w,Calendar,wood_variant[1],true,true,{[wood_model]=true}) end
+end
+mount(s)
 s.corner_grid=dofile(root.."terrain_preview.lua")(S,Terrain,s)
 dofile(root.."town_layout.lua")(S,s)
 s.road_economy,s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading=true,true,true,true
@@ -44,7 +56,7 @@ local function buy(engine,cargo,from,to)
   local ok,why=S.toggle(s,"Wood Route",id);assert(ok,why)
   return id
 end
-local w=buy("wood_truck","wood",p.forest_stop,p.sawmill_stop)
+local w=buy(wood_model,"wood",p.forest_stop,p.sawmill_stop)
 local goods_model=later and "craighead_goods_truck" or "goods_truck"
 local capacity=later and 16 or 14
 if later then
@@ -86,7 +98,7 @@ if later then
   local ok,why=S.toggle(s,"Wood Route",g);assert(ok,why)
   core=nil
 else g=buy(goods_model,"goods",mill_goods,p.goods_stop) end
-assert(S.vehicles.wood_truck.stock_engine_id==144 and S.vehicles.wood_truck.capacity==20)
+assert(S.vehicles[wood_model].stock_engine_id==(wood_variant and wood_variant[2] or 144) and S.vehicle_capacity(s.fleet[w])==wood_capacity)
 assert(S.vehicles.goods_truck.stock_engine_id==138 and S.vehicles.goods_truck.capacity==14)
 local function clone(a,seen)
   if type(a)~="table" then return a end
@@ -107,7 +119,7 @@ for i=1,190 do
   assert(tick==s.day*74 and a.stock_aged_tick==tick and b.stock_aged_tick==tick)
   for _,e in ipairs(S.road_loading_events(s)) do
     if e.kind=="fare" and e.vehicle==w then
-      assert(e.data.units==20 and e.data.amount>0)
+      assert(e.data.units==wood_capacity and e.data.amount>0)
       wood_first=wood_first or e.data.tick
     end
     if e.kind=="fare" and e.vehicle==g then
@@ -115,16 +127,16 @@ for i=1,190 do
       goods_first=goods_first or e.data.tick
     end
   end
-  if not reload and a.units>=10 and a.delivered==0 then
+  if not reload and a.units>=math.floor(wood_capacity/2) and a.delivered==0 then
     assert(mill.wood_received==nil)
     s=clone(s);reload=true
-    if later then S.mount_road_bus_market(s,Calendar,1976,true,true) end
+    mount(s)
   end
   if reload and wood_first and goods_first and b.delivered>=capacity*2 then break end
 end
 local a,b=s.fleet[w],s.fleet[g]
 assert(reload and wood_first and goods_first and wood_first<goods_first)
-assert(a.delivered>=20 and b.delivered==capacity*2 and a.expense>0 and b.expense>0)
+assert(a.delivered>=wood_capacity and b.delivered==capacity*2 and a.expense>0 and b.expense>0)
 assert((s.sites[station(p.goods_stop).site].received.goods or 0)==b.delivered)
 assert(s.companies["Wood Route"].revenue==a.revenue+b.revenue)
 assert(not (station(p.sawmill_stop).stock or {}).wood,"Stock wood leaked into the legacy prototype queue")

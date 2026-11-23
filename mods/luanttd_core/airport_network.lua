@@ -2,24 +2,33 @@
 -- branch of OpenTTD 14.1 CmdBuildAirport / CheckFlatLandAirport.
 -- Noise, stations shared across modes, foundation clearing and airport
 -- replacement are explicit future work; the preview never clears objects.
-return function(Sim,Terrain,Small)
+return function(Sim,Terrain,Small,City)
   local N={PRICE_PER_TILE=600,CLEAR_PER_TILE=30}
-  function N.footprint(origin)
+  function N.layout(name)
+    if name=="city" then return City end
+    if name==nil or name=="country" then return Small end
+  end
+  function N.footprint(origin,name)
+    local field=N.layout(name)
+    if not field then return {} end
     local tiles={}
     local x,z=Sim.xy(origin)
-    for dz=0,Small.H-1 do for dx=0,Small.W-1 do
+    for dz=0,field.H-1 do for dx=0,field.W-1 do
       local id=Sim.id(x+dx,z+dz)
       if id then tiles[#tiles+1]=id end
     end end
     return tiles
   end
-  function N.quote(s,owner,origin)
+  function N.quote(s,owner,origin,name)
+    local field=N.layout(name)
+    if not field then return nil,"AIRPORT_TYPE_NOT_AVAILABLE" end
+    if field.intro_year and Sim.date(s)<field.intro_year then return nil,"CITY_AIRPORT_NOT_INTRODUCED" end
     if not (s.corner_grid and origin and s.tiles[origin]) then return nil,"SELECT_AIRFIELD_ORIGIN" end
     local x,z=Sim.xy(origin)
     local airport={owner=owner,origin=origin,x=x*16,z=z*16,rotation=0,
-      width=Small.W,height=Small.H,flags=0,tiles={}}
+      width=field.W,height=field.H,flags=0,tiles={},layout=name=="city" and name or nil}
     local h
-    for dz=0,Small.H-1 do for dx=0,Small.W-1 do
+    for dz=0,field.H-1 do for dx=0,field.W-1 do
       local a=Sim.id(x+dx,z+dz)
       local t=a and s.tiles[a]
       if not t then return nil,"AIRPORT_OUTSIDE_REGION",a end
@@ -51,8 +60,8 @@ return function(Sim,Terrain,Small)
     c.cash,c.expense,c.month_exp=c.cash-cost,c.expense+cost,c.month_exp+cost
     s.topology=s.topology+1
   end
-  function N.build(s,owner,origin)
-    local airport,why,id=N.quote(s,owner,origin)
+  function N.build(s,owner,origin,name)
+    local airport,why,id=N.quote(s,owner,origin,name)
     if not airport then return nil,why,id end
     airport.id=s.next_small_airport or 1
     s.next_small_airport=airport.id+1
@@ -60,7 +69,7 @@ return function(Sim,Terrain,Small)
     s.stock_small_airports[airport.id]=airport
     local dirty={}
     for _,pos in ipairs(airport.tiles) do
-      s.tiles[pos.id].airfield={airport=airport.id,x=pos.x,z=pos.z}
+      s.tiles[pos.id].airfield={airport=airport.id,x=pos.x,z=pos.z,layout=airport.layout}
       dirty[#dirty+1]=pos.id
     end
     expense(s,owner,airport.price)

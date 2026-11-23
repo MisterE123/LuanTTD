@@ -32,6 +32,8 @@ return function(Sim,Run,Roster,model_ready)
     elseif plane_count(s)>0 or Run.current(s) then return nil,"ONE_OWNED_PLANE_ONLY" end
     local airport=s.stock_small_airports and s.stock_small_airports[field]
     if not airport or airport.owner~=owner then return nil,"OWN_COUNTRY_HANGAR_REQUIRED" end
+    if Run.fits and not Run.fits(airport,engine) then return nil,"LARGER_AIRFIELD_REQUIRED" end
+    if Roster.available and not Roster.available(Sim,s,engine) then return nil,"AIRCRAFT_NOT_INTRODUCED" end
     local quote,why=Roster.quote(engine,s.stock_air_purchase_base,s.stock_air_running_base)
     if not quote then return nil,why end
     if not model_ready(engine) then return nil,"NATIVE_AIRCRAFT_MODEL_UNAVAILABLE" end

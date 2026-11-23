@@ -7,10 +7,17 @@ return function(api,RoadVisual)
     collide_with_objects=false,visual="mesh",mesh="bl_yate_cargo_ship.obj",
     textures={"bl_yate_cargo_ship_atlas.png"},shaded=true,backface_culling=true,
     visual_size={x=1,y=1,z=1}}})
-  local ref,yaw
+  local bakewell_name="luanttd_core:stock_bakewell_cargo_ship"
+  if api.capabilities and api.capabilities.ferry[212] then
+    core.register_entity(bakewell_name,{initial_properties={physical=false,pointable=false,static_save=false,
+      collide_with_objects=false,visual="mesh",mesh="bl_stock_bakewell_cargo_ship.obj",
+      textures={"bl_stock_bakewell_cargo_ship_atlas.png"},shaded=true,backface_culling=true,
+      visual_size={x=1,y=1,z=1}}})
+  end
+  local ref,yaw,shown
   local function clear()
     if ref and ref:get_pos() then ref:remove() end
-    ref,yaw=nil,nil
+    ref,yaw,shown=nil,nil,nil
   end
   function V.step(dt,online,fraction)
     if not online then clear();return end
@@ -23,6 +30,10 @@ return function(api,RoadVisual)
         end
       end
     end
+    local status=api.ship_coal.status()
+    local current=status and (status.engine==212 and bakewell_name or name)
+    if current~=shown then clear() end
+    if not current then return end
     local pos,dir=api.ship_coal.pose(fraction)
     if not pos or not dir then clear();return end
     if api.vehicle_ui then api.vehicle_ui.track("ship","coal",pos) end
@@ -33,7 +44,7 @@ return function(api,RoadVisual)
     end
     end
     if not nearby then clear();return end
-    if not ref or not ref:get_pos() then ref=core.add_entity(pos,name);yaw=nil end
+    if not ref or not ref:get_pos() then ref=core.add_entity(pos,current);yaw=nil;shown=current end
     if ref then
       if api.vehicle_ui then api.vehicle_ui.track("ship","coal",pos,ref) end
       ref:move_to(pos,true)

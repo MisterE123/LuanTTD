@@ -2,10 +2,11 @@ local mod="mods/luanttd_core/"
 local S=dofile(mod.."sim.lua")
 local T=dofile(mod.."openttd/terrain.lua")
 local E=dofile(mod.."openttd/stock_engine_calendar.lua")
+local super=arg and arg[1]=="superbus"
 local function world(year,art)
   local s=S.new(1751)
   s.road_economy,s.road_stock_clock,s.road_stock_loading,s.road_stock_house_supply=true,true,true,true
-  S.mount_road_bus_market(s,E,year,art)
+  S.mount_road_bus_market(s,E,year,art,nil,{foster_mk2_bus=art and true or nil})
   dofile(mod.."town_layout.lua")(S,s)
   s.corner_grid=dofile(mod.."terrain_preview.lua")(S,T,s)
   return s
@@ -31,6 +32,11 @@ assert(S.vehicle_available(s,"foster_bus") and S.vehicle_available(s,"leopard_bu
 local no_art=world(1995,false)
 assert(not S.vehicle_available(no_art,"foster_bus") and S.vehicle_available(s,"foster_bus"),
   "Native assets are mounted per world and a missing model cannot be purchased")
+if super then
+  assert(not S.vehicle_available(s,"foster_mk2_bus"))
+  s=world(2025,true)
+  assert(not S.vehicle_available(world(2025,false),"foster_mk2_bus"))
+end
 local function at(x,y) return assert(S.id(x,y)) end
 local a,b,depot=at(9,12),at(18,12),at(10,13)
 assert(S.build(s,"A","road",S.line(a,b)))
@@ -40,9 +46,11 @@ local cash=S.company(s,"A").cash
 assert(not S.purchase(s,"A","bus","passenger",nil,depot))
 assert(not S.purchase(s,"A","foster_bus","passenger",s.tiles[a].station))
 assert(S.company(s,"A").cash==cash)
-local v=assert(S.purchase(s,"A","foster_bus","passenger",nil,depot))
-assert(S.company(s,"A").cash==cash-8203)
-assert(S.vehicle_capacity(s.fleet[v])==37 and s.fleet[v].stock_bus.stock_id==118)
+local engine=super and "foster_mk2_bus" or "foster_bus"
+local seats=super and 40 or 37
+local v=assert(S.purchase(s,"A",engine,"passenger",nil,depot))
+assert(S.company(s,"A").cash==cash-(super and 8750 or 8203))
+assert(S.vehicle_capacity(s.fleet[v])==seats and s.fleet[v].stock_bus.stock_id==(super and 119 or 118))
 assert(S.add_order(s,"A",v,s.tiles[a].station))
 assert(S.add_order(s,"A",v,s.tiles[b].station))
 assert(S.toggle(s,"A",v))
@@ -65,7 +73,7 @@ local function copy(t)
   return r
 end
 local clone=copy(s)
-S.mount_road_bus_market(clone,E,1950,true)
-assert(S.date(clone)==1995 and S.vehicle_capacity(clone.fleet[v])==37)
+S.mount_road_bus_market(clone,E,1950,true,nil,{foster_mk2_bus=true})
+assert(S.date(clone)==(super and 2025 or 1995) and S.vehicle_capacity(clone.fleet[v])==seats)
 assert(advance(clone,prev)>prev)
-print("PASS: stock real calendar public offer and retirement, actual Foster bus 37 seats/price/payout, independent art gate and saved epoch")
+print("PASS: stock real calendar public offer and retirement, actual Foster bus seats/price/payout, independent art gate and saved epoch")

@@ -16,11 +16,15 @@ return function(Sim,R)
       local v=R.rail.owned.get(S,n,id)
       if not v then return end
       return row(mode,id,v,n,"Train "..v.unit_number,v.depot)
+    elseif mode=="ship" and id=="oil" and R.water and R.water.tanker then
+      local v=R.water.tanker.status(S)
+      local depot=v and S.stock_ship_depots and S.stock_ship_depots[v.depot]
+      if v then return row(mode,id,v,n,v.name,depot and depot.tiles[1],v.depot) end
     elseif mode=="ship" and (id=="ferry" or id=="coal") then
       local v=id=="ferry" and S.stock_owned_ferry or id=="coal" and S.stock_coal_ship
       if not v then return end
       local depot=S.stock_ship_depots and S.stock_ship_depots[v.depot]
-      return row(mode,id,v,n,id=="coal" and "Yate Cargo Ship" or v.engine_id==207 and
+      return row(mode,id,v,n,id=="coal" and (v.engine==212 and "Bakewell Cargo Ship" or "Yate Cargo Ship") or v.engine_id==208 and "Bakewell 300 Hovercraft" or v.engine_id==207 and
         "FFP Passenger Ferry" or "MPS Passenger Ferry",depot and depot.tiles[1],v.depot)
     elseif mode=="air" then
       local v=(S.stock_owned_air_fleet or {})[id] or id==1 and S.stock_owned_aircraft
@@ -59,6 +63,10 @@ return function(Sim,R)
         if away then
           if run.paid_clock then p=Sim.ferry_paid_pose(S,1) else p=w.run.pose(run) end
         end
+      elseif id=="oil" and w.tanker then
+        local q=w.tanker.status(S)
+        away=q and q.first~=nil
+        if away then p=w.tanker.pose(S,1) end
       elseif w.freight and w.coal then
         local run=w.freight.current(S)
         away=run and run.owner==n
@@ -97,7 +105,7 @@ return function(Sim,R)
     end
     for id in pairs(S.stock_owned_air_fleet or {}) do add("air",id) end
     if S.stock_owned_aircraft and not (S.stock_owned_air_fleet or {})[1] then add("air",1) end
-    add("ship","ferry");add("ship","coal");add("tram",1)
+    add("ship","ferry");add("ship","coal");add("ship","oil");add("tram",1)
     table.sort(rows,function(a,b) return a.mode==b.mode and a.id<b.id or a.mode<b.mode end)
     local count=math.max(1,math.ceil(#rows/20))
     page=math.min(page,count)

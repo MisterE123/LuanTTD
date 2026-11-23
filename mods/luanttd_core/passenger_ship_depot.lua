@@ -19,6 +19,7 @@ return function(Sim,Roster,Calendar,Run,art)
     local q=(s.stock_ship_depots or {})[depot]
     if not q or q.owner~=owner then return nil,"Choose a ship depot you own." end
     if s.stock_coal_ship and s.stock_coal_ship.depot==depot then return nil,"The Yate already uses this depot." end
+    if s.stock_owned_oil_ship and s.stock_owned_oil_ship.depot==depot then return nil,"The oil tanker already uses this depot." end
     local r=D.offer(s,id)
     return r,r and nil or "That ferry is not on sale."
   end

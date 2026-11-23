@@ -158,6 +158,7 @@ return function(Sim,Terrain,Water,Facilities)
       entries=s.stock_ship_depots
       p=entries and entries[t.depot]
       if not p then return nil,"INVALID_FACILITY" end
+      if s.stock_owned_oil_ship and s.stock_owned_oil_ship.depot==p.id then return nil,"DEPOT_HAS_OIL_SHIP" end
       if s.stock_coal_ship and s.stock_coal_ship.depot==p.id then return nil,"DEPOT_HAS_OWNED_SHIP" end
       if s.stock_owned_ferry and s.stock_owned_ferry.depot==p.id then return nil,"DEPOT_HAS_PASSENGER_FERRY" end
       tiles,cost=p.tiles,90 -- PR_CLEAR_DEPOT_SHIP
@@ -165,12 +166,14 @@ return function(Sim,Terrain,Water,Facilities)
       entries=s.stock_ship_stations
       p=entries and entries[t.station]
       if not p then return nil,"INVALID_FACILITY" end
+      local tanker=s.stock_oil_ship_route
+      if tanker and (tanker.first==p.id or tanker.second==p.id) then return nil,"DOCK_HAS_OIL_SERVICE" end
       tiles,cost={p.land,p.water},55 -- PR_CLEAR_STATION_DOCK
     elseif t.kind=="buoy" then
       entries=s.stock_ship_buoys
       p=entries and entries[t.station]
       if not p or p.tile~=id then return nil,"INVALID_FACILITY" end
-      for _,name in ipairs({"ship_pilot","stock_coal_ship_run"}) do
+      for _,name in ipairs({"ship_pilot","stock_coal_ship_run","stock_oil_ship_route"}) do
         local run=s[name]
         if run then
           local v=run.vehicle

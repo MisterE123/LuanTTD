@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Optional owned #211 coal service, one distinct stock motion actor.
-return function(Sim,Service,Roster,Rating,debit,credit,receive)
+return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
   local M={}
   local bindings=setmetatable({},{__mode="k"})
   local frames=setmetatable({},{__mode="k"})
@@ -43,8 +43,8 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
     end
     return true
   end
-  function M.mount(s,Run,Passenger,Network)
-    bindings[s]={run=Run,passenger=Passenger,network=Network}
+  function M.mount(s,Run,Passenger,Network,art)
+    bindings[s]={run=Run,passenger=Passenger,network=Network,ready=art,calendar={}}
     Run.start_guard=function(w,dep,a,z,board)
       if not live_docks(board,a,z) then return false,"DOCK_BERTHS_OVERLAP_OR_MISSING" end
       return check_pair(board,dep,a,z,Passenger.current(w))
@@ -126,36 +126,63 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
       end})
     return b,archive,comm
   end
-  function M.buy(s,owner,dep)
+  M.catalog=Roster.order
+  M.model=Roster.model
+  function M.offer(s,id)
+    if not M.active(s) then return end
+    local model=Roster.model(id)
+    if not model then return end
+    local host=bindings[s]
+    if host.ready and not host.ready(model.id) then return end
+    local market=s.stock_bus_market
+    if not (market and Calendar) then return model.id==211 and model or nil end
+    if not host.calendar[model.id] then
+      host.calendar[model.id]=assert(Calendar.prepare_original(model,market.settings))
+    end
+    return Calendar.snapshot(host.calendar[model.id],market.epoch+s.day).public and model or nil
+  end
+  function M.quote(s,owner,dep,id)
     if not M.active(s) then return nil,"STOCK_COAL_SHIP_DISABLED" end
     if s.stock_coal_ship then return nil,"ONE_STOCK_COAL_SHIP_ONLY" end
     local d=depot(s,dep)
     if not d or d.owner~=owner then return nil,"OWN_SHIP_DEPOT_REQUIRED" end
     local p=bindings[s].passenger.current(s) or s.stock_owned_ferry
     if p and p.depot==dep then return nil,"FERRY_FREIGHT_SHARED_DEPOT" end
-    local q=Roster.quote(Roster.default_cargo,s.stock_ship_purchase_base)
+    if s.stock_owned_oil_ship and s.stock_owned_oil_ship.depot==dep then return nil,"TANKER_USES_THIS_DEPOT" end
+    local model=M.offer(s,id or 211)
+    if not model then return nil,"CARGO_SHIP_NOT_AVAILABLE" end
+    return Roster.quote(Roster.default_cargo,s.stock_ship_purchase_base,nil,model.id)
+  end
+  function M.buy(s,owner,dep,id)
+    local q,why=M.quote(s,owner,dep,id)
+    if not q then return nil,why end
     local c=Sim.company(s,owner)
     if c.cash<q.purchase then return nil,"NOT_ENOUGH_MONEY" end
     debit(c,q.purchase)
-    local v={id=1,engine=Roster.id,owner=owner,depot=dep,built=Sim.date(s),
+    local v={id=1,engine=id or Roster.id,owner=owner,depot=dep,built=Sim.date(s),
       cargo=Roster.default_cargo,purchase=q.purchase,refit=0,expense=0}
     s.stock_coal_ship=v
-    return {engine=v.engine,cost=v.purchase,cargo=v.cargo,capacity=q.capacity}
+    return {id="coal",engine=v.engine,cost=v.purchase,cargo=v.cargo,capacity=q.capacity}
   end
-  function M.refit(s,owner)
+  function M.refit_quote(s,owner,dep)
     if not M.active(s) then return nil,"STOCK_COAL_SHIP_DISABLED" end
     local v=s.stock_coal_ship
     local d=v and depot(s,v.depot)
-    if not (d and d.owner==owner and v.owner==owner) or bindings[s].run.current(s) then
+    if not (d and d.owner==owner and v.owner==owner and (dep==nil or dep==v.depot)) or bindings[s].run.current(s) then
       return nil,"OWN_SHIP_IN_DEPOT_REQUIRED"
     end
     if v.cargo==Roster.coal then return nil,"SHIP_ALREADY_COAL_REFITTED" end
-    local q=Roster.quote(Roster.coal,s.stock_ship_purchase_base,v.cargo)
+    return Roster.quote(Roster.coal,s.stock_ship_purchase_base,v.cargo,v.engine)
+  end
+  function M.refit(s,owner,dep)
+    local q,why=M.refit_quote(s,owner,dep)
+    if not q then return nil,why end
+    local v=s.stock_coal_ship
     local c=Sim.company(s,owner)
     if c.cash<q.refit then return nil,"NOT_ENOUGH_MONEY" end
     debit(c,q.refit)
     v.cargo,v.refit=Roster.coal,q.refit
-    return {engine=v.engine,cost=v.refit,cargo=v.cargo,capacity=q.capacity}
+    return {id="coal",engine=v.engine,cost=v.refit,cargo=v.cargo,capacity=q.capacity}
   end
   function M.start(s,owner,a,z)
     if not M.active(s) then return nil,"STOCK_COAL_SHIP_DISABLED" end
@@ -163,13 +190,13 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
     local v=s.stock_coal_ship
     if not v or v.owner~=owner or v.cargo~=Roster.coal then return nil,"OWN_YATE_REFITTED_TO_COAL_REQUIRED" end
     if a==z or not a or not z then return nil,"OWN_DEPOT_AND_TWO_DOCKS_REQUIRED" end
-    local candidate,why=spec.run.quote(s,owner,v.depot,a,z)
+    local candidate,why=spec.run.quote(s,owner,v.depot,a,z,nil,v.engine)
     if not candidate then return nil,why end
     local b=model(s,true)
     local source,dest=b.report(a),b.report(z)
     if not source or #source.sources==0 then return nil,"DOCK_NEEDS_COAL_MINE" end
     if not dest or not dest.accepts then return nil,"DOCK_NEEDS_POWER_STATION" end
-    local run,why2=spec.run.start(s,owner,v.depot,a,z)
+    local run,why2=spec.run.start(s,owner,v.depot,a,z,nil,v.engine)
     if not run then return nil,why2 end
     s.stock_ship_coal=Service.new()
     local live=model(s)
@@ -215,7 +242,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
     if not M.active(s) then return end
     local spec=bindings[s]
     local run=spec.run.current(s)
-    if not run then return end
+    if not run or spec.ready and not spec.ready(s.stock_coal_ship.engine) then return end
     local b,state,common=model(s)
     if state.loading_tick and state.loading_tick<first_tick-1 then
       state.loading_tick,state.post_tick=first_tick-1,first_tick-1
@@ -287,8 +314,8 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
         if not power and o.cargo_order=="no_load" then power=o.id end
       end
     end
-    return {id=craft.id,owner=craft.owner,engine=Roster.id,cargo=craft.cargo,
-      phase=p and p.phase or "purchased",capacity=Roster.capacity,onboard=v and v.units or 0,
+    return {id=craft.id,owner=craft.owner,engine=craft.engine,cargo=craft.cargo,name=Roster.model(craft.engine).name,
+      phase=p and p.phase or "purchased",capacity=Roster.model(craft.engine).capacity,onboard=v and v.units or 0,
       delivered=v and v.delivered or 0,boarded=v and v.boarded or 0,fare=v and v.revenue or 0,
       last_fare=v and v.last_fare,purchase=craft.purchase,refit=craft.refit,running_expense=craft.expense,
       depot=craft.depot,mine=mine or p and p.first,power=power or p and p.second,last_dock=p and p.last_dock,

@@ -3,12 +3,12 @@
 return function(client,mode)
   local revision_by_player={}
   local M={}
-  if mode=="road" then
+  if mode=="road" or mode=="ship" then
     function M.toggle(player,vehicle,done)
       local revision=revision_by_player[player]
       if revision==nil then return nil,"Open the current orders first." end
       return client.query({kind="command",player=player,command={
-        kind="road_toggle",vehicle=vehicle,revision=revision,
+        kind=mode=="road" and "road_toggle" or "ship_toggle",vehicle=vehicle,revision=revision,
       }},function(r)
         if r.revision~=nil then revision_by_player[player]=r.revision end
         done(r.ok,r.why)

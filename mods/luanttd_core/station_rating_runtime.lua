@@ -83,7 +83,7 @@ return function(Sim,Kernel,Packets)
   -- Cache units from the authored engines, shared in value with road YAPF.
   -- The Town Flyer uses stock MPS Regal 112 / 2; the other visual road models
   -- are LuanTTD variants. Vehicle purchase date is our build date.
-  local max_speed={bus=112,coach=144,leopard_bus=176,foster_bus=224,mail_van=96,truck=96}
+  local max_speed={bus=112,coach=144,leopard_bus=176,foster_bus=224,foster_mk2_bus=255,mail_van=96,truck=96}
 
   local function goods(s,st)
     local g=st.passenger_rating_state

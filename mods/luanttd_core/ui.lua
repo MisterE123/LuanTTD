@@ -1443,14 +1443,14 @@ function U.clear_ship_run(p)
   if ok then V.ferry_depot,V.ferry_first,V.ferry_via=nil,nil,nil end
   V.status=msg
 end
-local airfield_tools={airfield_build={name="Build country airfield"},airfield_remove={name="Dismantle airfield"}}
+local airfield_tools={airfield_build={name="Build country airfield"},city_airport_build={name="Build City Airport",layout="city"},airfield_remove={name="Dismantle airfield"}}
 local airfield_order={name=S.air_owned_preview and "Order aircraft" or "Order trimotor"}
 local function airport_order_target(n,V,id)
   if not S.air_fleet_preview and api.airfield.current() then
     return nil,S.air_owned_preview and "This aircraft already has its route." or "Clear the active flight before ordering another."
   end
   local field=api.airfield.network.airport_for(S,id)
-  if not field or field.owner~=n then return nil,"Choose one of your country airfields." end
+  if not field or field.owner~=n then return nil,"Choose one of your airfields." end
   if field.id==V.airport_first then return nil,"The destination must be a different airfield." end
   if S.air_owned_preview and not V.airport_first then
     local unit=api.airfield.owned(field.id)
@@ -1520,8 +1520,9 @@ local function airfields(s,name,tool,origin,quote)
     return api.airfield.network.remove(s,name,origin,quote,api.airfield.busy)
   end
   local field,why,bad
-  if quote then field,why,bad=api.airfield.network.quote(s,name,origin)
-  else field,why,bad=api.airfield.network.build(s,name,origin) end
+  local layout=airfield_tools[tool].layout
+  if quote then field,why,bad=api.airfield.network.quote(s,name,origin,layout)
+  else field,why,bad=api.airfield.network.build(s,name,origin,layout) end
   if not field then return nil,why,bad end
   local tiles={}
   for i,tile in ipairs(field.tiles) do tiles[i]=tile.id end
@@ -1775,8 +1776,8 @@ local function authority_preview(p,id,hit)
   elseif dock=="lock" or dock=="canal" or dock=="aqueduct" then
     if dock~="lock" and not V.anchor then return ids,true,"Mark the first waterway tile." end
     kind,request="transport",{mode="ship",operation="waterwork",kind=dock,tile=V.anchor or id,last=id}
-  elseif tool=="airfield_build" then
-    kind,request="transport",{mode="air",operation="build",tile=id}
+  elseif tool=="airfield_build" or tool=="city_airport_build" then
+    kind,request="transport",{mode="air",operation="build",tile=id,layout=airfield_tools[tool].layout}
   elseif tool=="structure_tunnel" or tool=="rail_span_tunnel" then
     kind,request="transport",{mode=tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id}
   else
@@ -1972,7 +1973,7 @@ function U.preview(p,id,hit)
         why=("Tile %d,%d: %s"):format(x,z,why)
       end
       local footprint=api.airfield.network.footprint
-      return V.tool=="airfield_build" and footprint and footprint(id) or {id},false,why
+      return V.tool~="airfield_remove" and footprint and footprint(id,airfield_tools[V.tool].layout) or {id},false,why
     end
     return tiles,true,("%s  |  %s  ·  %d tiles"):format(airfield_tools[V.tool].name,dollars(price),#tiles)
   end
@@ -2254,7 +2255,7 @@ function U.build_world(p,id,hit)
     end
     if V.tool=="airfield_order" then
       local field=surface and surface.owner==n and surface.airfield and surface.airfield.airport
-      if not field then V.status="Choose one of your country airfields.";return end
+      if not field then V.status="Choose one of your airfields.";return end
       if not V.airport_first then V.airport_first=field;V.status="Departure selected. Pick a destination.";return end
       if field==V.airport_first then V.status="Choose a different airfield.";return end
       if stage_fixed_destination(V,id) then return end
@@ -2299,8 +2300,8 @@ function U.build_world(p,id,hit)
       worker_build(n,V,"transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=V.ship_axis or 0})
       return
     end
-    if V.tool=="airfield_build" then
-      worker_build(n,V,"transport",{mode="air",operation="build",tile=id});return
+    if V.tool=="airfield_build" or V.tool=="city_airport_build" then
+      worker_build(n,V,"transport",{mode="air",operation="build",tile=id,layout=airfield_tools[V.tool].layout});return
     end
     if V.tool=="structure_tunnel" or V.tool=="rail_span_tunnel" then
       worker_build(n,V,"transport",{mode=V.tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id})
@@ -3070,7 +3071,7 @@ function U.service(p,kind,id)
   elseif kind=="airfield_status" then
     local field=S.stock_small_airports and S.stock_small_airports[id]
     if not field then return end
-    label(.4,.45,("Country airfield #%d  ·  %s"):format(id,field.owner))
+    label(.4,.45,("%s #%d  ·  %s"):format(field.layout=="city" and "City Airport" or "Country airfield",id,field.owner))
     label(.4,1.20,math.floor(field.flags/256)%2==1 and "Runway reserved." or "Runway clear.")
     local flights=api.airfield.at(id)
     local unit=api.airfield.owned(id)
@@ -3140,7 +3141,7 @@ function U.service(p,kind,id)
     if S.stock_bus_market then
       local options={}
       for _,v in ipairs({{"bus","depot_buy","Regal"},{"leopard_bus","depot_buy_leopard","Leopard"},
-          {"foster_bus","depot_buy_foster","Foster"}}) do
+          {"foster_bus","depot_buy_foster","Foster"},{"foster_mk2_bus","depot_buy_superbus","Superbus"}}) do
         if Sim.vehicle_available(S,v[1]) then options[#options+1]=v end
       end
       if #options==0 then label(.4,1.25,"No original buses are on sale right now.") end
@@ -3176,6 +3177,10 @@ function U.service(p,kind,id)
     offer(api.farm_tools,"livestock","livestock_van","Buy livestock van")
     offer(api.oil_tools,"oil","oil_tanker","Buy oil tanker")
     offer(api.timber_tools,"wood","wood_truck","Buy wood truck")
+    for _,engine in ipairs(Sim.road_extra_freight()) do
+      local e=Sim.vehicles[engine]
+      offer(true,"extra_"..engine,engine,"Buy "..e.name)
+    end
     offer(api.timber_tools or api.farm_tools or api.oil_tools,"goods","goods_truck","Buy goods truck")
     offer(S.road_mail,"mail","mail_van","Buy post van")
     offer(Sim.road_coal_active(S),"coal","coal_tipper","Buy coal tipper")
@@ -3419,9 +3424,13 @@ function U.service_fields(p,f)
   elseif kind=="depot" then
     local t=S.tiles[id]
     if not t or t.owner~=n or t.build~="road_depot" then return true end
-    if f.depot_buy or f.depot_buy_leopard or f.depot_buy_foster or f.depot_buy_mail or f.depot_buy_coal or
+    local extra
+    for _,engine in ipairs(Sim.road_extra_freight()) do
+      if f["depot_buy_extra_"..engine] then extra=engine;break end
+    end
+    if extra or f.depot_buy_superbus or f.depot_buy or f.depot_buy_leopard or f.depot_buy_foster or f.depot_buy_mail or f.depot_buy_coal or
         f.depot_buy_wood or f.depot_buy_goods or f.depot_buy_grain or f.depot_buy_livestock or f.depot_buy_oil or f.depot_buy_craighead then
-      local model=f.depot_buy_craighead and "craighead_goods_truck" or f.depot_buy_oil and "oil_tanker" or f.depot_buy_grain and "grain_truck" or f.depot_buy_livestock and "livestock_van" or
+      local model=extra or f.depot_buy_superbus and "foster_mk2_bus" or f.depot_buy_craighead and "craighead_goods_truck" or f.depot_buy_oil and "oil_tanker" or f.depot_buy_grain and "grain_truck" or f.depot_buy_livestock and "livestock_van" or
         f.depot_buy_wood and "wood_truck" or f.depot_buy_goods and "goods_truck" or
         f.depot_buy_coal and "coal_tipper" or f.depot_buy_mail and "mail_van" or f.depot_buy_leopard and "leopard_bus" or
         f.depot_buy_foster and "foster_bus" or "bus"
