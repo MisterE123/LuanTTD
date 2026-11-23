@@ -25,6 +25,7 @@ return function(Sim,mod,s,cap)
   end
   local network=B.networks(s,Slope,tile)
   local N={world=s,network=network,farm=farm,oil=oil,terrain=Terrain}
+  N.crossing_gesture=dofile(mod.."/crossing_gesture.lua")
   N.road_construction=dofile(mod.."/campaign_road_construction.lua")(Sim,s,network.oneway)
   N.terrain_projection=dofile(mod.."/campaign_terrain_projection.lua")
   N.landscape=dofile(mod.."/campaign_landscape_commands.lua")(Sim,s)
@@ -32,6 +33,12 @@ return function(Sim,mod,s,cap)
   if s.ship_paid_service then
     local _,follow,net,roster,run,depot,freight,coal=B.water(s,network.track,function(id) return cap.ferry[id]==true end)
     N.water={network=net,follow=follow,roster=roster,run=run,depot=depot,freight=freight,coal=coal}
+    local Bridge=dofile(source.."road_bridge.lua")(Slope)
+    local Aqua=dofile(source.."aqueduct.lua")(Bridge)
+    N.water.aqueduct=dofile(mod.."/ship_aqueduct_world.lua")(Sim,Terrain,Aqua)
+    local Construction=dofile(source.."water_construction.lua")(network.track,follow)
+    N.water.works=dofile(mod.."/ship_water_world.lua")(Sim,net,Construction)
+    function N.water.busy() return run.uses_facilities(s) or coal and coal.busy(s) end
   end
   if s.air_paid_service then
     local net,run,owned,roster=B.air(s,Slope,function(id) return cap.air[id]==true end)
@@ -116,6 +123,16 @@ return function(Sim,mod,s,cap)
     local interval=cap.seconds_per_day or 1.25
     local net,run,clock=B.tram(s,Slope,interval)
     N.tram={run=run,net=net}
+    function N.tram.facility(owner,id,kind)
+      local tile=s.tiles[id]
+      return tile and tile.tram and tile.tram.owner==owner and tile.tram.kind==kind
+    end
+    function N.tram.reason(r) return r end
+    function N.tram.busy(id)
+      if run.uses(s,id) then return true end
+      for _,v in pairs(s.fleet) do if Sim.position(s,v)==id then return true end end
+      return false
+    end
     local tram_motion=dofile(mod.."/road_motion_presentation.lua")(dofile(mod.."/road_lanes.lua"))
     function N.tram.pose(frame)
       local x,z=tram_motion.xy(frame[1],frame[2],frame[5])
@@ -124,7 +141,7 @@ return function(Sim,mod,s,cap)
     end
     Clock=function() clock(interval) end
   end
-  N.orders=dofile(mod.."/road_vehicle_orders.lua")({s=s,Sim=Sim})
+  N.orders=dofile(mod.."/road_vehicle_orders.lua")({s=s,Sim=Sim,tram=N.tram})
   local motions=dofile(mod.."/road_motion_presentation.lua")(dofile(mod.."/road_lanes.lua"))
   local positions=dofile(mod.."/road_source_pose.lua")(Sim,motions)
   function N.road_pose(v,fraction)
@@ -159,6 +176,8 @@ return function(Sim,mod,s,cap)
   local water_air=dofile(mod.."/water_air_orders.lua")(s,Sim,dofile(source.."rail_order_list.lua"),
     N.water and N.water.run,N.water and N.water.freight,N.water and N.water.coal,N.air and N.air.run)
   N.orders.ship,N.orders.air=water_air.ship,water_air.air
+  N.guide=dofile(mod.."/campaign_company_guide.lua")(Sim,s)
+  N.company_fleet=dofile(mod.."/campaign_company_fleet.lua")(Sim,N)
   N.demolition=dofile(mod.."/campaign_demolition_runtime.lua")(Sim,mod,N,Slope)
   N.transport=dofile(mod.."/campaign_transport_commands.lua")(Sim,N)
   function N.day() Sim.daily(s);if Clock then Clock() end end

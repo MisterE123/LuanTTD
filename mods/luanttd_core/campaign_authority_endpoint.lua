@@ -69,7 +69,20 @@ return function(Sim,R,max_days)
     local u,v=Sim.xy(last)
     if math.abs(x-u)+math.abs(z-v)>=128 then return reply(false,"RAIL_DRAG_TOO_LONG") end
     local q,why
-    if request.tool=="track" and integer(request.track,0,5) then
+    if request.tool=="crossing" then
+      if s.tiles[first].rail_type==1 then return reply(false,"Electric level crossing is not available.") end
+      local n=R.network
+      local c,error_=R.crossing_gesture(Sim,s,first)
+      if not c then return reply(false,error_) end
+      local plan,msg=n.crossings.quote(s,name,first,c,n.lab.board(s))
+      rail_quotes[name]=nil
+      if not plan then return reply(false,msg) end
+      quote_sequence=quote_sequence+1
+      rail_quotes[name]={token=quote_sequence,plan=plan,crossing=true}
+      return reply(true,nil,{tiles={first},cost=plan.price,token=quote_sequence,kind="crossing"})
+    elseif request.tool=="waypoint" then
+      q,why=rail.quote_waypoint(name,first,request.remove==true)
+    elseif request.tool=="track" and integer(request.track,0,5) then
       q,why=rail.quote_track(name,first,last,request.track,request.remove==true)
     elseif request.tool=="depot" and integer(request.direction,0,3) then
       q,why=rail.quote_depot(name,first,request.direction)
@@ -92,6 +105,44 @@ return function(Sim,R,max_days)
     rail_quotes[name]={token=quote_sequence,plan=q}
     return reply(true,nil,{tiles=q.ids,cost=q.price,token=quote_sequence,kind=q.kind})
   end
+  local signal_quotes={}
+  function A.signal_panel(name,id,hit,kind,inspect,peek)
+    if not owner(name) or not s.companies[name] or not tile_id(id) or not R.rail or
+      kind~=0 and kind~=4 and kind~=5 and not inspect then return reply(false,"SIGNAL_UNAVAILABLE") end
+    if hit~=nil and (type(hit)~="table" or type(hit.x)~="number" or math.abs(hit.x)>2*Sim.W+5
+      or type(hit.z)~="number" or math.abs(hit.z)>2*Sim.H+5 or hit.x~=hit.x or hit.z~=hit.z) then
+      return reply(false,"INVALID_TRACK_POINT")
+    end
+    local B,Track=R.rail.build,R.network.track
+    local track=B.signal_track(id,hit)
+    local details=(track~=nil or inspect and not hit) and B.signal_details(id,track)
+    if inspect and not details then return reply(false,"No signal on that rail piece.") end
+    if details then track,kind=details.track,details.kind end
+    if track==nil then return reply(false,"Aim at an owned rail piece. Avoid platforms and junctions.") end
+    local choices,plans={},{}
+    local function set(key,td,both,flip)
+      local p,why
+      if flip then p,why=B.quote_flip_signal(name,id,track)
+      else p,why=B.quote_signal_track(name,id,td,kind,both) end
+      choices[key]={price=p and p.price,why=why}
+      if p then plans[key]={td=td,both=both,flip=flip,price=p.price} end
+    end
+    if details then set("flip",nil,nil,true)
+    else
+      set("td"..track,track)
+      local other=Track.reverse_trackdir(track)
+      set("td"..other,other)
+      if kind==0 then set("both",track,true) end
+    end
+    local result={track=track,kind=kind,details=details or nil,choices=choices}
+    if not peek then
+      quote_sequence=quote_sequence+1
+      result.token=quote_sequence
+      signal_quotes[name]={token=quote_sequence,id=id,track=track,kind=kind,plans=plans,
+        topology=s.topology,terrain=s.corner_grid.revision}
+    end
+    return reply(true,nil,result)
+  end
   local transport_quotes={}
   function A.transport_quote(name,request)
     if not owner(name) or not R.transport or not s.companies[name] then return reply(false,"TRANSPORT_QUOTE_UNAVAILABLE") end
@@ -101,6 +152,28 @@ return function(Sim,R,max_days)
     quote_sequence=quote_sequence+1
     transport_quotes[name]={quote=quote,token=quote_sequence,topology=s.topology}
     return reply(true,nil,{token=quote_sequence,cost=quote.price,tiles=quote.tiles})
+  end
+  local bridge_quotes={}
+  function A.bridge_picker(name,mode,a,b,peek)
+    if not owner(name) or not s.companies[name] or not tile_id(a) or not tile_id(b) or a==b
+      or (mode~="rail" and mode~="road") or not R.transport then return reply(false,"Choose two distinct bridgeheads.") end
+    local styles={[0]="Timber",[1]="Concrete",[2]="Steel girder"}
+    local offers,by_type,ids,minimum,why={},{}
+    if not peek then bridge_quotes[name]=nil end
+    for style=0,mode=="road" and 2 or 0 do
+      local q,error_=R.transport.quote(name,{mode=mode,operation="bridge",tile=a,last=b,style=style})
+      if q then
+        offers[#offers+1]={style=style,name=styles[style],price=q.price,speed=q.speed}
+        ids=ids or q.tiles
+        minimum=math.min(minimum or q.price,q.price)
+        by_type[style]=q
+      else why=why or error_ end
+    end
+    if #offers==0 then return reply(false,why or "No available bridge fits this span.") end
+    if peek then return reply(true,nil,{offers=offers,ids=ids,minimum=minimum}) end
+    quote_sequence=quote_sequence+1
+    bridge_quotes[name]={token=quote_sequence,quotes=by_type,topology=s.topology,terrain=s.corner_grid.revision}
+    return reply(true,nil,{token=quote_sequence,offers=offers,ids=ids,minimum=minimum})
   end
   function A.depot(name,mode,id)
     if not owner(name) or not R.transport then return reply(false,"DEPOT_UNAVAILABLE") end
@@ -144,6 +217,21 @@ return function(Sim,R,max_days)
       month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,
       year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name})
   end
+  function A.company_fleet(name,page)
+    if not owner(name) or not s.companies[name] or not integer(page,1,1000000) then
+      return reply(false,"COMPANY_FLEET_UNAVAILABLE")
+    end
+    return reply(true,nil,R.company_fleet.page(name,page))
+  end
+  function A.vehicle(name,mode,id,locate)
+    if not owner(name) or not s.companies[name] or not (index(id) or id=="ferry" or id=="coal") then
+      return reply(false,"VEHICLE_UNAVAILABLE")
+    end
+    local v=R.company_fleet.vehicle(name,mode,id)
+    if not v then return reply(false,"VEHICLE_UNAVAILABLE") end
+    if locate then v.position=R.company_fleet.locate(name,mode,id) end
+    return reply(true,nil,v)
+  end
   function A.road_quote(name,request)
     if not owner(name) or not R.road_construction then return reply(false,"ROAD_QUOTE_UNAVAILABLE") end
     if not s.companies[name] then return reply(false,"COMPANY_NOT_OPEN") end
@@ -157,7 +245,7 @@ return function(Sim,R,max_days)
   end
   function A.command(name,c)
     if not owner(name) or type(c)~="table" then return reply(false,"INVALID_REQUEST") end
-    if c.revision~=authority_revision then return reply(false,"STALE_COMMAND") end
+    if c.kind~="company_open" and c.revision~=authority_revision then return reply(false,"STALE_COMMAND") end
     local ok,note,value
     if c.kind=="demolition" then
       local q=demolition_quotes[name]
@@ -180,6 +268,29 @@ return function(Sim,R,max_days)
       terrain_quotes[name]=nil
       if not q or q.token~=c.token then return reply(false,"TERRAIN_QUOTE_EXPIRED") end
       ok,note,value=R.landscape.commit(name,q.quote)
+    elseif c.kind=="signal_panel" then
+      local q=signal_quotes[name]
+      if not q or q.token~=c.token or q.topology~=s.topology or q.terrain~=s.corner_grid.revision
+        or type(c.action)~="string" or not q.plans[c.action] then
+        return reply(false,"The railway changed. Select the tile again.")
+      end
+      signal_quotes[name]=nil
+      local cmd=q.plans[c.action]
+      local B=R.rail.build
+      local p,why
+      if cmd.flip then p,why=B.quote_flip_signal(name,q.id,q.track)
+      else p,why=B.quote_signal_track(name,q.id,cmd.td,q.kind,cmd.both) end
+      if not p or cmd.price~=p.price then return reply(false,why or "The signal price changed.") end
+      ok,note=B.build(name,p)
+      if ok then value=p.ids end
+    elseif c.kind=="bridge_picker" then
+      local q=bridge_quotes[name]
+      bridge_quotes[name]=nil
+      if not q or q.token~=c.token or q.topology~=s.topology or q.terrain~=s.corner_grid.revision
+        or not integer(c.style,0,2) or not q.quotes[c.style] then
+        return reply(false,"The span changed. Select both bridgeheads again.")
+      end
+      ok,note,value=R.transport.commit(name,q.quotes[c.style])
     elseif c.kind=="transport_commit" then
       local q=transport_quotes[name]
       transport_quotes[name]=nil
@@ -191,8 +302,15 @@ return function(Sim,R,max_days)
       local quote=rail_quotes[name]
       rail_quotes[name]=nil
       if not quote or quote.token~=c.token then return reply(false,"RAIL_QUOTE_EXPIRED") end
-      ok,note=R.rail.build.build(name,quote.plan)
-      if ok then value=quote.plan.ids end
+      if quote.crossing then
+        local n=R.network
+        local cost
+        ok,cost,value=n.crossings.commit(s,name,quote.plan,n.lab.board(s))
+        note=ok and ("Built level crossing for $%d."):format(cost) or cost
+      else
+        ok,note=R.rail.build.build(name,quote.plan)
+        if ok then value=quote.plan.ids end
+      end
     elseif c.kind=="company_open" then
       if s.companies[name] then return A.company(name) end
       Sim.company(s,name)
@@ -218,7 +336,7 @@ return function(Sim,R,max_days)
       local u,v=Sim.xy(c.last)
       if math.abs(x-u)+math.abs(z-v)>=128 then return reply(false,"ROAD_DRAG_TOO_LONG") end
       local cells=Sim.line(c.first,c.last)
-      ok,note=Sim.build(s,name,"road",cells)
+      ok,note,value=Sim.build(s,name,"road",cells)
     elseif c.kind=="vehicle_order" and order_verbs[c.operation] then
       local handle=adapter(c.mode,c.vehicle)
       if not handle or not (type(c.order_revision)=="string" and #c.order_revision<=8192
@@ -244,6 +362,7 @@ return function(Sim,R,max_days)
       ok,note=Sim.toggle(s,name,c.vehicle)
     else return reply(false,"UNKNOWN_OR_INVALID_COMMAND") end
     if ok then
+      if R.guide then R.guide.changed(value) end
       authority_revision=authority_revision+1
       s.authority_revision=authority_revision
     end
@@ -337,7 +456,11 @@ return function(Sim,R,max_days)
     if type(players)=="table" and #players<=32 then
       for _,name in ipairs(players) do
         local company=A.company(name)
-        if company.ok then r.companies[name]=company.value end
+        if company.ok then
+          local v=company.value
+          v.guide=R.guide and R.guide.phase(name)
+          r.companies[name]=v
+        end
       end
     end
     return r

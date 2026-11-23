@@ -1,6 +1,7 @@
 return function(api)
 local Sim,S,R=api.Sim,api.s,api.render
 local U={}
+local worker_action
 local esc=core.formspec_escape
 local session,hud={},{}
 local Workbenches=api.road_first and dofile(core.get_modpath("luanttd_core").."/workbench_index.lua")(api)
@@ -26,12 +27,20 @@ end
 local function date() return formatted_date(Sim.date(S)) end
 local company_projection
 function U.use_worker_projection(view) company_projection=view end
-function U.install_worker_finance(client)
+function U.install_worker_controls(client)
   local mod=core.get_modpath("luanttd_core")
   api.worker_layer_client=client
+  api.worker_bridge_client=client
+  api.worker_signal_client=client
   api.worker_finance=dofile(mod.."/campaign_worker_finance_ui.lua")(core,client,formatted_date,dollars)
   api.worker_build=api.worker_build or dofile(mod.."/campaign_build_proxy.lua")(client)
   api.worker_depot=dofile(mod.."/campaign_worker_depot_ui.lua")(core,client,api.worker_build,dollars)
+  if api.vehicle_ui then
+    api.vehicle_ui.install_worker(client)
+    local proxy=dofile(mod.."/campaign_authority_order_proxy.lua")
+    for _,mode in ipairs({"road","rail","ship","air","tram"}) do api.vehicle_ui.orders[mode]=proxy(client,mode) end
+    api.worker_fleet=dofile(mod.."/campaign_worker_fleet_ui.lua")(core,client,api.vehicle_ui)
+  end
 end
 local mode_label={rail="RAIL",road="ROAD",water="WATER",air="AIR"}
 local orders={"normal","full","transfer","unload"}
@@ -371,6 +380,7 @@ function U.leave(n)
   if Workbenches then Workbenches.leave(n) end
   if Tutorials then Tutorials.leave(n) end
   if U.layer_bulldozer then U.layer_bulldozer.leave(n) end
+  if api.worker_fleet then api.worker_fleet.leave(n) end
   if U.signal_ui then U.signal_ui.leave(n) end
 end
 function U.cinematic(p,active)
@@ -405,6 +415,7 @@ local function pick(fields,id,a,prior)
   return prior
 end
 function U.fields(p,formname,f)
+  if api.worker_fleet and formname==api.worker_fleet.form then return api.worker_fleet.fields(p,f) end
   if api.worker_finance and formname==api.worker_finance.form then return api.worker_finance.fields(p,f) end
   if api.worker_depot and formname==api.worker_depot.form then return api.worker_depot.fields(p,f) end
   if api.world and api.world.avatar_state and api.world.avatar_state(p) then return false end
@@ -580,12 +591,17 @@ function U.open_controls(p)
   view(p:get_player_name()).tab="help";U.open(p)
 end
 function U.open_company(p)
+  if api.authority_handoff and api.worker_fleet then return api.worker_fleet.open(p) end
   if api.road_first then U.service(p,"fleet");return end
   view(p:get_player_name()).tab="fleet"
   U.open(p)
 end
 function U.phase(p)
   local n=p:get_player_name()
+  if api.authority_handoff then
+    local stats=company_projection and company_projection.company(n)
+    return stats and stats.guide or 2
+  end
   local c=S.companies[n]
   if c and c.paid_units>0 then return 8 end
   local count=0
@@ -627,6 +643,9 @@ function U.guide(p,menu)
   if menu=="harbor" then return "Place a dock on a straight sloping shore, and a ship depot in open water." end
   if menu=="airfields" then return "Build two airfields. Right-click one to buy an aircraft and start its orders." end
   if menu=="freight" then
+    if api.authority_handoff then
+      return "Inspect truck stops to see the cargo they supply or accept. Buy the matching vehicle at a road depot."
+    end
     for _,id in ipairs(sorted(S.fleet,n)) do
       local v=S.fleet[id]
       if v.cargo=="coal" and v.running then
@@ -641,6 +660,7 @@ function U.guide(p,menu)
     return "Build truck stops near the mine and power station, then buy a coal tipper at the depot."
   end
   if menu=="tramway" and api.tram then
+    if api.authority_handoff then return "Build a dedicated line, depot and two through stops. Then choose Order test streetcar." end
     local running,summary=api.tram.status(n)
     return running and summary or "Build a dedicated line, depot and two through stops. Then choose Order test streetcar."
   end
@@ -659,6 +679,7 @@ function U.guide(p,menu)
     return "Open Fleet to keep working with your bus."
   end
   if phase==7 and S.road_economy then
+    if api.authority_handoff then return "Service is running. Open Fleet to inspect your vehicles and orders." end
     local service,passenger_bus=false,false
     for _,v in pairs(S.fleet) do
       if v.owner==n and v.running and v.cargo=="passenger" then
@@ -746,6 +767,11 @@ local function asset_details(p,tile,hit)
   return true
 end
 function U.inspect(p,tile)
+  if api.authority_handoff then
+    local v=api.vehicle_ui and api.vehicle_ui.pick(p,90)
+    if v then return api.vehicle_ui.open(p,v.kind,v.id) end
+    return U.context(p,tile)
+  end
   local n=p:get_player_name()
   local vehicle=R.pick(p)
   if vehicle then U.service(p,"vehicle",vehicle);return end
@@ -806,6 +832,12 @@ end
 function U.clear_tram_run(p)
   if not api.tram then return end
   local V=view(p:get_player_name())
+  if api.authority_handoff then
+    worker_action(p:get_player_name(),V,{kind="transport_start",mode="tram",clear=true},function(ok)
+      if ok then V.anchor,V.tram_first=nil,nil end
+    end)
+    return
+  end
   local ok,msg=api.tram.clear(p:get_player_name())
   V.status=msg
   if ok then V.anchor,V.tram_first=nil,nil end
@@ -1039,21 +1071,10 @@ local crossing_errors={
   CROSSING_ON_ONEWAY_ROAD="Remove the one-way restriction before building a crossing.",
   NOT_ENOUGH_MONEY="Your company cannot afford the crossing.",
 }
+local crossing_gesture=dofile(core.get_modpath("luanttd_core").."/crossing_gesture.lua")
 local function crossing_quote(n,id)
-  local t=S.tiles[id]
-  local request
-  if t and not t.level_crossing then
-    if t.build=="road" and not t.rail_tracks then
-      local bits=Sim.road_bits(S,id)
-      local track=({[1]=0,[4]=0,[5]=0,[2]=1,[8]=1,[10]=1})[bits]
-      if track~=nil then request={kind="rail",track=track} end
-    elseif t.build=="stock_rail" and (t.rail_tracks==1 or t.rail_tracks==2) then
-      request={kind="road",pieces=t.rail_tracks==1 and 5 or 10}
-    end
-  end
-  if not request then
-    return nil, crossing_errors[t and t.level_crossing and "ALREADY_BUILT" or "NEEDS_PLAIN_ROAD_OR_RAIL"]
-  end
+  local request,error_=crossing_gesture(Sim,S,id)
+  if not request then return nil,crossing_errors[error_] end
   local plan,why=api.crossing_quote(n,id,request)
   return plan,why and (crossing_errors[why] or ("Crossing unavailable: "..tostring(why)))
 end
@@ -1140,6 +1161,24 @@ function U.cancel_autorail(p)
   if not V.rail_press then return end
   V.rail_press,V.rail_ghost=nil,nil
   V.status="Rail drag canceled."
+end
+function worker_action(n,V,command,complete)
+  local client=api.worker_bridge_client
+  if not client then V.status="The campaign worker is not ready.";return false end
+  local function finish(ok,msg)
+    V.status=msg or (ok and "Completed." or "Operation not accepted.")
+    if complete then complete(ok) end
+  end
+  local sent,why=client.query({kind="company",player=n},function(r)
+    if not r.ok then finish(false,r.why);return end
+    command.revision=r.revision
+    local ok,message=client.query({kind="command",player=n,command=command},function(result)
+      finish(result.ok,result.why)
+    end)
+    if not ok then finish(false,message) end
+  end)
+  if not sent then finish(false,why) end
+  return not not sent
 end
 local function worker_build(n,V,kind,request)
   if not api.authority_handoff then return false end
@@ -1901,9 +1940,22 @@ end
 function U.build_world(p,id,hit)
   local n=p:get_player_name();local V=view(n)
   V.chosen=id
+  local bridge=bridge_tool(V.tool)
+  if bridge then
+    if not V.anchor then V.anchor=id;V.status="First bridgehead selected. Click the opposite end.";return end
+    V.status="Choose a bridge type."
+    local ok,why=api.bridge_picker.open(p,bridge,V.anchor,id,function(built,note)
+      if note then V.status=note
+      elseif built then V.status="Bridge built." end
+    end)
+    if ok then V.anchor=nil else V.status=why or "No bridge can join these heads." end
+    return
+  end
   if api.authority_handoff then
     if V.tool=="inspect" then U.inspect(p,id);return end
-    if V.tool=="rail_signal_remove" or V.tool=="rail_span_clear" or V.tool=="ship_remove" then
+    if U.signal_ui and U.signal_ui.tool(V.tool) then U.signal_ui.open(p,id,V.tool,hit);return end
+    if V.tool=="rail_signal_remove" or V.tool=="rail_span_clear" or V.tool=="ship_remove"
+      or V.tool=="ship_buoy_remove" or V.tool=="airfield_remove" then
       if U.layer_bulldozer then U.layer_bulldozer.open(p,id) end
       return
     end
@@ -1920,10 +1972,53 @@ function U.build_world(p,id,hit)
     if V.tool=="road_station" or V.tool=="road_depot" or V.tool=="road_bay_pair" then
       worker_build(n,V,"road",{tool=V.tool,first=id});return
     end
+    if V.tool=="truck_stop_tool" then
+      worker_build(n,V,"road",{tool="truck_stop",first=id});return
+    end
+    if V.tool=="rail_crossing_tool" then
+      worker_build(n,V,"rail",{tool="crossing",first=id});return
+    end
+    if V.tool=="rail_waypoint_place" then
+      worker_build(n,V,"rail",{tool="waypoint",first=id});return
+    elseif V.tool=="rail_waypoint_remove" then
+      if U.layer_bulldozer then U.layer_bulldozer.open(p,id) end
+      return
+    end
     if V.tool=="rail_depot_tool" then
       worker_build(n,V,"rail",{tool="depot",first=id,direction=V.rail_dir or 2});return
     end
+    if V.tool=="tram_order" then
+      local t=R.host_tile and R.host_tile(id)
+      local record=t and t.tram
+      if not record or record.owner~=n then V.status="Choose one of your tramway facilities.";return end
+      if not V.anchor then
+        if record.kind~="depot" then V.status="Choose your tram depot first.";return end
+        V.anchor=id;V.status="Depot selected. Click the first through tram stop.";return
+      end
+      if record.kind~="drive_stop" then V.status="Choose an owned through tram stop.";return end
+      if not V.tram_first then V.tram_first=id;V.status="First stop selected. Click a different through stop.";return end
+      if id==V.tram_first then V.status="Choose a different through stop.";return end
+      if stage_fixed_destination(V,id) then return end
+      worker_action(n,V,{kind="transport_start",mode="tram",depot=V.anchor,first=V.tram_first,second=id},function(ok)
+        if ok then V.anchor,V.tram_first,V.fixed_route=nil,nil,nil end
+      end)
+      return
+    end
+    local tram,cells,direction=tram_request(V,id)
+    if tram then
+      if V.tool=="tram_track" and not V.anchor then V.anchor=id;V.status="Choose the end of the tramway.";return end
+      V.anchor=nil
+      worker_build(n,V,"transport",{mode="tram",operation="build",kind=tram,cells=cells,direction=direction})
+      return
+    end
     local dock=ship_mode[V.tool]
+    if dock=="lock" or dock=="canal" or dock=="aqueduct" then
+      if dock~="lock" and not V.anchor then V.anchor=id;V.status="Choose the opposite end of the waterway.";return end
+      local first=V.anchor or id
+      V.anchor=nil
+      worker_build(n,V,"transport",{mode="ship",operation="waterwork",kind=dock,tile=first,last=id})
+      return
+    end
     if dock=="dock" or dock=="depot" or V.tool=="ship_buoy" then
       worker_build(n,V,"transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=V.ship_axis or 0})
       return
@@ -1941,17 +2036,6 @@ function U.build_world(p,id,hit)
   if V.pick_order then U.choose_order_stop(p,id);return end
   if V.tool=="inspect" then U.inspect(p,id);return end
   if V.tool=="clear" and U.layer_bulldozer and U.layer_bulldozer.open(p,id) then return end
-  local bridge=bridge_tool(V.tool)
-  if bridge then
-    if not V.anchor then V.anchor=id;V.status="First bridgehead selected. Click the opposite end.";return end
-    V.status="Choose a bridge type."
-    local ok,why=api.bridge_picker.open(p,bridge,V.anchor,id,function(built,note)
-      if note then V.status=note
-      elseif built then V.status="Bridge built." end
-    end)
-    if ok then V.anchor=nil else V.status=why or "No bridge can join these heads." end
-    return
-  end
   if electric_tools[V.tool]~=nil and api.electric_tools then
     if electric_tools[V.tool]==1 and not api.electric_available(n) then V.status=wire_errors.RAILTYPE_NOT_AVAILABLE;return end
     if not V.anchor then V.anchor=id;V.status="Click the opposite corner, or click this tile again.";return end
@@ -2243,6 +2327,7 @@ function U.context(p,tile,hit)
     local row=company_projection.terrain(x,z)
     local t=row and row.surface
     if t then
+      if R.host_signal and R.host_signal(tile) then return U.signal_ui.inspect(p,tile,hit) end
       local mode,key
       if t.rail_depot_dir~=nil then mode,key="rail",tile
       elseif t.build=="road_depot" then mode,key="road",tile

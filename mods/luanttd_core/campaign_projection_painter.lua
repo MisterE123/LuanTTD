@@ -3,7 +3,7 @@
 return function(render,on_result)
   local P={}
   local current,completed={},{}
-  local busy
+  local busy,initialized
   local function key(w) return w.x..":"..w.z end
   local function same(a,b)
     return a and b and (a.scene and a.scene==b.scene or a==b)
@@ -22,7 +22,10 @@ return function(render,on_result)
       if not next_[id] then completed[id]=nil;changed=true end
     end
     current=next_
-    if changed then render.use_worker_projection(projection) end
+    if changed or not initialized then
+      initialized=true
+      render.use_worker_projection(projection)
+    end
   end
   function P.step()
     if busy then return false end

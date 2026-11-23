@@ -65,14 +65,19 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         elseif q.kind=="transport_quote" then r=A.transport_quote(q.player,q.request)
         elseif q.kind=="terrain_quote" then r=A.terrain_quote(q.player,q.request)
         elseif q.kind=="company" then r=A.company(q.player)
+        elseif q.kind=="signal_panel" then r=A.signal_panel(q.player,q.tile,q.hit,q.signal,q.inspect==true,q.peek==true)
+        elseif q.kind=="bridge_picker" then r=A.bridge_picker(q.player,q.mode,q.first,q.last,q.peek==true)
+        elseif q.kind=="company_fleet" then r=A.company_fleet(q.player,q.page)
+        elseif q.kind=="vehicle" then r=A.vehicle(q.player,q.mode,q.vehicle,q.locate==true)
         elseif q.kind=="demolition" then r=A.demolition(q.player,q.tile)
         elseif q.kind=="depot" then r=A.depot(q.player,q.mode,q.depot)
         elseif q.kind=="advance" and not auto then r=A.advance(q.days)
         elseif q.kind=="clock" then r={ok=true,day=s.day,tick=s.passenger_house_clock and
           s.passenger_house_clock.counter or 0,revision=s.authority_revision or 0}
         elseif q.kind=="command" then
+          local before=s.authority_revision or 0
           r=A.command(q.player,q.command)
-          if r.ok and cap.durable_actions then checkpoint() end
+          if r.ok and cap.durable_actions and r.revision~=before then checkpoint() end
         elseif q.kind=="checkpoint" then
           checkpoint()
           r={ok=true,day=s.day,revision=s.authority_revision or 0}

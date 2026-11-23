@@ -122,6 +122,27 @@ bridge leaves the surface intact; the graphical replay uses the native
 confirmation modal to remove a depot, with no effect before confirmation.
 Road and train poses are computed once per batch and sampled from the
 owning worker's actual clock fraction.
+
+A company fleet query pages the owned roster independently of terrain or
+visibility. It opens the same vehicle order form for parked or offscreen
+vehicles and can obtain an authoritative location for the follow camera.
+The Linux replay opens train orders through the fleet menu after the train
+entities and their viewport have been removed.
+Bridge choices and rail-signal approach/flip choices use their original
+native menus, with stock prices, ownership, and occupancy checked on the
+owner. Hover previews do not consume mutation tickets. Crossings are built
+through the same source command as the old direct tile action. The owner
+also supports freight loading-stop construction and bounded canal, lock,
+and aqueduct commands.
+
+An internal integration replay now starts the owner from the actual server
+lifecycle, including after generated terrain placement. A real Linux client
+can join and move horizontally while its company is created only on the
+worker, and the same server world restores the exact company, tick and
+command revision on restart. No player-facing switch was introduced.
+Builder guidance uses the owner's live fleet, stations and deliveries. The
+worker indexes depot ownership and updates only changed tiles; the native
+HUD does not scan the full world to show the next suggested action.
 The next integration step is the full dispatcher, all physical build
 and depot interactions (especially freight dispatch), and making
 this ownership lifecycle standard with no desktop-specific controls.

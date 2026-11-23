@@ -22,6 +22,15 @@ return function(Sim,s,oneway)
       return Sim.autoroad_plan(s,player,first,last,request.axis,request.start_half,request.end_half)
     elseif op=="bend" then
       return Sim.autoroad_bend_plan(s,player,first,last)
+    elseif op=="truck_stop" and first==last then
+      if not (s.road_mail and s.road_stock_house_supply) and not Sim.road_coal_active(s)
+        and not Sim.road_timber_active(s) and not Sim.road_farm_active(s) and not Sim.road_oil_active(s) then
+        return nil,"No stock mail or freight service in this campaign."
+      end
+      if s.tiles[first].station then return nil,"Build a new truck stop rather than converting a station." end
+      local changes,cost=Sim.plan(s,player,"road_station",{first})
+      if not changes then return nil,cost end
+      return {changes=changes,cost=cost}
     elseif methods[op] and first==last then
       local changes,cost=Sim.plan(s,player,op,{first})
       if not changes then return nil,cost end
@@ -60,6 +69,14 @@ return function(Sim,s,oneway)
       return Sim.autoroad_build(s,player,first,last,request.axis,request.start_half,request.end_half)
     elseif request.tool=="bend" then
       return Sim.autoroad_bend_build(s,player,first,last)
+    elseif request.tool=="truck_stop" then
+      local ok,note,ids=Sim.build_truck_stop(s,player,first)
+      if ok then
+        local st=s.stations[s.tiles[first].station]
+        st.freight_art=true;st.coal_art=Sim.road_coal_active(s) or nil
+        if Sim.road_bits(s,first)==0 then note="Truck stop built. Connect it to the road before ordering trucks." end
+      end
+      return ok,note,ids
     end
     return Sim.build(s,player,request.tool,{first})
   end

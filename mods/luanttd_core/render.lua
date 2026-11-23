@@ -480,6 +480,10 @@ return function(api)
   function R.host_tile(id)
     return id and S.tiles[id]
   end
+  function R.host_signal(id)
+    local d=S.stock_rail_dispatch
+    return id and d and d.signals and d.signals.records[id]
+  end
   function R.pick_terrain(pos,ray,limit)
     if terrain then return terrain.pick(pos,ray,R.uses_slope,limit,R.surface) end
   end

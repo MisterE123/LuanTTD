@@ -78,6 +78,11 @@ sleep .55
 import -window root -resize 960x600 -quality 88 "$out/worker-demolition.jpg"
 xdotool mousemove 720 440 click 1
 mark 'PASS NATIVE PROJECTED DEMOLITION'
+mark 'NATIVE_PROJECTED_FLEET_READY'
+sleep .5
+import -window root -resize 960x600 -quality 88 "$out/worker-fleet.jpg"
+xdotool mousemove 654 568 click 1
+mark 'PASS NATIVE PROJECTED FLEET'
 mark 'PASS NATIVE ORDINARY HANDOFF'
 grep 'PASS NATIVE' "$out/server.log"
 ! grep -E 'ERROR\[' "$out/server.log"

@@ -48,13 +48,43 @@ return function(Sim,R)
       local ok,price,p=spans(owner,cmd,true)
       if not ok then return nil,price end
       return {request={mode=mode,operation=op,tile=cmd.tile,last=cmd.last,style=cmd.style},
-        price=price,tiles=span_tiles(p)}
+        price=price,tiles=span_tiles(p),speed=p.spec and p.spec.speed}
     elseif op=="build" and mode=="air" and R.air and tile(cmd.tile) then
       local q,why=R.air.network.quote(s,owner,cmd.tile)
       if not q then return nil,why end
       return {request={mode=mode,operation=op,tile=cmd.tile},price=q.price,tiles=collect_tiles(q)}
+    elseif op=="build" and mode=="tram" and R.tram and type(cmd.cells)=="table" and
+      #cmd.cells>=1 and #cmd.cells<=128 then
+      local cells={}
+      for i,id_ in ipairs(cmd.cells) do
+        if not tile(id_) then return nil,"Invalid tram tile." end
+        cells[i]=id_
+      end
+      local plans,cost=R.tram.net.plan(s,owner,cmd.kind,cells,cmd.direction,R.tram.busy)
+      if not plans then return nil,cost end
+      local ids={}
+      for i,p in ipairs(plans) do ids[i]=p.id end
+      return {request={mode=mode,operation=op,kind=cmd.kind,cells=cells,direction=cmd.direction},price=cost,tiles=ids}
+    elseif op=="waterwork" and mode=="ship" and R.water and tile(cmd.tile) then
+      local w=R.water
+      if w.busy() then return nil,"An active vessel protects these waterways." end
+      local q,why,ids
+      if cmd.kind=="lock" then q,why=w.works.quote_lock(s,owner,cmd.tile)
+      elseif cmd.kind=="canal" and tile(cmd.last) then
+        local x,z=Sim.xy(cmd.tile)
+        local u,v=Sim.xy(cmd.last)
+        if (math.abs(x-u)+1)*(math.abs(z-v)+1)>256 then return nil,"Canal selection is too large." end
+        q,why=w.works.quote(s,owner,cmd.tile,cmd.last,cmd.diagonal==true)
+      elseif cmd.kind=="aqueduct" and tile(cmd.last) then
+        q,why=w.aqueduct.quote(s,owner,cmd.tile,cmd.last)
+        if q then ids=span_tiles(q) end
+      end
+      if not q then return nil,why or "Choose a valid waterway." end
+      return {request={mode="ship",operation=op,kind=cmd.kind,tile=cmd.tile,last=cmd.last,diagonal=cmd.diagonal==true},
+        tiles=ids or collect_tiles(q),price=q.price or q.cost}
     elseif op=="build" and mode=="ship" and R.water and tile(cmd.tile) and
       (cmd.kind=="dock" or cmd.kind=="buoy" or cmd.kind=="depot" and integer(cmd.axis,0,1)) then
+      if cmd.kind~="buoy" and R.water.busy() then return nil,"An active vessel protects these waterways." end
       local q,why=R.water.network.quote(s,owner,cmd.kind,cmd.tile,cmd.axis)
       if not q then return nil,why end
       local tiles=collect_tiles(q)
@@ -90,6 +120,21 @@ return function(Sim,R)
     if req.operation=="bridge" or req.operation=="tunnel" then
       local ok,msg,tiles,deck=spans(owner,req,false)
       return ok,msg,ok and {tiles=tiles,deck=deck} or nil
+    end
+    if req.mode=="tram" and req.operation=="build" then
+      local ids,cost=R.tram.net.construct(s,owner,req.kind,req.cells,req.direction,R.tram.busy)
+      if not ids then return false,cost end
+      return true,("Tram construction: %d tiles for $%d."):format(#ids,cost),{tiles=ids}
+    end
+    if req.operation=="waterwork" then
+      local w=R.water
+      local p,why
+      if req.kind=="lock" then p,why=w.works.build_lock(s,owner,req.tile)
+      elseif req.kind=="canal" then p,why=w.works.build(s,owner,req.tile,req.last,req.diagonal)
+      else p,why=w.aqueduct.build(s,owner,req.tile,req.last) end
+      if not p then return false,why end
+      return true,("Waterway built for $%d."):format(current.price),
+        {tiles=p.dirty or current.tiles,deck=p.deck}
     end
     local unit,msg
     if req.operation=="build" and req.mode=="air" then
@@ -183,8 +228,15 @@ return function(Sim,R)
     return {offers=offers,vehicles=vehicles,targets=targets}
   end
   function T.start(owner,req)
+    if req.mode=="tram" and R.tram and req.clear==true then
+      local ok,why=R.tram.run.clear(s,owner)
+      return ok,ok and "Test streetcar removed. Your tramway and stops remain." or why
+    end
     if not (id(req.first) and id(req.second)) or req.first==req.second then return false,"INVALID_DESTINATIONS" end
-    if req.mode=="rail" and R.rail and R.rail.owned and id(req.vehicle) then
+    if req.mode=="tram" and R.tram and tile(req.depot) and tile(req.first) and tile(req.second) then
+      local run,why=R.tram.run.start(s,owner,req.depot,req.first,req.second)
+      return run~=nil,run and "Test streetcar dispatched between the two stops. It does not carry passengers." or why
+    elseif req.mode=="rail" and R.rail and R.rail.owned and id(req.vehicle) then
       return R.rail.owned.start(s,owner,req.vehicle,req.first,req.second)
     elseif req.mode=="ship" and R.water and id(req.depot) and (req.via==nil or tile(req.via)) then
       local run,why=R.water.depot.start(s,owner,req.depot,req.first,req.second,req.via)

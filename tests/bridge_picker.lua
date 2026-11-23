@@ -42,3 +42,23 @@ picker.fields(p,form.f,{quit=true})
 picker.fields(p,form.f,{[form.s:match("(bridge_%d+_0)")]=true})
 assert(applied==1 and saves==1)
 print("PASS real bridgehead quotes, responsive style list, no draw-time payment, one actual native construction, and stale/cancel refusal")
+local sent,observed
+local remote=load("bridge_picker")({s=s,Sim=Sim,authority_handoff=true,worker_bridge_client={
+  query=function(q,done) assert(not sent);sent={q,done};return true end,
+}})
+local prevcash=c.cash
+assert(remote.open(p,"road",other_a,other_b,capture))
+assert(sent[1].kind=="bridge_picker" and sent[1].first==other_a)
+local answer=sent[2];sent=nil
+answer({ok=true,revision=17,value={token=21,ids={other_a,other_b},minimum=2012,
+  offers={{style=2,name="Steel girder",speed=64,price=2012}}}})
+observed=form.s
+assert(observed:find("Steel girder",1,true) and observed:find("$2,012",1,true) and c.cash==prevcash)
+local button=observed:match("(bridge_%d+_2)")
+remote.fields(p,form.f,{[button]=true})
+local req=assert(sent)[1]
+assert(req.kind=="command" and req.command.kind=="bridge_picker" and req.command.token==21
+  and req.command.revision==17 and req.command.style==2)
+sent[2]({ok=true,why="Bridge complete on the worker."})
+assert(seen[1] and c.cash==prevcash and applied==1 and saves==1)
+print("PASS the same native bridge list submits the owner's price and protected ticket without mutating the host")

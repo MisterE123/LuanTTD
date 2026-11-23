@@ -202,14 +202,31 @@ local function transfer_ordinary(viewer)
       core.after(.04,function()
         authority_test.step(0,{},1)
         assert(bodies()==0,"unsubscribed train was still visible")
-        ask({kind="clock"},function(q)
-          core.after(viewer and .35 or 7.3,function()
-            ask({kind="clock"},function(later)
-              assert(later.tick>q.tick,"worker did not advance without a view")
-              away_tick=later.tick
+        local function cull_timer()
+          ask({kind="clock"},function(q)
+            core.after(viewer and .35 or 7.3,function()
+              ask({kind="clock"},function(later)
+                assert(later.tick>q.tick,"worker did not advance without a view")
+                away_tick=later.tick
+              end)
             end)
           end)
-        end)
+        end
+        if not viewer then cull_timer();return end
+        local show=core.show_formspec
+        core.show_formspec=function(player,form,body)
+          assert(player==owner)
+          show(player,form,body)
+          if form=="luanttd_core:worker_fleet" and body:find("Rail · Train 1",1,true) then
+            core.log("action","NATIVE_PROJECTED_FLEET_READY")
+          elseif form=="luanttd_core:vehicle_details" and body:find("Available destinations",1,true) then
+            assert(not next(projected.actors()) and body:find("Train 1",1,true))
+            core.show_formspec=show
+            core.log("action","PASS NATIVE PROJECTED FLEET: orders opened from company roster with an empty viewport")
+            cull_timer()
+          end
+        end
+        assert(ui.open_company(viewer))
       end)
     elseif away_tick and not reentered and bodies()>=2 then
       reentered=true
@@ -236,7 +253,7 @@ local function transfer_ordinary(viewer)
     core.after(.65,function()
       ask({kind="company"},function(first)
         assert(first.ok and first.day>expected.day and first.tick==first.day*74 and first.value.cash==expected.cash)
-        ui.install_worker_finance(authority_test)
+        ui.install_worker_controls(authority_test)
         local builder=viewer or {get_player_name=function() return owner end}
         api.on_worker_build=function(name,tiles,quote)
           assert(name==owner and #tiles==14 and quote.cost==initial_price)

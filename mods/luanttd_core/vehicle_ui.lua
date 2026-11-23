@@ -9,6 +9,9 @@ return function(api)
   local now=0
   local projection
   local projected={}
+  local worker
+  local remote={}
+  function V.install_worker(client) worker=client end
   function V.use_worker_projection(view)
     projection=view
     projected=view and view.actors() or {}
@@ -24,13 +27,17 @@ return function(api)
     return record and record.owner==name and record
   end
   local function get(n,kind,id)
-    if projection then
+    if projection or worker then
       local row=projected[key(kind,id)]
+      local known=remote[n]
+      if known and (known.mode~=kind or known.id~=id) then known=nil end
+      if not row then row=known end
       if not row or row.owner~=n then return end
-      local depot=row.home_depot or row.depot
+      local depot=known and known.depot or kind~="ship" and (row.home_depot or row.depot) or nil
       return {kind=kind,id=id,label=row.label or ("Vehicle #"..id),source=row,
-        depot=kind~="ship" and depot or nil,depot_key=depot}
+        depot=depot,depot_key=known and known.depot_key or row.home_depot or row.depot}
     end
+
     local source,depot,depot_key,label
     if kind=="road" then
       source=own(S.fleet[id],n)
@@ -131,10 +138,8 @@ return function(api)
     if api.vehicle_status then api.vehicle_status(p,"Returned to the builder camera.") end
     return true
   end
-  function V.follow(p,kind,id)
+  local function follow_at(p,kind,id,v,pos)
     local n=p:get_player_name()
-    local v=get(n,kind,id)
-    local pos=v and position(v)
     if not pos or p:get_attach() or following[n] then return false end
     local yaw=p:get_look_horizontal()
     local offset={x=2.8*math.sin(yaw),y=3.6,z=-2.8*math.cos(yaw)}
@@ -142,7 +147,7 @@ return function(api)
     local camera=core.add_entity(view,anchor)
     if not camera then return false end
     local f={anchor=camera,kind=kind,id=id,return_pos=p:get_pos(),yaw=p:get_look_horizontal(),
-      pitch=p:get_look_vertical(),last=view,vehicle_pos=pos,offset=offset}
+      pitch=p:get_look_vertical(),last=view,vehicle_pos=pos,offset=offset,owner_row=worker and v}
     following[n]=f
     -- The unrotated anchor follows translation, never the vehicle mesh's roll or turns.
     p:set_attach(camera,"",{x=0,y=0,z=0},{x=0,y=0,z=0},false)
@@ -153,13 +158,33 @@ return function(api)
     panels[n]=nil;close(p)
     return true
   end
+  function V.follow(p,kind,id)
+    local n=p:get_player_name()
+    local v=get(n,kind,id)
+    if p:get_attach() or following[n] or not v then return false end
+    local a=poses[key(kind,id)]
+    if not worker or a and now-a.time<=.7 then return follow_at(p,kind,id,v,position(v)) end
+    local panel=panels[n]
+    if panel and panel.locating then return true end
+    if panel then panel.locating=true end
+    local sent=worker.query({kind="vehicle",player=n,mode=kind,vehicle=id,locate=true},function(r)
+      if panel and panels[n]~=panel then return end
+      if panel then panel.locating=nil end
+      if r.ok and r.value.position then
+        remote[n]=r.value
+        follow_at(p,kind,id,v,r.value.position)
+      elseif api.vehicle_status then api.vehicle_status(p,"No visible position for this vehicle yet.") end
+    end)
+    if not sent and panel then panel.locating=nil end
+    return not not sent
+  end
   function V.step(dt)
     now=now+dt
     for _,p in ipairs(core.get_connected_players()) do
       local n=p:get_player_name()
       local f=following[n]
       if f then
-        local v=get(n,f.kind,f.id)
+        local v=get(n,f.kind,f.id) or f.owner_row
         local pos=v and position(v,f.vehicle_pos)
         if not pos or not f.anchor:get_pos() or p:get_attach()~=f.anchor then V.exit(p)
         else
@@ -176,7 +201,7 @@ return function(api)
   end
   function V.leave(p)
     local n=p:get_player_name()
-    V.exit(p);panels[n]=nil
+    V.exit(p);panels[n]=nil;remote[n]=nil
   end
   local function title(txt,height)
     return ("formspec_version[7]size[11,%g]bgcolor[#152334;false]"):format(height or 8)..
@@ -241,7 +266,8 @@ return function(api)
       prior={}
     end
     local footer=cargo and 8.15 or 7.11
-    if back then b=b..("button[.45,%g;4.98,.57;V_TOKEN_depot;Depot vehicles]"):format(footer) end
+    if back then b=b..("button[.45,%g;4.98,.57;V_TOKEN_depot;%s]"):format(footer,
+      back.directory and "Company fleet" or "Depot vehicles") end
     b=b..("button_exit[5.55,%g;5,.57;V_TOKEN_close;Back to world]"):format(footer)
     prior.kind,prior.id,prior.back=kind,id,back
     return show(p,prior,b)
@@ -249,6 +275,24 @@ return function(api)
   function V.open(p,kind,id,back,prior,note)
     local n=p:get_player_name()
     local v=get(n,kind,id)
+    if not v and worker then
+      local pending={kind=kind,id=id,back=back,waiting=true}
+      show(p,pending,title("Vehicle").."label[.45,1.20;Loading vehicle…]"..
+        "button_exit[5.55,7.11;5,.57;V_TOKEN_close;Back to world]")
+      local function load(r)
+        if panels[n]~=pending then return end
+        if r.ok then
+          remote[n]=r.value
+          return V.open(p,kind,id,back,prior,note)
+        end
+        panels[n]=nil;close(p)
+        if api.vehicle_status then api.vehicle_status(p,r.why or "Vehicle is unavailable.") end
+        if back and back.return_ then back.return_() end
+      end
+      local ok,why=worker.query({kind="vehicle",player=n,mode=kind,vehicle=id},load)
+      if not ok then load({ok=false,why=why}) end
+      return true
+    end
     if not v then
       if api.vehicle_status then api.vehicle_status(p,"You can manage vehicles from your own company.") end
       return false
@@ -324,7 +368,10 @@ return function(api)
       end
       return true
     end
-    if field("depot") and q.back then return V.depot(p,q.kind,q.back.depot,q.back.return_) end
+    if field("depot") and q.back then
+      if q.back.directory and q.back.return_ then panels[n]=nil;return q.back.return_() end
+      return V.depot(p,q.kind,q.back.depot,q.back.return_)
+    end
     if field("follow") then
       if not V.follow(p,q.kind,q.id) then V.open(p,q.kind,q.id,q.back,q,"Follow is unavailable from the current camera mode.") end
       return true

@@ -1,6 +1,6 @@
 -- Bind the same demolition choices to the simulation owner, with no
 -- formspec, renderer, engine object or secondary persistence.
-return function(Sim,mod,R,Slope)
+return function(Sim,mod,R)
   local s,net=R.world,R.network
   local source=mod.."/openttd/"
   local api={s=s,Sim=Sim,structure_tools=true,trackworks=net.lab,rail_spans=net.spans,
@@ -8,15 +8,8 @@ return function(Sim,mod,R,Slope)
   local aquatic_remove
   if R.water then
     local w=R.water
-    api.shipyard={reason=function(msg) return msg end,busy=function()
-      return w.run.uses_facilities(s) or w.coal and w.coal.busy(s)
-    end}
-    local Bridge=dofile(source.."road_bridge.lua")(Slope)
-    local Aqua=dofile(source.."aqueduct.lua")(Bridge)
-    local aqueduct=dofile(mod.."/ship_aqueduct_world.lua")(Sim,R.terrain,Aqua)
-    local Water=assert(w.follow)
-    local Construction=dofile(source.."water_construction.lua")(net.track,Water)
-    local works=dofile(mod.."/ship_water_world.lua")(Sim,w.network,Construction)
+    api.shipyard={reason=function(msg) return msg end,busy=w.busy}
+    local aqueduct,works=w.aqueduct,w.works
     aquatic_remove=function(owner,id,quote)
       local t=s.tiles[id]
       if t.ship and t.ship.aqueduct then return aqueduct.remove(s,owner,id,quote) end

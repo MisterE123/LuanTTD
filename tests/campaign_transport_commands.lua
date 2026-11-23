@@ -32,11 +32,17 @@ local function choose(n,req)
   assert(A.company(n).value.cash==before-q.value.cost)
   return value.id
 end
+local lower,upper=Sim.id(7,27),Sim.id(9,27)
+choose("Water",{mode="ship",operation="waterwork",kind="canal",tile=lower,last=upper})
+assert(s.tiles[lower].stock_canal and s.tiles[upper].stock_canal)
+assert(s.tiles[lower].water_class=="canal")
 local dock1=choose("Water",{mode="ship",operation="build",kind="dock",tile=Sim.id(18,8)})
 local dock2=choose("Water",{mode="ship",operation="build",kind="dock",tile=Sim.id(18,16)})
 local ship_depot=choose("Water",{mode="ship",operation="build",kind="depot",tile=Sim.id(22,10),axis=0})
 assert(choose("Water",{mode="ship",operation="buy",engine=206,depot=ship_depot})=="ferry")
 command("Water",{kind="transport_start",mode="ship",depot=ship_depot,first=dock1,second=dock2})
+assert(not A.transport_quote("Water",{mode="ship",operation="waterwork",kind="canal",
+  tile=Sim.id(7,26),last=Sim.id(9,26)}).ok)
 local ap=choose("Air",{mode="air",operation="build",tile=Sim.id(2,14)})
 local aq=choose("Air",{mode="air",operation="build",tile=Sim.id(13,19)})
 assert(choose("Air",{mode="air",operation="buy",engine=215,depot=ap}))
@@ -62,4 +68,37 @@ assert(A.orders("Rail","rail",engine).ok and A.orders("Water","ship","ferry").ok
 assert(A.advance(4).tick==296 and runtime.rail.run.current(s).ticks>0)
 assert(runtime.water.run.current(s).vehicle.tick>0 and runtime.air.run.current(s).vehicle.tick>0)
 print("PASS worker builds, buys and dispatches rail, ferry and air using the normal commands")
+local t=Sim.new(1751)
+t.corner_grid=Terrain.new(Sim.W,Sim.H,function() return 0 end)
+t.tram_enabled=true
+for _,a in ipairs(t.tiles) do a.h=0;a.terrain="grass";a.wood=nil;a.house=nil;a.site=nil;a.build=nil end
+local T=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,t,{
+  road={start_year=1950,breakdowns=0,service_interval=150},
+})
+local W=dofile(mod.."/campaign_authority_endpoint.lua")(Sim,T)
+local name="Municipal Tramways"
+assert(W.command(name,{kind="company_open"}).ok)
+local function wbuild(kind,cells,direction)
+  local q=W.transport_quote(name,{mode="tram",operation="build",kind=kind,cells=cells,direction=direction})
+  assert(q.ok,q.why)
+  local decision=W.command(name,{kind="transport_commit",token=q.value.token,revision=q.revision})
+  assert(decision.ok,decision.why)
+end
+local id=Sim.id
+local follow=dofile(mod.."/openttd/yapf_road_follow.lua")
+local src,dst,other=id(5,10),id(8,8),id(8,13)
+wbuild("depot",{src},follow.SW)
+wbuild("road",Sim.line(id(6,10),id(8,10)))
+wbuild("road",{id(6,10)},8)
+wbuild("road",Sim.line(id(8,7),id(8,14)))
+wbuild("drive_stop",{dst},follow.SE)
+wbuild("drive_stop",{other},follow.SE)
+local tram=assert(W.company(name))
+assert(W.command(name,{kind="transport_start",mode="tram",depot=src,first=dst,second=other,revision=tram.revision}).ok)
+assert(W.orders(name,"tram",1).ok)
+assert(W.advance(4).ok and t.tram_pilot.steps>0)
+local latest=W.company(name)
+assert(W.command(name,{kind="transport_start",mode="tram",clear=true,revision=latest.revision}).ok)
+assert(not t.tram_pilot and t.tiles[dst].tram)
+print("PASS worker constructs track and stops, dispatches and advances the stock tram, reads orders and clears the run")
 return true

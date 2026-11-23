@@ -16,6 +16,15 @@ local qa={}
 local qa_path=mod.."/qa_layout.lua"
 local qa_file=io.open(qa_path,"r")
 if qa_file then qa_file:close();qa=dofile(qa_path)(settings,mod) end
+-- Internal integration replay only. No player-facing setting switches
+-- between owners. Ordinary startup cannot flip until all controls are wired.
+local worker_boot=qa.authoritative_boot==true
+local owner_filename="luanttd-campaign-owner.chk"
+local OwnerCheckpoint=worker_boot and Checkpoints(core,Codec,owner_filename) or nil
+local resumed_owner=OwnerCheckpoint and OwnerCheckpoint.read()
+if resumed_owner then
+  saved=resumed_owner;fresh=false
+end
 local fixture=qa.enabled
 local WorldSetup=dofile(mod.."/world_setup.lua")
 local world_options=WorldSetup.read(core,storage)
@@ -436,6 +445,7 @@ if api.stock_coal_scenery then api.coal_view=dofile(mod.."/coal_industry_view.lu
 local placement_key="world_setup_terrain_placed_v1"
 local placement=world_options
   and storage:get_string(placement_key)~="placed" and "pending" or nil
+local authority
 local save_elapsed,hud_elapsed=0,0
 local headless=true
 api.offline_economy=headless
@@ -458,6 +468,7 @@ core.register_globalstep(function(dt)
     -- Leave flight, targeting and engine presentation on the host,
     -- but prevent its former stepper, pilots and autosave from running.
     if api.authority_frame then api.authority_frame(dt) end
+    api.vehicle_ui.step(dt)
     return
   end
   if api.trackworks_demo then api.trackworks_demo.step(dt) end
@@ -509,11 +520,14 @@ core.register_globalstep(function(dt)
 end)
 core.register_on_shutdown(function() landscape.close();api.save() end)
 local atmosphere=dofile(mod.."/atmosphere.lua").start(core,function()
-  return not placement and S.speed or 0
+  if placement then return 0 end
+  if authority then return authority.speed() end
+  return S.speed
 end)
 local function open_campaign_player(p)
   local name=p:get_player_name()
-  Sim.company(S,name)
+  if not authority then Sim.company(S,name) end
+  core.close_formspec(name,"luanttd_core:opening_worker")
   world.spawn(p)
   atmosphere(p)
   api.save()
@@ -521,6 +535,25 @@ local function open_campaign_player(p)
     local who=core.get_player_by_name(name)
     if who then ui.hud();world.hud(who) end
   end)
+end
+-- Register the async worker while the engine is loading this mod. The
+-- actual job starts only after the opening terrain is ready.
+if worker_boot then
+  authority=dofile(mod.."/campaign_worker_session.lua")(core,mod,api,ui,render,OwnerCheckpoint,owner_filename,
+    not resumed_owner,{open=open_campaign_player,wait=function(p,note)
+      local message=core.formspec_escape(note)
+      core.show_formspec(p:get_player_name(),"luanttd_core:opening_worker",
+        "formspec_version[7]size[10,2.2]textarea[.5,.6;9,1.3;;;"..message.."]")
+    end})
+  api.authority_frame=authority.step
+end
+local authority_started
+local function start_authority()
+  if not authority or authority_started then return end
+  authority_started=true
+  local cap={autoplay=true,seconds_per_day=interval,durable_actions=true}
+  for k,value in pairs(api.capabilities) do if cap[k]==nil then cap[k]=value end end
+  authority.start(cap,Sim.W,Sim.H)
 end
 local placement_form="luanttd_core:placing_terrain"
 local placement_percent,placement_stage=90,"Loading the starting area"
@@ -555,9 +588,10 @@ attempt_placement=function()
     api.save()
     storage:set_string(placement_key,"placed")
     placement=nil
+    start_authority()
     for _,p in ipairs(core.get_connected_players()) do
       core.close_formspec(p:get_player_name(),placement_form)
-      open_campaign_player(p)
+      if authority then authority.join(p) else open_campaign_player(p) end
     end
   end,function(f,stage)
     if placement~="placing" then return end
@@ -569,7 +603,11 @@ attempt_placement=function()
   end)
 end
 core.register_on_joinplayer(function(p)
-  if placement then show_placement(p) else open_campaign_player(p) end
+  if placement then show_placement(p)
+  elseif worker_boot then
+    start_authority()
+    authority.join(p)
+  else open_campaign_player(p) end
 end)
 core.register_on_player_receive_fields(function(p,key,f)
   if key~=placement_form then return false end
@@ -585,8 +623,8 @@ core.register_on_player_receive_fields(function(p,key,f)
   end
   return true
 end)
-if placement then core.after(0,attempt_placement) end
-core.register_on_leaveplayer(function(p) api.vehicle_ui.leave(p);ui.leave(p:get_player_name());world.leave(p:get_player_name());if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
+if placement then core.after(0,attempt_placement) elseif worker_boot then core.after(0,start_authority) end
+core.register_on_leaveplayer(function(p) api.vehicle_ui.leave(p);ui.leave(p:get_player_name());world.leave(p:get_player_name());if authority then authority.leave(p:get_player_name()) end;if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
 core.register_on_player_receive_fields(ui.fields)
 core.register_chatcommand("dispatch",{description="Open LuanTTD dispatcher",func=function(name)
   local p=core.get_player_by_name(name)

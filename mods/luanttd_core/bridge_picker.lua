@@ -34,7 +34,31 @@ return function(api)
     for i=2,#offers do minimum=math.min(minimum,offers[i].price) end
     return {ids=ids,minimum=minimum,offers=offers}
   end
-  function W.quote(mode,n,a,b) return evaluate(mode,n,a,b) end
+  local hover={}
+  function W.quote(mode,n,a,b)
+    if not api.authority_handoff then return evaluate(mode,n,a,b) end
+    local client=api.worker_bridge_client
+    if not client then return nil,"Campaign worker is not ready." end
+    local key=mode..":"..a..":"..b
+    local shown=hover[n]
+    local now=core.get_us_time()
+    if shown and shown.key==key and shown.ready and now-shown.ready<650000 then
+      return shown.value,shown.why
+    end
+    -- One bounded hover request per player. Never replace the actual
+    -- choice ticket or discard an explicit click behind a preview.
+    if not shown or shown.ready then
+      local q={key=key}
+      hover[n]=q
+      local ok=client.query({kind="bridge_picker",player=n,mode=mode,first=a,last=b,peek=true},function(r)
+        if hover[n]~=q then return end
+        q.ready=core.get_us_time()
+        q.value,q.why=r.value,r.why
+      end)
+      if not ok then hover[n]=nil end
+    end
+    return nil,"Checking the span…"
+  end
   local function buy(n,ticket,style)
     if S.topology~=ticket.topology or not S.corner_grid or S.corner_grid.revision~=ticket.corners then
       return false,"The span changed. Select both bridgeheads again."
@@ -60,20 +84,35 @@ return function(api)
   local function money(amount)
     return "$"..tostring(amount):reverse():gsub("(%d%d%d)","%1,"):reverse():gsub("^,","")
   end
-  function W.open(player,mode,a,b,callback)
+  local function commit(n,ticket,style)
+    local function finish(ok,note)
+      if ticket.callback then ticket.callback(ok,note) end
+    end
+    if ticket.remote then
+      local remote=ticket.remote
+      local queued,why=api.worker_bridge_client.query({kind="command",player=n,command={
+        kind="bridge_picker",revision=remote.revision,token=remote.token,style=style}},function(r)
+        if r.ok then
+          latest[n]=latest[n] or {};latest[n][ticket.mode]=style
+        end
+        finish(r.ok,r.why)
+      end)
+      if not queued then finish(false,why) end
+    else
+      finish(buy(n,ticket,style))
+    end
+  end
+  local function show(player,mode,a,b,callback,proposal,remote)
     local n=player:get_player_name()
-    local proposal,why=evaluate(mode,n,a,b)
-    if not proposal then return nil,why end
     serial=serial+1
     local ticket={n=serial,mode=mode,a=a,b=b,prices={},topology=S.topology,
-      corners=S.corner_grid.revision,callback=callback}
+      corners=not remote and S.corner_grid.revision,callback=callback,remote=remote}
     for _,o in ipairs(proposal.offers) do ticket.prices[o.style]=o.price end
     local controls=player:get_player_control()
     local last=latest[n] and latest[n][mode]
     if controls and controls.aux1 and last and ticket.prices[last] then
       pending[n]=nil
-      local ok,msg=buy(n,ticket,last)
-      if callback then callback(ok,msg) end
+      commit(n,ticket,last)
       return true
     end
     pending[n]=ticket
@@ -92,6 +131,27 @@ return function(api)
     core.show_formspec(n,W.form,table.concat(bspec))
     return true
   end
+  local fetching={}
+  function W.open(player,mode,a,b,callback)
+    local n=player:get_player_name()
+    if api.authority_handoff then
+      local client=api.worker_bridge_client
+      if not client then return nil,"Campaign worker is not ready." end
+      local token={}
+      pending[n]=nil;fetching[n]=token
+      local sent,why=client.query({kind="bridge_picker",player=n,mode=mode,first=a,last=b},function(r)
+        if fetching[n]~=token then return end
+        fetching[n]=nil
+        if r.ok then show(player,mode,a,b,callback,r.value,{token=r.value.token,revision=r.revision})
+        elseif callback then callback(false,r.why) end
+      end)
+      if not sent then fetching[n]=nil;return nil,why end
+      return true
+    end
+    local proposal,why=evaluate(mode,n,a,b)
+    if not proposal then return nil,why end
+    return show(player,mode,a,b,callback,proposal)
+  end
   function W.fields(player,form,fields)
     if form~=W.form then return false end
     local n=player:get_player_name()
@@ -104,14 +164,13 @@ return function(api)
     end
     if selected~=nil then
       pending[n]=nil
-      local ok,msg=buy(n,ticket,selected)
-      if ticket.callback then ticket.callback(ok,msg) end
+      commit(n,ticket,selected)
     elseif fields.quit or fields.cancel then
       pending[n]=nil
       if ticket.callback then ticket.callback(false,"Bridge selection canceled.") end
     end
     return true
   end
-  function W.leave(n) pending[n],latest[n]=nil,nil end
+  function W.leave(n) pending[n],latest[n],fetching[n],hover[n]=nil,nil,nil,nil end
   return W
 end
