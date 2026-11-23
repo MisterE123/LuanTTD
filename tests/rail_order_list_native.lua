@@ -5,6 +5,7 @@ local Owned=assert(api.rail_owned)
 core.after(0,function()
   local p=S.rail_order_list_native
   local restoring=p~=nil
+  local live=core.settings:get_bool("luanttd_qa_live_order_edit",false)
   if not restoring then
     local owner="Order Loop Railways"
     Sim.company(S,owner)
@@ -28,18 +29,33 @@ core.after(0,function()
       end
     end
     local unit=assert(Owned.commit(S,owner,assert(Owned.quote(S,owner,id(2),{0,27}))))
-    assert(Owned.start_order_list(S,owner,unit.id,{stations[3],stations[2],stations[1]}))
-    p={unit=unit.id,stations={stations[3],stations[2],stations[1]},count=0}
+    local ordered={stations[3],stations[2],stations[1]}
+    assert(Owned.start_order_list(S,owner,unit.id,live and {stations[3],stations[1]} or ordered))
+    p={unit=unit.id,stations=live and {stations[2],stations[1],stations[3]} or ordered,ordered=ordered,count=0,owner=owner}
+    if live then
+      assert(Owned.edit_orders(S,owner,unit.id,0,"add",2,stations[2]))
+      assert(not Owned.edit_orders(S,owner,unit.id,0,"move",2,3))
+    end
   end
   local run=assert(Rail.current_paid(S,p.unit))
   if restoring then
     assert(p.count==2 and run.order_cursor.real==p.cursor and run.order_cursor.implicit==p.cursor)
-    for i,station in ipairs(p.stations) do assert(run.orders[i].station==station) end
+    for i,station in ipairs(p.ordered) do assert(run.orders[i].station==station) end
+    if live then assert(Owned.order_state(S,p.owner,p.unit).revision==2) end
   end
   for _=1,150 do
     Sim.daily(S)
     local d=assert(Rail.current(S))
     assert(not d.failure,d.failure)
+    if live and not p.edited and run.phase=="running" then
+      local head,serial=run.consist.parts[1],run.consist.serial
+      local x=Sim.xy(head.tile)
+      if x>=8 and x<15 then
+        assert(Owned.edit_orders(S,p.owner,p.unit,1,"skip",2))
+        assert(run.consist.parts[1]==head and run.consist.serial==serial and run.station==p.ordered[2])
+        p.edited=true
+      end
+    end
     for _,event in ipairs(Sim.rail_paid_motion_events(S)) do
       if event.kind=="arrived" then
         assert(event.station==p.stations[p.count%3+1],("wrong station at order %d: %s"):format(p.count+1,event.station))
@@ -47,6 +63,7 @@ core.after(0,function()
       end
     end
     if not restoring and p.count==2 then
+      if live then assert(p.edited and run.order_revision==2) end
       p.cursor=run.order_cursor.real
       S.rail_order_list_native=p
       api.save()
@@ -57,7 +74,8 @@ core.after(0,function()
     local status=assert(Sim.rail_paid_status(S,p.unit))
     if restoring and p.count>=6 and status.fare>0 then
       assert(run.shuttle.reversals>=2)
-      core.log("action",("RAIL_ORDER_LIST_NATIVE_PASS %d ordered arrivals, loop and $%d fare after SQLite restart"):format(p.count,status.fare))
+      core.log("action",("RAIL_ORDER_LIST_NATIVE_PASS %d ordered arrivals, loop and $%d fare after SQLite restart%s"):format(
+        p.count,status.fare,live and " with live edits" or ""))
       core.request_shutdown("Three-station train paid and looped",false,0)
       return
     end

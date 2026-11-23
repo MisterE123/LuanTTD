@@ -72,6 +72,9 @@ return function(Sim,Service,Roster,debit,credit,receive)
       local hit=r.station==id or r.shuttle and (r.shuttle.first==id or r.shuttle.second==id) or
         r.freight and (r.freight.mine==id or r.freight.power==id)
       if not hit then
+        for _,o in ipairs(r.orders or {}) do if o.station==id then hit=true;break end end
+      end
+      if not hit then
         for _,v in ipairs(r.route or {}) do
           local t=s.tiles[v.tile]
           if t and t.rail_station_id==id then hit=true;break end

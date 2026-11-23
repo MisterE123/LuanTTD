@@ -26,6 +26,7 @@ return function(api,Run,Pose,RoadVisual,seconds_per_day)
       ref=core.add_entity(p,"luanttd_core:tram_preview_vehicle")
       last_yaw=nil
     end
+    if api.vehicle_ui then api.vehicle_ui.track("tram",1,p,ref) end
     if ref then
       ref:move_to(p,true)
       last_yaw=RoadVisual.turn(last_yaw,target,math.min(1.0,dt*9))

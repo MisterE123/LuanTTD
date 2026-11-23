@@ -2290,6 +2290,22 @@ function U.service(p,kind,id)
   local function button(x,y,w,k,t)
     b[#b+1]=("button[%g,%g;%g,.56;%s;%s]"):format(x,y,w,k,esc(t))
   end
+  local function vehicle_depot(n_,kind_,id_)
+    local t=S.tiles[id_]
+    if kind_=="depot" then return t and t.owner==n_ and "road",id_ end
+    if kind_=="tram_depot_status" then return t and t.tram and t.tram.owner==n_ and "tram",id_ end
+    if kind_=="airfield_status" then
+      local f=S.stock_small_airports and S.stock_small_airports[id_]
+      return f and f.owner==n_ and "air",id_
+    end
+    if kind_=="harbor_status" or kind_=="passenger_depot" or kind_=="cargo_depot" then
+      local r=t and t.ship
+      return r and r.kind=="ship_depot" and r.owner==n_ and "ship",r and r.depot
+    end
+  end
+  if api.vehicle_ui and vehicle_depot(n,kind,id) then
+    V.vehicle_depot_kind,V.vehicle_depot_id=vehicle_depot(n,kind,id)
+  else V.vehicle_depot_kind,V.vehicle_depot_id=nil,nil end
   if kind=="vehicle" and (V.service_kind~=kind or V.service_id~=id) then V.service_order=1 end
   V.service_kind=kind;V.service_id=id
   if kind=="controls" or kind=="context" then
@@ -2815,6 +2831,7 @@ function U.service(p,kind,id)
         Sim.vehicles[v.engine].mode=="road" then
       button(6.26,.91,2.74,"order_list_open","Copy / share…")
     end
+    if api.vehicle_ui and v.owner==n then button(6.26,1.43,2.74,"common_vehicle","Orders & follow") end
     local rows={}
     for i,o in ipairs(v.orders) do
       local st=S.stations[o.station]
@@ -2835,13 +2852,24 @@ function U.service(p,kind,id)
     end
   end
   label(.4,tall and 5.49 or 5.02,V.service_note or "")
-  button(.4,tall and 6.10 or 5.61,8.6,"service_back","Back to world")
+  local footer=tall and 6.10 or 5.61
+  if V.vehicle_depot_kind then button(.4,footer,4.14,"depot_vehicle_list","Depot vehicles / Follow") end
+  local narrow=not not V.vehicle_depot_kind
+  button(narrow and 4.86 or .4,footer,narrow and 4.14 or 8.6,"service_back","Back to world")
   core.show_formspec(n,"luanttd_core:service",table.concat(b))
 end
 function U.service_fields(p,f)
   local n=p:get_player_name();local V=view(n)
   local kind,id=V.service_kind,V.service_id
   if f.quit or f.service_back then core.close_formspec(n,"luanttd_core:service");return true end
+  if f.depot_vehicle_list and api.vehicle_ui and V.vehicle_depot_kind then
+    core.close_formspec(n,"luanttd_core:service")
+    return api.vehicle_ui.depot(p,V.vehicle_depot_kind,V.vehicle_depot_id,function() U.service(p,kind,id) end)
+  end
+  if f.common_vehicle and kind=="vehicle" and api.vehicle_ui then
+    core.close_formspec(n,"luanttd_core:service")
+    return api.vehicle_ui.open(p,"road",id)
+  end
   if kind=="controls" and f.service_workbenches and Workbenches then
     core.close_formspec(n,"luanttd_core:service")
     return U.open_workbenches(p)

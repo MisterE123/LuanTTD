@@ -82,6 +82,9 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
         run.paired and (run.paired.first==id or run.paired.second==id) or
         run.freight and (run.freight.mine==id or run.freight.power==id)
       if not hit then
+        for _,o in ipairs(run.orders or {}) do if o.station==id then hit=true;break end end
+      end
+      if not hit then
         for _,v in ipairs(run.route or {}) do
           local t=s.tiles[v.tile]
           if t and t.rail_station_id==id then hit=true;break end

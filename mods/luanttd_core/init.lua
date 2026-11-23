@@ -367,6 +367,8 @@ do
   api.oneway,api.oneway_tools=OneWay,true
   Sim.mount_road_oneway(S,OneWay)
 end
+api.vehicle_ui=dofile(mod.."/vehicle_ui.lua")(api)
+api.vehicle_orders=api.vehicle_ui.orders
 local render=dofile(mod.."/render.lua")(api)
 api.render=render
 if api.structure_tools or api.rail_spans then
@@ -377,6 +379,7 @@ end
 api.crowd=dofile(mod.."/passenger_crowd.lua")(api)
 if api.road_first then api.selector=dofile(mod..'/tile_selector.lua')(api) end
 local ui=dofile(mod.."/ui.lua")(api)
+api.vehicle_status=ui.status
 local world=dofile(mod.."/world.lua")(api,ui)
 api.world=world
 local interval=qa.interval or 1.25
@@ -398,6 +401,7 @@ if api.tram_tools then
   api.tram_view=dofile(mod.."/tram_preview_view.lua")(api,Run,Pose,dofile(mod.."/road_motion.lua"),interval)
   dofile(mod.."/tram_preview_commands.lua")(api,Network,Run)
 end
+local water_order_run, coal_order_run, coal_order_runtime, air_order_run
 if api.ship_tools then
   local source=mod.."/openttd/"
   local Water=dofile(source.."ship_follow.lua")(Track)
@@ -411,6 +415,7 @@ if api.ship_tools then
   local Calendar=dofile(source.."stock_engine_calendar.lua")
   local Run=dofile(mod.."/ship_preview_run.lua")(Network,Track,Water,Y,Motion,Regions,
     {width=Sim.W,height=Sim.H,x0=1,z0=1},{engine=Roster.model(206),engine_for=Roster.model,validate_both=true})
+  water_order_run=Run
   local art={}
   local missing={}
   for _,key in ipairs(core.get_dir_list(mod.."/models",false)) do missing[key]=true end
@@ -435,6 +440,7 @@ if api.ship_tools then
         key="stock_coal_ship_run",serial="next_stock_coal_ship_run",paid=function() return true end,
         validate_both=true})
     local C=Sim.mount_coal_ship(S,cargo_run,Run,Network)
+    coal_order_run,coal_order_runtime=cargo_run,C
     local function asset(dir,filename)
       for _,name in ipairs(core.get_dir_list(mod.."/"..dir,false)) do
         if name==filename then return true end
@@ -504,6 +510,7 @@ if api.airport_tools then
   local Network=dofile(mod.."/airport_network.lua")(Sim,Terrain,Small)
   local Roster=dofile(source.."airport_roster.lua")
   local Run=dofile(mod.."/airport_preview_run.lua")(Sim,Network,Small,Motion,Terrain,api.slope,Roster)
+  air_order_run=Run
   S.air_paid_service=true
   Sim.mount_paid_air(S,Run)
   api.airport_view=dofile(mod.."/airport_preview_view.lua")(api,Run,dofile(mod.."/road_motion.lua"),interval)
@@ -511,6 +518,30 @@ if api.airport_tools then
   local Owned=dofile(mod.."/airport_owned.lua")(Sim,Run,Roster,api.airport_view.has)
   dofile(mod.."/airport_preview_commands.lua")(api,Network,Run,Owned,Roster)
 end
+local ground_orders=dofile(mod.."/road_vehicle_orders.lua")(api)
+api.vehicle_orders.road,api.vehicle_orders.tram=ground_orders.road,ground_orders.tram
+if api.rail_owned then
+  api.vehicle_orders.rail={
+    read=function(owner,id)
+      local d,note=api.rail_owned.order_state(S,owner,id)
+      if not d then return d,note end
+      local labels,items={},{}
+      for _,x in ipairs(d.stops or {}) do labels[x.id]=x.label end
+      for _,x in ipairs(d.orders or {}) do items[#items+1]={id=x,label=labels[x] or ("Station #"..x)} end
+      local c=d.capabilities or {}
+      return {items=items,targets=d.stops,active=d.active,revision=d.revision,can_insert=c.add,
+        can_reorder=c.move,can_remove=c.remove,can_skip=c.skip,can_replace=c.replace,summary=d.reason}
+    end,
+    edit=function(owner,id,rev,op,i,dest)
+      local verbs={append="add",up="move",down="move"}
+      local val=op=="up" and i-1 or op=="down" and i+1 or dest
+      return api.rail_owned.edit_orders(S,owner,id,rev,verbs[op] or op,i,val)
+    end,
+  }
+end
+local water_air_orders=dofile(mod.."/water_air_orders.lua")(S,Sim,
+  dofile(mod.."/openttd/rail_order_list.lua"),water_order_run,coal_order_run,coal_order_runtime,air_order_run)
+api.vehicle_orders.ship,api.vehicle_orders.air=water_air_orders.ship,water_air_orders.air
 if api.stock_coal_scenery then api.coal_view=dofile(mod.."/coal_industry_view.lua")(api) end
 local placement_key="world_setup_terrain_placed_v1"
 local placement=world_options
@@ -563,6 +594,7 @@ core.register_globalstep(function(dt)
   if api.ship_lock_view then api.ship_lock_view.step(online,fraction) end
   if api.coal_view then api.coal_view.step(dt,online) end
   render.frame(dt,fraction)
+  api.vehicle_ui.step(dt)
   -- Purchases and construction still change balance while time is paused.
   -- The HUD caches its unchanged text, so a lightweight poll needn't
   -- send recurring packets while the company stands still.
@@ -616,7 +648,7 @@ if placement then
     end)
   end)
 end
-core.register_on_leaveplayer(function(p) ui.leave(p:get_player_name());world.leave(p:get_player_name());if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
+core.register_on_leaveplayer(function(p) api.vehicle_ui.leave(p);ui.leave(p:get_player_name());world.leave(p:get_player_name());if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
 core.register_on_player_receive_fields(ui.fields)
 core.register_chatcommand("dispatch",{description="Open LuanTTD dispatcher",func=function(name)
   local p=core.get_player_by_name(name)

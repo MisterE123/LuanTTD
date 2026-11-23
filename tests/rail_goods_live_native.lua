@@ -3,6 +3,7 @@
 local owner,at="Harbor Goods QA",Sim.id
 local engine=tonumber(core.settings:get("bayline_rail_goods_qa_engine")) or 0
 local craighead=core.settings:get_bool("bayline_native_craighead_goods",false)
+local live_edit=core.settings:get_bool("luanttd_qa_freight_order_edit",false)
 local mixed_rail=core.settings:get_bool("luanttd_qa_passenger_and_goods",false)
 local empty_mass,full_mass,purchase_price=68,80,12421
 if engine==8 then empty_mass,full_mass,purchase_price=152,164,21796 end
@@ -71,6 +72,7 @@ local function proof_goods()
     assert(first.onboard==qa.units and first.delivered==0 and first.loading and first.last_platform==qa.source)
     assert(c.cash==qa.cash and c.revenue==qa.revenue and c.expense==qa.expense)
     assert(not Owned.commit(S,owner,qa.quote))
+    if live_edit then assert(Owned.order_state(S,owner,qa.unit).orders[2]==qa.sink and r.order_revision==1) end
     assert(unit.status=="dispatched" and r.stock_engine==engine and r.stock_wagon==32 and r.freight.cargo=="goods")
     assert(not Sim.rail_coal_status(S) and not Sim.rail_oil_status(S))
     if mixed_rail then
@@ -108,6 +110,10 @@ local function proof_goods()
             local def=assert(core.registered_entities["luanttd_core:vehicle_craighead_goods_truck"]).initial_properties
             assert(def.mesh=="bl_craighead_goods_truck.obj" and def.textures[1]=="bl_craighead_goods_truck_atlas.png")
           end
+        end
+        if live_edit then
+          assert(r.last_paid_platform==qa.sink,"Delivery must use the changed freight order")
+          core.log("action","RAIL_FREIGHT_ORDER_EDIT_NATIVE_PASS switched destination during actual source loading, retained cargo and paid at new station after SQLite restore")
         end
         assert(charge>0 and phase.fare==charge and delivered==phase.delivered and delivered%25==0 and peak==full_mass)
         assert(phase.running_expense>0 and r.running_ticks_total>qa.ticks)
@@ -153,6 +159,7 @@ local function proof_goods()
   checked(Build.quote_signal(owner,at(16,12),Track.SW,false))
   local source=S.tiles[at(17,16)].rail_station_id
   local sink=S.tiles[at(13,12)].rail_station_id
+  local new_sink,arrival_town
   local a,z=assert(Sim.rail_goods_stop_status(S,source)),assert(Sim.rail_goods_stop_status(S,sink))
   assert(#a.sources==1 and not a.accepts and z.accepts and z.eighths==9)
   assert(not Sim.rail_goods_designate(S,owner,source,"unload"))
@@ -160,9 +167,36 @@ local function proof_goods()
   assert(Sim.rail_goods_designate(S,owner,source,"load"))
   assert(Sim.rail_goods_designate(S,owner,sink,"unload"))
   assert(not Sim.rail_coal_designate(S,owner,source,"load"))
+  if live_edit then
+    for x=10,12 do
+      local t=S.tiles[at(x,12)]
+      t.house,t.site,t.build,t.owner,t.wood=nil,nil,nil,nil,nil
+    end
+    lay(10,12,12,12,Track.X)
+    checked(Build.quote_station(owner,at(10,12),at(11,12),{axis=0,drag=true,tracks=1,length=1,separate=true}))
+    new_sink=assert(S.tiles[at(10,12)].rail_station_id)
+    for x=8,11 do
+      for _,z2 in ipairs({9,10,13,14}) do
+        local t=S.tiles[at(x,z2)]
+        if not (t.build or t.site) then
+          t.house,t.parcel,t.variant=true,"shop",2
+          t.source_house={id=0,town=z.station.town,completed=true}
+        end
+      end
+    end
+    local alternate=assert(Sim.rail_goods_stop_status(S,new_sink))
+    assert(alternate.accepts and new_sink~=sink)
+    arrival_town=alternate.station.town
+    assert(Sim.rail_goods_designate(S,owner,new_sink,"unload"))
+  end
 
   local W=dofile(mod.."/timber_world.lua")(Sim,dofile(mod.."/openttd/terrain.lua"),Sim.timber_rules())
   local seed=assert(W.scenario_1751(S))
+  if live_edit then
+    seed.depot=at(11,13)
+    local d=S.tiles[seed.depot]
+    d.house,d.source_house=nil,nil
+  end
   local way=seed.road_waypoints[1]
   for i=2,#way do assert(Sim.build(S,owner,"road",Sim.line(way[i-1],way[i]))) end
   assert(Sim.build_truck_stop(S,owner,seed.forest_stop))
@@ -227,8 +261,13 @@ local function proof_goods()
     local phase=day()
     if phase.loading and phase.onboard>0 and phase.onboard<25 then
       art(unit.id)
-      S.rail_goods_native_qa={unit=unit.id,units=phase.onboard,source=source,sink=sink,mill=a.sources[1],
-        town=z.station.town,quote=q,truck=truck,goods_truck=second_truck,passenger=passenger,cash=c.cash,revenue=c.revenue,expense=c.expense,ticks=r.running_ticks_total}
+      if live_edit then
+        assert(not Owned.edit_orders(S,owner,unit.id,0,"replace",2,source))
+        assert(Owned.edit_orders(S,owner,unit.id,0,"replace",2,new_sink))
+        assert(Owned.order_state(S,owner,unit.id).orders[2]==new_sink and r.station==source)
+      end
+      S.rail_goods_native_qa={unit=unit.id,units=phase.onboard,source=source,sink=new_sink or sink,mill=a.sources[1],
+        town=arrival_town or z.station.town,quote=q,truck=truck,goods_truck=second_truck,passenger=passenger,cash=c.cash,revenue=c.revenue,expense=c.expense,ticks=r.running_ticks_total}
       api.save()
       core.log("action","RAIL_GOODS_NATIVE_SAVE_LOADING")
       return core.request_shutdown("Stock physical Goods Van saved mid-loading",false,0)

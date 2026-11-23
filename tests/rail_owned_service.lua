@@ -34,7 +34,8 @@ local mode=arg and arg[1]
 local turnout=mode=="depot_turnout"
 local mixed=mode=="mixed_signals"
 local two_coaches=mode=="two_coaches"
-local three_stops=mode=="three_stops"
+local live_orders=mode=="live_orders" or mode=="live_pbs_orders"
+local three_stops=mode=="three_stops" or live_orders
 local spans_unreserved=mode=="spans_unreserved"
 local Block=(mixed or spans_unreserved or three_stops) and port("rail_block_signals",T,Signal) or nil
 local turnout_decisions={}
@@ -133,6 +134,10 @@ if mixed then
   assert(Run.place_signal(s,owner,id(18),8,Signal.PBS))
 end
 assert(Owned.initialize(s,{starting_year=1950,generation_seed=s.seed,startup_random=9001}))
+if mode=="live_pbs_orders" then
+  assert(Run.place_signal(s,owner,id(8),8,Signal.PBS))
+  assert(Run.place_signal(s,owner,id(19),8,Signal.PBS))
+end
 if three_stops then
   assert(Lab.station(s,owner,id(16),id(17)))
   local middle=s.tiles[id(16)].rail_station_id
@@ -143,9 +148,88 @@ if three_stops then
   local u=assert(Owned.commit(s,owner,assert(Owned.quote(s,owner,start_depot,{0,27}))))
   assert(not Owned.start_order_list(s,owner,u.id,{east,9999,west}))
   assert(Owned.get(s,owner,u.id).status=="depot")
-  local ok,note,run=Owned.start_order_list(s,owner,u.id,{east,middle,west})
+  local ok,note,run=Owned.start_order_list(s,owner,u.id,live_orders and {east,west} or {east,middle,west})
   assert(ok,note)
   local expected={east,middle,west}
+  if live_orders then
+    local function edit(action,row,value)
+      local v=assert(Owned.order_state(s,owner,u.id))
+      return Owned.edit_orders(s,owner,u.id,v.revision,action,row,value)
+    end
+    assert(not Owned.order_state(s,"intruder",u.id))
+    assert(not Owned.edit_orders(s,"intruder",u.id,0,"add",nil,middle))
+    assert(not edit("add",nil,9999))
+    assert(edit("add",nil,middle))
+    assert(not Owned.edit_orders(s,owner,u.id,0,"remove",3))
+    assert(edit("move",3,2))
+    assert(table.concat(Owned.order_state(s,owner,u.id).orders,",")==table.concat({east,middle,west},","))
+    if mode=="live_pbs_orders" then
+      s.rail_block_preview=true
+    end
+    local seen={}
+    for _=1,75 do
+      Sim.daily(s)
+      assert(not Run.current(s).failure,Run.current(s).failure)
+      local head=run.consist.parts[1]
+      local x=Sim.xy(head.tile)
+      for _,e in ipairs(Sim.rail_paid_motion_events(s)) do
+        if e.kind=="arrived" then seen[#seen+1]=e.station end
+      end
+      if run.phase=="running" and run.station==east and x>=9 and x<15 and #seen==0 then
+        local serial,phase,units,spent=run.consist.serial,run.phase,run.passengers_onboard,company.cash
+        local claims=Run.current(s).life.claims
+        local existing={}
+        for tile,tracks in pairs(claims) do for k,v in pairs(tracks) do
+          existing[#existing+1]={tile=tile,track=k,owner=v}
+        end end
+        if mode=="live_pbs_orders" then
+          assert(Run.current(s).life.claims[id(18)][0]==run.id,"Missing future PBS claim at edit time")
+        end
+        assert(edit("skip",2))
+        -- No teleport, recreate, reservation release, or charge at the UI boundary.
+        assert(run.consist.parts[1]==head and run.consist.serial==serial and run.phase==phase)
+        assert(run.passengers_onboard==units and company.cash==spent)
+        for _,c in ipairs(existing) do assert(claims[c.tile][c.track]==c.owner) end
+        assert(run.station==middle and Owned.order_state(s,owner,u.id).active==2)
+        break
+      end
+    end
+    assert(#seen==0 and run.station==middle,"Never edited a moving train before the middle platform")
+    -- Exercise the physical tick boundary of the Loading order, which
+    -- usually passes wholly inside a 74-tick campaign day in this fixture.
+    local expected_force=false
+    local callbacks={
+      arrive=function() return true end,
+      leave=function(_,force)
+        assert(not not force==expected_force)
+        return expected_force
+      end,
+    }
+    for _=1,74*64 do
+      for _,e in ipairs(Run.advance_paid(s,callbacks)) do
+        if e.kind=="arrived" then seen[#seen+1]=e.station end
+      end
+      assert(not Run.current(s).failure,Run.current(s).failure)
+      if run.phase=="dwell" and #seen==1 and not expected_force then
+        assert(seen[1]==middle)
+        -- Removing the loading order retains the current visit and selects
+        -- the next row, rather than incrementing past it on departure.
+        assert(edit("remove",2))
+        assert(run.phase=="dwell" and run.station==middle and run.selected_after_loading)
+        assert(Owned.order_state(s,owner,u.id).orders[2]==west)
+        -- The explicit skip does call LeaveStation, even before ready.
+        assert(edit("skip",1))
+        assert(run.phase=="dwell" and run.station==middle and run.skip_loading_order)
+        expected_force=true
+      end
+      if #seen>=2 then
+        assert(seen[1]==middle and seen[2]==east and not run.skip_loading_order)
+        print("PASS owned live insertion, move and mid-run skip retain PBS claims; removal and skip preserve actual loading transition")
+        return
+      end
+    end
+    error("Train did not visit the newly ordered platforms")
+  end
   assert(run.orders[2].station==middle and run.order_cursor.real==0)
   local count,saved=0,false
   local function copy(t)

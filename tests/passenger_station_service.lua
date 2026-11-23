@@ -212,3 +212,28 @@ for _=1,60 do step() end
 assert(state.vehicles[4].units==27 and state.vehicles[1].units==0)
 assert(S.waiting(state,2)==0 and not state.companies.A)
 print("PASS: simultaneous shared-platform FIFO reservation, overhang and no double boarding")
+
+-- CmdSkipToOrder calls LeaveStation on an active loading order even
+-- before it is ready. Settle that real visit and return its reserved
+-- packets to the same queue; do not withdraw or recreate the train.
+state=S.new(10289);t=0
+S.station(state,{id=1,town=101,owner="A",tiles={block(4,5,"rail"),block(5,5,"rail")}},ctx)
+S.vehicle(state,{id=1,mode="rail",owner="A",speed=80,built=1940,length=16})
+step(function(_,events) begin(1,1,1,at(5,5),{full=true,platform_tiles=2},events) end)
+step()
+step(function() assert(S.produce(state,4,4,60,101,ctx)==41) end)
+for _=1,19 do step() end
+step(function(leave,events)
+  local v=assert(state.vehicles[1])
+  local old_visible,old_available=S.waiting(state,1)
+  local aboard=v.units
+  assert(#leave==0 and old_visible>old_available and aboard>0)
+  assert(not S.leave(state,1,v.visit,t,ctx,events))
+  assert(S.leave(state,1,v.visit,t,ctx,events,true))
+  assert(not S.leave(state,1,v.visit,t,ctx,events,true))
+  local new_visible,new_available=S.waiting(state,1)
+  assert(new_visible==old_visible and new_available==new_visible)
+  assert(state.vehicles[1]==v and v.units==aboard and not v.load_state)
+  assert(#state.stations[1].loading_order==0)
+end)
+print("PASS: stock explicit skip ends real loading visit once, returns reserved packets, and preserves the train")

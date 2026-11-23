@@ -1400,6 +1400,7 @@ return function(api)
     for id,v in pairs(S.fleet) do
       local pos,yaw,pitch=position(v,fraction)
       local ref=refs[id]
+      if api.vehicle_ui then api.vehicle_ui.track("road",id,pos) end
       if v.last_fare and fare_seen[id]~=v.last_fare then
         fare_seen[id]=v.last_fare
         fare_effect(v.owner,v.cargo,v.last_fare)
@@ -1424,6 +1425,7 @@ return function(api)
           ref=core.add_entity(pos,"luanttd_core:vehicle_"..v.engine);refs[id]=ref;last[id]=nil
         end
         if ref then
+          if api.vehicle_ui then api.vehicle_ui.track("road",id,pos,ref) end
           local visible_load=v.engine=="coal_tipper" and v.units>0 or
             (v.engine=="wood_truck" or v.engine=="grain_truck") and v.units>=10
           if (v.engine=="coal_tipper" or v.engine=="wood_truck" or v.engine=="grain_truck") and

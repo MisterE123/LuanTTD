@@ -98,10 +98,10 @@ return function(Service,key)
           Service.crash_rail(service,n,tick,ctx,events)
         end
       end,
-      leave=function(r)
+      leave=function(r,skip_order)
         local n=id(r)
         local row=assert(service.vehicles[n])
-        return ready[n] and Service.leave(service,n,row.visit,tick,ctx,events) or false
+        return (skip_order or ready[n]) and Service.leave(service,n,row.visit,tick,ctx,events,skip_order) or false
       end,
       cargo_count=function(r)
         local v=service.vehicles[id(r)]

@@ -30,6 +30,7 @@ return function(api,Run,RoadVisual,seconds_per_day)
     if p.paid_clock then pos,dir=api.Sim.ferry_paid_pose(s,fraction)
     else pos,dir=Run.pose(p) end
     if not pos then stop();return end
+    if api.vehicle_ui then api.vehicle_ui.track("ship","ferry",pos) end
     local nearby=false
     for _,player in ipairs(core.get_connected_players()) do
       local a=player:get_pos()
@@ -44,6 +45,7 @@ return function(api,Run,RoadVisual,seconds_per_day)
     end
     if not ref then ref=core.add_entity(pos,name);yaw=nil end
     if ref and ref:get_pos() then
+      if api.vehicle_ui then api.vehicle_ui.track("ship","ferry",pos,ref) end
       ref:move_to(pos,true)
       yaw=RoadVisual.turn(yaw,RoadVisual.nose_yaw(dir),math.min(.8,dt*7))
       ref:set_rotation({x=0,y=yaw,z=0})

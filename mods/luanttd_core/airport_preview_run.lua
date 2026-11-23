@@ -1,6 +1,8 @@
 -- One fixed-wing trimotor alternating two true 4x3 airfields.
 -- Taxi, runway block, holding and flight math remain source-port code.
 return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
+  local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  local O=dofile(source.."rail_order_list.lua")
   local R={VERSION=1,DWELL_TICKS=74,engine={id=215,visual="bayshore_trimotor",
     passengers=25,mail=4,acceleration=18,max_speed=473}} -- (37 * 128) / 10
   function R.all(s)
@@ -69,13 +71,18 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     else s.airport_pilot=p end
     return p
   end
+  function R.uses_airfield(p,id)
+    if p.target==id then return true end
+    if not p.transport_orders then return p.first==id or p.second==id end
+    for _,o in ipairs(p.transport_orders) do if o.id==id then return true end end
+    return false
+  end
   function R.clear(s,owner)
     local p=R.current(s)
     if not p or p.owner~=owner then return nil,"NO_OWN_AIRCRAFT_PILOT" end
     if p.engine_id then return nil,"OWNED_AIRCRAFT_CANNOT_BE_CLEARED" end
-    for _,id in ipairs({p.first,p.second}) do
-      local a=s.stock_small_airports[id]
-      if a then a.flags=0 end
+    for id,a in pairs(s.stock_small_airports or {}) do
+      if R.uses_airfield(p,id) then a.flags=0 end
     end
     s.airport_pilot=nil
     return true
@@ -97,18 +104,48 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     local hooks={airports=airports,plane_speed=Motion.PLANE_SPEED,terrain_height=function(x,z)
       return R.terrain_under(s,x,z)
     end}
+    local function find_order(advance)
+      local list,c=p.transport_orders,p.transport_order_cursor
+      if advance and list[c.implicit+1].id==v.last_station then
+        -- Vehicle::HandleLoading advances only when this was the ordered terminal.
+        O.increment_implicit(list,c)
+      end
+      O.update_real(list,c)
+      return list[c.real+1]
+    end
     for _=1,ticks or 1 do
-      local ready
+      local ready,skipped
       if paid then
-        ready=v.loading and paid.leave(p)
+        skipped=v.loading and p.transport_skip_loading
+        ready=v.loading and paid.leave(p,skipped)
+      elseif v.loading and p.transport_skip_loading then
+        skipped,ready,p.dwell=true,true,0
       elseif p.dwell>0 then
         p.dwell=p.dwell-1
         ready=p.dwell==0
       end
       if ready then
         v.loading=nil
-        v.order={kind="station",id=v.last_station==p.first and p.second or p.first}
+        if p.transport_orders then v.order=find_order(not skipped)
+        else v.order={kind="station",id=v.last_station==p.first and p.second or p.first} end
+        p.transport_skip_loading,p.transport_cancel_full=nil,nil
         p.phase="taxi"
+      end
+      if p.transport_orders and not v.loading and not v.stopped then
+        local order=find_order(false)
+        if not v.order or v.order.id~=order.id then
+          v.order=order
+          -- Aircraft::GetOrderStationLocation retargets immediately only
+          -- in FLYING. Keep the previous airport and FTA flags through
+          -- committed approach/rollout and ground handling.
+          if v.state==Small.state.FLYING and a.id~=order.id then
+            local dest=airports[order.id]
+            if not dest then p.phase,p.failure="blocked","AIRFIELD_CHANGED";return p end
+            Small.inbound(dest,v)
+            a=dest
+            p.target,p.phase=a.id,"flying"
+          end
+        end
       end
       if p.finance and not v.stopped then p.finance.ticks=p.finance.ticks+1 end
       local next,events,why=Motion.tick(a,v,hooks)

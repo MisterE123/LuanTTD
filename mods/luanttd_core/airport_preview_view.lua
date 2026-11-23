@@ -52,9 +52,11 @@ return function(api,Run,RoadVisual,seconds_per_day)
         if not x or not x.ref or not x.ref:get_pos() then
           local ref=core.add_entity(pos,art.entity)
           x={ref=ref,pitch=0,shown=art.mesh}
-          if ref then ref:get_luaentity().paid_clock=id end
+          local entity=ref and ref:get_luaentity()
+          if entity then entity.paid_clock=id end
           views[id]=x
         end
+        if api.vehicle_ui then api.vehicle_ui.track("air",id~=0 and id or 1,pos,x.ref) end
         if x.ref then
           local mesh=airborne and art.flight or art.mesh
           if mesh~=x.shown then x.ref:set_properties({mesh=mesh});x.shown=mesh end

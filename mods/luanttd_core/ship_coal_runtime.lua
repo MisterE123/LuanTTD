@@ -21,12 +21,21 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
     end
     return out
   end
+  local function docks(run)
+    if not run.transport_orders then return {run.first,run.second} end
+    local ids={}
+    for _,o in ipairs(run.transport_orders) do
+      if o.kind=="station" then ids[#ids+1]=o.id end
+    end
+    if run.vehicle.loading and run.last_dock then ids[#ids+1]=run.last_dock end
+    return ids
+  end
   local function check_pair(board,dep,a,z,other)
     if not other then return true end
     if dep==other.depot then return false,"FERRY_FREIGHT_SHARED_DEPOT" end
     local our=live_docks(board,a,z,true)
     if not our then return false,"DOCK_BERTHS_OVERLAP_OR_MISSING" end
-    for _,id in ipairs({other.first,other.second}) do
+    for _,id in ipairs(docks(other)) do
       if id==a or id==z then return false,"FERRY_FREIGHT_SHARED_BERTH" end
       for _,tile in ipairs(board.station_dock_tiles(id)) do
         if our[tile] then return false,"FERRY_FREIGHT_SHARED_BERTH" end
@@ -40,6 +49,32 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
       if not live_docks(board,a,z) then return false,"DOCK_BERTHS_OVERLAP_OR_MISSING" end
       return check_pair(board,dep,a,z,Passenger.current(w))
     end
+    local function order_guard(w,p,list,board,other)
+      if not other then return true end
+      for _,o in ipairs(list) do
+        if o.kind=="station" then
+          local ok,why=check_pair(board,p.depot,o.id,o.id,other)
+          if not ok then return nil,why end
+        end
+      end
+      return true
+    end
+    Run.order_guard=function(w,p,list,board)
+      local ids,berths={},{}
+      for _,o in ipairs(list) do
+        if o.kind=="station" and not ids[o.id] then
+          local tiles=board.station_dock_tiles(o.id)
+          if #tiles==0 then return false,"A coal dock has no water berth." end
+          for _,tile in ipairs(tiles) do
+            if berths[tile] then return false,"Coal docks need separate water berths." end
+            berths[tile]=true
+          end
+          ids[o.id]=true
+        end
+      end
+      return order_guard(w,p,list,board,Passenger.current(w))
+    end
+    Passenger.order_guard=function(w,p,list,board) return order_guard(w,p,list,board,Run.current(w)) end
     Passenger.start_guard=function(w,dep,a,z,board)
       local craft=w.stock_coal_ship
       if craft and craft.depot==dep then return false,"FERRY_FREIGHT_SHARED_DEPOT" end
@@ -62,7 +97,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
     end
     local view=frame(s)
     local b=Service.bind(s,archive,{board=spec.network.board(s),
-      dock_filter=order and function(i) return i==order.first or i==order.second end,
+      dock_filter=order and function(i) return spec.run.ordered_dock(order,i) end,
       current_payment=s.stock_coal_payment,stationwide=comm,received=receive,
       credit=function(world,owner,amount,n)
         local company=Sim.company(world,owner)
@@ -154,6 +189,10 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
     -- or stopped. An undispatched purchase only protects its depot.
     return s.stock_coal_ship_run~=nil
   end
+  function M.order_report(s,id)
+    local b=model(s,true)
+    return b and b.report(id)
+  end
   function M.report(s,id)
     if not M.active(s) or type(id)~="number" or id<0 or id>=0x4000 or id%1~=0 then return end
     local b=model(s)
@@ -182,15 +221,18 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
       state.loading_tick,state.post_tick=first_tick-1,first_tick-1
     end
     b.economy_day(s.day)
-    local a,z=b.report(run.first),b.report(run.second)
     if not run.failure then
-      if not a or #a.sources==0 then run.failure="COAL_SOURCE_NO_LONGER_AVAILABLE"
-      elseif not z or z.eighths<8 then run.failure="COAL_SINK_NO_LONGER_AVAILABLE" end
+      for _,o in ipairs(run.transport_orders or {{id=run.first,cargo_order="full"},{id=run.second,cargo_order="no_load"}}) do
+        local dock=b.report(o.id)
+        if o.cargo_order=="full" and (not dock or #dock.sources==0) then run.failure="COAL_SOURCE_NO_LONGER_AVAILABLE"
+        elseif o.cargo_order=="no_load" and (not dock or dock.eighths<8) then run.failure="COAL_SINK_NO_LONGER_AVAILABLE" end
+      end
       if run.failure then run.phase="blocked" end
     end
     local view=frame(s)
     view.samples={sample(spec.run,run)}
     local function before(tick)
+      if run.transport_cancel_full then b.cancel_full();run.transport_cancel_full=nil end
       local ok,why=b.loading_tick(tick,run.stopped or run.phase=="blocked")
       if not ok and why then run.failure,run.phase=why,"blocked" end
       return ok
@@ -198,9 +240,11 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
     local function after(tick,ready)
       if ready then
         spec.run.advance_paid(s,{
-          leave=function(q) return b.leave(q.arrivals,tick) end,
+          leave=function(q,force) return b.leave(q.arrivals,tick,force) end,
           arrive=function(q)
-            local l,why=b.arrive(q.last_dock,q.arrivals,tick,q.last_berth,q.last_dock==q.first and "full" or "no_load")
+            local order=q.transport_orders and q.transport_orders[q.transport_order_cursor.real+1]
+            local policy=order and order.cargo_order or (q.last_dock==q.first and "full" or "no_load")
+            local l,why=b.arrive(q.last_dock,q.arrivals,tick,q.last_berth,policy)
             return not not l,why
           end,
         })
@@ -236,11 +280,18 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive)
     local p=b and b.run.current(s)
     local c=s.stock_ship_coal
     local v=c and c.vehicle
+    local mine,power
+    if p and p.transport_orders then
+      for _,o in ipairs(p.transport_orders) do
+        if not mine and o.cargo_order=="full" then mine=o.id end
+        if not power and o.cargo_order=="no_load" then power=o.id end
+      end
+    end
     return {id=craft.id,owner=craft.owner,engine=Roster.id,cargo=craft.cargo,
       phase=p and p.phase or "purchased",capacity=Roster.capacity,onboard=v and v.units or 0,
       delivered=v and v.delivered or 0,boarded=v and v.boarded or 0,fare=v and v.revenue or 0,
       last_fare=v and v.last_fare,purchase=craft.purchase,refit=craft.refit,running_expense=craft.expense,
-      depot=craft.depot,mine=p and p.first,power=p and p.second,last_dock=p and p.last_dock,
+      depot=craft.depot,mine=mine or p and p.first,power=power or p and p.second,last_dock=p and p.last_dock,
       last_berth=p and p.last_berth,loading=v and v.load_state~=nil,
       visits=p and p.arrivals or 0,stopped=p and p.stopped or false,failure=p and p.failure,
       paused=not M.active(s),tick=c and c.post_tick}

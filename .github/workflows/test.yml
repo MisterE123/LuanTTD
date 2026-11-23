@@ -30,7 +30,7 @@ jobs:
       - name: Check Lua syntax and run focused tests
         run: |
           find mods/luanttd_core -type f -name '*.lua' -print0 | xargs -0 -r -n 1 luac5.1 -p
-          for t in sim pedestrian avatar_car world_setup workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere hotbar ordinary_level_crossing \
+          for t in sim pedestrian avatar_car world_setup workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere hotbar vehicle_ui road_live_order_edit tram_live_order_edit water_air_orders ordinary_level_crossing \
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight rail_owned_default \
             rail_depot_fleet rail_depot_construction rail_loose_wagons rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
@@ -43,6 +43,8 @@ jobs:
           lua5.1 tests/rail_owned_service.lua mixed_signals
           lua5.1 tests/rail_owned_service.lua two_coaches
           lua5.1 tests/rail_owned_service.lua three_stops
+          lua5.1 tests/rail_owned_service.lua live_orders
+          lua5.1 tests/rail_owned_service.lua live_pbs_orders
           lua5.1 tests/rail_owned_service.lua spans_unreserved
           lua5.1 tests/rail_owned_multi.lua shared_depot
           lua5.1 tests/rail_owned_multi.lua collision
@@ -65,6 +67,9 @@ jobs:
           BAYLINE_NATIVE_GOODS_ENGINE=13 BAYLINE_NATIVE_GOODS_YEAR=1976 LUANTTD_NATIVE_CRAIGHEAD=true bash tests/rail_goods_live_native.sh
           LUANTTD_NATIVE_PASSENGER_AND_GOODS=true bash tests/rail_goods_live_native.sh
           for year in 1950 1980; do LUANTTD_NATIVE_FERRY_YEAR="$year" bash tests/ship_coal_live_native.sh; done
+          LUANTTD_NATIVE_COAL_ORDERS=true bash tests/ship_coal_live_native.sh
+          LUANTTD_NATIVE_FREIGHT_ORDER_EDIT=true bash tests/rail_goods_live_native.sh
+          LUANTTD_NATIVE_ORDER_SEQUENCE=true LUANTTD_NATIVE_LIVE_ORDER_EDIT=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_ORDER_SEQUENCE=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_SIGNAL_FREE=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_DEPOT_TURNOUT=true bash tests/rail_owned_live_native.sh

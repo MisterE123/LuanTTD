@@ -43,11 +43,56 @@ return function(Network,Trip,Speed)
     if not check or check.last~=leg2.last or loop.last~=leg1.last then
       return nil,msg4 or "unstable_arrival_orientation"
     end
-    local active={version=R.VERSION,owner=owner,legs={lead,leg1,leg2,loop},leg=1,index=1,
+    lead.order_index,leg1.order_index,leg2.order_index,loop.order_index=1,2,1,2
+    local active={version=R.VERSION,owner=owner,depot=depot,orders={first,second},
+      legs={lead,leg1,leg2,loop},leg=1,index=1,
       heading=lead.frames[1][3],speed=0,subspeed=0,progress=0,arrivals=0,phase="depot",
       wait=18,ticks=0,steps=0}
     s.tram_pilot=active
     return active
+  end
+  function R.orders(s,owner)
+    local p=R.current(s)
+    if not p or p.owner~=owner then return end
+    return p.orders or {p.legs[1].target,p.legs[2].target}, p.order_revision or 0, p
+  end
+  -- Luanti's tram adapter precompiles its stock YAPF/vehicle-table legs.
+  -- Keep the active physical leg, then enter the edited order sequence
+  -- from its legal through-stop approach. Verify the entire directed
+  -- loop before changing anything, including the seam at wraparound.
+  function R.replace_orders(s,owner,orders,next_order,retained)
+    local _,_,p=R.orders(s,owner)
+    if not p or #orders<2 or #orders>254 then return false,"Choose at least two tram stops." end
+    local current=p.legs[p.leg]
+    local end_pose=current.frames[#current.frames]
+    local previous,td,pose=current.target,current.last,end_pose
+    local prefix={}
+    for k,v in pairs(current) do prefix[k]=v end
+    prefix.order_index=retained
+    local legs,seen={prefix},{}
+    local i=next_order
+    for _=1,16*#orders+1 do
+      if not orders[i] then return false,"Invalid tram order." end
+      local key=("%d/%s/%s"):format(i,tostring(previous),tostring(td))
+      if seen[key] then
+        if #legs<2 then return false,"Choose at least two distinct tram stops." end
+        p.depot=p.depot or p.legs[1].source
+        p.legs,p.leg,p.loop=legs,1,seen[key]
+        p.orders,p.order_revision,p.pending_order=orders,(p.order_revision or 0)+1,next_order
+        return true,"Tram orders updated."
+      end
+      seen[key]=#legs+1
+      local stop=orders[i]
+      if stop~=previous then
+        local leg,why=compile(s,owner,previous,stop,td,pose)
+        if not leg then return false,why end
+        leg.order_index=i
+        legs[#legs+1]=leg
+        previous,td,pose=stop,leg.last,leg.frames[#leg.frames]
+      end
+      i=i%#orders+1
+    end
+    return false,"unstable_arrival_orientation"
   end
   function R.clear(s,owner)
     local p=R.current(s)
@@ -80,7 +125,7 @@ return function(Network,Trip,Speed)
           if p.phase~="depot" then
             -- The first trip uses the compiler's approach direction; the
             -- stable loop may return to that platform from the other side.
-            local following=({[1]=2,[2]=3,[3]=4,[4]=3})[p.leg]
+            local following=p.loop and (p.leg<#p.legs and p.leg+1 or p.loop) or ({[1]=2,[2]=3,[3]=4,[4]=3})[p.leg]
             p.leg,p.index=following,1
           end
           p.phase,p.speed,p.subspeed,p.progress="running",0,0,0
@@ -95,8 +140,9 @@ return function(Network,Trip,Speed)
           c.steps=c.steps+1
           if observe then observe(f,c) end
           if c.index==#leg.frames then
-            c.arrivals=c.arrivals+1
-            c.phase,c.wait,c.speed,c.subspeed,c.progress="stopped",30,0,0,0
+            local serviced=not c.loop or leg.order_index~=nil
+            if serviced then c.arrivals=c.arrivals+1 end
+            c.phase,c.wait,c.speed,c.subspeed,c.progress="stopped",serviced and 30 or 1,0,0,0
           end
           return true
         end)

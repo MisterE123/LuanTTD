@@ -152,11 +152,29 @@ return function(api,ui)
     end
     return state.inherited_clear==i
   end
+  function W.select_vehicle(p,vehicle,already_guarded)
+    if not p or not p:is_player() then return false end
+    local s=controls[p:get_player_name()]
+    if not api.vehicle_ui or not s or s.avatar or s.order_mode or s.build_drag or s.demolishing or
+      api.vehicle_ui.following(p) then return false end
+    local now=core.get_us_time()
+    if not already_guarded then
+      if s.right_at and now-s.right_at<170000 then return false end
+      s.right_at=now
+    end
+    api.vehicle_ui.open(p,vehicle.kind,vehicle.id)
+    W.hud(p)
+    return true
+  end
   local function activate(item,p,menu,control_press)
     if not p or not p:is_player() then return item end
     local n=p:get_player_name()
     local state=controls[n]
     if not state then return item end
+    if api.vehicle_ui and api.vehicle_ui.following(p) then
+      if menu then api.vehicle_ui.exit(p);state.right_at=core.get_us_time() end
+      return item
+    end
     if state.avatar then
       if menu then W.exit_avatar(p) end
       return item
@@ -188,6 +206,10 @@ return function(api,ui)
         W.hud(p)
         return item
       end
+      if api.vehicle_ui then
+        local vehicle=api.vehicle_ui.pick(p,90)
+        if vehicle and W.select_vehicle(p,vehicle,true) then return item end
+      end
     end
     if not menu then
       local now=core.get_us_time()
@@ -213,6 +235,10 @@ return function(api,ui)
         return item
       end
       state.clicked=now
+      if key=="inspect" and api.vehicle_ui then
+        local selected=api.vehicle_ui.pick(p,90)
+        if selected and W.select_vehicle(p,selected,true) then return item end
+      end
       if H then
         if key=="teleport_tile" then
           local tile,hit=W.target(p)
@@ -562,10 +588,25 @@ return function(api,ui)
     hud[n]=nil;controls[n]=nil;api.render.leave(n)
     if api.selector then api.selector.leave(n) end
   end
+  function W.follow_hud(p,active)
+    local n=p:get_player_name()
+    local s=controls[n]
+    if not s then return end
+    p:hud_set_flags({hotbar=not active,crosshair=not active})
+    if active then
+      for _,id in pairs(hud[n] or {}) do if type(id)=="number" then p:hud_remove(id) end end
+      hud[n]=nil
+      for _,id in pairs(s.labels or {}) do p:hud_remove(id) end
+      s.labels,s.label_names=nil,nil
+      if api.selector then api.selector.leave(n) end
+    else
+      W.hud(p,0)
+    end
+  end
   function W.hud(p)
     local n=p:get_player_name()
     local state=controls[n]
-    if not state or state.avatar then return end
+    if not state or state.avatar or api.vehicle_ui and api.vehicle_ui.following(p) then return end
     local t,hit=W.target(p)
     local menu=entries(state)
     local slot=menu[p:get_wield_index()]
@@ -719,7 +760,13 @@ return function(api,ui)
     dt=math.min(dt,.10)
     for _,p in ipairs(core.get_connected_players()) do
       local state=controls[p:get_player_name()]
-      if state and state.avatar then
+      if state and api.vehicle_ui and api.vehicle_ui.following(p) then
+        local keys=p:get_player_control()
+        local right=keys.place or keys.RMB
+        if right and not state.place then activate(p:get_wielded_item(),p,true) end
+        state.place=right
+        state.dig=keys.dig or keys.LMB
+      elseif state and state.avatar then
         local keys=p:get_player_control()
         local right=keys.place or keys.RMB
         if not state.avatar.leaving then

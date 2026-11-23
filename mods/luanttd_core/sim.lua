@@ -1771,7 +1771,7 @@ function M.purchase(s,owner,engine,cargo,station,depot)
   debit(c,e.cost)
   local id=s.next_vehicle;s.next_vehicle=id+1
   s.fleet[id]={id=id,name=e.name.." #"..id,owner=owner,engine=engine,cargo=cargo,station=station,
-    depot=depot,orders=depot and {} or {{station=station,action="normal"}},index=1,units=0,revenue=0,expense=0,delivered=0, bought=s.day,
+    depot=depot,home_depot=depot,orders=depot and {} or {{station=station,action="normal"}},index=1,units=0,revenue=0,expense=0,delivered=0, bought=s.day,
     status="Stopped",running=false,progress=0,wait=0,condition=100}
   if e.stock_id then
     local key=s.stock_bus_market and "stock_bus" or "stock_regal"
@@ -1804,7 +1804,7 @@ local function can_use_road_order(s,v,o)
 end
 local abort_stock_stop
 local function orders_changed(s,v,wipe_resume)
-  if wipe_resume then v.road_depot_resume=nil end
+  if wipe_resume then v.road_depot_resume,v.road_order_override=nil,nil end
   if v.load_state then abort_stock_stop(s,v) end
   v.stock_loading_complete=nil
 end
@@ -1822,63 +1822,102 @@ function M.clone_road_orders(s,owner,id,from,action)
   if ok then orders_changed(s,s.fleet[id],true) end
   return ok,note
 end
-function M.add_order(s,owner,id,station,action)
+-- RC1 order_cmd.cpp keeps per-vehicle indexes attached to the current
+-- order even when the same list is shared. In-flight destinations are a
+-- separate Lua motion cursor: reindex it too, or replace it through YAPF
+-- from the physical front rather than teleporting to a stop/depot.
+function M.road_order_target(s,owner,id,station)
   local v,st=s.fleet[id],s.stations[station]
-  if not v or not st or v.owner~=owner or st.owner~=owner or st.mode~=M.vehicles[v.engine].mode then return false,"Choose a compatible terminal." end
-  if v.running or v.route then return false,"Stop at a terminal before changing orders." end
-  if s.road_economy and M.vehicles[v.engine].mode=="road" then
-    local truck=st.stop_type=="truck"
-    if v.cargo=="passenger" and truck then return false,"Buses need passenger stops." end
-    if v.engine=="mail_van" and not truck then return false,"Mail vans need truck loading stops." end
-    if v.engine=="coal_tipper" and not truck then return false,"Coal tippers need truck loading stops." end
-    if industry_truck(v.engine) and not truck then return false,"Freight needs truck loading stops." end
+  if not v or not st or v.owner~=owner or st.owner~=owner or st.mode~=M.vehicles[v.engine].mode then
+    return nil,"Choose a compatible terminal."
   end
-  if v.order_group then
-    local members,note=orders_module().can_edit(s,v)
-    if not members then return false,note end
-    for _,other in ipairs(members) do
-      if not can_use_road_order(s,other,{station=station}) then
-        return false,"A vehicle sharing these orders cannot call at that stop."
-      end
+  if not is_road_vehicle(v) then
+    if v.running or v.route then return nil,"Stop at a terminal before changing orders." end
+    if #v.orders>=16 then return nil,"Limit of 16 orders." end
+    return st
+  end
+  for _,other in ipairs(orders_module().members(s,v)) do
+    if not can_use_road_order(s,other,{station=station}) then
+      return nil,other==v and (v.cargo=="passenger" and "Buses need passenger stops." or "Freight needs truck loading stops.")
+        or "A vehicle sharing these orders cannot call at that stop."
     end
   end
-  if #v.orders>=16 then return false,"Limit of 16 orders." end
-  local prior=v.orders[#v.orders]
-  if prior and prior.station==station then return false,"That order repeats the previous terminal." end
+  if #v.orders>=254 then return nil,"Limit of 254 orders." end
+  if not s.road_economy and v.orders[#v.orders] and v.orders[#v.orders].station==station then
+    return nil,"That order repeats the previous terminal."
+  end
+  return st
+end
+function M.add_order(s,owner,id,station,action)
+  local v=s.fleet[id]
+  local st,note=M.road_order_target(s,owner,id,station)
+  if not st then return false,note end
+  if not is_road_vehicle(v) and #v.orders>=16 then return false,"Limit of 16 orders." end
   if action~="transfer" and action~="full" and action~="unload" then action="normal" end
   v.orders[#v.orders+1]={station=station,action=action}
-  if v.order_group then
-    for _,other in ipairs(orders_module().members(s,v)) do orders_changed(s,other,true) end
-  end
   return true,"Added "..st.name.."."
 end
 function M.edit_order(s,owner,id,index,op)
-  local v=s.fleet[id];local o=v and v.orders[index]
+  local v=s.fleet[id]
+  local o=v and v.orders[index]
   if not v or v.owner~=owner or not o then return false,"Select one of your vehicle's orders." end
-  if v.running or v.route then return false,"Stop at a terminal before changing orders." end
-  local members,note
-  if v.order_group then
-    members,note=orders_module().can_edit(s,v)
-    if not members then return false,note end
+  local road=is_road_vehicle(v)
+  if not road and (v.running or v.route) then return false,"Stop at a terminal before changing orders." end
+  if op=="skip" then
+    -- RC1 CmdSkipToOrder: reject the current order and lists shorter than
+    -- two, leave a loading stop, then set both order cursors.
+    if not road or #v.orders<2 or index==(type(v.road_order_override)=="number" and v.road_order_override or v.dest_index or v.road_depot_resume or v.index) then
+      return false,"Choose a different order in a list of at least two stops."
+    end
+    if v.load_state then abort_stock_stop(s,v) end
+    if v.station then v.stock_loading_complete=v.station end
+    v.index=index
+    if v.road_auto_service then v.road_auto_service.index,v.road_auto_service.station=index,o.station end
+    if v.depot then v.road_depot_resume=index end
+    v.road_order_override=index
+    if v.road_speed_state then v.road_speed_state.order_retry_tile=nil end
+    return true,"Next destination changed."
   end
+  local members=road and orders_module().members(s,v) or {v}
   local moved
   if op=="remove" then table.remove(v.orders,index)
-  elseif op=="cycle_load" then
-    o.action=o.action=="full" and "normal" or "full"
+  elseif op=="cycle_load" then o.action=o.action=="full" and "normal" or "full"
   elseif op=="up" and index>1 then
     moved=index-1;v.orders[index],v.orders[moved]=v.orders[moved],o
   elseif op=="down" and index<#v.orders then
     moved=index+1;v.orders[index],v.orders[moved]=v.orders[moved],o
   else return false,"Cannot move this order farther." end
-  if members then
-    for _,other in ipairs(members) do
-      if op=="remove" then orders_module().cursor_after_remove(other,index) end
-      if moved then orders_module().cursor_after_move(other,index,moved) end
-      orders_changed(s,other,op~="cycle_load")
+  for _,other in ipairs(members) do
+    local function map(i)
+      if type(i)~="number" then return i end
+      if moved then return i==index and moved or i==moved and index or i end
+      if op=="remove" then
+        if i>index then return i-1 end
+        if i==index and i>#v.orders then return 1 end
+      end
+      return i
     end
-  else
-    if v.index>#v.orders then v.index=1 end
-    orders_changed(s,v,op~="cycle_load")
+    local active=type(other.road_order_override)=="number" and other.road_order_override
+        or other.dest_index or other.road_depot_resume or other.index
+    if op=="cycle_load" and road and active==index and other.load_state then
+      -- CmdModifyOrder updates the active loading copy, including peers
+      -- on this shared list, without reclassifying cargo in flight.
+      other.load_state.full=o.action=="full" and not other.stop_requested
+    end
+    if op=="remove" and road and active==index then
+      if other.load_state then abort_stock_stop(s,other) end
+      if other.station then other.stock_loading_complete=other.station end
+      other.road_order_override=#v.orders>0 and map(index) or false
+      if other.road_speed_state then other.road_speed_state.order_retry_tile=nil end
+    else other.road_order_override=map(other.road_order_override) end
+    other.index=map(other.index)
+    other.dest_index=map(other.dest_index)
+    other.road_depot_resume=map(other.road_depot_resume)
+    if other.road_auto_service then
+      other.road_auto_service.index=map(other.road_auto_service.index)
+      local dest=v.orders[other.road_auto_service.index]
+      if dest then other.road_auto_service.station=dest.station end
+    end
   end
   return true,op=="cycle_load" and (o.action=="full" and "Order waits for a full load." or "Order loads normally.") or "Orders updated."
 end
@@ -1891,18 +1930,20 @@ function M.toggle(s,owner,id)
     if v.route then v.stop_requested=true;return true,"Vehicle will stop at the next terminal." end
     v.running=false;v.status="Stopped";return true,"Vehicle stopped."
   end
-  if #v.orders<2 then return false,"Add at least two different terminal orders." end
+  local different=false
+  for i=2,#v.orders do if v.orders[i].station~=v.orders[1].station then different=true;break end end
+  if not different then return false,"Add at least two different terminal orders." end
   local mode=M.vehicles[v.engine].mode
   for i,o in ipairs(v.orders) do
     local d=v.orders[i%#v.orders+1]
     -- Validate from an unspecified approach at each stop. The driven
     -- itinerary uses the actual arrival trackdir at the next departure.
     local route_vehicle=mode=="road" and {engine=v.engine,cargo=v.cargo} or nil
-    if not M.path(s,s.stations[o.station],s.stations[d.station],mode,owner,nil,route_vehicle) then
+    if o.station~=d.station and not M.path(s,s.stations[o.station],s.stations[d.station],mode,owner,nil,route_vehicle) then
       return false,"No route from order "..i.." to its next terminal."
     end
   end
-  local resume=v.orders[v.road_depot_resume or 1] or v.orders[1]
+  local resume=v.orders[v.road_order_override or v.road_depot_resume or 1] or v.orders[1]
   if v.depot and not M.path(s,depot_endpoint(s,owner,v.depot),s.stations[resume.station],mode,owner,nil,v) then
     return false,"The depot has no road connection to the first stop."
   end
@@ -2688,6 +2729,7 @@ local function vehicle_order(v,station)
   return nil
 end
 local function launch(s,v,route,dest,index,arrival_td,route_cost,frames,bays)
+  v.home_depot=v.home_depot or v.depot
   v.road_motion_frames=frames;v.road_stop_pose=nil;v.road_speed_state=nil;v.stock_loading_complete=nil
   v.road_leg_td=arrival_td;v.road_route_cost=route_cost
   v.road_bay_branch=bays
@@ -2741,11 +2783,13 @@ local function rail_route(s,traffic,v,st,dest,r)
 end
 local function idle_or_plan(s,v,traffic)
   if not v.running then return end
+  if #v.orders==0 then v.running=false;v.status="No orders";return end
   local e=M.vehicles[v.engine]
   if v.depot then
-    local first=s.stations[v.orders[1] and v.orders[1].station]
+    local ix=v.road_order_override or 1
+    local first=s.stations[v.orders[ix] and v.orders[ix].station]
     local route,arrival_td,cost,frames,bays=M.path(s,depot_endpoint(s,v.owner,v.depot),first,e.mode,v.owner,nil,v)
-    if route then launch(s,v,route,first.id,1,arrival_td,cost,frames,bays) else v.status="No road from depot" end
+    if route then launch(s,v,route,first.id,ix,arrival_td,cost,frames,bays);v.road_order_override=nil else v.status="No road from depot" end
     return
   end
   local st=s.stations[v.station]
@@ -2753,16 +2797,16 @@ local function idle_or_plan(s,v,traffic)
   local cur=v.orders[v.index] and v.orders[v.index].station==st.id and v.index or vehicle_order(v,st.id)
   local order=cur and v.orders[cur]
   local action=order and order.action or "normal"
-  if v.loaded_at~=st.id then
+  if v.road_order_override==nil and v.loaded_at~=st.id then
     visit_station(s,st,v,action)
     unload_at(s,st,v,action);v.loaded_at=st.id
   end
-  if action~="transfer" and action~="unload" then load_at(s,st,v,e.capacity) end
+  if v.road_order_override==nil and action~="transfer" and action~="unload" then load_at(s,st,v,e.capacity) end
   if v.stop_requested then v.stop_requested=nil;v.running=false;v.status="Stopped";return end
-  if action=="full" and v.units<e.capacity and v.wait<35 then
+  if v.road_order_override==nil and action=="full" and v.units<e.capacity and v.wait<35 then
     v.wait=v.wait+1;v.status="Waiting for full load";return
   end
-  local next_index=cur and cur%#v.orders+1 or 1
+  local next_index=v.road_order_override or (cur and cur%#v.orders+1 or 1)
   local target=s.stations[v.orders[next_index].station]
   local route,arrival_td,cost,frames,bays=M.path(s,st,target,e.mode,v.owner,nil,v)
   if not route then v.status="No path";v.rail_wait_key=nil;return end
@@ -2770,7 +2814,7 @@ local function idle_or_plan(s,v,traffic)
     route=rail_route(s,traffic,v,st,target,route)
     if not route then v.status="Waiting for clear track";return end
   end
-  launch(s,v,route,target.id,next_index,arrival_td,cost,frames,bays)
+  launch(s,v,route,target.id,next_index,arrival_td,cost,frames,bays);v.road_order_override=nil
   v.rail_wait_key=nil
   if e.mode=="rail" then reserve(s,traffic,v) end
 end
@@ -2808,8 +2852,11 @@ local function current_station_order(v,st)
 end
 local function stock_next_plan(s,v,st)
   local i=current_station_order(v,st)
-  local n=i and i%#v.orders+1 or 1
-  while i and n~=i and v.orders[n].station==st.id do n=n%#v.orders+1 end
+  local n=v.road_order_override or (i and i%#v.orders+1 or 1)
+  for _=1,#v.orders do
+    if not v.orders[n] or v.orders[n].station~=st.id then break end
+    n=n%#v.orders+1
+  end
   local target=v.orders[n] and s.stations[v.orders[n].station]
   if not target or target==st then return end
   local path,td,cost,frames,bays=M.path(s,st,target,"road",v.owner,nil,v)
@@ -3007,15 +3054,39 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       if not v.running then return end
       if v.engine=="coal_tipper" then v.stock_coal_running_ticks=(v.stock_coal_running_ticks or 0)+1 end
       if industry_truck(v.engine) then v.stock_timber_running_ticks=(v.stock_timber_running_ticks or 0)+1 end
-      if v.route then return end
+      if v.route then
+        local order=v.road_order_override and v.orders[v.road_order_override]
+        if order and not v.road_return_depot then
+          if order.station==v.dest then
+            v.dest_index,v.road_order_override=v.road_order_override,nil
+          else
+            local state=v.road_speed_state
+            local frame=state and M.road_motion_frame(s,v)
+            local tile=frame and frame[4]
+            if frame and not state.depot_wait and not (s.tiles[tile] and s.tiles[tile].level_crossing) and
+                state.order_retry_tile~=tile then
+              state.order_retry_tile=tile
+              local r=road_routing()
+              local route,_,td,cost,frames,bays=source_route.from_live_frame(s,v,frame,order.station,r.occupancy(M,s))
+              if route then
+                launch(s,v,route,order.station,v.road_order_override,td,cost,frames,bays)
+                state.index,state.waiting,state.oneway_tile,state.order_retry_tile=1,nil,nil,nil
+                v.road_speed_state,v.road_order_override=state,nil
+              end
+            end
+          end
+        end
+        return
+      end
+      if #v.orders==0 then v.running=false;v.status="No orders";return end
       if v.depot then
-        local order=v.road_depot_resume or 1
+        local order=v.road_order_override or v.road_depot_resume or 1
         if not v.orders[order] then order=1 end
         local to=v.orders[order] and s.stations[v.orders[order].station]
         local route,td,cost,frames,bays=M.path(s,depot_endpoint(s,v.owner,v.depot),to,"road",v.owner,nil,v)
         if route and frames then
           launch(s,v,route,to.id,order,td,cost,frames,bays)
-          v.road_depot_resume=nil;v.last_departure=s.day;v.last_departure_tick=tick
+          v.road_depot_resume,v.road_order_override=nil,nil;v.last_departure=s.day;v.last_departure_tick=tick
         else v.status="No road from depot" end
         return
       end
@@ -3038,7 +3109,8 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         v.status="Road exit no longer matches the stopped pose"
         return
       end
-      launch(s,v,route,dest,index,td,cost,frames,bays);v.last_departure=s.day;v.last_departure_tick=tick
+      launch(s,v,route,dest,index,td,cost,frames,bays);v.road_order_override=nil
+      v.last_departure=s.day;v.last_departure_tick=tick
     end,
     exited=faults and function(v,tick) faults.service(v,tick) end or nil,
     arrive=function(v,tick,frame)
@@ -3064,7 +3136,13 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       v.road_motion_frames=nil;v.road_speed_state=nil;v.road_bay_branch=nil
       v.route=nil;v.dest=nil;v.dest_index=nil;v.progress=0
       local st=s.stations[v.station]
-      if st then begin(v,st,tick) else v.running=false;v.status="Missing terminal" end
+      if st and v.road_order_override~=nil then
+        -- A bridge, passing maneuver or depot exit may have prevented an
+        -- exact live splice. Finish its physical approach without cargo
+        -- actions, then use the selected order from the settled frame.
+        v.stock_loading_complete=st.id
+        if #v.orders==0 then v.running=false;v.status="No orders" end
+      elseif st then begin(v,st,tick) else v.running=false;v.status="Missing terminal" end
       return true
     end,
     age=function(v,tick)
@@ -3303,7 +3381,7 @@ function M.daily(s)
       v.route=nil;v.dest=nil;v.dest_index=nil;v.progress=0
       v.status="At terminal"
       local st=s.stations[v.station];local order=v.orders[v.index]
-      if st then
+      if st and v.road_order_override==nil then
         local action=order and order.action or "normal"
         visit_station(s,st,v,action)
         unload_at(s,st,v,action);v.loaded_at=st.id

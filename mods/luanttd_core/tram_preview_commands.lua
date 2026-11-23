@@ -44,7 +44,7 @@ return function(api,N,Run)
     local record=t and t.tram
     return record and record.owner==name and record.kind==kind
   end
-  api.tram={network=N,busy=busy,reason=why,start=start,clear=clear,status=status,facility=facility}
+  api.tram={network=N,run=Run,busy=busy,reason=why,start=start,clear=clear,status=status,facility=facility}
   core.register_chatcommand("tramway",{
     params="X Z END_X END_Z | bit X Z MASK | depot X Z east|west|north|south | stop X Z x|z",
     description="Build independent flat electric tram track and facilities",

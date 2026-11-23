@@ -340,14 +340,14 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       return ready,events
     end
     local function after(tick,ready,events,advance_rail)
-      local function leave(id)
+      local function leave(id,force)
         local vehicle=service.vehicles[id]
-        return ready[id] and Service.leave(service,id,vehicle.visit,tick,ctx,events) or false
+        return (force or ready[id]) and Service.leave(service,id,vehicle.visit,tick,ctx,events,force) or false
       end
       if run and ship_ready then
         if Ship.count_owned_tick then Ship.count_owned_tick(s,p) end
         Ship.advance_paid(s,{
-          leave=function() return leave(run) end,
+          leave=function(_,force) return leave(run,force) end,
           arrive=function(q)
             return Service.begin(service,run,q.last_dock,q.arrivals,q.last_berth,{},tick,ctx,events)
           end,
@@ -375,7 +375,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
         local id=air_key(a.paid_clock)
         if air_ready[id] then
           Air.advance_paid(s,{
-            leave=function() return leave(id) end,
+            leave=function(_,force) return leave(id,force) end,
             arrive=function(q,tile)
               assert(q.paid_clock==a.paid_clock,"Paid air movement selected another actor")
               return Service.begin(service,id,air_key(q.last_airfield),q.arrivals,tile,{},tick,ctx,events)
@@ -489,10 +489,11 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     local waiting={}
     local orders=rail and (p.paired or p.shuttle) or p
     local stops={orders.first,orders.second}
-    if rail and p.orders then
+    local list=rail and p.orders or p.transport_orders
+    if list then
       stops={}
-      for _,order in ipairs(p.orders) do
-        if order.kind=="station" then stops[#stops+1]=order.station end
+      for _,order in ipairs(list) do
+        if order.kind=="station" then stops[#stops+1]=order.station or order.id end
       end
     end
     for _,id in ipairs(stops) do

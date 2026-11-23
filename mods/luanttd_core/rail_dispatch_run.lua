@@ -366,7 +366,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end
     if run.span and not run.shuttle and not run.fleet_id and span_jumps==0 then return false end
     local origin=board.tile(route[1].tile)
-    return origin.kind=="depot" or allow_platform_origin and origin.kind=="station" and origin.station~=run.station
+    return origin.kind=="depot" or allow_platform_origin=="physical" or
+      allow_platform_origin and origin.kind=="station" and origin.station~=run.station
   end
 
   local function station_order(station)
@@ -375,6 +376,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
 
   local function next_passenger_order(run)
     if run.orders then
+      if run.selected_after_loading then
+        return run.orders[run.order_cursor.real+1].station,run.order_cursor
+      end
       local order,index=OrderList.next_manual(run.orders,run.order_cursor)
       return order and order.station,index
     end
@@ -388,7 +392,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
 
   -- Stock CheckReverseTrain compares the order from the actual front and
   -- reversed rear. Build the chosen leg before altering any live poses.
-  local function choose_leg(board,run,consist,station)
+  local function choose_leg(board,run,consist,station,physical_origin)
     local final=station_order(station)
     local order=run.via and waypoint_order(run.via) or final
     local reverse_settings={forbid_90=settings.forbid_90,max_speed=run.max_track_speed}
@@ -415,7 +419,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
       for i=2,#suffix do view.route[#view.route+1]=suffix[i] end
     end
-    local ok,reason=validate(board,view,true)
+    local ok,reason=validate(board,view,physical_origin and "physical" or true)
     if not ok then return nil,nil,nil,reason end
     return view.route,order,flip
   end
@@ -1124,6 +1128,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local head=run.consist.parts[1].pose
     run.direction=head.direction
     run.station=station;run.order=order;run.route=route;run.index=1
+    run.live_order_origin=nil
     run.reserved_through_station=nil
     if run.ordered_tiles then for _,step in ipairs(route) do run.ordered_tiles[step.tile]=true end end
     run.speed=0;run.subspeed=0;run.progress=0;run.wait_counter=0;run.stuck=false
@@ -1135,7 +1140,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local function switch_shuttle_order(base,d,run,events)
     local station,index=next_passenger_order(run)
     switch_station_order(base,d,run,events,station,run.shuttle)
-    if index and run.station==station and not d.failure then run.order_cursor=index end
+    if index and run.station==station and not d.failure then
+      run.order_cursor=index;run.selected_after_loading=nil
+    end
   end
 
   -- No call to the PBS lifecycle: stock path reservation is not the
@@ -1490,6 +1497,200 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end
   end
 
+  local function current_order_list(run)
+    if run.orders then return run.orders,run.order_cursor end
+    local q=run.freight or run.paired or run.shuttle
+    if not q then return end
+    local first=q.first or q.mine
+    local second=q.second or q.power
+    if not first or not second then return end
+    local i=run.station==first and 0 or 1
+    return {station_order(first),station_order(second)},{real=i,implicit=i}
+  end
+
+  function R.order_state(s,owner,id)
+    local r=R.current_paid(s,id)
+    if not r or not id or r.owner~=owner then return end
+    local orders,index=current_order_list(r)
+    if not orders then return end
+    local editable=not (r.crashed or r.failure or r.paired or r.via or r.freight and r.freight.complete)
+    local passenger=editable and not r.freight
+    local out={orders={},stops={},active=index.real+1,revision=r.order_revision or 0,
+      capabilities={add=passenger,move=passenger,remove=passenger,skip=passenger,replace=editable}}
+    if not editable then out.reason="This specialized or inactive train cannot change its orders." end
+    for _,o in ipairs(orders) do out.orders[#out.orders+1]=o.station end
+    local xy=Lab.board(s).xy
+    for station,t in pairs(s.stock_rail_stations or {}) do
+      local role
+      if r.freight then
+        role=t[(r.freight.cargo or "coal").."_role"]
+      end
+      if t.owner==owner and (r.freight and role or not r.freight and
+          not (t.coal_role or t.oil_role or t.goods_role)) then
+        local x,z=xy(t.tiles and t.tiles[1] or r.depot)
+        out.stops[#out.stops+1]={id=station,role=role,label=("Rail station %d (%d, %d)%s"):format(
+          station,x,z,role and (" · "..role) or "")}
+      end
+    end
+    table.sort(out.stops,function(a,b) return a.id<b.id end)
+    return out
+  end
+
+  -- A moving train changes destination without calling CheckReverseTrain
+  -- (ProcessOrders returns may_reverse only after LeaveStation). Keep the
+  -- committed PBS prefix on the approach; route from its end using
+  -- the same stock YAPF costs/follower, not from the depot or a center tile.
+  local function replan_forward(base,d,run,station)
+    local board=viewed(base,d)
+    local head=run.consist.parts[1]
+    if not head or head.wormhole then return end
+    local prefix={{tile=head.tile,td=head.pose.td}}
+    local current=run.route[run.index]
+    if not current or not same_step(current,prefix[1]) then return end
+    if run.reserved_through_station then return end
+    for i=run.index+1,#run.route do
+      local step=run.route[i]
+      if Life.claim_owner(d.life,step.tile,Track.track(step.td))~=run.id then break end
+      prefix[#prefix+1]=step
+      local tile=board.tile(step.tile)
+      if tile and tile.kind=="station" and tile.station==station then break end
+    end
+    local origin=prefix[#prefix]
+    local v={}
+    for k,x in pairs(run) do v[k]=x end
+    v.order,v.station=station_order(station),station
+    local best,vehicle=search(board,v,origin.tile,origin.td)
+    local tail=best and dense_route(board,vehicle,best,v.span)
+    if not tail then return end
+    for i=2,#tail do prefix[#prefix+1]=tail[i] end
+    v.route=prefix
+    if validate(board,v,"physical") then return prefix,v.order end
+  end
+
+  local function can_stop(board,run,leg)
+    local last=leg and leg[#leg]
+    return last and Follow.platform(board,last.tile,Track.reverse_side(Track.exit_side(last.td)))*16>=run.total_length
+  end
+
+  -- Validate the proposed cyclic station list without moving the actual
+  -- consist or assigning any reservations. Existing dispatch supports
+  -- only station routes with a safe platform/reversal and modeled spans.
+  local function verify_order_cycle(base,d,run,orders,index,current_route,at_station,selecting)
+    local board=signed(base,d)
+    local tiles={}
+    local function check(leg,previous)
+      if not can_stop(board,run,leg) then return false end
+      if run.platform_lookahead and (not run.local_signals or run.reserved_through_station==run.station)
+          and previous and not validate_continuation(board,run,previous,leg) then return false end
+      for _,piece in ipairs(leg) do
+        local t=board.tile(piece.tile)
+        if not t then return false end
+        if run.engine_railtype==1 and t.kind=="bridge" and t.transport=="rail" and
+            not run.bridge_collectors then return false end
+        tiles[piece.tile]=true
+      end
+      return true
+    end
+    local leg=current_route
+    if not check(leg) then return end
+    local probe=at_station and run.consist or departure_probe(run,leg)
+    for i=1,#orders+(selecting and 1 or 0) do
+      local o,next_index
+      if selecting and i==1 then
+        o,next_index=orders[index.real+1],index
+      else o,next_index=OrderList.next_manual(orders,index) end
+      local next_leg=choose_leg(board,run,probe,o.station)
+      if not check(next_leg,leg) then return end
+      leg,index=next_leg,next_index
+      probe=departure_probe(run,leg)
+    end
+    return tiles
+  end
+
+  function R.edit_orders(s,owner,id,revision,action,row,value)
+    local view=R.order_state(s,owner,id)
+    if not view or not view.capabilities[action] then return false,"This order change is unavailable for that train." end
+    if revision~=view.revision then return false,"Orders changed since this window opened. Reopen it and try again." end
+    local run,d=R.current_paid(s,id),R.current(s)
+    if d.failure then return false,"The railway is blocked." end
+    local orders,index=current_order_list(run)
+    orders,index=clone(orders),clone(index)
+    local station=orders[index.real+1].station
+    local slot=type(row)=="number" and row%1==0 and row-1 or nil
+    local loading=run.phase=="dwell"
+    local selecting=not not run.selected_after_loading
+    local reroute,force,freight_slot
+    if action=="add" or action=="replace" then
+      local allowed
+      for _,stop in ipairs(view.stops) do
+        if stop.id==value then allowed=stop;break end
+      end
+      if not allowed then return false,"Choose a compatible owned rail station." end
+      if action=="add" then
+        if row~=nil and not slot then return false,"Invalid order row." end
+        if not OrderList.insert(orders,index,slot or #orders,station_order(value)) then
+          return false,"Invalid order row or too many orders."
+        end
+      else
+        if not slot or not orders[slot+1] then return false,"Choose an existing order row." end
+        if orders[slot+1].station==value then return false,"That station is already selected." end
+        if run.freight then
+          if allowed.role~=(slot==0 and "load" or "unload") then return false,"Choose a station with the same cargo role." end
+          if slot==index.real and loading then return false,"Wait for the train to leave this freight platform, then edit it." end
+          freight_slot=slot
+        end
+        orders[slot+1]=station_order(value)
+        if slot==index.real then reroute=true end
+      end
+    elseif action=="move" then
+      if not slot or type(value)~="number" or value%1~=0 or not OrderList.move(orders,index,slot,value-1) then
+        return false,"Choose two different existing rows."
+      end
+    elseif action=="remove" then
+      if not slot or #orders<3 then return false,"A running train needs at least two different stations." end
+      local current=slot==index.real
+      if not OrderList.delete(orders,index,slot) then return false,"Choose an existing row." end
+      if current then reroute=true end
+    elseif action=="skip" then
+      if not slot or not OrderList.skip(orders,index,slot) then return false,"Choose a different existing order." end
+      reroute,force=true,loading
+    else return false,"Unknown order edit." end
+    for i,o in ipairs(orders) do
+      if o.station==orders[i==1 and #orders or i-1].station then
+        return false,"Use different consecutive stations, including the loop back to the first."
+      end
+    end
+
+    local route,order=run.route
+    local base=rail_board(s,run.span)
+    if reroute then
+      station=orders[index.real+1].station
+      if loading then selecting=true
+      else
+        route,order=replan_forward(base,d,run,station)
+        if not route then return false,"No safe forward route from this train's position. Try again while it is stopped at a station." end
+      end
+    end
+    local locked=verify_order_cycle(base,d,run,orders,index,route,loading,selecting)
+    if not locked then return false,"The proposed orders don't form a safe connected loop from this train." end
+
+    run.order_revision=view.revision+1
+    if run.freight then
+      if freight_slot==0 then run.freight.mine=value else run.freight.power=value end
+    else
+      run.orders,run.order_cursor=orders,index
+      run.selected_after_loading=selecting or nil
+      if force then run.skip_loading_order=true end
+    end
+    if reroute and not loading then
+      run.station,run.order,run.route,run.index=station,order,route,1
+      run.live_order_origin=true
+      run.reserved_through_station=nil
+    end
+    run.ordered_tiles=locked
+    return true,"Train orders updated."
+  end
+
   function R.freight_paid(s,cargo)
     local d=R.current(s)
     for _,r in ipairs(d and d.runs or {}) do
@@ -1591,7 +1792,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if d.topology~=s.topology then
       local board=signed(base,d)
       for _,run in ipairs(d.runs) do
-        if not run.crashed and not validate(board,run,(run.shuttle or run.freight or run.paired) and run.route[1].tile~=run.depot) or
+        if not run.crashed and not validate(board,run,run.live_order_origin and "physical" or
+            (run.shuttle or run.freight or run.paired) and run.route[1].tile~=run.depot) or
             (is_block and (not block_route(board,run,d) or not compatible_signals(base,d,true))) or
             (not is_block and not Life.valid_state(board,d.life)) then
           halt(d,run,events,"The dispatch railway changed.")
@@ -1630,6 +1832,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         elseif run.failure or service and not callback then
           -- Missing or paused commercial service does not advance this
           -- vehicle, but cannot freeze a different cargo or company.
+        elseif run.phase=="dwell" and run.skip_loading_order and callback and callback.leave(run,true) then
+          -- CmdSkipToOrder calls LeaveStation even for a stopped train.
+          -- Finish the service visit now, but let the stopped/status check
+          -- keep the physical consist parked until the player starts it.
+          run.skip_loading_order=nil
+          switch_shuttle_order(base,d,run,events)
+          if d.failure then return events end
         elseif run.fleet_id and run.stopped and run.speed==0 then
           -- The real stock handler returns here. Do not leave a depot
           -- or station, move a stopped wagon, or discard path holdings.

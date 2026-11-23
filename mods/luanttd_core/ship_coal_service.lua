@@ -207,10 +207,10 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
       if #departures>0 then l.ready_tick=tick end
       return true
     end
-    function B.leave(visit,tick)
+    function B.leave(visit,tick,force)
       local v=state.vehicle
       local l=v and v.load_state
-      if not l or v.visit~=visit or l.ready_tick~=tick or state.loading_tick~=tick or state.post_tick==tick then
+      if not l or v.visit~=visit or not force and l.ready_tick~=tick or state.loading_tick~=tick or state.post_tick==tick then
         return false
       end
       local st=state.stations[l.station]
@@ -219,6 +219,10 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
       emit("leave",st,v,tick)
       v.cargo_tile=nil
       return true
+    end
+    function B.cancel_full()
+      local v=state.vehicle
+      if v and v.load_state then v.load_state.full=false end
     end
     function B.after_motion(tick)
       if state.loading_tick~=tick then return nil,"WRONG_SHIP_TICK_PHASE" end

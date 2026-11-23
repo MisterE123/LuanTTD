@@ -25,6 +25,7 @@ return function(api,RoadVisual)
     end
     local pos,dir=api.ship_coal.pose(fraction)
     if not pos or not dir then clear();return end
+    if api.vehicle_ui then api.vehicle_ui.track("ship","coal",pos) end
     local nearby=false
     for _,p in ipairs(core.get_connected_players()) do
       local a=p:get_pos()
@@ -33,6 +34,7 @@ return function(api,RoadVisual)
     if not nearby then clear();return end
     if not ref or not ref:get_pos() then ref=core.add_entity(pos,name);yaw=nil end
     if ref then
+      if api.vehicle_ui then api.vehicle_ui.track("ship","coal",pos,ref) end
       ref:move_to(pos,true)
       yaw=RoadVisual.turn(yaw,RoadVisual.nose_yaw(dir),math.min(.8,dt*7))
       ref:set_rotation({x=0,y=yaw,z=0})

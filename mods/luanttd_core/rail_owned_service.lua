@@ -188,6 +188,28 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     assert(Fleet.bind_dispatch(s,owner,id,id))
     return true,note,run
   end
+  function O.order_state(s,owner,id)
+    local unit=Fleet.get(s,owner,id)
+    if not unit or unit.status~="dispatched" then return end
+    return Run.order_state(s,owner,id)
+  end
+  function O.edit_orders(s,owner,id,revision,action,row,value)
+    local unit=Fleet.get(s,owner,id)
+    if not unit or unit.status~="dispatched" then return false,"Select an active owned train." end
+    local view=Run.order_state(s,owner,id)
+    local run=Run.current_paid(s,id)
+    if view and run.freight and action=="replace" then
+      local cargo=run.freight.cargo or "coal"
+      local validators={coal=validate_coal,oil=validate_oil,goods=validate_goods}
+      local validate=validators[cargo]
+      if (row~=1 and row~=2) or type(value)~="number" or not validate then
+        return false,"Choose an existing freight order and a compatible station."
+      end
+      local ok,note=validate(s,owner,row==1 and value or run.freight.mine,row==2 and value or run.freight.power)
+      if not ok then return false,note end
+    end
+    return Run.edit_orders(s,owner,id,revision,action,row,value)
+  end
   function O.toggle(s,owner,id)
     local unit=Fleet.get(s,owner,id)
     if not unit or unit.status~="dispatched" then return false,"Select an active owned rail fleet unit." end

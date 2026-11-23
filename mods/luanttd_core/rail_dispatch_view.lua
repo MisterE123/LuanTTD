@@ -101,6 +101,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
         saved.ref:set_properties({visual_size={x=1,y=extension,z=1}})
         saved.extension=extension
       end
+      return saved.ref
     end
   end
   local function board_base(id)
@@ -179,6 +180,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
             local body={x=2*tx+.5+x,y=(level or board_base(id))+models[kind].offset,z=2*tz+.5+z}
             local rotation={x=(tilt or 0)*(flipped and 1 or -1),
               y=math.pi-math.atan2(dx,dz)+(flipped and math.pi or 0),z=0}
+            local ref
             if i==1 and train.bridge_collectors and split_ready[kind] then
               local rows,axis,side=span_wire(S,id,td,wormhole)
               local move=rows and collector.mount(rows,axis,side,body,rotation,vector.rotate,.03,.45)
@@ -186,13 +188,14 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
               -- If an optional visual contact is missing, don't hover
               -- above the rail or move the authoritative vehicle.
               local scale=move and move.scale_y or (rows and .03/collector.nominal_extension or 1)
-              pose(refs,key,"dispatch_"..kind.."_body",body,rotation,nil,flip_epoch)
+              ref=pose(refs,key,"dispatch_"..kind.."_body",body,rotation,nil,flip_epoch)
               pose(refs,key..":collector","dispatch_"..kind.."_collector",heel,rotation,scale,flip_epoch)
               show_parts[key..":collector"]=true
               if V.observe_collector then V.observe_collector(train,id,move,rows,scale,td) end
             else
-              pose(refs,key,"dispatch_"..kind,body,rotation,nil,flip_epoch)
+              ref=pose(refs,key,"dispatch_"..kind,body,rotation,nil,flip_epoch)
             end
+            if api.vehicle_ui and train.fleet_id then api.vehicle_ui.track("rail",train.fleet_id,body,ref,i==1) end
             show_parts[key]=true
           end
         end

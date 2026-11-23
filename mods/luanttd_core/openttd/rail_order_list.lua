@@ -59,6 +59,16 @@ function O.insert(orders,index,slot,order)
   end
   return true
 end
+-- order_cmd.cpp CmdSkipToOrder. The host calls LeaveStation for an
+-- active loading order and invalidates timetable/unbunching state.
+function O.skip(orders,index,slot)
+  if type(slot)~="number" or slot%1~=0 or slot<0 or slot>=#orders or
+      #orders<2 or slot==index.implicit then return false end
+  index.real,index.implicit=slot,slot
+  O.update_real(orders,index)
+  return true
+end
+
 -- order_cmd.cpp CmdMoveOrder: zero-based rotation, preserving the two
 -- cursor identities and re-targeting conditional jumps within that range.
 function O.move(orders,index,from,to)

@@ -2,6 +2,8 @@
 -- shared by the original empty pilot and opt-in paid simulation clock.
 return function(Network,Track,Water,Y,Motion,Regions,extents,config)
   config=config or {}
+  local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  local O=dofile(source.."rail_order_list.lua")
   local key,serial=config.key or "ship_pilot",config.serial or "next_paid_ferry_run"
   local R={VERSION=1,engine=config.engine or {id=206,max_speed=64,acceleration=1,capacity=100}}
   function R.engine_for(p) return config.engine_for and config.engine_for(p and p.engine_id) or R.engine end
@@ -43,6 +45,12 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
   function R.current(s)
     local p=s[key]
     if p and p.version==R.VERSION then return p end
+  end
+  function R.ordered_dock(p,id)
+    if not p.transport_orders then return id==p.first or id==p.second end
+    if p.vehicle.loading and p.last_dock==id then return true end
+    for _,o in ipairs(p.transport_orders) do if o.kind=="station" and o.id==id then return true end end
+    return false
   end
   function R.uses_facilities(s)
     return R.current(s)~=nil
@@ -139,6 +147,35 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
     s[key]=p
     return p
   end
+  function R.check_order(s,p,list)
+    local board=lookup(s)
+    if R.order_guard then
+      local ok,reason=R.order_guard(s,p,list,board)
+      if not ok then return false,reason end
+    end
+    local function origin(o)
+      if o.kind=="waypoint" then return {o.tile} end
+      return board.station_dock_tiles(o.id)
+    end
+    local function reachable(a,b)
+      if a.kind==b.kind and a.id==b.id then return true end
+      for _,tile in ipairs(origin(a)) do
+        for _,td in ipairs(Water.trackdirs(Water.at(board,tile))) do
+          local probe={tile=tile,owner=p.owner,order=b,
+            ocean_speed_frac=p.vehicle.ocean_speed_frac,canal_speed_frac=p.vehicle.canal_speed_frac}
+          if plan(board,probe,td) then return true end
+        end
+      end
+    end
+    -- This runtime must be able to draw every leg around the service
+    -- loop. Unlike a Region estimate, the YAPF probe must reach the
+    -- actual replacement dock/buoy before accepting it.
+    local before,added,after=list[#list-1],list[#list],list[1]
+    if not reachable(before,added) or not reachable(added,after) then
+      return false,"No navigable route to or from the new order."
+    end
+    return true
+  end
   function R.clear(s,owner)
     local p=R.current(s)
     if not p or p.owner~=owner then return nil,"NO_OWN_PILOT" end
@@ -148,11 +185,11 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
   end
   local function tick(s,num,paid)
     local p=R.current(s)
-    if not p or p.stopped or p.phase=="blocked" or (p.paid_clock~=nil)~=(paid~=nil) then return end
+    if not p or p.phase=="blocked" or (p.paid_clock~=nil)~=(paid~=nil) then return end
     local board,region=lookup(s)
     local v=p.vehicle
     if p.topology~=s.topology then
-      if p.via then
+      if p.via and not p.transport_orders then
         local b=board.tile(p.via.tile)
         if not b or b.kind~="buoy" or b.station~=p.via.id then
           p.phase,p.failure="blocked","SELECT_BUOY"
@@ -183,6 +220,11 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
         return math.floor(b.max_speed*(256-ratio)/256)
       end,
       on_waypoint=function(B,b,o)
+        if p.transport_orders then
+          local _,cursor=O.next_manual(p.transport_orders,p.transport_order_cursor)
+          p.transport_order_cursor=cursor
+          return
+        end
         local via=p.via
         if not via or via.id~=o.id or via.tile~=o.tile then return end
         local x,z=B.xy(b.tile)
@@ -193,18 +235,47 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
         p.pending_buoy_dock=o.next_station
       end,
     }
-    local function leave()
+    local function current_order(advance)
+      local list,c=p.transport_orders,p.transport_order_cursor
+      if advance and list[c.implicit+1].kind=="station" and list[c.implicit+1].id==v.last_station then
+        O.increment_implicit(list,c)
+      end
+      O.update_real(list,c)
+      return list[c.real+1]
+    end
+    local function leave(skipped)
+      if p.transport_orders then
+        Motion.leave(v,current_order(not skipped))
+        p.phase="sailing"
+        return
+      end
       local next_=v.last_station==p.first and p.second or p.first
       Motion.leave(v,p.via and waypoint_order(p.via,next_) or station_order(next_))
       p.phase="sailing"
     end
     for _=1,num or 1 do
+      if p.transport_orders then
+        p.pending_buoy_dock=nil
+        if v.loading and p.transport_skip_loading and (not paid or paid.leave(p,true)) then
+          p.transport_skip_loading,p.transport_cancel_full=nil,nil
+          leave(true)
+        end
+        if p.stopped then break end
+        if not v.loading and not v.leaving then
+          local order=current_order(false)
+          if not v.order or v.order.kind~=order.kind or v.order.id~=order.id then
+            v.order=order
+            v.path,v.path_index=nil,nil
+          end
+        end
+      elseif p.stopped then break end
       if p.pending_buoy_dock then
         v.order=station_order(p.pending_buoy_dock)
         p.pending_buoy_dock=nil
       end
       if paid then
         if v.loading and paid.leave(p) then
+          p.transport_cancel_full=nil
           leave()
         end
       elseif p.dwell>0 then
@@ -225,7 +296,7 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
           end
           p.phase="sailing"
         end
-      elseif not v.loading and (not v.path or v.path_index>#v.path) and not v.leaving and
+      elseif v.track~=Motion.WORMHOLE and not v.loading and (not v.path or v.path_index>#v.path) and not v.leaving and
           v.direction==v.rotation and
           not (v.order and v.order.kind=="station" and Water.ship_destination(board,v.tile,v.order.id)
             and hooks.docking_area(board,v.tile,v.order.id)) then

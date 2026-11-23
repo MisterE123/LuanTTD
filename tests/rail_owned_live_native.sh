@@ -50,6 +50,7 @@ CONF
 use_market=false
 if [[ ${BAYLINE_NATIVE_SH_8P:-false} == true || ${BAYLINE_NATIVE_MANLEY:-false} == true || ${BAYLINE_NATIVE_MANLEY_COACH:-false} == true || ${BAYLINE_NATIVE_ELECTRIC:-false} == true || ${BAYLINE_NATIVE_SH_40:-false} == true ]]; then use_market=true; fi
 cat > "$out/native.conf" <<EOF_CONF
+luanttd_qa_live_order_edit = ${LUANTTD_NATIVE_LIVE_ORDER_EDIT:-false}
 luanttd_qa_two_coaches = ${LUANTTD_NATIVE_TWO_COACHES:-false}
 luanttd_qa_disconnected_path_signal = ${LUANTTD_NATIVE_DISCONNECTED_PBS:-false}
 luanttd_qa_depot_turnout = ${LUANTTD_NATIVE_DEPOT_TURNOUT:-false}

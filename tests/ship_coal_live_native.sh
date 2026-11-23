@@ -30,7 +30,15 @@ if storage:get_string("world_setup_v1")=="" then
 end
 """+s[k:])
 PROBE
-cat tests/ship_coal_live_native.lua >> "$game/mods/luanttd_core/init.lua"
+save_mark=YATE_SAVE_LOADING
+pass_mark=YATE_NATIVE_PASS
+fixture=tests/ship_coal_live_native.lua
+if [[ ${LUANTTD_NATIVE_COAL_ORDERS:-false} =~ ^(true|delete)$ ]]; then
+  fixture=tests/ship_coal_orders_native.lua
+  save_mark=YATE_ORDERS_NATIVE_SAVED
+  pass_mark=YATE_ORDERS_NATIVE_PASS
+fi
+cat "$fixture" >> "$game/mods/luanttd_core/init.lua"
 cat > "$out/world/world.mt" <<'CONF'
 gameid = luanttd
 backend = sqlite3
@@ -40,6 +48,7 @@ mod_storage_backend = sqlite3
 CONF
 cat > "$out/native.conf" <<EOF_CONF
 luanttd_qa_ferry_year = ${LUANTTD_NATIVE_FERRY_YEAR:-1950}
+luanttd_qa_coal_orders = ${LUANTTD_NATIVE_COAL_ORDERS:-skip}
 port = ${BAYLINE_NATIVE_PORT:-39619}
 bind_address = 127.0.0.1
 server_announce = false
@@ -49,9 +58,8 @@ export LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/server.log" 2>&1 || {
   cat "$out/server.log"; exit 1;
 }
-grep -q YATE_SAVE_LOADING "$out/server.log" || { cat "$out/server.log"; exit 1; }
+grep -q "$save_mark" "$out/server.log" || { cat "$out/server.log"; exit 1; }
 timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/reload.log" 2>&1 || {
   cat "$out/reload.log"; exit 1;
 }
-marker=YATE_NATIVE_PASS
-grep "$marker" "$out/reload.log" || { cat "$out/reload.log"; exit 1; }
+grep "$pass_mark" "$out/reload.log" || { cat "$out/reload.log"; exit 1; }

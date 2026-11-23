@@ -286,7 +286,11 @@ return function(api,status)
     if #units>limit then lab(.42,5.18+height,"Additional consists remain saved in this depot.") end
     if note then lab(.42,5.64+height,note) end
     if can_assemble then button(6.38+height,"assemble","Buy locomotives and wagons separately") end
-    button(6.38+height+(can_assemble and .67 or 0),"back","Back to world")
+    local bottom=6.38+height+(can_assemble and .67 or 0)
+    if api.vehicle_ui then
+      button(bottom,"depot_vehicle_list","Depot vehicles / Follow",.42,4.45)
+      button(bottom,"back","Back to world",5.14,4.44)
+    else button(bottom,"back","Back to world") end
     core.show_formspec(n,form,table.concat(b))
     return true
   end
@@ -620,6 +624,11 @@ return function(api,status)
     local a=panels[n]
     if f.quit or f.back then panels[n]=nil;core.close_formspec(n,form);return true end
     if not a or not owned_depot(n,a.depot) then return true end
+    if f.depot_vehicle_list and api.vehicle_ui then
+      local id=a.depot
+      panels[n]=nil;core.close_formspec(n,form)
+      return api.vehicle_ui.depot(p,"rail",id,function() U.open(p,id) end)
+    end
     local owned=api.rail_owned
     if a.assembly then
       local prefix="assembly_"..a.token.."_"

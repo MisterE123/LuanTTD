@@ -397,11 +397,11 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     return departures,events
   end
 
-  function S.leave(state,vid,visit,tick,ctx,events)
+  function S.leave(state,vid,visit,tick,ctx,events,skip_order)
     local v=assert(state.vehicles[vid])
     local l=v.load_state
     if not l or v.visit~=visit then return false,"DUPLICATE_OR_STALE_VISIT" end
-    if l.ready_tick~=tick then return false,"NOT_READY" end
+    if not skip_order and l.ready_tick~=tick then return false,"NOT_READY" end
     assert(state.tick==tick and state.post_tick~=tick,"Departure must follow this tick's station pass")
     local st=assert(state.stations[l.station])
     local ops=options(state,tick,ctx,events)

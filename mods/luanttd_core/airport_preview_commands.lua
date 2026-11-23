@@ -30,7 +30,7 @@ return function(api,Network,Run,Owned,Roster)
   local function at(x,z) return x and z and Sim.id(tonumber(x),tonumber(z)) end
   local function busy(id)
     if Owned.owns_hangar(S,id) then return true end
-    for _,run in ipairs(Run.all(S)) do if id==run.first or id==run.second then return true end end
+    for _,run in ipairs(Run.all(S)) do if Run.uses_airfield(run,id) then return true end end
     return false
   end
   local function start(name,first,second)
@@ -53,7 +53,7 @@ return function(api,Network,Run,Owned,Roster)
     at=function(field)
       local records={}
       for _,p in ipairs(Run.all(S)) do
-        if p.first==field or p.second==field then records[#records+1]=p end
+        if Run.uses_airfield(p,field) then records[#records+1]=p end
       end
       return records
     end,
