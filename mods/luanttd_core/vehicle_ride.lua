@@ -1,19 +1,21 @@
 -- Seated sightseeing is presentation only; never change a worker vehicle,
--- sim time, camera yaw after boarding, or anyone else's vehicle visibility.
+-- sim time or anyone else's vehicle visibility. Camera turns are relative
+-- to the driver's own free look, with no correction on straight track.
 return function(core,api,path)
   local R={}
   local rooms,tracked,riders,settling={},{},{},{}
   local masks=setmetatable({},{__mode="k"})
   local now,roster=0,{}
   local anchor_name="luanttd_core:seated_camera"
+  local shell_name="luanttd_core:seated_exterior"
   local names={"bus_interior","train_interior","train_cab"}
   -- Standard ride interiors are authored in node units with +Z facing out
   -- the windscreen. Stock exteriors are authored nose -Z. The limited
   -- body envelope is enforced for every private variant.
   local interiors={
-    bus_interior={eye={x=-.020,y=.117,z=-.042},floor=.071},
-    train_interior={eye={x=-.091,y=.207,z=-.080},floor=.202,depth=.80},
-    train_cab={eye={x=.075,y=.228,z=-.228},floor=.247},
+    bus_interior={eye={x=-.020,y=.117,z=-.042},floor=.071,scale=.76},
+    train_interior={eye={x=-.091,y=.207,z=-.080},floor=.202,depth=.80,scale=.78},
+    train_cab={eye={x=.075,y=.228,z=-.228},floor=.247,scale=.76},
   }
   local function alive(o) return o and o:get_pos()~=nil end
   local function copy(x)
@@ -45,10 +47,11 @@ return function(core,api,path)
     else stem="bl_ride_train_cab" end
     local mesh,texture=stem..".obj",stem..".png"
     if models[mesh] and textures[texture] then
+      local d=interiors[design]
       local id="luanttd_core:ride_"..design
       register(id,{physical=false,collide_with_objects=false,pointable=false,static_save=false,
         visual="mesh",mesh=mesh,textures={texture},backface_culling=true,shaded=true,
-        visual_size={x=1,y=1,z=interiors[design].depth or 1}})
+        visual_size={x=d.scale,y=d.scale,z=(d.depth or 1)*d.scale}})
       rooms[design]=id
     end
   end
@@ -56,6 +59,8 @@ return function(core,api,path)
     register(anchor_name,{physical=false,collide_with_objects=false,pointable=false,
       -- An invisible parent also hides child meshes on native 5.10.
       -- Use a genuinely transparent sprite to keep both on one transform.
+      static_save=false,is_visible=true,visual="sprite",textures={"bl_sightseeing_hidden_player.png"}})
+    register(shell_name,{physical=false,collide_with_objects=false,pointable=false,
       static_save=false,is_visible=true,visual="sprite",textures={"bl_sightseeing_hidden_player.png"}})
   end
   function R.capable(kind,mode)
@@ -93,9 +98,16 @@ return function(core,api,path)
     for ref in pairs(state.hidden) do reveal(ref,n) end
     state.hidden={}
   end
+  local function clear_shells(state)
+    for _,shell in pairs(state.shells) do
+      if alive(shell.ref) then shell.ref:remove() end
+    end
+    state.shells={}
+  end
   local function remove_interior(state,n)
     if alive(state.interior) then state.interior:remove() end
     state.interior,state.interior_pos,state.rotation=nil,nil,nil
+    clear_shells(state)
     restore_bodies(state,n)
   end
 
@@ -148,11 +160,54 @@ return function(core,api,path)
     -- Keep the enlarged coach between the coupled exterior cars.
     -- Compress depth only; the lateral camera clipping clearance remains.
     local point=vector.rotate({x=d.eye.x,y=d.eye.y+d.floor,z=d.eye.z*(d.depth or 1)},r)
-    local floor=vector.rotate({x=0,y=d.floor,z=0},r)
+    -- Contract the room around the eye, not around the seat floor, so
+    -- it sits inside the smaller exteriors in chase view.
+    local inset=1-d.scale
+    local floor=vector.rotate({x=d.eye.x*inset,y=d.floor+d.eye.y*inset,z=d.eye.z*(d.depth or 1)*inset},r)
     local feet={x=b.pos.x+point.x,y=b.pos.y+point.y-state.eye_height,z=b.pos.z+point.z}
     return feet,r,{x=b.pos.x+floor.x,y=b.pos.y+floor.y,z=b.pos.z+floor.z}
   end
-  local function maintain(state,b,n)
+  local function mount_shells(state,wanted,feet,p,n)
+    for ref,body in pairs(wanted) do
+      local mask=masks[ref]
+      local at=body.pos or ref:get_pos()
+      local r=body.rotation or (ref.get_rotation and ref:get_rotation())
+      if mask and not (mask.original and not mask.original[n]) and at and r then
+        local shell=state.shells[ref]
+        if not shell and ref.get_properties then
+          local props=ref:get_properties()
+          if props and props.visual=="mesh" and props.mesh and props.mesh~="" then
+            local proxy=core.add_entity(at,shell_name)
+            if alive(proxy) then
+              proxy:set_observers({[n]=true})
+              local graphics={}
+              for _,k in ipairs({"visual","mesh","textures","visual_size","backface_culling","use_texture_alpha",
+                "shaded","glow","colors"}) do graphics[k]=props[k] end
+              proxy:set_properties(graphics)
+              shell={ref=proxy};state.shells[ref]=shell
+            end
+          end
+        end
+        if shell and alive(shell.ref) then
+          local offset={x=10*(at.x-feet.x),y=10*(at.y-feet.y),z=10*(at.z-feet.z)}
+          if diff(shell.offset,offset) or diff(shell.rotation,r) then
+            -- Only a non-forced child of the local player is hidden by
+            -- Luanti solely in first person. The ordinary moving exterior
+            -- and private cockpit keep their original observer rules.
+            shell.ref:set_attach(p,"",offset,{x=-degrees*r.x,y=-degrees*r.y,z=-degrees*r.z},false)
+            shell.offset,shell.rotation=offset,r
+          end
+        end
+      end
+    end
+    for ref,shell in pairs(state.shells) do
+      if not wanted[ref] then
+        if alive(shell.ref) then shell.ref:remove() end
+        state.shells[ref]=nil
+      end
+    end
+  end
+  local function maintain(state,b,n,p)
     local feet,r,origin=transform(state,b)
     if not alive(state.interior) then
       state.interior=core.add_entity(origin,rooms[state.design])
@@ -161,14 +216,14 @@ return function(core,api,path)
       state.interior_pos,state.rotation=nil,nil
     end
     if not hide(b.ref,n) then return false end
-    local wanted={[b.ref]=true}
+    local wanted={[b.ref]=b}
     local bodies=tracked[key(state.kind,state.id)]
     for _,part in pairs(bodies) do
       -- This is the selected train, not just one ObjectRef. A coupled
       -- coach can interpenetrate the private cab during a reversal.
       if live(part) then
-        wanted[part.ref]=true
-        if alive(part.auxiliary) then wanted[part.auxiliary]=true end
+        wanted[part.ref]=part
+        if alive(part.auxiliary) then wanted[part.auxiliary]={} end
       end
     end
     for ref in pairs(wanted) do if hide(ref,n) then state.hidden[ref]=true end end
@@ -176,6 +231,7 @@ return function(core,api,path)
       if not wanted[ref] then reveal(ref,n);state.hidden[ref]=nil end
     end
     if diff(state.feet,feet) then state.anchor:move_to(feet,true);state.feet=feet end
+    mount_shells(state,wanted,feet,p,n)
     -- Share the actual client scene-node transform, not just timestamps:
     -- independent ObjectRefs interpolate different arrival sequences
     -- under load. A tiny cabin can otherwise slide past its camera eye.
@@ -187,7 +243,23 @@ return function(core,api,path)
     return true
   end
 
-  local function angular_diff(a,b) return math.abs((a-b+math.pi)%(2*math.pi)-math.pi) end
+  local circle=2*math.pi
+  local function signed_angle(a,b) return (a-b+math.pi)%circle-math.pi end
+  local function angular_diff(a,b) return math.abs(signed_angle(a,b)) end
+  local function heading(r)
+    local forward=vector.rotate(axes,r)
+    return math.atan2(-forward.x,forward.z)
+  end
+  local function turn_camera(state,b,p)
+    local want=heading(orientation(b))
+    local delta=signed_angle(want,state.view_heading)
+    -- Rotate by the vehicle's delta, relative to wherever the player is
+    -- looking right now, not toward its windscreen. Quiet on straights
+    -- and rate-limited on turns so Luanti doesn't keep recentering input.
+    if math.abs(delta)<.032 or now-state.view_turn_at<.095 then return end
+    state.view_heading,state.view_turn_at=want,now
+    p:set_look_horizontal((p:get_look_horizontal()+delta)%circle)
+  end
   local function restore_view(p,state)
     -- Set wanted look before the absolute move packet, which carries
     -- camera heading as well as position on native clients.
@@ -209,21 +281,22 @@ return function(core,api,path)
     restore_view(p,state)
     if core.after and core.get_player_by_name then
       settling[n]=state
-      core.after(.15,function()
+      core.after(.23,function()
         if settling[n]~=state then return end
         settling[n]=nil
         local live=core.get_player_by_name(n)
         if live~=p or riders[n] or p:get_attach() then return end
         local pos=p:get_pos()
-        if not pos or math.abs(pos.x-state.return_pos.x)+math.abs(pos.y-state.return_pos.y)+
-            math.abs(pos.z-state.return_pos.z)>.22 then return end
+        if not pos then return end
+        local drift=math.abs(pos.x-state.return_pos.x)+math.abs(pos.y-state.return_pos.y)+math.abs(pos.z-state.return_pos.z)
+        local keys=p:get_player_control()
+        if drift>1.65 or keys.up or keys.down or keys.left or keys.right or keys.jump or keys.sneak then return end
         local yaw,pitch=p:get_look_horizontal(),p:get_look_vertical()
-        -- A recent look packet generated while still seated can arrive
-        -- after detach. Repair that value only, not later mouse input.
-        if angular_diff(yaw,last_yaw)<.08 and math.abs(pitch-last_pitch)<.08 and
-            (angular_diff(yaw,state.yaw)>.035 or math.abs(pitch-state.pitch)>.035) then
-          restore_view(p,state)
-        end
+        local aimed=angular_diff(yaw,state.yaw)<.09 and math.abs(pitch-state.pitch)<.09
+        local stale=angular_diff(yaw,last_yaw)<.08 and math.abs(pitch-last_pitch)<.08
+        -- Delayed attached-position or look input must not leave the
+        -- builder a tile away, but do not override real mouse movement.
+        if (aimed and drift>.035) or (stale and not aimed) then restore_view(p,state) end
       end)
     end
     if state.hud then p:hud_remove(state.hud) end
@@ -247,7 +320,7 @@ return function(core,api,path)
     local b,index,design=chosen(target.kind,target.id,target.body,mode)
     if not b then return false,index end
     if not b.ref.set_observers or not b.ref.get_observers then return false,"This Luanti server does not support private vehicle views." end
-    local state={kind=target.kind,id=target.id,body=index,design=design,hidden={},
+    local state={kind=target.kind,id=target.id,body=index,design=design,hidden={},shells={},
       return_pos=p:get_pos(),yaw=p:get_look_horizontal(),pitch=p:get_look_vertical(),
       eye_height=p:get_properties().eye_height or 1.625,inventory=p:get_inventory_formspec(),
       flags=p.hud_get_flags and p:hud_get_flags()}
@@ -259,7 +332,7 @@ return function(core,api,path)
       return false,"Could not create a private seat view."
     end
     state.anchor:set_observers({[n]=true})
-    if not maintain(state,b,n) then
+    if not maintain(state,b,n,p) then
       remove_interior(state,n)
       state.anchor:remove()
       return false,"Could not create the vehicle cabin."
@@ -272,7 +345,8 @@ return function(core,api,path)
     -- Keep an unrotated attachment: the cam moves along with the seat
     -- but neither a turn nor key input changes the player's look direction.
     local forward=vector.rotate(axes,r)
-    p:set_look_horizontal(math.atan2(-forward.x,forward.z))
+    state.view_heading,state.view_turn_at=heading(r),now
+    p:set_look_horizontal(state.view_heading)
     p:set_look_vertical(math.atan2(-forward.y,math.sqrt(forward.x^2+forward.z^2)))
     if api.world and api.world.follow_hud then api.world.follow_hud(p,true) end
     state.hud=p:hud_add({type="text",position={x=.5,y=.88},alignment={x=0,y=0},z_index=110,
@@ -308,7 +382,8 @@ return function(core,api,path)
         if not alive(state.anchor) or p:get_attach()~=state.anchor then R.exit(p)
         elseif live(b) then
           state.missing=nil
-          if not maintain(state,b,n) then R.exit(p,"The vehicle's seat view is no longer available.") end
+          if not maintain(state,b,n,p) then R.exit(p,"The vehicle's seat view is no longer available.")
+          else turn_camera(state,b,p) end
         else
           -- A worker/viewport hitch must not strip the private room or
           -- throw the rider out. Freeze at the last received pose, without

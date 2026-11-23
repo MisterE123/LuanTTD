@@ -203,7 +203,9 @@ local function inspect(phase,mode,q,rider,witness,id,next_)
         core.log("action","RIDE_SIDE_VIEW "..phase)
         wait_for(phase.." exact restore",function()
           if api.vehicle_ui.riding(rider) then return end
-          return math.abs((rider:get_look_horizontal()-state.yaw+math.pi)%(2*math.pi)-math.pi)<.035
+          local eye=rider:get_pos()
+          local drift=math.abs(eye.x-state.pos.x)+math.abs(eye.y-state.pos.y)+math.abs(eye.z-state.pos.z)
+          return drift<.12 and math.abs((rider:get_look_horizontal()-state.yaw+math.pi)%(2*math.pi)-math.pi)<.035
             and math.abs(rider:get_look_vertical()-state.pitch)<.035
         end,function()
           api.vehicle_ui.ride_toggle=entry

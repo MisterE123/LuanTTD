@@ -101,7 +101,20 @@ core.register_on_joinplayer(function(p)
       if f then
         local label=f:read("*l");f:close();os.remove(stage)
         if label=="initial" then arm(function() receipt(label) end)
-        elseif label=="focus-return" or label=="reopen" then receipt(label) end
+        elseif label=="focus-return" or label=="reopen" then receipt(label)
+        elseif label=="set-rejoin" then
+          core.log("action","FOCUS_NATIVE_REJOIN_MOVE")
+          live:set_look_horizontal(1.34)
+          live:set_look_vertical(.42)
+          live:set_pos({x=42.75,y=13.25,z=31.50})
+          core.after(.55,function() core.log("action","FOCUS_NATIVE_REJOIN_SET") end)
+        elseif label=="check-rejoin" then
+          assert(math.abs(pos.x-42.75)<.08 and math.abs(pos.y-13.25)<.08 and math.abs(pos.z-31.50)<.08,
+            "Reopen did not restore the position the player left")
+          assert(math.abs(live:get_look_horizontal()-1.34)<.05 and math.abs(live:get_look_vertical()-.42)<.05,
+            "Reopen did not restore the direction the player was looking")
+          core.log("action","FOCUS_NATIVE_REJOIN_PASS exact bookmarked position and view after the process restarted")
+        end
       end
       if at_return~=nil then
         local s=OwnerCheckpoint.read()

@@ -606,20 +606,41 @@ return function(api,ui)
       if not p then return false,"Join the campaign to walk." end
       return W.toggle_walk(p)
     end})
-  function W.spawn(p)
+  function W.return_view(p)
+    local state=controls[p:get_player_name()]
+    if not state then return end
+    local pos=p:get_pos()
+    if not pos then return end
+    local yaw,pitch=p:get_look_horizontal(),p:get_look_vertical()
+    -- Keep where the player was looking, but don't reload into a
+    -- vanished moving cabin or inside a tunnel while in builder mode.
+    if state.avatar or p:get_attach() then
+      local tile=Sim.id(math.floor((pos.x+.5)/2),math.floor((pos.z+.5)/2))
+      local ground=tile and display_tile(tile)
+      if ground then
+        local top=ground.h+.5
+        if api.render.uses_slope(tile) then top=api.render.surface(tile,pos.x,pos.z) end
+        if api.render.host_deck then top=math.max(top,api.render.host_deck(tile) or top) end
+        pos={x=pos.x,y=math.max(pos.y,top+.4),z=pos.z}
+      end
+    end
+    return pos,yaw,pitch
+  end
+  function W.spawn(p,bookmark)
     local n=p:get_player_name()
     controls[n]={elapsed=0,menus={"home"},sprinting=false}
     Pedestrian.hide_builder(p)
-    if api.generated_world and S.sites[1] then
+    local function place_bookmark()
+      p:set_look_horizontal(bookmark.yaw);p:set_look_vertical(bookmark.pitch)
+      p:set_pos(bookmark.pos)
+    end
+    if not bookmark and api.generated_world and S.sites[1] then
       local id=S.sites[1].tile
       local x,z=Sim.xy(id)
       p:set_pos({x=2*x+.5,y=S.tiles[id].h+15,z=2*z-7})
       p:set_look_horizontal(0);p:set_look_vertical(1.05)
-    elseif api.road_first then
-      p:set_pos({x=27.5,y=17,z=13})
-      p:set_look_horizontal(0);p:set_look_vertical(1.05)
-    else
-      p:set_pos({x=18.5,y=13,z=10})
+    elseif not bookmark then
+      p:set_pos(api.road_first and {x=27.5,y=17,z=13} or {x=18.5,y=13,z=10})
       p:set_look_horizontal(0);p:set_look_vertical(1.05)
     end
     p:set_physics_override({
@@ -629,6 +650,23 @@ return function(api,ui)
       speed_walk=walk_speed,speed_crouch=crouch_speed,
       acceleration_air=6,acceleration_default=3,
     })
+    if bookmark then
+      place_bookmark()
+      local state=controls[n]
+      -- The native client may integrate a frame before the opening
+      -- physics packet arrives. Stabilize one time, not as a respawn
+      -- loop; do not override an input or a deliberate new destination.
+      core.after(.26,function()
+        if core.get_player_by_name(n)~=p or controls[n]~=state or state.avatar or p:get_attach() then return end
+        local keys=p:get_player_control()
+        local at=p:get_pos()
+        if not at or math.abs(at.x-bookmark.pos.x)+math.abs(at.z-bookmark.pos.z)>.12 or
+            keys.up or keys.down or keys.left or keys.right or keys.jump or keys.sneak or
+            math.abs(p:get_look_horizontal()-bookmark.yaw)>.09 or
+            math.abs(p:get_look_vertical()-bookmark.pitch)>.09 then return end
+        if math.abs(at.y-bookmark.pos.y)>.01 then place_bookmark() end
+      end)
+    end
     p:hud_set_flags({hotbar=true,healthbar=false,crosshair=true,wielditem=false,breathbar=false,minimap=false,minimap_radar=false})
     local inv=p:get_inventory()
     inv:set_size("main",menu_size)

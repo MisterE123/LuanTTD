@@ -23,8 +23,10 @@ not reserve a traffic lane, interact with vehicles, or change the map.
 Use **W** to accelerate, **A/D** to choose a turn, and **S** to brake or reverse when driving.
 The car cruises at about the pace of regular road traffic and backs up
 more slowly. Its speed does not change with the simulation clock.
-Look through the car’s real window openings from behind the wheel. The
-car’s body is visible outside to other players. A drive is for sightseeing,
+Look through the car’s real window openings from behind the wheel, or
+switch to either third-person view to see the full exterior. Front and
+rear wheels follow the road grade, so the car and cockpit pitch together
+on hills. Other players see the same exterior. A drive is for sightseeing,
 not a company vehicle purchase.
 
 **Right-click** to leave sightseeing and restore the builder camera.
@@ -32,7 +34,10 @@ The previous hotbar and construction controls are restored. The
 `/walk`, `/car`, `/plane`, `/train`, and `/ride` commands are optional
 shortcuts. See [flight controls](sightseeing-flight.md) and
 [the train cab and passenger rides](seated-sightseeing.md). The builder has no
-visible body in any camera mode.
+visible body in any camera mode. Rejoining a world restores your last
+position and look direction. If you logged out inside a vehicle, you
+return to the builder view at that location, clear of the road or terrain
+where necessary, rather than reattaching to a vehicle that may have moved.
 
 `lua tests/pedestrian.lua` checks candidate landing and grade collision
 profiles. `tests/pedestrian_native.sh` exercises the real Luanti

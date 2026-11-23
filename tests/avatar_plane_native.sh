@@ -41,12 +41,13 @@ cat > "$out/client.conf" <<'CONF'
 screen_w = 1280
 screen_h = 800
 fullscreen = false
+keymap_camera_mode = KEY_F7
 enable_sound = true
 viewing_range = 128
 fps_max = 40
 enable_dynamic_shadows = false
 CONF
-export HOME="$out/home" XDG_CACHE_HOME="$out/cache" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
+export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null MESA_SHADER_CACHE_DISABLE=1
 disp=${BAYLINE_NATIVE_DISPLAY:-224}
 export DISPLAY="127.0.0.1:$disp"
@@ -78,6 +79,11 @@ for layout in country city; do
   mark "PLANE_QA $layout board"
   sleep 1
   import -window root "$out/$layout-cockpit.png"
+  xdotool key F7; sleep .55
+  import -window root "$out/$layout-third-back.png"
+  xdotool key F7; sleep .55
+  import -window root "$out/$layout-third-front.png"
+  xdotool key F7; sleep .35
   xdotool keydown w keydown space
   sleep 2.8
   xdotool keyup w keyup space

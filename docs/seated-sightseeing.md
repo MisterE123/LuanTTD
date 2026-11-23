@@ -6,13 +6,15 @@ Aim at a vehicle or select it first. **Ride** in its details, or
 If you select a locomotive with a coach, Ride uses the nearest
 passenger coach. Cab view works on freight trains too.
 
-Look around with the normal camera controls. You cannot walk in the
-vehicle or drive it. Press **E**, **right-click**, or use the command
+Look around with the normal camera controls. The view turns with the
+vehicle without pulling your gaze back to the front. You cannot walk
+in the vehicle or drive it. Press **E**, **right-click**, or use the command
 again to return to your exact builder view. On touch screens, open the
 inventory and choose **Leave ride**.
 
-Only your client sees the private interior. Everyone else still sees
-the actual moving vehicle. The feature does not change any orders,
+Only your client sees the private interior. Use Luanti’s camera key
+(**C** by default) to switch outside and see the actual bus, coach or
+locomotive model. Everyone else still sees the original moving vehicle. The feature does not change any orders,
 physics, rail reservations or transactions in the simulation. If the
 vehicle briefly falls out of view, the cabin stays at its last known
 position for up to three seconds. A returning vehicle is matched by

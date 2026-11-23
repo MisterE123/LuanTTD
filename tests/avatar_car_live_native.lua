@@ -31,7 +31,10 @@ return function(api)
       for _,o in ipairs(core.get_objects_inside_radius(v,.5)) do
         local e=o:get_luaentity()
         if e and e.name=="luanttd_core:sightseeing_car" then
-          assert(not o:get_observers()[owner],"opaque exterior is visible to the driver")
+          assert(not o:get_observers()[owner],"unattached exterior is visible to the driver")
+          core.log("action",("CAR_QA_ROTATION %.4f"):format(o:get_rotation().x))
+        elseif e and e.name=="luanttd_core:sightseeing_car_third_person" then
+          assert(o:get_observers()[owner] and o:get_attach()==p,"chase shell is not local to driver")
         end
       end
     else
@@ -51,7 +54,16 @@ return function(api)
   end
   core.register_chatcommand("carprobe",{func=function(name,tag)
     local p=assert(core.get_player_by_name(name))
-    report(p,tag)
+    if tag=="leave-spot" then
+      p:set_look_horizontal(2.1);p:set_look_vertical(.36)
+      p:set_pos({x=29.75,y=8.25,z=19.50})
+      core.after(.45,function() core.log("action","RETURN_BOOKMARK_SET") end)
+    elseif tag=="rejoined-spot" then
+      local q=p:get_pos()
+      assert(math.abs(q.x-29.75)<.08 and math.abs(q.y-8.25)<.08 and math.abs(q.z-19.50)<.08)
+      assert(math.abs(p:get_look_horizontal()-2.1)<.05 and math.abs(p:get_look_vertical()-.36)<.05)
+      core.log("action","RETURN_BOOKMARK_NATIVE_MULTIPLAYER_PASS")
+    else report(p,tag) end
     return true
   end})
   local elapsed,total,previous=0,0,nil
@@ -73,8 +85,10 @@ return function(api)
       end
     else previous=nil end
   end)
+  local joined=false
   core.register_on_joinplayer(function(p)
-    if p:get_player_name()~=owner then return end
+    if p:get_player_name()~=owner or joined then return end
+    joined=true
     core.emerge_area({x=15,y=-1,z=15},{x=37,y=5,z=36},function(_,_,left)
       if left~=0 then return end
       core.after(.3,function()

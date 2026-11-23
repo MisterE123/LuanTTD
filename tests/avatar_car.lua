@@ -8,11 +8,11 @@ local function road(x,z,bits)
   S.tiles[id(x,z)]={build="road",road_bits=bits,h=0}
 end
 road(10,8,4);road(10,9,5);road(10,10,11);road(9,10,2);road(11,10,10);road(12,10,8)
-local cmd,p,model,interior,attached,state,hint,warning,join,leave
+local cmd,p,model,interior,shell,attached,state,hint,warning,join,leave
 local registered={}
 local removed=0
 local avatar={visual="upright_sprite",textures={"player.png"},visual_size={x=1,y=1,z=1}}
-local player_yaw,lookx,lookz=0,0,1
+local player_yaw,lookx,lookz,player_pitch=0,0,1,0
 p={
   get_player_name=function() return "driver" end,
   get_pos=function() return {x=20,y=12,z=17} end,
@@ -20,7 +20,8 @@ p={
   get_attach=function()return attached end,
   get_look_horizontal=function()return player_yaw end,
   set_look_horizontal=function(_,x)player_yaw=x end,
-  set_look_vertical=function()end,get_properties=function()return avatar end,
+  get_look_vertical=function()return player_pitch end,
+  set_look_vertical=function(_,v)player_pitch=v end,get_properties=function()return avatar end,
   set_properties=function(_,change)for k,v in pairs(change) do avatar[k]=v end end,
   set_physics_override=function()end,set_eye_offset=function()end,
   set_attach=function(_,q)attached=q end,set_detach=function()attached=nil end,
@@ -37,10 +38,11 @@ core={
   chat_send_player=function(_,msg)warning=msg end,
   add_entity=function(pos,name)
     local ref={pos=pos,get_pos=function(self)return self.pos end,
-      move_to=function(self,q)self.pos=q end,set_yaw=function()end,
+      move_to=function(self,q)self.pos=q end,set_rotation=function(self,r) self.rotation=r end,
+      set_attach=function(self,who,_,offset,_,always) self.parent,self.offset,self.always=who,offset,always end,
       set_observers=function(self,a)self.observers=a end,
       remove=function(self)removed=removed+1;self.pos=nil end}
-    if name:match("_interior$") then interior=ref else model=ref end
+    if name:match("_interior$") then interior=ref elseif name:match("_third_person$") then shell=ref else model=ref end
     return ref
   end,
 }
@@ -62,6 +64,7 @@ assert(inside.mesh=="bl_sightseeing_car_interior.obj" and not inside.static_save
 assert(not C.toggle_at(p,id(1,1)) and not state)
 assert(C.toggle_at(p,target) and C.active(p) and attached==interior and avatar.visual=="sprite" and avatar.visual_size.y<.01)
 assert(not model.observers.driver and model.observers.observer and interior.observers.driver and not interior.observers.observer)
+assert(shell.observers.driver and not shell.observers.observer and shell.parent==p and shell.always==false)
 local newcomer={get_player_name=function()return "new" end}
 join(newcomer)
 assert(model.observers.new and not interior.observers.new)
@@ -76,7 +79,7 @@ tick({up=true,right=true},45)
 assert(math.abs(model.pos.x-24.5)<.001 and math.abs(model.pos.z-(20.5-.155))<.001,"D did not steer right facing +Z")
 tick({down=true},55)
 assert(model.pos.x<21.7,"reverse did not move backwards")
-assert(cmd("driver") and not C.active(p) and not attached and not state and removed==2 and avatar.visual=="upright_sprite" and avatar.textures[1]=="player.png" and avatar.visual_size.y==1)
+assert(cmd("driver") and not C.active(p) and not attached and not state and removed==3 and avatar.visual=="upright_sprite" and avatar.textures[1]=="player.png" and avatar.visual_size.y==1)
 assert(next(S.companies)==nil,"sightseeing mutated the ledger")
 
 -- Drive exactly up to but not through a closed crossing. When it opens the
@@ -112,7 +115,7 @@ for _=1,70 do tick({up=true},1)
 end
 assert(deck and land,"did not stay on bridge layer and reach linked land")
 C.leave("driver")
-assert(not model.pos and not interior.pos and not C.active(p),"disconnect leaked a street vehicle")
+assert(not model.pos and not interior.pos and not shell.pos and not C.active(p),"disconnect leaked a street vehicle")
 print("avatar car: command, movement, explicit right turn, reverse, gate, live edit, bridge layer, persistence isolation and cleanup OK")
 local before_move={tiles={},companies={}}
 local live_board={tiles={},companies={}}
@@ -151,3 +154,16 @@ tick({down=true},20)
 assert(math.abs(reverse_start-model.pos.z-1.2)<.00001 and hint:find("17 km/h",1,true))
 C.leave("driver")
 print("PASS sightseeing cruise 3.00 and reverse 1.20 nodes/s; fast-forward and auxiliary key do not boost it")
+
+rendering.surface=function(_,_,z) return .36*z end
+target=id(20,13)
+C=dofile(mod.."/avatar_car.lua")({s=S,Sim=Sim,render=rendering},W)
+assert(C.toggle_at(p,target))
+tick({up=true},8)
+local grade=math.atan(.36)
+assert(math.abs(model.rotation.x+grade)<1e-8 and model.rotation.x==interior.rotation.x)
+assert(math.abs(interior.pos.y-model.pos.y+.10*math.sin(grade))<1e-8)
+tick({down=true},20)
+assert(math.abs(model.rotation.x+grade)<1e-8,"reverse changed the slope of the chassis")
+C.leave("driver")
+print("PASS front and rear road contact pitch the full car and cabin together on grades")

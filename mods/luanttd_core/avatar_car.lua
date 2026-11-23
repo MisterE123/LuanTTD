@@ -11,9 +11,9 @@ return function(api,W)
   local Lanes=dofile(path.."/road_lanes.lua")
   local C,players={},{}
   local entity="luanttd_core:sightseeing_car"
-  local cabin=entity.."_interior"
+  local cabin,shell=entity.."_interior",entity.."_third_person"
   local function exterior_observers(q,join,leave)
-    if not q.object:get_pos() or not q.interior:get_pos() then return end
+    if not q.object:get_pos() or not q.interior:get_pos() or not q.shell:get_pos() then return end
     local keep={}
     for _,p in ipairs(core.get_connected_players()) do
       local n=p:get_player_name()
@@ -163,15 +163,37 @@ return function(api,W)
     local y=q.look
     local shiftx,shiftz=Lanes.offset(math.sin(y),math.cos(y))
     x,z=x+shiftx,z+shiftz
-    return {x=x,y=height(ground,x,z,layer),z=z}
+    local center_height=height(ground,x,z,layer)
+    local fx,fz=math.sin(y),math.cos(y)
+    -- Sample the actual front/rear contact patches of the .416-node
+    -- wheelbase. Do not sample bare terrain beside an end of road and
+    -- do not let an underlying road pull the car off a bridge deck.
+    local axle=.2075
+    local function contact(d)
+      local ax,az=x+fx*d,z+fz*d
+      local id=tile(ax,az)
+      if id and (id==ground or ordinary(id) or layer and
+          (id==layer.record.start or id==layer.record["end"] or layer.record.middle_by_tile[id])) then
+        return height(id,ax,az,layer)
+      end
+    end
+    local rear,front=contact(-axle),contact(axle)
+    rear,front=rear or center_height,front or center_height
+    return {x=x,y=(front+rear)*.5,z=z},math.atan2(front-rear,2*axle)
   end
-  local function seated(at,yaw)
+  local function seated(at,yaw,pitch)
     -- Luanti's first-person camera follows the attached object's origin,
     -- independently of its visual attachment offset. Keep the private
     -- object's origin at the driver's seat; the mesh is exported relative
     -- to this point, so doors and exterior still occupy the same world pose.
     local x,z=math.sin(yaw),math.cos(yaw)
-    return {x=at.x-.10*x-.045*z,y=at.y,z=at.z-.10*z+.045*x}
+    local depth=-.10*math.cos(pitch)
+    return {x=at.x+depth*x-.045*z,y=at.y-.10*math.sin(pitch),z=at.z+depth*z+.045*x}
+  end
+  local function mount_pose(q,pitch)
+    local rotation={x=-pitch,y=-q.look,z=0}
+    q.object:set_rotation(rotation)
+    q.interior:set_rotation(rotation)
   end
   local function status(p,q,waiting)
     local speed=math.floor(q.speed*14+.5)
@@ -183,6 +205,7 @@ return function(api,W)
     end
   end
   local function release(q,p)
+    if q.shell and q.shell:get_pos() then q.shell:remove() end
     if p and q.attached and p:get_attach()==q.interior then p:set_detach() end
     if p and q.avatar_graphics then p:set_properties(q.avatar_graphics) end
     if p and q.hud then p:hud_remove(q.hud) end
@@ -212,19 +235,21 @@ return function(api,W)
     if not state then return false,why or "Return to builder view before driving." end
     local heading=first_heading(id,p)
     local q={id=id,name=n,heading=heading,look=yaw(heading),progress=0,speed=0}
-    local at=pose(q)
+    local at,pitch=pose(q)
     q.object=core.add_entity(at,entity)
-    q.interior=q.object and core.add_entity(seated(at,q.look),cabin)
-    if not q.interior or not q.interior.set_observers or not q.object.set_observers then
+    q.interior=q.object and core.add_entity(seated(at,q.look,pitch),cabin)
+    q.shell=q.interior and core.add_entity(at,shell)
+    if not q.shell or not q.shell.set_observers or not q.interior.set_observers or not q.object.set_observers then
       release(q,p);W.end_avatar(p,"car")
       return false,"Could not create the private car cabin. Try again from a loaded road."
     end
     exterior_observers(q)
     q.interior:set_observers({[n]=true})
-    q.object:set_yaw(-q.look)
-    q.interior:set_yaw(-q.look)
+    q.shell:set_observers({[n]=true})
+    mount_pose(q,pitch)
+    q.pitch=pitch
     p:set_physics_override({gravity=0,speed=0,jump=0,sneak=false,speed_walk=0,speed_crouch=0})
-    p:set_eye_offset({x=0,y=0,z=0},{x=0,y=0,z=0},{x=0,y=0,z=0})
+    p:set_eye_offset({x=0,y=0,z=0},{x=.45,y=2.5,z=0},{x=.45,y=1.0,z=4})
     p:set_attach(q.interior,"",{x=0,y=0,z=0},{x=0,y=0,z=0},true)
     q.attached=true
     local graphics=p:get_properties()
@@ -233,7 +258,10 @@ return function(api,W)
     -- no visible pixels while mounted instead of hiding the parent/car.
     p:set_properties({eye_height=.225,visual="sprite",textures={"bl_sightseeing_hidden_player.png"},
       visual_size={x=.001,y=.001,z=.001}})
-    p:set_look_horizontal(-q.look);p:set_look_vertical(.07)
+    -- A non-forced child of the local player is hidden by Luanti only
+    -- in first person; F7 shows the full exterior without a server poll.
+    q.shell:set_attach(p,"",{x=.45,y=0,z=1},{x=0,y=0,z=0},false)
+    p:set_look_horizontal(-q.look);p:set_look_vertical(.07-pitch)
     q.hud=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},
       text="",number=0xffe3a3,z_index=105})
     players[n]=q
@@ -250,7 +278,7 @@ return function(api,W)
     if api.authority_handoff and (not S.tiles[q.id] or q.next_id and not S.tiles[q.next_id]) then
       q.speed=0;status(p,q,true);return
     end
-    if not q.object:get_pos() or not q.interior:get_pos() then
+    if not q.object:get_pos() or not q.interior:get_pos() or not q.shell:get_pos() then
       C.toggle(p)
       core.chat_send_player(name,"The car disappeared; returned to builder view.")
       return
@@ -306,19 +334,27 @@ return function(api,W)
     local delta=wrap(yaw(q.heading)-q.look)
     local change=math.max(-7*dt,math.min(7*dt,delta))
     q.look=wrap(q.look+change)
-    local at=pose(q)
+    local at,pitch=pose(q)
     q.object:move_to(at,true)
-    q.interior:move_to(seated(at,q.look),true)
-    q.object:set_yaw(-q.look)
-    q.interior:set_yaw(-q.look)
-    -- Turn the driver's view with the car while retaining mouse look offset.
+    q.interior:move_to(seated(at,q.look,pitch),true)
+    mount_pose(q,pitch)
+    -- Turn the driver's view with the chassis while retaining mouse look.
     if math.abs(change)>.0001 then p:set_look_horizontal((p:get_look_horizontal()-change)%two_pi) end
+    if math.abs(pitch-q.pitch)>.0001 then
+      local tilt=math.max(-math.pi/2,math.min(math.pi/2,p:get_look_vertical()+q.pitch-pitch))
+      p:set_look_vertical(tilt)
+    end
+    q.pitch=pitch
     status(p,q,waiting)
   end
-  core.register_entity(entity,{initial_properties={
-    physical=false,collide_with_objects=false,pointable=false,visual="mesh",
-    mesh="bl_sightseeing_car.obj",textures={"bl_sightseeing_car_palette.png"},
-    visual_size={x=1,y=1,z=1},static_save=false}})
+  local function register_exterior(id)
+    core.register_entity(id,{initial_properties={
+      physical=false,collide_with_objects=false,pointable=false,visual="mesh",
+      mesh="bl_sightseeing_car.obj",textures={"bl_sightseeing_car_palette.png"},
+      visual_size={x=1,y=1,z=1},static_save=false}})
+  end
+  register_exterior(entity)
+  register_exterior(shell)
   core.register_entity(cabin,{initial_properties={
     physical=false,collide_with_objects=false,pointable=false,visual="mesh",
     mesh="bl_sightseeing_car_interior.obj",textures={"bl_sightseeing_car_interior_atlas.png"},

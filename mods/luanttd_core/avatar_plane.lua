@@ -9,6 +9,11 @@ return function(api,W)
   local Effects=dofile(mod.."/sightseeing_plane_effects.lua")(core)
   local Plane,players={},{}
   local exterior="luanttd_core:sightseeing_plane"
+  local third_person=exterior.."_third_person"
+  -- Fit the instrument room within the original Sampson body envelope.
+  -- Scale around the pilot eye, so the first-person perspective is kept.
+  local cockpit_scale=.35
+  local seat_offset={x=0,y=.353,z=-.30}
   local cabin="luanttd_core:sightseeing_plane_cockpit"
   local art=api.airframe_art and api.airframe_art[215]
   local Sim,R=api.Sim,api.render
@@ -105,7 +110,7 @@ return function(api,W)
     local rotation={x=-f.pitch,y=Road.nose_yaw(f.heading),z=-f.bank}
     -- First-person in Luanti follows the actual attachment origin.
     -- OBJ cockpit coordinates are exported relative to this same seat.
-    local seat=vector.add(f.pos,vector.rotate({x=0,y=.430,z=-.245},rotation))
+    local seat=vector.add(f.pos,vector.rotate(seat_offset,rotation))
     for _,row in ipairs({{q.object,seat},{q.exterior,f.pos}}) do
       local object,at=row[1],row[2]
       if snap then object:set_pos(at) else object:move_to(at,true) end
@@ -119,6 +124,7 @@ return function(api,W)
       if p:get_attach()==q.object then p:set_detach() end
       for _,id in ipairs({q.status,q.hint,q.controls}) do p:hud_remove(id) end
     end
+    if q.shell and q.shell:get_pos() then q.shell:remove() end
     if q.object and q.object:get_pos() then q.object:remove() end
     if q.exterior and q.exterior:get_pos() then q.exterior:remove() end
   end
@@ -155,18 +161,22 @@ return function(api,W)
     local q={flight=f,origin=strip}
     q.object=core.add_entity(f.pos,cabin)
     q.exterior=core.add_entity(f.pos,exterior)
-    if not q.object or not q.exterior then
+    q.shell=q.exterior and core.add_entity(f.pos,third_person)
+    if not q.object or not q.exterior or not q.shell then
       release(q,p);W.end_avatar(p,"plane");return false,"Could not attach to the aircraft yet."
     end
-    -- Only the pilot sees the hollow interior. The standard opaque
-    -- external art remains unchanged for everyone else, including ATC.
+    -- Only the pilot sees the cabin. Luanti's native camera mode shows
+    -- its exterior child in chase view, without ever occluding the glass
+    -- in first person. Other observers retain the normal exterior.
     q.object:set_observers({[n]=true})
+    q.shell:set_observers({[n]=true})
     observe_exterior(n,q)
     p:set_physics_override({gravity=0,speed=0,jump=0,sneak=false,speed_walk=0,speed_crouch=0})
-    p:set_properties({eye_height=.08,visual="sprite",textures={"bl_sightseeing_hidden_player.png"},
+    p:set_properties({eye_height=.08*cockpit_scale,visual="sprite",textures={"bl_sightseeing_hidden_player.png"},
       visual_size={x=.001,y=.001,z=.001}})
-    p:set_eye_offset()
+    p:set_eye_offset({x=0,y=0,z=0},{x=0,y=8,z=0},{x=0,y=9,z=0})
     p:set_attach(q.object,"",{x=0,y=0,z=0},{x=0,y=0,z=0})
+    q.shell:set_attach(p,"",vector.multiply(seat_offset,-10),{x=0,y=0,z=0},false)
     q.status=text(p,.118,0x25281c,"")
     q.hint=text(p,.165,0x26312c,"")
     q.controls=text(p,.212,0x26312c,"W/S power · A/D bank · Space/Shift pitch · E recover · Right-click or /plane exit")
@@ -189,7 +199,7 @@ return function(api,W)
     local n=p:get_player_name()
     local q=players[n]
     if not q then return end
-    if not q.object:get_pos() or not q.exterior:get_pos() or p:get_attach()~=q.object then
+    if not q.object:get_pos() or not q.exterior:get_pos() or not q.shell:get_pos() or p:get_attach()~=q.object then
       Plane.toggle(p)
       core.chat_send_player(n,"Aircraft view lost. Returned to the builder camera.")
       return
@@ -228,12 +238,17 @@ return function(api,W)
     Effects.update(q.audio,q.flight,dt)
   end
   if art then
-    core.register_entity(exterior,{initial_properties={physical=false,pointable=false,collide_with_objects=false,
+    local function register_exterior(id)
+      core.register_entity(id,{initial_properties={physical=false,pointable=false,collide_with_objects=false,
       static_save=false,visual="mesh",mesh=art.mesh,textures={art.atlas},shaded=true,backface_culling=true,
       visual_size={x=art.scale,y=art.scale,z=art.scale}}})
+    end
+    register_exterior(exterior)
+    register_exterior(third_person)
     core.register_entity(cabin,{initial_properties={physical=false,pointable=false,collide_with_objects=false,
       static_save=false,visual="mesh",mesh="bl_sightseeing_plane_cockpit.obj",
-      textures={"bl_sightseeing_plane_cockpit_atlas.png"},shaded=false,backface_culling=false}})
+      textures={"bl_sightseeing_plane_cockpit_atlas.png"},shaded=false,backface_culling=false,
+      visual_size={x=cockpit_scale,y=cockpit_scale,z=cockpit_scale}}})
   end
   core.register_chatcommand("plane",{description="Aim at a built airport and fly a sightseeing plane; repeat to exit.",
     func=function(n)

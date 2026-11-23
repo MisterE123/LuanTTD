@@ -49,6 +49,7 @@ cat > "$out/client.conf" <<'EOF'
 screen_w = 1300
 screen_h = 860
 fullscreen = false
+keymap_camera_mode = KEY_F7
 enable_sound = false
 viewing_range = 80
 fps_max = 30
@@ -58,7 +59,7 @@ video_driver = opengl
 shadow_map_max_distance = 100
 shadow_map_texture_size = 1024
 EOF
-export HOME="$out/home" XDG_CACHE_HOME="$out/cache" XDG_CONFIG_HOME="$out/home/.config" \
+export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" XDG_CONFIG_HOME="$out/home/.config" \
   LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games" \
   LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null LP_NUM_THREADS=2
 export DISPLAY=":$disp" XAUTHORITY="$out/Xauthority"
@@ -109,8 +110,28 @@ if cmp -s "$out/car-entry.jpg" "$out/car-side.jpg"; then
   echo "Turning your head did not change the seated view." >&2
   exit 1
 fi
+xdotool key F7
+sleep .55
+import -window root -quality 92 "$out/car-third-back.jpg"
+xdotool key F7
+sleep .27
+xdotool mousemove_relative -- 0 -92
+sleep .30
+import -window root -quality 92 "$out/car-third-front.jpg"
+xdotool mousemove_relative -- 0 92
+xdotool key F7
+sleep .55
+import -window root -quality 92 "$out/car-first-again.jpg"
+xdotool key F7
+sleep .45
 xdotool keydown w
-sleep 2.3
+sleep 1.22
+xdotool mousemove_relative -- 0 73
+sleep .18
+import -window root -quality 92 "$out/car-third-slope.jpg"
+xdotool mousemove_relative -- 0 -73
+xdotool key F7; sleep .28; xdotool key F7
+sleep .77
 import -window root -quality 87 "$out/car-driving.jpg"
 sleep 3.5
 xdotool keyup w
@@ -148,3 +169,36 @@ assert max(samples)<=3.03 and min(samples)>=-1.23, samples
 print(f"Native /car: {max(samples):.2f} nodes/s cruise, {-min(samples):.2f} nodes/s reverse. "
       "Hill road driving, right-click restore, and unchanged route state passed.")
 LOG
+
+python3 - "$out" <<'CAMERAS'
+from pathlib import Path
+from PIL import Image
+import sys
+out=Path(sys.argv[1])
+for phase in ("third-back","third-front","third-slope"):
+    image=Image.open(out/f"car-{phase}.jpg").convert("RGB")
+    width,height=image.size
+    box=image.crop((width//5,height//4,width*4//5,height))
+    body=sum(r>90 and r>1.8*g and r>1.75*b for r,g,b in box.getdata())
+    assert body>190,(phase,body)
+print("CAR_NATIVE_CHASE_PASS complete painted body in front, rear and moving grade views")
+CAMERAS
+
+if [[ ${LUANTTD_NATIVE_REJOIN_CAR:-0} == 1 ]]; then
+  say "/carprobe leave-spot"
+  for _ in {1..24}; do grep -q RETURN_BOOKMARK_SET "$out/server.log" && break; sleep .25; done
+  grep -q RETURN_BOOKMARK_SET "$out/server.log"
+  kill "$client";wait "$client" || true
+  sleep .55
+  luanti --go --address 127.0.0.1 --port "$port" --config "$out/client.conf" --name CarQA --logfile "" > "$out/reconnected.log" 2>&1 &
+  client=$!;pids+=("$client")
+  win=$(timeout 25 xdotool search --sync --onlyvisible --pid "$client"|tail -1)
+  for _ in {1..120}; do
+    if [[ $(grep -c 'CarQA.*joins game' "$out/server.log") -ge 2 ]]; then break; fi
+    sleep .25
+  done
+  xdotool windowfocus --sync "$win"
+  sleep 1.8
+  say "/carprobe rejoined-spot"
+  grep RETURN_BOOKMARK_NATIVE_MULTIPLAYER_PASS "$out/server.log"
+fi

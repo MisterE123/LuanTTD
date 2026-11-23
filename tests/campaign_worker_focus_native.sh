@@ -13,7 +13,12 @@ src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
 game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp "$src/game.conf" "$game/"
-cp -R "$src/mods" "$game/"
+if cp -al "$src/mods" "$game/" 2>/dev/null; then
+  cp "$game/mods/luanttd_core/init.lua" "$out/fixture-init.lua"
+  mv "$out/fixture-init.lua" "$game/mods/luanttd_core/init.lua"
+else
+  cp -R "$src/mods/." "$game/mods/"
+fi
 mod="$game/mods/luanttd_core"
 cp tests/campaign_worker_focus_geography.lua "$mod/"
 python3 - "$mod/init.lua" <<'PY'
@@ -107,12 +112,22 @@ xdotool keydown d; sleep 1.1; xdotool keyup d
 sleep 1
 import -window root "$out/after-focus.png"
 await_log 'FOCUS_NATIVE_PAID'
+if [[ ${LUANTTD_NATIVE_REJOIN:-0} == 1 ]]; then
+  printf '%s\n' set-rejoin > "$out/world/native-focus-step"
+  await_log 'FOCUS_NATIVE_REJOIN_SET'
+fi
 kill -TERM "$client"
 wait "$client" || true
 client=
 open reopened
 printf '%s\n' reopen > "$out/world/native-focus-step"
 await_log 'FOCUS_NATIVE_RECEIPT reopen'
+if [[ ${LUANTTD_NATIVE_REJOIN:-0} == 1 ]]; then
+  sleep .6
+  printf '%s\n' check-rejoin > "$out/world/native-focus-step"
+  await_log 'FOCUS_NATIVE_REJOIN_PASS'
+  grep 'FOCUS_NATIVE_REJOIN_PASS' "$log"
+fi
 xdotool keydown d; sleep 1.1; xdotool keyup d
 sleep 1
 import -window root "$out/after-reopen.png"
@@ -133,7 +148,7 @@ arrive=re.search(r'FOCUS_NATIVE_PAID bus=(\d+) delivered=(\d+) revenue=(\d+)',a)
 bus,paid,revenue=map(int,arrive.groups())
 assert bus==focus[2] and paid>focus[3] and reopen[3]>=paid and reopen[4]>=revenue>focus[4]
 def movement(log,phase):
-    span=log.split('FOCUS_NATIVE_RECEIPT '+phase,1)[1]
+    span=log.split('FOCUS_NATIVE_RECEIPT '+phase,1)[1].split('FOCUS_NATIVE_REJOIN_MOVE',1)[0]
     pos=[(float(x),float(z)) for x,y,z in re.findall(r'FOCUS_NATIVE_POSITION (-?\d+.\d+) (-?\d+.\d+) (-?\d+.\d+)',span)]
     return max(abs(x-pos[0][0])+abs(z-pos[0][1]) for x,z in pos)
 after_focus=movement(a,'focus-return'); after_reopen=movement(b,'reopen')

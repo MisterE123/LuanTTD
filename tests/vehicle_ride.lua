@@ -13,6 +13,9 @@ local function object(pos)
   o.set_pos=o.move_to
   function o:remove() self.pos=nil end
   function o:set_rotation(r) self.rotation=clone(r) end
+  function o:get_rotation() return self.rotation or {x=0,y=0,z=0} end
+  function o:set_properties(v) self.props=clone(v) end
+  function o:get_properties() return self.props end
   function o:get_observers() return clone(self.observers) end
   function o:set_observers(users) self.observers=clone(users) end
   function o:get_attach() return self.parent end
@@ -35,7 +38,7 @@ local function player(n)
   function p:get_look_dir() return {x=0,y=0,z=1} end
   function p:get_look_horizontal() return self.yaw end
   function p:get_look_vertical() return self.pitch end
-  function p:set_look_horizontal(yaw) self.yaw=yaw end
+  function p:set_look_horizontal(yaw) self.yaw=yaw;self.look_changes=(self.look_changes or 0)+1 end
   function p:set_look_vertical(pitch) self.pitch=pitch end
   function p:get_inventory_formspec() return self.inventory end
   function p:set_inventory_formspec(body) self.inventory=body end
@@ -63,6 +66,7 @@ local R=dofile("mods/luanttd_core/vehicle_ride.lua")(core,api,"mods/luanttd_core
 local zero={x=0,y=0,z=0}
 local function equal(a,b) return math.abs(a-b)<.00001 end
 local bus=object({x=20,y=5,z=22})
+bus:set_properties({visual="mesh",mesh="real_bus.obj",textures={"own_livery.png"}})
 local function track_vehicle(ref,at,cargo,running)
   R.track("road",2,ref,at,{x=0,y=math.pi,z=0},{passenger=cargo,running=running})
 end
@@ -74,7 +78,9 @@ track_vehicle(bus,bus:get_pos(),true,false)
 assert(not R.enter(a,"ride",{kind="road",id=2}),"parked bus must not receive passenger interior")
 track_vehicle(bus,bus:get_pos(),true,true)
 assert(R.enter(a,"ride",{kind="road",id=2}))
-local camera,inside=attachments[1],attachments[2]
+local camera,inside,third=attachments[1],attachments[2],attachments[3]
+assert(third.parent==a and third.visible==false and third.props.mesh=="real_bus.obj")
+assert(third.observers.Rider and not third.observers.Other)
 assert(inside:get_attach()==camera and a:get_attach()==camera)
 assert(inside:get_observers().Rider and not inside:get_observers().Other and not inside:get_observers().Late)
 assert(bus:get_observers().Other and not bus:get_observers().Rider)
@@ -87,13 +93,25 @@ track_vehicle(bus,bus:get_pos(),true,true)
 R.step(.05,{a,b,c})
 assert(equal(camera:get_pos().x,21-.02) and equal(camera:get_pos().z,25-.042))
 assert(a:get_look_horizontal()==1.2 and a:get_look_vertical()==-.3)
+local stable=a.look_changes
+for _=1,5 do track_vehicle(bus,bus:get_pos(),true,true);R.step(.11,{a,b,c}) end
+assert(a.look_changes==stable,"a straight stretch continuously sent look corrections")
+R.track("road",2,bus,bus:get_pos(),{x=0,y=math.pi+.40,z=0},{passenger=true,running=true})
+R.step(.11,{a,b,c})
+assert(equal(a:get_look_horizontal(),1.60) and a:get_look_vertical()==-.3,
+  "a vehicle turn lost the passenger's independent look angle")
+local turning=a.look_changes
+a:set_look_horizontal(2.05)
+R.track("road",2,bus,bus:get_pos(),{x=0,y=-math.pi+.41,z=0},{passenger=true,running=true})
+R.step(.11,{a,b,c})
+assert(a.look_changes==turning+1 and equal(a:get_look_horizontal(),2.05),"tiny wraparound motion recentered the view")
 assert(R.enter(b,"ride",{kind="road",id=2}) and not bus:get_observers().Other)
 assert(R.controls(a,{aux1=true}) and not R.active(a))
 assert(bus:get_observers().Rider and not bus:get_observers().Other)
 assert(a:get_pos().x==old_pos.x and a:get_pos().y==old_pos.y and a:get_pos().z==old_pos.z)
 assert(a:get_look_horizontal()==.33 and a:get_look_vertical()==-.09)
 assert(a:get_eye_offset().z==3 and a:get_inventory_formspec()=="Original formspec" and not a.flags.crosshair)
-assert(not inside:get_pos())
+assert(not inside:get_pos() and not third:get_pos())
 assert(R.exit(b) and not bus:get_observers(),"unmanaged observers must be restored, not a stale player list")
 
 local cab,coach,collector=object({x=30,y=6,z=30}),object({x=30,y=6,z=31}),object({x=30,y=7,z=30})

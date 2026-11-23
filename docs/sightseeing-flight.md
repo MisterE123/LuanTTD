@@ -25,7 +25,7 @@ cockpit if you have switched the engine to an external camera.
 
 The private cockpit has a separate camera-origin mesh so the dash and
 physical windshield pillars are visible without obstructing the scenery.
-Fellow players see the original exterior instead. Propeller power layers
+Use Luanti’s camera key (**C** by default) to see the complete trimotor from outside. Fellow players always see the original exterior. Propeller power layers
 crossfade, wind grows with airspeed, and a gentle gear cue plays once on
 touchdown. Original procedural assets can be rebuilt using
 `tools/build_sightseeing_plane_cockpit.py` (Pillow) and

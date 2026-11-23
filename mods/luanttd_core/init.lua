@@ -549,7 +549,15 @@ core.register_globalstep(function(dt)
   if n>0 or hud_elapsed>=.23 then ui.hud();hud_elapsed=0 end
   if save_elapsed>=8 then api.save();save_elapsed=0 end
 end)
-core.register_on_shutdown(function() landscape.close();api.save() end)
+local ReturnView=dofile(mod.."/player_return.lua")(core,storage)
+local function save_return_view(p)
+  local pos,yaw,pitch=world.return_view(p)
+  if pos then ReturnView.save(p,pos,yaw,pitch) end
+end
+core.register_on_shutdown(function()
+  for _,p in ipairs(core.get_connected_players()) do save_return_view(p) end
+  landscape.close();api.save()
+end)
 local solar=dofile(mod.."/campaign_solar_clock.lua")
 local local_solar=solar.new(Sim,S,interval)
 local atmosphere=dofile(mod.."/atmosphere.lua").start(core,function()
@@ -564,7 +572,7 @@ local function open_campaign_player(p)
   local name=p:get_player_name()
   if not authority then Sim.company(S,name) end
   core.close_formspec(name,"luanttd_core:opening_worker")
-  world.spawn(p)
+  world.spawn(p,ReturnView.read(p))
   atmosphere(p)
   api.save()
   core.after(0.6,function()
@@ -660,7 +668,19 @@ core.register_on_player_receive_fields(function(p,key,f)
   return true
 end)
 if placement then core.after(0,attempt_placement) elseif worker_boot then core.after(0,start_authority) end
-core.register_on_leaveplayer(function(p) render.leave_ambient_particles(p:get_player_name());api.vehicle_ui.leave(p);ui.leave(p:get_player_name());world.leave(p:get_player_name());if authority then authority.leave(p:get_player_name()) end;if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
+core.register_on_leaveplayer(function(p)
+  -- Capture before the sightseeing UI detaches and restores its old
+  -- builder camera. Temporary placement/opening players are not saved.
+  save_return_view(p)
+  local name=p:get_player_name()
+  render.leave_ambient_particles(name)
+  api.vehicle_ui.leave(p)
+  ui.leave(name)
+  world.leave(name)
+  if authority then authority.leave(name) end
+  if api.trackworks_demo then api.trackworks_demo.leave(name) end
+  api.save()
+end)
 core.register_on_player_receive_fields(ui.fields)
 core.register_chatcommand("dispatch",{description="Open LuanTTD dispatcher",func=function(name)
   local p=core.get_player_by_name(name)

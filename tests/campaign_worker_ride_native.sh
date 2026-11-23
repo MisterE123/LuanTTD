@@ -33,7 +33,7 @@ bayline_generated_town_layout = grid2
 bayline_seed = 1751
 singleplayer_mode = false
 CONF
-printf 'screen_w = 1440\nscreen_h = 900\nenable_sound = false\n' >"$out/client.conf"
+printf 'screen_w = 1440\nscreen_h = 900\nenable_sound = false\nkeymap_camera_mode = KEY_F7\n' >"$out/client.conf"
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   t=$(realpath "$BAYLINE_NATIVE_TOOLS")
   export PATH="$t/run/bin:$t/usr/bin:$PATH" LD_LIBRARY_PATH="$t/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -72,8 +72,19 @@ for phase in bus cab coach; do
   else xdotool mousemove 794 232 click 1
   fi
   mark "RIDE_VISIBLE $phase"
-  sleep .35
-  import -window root "$out/$phase-forward.png"
+  # The tested vehicle can be a sector away from the builder camera.
+  # A sent seat update is not the same as the client's painted first frame.
+  for _ in {1..14}; do
+    sleep .26
+    import -window root "$out/$phase-forward.png"
+    mean=$(convert "$out/$phase-forward.png" -crop 920x390+260+190 -colorspace gray -format '%[fx:mean]' info:)
+    if awk -v n="$mean" 'BEGIN{exit !(n > 0.065)}'; then break; fi
+  done
+  xdotool key F7; sleep .50
+  import -window root "$out/$phase-third-back.png"
+  xdotool key F7; sleep .50
+  import -window root "$out/$phase-third-front.png"
+  xdotool key F7; sleep .35
   xdotool keydown w; xdotool mousemove_relative -- 250 15; sleep 1; xdotool keyup w
   mark "RIDE_SIDE_VIEW $phase"
   sleep .15
