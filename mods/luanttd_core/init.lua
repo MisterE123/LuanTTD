@@ -20,11 +20,8 @@ local fixture=qa.enabled
 local WorldSetup=dofile(mod.."/world_setup.lua")
 local world_options=WorldSetup.read(core,storage)
 if fresh and not fixture and not world_options and core.is_singleplayer() then
-  WorldSetup.mount(core,storage,function(cfg,progress)
-    local state=dofile(mod.."/campaign_generation.lua")(core,mod,Sim,WorldSetup).run(cfg,progress)
-    progress(87,"Saving your new world")
-    Prepared.write_state(state,function() progress(87,"Saving your new world",true) end)
-  end)
+  local prepare=dofile(mod.."/campaign_generation_async.lua")(core,mod)
+  WorldSetup.mount(core,storage,prepare)
   return
 end
 local scenario=qa.scenario or (world_options and world_options.scenario) or "generated"

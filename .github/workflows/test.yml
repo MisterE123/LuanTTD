@@ -61,6 +61,7 @@ jobs:
           bash tests/default_stock_terrain_native.sh
           python3 tests/generated_world_dimensions_native.py "$(mktemp -d)/worlds"
           bash tests/default_tram_native.sh
+          bash tests/campaign_generation_async_native.sh "$(command -v luantiserver)" "$(mktemp -d)/generation"
           bash tests/generated_oil_freight_native.sh
           bash tests/mixed_freight_live_native.sh
           python3 tests/rail_early_diesel_art.py

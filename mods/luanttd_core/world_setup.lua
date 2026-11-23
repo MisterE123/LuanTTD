@@ -266,19 +266,10 @@ function M.mount(core,storage,prepare)
       busy=true;percent=0;stage="Starting the generator"
       local n=p:get_player_name()
       progress(p)
-      local last=core.get_us_time()
-      local task=coroutine.create(function()
-        prepare(draft,function(pct,description,pulse)
-          percent=math.max(percent,pct);stage=description
-          local now=core.get_us_time()
-          if not pulse or now-last>=100000 then
-            last=now
-            coroutine.yield()
-          end
-        end)
-      end)
-      local function step()
-        local ok,why=coroutine.resume(task)
+      local settled
+      local function finish(ok,why)
+        if settled then return end
+        settled=true
         local player=core.get_player_by_name(n)
         if not ok then
           busy=false
@@ -289,16 +280,17 @@ function M.mount(core,storage,prepare)
           end
           return
         end
-        if coroutine.status(task)=="dead" then
-          percent=90;stage="Map generated and saved"
-          if player then progress(player,"Reconnecting once to load the landscape.") end
-          core.after(.65,reconnect)
-        else
-          if player then progress(player) end
-          core.after(.08,step)
-        end
+        percent=90;stage="Map generated and saved"
+        if player then progress(player,"Reconnecting once to load the landscape.") end
+        core.after(.65,reconnect)
       end
-      core.after(.14,step)
+      local queued,why=prepare(draft,function(pct,description)
+        if settled then return end
+        percent=math.max(percent,pct);stage=description
+        local player=core.get_player_by_name(n)
+        if player then progress(player) end
+      end,finish)
+      if not queued then finish(false,why) end
     elseif (fields.setup_scenario or fields.setup_width or fields.setup_depth) and not fields.quit then show(p,error_text)
     elseif fields.quit then
       local n=p:get_player_name()

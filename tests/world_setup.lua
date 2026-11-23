@@ -62,10 +62,11 @@ shell.request_shutdown=function(_,reconnect)
   reconnects=reconnects+1
 end
 local status="pending"
-M.mount(shell,store,function(_,progress)
-  progress(5,"Shaping the landscape")
-  progress(62,"Building towns")
-  status="prepared"
+M.mount(shell,store,function(_,progress,done)
+  shell.after(.1,progress,5,"Shaping the landscape")
+  shell.after(.2,progress,62,"Building towns")
+  shell.after(.3,function() status="prepared";done(true) end)
+  return true
 end)
 fields(player,M.form,{setup_generate=true})
 assert(not saved and #progress_events==1 and progress_events[1]:find("0%",1,true))
@@ -77,3 +78,29 @@ end
 assert(reconnects==1 and status=="prepared" and #progress_events==4)
 for i,pct in ipairs({0,5,62,90}) do assert(progress_events[i]:find(pct.."%",1,true)) end
 print("PASS generation starts on submit with real progress; exactly one reconnect after the campaign is prepared")
+
+-- A worker error or disk failure must not save options or leave the
+-- setup wedged. A late second callback from the first task is ignored.
+local callbacks,failures={},0
+saved=nil
+shell.log=function(level,text) assert(level=="error" and text:find("disk full",1,true));failures=failures+1 end
+shell.close_formspec=function(_,id) assert(id=="luanttd_core:generating_world") end
+M.mount(shell,store,function(_,_,done)
+  callbacks[#callbacks+1]=done
+  return true
+end)
+fields(player,M.form,{setup_generate=true})
+assert(#callbacks==1)
+callbacks[1](false,"disk full")
+assert(failures==1 and not saved and reconnects==1)
+fields(player,M.form,{setup_generate=true})
+assert(#callbacks==2)
+callbacks[1](true)
+assert(#queue==0)
+callbacks[2](true)
+callbacks[2](true)
+assert(#queue==1)
+local resume=table.remove(queue,1)
+resume[1]()
+assert(saved=="valid-json" and reconnects==2)
+print("PASS failed writes leave settings unchanged; retry succeeds and duplicate/stale completions do not reconnect")
