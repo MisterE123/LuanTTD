@@ -141,22 +141,67 @@ return function(api,Lab,Track,Run,prices)
     local plan,why=quote_pieces(owner,list,false,#list>1)
     return plan,why,list
   end
-  function R.quote_platform(owner,first,last,d)
+  local StationPlacement=dofile(upstream.."rail_station_placement.lua")
+  function R.quote_station(owner,first,last,layout)
     if R.busy() then return nil,blocked() end
+    local x,z=Sim.xy(first)
+    local u,v=Sim.xy(last)
+    local area=StationPlacement.bounds(x,z,u,v,layout)
+    local group,topics,existing={},{}
+    for row=area.z,area.z+area.h-1 do
+      for col=area.x,area.x+area.w-1 do
+        local id=Sim.id(col,row)
+        if id then group[#group+1]=id end
+      end
+    end
+    if #group~=area.w*area.h then return nil,"The station footprint is outside playable land.",group end
+    for _,id in ipairs(group) do
+      if S.tiles[id].stock_void then return nil,"The station footprint is outside playable land.",group end
+      if protected(id) then return nil,span_msg,group end
+      if signed(id) then return nil,"A platform cannot cover a signal.",group end
+      local tile=record(id)
+      if tile.kind=="station" then
+        local st=S.stock_rail_stations[tile.station]
+        if not st then return nil,"This platform has no matching station record.",group end
+        if st.owner~=owner then return nil,"Another company owns this station.",group end
+        if existing and existing.id~=st.id then return nil,"Adjoins more than one existing station.",group end
+        existing=st
+      end
+      if tile.slope~=0 or tile.overhead or tile.subsurface then return nil,"Platforms need open level ground.",group end
+      topics[#topics+1]=tile
+    end
+    local join,deny=StationPlacement.find_join(area,owner,existing,layout.separate,function(col,row)
+      local tid=Sim.id(col,row)
+      local t=tid and S.tiles[tid]
+      return t and t.rail_station_id and S.stock_rail_stations[t.rail_station_id]
+    end)
+    if deny then return nil,deny,group end
+    local combined=area
+    if join then
+      local box=Lab.station_bounds(S,join)
+      combined=StationPlacement.combined(area,box)
+      if math.max(combined.w,combined.h)>StationPlacement.spread then
+        return nil,"The joined station would exceed the station spread.",group
+      end
+      if join.coal_role or join.goods_role or join.oil_role then
+        return nil,"Clear the station's designated freight role before extending it.",group
+      end
+    end
+    local value,why=prices.station_area(topics,area.axis,area.tracks,area.length,opts(owner))
+    if value==nil then return nil,why,group end
+    return budget(owner,{kind="platform",axis=area.axis,area=area,combined=combined,join=join and join.id,ids=group,price=value})
+  end
+  function R.quote_platform(owner,first,last,d)
     local x,z=Sim.xy(first)
     local u,v=Sim.xy(last)
     if x~=u and z~=v then return nil,"A platform follows one straight axis." end
     local axis=first==last and d%2 or z==v and 0 or 1
-    local group=Sim.line(first,last)
-    if #group>7 then return nil,"Choose one to seven platform tiles." end
-    local topics={}
-    for _,id in ipairs(group) do
-      if protected(id) then return nil,span_msg end
-      if signed(id) then return nil,"A platform cannot cover a path signal." end
-      local tile=record(id)
-      if tile.slope~=0 or tile.overhead or tile.subsurface then return nil,"Platforms need open level ground." end
-      topics[#topics+1]=tile
+    if prices.station_area then
+      return R.quote_station(owner,first,last,{axis=axis,drag=true,tracks=1,length=1})
     end
+    -- Externally supplied one-platform test adapter.
+    local group,topics=Sim.line(first,last),{}
+    for _,id in ipairs(group) do topics[#topics+1]=record(id) end
     local value,why=prices.platform(topics,axis,opts(owner))
     if value==nil then return nil,why end
     return budget(owner,{kind="platform",axis=axis,ids=group,price=value})
@@ -336,7 +381,7 @@ return function(api,Lab,Track,Run,prices)
       end
       ok,note=true,plan.crossing and "Track laid, including level crossing work." or "Track pieces updated."
     elseif plan.kind=="platform" then
-      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis)
+      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis,plan.combined or plan.area,plan.join)
     elseif plan.kind=="depot" then
       ok,note=Lab.commit_depot(S,owner,plan.id,plan.direction)
     elseif plan.kind=="waypoint" or plan.kind=="waypoint_remove" then

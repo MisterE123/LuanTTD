@@ -133,6 +133,7 @@ return function(api,ui)
   local function drag_kind(tool)
     if ui.road_gesture and ui.road_gesture(tool) then return "autoroad" end
     if ui.rail_gesture and ui.rail_gesture(tool) then return "autorail" end
+    if ui.station_gesture and ui.station_gesture(tool) then return "station" end
   end
   local function cancel_drag(p,state)
     local drag=state.build_drag
@@ -421,6 +422,7 @@ return function(api,ui)
       local state=controls[n]
       local entry=state and entries(state)[p:get_wield_index()]
       if entry and entry[1]=="teleport_tile" then ui.inspect(p,tile);return end
+      if entry and ui.station_gesture and ui.station_gesture(entry[1]) then ui.open_station_layout(p);return end
       ui.context(p,tile);return
     end
     if tile then ui.build_world(p,tile)
@@ -481,10 +483,13 @@ return function(api,ui)
     local anchor=ui.anchor(p)
     if ids then shade=valid and tool~="clear" and "valid" or "invalid" end
     if api.selector then
+      local rail=world_tool and ui.rail_overlay and ui.rail_overlay(p,t)
       api.selector.show(p,t,shade)
       api.selector.show(p,anchor,"anchor")
-      api.selector.area(p,ids,t,anchor,shade)
-      if api.selector.rail and ui.rail_overlay then api.selector.rail(p,ui.rail_overlay(p,t)) end
+      -- A valid track ghost is already the placement footprint. The
+      -- staircase of square outlines obscures its continuous diagonal.
+      api.selector.area(p,not rail and ids or nil,t,anchor,shade)
+      if api.selector.rail then api.selector.rail(p,rail or nil) end
       if api.selector.signal and ui.signal_arrow then api.selector.signal(p,t,world_tool and ui.signal_arrow(p,t) or nil) end
     elseif ids then api.render.preview(n,ids,valid) end
     if H and not world_tool and not picking then

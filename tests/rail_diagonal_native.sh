@@ -19,14 +19,26 @@ cleanup() {
   wait || true
 }
 trap cleanup EXIT
-mod="$out/games/rail_art/mods/railpreview"
+preview=${BAYLINE_RAIL_PLACEMENT_PREVIEW:-0}
+name=railpreview
+if [[ $preview == 1 ]]; then name=luanttd_core; fi
+mod="$out/games/rail_art/mods/$name"
 mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD track art fixture\n' > "$out/games/rail_art/game.conf"
-printf 'name = railpreview\n' > "$mod/mod.conf"
-cp tests/rail_diagonal_native.lua "$mod/init.lua"
-cp mods/luanttd_core/{rail_diagonal.lua,openttd/rail_track.lua} "$mod/"
-cp mods/luanttd_core/models/{bl_rail_track_1.obj,bl_rail_track_4.obj,bl_rail_track_8.obj,bl_rail_eased_4_*,bl_rail_eased_8_*} "$mod/models/"
-cp mods/luanttd_core/textures/{bl_rail_atlas,bl_grass*}.png "$mod/textures/"
+printf 'name = %s\n' "$name" > "$mod/mod.conf"
+if [[ $preview == 1 ]]; then
+  cp tests/rail_preview_native.lua "$mod/init.lua"
+  cp mods/luanttd_core/{rail_diagonal.lua,rail_preview.lua,tile_selector.lua} "$mod/"
+  mkdir "$mod/openttd"
+  cp mods/luanttd_core/openttd/{rail_track.lua,autorail.lua,slope.lua} "$mod/openttd/"
+  for file in "$repo"/mods/luanttd_core/models/{bl_selector_0.obj,bl_rail_track_{1,2,4,5,8}.obj,bl_rail_eased_{4,8}_*}; do ln -s "$file" "$mod/models/"; done
+  for file in "$repo"/mods/luanttd_core/textures/bl_selector_*.png; do ln -s "$file" "$mod/textures/"; done
+else
+  cp tests/rail_diagonal_native.lua "$mod/init.lua"
+  cp mods/luanttd_core/{rail_diagonal.lua,openttd/rail_track.lua} "$mod/"
+  for file in "$repo"/mods/luanttd_core/models/{bl_rail_track_{1,4,8}.obj,bl_rail_eased_{4,8}_*}; do ln -s "$file" "$mod/models/"; done
+fi
+for file in "$repo"/mods/luanttd_core/textures/{bl_rail_atlas,bl_grass*}.png; do ln -s "$file" "$mod/textures/"; done
 printf 'gameid = rail_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

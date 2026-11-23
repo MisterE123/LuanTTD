@@ -31,6 +31,9 @@ local Cross=dofile(root.."level_crossing_runtime.lua")(Sim,CrossWorld)
 local Roster=dofile(src.."rail_roster.lua")
 local s=Sim.new(1751)
 local mode=arg and arg[1]
+local turnout=mode=="depot_turnout"
+local turnout_decisions={}
+local turnout_id
 local via_tile,via_id,via_passes,via_reloaded
 local lookahead=mode=="platform_lookahead" or mode=="platform_fallback" or mode=="platform_claim_rollback"
 local real_find,fallback_calls=Search.find,0
@@ -67,6 +70,15 @@ local function mount(new,art)
   Sim.mount_paid_rail(s,Run)
 end
 mount(true)
+if turnout then
+  local choose=Search.choose
+  Search.choose=function(board,v,origin,dest,settings,o)
+    local td,found,best,flags=choose(board,v,origin,dest,settings,o)
+    local approached=board.adjacent(origin.tile,T.exit_side(origin.td))
+    if approached==turnout_id and td then turnout_decisions[T.track(td)]=true end
+    return td,found,best,flags
+  end
+end
 local owner="Railworks"
 local company=Sim.company(s,owner)
 local function id(x,z) return Sim.id(x,z or 10) end
@@ -81,10 +93,25 @@ if use_spans then
   local quote=assert(Cross.quote(s,owner,id(20),{kind="road",pieces=5},Lab.board(s)))
   assert(Cross.commit(s,owner,quote,Lab.board(s)))
 else for x=2,24 do rail(x) end end
-assert(Lab.depot(s,owner,id(2),T.SW))
+local start_depot=id(2)
+if turnout then
+  -- Screenshot layout: a side depot above a main line with a station
+  -- in both directions. Depot -> mouth offers either curve; the
+  -- east/west main line remains a third, independent piece.
+  local RailTools=dofile(root.."rail_construction_tools.lua")
+  local construction=RailTools({Sim=Sim,s=s,terrain={tile=terrain},save=function()end,render={update=function()end}},Lab,T,nil,{
+    track=function(t,st,o)local q,why=Q.piece(t,st.track,o);return q and q.cost,why end,
+    depot=function(t,d,o)local q,why=Q.depot(t,d,o);return q and q.cost,why end})
+  start_depot,turnout_id=id(16,9),id(16)
+  local p=assert(construction.quote_depot(owner,start_depot,T.SE))
+  assert(construction.build(owner,p))
+  assert(s.tiles[turnout_id].rail_tracks==21)
+else
+  assert(Lab.depot(s,owner,start_depot,T.SW))
+end
 assert(Lab.station(s,owner,id(11),id(12)))
 assert(Lab.station(s,owner,id(22),id(24)))
-if mode~="signal_free" then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
+if mode~="signal_free" and not turnout then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
 local west,east=s.tiles[id(11)].rail_station_id,s.tiles[id(22)].rail_station_id
 s.sites[1].tile=id(10,13);s.sites[2].tile=id(24,13)
 for _,z in ipairs({7,8,12,13}) do
@@ -97,15 +124,15 @@ assert(not Owned.initialize(s,{starting_year=1950,generation_seed=s.seed,startup
 s.rail_owned_service=true
 assert(Owned.initialize(s,{starting_year=1950,generation_seed=s.seed,startup_random=9001}))
 local base=company.cash
-local coal=assert(Owned.commit(s,owner,assert(Owned.quote(s,owner,id(2),{0,29}))))
+local coal=assert(Owned.commit(s,owner,assert(Owned.quote(s,owner,start_depot,{0,29}))))
 assert(not Owned.start(s,owner,coal.id,east,west))
 if jubilee then
-  local q,why=Owned.quote(s,owner,id(2),{8,27})
+  local q,why=Owned.quote(s,owner,start_depot,{8,27})
   assert(not q and why=="JUBILEE_MODEL_NOT_AVAILABLE")
   assert(not Owned.commit(s,owner,assert(Fleet.quote(s,owner,id(2),{8,27}))))
   assert(Run.mount_owned_model(8))
 end
-local quote=assert(Owned.quote(s,owner,id(2),{engine,27}))
+local quote=assert(Owned.quote(s,owner,start_depot,{engine,27}))
 local unit=assert(Owned.commit(s,owner,quote))
 assert(unit.price==(jubilee and 22241 or 12866))
 local cash=base-coal.price-unit.price
@@ -202,7 +229,7 @@ end
 assert(run.max_track_speed==vmax and run.power==power and run.consist_mass==mass and run.acceleration==accel)
 assert(run.paid_clock and run.running_year_fp==annual)
 assert(Owned.get(s,owner,coal.id).parts[1].stock_id==0)
-assert(Owned.get(s,owner,unit.id).status=="dispatched" and Owned.occupies_depot(s,id(2)))
+assert(Owned.get(s,owner,unit.id).status=="dispatched" and Owned.occupies_depot(s,start_depot))
 assert(not Owned.start(s,owner,unit.id,east,west))
 assert(not Run.clear(s,owner) and #Run.tick(s,100)==0)
 local function clone(t)
@@ -405,9 +432,13 @@ if lookahead then
   if mode=="platform_fallback" then assert(fallback_calls>0) end
   print("PASS: reserve beyond an unsafe through platform without skipping the actual stop, take next order and repeat")
 end
-if mode=="signal_free" then
+if mode=="signal_free" or turnout then
   assert(run.ordinary_unreserved and not run.platform_lookahead and run.shuttle.reversals>=2)
   assert(not next(s.stock_rail_dispatch.signals.records))
+  if turnout then
+    assert(turnout_decisions[T.LEFT] and turnout_decisions[T.X], "the actual consist must choose a turn at depot departure and the main line during service")
+    print("PASS automatic depot attachment: live order routing selects the exit curve, then passes the turnout both ways with no signals")
+  end
   print("PASS stock default signal-free passenger shuttle reverses automatically and earns fares")
 end
 assert(had_mass and had_load_reload and had_paid_reload and Owned.running(s,owner,unit.id).future_daily_rate_fp==(jubilee and 1841 or 767))

@@ -7,6 +7,7 @@ return function(api)
   local base=source and source:match("^@(.*/)tile_selector%.lua$")
   base=base or (core.get_modpath("luanttd_core").."/")
   local slopes=api.slope or dofile(base.."openttd/slope.lua")
+  local rail_preview=api.trackworks and api.terrain and dofile(base.."rail_preview.lua")(api,base)
   local state_by_player={}
   local entity_name="luanttd_core:tile_selector"
   local rail_entity="luanttd_core:rail_selector"
@@ -26,7 +27,7 @@ return function(api)
 
   core.register_entity(rail_entity,{
     initial_properties={visual="mesh",mesh="bl_rail_track_1.obj",
-      textures={"bl_rail_atlas.png^[colorize:#78ffda:165^[opacity:180"},
+      textures={"bl_rail_atlas.png^[colorize:#53f0c8:138^[opacity:222"},
       -- Node meshes are authored in tile units; entities normally load
       -- OBJ dimensions at one tenth of that scale.
       visual_size={x=10,y=10,z=10},use_texture_alpha=true,
@@ -161,27 +162,18 @@ return function(api)
     if not pieces and not bucket.rail then return end
     local rail=bucket.rail or {};bucket.rail=rail
     local keep={}
-    if pieces and api.trackworks and api.terrain then
-      local stride=math.max(1,math.ceil(#pieces/48))
-      for i=1,#pieces,stride do
-        local record=pieces[i]
-        local id,bits=record.id,record.tracks
-        local slope,base=api.terrain.tile(id)
-        local grade,level=api.trackworks.surface(slope,base,bits)
-        if grade then
-          local x,z=Sim.xy(id)
-          local pos={x=2*x,y=level+(grade==0 and 1 or 2)+.038,z=2*z}
-          local mesh=grade==0 and ("bl_rail_track_"..bits..".obj") or ("bl_rail_grade_"..grade..".obj")
-          local p=rail[id]
-          if not p or not p.object:get_pos() then
-            local object=core.add_entity(pos,rail_entity,name)
-            if object and object:get_pos() then p={object=object,y=pos.y};rail[id]=p end
-          end
-          if p then
-            if p.mesh~=mesh then p.object:set_properties({mesh=mesh});p.mesh=mesh end
-            if p.y~=pos.y then p.object:set_pos(pos);p.y=pos.y end
-            keep[id]=true
-          end
+    if pieces and rail_preview then
+      for _,record in ipairs(rail_preview(pieces,name,player:get_pos())) do
+        local id,mesh,pos=record.id,record.mesh,record.pos
+        local p=rail[id]
+        if not p or not p.object:get_pos() then
+          local object=core.add_entity(pos,rail_entity,name)
+          if object and object:get_pos() then p={object=object,y=pos.y};rail[id]=p end
+        end
+        if p then
+          if p.mesh~=mesh then p.object:set_properties({mesh=mesh});p.mesh=mesh end
+          if p.y~=pos.y then p.object:set_pos(pos);p.y=pos.y end
+          keep[id]=true
         end
       end
     end

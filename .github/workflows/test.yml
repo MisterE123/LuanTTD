@@ -34,11 +34,12 @@ jobs:
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight rail_owned_default \
             rail_depot_fleet rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
-            road_bay_live road_terminus_town_limits rail_owned_service rail_paid_runtime rail_signal_ui rail_diagonal rail_dispatch_view ship_preview_view; do
+            road_bay_live road_terminus_town_limits rail_owned_service rail_paid_runtime rail_signal_ui rail_station_placement rail_preview rail_diagonal rail_dispatch_view ship_preview_view; do
             lua5.1 "tests/$t.lua"
           done
           lua5.1 tests/road_timber_live.lua craighead
           lua5.1 tests/rail_owned_service.lua signal_free
+          lua5.1 tests/rail_owned_service.lua depot_turnout
           python3 tests/rail_diagonal_art.py
           for ship in 206 207; do lua5.1 tests/rail_paid_runtime.lua "$ship"; done
       - name: Run native startup, feature availability and SQLite checks
@@ -54,3 +55,4 @@ jobs:
           BAYLINE_NATIVE_GOODS_ENGINE=13 BAYLINE_NATIVE_GOODS_YEAR=1976 LUANTTD_NATIVE_CRAIGHEAD=true bash tests/rail_goods_live_native.sh
           for year in 1950 1980; do LUANTTD_NATIVE_FERRY_YEAR="$year" bash tests/ship_coal_live_native.sh; done
           LUANTTD_NATIVE_SIGNAL_FREE=true bash tests/rail_owned_live_native.sh
+          LUANTTD_NATIVE_DEPOT_TURNOUT=true bash tests/rail_owned_live_native.sh

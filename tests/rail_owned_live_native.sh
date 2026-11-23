@@ -37,6 +37,7 @@ CONF
 use_market=false
 if [[ ${BAYLINE_NATIVE_SH_8P:-false} == true || ${BAYLINE_NATIVE_MANLEY:-false} == true || ${BAYLINE_NATIVE_MANLEY_COACH:-false} == true || ${BAYLINE_NATIVE_ELECTRIC:-false} == true || ${BAYLINE_NATIVE_SH_40:-false} == true ]]; then use_market=true; fi
 cat > "$out/native.conf" <<EOF_CONF
+luanttd_qa_depot_turnout = ${LUANTTD_NATIVE_DEPOT_TURNOUT:-false}
 luanttd_qa_signal_free = ${LUANTTD_NATIVE_SIGNAL_FREE:-false}
 luanttd_qa_coastal_layout = true
 bayline_offline_economy = false
@@ -74,3 +75,6 @@ if [[ ${BAYLINE_NATIVE_PLATFORM_LOOKAHEAD:-false} == true ]]; then
   grep -q OWNED_RAIL_THROUGH_NATIVE_PASS "$out/reload.log" || { cat "$out/reload.log"; exit 1; }
 fi
 echo 'PASS: native owned rail purchase, exact mesh mounting, saved loading and paid after restart'
+if [[ ${LUANTTD_NATIVE_DEPOT_TURNOUT:-false} == true ]]; then
+  grep OWNED_RAIL_DEPOT_TURNOUT_NATIVE_PASS "$out/reload.log"
+fi

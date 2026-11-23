@@ -387,6 +387,7 @@ local function pick(fields,id,a,prior)
   return prior
 end
 function U.fields(p,formname,f)
+  if formname=="luanttd_core:station_layout" then return U.station_layout_fields(p,f) end
   if U.signal_ui and formname==U.signal_ui.form then
     return U.signal_ui.fields(p,f,U.layer_bulldozer.open)
   end
@@ -1102,6 +1103,65 @@ function U.end_autorail(p,id,hit)
     R.float(n,plan.ids[#plan.ids] or id,"−"..dollars(plan.price),0xf89171)
   end
 end
+local StationPlacement=api.road_first and dofile(core.get_modpath("luanttd_core").."/openttd/rail_station_placement.lua")
+local function station_layout(V)
+  return V.station_layout or StationPlacement.default
+end
+function U.open_station_layout(p)
+  local n=p:get_player_name()
+  local V=view(n)
+  local l=station_layout(V)
+  V.station_layout_open=true
+  local numbers="1,2,3,4,5,6,7"
+  core.show_formspec(n,"luanttd_core:station_layout",
+    "formspec_version[7]size[10.4,6.1]bgcolor[#152334;false]"..
+    "label[.4,.48;Rail station builder]"..
+    "label[.4,1.12;Orientation]dropdown[.4,1.42;4.5,.62;rail_axis;East-West,North-South;"..(l.axis+1)..";true]"..
+    "label[5.17,1.12;Placement]dropdown[5.17,1.42;4.82,.62;rail_place;Drag rectangle,Fixed size;"..(l.drag and 1 or 2)..";true]"..
+    "label[.4,2.49;Number of tracks]dropdown[.4,2.81;4.5,.62;rail_count;"..numbers..";"..l.tracks..";true]"..
+    "label[5.17,2.49;Platform length]dropdown[5.17,2.81;4.82,.62;rail_length;"..numbers..";"..l.length..";true]"..
+    "label[.4,3.86;Fixed size uses the track and length settings.]"..
+    "checkbox[.4,4.27;rail_separate;Build separate from adjacent station;"..tostring(l.separate or false).."]"..
+    "button[.4,5.03;9.59,.69;rail_layout_apply;Use layout]")
+  return true
+end
+function U.station_layout_fields(p,f)
+  local n=p:get_player_name()
+  local V=view(n)
+  if not V.station_layout_open then return true end
+  if f.quit then V.station_layout_open=nil;return true end
+  if not f.rail_layout_apply then return true end
+  local ax,dm=tonumber(f.rail_axis),tonumber(f.rail_place)
+  local l=ax and (dm==1 or dm==2) and StationPlacement.layout(ax-1,dm==1,tonumber(f.rail_count),tonumber(f.rail_length),f.rail_separate=="true")
+  if not l then return true end
+  V.station_layout,V.station_layout_open=l,nil
+  core.close_formspec(n,"luanttd_core:station_layout")
+  U.status(p,l.drag and "Drag out the station footprint." or "Click the northwest tile of the station.")
+  return true
+end
+function U.station_gesture(tool) return tool=="rail_platform" and api.rail_build and api.rail_build.quote_station~=nil end
+function U.begin_station(p,id)
+  local V=view(p:get_player_name())
+  if not U.station_gesture(V.tool) or V.pick_order then return false end
+  V.anchor=id
+  return true
+end
+function U.cancel_station(p)
+  local V=view(p:get_player_name())
+  if V.anchor then V.anchor=nil;V.status="Station placement canceled." end
+end
+function U.end_station(p,id)
+  local n=p:get_player_name()
+  local V=view(n)
+  local first=V.anchor
+  V.anchor=nil
+  if not first or not U.station_gesture(V.tool) then return end
+  local plan,why=api.rail_build.quote_station(n,first,id,station_layout(V))
+  if not plan then V.status=why;return end
+  local ok,msg=api.rail_build.build(n,plan)
+  V.status=msg
+  if ok and R.float then R.float(n,first,"−"..dollars(plan.price),0xf89171) end
+end
 function U.rail_overlay(p,id)
   local V=view(p:get_player_name())
   if V.tool~="rail_autotrack" or not id or V.pick_order or
@@ -1582,6 +1642,13 @@ function U.preview(p,id,hit)
   if waypoint_tools[V.tool] then
     local plan,why=waypoint_quote(n,V.tool,id)
     return {id},plan~=nil,plan and (waypoint_tools[V.tool].."  |  "..dollars(plan.price)) or why
+  end
+  if U.station_gesture(V.tool) then
+    local plan,why,preview=api.rail_build.quote_station(n,V.anchor or id,id,station_layout(V))
+    if not plan then return preview and #preview>0 and preview or {id},false,why end
+    local area=plan.area
+    return plan.ids,true,("Rail station · %d tracks × %d tiles · %s"):format(area.tracks,area.length,dollars(plan.price))
+      .. (plan.join and (" · Joins #%d"):format(plan.join) or " · Right-click for layout")
   end
   if U.signal_ui and api.rail_build and U.signal_ui.tool(V.tool) then
     local q,hint=U.signal_ui.preview(p,V.tool,id)

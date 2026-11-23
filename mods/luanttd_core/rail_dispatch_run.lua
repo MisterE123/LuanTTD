@@ -152,10 +152,12 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
 
   local ordinary_traction={[0]=true,[1]=true}
-  -- A route with competing reachable pieces is safe only for a
-  -- controller that verifies its stock YAPF path before PBS writes.
+  -- Non-PBS trains still run the stock pathfinder at a turnout.
+  -- The quote checks the reachability of each physical segment; the
+  -- live train independently chooses from its actual approach.
   local function follows_plan(run,entry,td)
-    return entry.trackdirs==2^td or (run.paired or run.branch_pbs) and has(entry.trackdirs,td)
+    return entry.trackdirs==2^td or (run.paired or run.branch_pbs or run.ordinary_unreserved)
+      and has(entry.trackdirs,td)
   end
   local function vehicle(run,tile)
     return {tile=tile,owner=run.owner,railtype=run.engine_railtype or 0,compatible=run.traction_railtypes or ordinary_traction,
@@ -200,6 +202,34 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local dest=Costs.destination(board,v,run.order)
     local found,best=Search.find(board,v,{tile=tile,td=td},dest,settings)
     if found then return best,v end
+  end
+
+  -- OpenTTD 16.0-RC1 train_cmd.cpp ChooseTrainTrack, when no PBS
+  -- reservation is requested. Retain an existing reachable reserved
+  -- track, return a single usable track directly, otherwise ask YAPF
+  -- from the moving front's actual tile/trackdir and current order.
+  local function choose_ordinary(board,d,run,head,tile,travel,entry)
+    local reserved=d.life.bits[tile] or 0
+    local existing=Track.intersect(reserved,Track.trackbits(Track.reachable(travel)))
+    for track=0,5 do
+      if has(existing,track) then return Track.trackdir_for_entry(track,travel) end
+    end
+    local td
+    for choice=0,13 do
+      if has(entry.trackdirs,choice) and has(entry.tracks,Track.track(choice)) then
+        if td then
+          local v=vehicle(run,head.tile)
+          local dest=Costs.destination(board,v,run.order)
+          local selected,_,best=Search.choose(board,v,{tile=head.tile,td=head.pose.td},dest,settings)
+          if selected and has(entry.trackdirs,selected) and has(entry.tracks,Track.track(selected)) then
+            return selected,best
+          end
+          return nil
+        end
+        td=choice
+      end
+    end
+    return td
   end
 
   -- Validated run scope: same-axis flat corridors with no turns/merges,
@@ -468,12 +498,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     -- The implemented departure probe models two 8-unit vehicles on a
     -- FAR stop; don't admit new routing behavior outside those real poses.
     -- OpenTTD 16.0-RC1 ChooseTrainTrack and ReverseTrainDirection:
-    -- with pf.reserve_paths=false (stock default), a sole reachable
-    -- track without a PBS head does not require a forward reservation.
-    -- Mount that branch first for an isolated, unsignalled owned shuttle.
-    -- Junction choices and a network containing actual signal heads still
-    -- use the existing reservation branch.
-    if run.branch_pbs and not next(d.signals.records) then
+    -- with pf.reserve_paths=false (stock default), an unsignalled
+    -- approach chooses via YAPF without reserving ahead. Cover one
+    -- owned service for now; mixed and multi-train admission are separate.
+    if owned and not pair and (second or freight) and not is_block and #d.runs==0 and not next(d.signals.records) then
       run.ordinary_unreserved=true
       run.branch_pbs=nil
     end
@@ -1027,7 +1055,22 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       -- inside its staged callback. Conventional mode runs no PBS journal.
       local withheld
       local function choose(_,into,travel,dirs)
-        if next_ and id==into and into==next_.tile and travel==dir and has(dirs,next_.td) then return next_.td end
+        if not (next_ and id==into and into==next_.tile and travel==dir) then return end
+        if run.ordinary_unreserved then
+          local td,best=choose_ordinary(board,d,run,old,into,travel,entry)
+          if td~=next_.td then
+            -- The ordinary board cannot be edited while this service
+            -- runs. If a tied live YAPF choice differs from the checked
+            -- route, follow its actual suffix rather than force a turn.
+            local suffix=td and best and dense_route(board,vehicle(run,old.tile),best,run.span)
+            if not suffix or not same_step(suffix[1],run.route[run.index])
+                or not suffix[2] or suffix[2].tile~=into or suffix[2].td~=td then return end
+            for i=#run.route,run.index+1,-1 do run.route[i]=nil end
+            for i=2,#suffix do run.route[run.index+i-1]=suffix[i] end
+            next_=run.route[run.index+1]
+          end
+          if td and has(dirs,td) then return td end
+        elseif has(dirs,next_.td) then return next_.td end
       end
       local function try_step()
         if run.block then return block_step(base,d,run,board,entry,choose) end

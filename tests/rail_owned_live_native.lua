@@ -1,4 +1,5 @@
-local signal_free=core.settings:get_bool("luanttd_qa_signal_free",false)
+local turnout=core.settings:get_bool("luanttd_qa_depot_turnout",false)
+local signal_free=turnout or core.settings:get_bool("luanttd_qa_signal_free",false)
 -- Appended only in isolated native QA. Purchase, move, board, save,
 -- reload, turn the true steam consist and deliver from the same receipt.
 local jubilee=core.settings:get_bool("bayline_native_jubilee_probe",false)
@@ -25,6 +26,7 @@ local capacity=coach and 116 or 76
 local roles=coach and {"front","carriage","rear"} or {"front","rear"}
 local owner="Owned Rail QA"
 local function id(x,z) return Sim.id(x,z or 10) end
+local depot=turnout and id(16,9) or id(2)
 local function stamp()
   local Owned,Run=assert(api.rail_owned),assert(api.rail_dispatch_controller)
   local qa=S.rail_owned_native_qa
@@ -52,9 +54,15 @@ local function stamp()
       if tile==id(15) or tile==id(19) then evidence.ramps[tile]=true end
     end
   end
+  local choices={}
   local function day()
     Sim.daily(S)
     assert(not Run.current(S).failure,Run.current(S).failure)
+    if turnout then
+      for _,event in ipairs(Sim.rail_paid_motion_events(S)) do
+        if event.kind=="front_entered" and event.tile==id(16) then choices[event.td]=true end
+      end
+    end
     if bridge then
       for t=0,74 do api.rail_dispatch_view.step(.05,true,t/74) end
     end
@@ -165,7 +173,8 @@ local function stamp()
           delivered=delivered+e.units;part_visits[e.part]=(part_visits[e.part] or 0)+e.units
         end
       end
-      if fare>0 and (lookahead and current().shuttle.arrivals>=3 or not lookahead and current().shuttle.reversals>=2) then break end
+      if fare>0 and (lookahead and current().shuttle.arrivals>=3 or not lookahead and current().shuttle.reversals>=2)
+          and (not turnout or choices[0] and choices[8]) then break end
     end
     assert(fare>0 and S.companies[owner].revenue==fare)
     if lookahead then
@@ -185,6 +194,11 @@ local function stamp()
     local after=assert(Owned.running(S,owner,qa.unit))
     assert(after.running_expense>previous.running_expense and after.charged_running_ticks>previous.charged_running_ticks)
     assert(S.companies[owner].cash==qa.cash+fare-(S.companies[owner].expense-qa.expense))
+    if turnout then
+      assert(qa.exit_curve and choices[0] and choices[8],"The restored train must run straight across the same turnout both ways")
+      assert(current().ordinary_unreserved and not next(S.stock_rail_dispatch.signals.records))
+      core.log("action","OWNED_RAIL_DEPOT_TURNOUT_NATIVE_PASS departure curve, then reciprocal main line through the same turnout after SQLite restore")
+    end
     if branch then
       assert(current().branch_pbs and S.tiles[id(6)].rail_tracks==41)
       core.log("action","OWNED_RAIL_BRANCH_NATIVE_PASS closed loop, two through platforms and PBS junction; paid route retained")
@@ -228,7 +242,14 @@ local function stamp()
       assert(ok and cost==340 and #area==5)
     end
   end
-  assert(api.trackworks.depot(S,owner,id(2),2))
+  if turnout then
+    S.tiles[depot]={h=0,terrain="grass",variant=1}
+    local builder=assert(api.rail_build)
+    assert(builder.build(owner,assert(builder.quote_depot(owner,depot,1))))
+    assert(S.tiles[id(16)].rail_tracks==21)
+  else
+    assert(api.trackworks.depot(S,owner,depot,2))
+  end
   assert(api.trackworks.station(S,owner,id(11),id(12)))
   assert(api.trackworks.station(S,owner,id(22),id(24)))
   if not signal_free then assert(Run.place_signal(S,owner,id(10),0,4)) end
@@ -241,7 +262,7 @@ local function stamp()
       t.house,t.parcel,t.variant=true,"shop",2
     end
   end
-  assert(not Owned.quote(S,owner,id(2),{1,27}))
+  assert(not Owned.quote(S,owner,depot,{1,27}))
   if jubilee or sh or manley or electric then
     local catalog=assert(Owned.catalog(S))
     local found=false
@@ -255,7 +276,7 @@ local function stamp()
   end
   if electric then
     assert(api.electric_available(owner) and api.rail_owned.passenger_engine(engine))
-    local missing,why=Owned.quote(S,owner,id(2),{engine,27})
+    local missing,why=Owned.quote(S,owner,depot,{engine,27})
     assert(not missing and why=="INCOMPATIBLE_DEPOT_RAIL",why)
     local line={}
     for x=2,24 do if x~=20 and (not bridge or x<15 or x>19) then line[#line+1]=id(x) end end
@@ -272,9 +293,9 @@ local function stamp()
     core.show_formspec=saved
     assert(ticket and ticket:find("purchase_manley",1,true) and ticket:find("76 seats",1,true))
     assert(ticket:find("purchase_manley_coach",1,true) and ticket:find("116 seats",1,true))
-    assert(not Owned.quote(S,owner,id(2),{11,27,27}))
+    assert(not Owned.quote(S,owner,depot,{11,27,27}))
   end
-  local q=assert(Owned.quote(S,owner,id(2),manley and not coach and {engine} or {engine,27}))
+  local q=assert(Owned.quote(S,owner,depot,manley and not coach and {engine} or {engine,27}))
   local initial_cash=c.cash
   local r=assert(Owned.commit(S,owner,q))
   assert(r.price==cost and c.cash==initial_cash-r.price)
@@ -330,7 +351,7 @@ local function stamp()
         running_expense=bill.running_expense,cost_fp=bill.running_cost_fp,fraction=c.stock_money_fraction,
         charged_running_ticks=bill.charged_running_ticks,peak=peak,
         front=manley and s.carrying_parts[1].onboard,rear=manley and s.carrying_parts[physical_count].onboard,
-        coach=coach and s.carrying_parts[2].onboard}
+        coach=coach and s.carrying_parts[2].onboard,exit_curve=turnout and choices[4]}
       if bridge then
         assert(evidence.before[id(17)],"No eastbound native contact across the bridge center")
         S.rail_owned_native_qa.fits=evidence.fits

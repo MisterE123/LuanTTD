@@ -869,7 +869,7 @@ do
           if p.remove then return Q.rail_clear_price(0,o) end
           return value(Q.piece(tile,p.track,o))
         end,
-        platform=function(tiles,axis,o) return value(Q.station(tiles,axis,1,#tiles,o)) end,
+        station_area=function(tiles,axis,tracks,length,o) return value(Q.station(tiles,axis,tracks,length,o)) end,
         depot=function(tile,d,o) return value(Q.depot(tile,d,o)) end,
         signal=function(tile,d,oneway,o)
           return value(Q.signal(tile,d%2,{kind=oneway and Signal.PBS_ONEWAY or Signal.PBS},o))

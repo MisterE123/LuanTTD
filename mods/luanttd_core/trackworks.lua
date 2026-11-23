@@ -22,6 +22,15 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       return grades[surface],base+rise,kind,surface
     end
   end
+  function Lab.station_bounds(s,st)
+    if st.area then return st.area end
+    local lo_x,lo_z,hi_x,hi_z=Sim.W,Sim.H,1,1
+    for _,id in ipairs(st.tiles) do
+      local x,z=Sim.xy(id)
+      lo_x,lo_z,hi_x,hi_z=math.min(lo_x,x),math.min(lo_z,z),math.max(hi_x,x),math.max(hi_z,z)
+    end
+    return {x=lo_x,z=lo_z,w=hi_x-lo_x+1,h=hi_z-lo_z+1}
+  end
   function Lab.board(s)
     return {
       tile=function(id)
@@ -37,8 +46,10 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       xy=Sim.xy,tile_at=Sim.id,
       station_area=function(id,kind)
         local st=(kind=="waypoint" and s.stock_rail_waypoints or kind~="waypoint" and s.stock_rail_stations or {})[id]
-        if st then return {tile=st.tiles[1],w=st.axis==0 and #st.tiles or 1,
-          h=st.axis==1 and #st.tiles or 1},st.tiles[1] end
+        if st then
+          local area=Lab.station_bounds(s,st)
+          return {tile=Sim.id(area.x,area.z),w=area.w,h=area.h},st.tiles[1]
+        end
       end,
     }
   end
@@ -67,14 +78,28 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     end
     return true,group,axis
   end
-  function Lab.commit_station(s,owner,group,axis)
+  function Lab.commit_station(s,owner,group,axis,area,join)
     for _,tile in ipairs(group) do
       if Lab.span_protected(s,tile) then return false,protected end
     end
-    local id=s.next_stock_rail_station or 1
-    s.next_stock_rail_station=id+1
     s.stock_rail_stations=s.stock_rail_stations or {}
-    s.stock_rail_stations[id]={id=id,owner=owner,axis=axis,tiles=group}
+    local id=join or s.next_stock_rail_station or 1
+    local st=join and s.stock_rail_stations[join]
+    if join then
+      if not st or st.owner~=owner then return false,"Station changed; select the footprint again." end
+      local merged,seen={},{}
+      for _,set in ipairs({st.tiles,group}) do
+        for _,tile in ipairs(set) do
+          if not seen[tile] then seen[tile]=true;merged[#merged+1]=tile end
+        end
+      end
+      table.sort(merged)
+      st.tiles,st.area=merged,area
+    else
+      s.next_stock_rail_station=id+1
+      st={id=id,owner=owner,axis=axis,tiles=group,area=area}
+      s.stock_rail_stations[id]=st
+    end
     for _,tile in ipairs(group) do
       local t=s.tiles[tile]
       t.rail_station_id=id;t.rail_station_axis=axis
