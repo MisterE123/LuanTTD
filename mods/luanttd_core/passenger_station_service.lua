@@ -335,6 +335,18 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     return load
   end
 
+  -- OpenTTD 16.0-RC1 CmdModifyOrder: change the active loading flag,
+  -- without redoing BeginLoading or changing the unloading designations.
+  function S.update_load_type(v,full,no_load)
+    local l=v.load_state
+    if not l then return end
+    local function apply(a)
+      a.full,a.no_load=full,no_load
+    end
+    apply(l)
+    for _,body in ipairs(v.carrying_parts or {}) do apply(body.load_state) end
+  end
+
   -- economy.cpp LoadUnloadVehicle + UpdateLoadUnloadTicks. The latter
   -- applies the train overhang penalty to the idle/full-load retry too.
   function S.loading_delay(mode,m,total_length,platform_tiles,loading_penalty)

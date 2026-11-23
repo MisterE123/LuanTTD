@@ -161,8 +161,8 @@ return function(api)
     local n=p:get_player_name()
     V.exit(p);panels[n]=nil
   end
-  local function title(txt)
-    return "formspec_version[7]size[11,8]bgcolor[#152334;false]"..
+  local function title(txt,height)
+    return ("formspec_version[7]size[11,%g]bgcolor[#152334;false]"):format(height or 8)..
       "style_type[label;textcolor=#E5ECEA]"..
       "style_type[button;bgimg=bl_button.png;bgimg_middle=6;border=false;textcolor=#E5ECEA]"..
       "label[.45,.42;"..esc(txt).."]"
@@ -188,9 +188,10 @@ return function(api)
     local a=V.orders[kind]
     local data,why
     if a then data,why=a.read(n,id) end
-    local b=title(v.label).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
+    local cargo=data and data.cargo_rules
+    local b=title(v.label,cargo and 9).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
     if note or data and data.summary then
-      b=b.."textarea[.45,6.35;10,.63;;;"..esc(note or data.summary).."]"
+      b=b..("textarea[.45,%g;10,.63;;;%s]"):format(cargo and 7.56 or 6.35,esc(note or data.summary))
     end
     if data then
       local items,targets=data.items or {},data.targets or {}
@@ -212,13 +213,28 @@ return function(api)
       if data.can_replace then
         b=b.."button[5.55,5.78;5,.53;V_TOKEN_replace;Replace selected order]"
       else b=b.."label[5.65,5.99;Select an order or a destination first.]" end
-      prior={row=row,target=target,revision=data.revision,targets=targets,item_count=#items}
+      if cargo and items[row] and items[row].cargo then
+        local f=items[row].cargo
+        b=b.."label[.45,6.53;Cargo rules for selected order]"
+        for i,k in ipairs({"load","unload"}) do
+          local x=i==1 and .45 or 5.55
+          local rows,selected={},1
+          for j,o in ipairs(cargo[k]) do
+            rows[j]=esc(o.label)
+            if o.value==f[k] then selected=j end
+          end
+          b=b..("dropdown[%g,6.86;3.32,.53;V_TOKEN_choose_%s;%s;%d;true]"):format(x,k,table.concat(rows,","),selected)
+            ..("button[%g,6.86;1.53,.53;V_TOKEN_apply_%s;Apply]"):format(x+3.43,k)
+        end
+      end
+      prior={row=row,target=target,revision=data.revision,targets=targets,item_count=#items,cargo=cargo}
     else
       b=b.."textarea[.45,1.22;10,1.35;;;"..esc(why or "Set initial orders from the depot. No editable orders are available for this vehicle yet.").."]"
       prior={}
     end
-    if back then b=b.."button[.45,7.11;4.98,.57;V_TOKEN_depot;Depot vehicles]" end
-    b=b.."button_exit[5.55,7.11;5,.57;V_TOKEN_close;Back to world]"
+    local footer=cargo and 8.15 or 7.11
+    if back then b=b..("button[.45,%g;4.98,.57;V_TOKEN_depot;Depot vehicles]"):format(footer) end
+    b=b..("button_exit[5.55,%g;5,.57;V_TOKEN_close;Back to world]"):format(footer)
     prior.kind,prior.id,prior.back=kind,id,back
     return show(p,prior,b)
   end
@@ -260,6 +276,7 @@ return function(api)
       local event=core.explode_textlist_event(x)
       if event.index and event.index>=1 and (not limit or event.index<=limit) then q[k]=event.index end
     end
+    local previous_row=q.row
     read("row",q.rows and #q.rows or q.item_count)
     read("target",q.targets and #q.targets)
     if q.rows then
@@ -280,6 +297,15 @@ return function(api)
     end
     local a=V.orders[q.kind]
     if not a or not get(n,q.kind,q.id) then return true end
+    for _,kind in ipairs({"load","unload"}) do
+      if q.cargo and field("apply_"..kind) then
+        local choice=q.cargo[kind][tonumber(field("choose_"..kind))]
+        if not choice then return true end
+        local ok,msg=a.edit(n,q.id,q.revision,kind,q.row,choice.value)
+        if ok then api.save() end
+        return V.open(p,q.kind,q.id,q.back,q,msg or (ok and "Cargo rule updated." or "Cargo rule not changed."))
+      end
+    end
     for _,op in ipairs({"append","up","down","remove","skip","replace"}) do
       if field(op) then
         local target=q.targets and q.targets[q.target]
@@ -291,6 +317,7 @@ return function(api)
         return V.open(p,q.kind,q.id,q.back,q,msg or (ok and "Orders updated." or "That order change was not accepted."))
       end
     end
+    if q.cargo and q.row~=previous_row then return V.open(p,q.kind,q.id,q.back,q) end
     return true
   end)
   return V

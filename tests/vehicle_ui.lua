@@ -121,4 +121,23 @@ fn(p,open.key,{[field(open,"return")]=true})
 assert(returned==1)
 V.follow(p,"road",1);s.fleet[1]=nil;V.step(.2)
 assert(not V.following(p) and not p.parent)
+local Cargo=dofile("mods/luanttd_core/openttd/rail_order_cargo.lua")
+local configured
+V.orders.rail={
+  read=function()
+    return {items={{id=1,label="Rail X",cargo={load=0,unload=0}},
+      {id=2,label="Rail Y",cargo={load=configured or 0,unload=0}}},
+      targets={},cargo_rules=Cargo,revision=configured or 0}
+  end,
+  edit=function(n,id,revision,kind,row,value)
+    assert(n=="E" and id==1 and row==2 and kind=="load" and revision==0)
+    assert(value==3);configured=value;return true,"Full load any."
+  end,
+}
+assert(V.open(p,"rail",1) and open.b:find("Cargo rules for selected order",1,true))
+local before=open
+fn(p,before.key,{[field(before,"row")]="2"})
+assert(open~=before)
+fn(p,open.key,{[field(open,"choose_load")]="3",[field(open,"apply_load")]=true})
+assert(configured==3 and open.b:find("Full load any.",1,true))
 print("PASS vehicle selection and ownership, stale form rejection, six actor types, depot entry, smooth follow anchor, cleanup and exact builder restore")

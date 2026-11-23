@@ -3,6 +3,8 @@
 -- rows all use the same loading service as the original paid shuttle.
 -- Dispatch remains the only owner of movement, visits and wagon poses.
 return function(Service,key)
+  local base=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+  local CargoOrder=dofile(base.."/openttd/rail_order_cargo.lua")
   local A={}
 
   function A.gather(Rail,s)
@@ -77,6 +79,11 @@ return function(Service,key)
       local train=assert(service.vehicles[key(r.paid_clock)])
       train.stopped=r.phase=="blocked" or r.stopped or nil
       train.broken=r.breakdown or nil
+      if r.load_type_update~=nil then
+        local full,no_load=CargoOrder.load_flags(r.load_type_update)
+        Service.update_load_type(train,full,no_load)
+        r.load_type_update=nil
+      end
     end
   end
 
@@ -119,6 +126,8 @@ return function(Service,key)
         if not orders then return nil,"MISSING_PASSENGER_ORDERS" end
         local opts={platform_tiles=platform_tiles,cargo_tiles=cargo_tiles}
         if cargo_tiles then wagon_tile=cargo_tiles[1] end
+        local current=r.orders and r.orders[r.order_cursor.real+1]
+        if current and current.station==r.station then CargoOrder.arrival(current,opts) end
         if r.paired then
           if r.station==orders.second then opts.action="unload"
           elseif r.station~=orders.first then return nil,"UNORDERED_PASSENGER_PLATFORM" end

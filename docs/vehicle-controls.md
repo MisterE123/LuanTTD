@@ -11,3 +11,9 @@ The order controls cover the shipped vehicle systems, not all OpenTTD order opti
 ## Verification
 
 Linux Luanti client input confirmed selecting the bus in the 3D world, moving an order in the form while the bus was in service, following it from the depot list, and returning to the exact builder position. The common interaction tests exercise six rendered actor classes. Native Linux SQLite checks cover live passenger rail edits, a Goods train delivering after a destination change, and the Yate leaving partial loading and delivering after a restart. Road, tram, ferry, and air motion/state tests cover their own order adapters.
+
+## Passenger train cargo rules
+
+Select a station order in a passenger train's sheet. **Cargo rules for selected order** lets you set loading and unloading independently. Loading supports available cargo, full load all, full load any, or no loading. Unloading supports normal delivery, unload all, transfer, or no unloading. A passenger-only consist has one cargo type, so both full-load options wait for the same capacity. Apply each rule separately.
+
+As in OpenTTD 16.0-RC1's `CmdModifyOrder`, editing the current loading rule applies to the visit already in progress; changing the unloading rule does not reclassify packets already staged for that visit. A native Linux/SQLite test saves a train while it is waiting on Full Load, restores that visit, and releases the train by changing its loading rule. The test is available via `LUANTTD_NATIVE_ORDER_SEQUENCE=true LUANTTD_NATIVE_CARGO_ORDER_EDIT=true bash tests/rail_owned_live_native.sh`.

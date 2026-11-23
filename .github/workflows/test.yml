@@ -33,7 +33,7 @@ jobs:
           for t in sim pedestrian avatar_car world_setup workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere hotbar vehicle_ui road_live_order_edit tram_live_order_edit water_air_orders ordinary_level_crossing \
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight rail_owned_default \
-            rail_depot_fleet rail_depot_construction rail_loose_wagons rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
+            rail_depot_fleet rail_depot_construction rail_loose_wagons rail_order_cargo rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
             road_bay_live road_terminus_town_limits rail_owned_service rail_owned_multi rail_paid_runtime rail_signal_ui rail_signal_curve rail_block_signals rail_block_dispatch rail_reverse rail_collision rail_accident_rating rail_station_placement rail_preview rail_diagonal rail_body_spacing rail_dispatch_view passenger_crowd passenger_terminal_crowd ship_preview_view; do
             lua5.1 "tests/$t.lua"
           done
@@ -69,6 +69,7 @@ jobs:
           for year in 1950 1980; do LUANTTD_NATIVE_FERRY_YEAR="$year" bash tests/ship_coal_live_native.sh; done
           LUANTTD_NATIVE_COAL_ORDERS=true bash tests/ship_coal_live_native.sh
           LUANTTD_NATIVE_FREIGHT_ORDER_EDIT=true bash tests/rail_goods_live_native.sh
+          LUANTTD_NATIVE_ORDER_SEQUENCE=true LUANTTD_NATIVE_CARGO_ORDER_EDIT=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_ORDER_SEQUENCE=true LUANTTD_NATIVE_LIVE_ORDER_EDIT=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_ORDER_SEQUENCE=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_SIGNAL_FREE=true bash tests/rail_owned_live_native.sh

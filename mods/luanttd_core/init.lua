@@ -521,20 +521,26 @@ end
 local ground_orders=dofile(mod.."/road_vehicle_orders.lua")(api)
 api.vehicle_orders.road,api.vehicle_orders.tram=ground_orders.road,ground_orders.tram
 if api.rail_owned then
+  local flags=dofile(mod.."/openttd/rail_order_cargo.lua")
   api.vehicle_orders.rail={
     read=function(owner,id)
       local d,note=api.rail_owned.order_state(S,owner,id)
       if not d then return d,note end
       local labels,items={},{}
       for _,x in ipairs(d.stops or {}) do labels[x.id]=x.label end
-      for _,x in ipairs(d.orders or {}) do items[#items+1]={id=x,label=labels[x] or ("Station #"..x)} end
+      for i,x in ipairs(d.orders or {}) do
+        local f=d.cargo and d.cargo[i]
+        items[i]={id=x,label=(labels[x] or ("Station #"..x))..(f and f.summary or ""),cargo=f}
+      end
       local c=d.capabilities or {}
       return {items=items,targets=d.stops,active=d.active,revision=d.revision,can_insert=c.add,
-        can_reorder=c.move,can_remove=c.remove,can_skip=c.skip,can_replace=c.replace,summary=d.reason}
+        can_reorder=c.move,can_remove=c.remove,can_skip=c.skip,can_replace=c.replace,summary=d.reason,
+        cargo_rules=c.load and flags or nil}
     end,
     edit=function(owner,id,rev,op,i,dest)
       local verbs={append="add",up="move",down="move"}
       local val=op=="up" and i-1 or op=="down" and i+1 or dest
+      if op=="append" then i=nil end
       return api.rail_owned.edit_orders(S,owner,id,rev,verbs[op] or op,i,val)
     end,
   }

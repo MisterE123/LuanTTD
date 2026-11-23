@@ -10,6 +10,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local upstream=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local Collision=dofile(upstream.."rail_collision.lua")
   local OrderList=dofile(upstream.."rail_order_list.lua")
+  local CargoOrder=dofile(upstream.."rail_order_cargo.lua")
   local path_backoff=20 -- pathfinding_settings.ini, path_backoff_interval.
   local floor,min,max=math.floor,math.min,math.max
   local has=Track.has
@@ -1515,10 +1516,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if not orders then return end
     local editable=not (r.crashed or r.failure or r.paired or r.via or r.freight and r.freight.complete)
     local passenger=editable and not r.freight
-    local out={orders={},stops={},active=index.real+1,revision=r.order_revision or 0,
-      capabilities={add=passenger,move=passenger,remove=passenger,skip=passenger,replace=editable}}
+    local out={orders={},cargo={},stops={},active=index.real+1,revision=r.order_revision or 0,
+      capabilities={add=passenger,move=passenger,remove=passenger,skip=passenger,replace=editable,load=passenger,unload=passenger}}
     if not editable then out.reason="This specialized or inactive train cannot change its orders." end
-    for _,o in ipairs(orders) do out.orders[#out.orders+1]=o.station end
+    for i,o in ipairs(orders) do
+      out.orders[i]=o.station
+      out.cargo[i]={load=o.load_type or 0,unload=o.unload_type or 0,summary=CargoOrder.summary(o)}
+    end
     local xy=Lab.board(s).xy
     for station,t in pairs(s.stock_rail_stations or {}) do
       local role
@@ -1619,6 +1623,17 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local slot=type(row)=="number" and row%1==0 and row-1 or nil
     local loading=run.phase=="dwell"
     local selecting=not not run.selected_after_loading
+    if action=="load" or action=="unload" then
+      local o=slot and orders[slot+1]
+      if not o or not CargoOrder.change(o,action,value) then return false,"Choose a different supported cargo rule." end
+      run.orders,run.order_cursor,run.order_revision=orders,index,view.revision+1
+      -- CmdModifyOrder copies only LoadType to the current order,
+      -- including during loading. The arrival's unloading plan remains.
+      if action=="load" and slot==index.real and loading and not selecting and run.station==o.station then
+        run.load_type_update=value
+      end
+      return true,"Train cargo rule updated."
+    end
     local reroute,force,freight_slot
     if action=="add" or action=="replace" then
       local allowed
@@ -1639,7 +1654,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           if slot==index.real and loading then return false,"Wait for the train to leave this freight platform, then edit it." end
           freight_slot=slot
         end
-        orders[slot+1]=station_order(value)
+        if run.freight then orders[slot+1]=station_order(value)
+        else orders[slot+1].station=value end
         if slot==index.real then reroute=true end
       end
     elseif action=="move" then
