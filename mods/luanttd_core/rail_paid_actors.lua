@@ -88,6 +88,16 @@ return function(Service,key)
       return n
     end
     return {
+      crash=function(r)
+        local n=id(r)
+        -- Remove pending platform loading, do not pay passenger fares
+        -- for cargo destroyed in the train, and retain the stopped row
+        -- until the usual vehicle roster reconciliation.
+        local v=service.vehicles[n]
+        if v then
+          Service.crash_rail(service,n,tick,ctx,events)
+        end
+      end,
       leave=function(r)
         local n=id(r)
         local row=assert(service.vehicles[n])

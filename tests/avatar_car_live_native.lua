@@ -17,7 +17,14 @@ return function(api)
     local v=car and car:get_pos() or p:get_pos()
     local at=Sim.id(math.floor((v.x+.5)/2),math.floor((v.z+.5)/2))
     local mode=W.avatar_state(p)
+    if mode and mode.leaving then return end
     local flags=p:hud_get_flags()
+    local graphics=p:get_properties()
+    if mode and mode.mode=="car" then
+      assert(car and graphics.visual_size.y<.01 and graphics.textures[1]=="bl_sightseeing_hidden_player.png",
+        "driver billboard visible while attached")
+    else assert(graphics.visual_size.y>=.01 and graphics.textures[1]~="bl_sightseeing_hidden_player.png",
+      "car exit left player model hidden") end
     core.log("action",("CAR_QA %s %s %.3f %.3f %.3f %.4f %.4f %.3f %s %s %s"):format(
       tag,mode and mode.mode or "builder",v.x,v.y,v.z,p:get_look_horizontal(),p:get_look_vertical(),
       R.surface(at,v.x,v.z),tostring(flags.hotbar),tostring(W.menu(p)),tostring(S.topology)))

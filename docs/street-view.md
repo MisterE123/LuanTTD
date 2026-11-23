@@ -5,7 +5,8 @@ camera. If you're looking at water, a building, or the sky, the game
 looks around the target or below the camera for nearby dry land.
 
 Use **WASD** to walk, the mouse to look, Space for a short hop and
-Shift to crouch. The camera follows the terrain and ordinary graded
+Shift to crouch. Press Luanti's camera key (**C** by default) to see
+the animated street avatar from behind or in front. The camera follows the terrain and ordinary graded
 roads. Houses and shops have solid walls; the sightseeing mode does
 not reserve a traffic lane, interact with vehicles, or change the map.
 

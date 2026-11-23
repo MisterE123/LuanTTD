@@ -27,6 +27,12 @@ mv "$out/fixture-init.lua" "$game/mods/luanttd_core/init.lua"
 if [[ ${LUANTTD_NATIVE_MIXED_FLEET:-false} == true ]]; then
   cat tests/rail_owned_multi_native.lua >> "$game/mods/luanttd_core/init.lua"
   cp tests/rail_owned_multi_fixture.lua "$game/mods/luanttd_core/qa_rail_multi.lua"
+elif [[ ${LUANTTD_NATIVE_SHARED_DEPOT:-false} == true ]]; then
+  cat tests/rail_shared_depot_native.lua >> "$game/mods/luanttd_core/init.lua"
+  cp tests/rail_shared_depot_fixture.lua "$game/mods/luanttd_core/qa_rail_shared_depot.lua"
+elif [[ ${LUANTTD_NATIVE_COLLISION:-false} == true ]]; then
+  cat tests/rail_collision_native.lua >> "$game/mods/luanttd_core/init.lua"
+  cp tests/rail_collision_fixture.lua "$game/mods/luanttd_core/qa_rail_collision.lua"
 else
   cat tests/rail_owned_live_native.lua >> "$game/mods/luanttd_core/init.lua"
 fi
@@ -43,6 +49,7 @@ use_market=false
 if [[ ${BAYLINE_NATIVE_SH_8P:-false} == true || ${BAYLINE_NATIVE_MANLEY:-false} == true || ${BAYLINE_NATIVE_MANLEY_COACH:-false} == true || ${BAYLINE_NATIVE_ELECTRIC:-false} == true || ${BAYLINE_NATIVE_SH_40:-false} == true ]]; then use_market=true; fi
 cat > "$out/native.conf" <<EOF_CONF
 luanttd_qa_two_coaches = ${LUANTTD_NATIVE_TWO_COACHES:-false}
+luanttd_qa_disconnected_path_signal = ${LUANTTD_NATIVE_DISCONNECTED_PBS:-false}
 luanttd_qa_depot_turnout = ${LUANTTD_NATIVE_DEPOT_TURNOUT:-false}
 luanttd_qa_signal_free = ${LUANTTD_NATIVE_SIGNAL_FREE:-false}
 luanttd_qa_coastal_layout = true
@@ -78,6 +85,12 @@ pass_mark=OWNED_RAIL_LIVE_NATIVE_PASS
 if [[ ${LUANTTD_NATIVE_MIXED_FLEET:-false} == true ]]; then
   save_mark=MIXED_RAIL_NATIVE_SAVED_WAIT
   pass_mark=MIXED_RAIL_NATIVE_PASS
+elif [[ ${LUANTTD_NATIVE_SHARED_DEPOT:-false} == true ]]; then
+  save_mark=SHARED_DEPOT_NATIVE_SAVED_ONE_WAITING
+  pass_mark=SHARED_DEPOT_NATIVE_PASS
+elif [[ ${LUANTTD_NATIVE_COLLISION:-false} == true ]]; then
+  save_mark=COLLISION_NATIVE_SAVED_APPROACH
+  pass_mark=COLLISION_NATIVE_PASS
 fi
 grep -q "$save_mark" "$out/server.log" || { cat "$out/server.log"; exit 1; }
 timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/reload.log" 2>&1 || {
@@ -89,6 +102,10 @@ if [[ ${BAYLINE_NATIVE_PLATFORM_LOOKAHEAD:-false} == true ]]; then
 fi
 if [[ ${LUANTTD_NATIVE_MIXED_FLEET:-false} == true ]]; then
   grep MIXED_RAIL_NATIVE_PASS "$out/reload.log"
+elif [[ ${LUANTTD_NATIVE_SHARED_DEPOT:-false} == true ]]; then
+  grep SHARED_DEPOT_NATIVE_PASS "$out/reload.log"
+elif [[ ${LUANTTD_NATIVE_COLLISION:-false} == true ]]; then
+  grep COLLISION_NATIVE_PASS "$out/reload.log"
 else
   echo 'PASS: native owned rail purchase, exact mesh mounting, saved loading and paid after restart'
 fi
@@ -97,4 +114,7 @@ if [[ ${LUANTTD_NATIVE_DEPOT_TURNOUT:-false} == true ]]; then
 fi
 if [[ ${LUANTTD_NATIVE_TWO_COACHES:-false} == true ]]; then
   grep OWNED_RAIL_TWO_COACHES_NATIVE_PASS "$out/reload.log"
+fi
+if [[ ${LUANTTD_NATIVE_DISCONNECTED_PBS:-false} == true ]]; then
+  grep OWNED_RAIL_UNRELATED_PBS_NATIVE_PASS "$out/reload.log"
 fi

@@ -18,8 +18,11 @@ return function(api,Lab,Track,Run,prices)
   end
   function R.busy()
     local d=S.stock_rail_dispatch
-    return S.stock_rail_run or d and #d.runs>0 or
-      api.trackworks_demo and not api.trackworks_demo.is_clear()
+    if S.stock_rail_run or api.trackworks_demo and not api.trackworks_demo.is_clear() then return true end
+    for _,r in ipairs(d and d.runs or {}) do
+      if not r.crashed or #r.consist.parts>0 then return true end
+    end
+    return false
   end
   local function record(id)
     local t=S.tiles[id]

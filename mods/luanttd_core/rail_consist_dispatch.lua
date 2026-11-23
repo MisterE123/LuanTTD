@@ -34,9 +34,11 @@ return function(Motion,Life)
     return proxy,publish
   end
 
-  function D.register(board,state,id,consist)
+  function D.register(board,state,id,consist,waiting_in_depot)
     local parts={}
-    for i,p in ipairs(consist.parts) do parts[i]={tile=p.tile,td=p.pose.td} end
+    for i,p in ipairs(consist.parts) do
+      parts[i]={tile=p.tile,td=p.pose.td,in_depot=waiting_in_depot and p.hidden or nil}
+    end
     return Life.register(board,state,id,consist.owner,parts,
       consist.engine_railtype and consist or nil)
   end
@@ -44,7 +46,7 @@ return function(Motion,Life)
   -- The callback only grants permission; it cannot mutate the board,
   -- consist or the registry. Real signal aspect updates can use the
   -- returned ordered events only after this whole step succeeds.
-  function D.step(board,state,id,consist,head_choice,settings,allowed,arbitrate)
+  function D.step(board,state,id,consist,head_choice,settings,allowed,arbitrate,ordinary_train)
     local registered=state.trains[id]
     if not registered or registered.owner~=consist.owner or #registered.parts~=#consist.parts then
       return nil,"invalid_train"
@@ -69,11 +71,13 @@ return function(Motion,Life)
     local staged={version=state.version,trains={[id]=train},bits=bits,claims=claims}
     local events={}
     for _,t in ipairs(move.transitions) do
+      local permit=ordinary_train
       if allowed and t.front then
-        local ok,reason=allowed(board,staged,t)
+        local ok,reason,strict=allowed(board,staged,t)
         if not ok then return nil,reason or "front_held",t.index end
+        if strict then permit=false end
       end
-      local ok,result=Life.enter(board,staged,id,t.index,t.tile,t.td,settings)
+      local ok,result=Life.enter(board,staged,id,t.index,t.tile,t.td,settings,nil,permit)
       if not ok then return nil,result,t.index end
       for _,event in ipairs(result) do events[#events+1]=event end
     end

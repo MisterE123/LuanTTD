@@ -6,7 +6,9 @@
 return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch,Speed,Lab,stock_height,Reverse,Spans,Crossings,Roster,Block)
   local R={VERSION=1,SHUTTLE_DWELL_TICKS=74,engine={id=1,power=600,weight=65,speed=80,visual="diesel"},
     wagon={id=27,weight=25,length=8}}
-  local settings={forbid_90=false}
+  local settings={forbid_90=true} -- OpenTTD 16.0-RC1 pf.forbid_90_deg default.
+  local upstream=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  local Collision=dofile(upstream.."rail_collision.lua")
   local path_backoff=20 -- pathfinding_settings.ini, path_backoff_interval.
   local floor,min,max=math.floor,math.min,math.max
   local has=Track.has
@@ -59,6 +61,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
 
   local function block_occupancy(d) return function(id) return physical_train_tracks(d,id) end end
+  local function has_active_bodies(d)
+    for _,r in ipairs(d.runs) do if #r.consist.parts>0 then return true end end
+    return false
+  end
 
   -- Modes never share a dispatch save while the other policy's signal
   -- heads are present. The detached stock solver supports mixed boundaries,
@@ -112,7 +118,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       return false,"Choose a track and signal direction."
     end
     local d=state(s,owner)
-    if not d or d.owner~=owner or #d.runs>0 or s.stock_rail_run then
+    if not d or d.owner~=owner or has_active_bodies(d) or s.stock_rail_run then
       return false,"Clear the active pilot before changing dispatch signals."
     end
     local base=Lab.board(s)
@@ -135,7 +141,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local base=Lab.board(s)
     local t=base.tile(id)
     local existing=d and d.signals.records[id]
-    if not (t and existing and d.owner==owner and t.owner==owner and #d.runs==0 and not s.stock_rail_run) then
+    if not (t and existing and d.owner==owner and t.owner==owner and not has_active_bodies(d) and not s.stock_rail_run) then
       return false,"The signal is not yours or this railway is in use."
     end
     local old=Signal.view(base,d.signals).tile(id)
@@ -443,7 +449,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       return false,"Clear the active pilot before changing its signal system."
     end
     local all_path_signals=compatible_signals(Lab.board(s),d,is_block)
-    local local_signals=Block and owned and not pair and not is_block and not all_path_signals
+    local local_signals=Block and owned and not pair and not is_block
     if not all_path_signals and not local_signals then
       return false,"Remove the other dispatch signal type before starting this pilot."
     end
@@ -468,7 +474,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if not shared and #d.runs>=2 then return false,"The dispatch pilot supports two consists." end
     if shared and (s.next_paid_rail_run or 1)>=0x3FFF then return false,"No paid railway slot available." end
     for _,other in ipairs(d.runs) do
-      if (not pair and other.station==station) or other.depot==depot then
+      if not shared and ((not pair and other.station==station) or other.depot==depot) then
         return false,"Choose a different depot and destination platform for each train."
       end
     end
@@ -501,6 +507,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if owned then
       run.fleet_id,run.stock_engine,run.stock_wagon=owned.id,owned.stock_ids[1],owned.stock_ids[2]
       run.visual=stats.parts[1].visual
+      -- The mounted Manley-Morel's rear is a stock powered driving cab.
+      -- The dispatcher stores travel order while commercial cargo stays
+      -- with the same physical cab when the train backs up.
+      if owned.stock_ids[1]==11 then consist.last_can_lead=true end
       if stats.parts[1].railtype==1 then
         run.engine_railtype,run.traction_railtypes=1,stats.compatible
         if not run.traction_railtypes[dt.railtype] then return false,"The depot does not supply power to this locomotive." end
@@ -530,7 +540,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       run.ordinary_unreserved=true
       run.branch_pbs=nil
     end
-    if not run.local_signals and not run.via and run.branch_pbs and #consist.parts==2 and run.front_length==8 and run.total_length==16 then
+    if not run.via and run.branch_pbs and #consist.parts==2 and run.front_length==8 and run.total_length==16 then
       run.platform_lookahead=true
     end
     local query=board
@@ -571,7 +581,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       if not long_enough(second_leg) then return false,"Lengthen the second platform to fit the whole train." end
       local repeat_leg,_,_,repeat_reason=choose_leg(board,run,departure_probe(run,second_leg),station)
       if not repeat_leg then return false,"Return to the first platform: "..(repeat_reason or "No safe route.") end
-      if run.platform_lookahead then
+      if run.platform_lookahead and not run.local_signals then
         local forward=choose_leg(board,run,departure_probe(run,repeat_leg),second)
         for _,legs in ipairs({{route,second_leg},{second_leg,repeat_leg},{repeat_leg,forward}}) do
           local ok,why=validate_continuation(board,run,legs[1],legs[2])
@@ -605,7 +615,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       run.freight={mine=station,power=freight,cargo=cargo,visits=0,reversals=0,cycles=0,repeat_route=true}
     end
     if not is_block then
-      local ok,why=Dispatch.register(board,d.life,run.id,consist)
+      local ok,why=Dispatch.register(board,d.life,run.id,consist,run.local_signals)
       if not ok then return false,"Cannot allocate the depot: "..why end
     end
     local get_height=span_mode and base.stock_height or stock_height
@@ -792,6 +802,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local run
     for _,p in ipairs(d and d.runs or {}) do if p.fleet_id==fleet_id then run=p;break end end
     if not run or run.owner~=owner or run.fleet_id~=fleet_id then return false,"Select an active owned rail fleet unit." end
+    if run.crashed then return false,"This train has crashed." end
     if d.failure then return false,"This owned train is blocked: "..d.failure end
     if run.freight and run.freight.complete then return false,"This freight delivery is complete; the train is parked." end
     if run.paired and run.paired.complete then return false,"This passenger order is complete; the train is parked." end
@@ -919,6 +930,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     for i=2,safe_index do allowed[planned[i].tile]=Track.track(planned[i].td) end
     for _,claim in ipairs(claims) do if allowed[claim.tile]~=claim.track then return false end end
     d.life.bits,d.life.claims=staged.bits,staged.claims
+    if run.local_signals and run.platform_lookahead then run.reserved_through_station=run.station end
     return true
   end
 
@@ -967,7 +979,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       if head.tile==plan[1].tile and head.pose.td==plan[1].td and validate(signed(base,d),candidate,true) then
         route,order=plan,candidate.order
       end
-    elseif run.platform_lookahead and not safe_leg_end(signed(base,d),run,run.route) then
+    elseif run.platform_lookahead and (not run.local_signals or run.reserved_through_station==run.station)
+        and not safe_leg_end(signed(base,d),run,run.route) then
       -- A verified forward reservation may already be held beyond this
       -- arrival. Dynamic costs (including our own holds) must not divert it.
       local board=signed(base,d)
@@ -988,6 +1001,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local head=run.consist.parts[1].pose
     run.direction=head.direction
     run.station=station;run.order=order;run.route=route;run.index=1
+    run.reserved_through_station=nil
     run.speed=0;run.subspeed=0;run.progress=0;run.wait_counter=0;run.stuck=false
     run.slowing=false;run.phase="turnaround";orders.dwell_until=nil
     local height=run.span and base.stock_height or stock_height
@@ -1034,6 +1048,66 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return {events=events,reveals=move.reveals}
   end
 
+  local function check_collision(base,d,run,events,paid)
+    if not run.local_signals or #d.runs<2 then return false end
+    local function physical(r,p)
+      local t=base.tile(p.tile)
+      local z=p.z
+      if z==nil then
+        local height=base.stock_height or stock_height
+        z=height and height(p.tile,p.pose.x%16,p.pose.y%16) or 0
+      end
+      return {kind="train",owner=r.owner,consist=r.id,tile=p.tile,
+        x=p.pose.x,y=p.pose.y,z=z,length=p.length,wormhole=p.wormhole,
+        depot=p.hidden and not p.wormhole and t and t.kind=="depot"}
+    end
+    local function enumerate(matches)
+      local out={}
+      for _,other in ipairs(d.runs) do
+        if other~=run then
+          for _,part in ipairs(other.consist.parts) do
+            if matches(part) then out[#out+1]=physical(other,part) end
+          end
+        end
+      end
+      return out
+    end
+    local head=physical(run,run.consist.parts[1])
+    local world={
+      near=function(x,y,r)
+        return enumerate(function(p) return math.abs(p.pose.x-x)<=r and math.abs(p.pose.y-y)<=r end)
+      end,
+      on_tile=function(tile) return enumerate(function(p) return p.tile==tile end) end,
+      other_end=function(tile) return base.tile(tile).other end,
+    }
+    local function crash(first,second)
+      local victims=0
+      for _,id in ipairs({first,second}) do
+        local hit=d.runs[id]
+        if not hit.crashed then
+          local passengers=not hit.freight and paid and paid.cargo_count and paid.cargo_count(hit) or
+            (not hit.freight and hit.passengers_onboard or 0)
+          victims=victims+2+(passengers or 0)
+          hit.crashed,hit.phase,hit.crash_age,hit.speed,hit.subspeed,hit.progress,hit.stopped=
+            true,"crashed",1,0,0,0,true
+          if paid and paid.crash then paid.crash(hit) end
+        end
+        -- The stock collision handles two crashes in order and tries
+        -- to re-reserve under both even if one was already a wreck.
+        for _,x in ipairs(Life.crash(base,d.life,id)) do
+          local t=signed(base,d).tile(x.tile)
+          for _,td in ipairs({x.track,x.track+8}) do
+            if Signal.pbs_along(t,td) then Signal.set_aspect(base,d.signals,x.tile,td,false) end
+          end
+        end
+      end
+      return victims
+    end
+    local hit,victims=Collision.scan(head,world,crash)
+    if hit then emit(d,run,events,"rail_collision",{tile=head.tile,victims=victims}) end
+    return hit
+  end
+
   local function pass(s,base,d,run,events,mode,paid)
     local head=run.consist.parts[1]
     if run.phase=="depot" then
@@ -1050,8 +1124,16 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           halt(d,run,events,"Unsupported block at the depot mouth.");return
         end
         if segment==Block.FULL then return end
+        local depot_owner=run.local_signals and Life.claim_owner(d.life,head.tile,Track.track(head.pose.td))
+        if depot_owner and depot_owner~=run.id then return end
         if segment==Block.PBS and not acquire(base,d,run,id,dir,entry,next_.td) then return end
       elseif not run.ordinary_unreserved and not acquire(base,d,run,id,dir,entry,next_.td) then return end
+      if run.local_signals then
+        local registered=d.life.trains[run.id]
+        if registered and registered.parts[1].in_depot then
+          assert(Life.release_depot_front(base,d.life,run.id))
+        end
+      end
       assert(ConsistMotion.release_front(run.consist))
       if run.block or run.local_signals then
         -- CheckTrainStayInDepot updates again with the now exposed engine.
@@ -1139,10 +1221,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           local gate=Signal.entry_wait(board.tile(t.tile),entry,track,run,
             {pbs_segment=not run.ordinary_unreserved and (not run.local_signals or pbs_entry),execute_reverse=false})
           if gate~="enter" then withheld=t;return false,gate=="reverse" and "unsupported_reverse" or "red_signal" end
-          return true
+          return true,nil,pbs_entry
         end,Crossings and function(transitions,commit)
           return Crossings.train_move(s,base,transitions,run.owner,commit)
-        end)
+        end,run.local_signals)
       end
       local r,why,at=try_step()
       if why=="red_block_signal" then withheld=at end
@@ -1231,6 +1313,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         local z=stock_height(new.tile,new.pose.x%16,new.pose.y%16)
         Speed.after_grade(run,run.z,z);run.z=z
       end
+      if check_collision(base,d,run,events,paid) then return "crashed" end
       if stop=="arrived" then
         Speed.begin_loading(run,run.station)
         run.phase="arrived"
@@ -1256,7 +1339,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
               cargo_tiles,visible={},true
               local first=run.passenger_coaches and 2 or 1
               for i=first,#run.consist.parts do
-                local part=run.consist.parts[i]
+                local n=run.stock_engine==11 and run.consist.driving_backwards and #run.consist.parts-i+1 or i
+                local part=run.consist.parts[n]
                 cargo_tiles[#cargo_tiles+1]=part.tile
                 if part.hidden then visible=false end
               end
@@ -1374,7 +1458,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if d.topology~=s.topology then
       local board=signed(base,d)
       for _,run in ipairs(d.runs) do
-        if not validate(board,run,(run.shuttle or run.freight or run.paired) and run.route[1].tile~=run.depot) or
+        if not run.crashed and not validate(board,run,(run.shuttle or run.freight or run.paired) and run.route[1].tile~=run.depot) or
             (is_block and (not block_route(board,run,d) or not compatible_signals(base,d,true))) or
             (not is_block and not Life.valid_state(board,d.life)) then
           halt(d,run,events,"The dispatch railway changed.")
@@ -1392,8 +1476,24 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       -- Each vehicle's Train::Tick runs false then true before the next
       -- vehicle in stock pool order. Our two IDs are in creation order.
       for _,run in ipairs(d.runs) do
-        stock_owned_tick(run,paid)
-        if run.fleet_id and run.stopped and run.speed==0 then
+        if not run.crashed then stock_owned_tick(run,paid) end
+        if run.crashed then
+          run.crash_age=run.crash_age+1
+          if run.crash_age>=4440 and d.ticks%32==0 and #run.consist.parts>0 then
+            local tail=assert(Life.remove_wreck_tail(base,d.life,run.id))
+            table.remove(run.consist.parts)
+            local t=base.tile(tail.tile)
+            if Block and t then
+              local with_claims=Life.view(base,d.life)
+              if t.kind=="depot" or portal(t) then
+                Block.update_segment(with_claims,d.signals,run.owner,block_occupancy(d),tail.tile,Block.INVALID_SIDE)
+              else
+                Block.update_track(with_claims,d.signals,run.owner,block_occupancy(d),tail.tile,Track.track(tail.td))
+              end
+            end
+            emit(d,run,events,"wreck_body_removed",{tile=tail.tile})
+          end
+        elseif run.fleet_id and run.stopped and run.speed==0 then
           -- The real stock handler returns here. Do not leave a depot
           -- or station, move a stopped wagon, or discard path holdings.
         elseif run.phase=="dwell" then

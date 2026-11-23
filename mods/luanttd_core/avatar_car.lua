@@ -153,6 +153,7 @@ return function(api,W)
   end
   local function release(q,p)
     if p and q.attached and p:get_attach()==q.object then p:set_detach() end
+    if p and q.avatar_graphics then p:set_properties(q.avatar_graphics) end
     if p and q.hud then p:hud_remove(q.hud) end
     if q.object then q.object:remove() end
   end
@@ -183,7 +184,12 @@ return function(api,W)
     p:set_physics_override({gravity=0,speed=0,jump=0,sneak=false,speed_walk=0,speed_crouch=0})
     p:set_attach(q.object,"",{x=0,y=0,z=0},{x=0,y=0,z=0})
     q.attached=true
-    p:set_properties({eye_height=.43})
+    local graphics=p:get_properties()
+    q.avatar_graphics={visual=graphics.visual,textures=graphics.textures,visual_size=graphics.visual_size}
+    -- PlayerSAO keeps its own visual enabled for camera/attachment. Give it
+    -- no visible pixels while mounted instead of hiding the parent/car.
+    p:set_properties({eye_height=.43,visual="sprite",textures={"bl_sightseeing_hidden_player.png"},
+      visual_size={x=.001,y=.001,z=.001}})
     p:set_look_horizontal(-q.look);p:set_look_vertical(.12)
     q.hud=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},
       text="",number=0xffe3a3,z_index=105})
@@ -260,7 +266,7 @@ return function(api,W)
   core.register_entity(entity,{initial_properties={
     physical=false,collide_with_objects=false,pointable=false,visual="mesh",
     mesh="bl_sightseeing_car.obj",textures={"bl_sightseeing_car_palette.png"},
-    visual_size={x=1,y=1,z=1},static_save=false},static_save=false})
+    visual_size={x=1,y=1,z=1},static_save=false}})
   core.register_chatcommand("car",{description="Drive a sightseeing car on the roads; use again to return to building.",
     func=function(name)
       local p=core.get_player_by_name(name)

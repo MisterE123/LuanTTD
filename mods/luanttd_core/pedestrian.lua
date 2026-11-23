@@ -1,7 +1,11 @@
 -- Street-level camera uses Luanti's local walking and collision prediction.
 -- Authoritative simulation remains separate: pedestrians don't buy/build
 -- or affect any route, vehicle reservation, or cargo.
-local P={}
+local unpack_values=table.unpack or unpack
+local P={eye_height=.462,visual_height=.511}
+local model="bl_street_pedestrian.glb"
+local idle,walking={x=0,y=1},{x=2,y=14}
+local walk_rate=15
 local function copy(value)
   if type(value)~="table" then return value end
   local t={}
@@ -22,16 +26,21 @@ end
 
 function P.capture(p)
   local props=p:get_properties()
+  local avatar={}
+  for _,key in ipairs({"eye_height","collisionbox","stepheight","visual","mesh","textures",
+      "visual_size","is_visible","backface_culling"}) do avatar[key]=copy(props[key]) end
   return {pos=copy(p:get_pos()),yaw=p:get_look_horizontal(),pitch=p:get_look_vertical(),
-    props={eye_height=props.eye_height,collisionbox=copy(props.collisionbox),
-      stepheight=props.stepheight},physics=copy(p:get_physics_override()),
-    flags=copy(p:hud_get_flags()),eye=copy({p:get_eye_offset()})}
+    props=avatar,physics=copy(p:get_physics_override()),flags=copy(p:hud_get_flags()),
+    eye=copy({p:get_eye_offset()}),animation=p.get_animation and copy({p:get_animation()}),
+    local_anim=p.get_local_animation and copy({p:get_local_animation()})}
 end
 
 function P.restore_controls(p,saved)
   p:set_properties(saved.props)
   p:set_physics_override(saved.physics)
   p:set_eye_offset(saved.eye[1],saved.eye[2],saved.eye[3])
+  if saved.animation then p:set_animation(unpack_values(saved.animation)) end
+  if saved.local_anim then p:set_local_animation(unpack_values(saved.local_anim)) end
   local v=p:get_velocity()
   if math.abs(v.x)+math.abs(v.y)+math.abs(v.z)>.05 then
     p:add_velocity({x=-v.x,y=-v.y,z=-v.z})
@@ -112,13 +121,24 @@ function P.new(api)
   function W.enter(p,state,land)
     state.last_dry=land
     p:set_eye_offset()
-    p:set_properties({eye_height=.74,collisionbox={-.13,0,-.13,.13,.95,.13},stepheight=.40})
-    p:set_physics_override({gravity=1,jump=.42,sneak=true,speed=1,speed_walk=.38,
+    p:set_properties({eye_height=P.eye_height,collisionbox={-.105,0,-.105,.105,.56,.105},stepheight=.28,
+      visual="mesh",mesh=model,textures={"bl_street_pedestrian_atlas.png"},
+      visual_size={x=1,y=1,z=1},backface_culling=false})
+    p:set_physics_override({gravity=1,jump=.27,sneak=true,speed=1,speed_walk=.38,
       speed_crouch=.67,acceleration_default=1,acceleration_air=1})
+    if p.set_local_animation then p:set_local_animation(idle,walking,idle,walking,walk_rate) end
+    if p.set_animation then p:set_animation(idle,walk_rate,.1,true) end
+    state.walking=false
     position(p,land,state.saved.yaw,0)
   end
   function W.step(p,state)
     local at=p:get_pos()
+    local speed=p:get_velocity()
+    local moving=speed.x*speed.x+speed.z*speed.z>.12^2
+    if p.set_animation and state.walking~=moving then
+      p:set_animation(moving and walking or idle,walk_rate,.1,true)
+      state.walking=moving
+    end
     local id=tile_at(at.x,at.z)
     local t=id and S.tiles[id]
     if not wet(t) and math.abs(at.y-surface(id,at.x,at.z))<.32 then

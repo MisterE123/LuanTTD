@@ -12,12 +12,26 @@ return function(api)
   assert(ok,why)
   local grade,base=Sim.road_surface(S,id(12,11))
   assert(grade==3 and base==0,"native walking fixture is not on an actual grade")
-  local positions={}
+  local initial_visual
   local function report(p,tag)
     local v=p:get_pos()
     local at=Sim.id(math.floor((v.x+.5)/2),math.floor((v.z+.5)/2))
     local mode=W.avatar_state(p)
     local flags=p:hud_get_flags()
+    local properties=p:get_properties()
+    if tag=="before" then initial_visual=properties end
+    if tag=="entered" then
+      assert(math.abs(properties.eye_height-.462)<.001 and properties.visual=="mesh",
+        "street camera did not get the proper human-scale eyes and mesh")
+      assert(properties.mesh=="bl_street_pedestrian.glb" and properties.textures[1]=="bl_street_pedestrian_atlas.png")
+      local i,walk=p:get_local_animation()
+      assert(i.x==0 and i.y==1 and walk.x==2 and walk.y==14)
+      core.log("action",("WALK_AVATAR %.3f %s"):format(properties.eye_height,properties.mesh))
+    elseif tag=="returned" then
+      assert(properties.visual==initial_visual.visual and properties.mesh==initial_visual.mesh
+        and properties.textures[1]==initial_visual.textures[1]
+        and properties.eye_height==initial_visual.eye_height,"builder visual did not restore")
+    end
     core.log("action",("WALK_QA %s %s %.3f %.3f %.3f %.4f %.4f %.3f %s %s %s"):format(
       tag,mode and mode.mode or "builder",v.x,v.y,v.z,p:get_look_horizontal(),p:get_look_vertical(),
       R.surface(at,v.x,v.z),tostring(flags.hotbar),tostring(W.menu(p)),tostring(S.topology)))

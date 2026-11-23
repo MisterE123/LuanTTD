@@ -42,11 +42,13 @@ return function(T,F,PBS)
   function R.valid_state(board,state)
     if state.version~=R.VERSION then return false,"version" end
     for id,train in pairs(state.trains) do
-      if train.id~=id or #train.parts==0 then return false,"train" end
+      if train.id~=id or #train.parts==0 and not train.crashed then return false,"train" end
       for _,p in ipairs(train.parts) do
-        if not T.valid_trackdir(p.td) or R.claim_owner(state,p.tile,T.track(p.td))~=id then
-          return false,"unclaimed_part"
-        end
+        if not T.valid_trackdir(p.td) then return false,"unclaimed_part" end
+        local t=tile(board,p.tile)
+        if not (p.in_depot and t and t.kind=="depot" and t.owner==train.owner)
+          and not (p.unreserved and ordinary(t) and t.owner==train.owner and has(T.status(t),p.td))
+          and R.claim_owner(state,p.tile,T.track(p.td))~=id then return false,"unclaimed_part" end
       end
     end
     for id,tracks in pairs(state.claims) do
@@ -114,12 +116,28 @@ return function(T,F,PBS)
       local t=tile(board,p.tile)
       if not t or not has(T.status(t),p.td) then return fail("invalid_track") end
       local track=T.track(p.td)
-      local ok,why,new=claim(board,state,train,p.tile,track)
-      if not ok then return fail(why) end
-      if new then acquired[#acquired+1]={tile=p.tile,track=track} end
-      train.parts[#train.parts+1]={tile=p.tile,td=p.td}
+      local hidden=p.in_depot and t.kind=="depot" and t.owner==owner
+      if not hidden then
+        local ok,why,new=claim(board,state,train,p.tile,track)
+        if not ok then return fail(why) end
+        if new then acquired[#acquired+1]={tile=p.tile,track=track} end
+      end
+      train.parts[#train.parts+1]={tile=p.tile,td=p.td,in_depot=hidden or nil}
     end
     state.trains[id]=train
+    return true
+  end
+
+  -- CheckTrainStayInDepot: stock only holds the depot's rail
+  -- reservation when a front is actually released. Any number of
+  -- consists may be wholly hidden inside the same depot beforehand.
+  function R.release_depot_front(board,state,train_id)
+    local train=state.trains[train_id]
+    local front=train and train.parts[1]
+    if not front or not front.in_depot then return false,"not_in_depot" end
+    local ok,why=claim(board,state,train,front.tile,T.track(front.td))
+    if not ok then return false,why end
+    front.in_depot=nil
     return true
   end
 
@@ -208,7 +226,7 @@ return function(T,F,PBS)
   -- comes AFTER the new position is recorded. A one-part train does both.
   -- Optional observe(event) sees the state at the event point. It must be
   -- read-only and must not throw/re-enter the adapter.
-  function R.enter(board,state,train_id,index,new_id,new_td,settings,observe)
+  function R.enter(board,state,train_id,index,new_id,new_td,settings,observe,permit_unreserved)
     local train=state.trains[train_id]
     local old=train and train.parts[index]
     if not old then return false,"invalid_part" end
@@ -217,22 +235,32 @@ return function(T,F,PBS)
     if not ordinary(prev) or not ordinary(new) then return false,"unsupported_tile" end
     if new.owner~=train.owner or prev.owner~=train.owner then return false,"foreign_tile" end
     local old_track=T.track(old.td)
-    if R.claim_owner(state,old.tile,old_track)~=train_id or
-        not has(PBS.bits(board,state.bits,old.tile),old_track) then return false,"missing_claim" end
+    if not old.unreserved and (R.claim_owner(state,old.tile,old_track)~=train_id or
+        not has(PBS.bits(board,state.bits,old.tile),old_track)) then return false,"missing_claim" end
     local exit=T.exit_side(old.td)
     if board.adjacent(old.tile,exit)~=new_id or T.entry_side(new_td)~=rev(exit) or
         not has(T.status(new,rev(exit)),new_td) then return false,"incompatible_boundary" end
     if index==1 and F.disallow_90(board,prev.railtype,new.railtype,settings and settings.forbid_90 or false) and
         has(T.crossing_trackdirs(old.td),new_td) then return false,"turn_disallowed" end
     local track=T.track(new_td)
+    local unreserved
     if index~=1 then
       if band(wagon_choice(board,train.parts[index-1],new_id,exit),T.trackbit(track))==0 then
         return false,"wagon_off_consist_path"
       end
-      if R.claim_owner(state,new_id,track)~=train.id then return false,"wagon_unreserved" end
+      if R.claim_owner(state,new_id,track)~=train.id then
+        if not permit_unreserved then return false,"wagon_unreserved" end
+        unreserved=true
+      end
     else
       local ok,why=claim(board,state,train,new_id,track)
-      if not ok then return false,why end
+      -- RC1 TrainController tries to set a raw track reservation on a
+      -- non-red approach, but a failed write does not cancel the step.
+      -- This is distinct from passing a PBS head, which needs a path.
+      if not ok then
+        if not (permit_unreserved and (why=="reserved" or why=="overlap")) then return false,why end
+        unreserved=true
+      end
     end
     local events={}
     local function publish(event)
@@ -244,7 +272,7 @@ return function(T,F,PBS)
         train=train_id,aspect="red"}
     end
     if index==#train.parts then tail_clear(board,state,train,old,exit,publish) end
-    train.parts[index]={tile=new_id,td=new_td}
+    train.parts[index]={tile=new_id,td=new_td,unreserved=unreserved}
     if index==1 then
       publish{kind="front_entered",phase="after_position",tile=new_id,enterdir=exit,
         td=new_td,train=train_id}
@@ -256,5 +284,60 @@ return function(T,F,PBS)
     return true,events
   end
 
+  -- Crash clears the path beyond real bodies and then reserves the track
+  -- under the consist. Disjoint parts and other trains' raw claims stay.
+  function R.crash(board,state,train_id)
+    local train=assert(state.trains[train_id])
+    train.crashed=true
+    local occupied={}
+    for _,p in ipairs(train.parts) do
+      if not p.in_depot then
+        local track=T.track(p.td)
+        occupied[p.tile]=T.union(occupied[p.tile] or 0,2^track)
+        local tile_record=board.tile(p.tile)
+        if tile_record and tile_record.other and (tile_record.kind=="bridge" or tile_record.kind=="tunnel") then
+          occupied[tile_record.other]=T.union(occupied[tile_record.other] or 0,2^track)
+        end
+      end
+    end
+    local released={}
+    for id,tracks in pairs(state.claims) do
+      for track,owner in pairs(tracks) do
+        if owner==train_id and not has(occupied[id] or 0,track) then
+          released[#released+1]={tile=id,track=track}
+        end
+      end
+    end
+    table.sort(released,function(a,b)return a.tile<b.tile or a.tile==b.tile and a.track<b.track end)
+    for _,p in ipairs(released) do assert(release(board,state,train,p.tile,p.track)) end
+    for _,p in ipairs(train.parts) do
+      if not p.in_depot and p.unreserved and ordinary(board.tile(p.tile)) then
+        local ok=claim(board,state,train,p.tile,T.track(p.td))
+        p.unreserved=not ok or nil
+      end
+    end
+    return released
+  end
+
+  -- DeleteLastWagon: keep the rail blocked until the last wreck on
+  -- that track is gone. An underlapping train can re-acquire afterward.
+  function R.remove_wreck_tail(board,state,train_id)
+    local train=state.trains[train_id]
+    if not (train and train.crashed) or #train.parts==0 then return end
+    local gone=table.remove(train.parts)
+    R.crash(board,state,train_id)
+    local track=T.track(gone.td)
+    for id,other in pairs(state.trains) do
+      if id~=train_id then
+        for _,p in ipairs(other.parts) do
+          if p.unreserved and p.tile==gone.tile and T.track(p.td)==track then
+            local ok=claim(board,state,other,p.tile,track)
+            p.unreserved=not ok or nil
+          end
+        end
+      end
+    end
+    return gone
+  end
   return R
 end

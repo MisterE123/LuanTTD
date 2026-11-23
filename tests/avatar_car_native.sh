@@ -83,7 +83,7 @@ grep -q 'listening' "$out/server.log" || { cat "$out/server.log"; exit 1; }
 luanti --go --address 127.0.0.1 --port "$port" --config "$out/client.conf" --name CarQA --logfile "" > "$out/client.log" 2>&1 &
 client=$!
 pids+=("$client")
-for _ in {1..120}; do if grep -q "CAR_QA ready" "$out/server.log"; then break; fi; sleep .25; done
+for _ in {1..360}; do if grep -q "CAR_QA ready" "$out/server.log"; then break; fi; sleep .25; done
 grep -q "CAR_QA ready" "$out/server.log" || { cat "$out/"{server,client}.log; exit 1; }
 win=$(xdotool search --sync --onlyvisible --pid "$client"|tail -1)
 xdotool windowfocus --sync "$win"
@@ -97,7 +97,32 @@ say "/carprobe before"
 say "/car"
 sleep .6
 say "/carprobe entered"
-import -window root -quality 87 "$out/car-entry.jpg"
+import -window root -quality 92 "$out/car-entry.jpg"
+# Luanti default C is the real camera cycle: first, rear third-person,
+# then front third-person. Both external views must have only the car.
+xdotool key c
+sleep .42
+import -window root -quality 92 "$out/car-chase.jpg"
+xdotool mousemove_relative -- 145 18
+sleep .42
+import -window root -quality 92 "$out/car-side.jpg"
+xdotool mousemove_relative -- -145 -18
+sleep .42
+xdotool key c
+sleep .42
+# Front camera mirrors pitch. Look toward the nose rather than at the sky.
+xdotool mousemove_relative -- 0 92
+sleep .42
+import -window root -quality 92 "$out/car-front.jpg"
+xdotool mousemove_relative -- 0 -92
+sleep .42
+xdotool key c
+sleep .42
+# Guard against taking three accidentally identical first-person shots.
+if cmp -s "$out/car-entry.jpg" "$out/car-chase.jpg" || cmp -s "$out/car-chase.jpg" "$out/car-front.jpg"; then
+  echo "Camera cycle did not produce distinct views." >&2
+  exit 1
+fi
 xdotool keydown w
 sleep 2.3
 import -window root -quality 87 "$out/car-driving.jpg"

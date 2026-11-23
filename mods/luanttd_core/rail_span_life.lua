@@ -73,14 +73,14 @@ return function(T,PBS,Life)
     return true,claims
   end
 
-  function L.enter(board,state,id,index,new,td,settings)
-    if not board.span_enabled then return Life.enter(board,state,id,index,new,td,settings) end
+  function L.enter(board,state,id,index,new,td,settings,observe,permit_unreserved)
+    if not board.span_enabled then return Life.enter(board,state,id,index,new,td,settings,observe,permit_unreserved) end
     local train=state.trains[id]
     local old=train and train.parts[index]
     if not old then return false,"invalid_part" end
     local p,q=board.tile(old.tile),board.tile(new)
     local from_span,to_span=span(p),span(q)
-    if not from_span and not to_span then return Life.enter(board,state,id,index,new,td,settings) end
+    if not from_span and not to_span then return Life.enter(board,state,id,index,new,td,settings,observe,permit_unreserved) end
     local own=function(tile,track) return Life.claim_owner(state,tile,track)==id end
     if from_span and new==p.other then
       if not to_span or q.other~=old.tile or p.kind~=q.kind or td~=old.td or

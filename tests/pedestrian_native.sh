@@ -98,23 +98,42 @@ say "/walk"
 sleep 1.1
 say "/walkprobe entered"
 import -window root "$out/walk-entry.png"
+xdotool key c
+sleep .65
+import -window root "$out/walk-thirdperson.png"
+xdotool key c
+sleep .5
+import -window root "$out/walk-front-avatar.png"
+xdotool key c
+sleep .35
+xdotool key c
+sleep .35
 # A held construction click must not build in cinematic mode. Then walk
 # up the actual road slope until the visible house collision stops us.
 xdotool mousedown 1
 sleep .38
 xdotool mouseup 1
 xdotool keydown w
-sleep 3.5
+sleep 2.7
+import -window root "$out/walk-gait-a.png"
+sleep .28
+import -window root "$out/walk-gait-b.png"
+sleep .52
 import -window root "$out/walk-on-street.png"
 sleep 3.6
 xdotool keyup w
 sleep .8
 say "/walkprobe blocked"
 import -window root "$out/walk-house-stop.png"
+xdotool key c
+sleep .35
+xdotool key c
+sleep .35
 xdotool click 3
 sleep .7
 say "/walkprobe returned"
 import -window root "$out/walk-returned.png"
 grep "WALK_QA" "$out/server.log"
+grep "WALK_AVATAR" "$out/server.log"
 ! grep -E 'ERROR\[' "$out/"{server,client}.log
 python3 "$repo/tests/pedestrian_native_evidence.py" "$out/server.log"

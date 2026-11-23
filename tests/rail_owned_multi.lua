@@ -43,6 +43,62 @@ local Owned=dofile(root.."rail_owned_service.lua")(Fleet,Roster,Run)
 local function mount() Sim.mount_paid_rail(s,Run) end
 mount()
 assert(Owned.initialize(s,{starting_year=1950,generation_seed=s.seed,startup_random=9001}))
+if arg and arg[1]=="collision" then
+  local q=dofile("tests/rail_collision_fixture.lua")(Sim,s,Lab,Owned,Run,T,Signal)
+  local d=Run.current(s)
+  local function copy(t)
+    if type(t)~="table" then return t end
+    local out={}
+    for k,v in pairs(t) do out[k]=copy(v) end
+    return out
+  end
+  s=copy(s);mount();d=Run.current(s)
+  local crash
+  for _=1,25 do
+    Sim.daily(s)
+    assert(not d.failure,d.failure)
+    for _,e in ipairs(Sim.rail_paid_motion_events(s)) do
+      if e.kind=="rail_collision" then
+        assert(not crash and e.victims==4)
+        crash=e
+      end
+    end
+    if crash then break end
+  end
+  assert(crash and d.runs[1].crashed and d.runs[2].crashed)
+  assert(d.life.bits[crash.tile] and L.valid_state(Run.board(s),d.life))
+  for _,u in ipairs({q.a,q.b}) do assert(Owned.running(s,q.owner,u).phase=="crashed") end
+  local a,b=d.runs[1].consist.parts[1].pose.x,d.runs[2].consist.parts[1].pose.x
+  assert(math.abs(a-b)==7)
+  for _=1,10 do Sim.daily(s) end
+  assert(d.runs[1].consist.parts[1].pose.x==a and d.runs[2].consist.parts[1].pose.x==b)
+  assert(d.life.bits[crash.tile])
+  for _=1,65 do Sim.daily(s) end
+  assert(next(d.life.bits)==nil and #d.runs[1].consist.parts==0 and #d.runs[2].consist.parts==0)
+  print("PASS true unsignalled collision after save, exact first contact 7 stock pixels, both stop, wrecks hold then clear the rail")
+  return
+end
+if arg and arg[1]=="shared_depot" then
+  local q=dofile("tests/rail_shared_depot_fixture.lua")(Sim,s,Lab,Owned,Run,T,Signal)
+  local d=Run.current(s)
+  local departed,turns={},{}
+  for _=1,180 do
+    Sim.daily(s)
+    assert(not d.failure,d.failure)
+    assert(L.valid_state(Run.board(s),d.life))
+    for _,ev in ipairs(Sim.rail_paid_motion_events(s)) do
+      if ev.kind=="departed" then departed[ev.train]=ev.tick end
+      if ev.kind=="front_entered" and ev.tile==q.turnout and not turns[ev.train] then turns[ev.train]=T.track(ev.td) end
+    end
+    local a,b=Sim.rail_paid_status(s,q.a),Sim.rail_paid_status(s,q.b)
+    if a.fare>0 and b.fare>0 then
+      assert(departed[2]>departed[1] and turns[1]==T.UPPER and turns[2]==T.LEFT)
+      print(("PASS stock same depot, two staged consists have no premature track reservation; separate turnout branches earn $%d/$%d"):format(a.fare,b.fare))
+      return
+    end
+  end
+  error("Both purchased trains did not run from the shared depot")
+end
 local fixture=dofile("tests/rail_owned_multi_fixture.lua")(Sim,s,Lab,Owned,Run,T,Signal)
 local owner=fixture.owner
 local u,v={id=fixture.a},{id=fixture.b}

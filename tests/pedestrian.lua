@@ -28,7 +28,8 @@ local walk=P.new({s={tiles=rows},Sim=sim,
   render={uses_slope=function(id) return id==3 end,surface=function(id,x,z) return 2+(x-6)*.5 end}})
 local pos,vel={x=3,y=15,z=2.5},{x=1,y=2,z=3}
 local yaw,pitch=1.2,.62
-local properties={eye_height=1.63,collisionbox={-.3,0,-.3,.3,1.7,.3},stepheight=.6}
+local properties={eye_height=1.63,collisionbox={-.3,0,-.3,.3,1.7,.3},stepheight=.6,
+  visual="upright_sprite",mesh="",textures={"builder.png"},visual_size={x=1,y=2,z=1},is_visible=true}
 local physics={gravity=0,speed_walk=2,sneak=false}
 local flags={hotbar=true,crosshair=true}
 local eye={x=.1,y=.2,z=.3}
@@ -57,7 +58,8 @@ assert(edge.x==5.75 and edge.z==3.25,"keep spawn footprint clear of neighbor til
 local avatar={saved=P.capture(p)}
 walk.enter(p,avatar,target)
 assert(pos==target and pos.y<3 and yaw==1.2 and pitch==0)
-assert(physics.gravity==1 and physics.speed_walk==.38 and properties.eye_height==.74)
+assert(physics.gravity==1 and physics.speed_walk==.38 and properties.eye_height==P.eye_height and P.eye_height<.49
+  and properties.visual=="mesh" and properties.collisionbox[4]==.105)
 assert(vel.x==0 and vel.y==0 and vel.z==0)
 pos={x=8.5,y=.12,z=2.5};vel.y=-2
 walk.step(p,avatar)
@@ -66,4 +68,5 @@ P.restore_controls(p,avatar.saved)
 P.restore_pose(p,avatar.saved)
 assert(pos.x==3 and pos.y==15 and yaw==1.2 and pitch==.62)
 assert(properties.eye_height==1.63 and physics.gravity==0 and flags.crosshair and flags.hotbar and eye.z==.3)
+assert(properties.visual=="upright_sprite" and properties.textures[1]=="builder.png" and properties.visual_size.y==2)
 print("Pedestrian: safe landing, slope support, client walking parameters, shoreline recovery and builder state restore")

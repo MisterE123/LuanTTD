@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Originally OpenTTD, copyright OpenTTD contributors; no warranty.
--- OpenTTD 14.1 train_cmd.cpp ReverseTrainDirection, ReverseTrainSwapVeh,
+-- OpenTTD 16.0-RC1 train_cmd.cpp ReverseTrainDirection, ReverseTrainSwapVehicles,
 -- AdvanceWagons{Before,After}Swap and FreeTrainTrackReservation.
 -- Ordinary, stopped, fully visible consists only. Fully hidden same-depot
 -- consists are a no-op; partially hidden consists and spans are excluded.
@@ -85,23 +85,40 @@ return function(T,Raw,Consist,Life,Signal,Follow,PBS)
     local checked,err=Consist.place(board,consist.owner,old)
     if not checked then return nil,err end
     local out={base_serial=consist.serial,parts=tiles,adjustments={},reversed=not consist.reversed}
-    if not snake_adjust(board,tiles,consist.owner,false,out.adjustments) then return nil,"before_swap" end
+    local back_up=consist.driving_backwards or consist.last_can_lead or opts and opts.flip_allowed=="none"
+    if back_up then
+      -- The simulation stores moving-front order. Reverse the iteration
+      -- order, not the wagons' physical positions or their identities.
+      -- Pose directions are travelling headings, so the movement
+      -- adapter needs their reverse even though the bodies do not turn.
+      for i,src in ipairs(old) do
+        local part=copy(src)
+        part.pose=copy(src.pose)
+        part.pose.direction=(src.pose.direction+4)%8
+        part.pose.td=T.reverse_trackdir(src.pose.td)
+        part.pose.enterdir=nil
+        tiles[#old-i+1]=part
+      end
+      out.driving_backwards=not consist.driving_backwards
+    else
+      if not snake_adjust(board,tiles,consist.owner,false,out.adjustments) then return nil,"before_swap" end
 
-    -- Stock swaps physical state, not vehicle IDs, length, cargo, or
-    -- predecessor links. In simulated chain order the locomotive remains
-    -- the locomotive, and the new head uses the old rear's location.
-    local place={}
-    for i,p in ipairs(tiles) do place[i]={tile=p.tile,pose=p.pose,hidden=p.hidden} end
-    for i,p in ipairs(tiles) do
-      local src=place[#tiles-i+1]
-      p.tile=src.tile;p.hidden=src.hidden
-      local pose=copy(src.pose)
-      pose.direction=(pose.direction+4)%8
-      pose.td=T.reverse_trackdir(pose.td)
-      pose.enterdir=nil
-      p.pose=pose
+      -- Stock swaps physical state, not vehicle IDs, length, cargo, or
+      -- predecessor links. In simulated chain order the locomotive remains
+      -- the locomotive, and the new head uses the old rear's location.
+      local place={}
+      for i,p in ipairs(tiles) do place[i]={tile=p.tile,pose=p.pose,hidden=p.hidden} end
+      for i,p in ipairs(tiles) do
+        local src=place[#tiles-i+1]
+        p.tile=src.tile;p.hidden=src.hidden
+        local pose=copy(src.pose)
+        pose.direction=(pose.direction+4)%8
+        pose.td=T.reverse_trackdir(pose.td)
+        pose.enterdir=nil
+        p.pose=pose
+      end
+      if not snake_adjust(board,tiles,consist.owner,true,out.adjustments) then return nil,"after_swap" end
     end
-    if not snake_adjust(board,tiles,consist.owner,true,out.adjustments) then return nil,"after_swap" end
     -- CheckTrainsLengths is a separate diagnostic, not part of the
     -- source's swap. Report its result rather than rewriting the poses.
     local head=tiles[1]
@@ -145,6 +162,7 @@ return function(T,Raw,Consist,Life,Signal,Follow,PBS)
     if not proposal or consist.serial~=proposal.base_serial then return false,"stale_proposal" end
     if proposal.noop then return true end
     consist.parts=proposal.parts;consist.reversed=proposal.reversed;consist.serial=consist.serial+1
+    consist.driving_backwards=proposal.driving_backwards or nil
     return true
   end
 

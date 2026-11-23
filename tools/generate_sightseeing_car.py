@@ -42,14 +42,14 @@ b = [(-.81,2.82,-1.38),(.81,2.82,-1.38),(.78,2.84,.61),(-.78,2.84,.61)]
 face(b[::-1],1)
 for i in range(4):
     j=(i+1)%4
-    face([a[i],a[j],b[j],b[i]],0)
+    face([a[i],b[i],b[j],a[j]],0)
     def blend(p,q,t): return tuple(x+t*(y-x) for x,y in zip(p,q))
     low_a, low_b = blend(a[i],b[i],.12), blend(a[j],b[j],.12)
     top_a, top_b = blend(a[i],b[i],.88), blend(a[j],b[j],.88)
     pts=[blend(low_a,low_b,.05),blend(low_b,low_a,.05),
          blend(top_b,top_a,.05),blend(top_a,top_b,.05)]
     push=((0,0,-.012),(.016,0,0),(0,0,.02),(-.016,0,0))[i]
-    face([tuple(v+d for v,d in zip(p,push)) for p in pts],4 if i==2 else 3)
+    face([tuple(v+d for v,d in zip(p,push)) for p in reversed(pts)],4 if i==2 else 3)
 for x in (-1, 1):
     for z in (-2.13, 2.02):
         f=lambda xa,r,i:(x*xa,.56+r*sin(i*pi/6),z+r*cos(i*pi/6))
@@ -85,3 +85,9 @@ pixels=b"".join(bytes(rgb)*8 for rgb in colors+[(0,0,0)]*(16-len(colors)))
 png=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",pack("!IIBBBBB",128,8,8,2,0,0,0))
 png+=chunk(b"IDAT",compress((b"\0"+pixels)*8,9))+chunk(b"IEND",b"")
 (root/"textures/bl_sightseeing_car_palette.png").write_bytes(png)
+
+# A deliberate transparent rider sprite; the camera and attachment remain
+# valid in the Luanti client even though the visual rider should be hidden.
+blank=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",pack("!IIBBBBB",4,4,8,6,0,0,0))
+blank+=chunk(b"IDAT",compress(bytes(4*17),9))+chunk(b"IEND",b"")
+(root/"textures/bl_sightseeing_hidden_player.png").write_bytes(blank)

@@ -1,4 +1,5 @@
-local turnout=core.settings:get_bool("luanttd_qa_depot_turnout",false)
+local isolated=core.settings:get_bool("luanttd_qa_disconnected_path_signal",false)
+local turnout=isolated or core.settings:get_bool("luanttd_qa_depot_turnout",false)
 local two_coaches=core.settings:get_bool("luanttd_qa_two_coaches",false)
 local signal_free=turnout or two_coaches or core.settings:get_bool("luanttd_qa_signal_free",false)
 -- Appended only in isolated native QA. Purchase, move, board, save,
@@ -64,6 +65,13 @@ local function stamp()
     if turnout then
       for _,event in ipairs(Sim.rail_paid_motion_events(S)) do
         if event.kind=="front_entered" and event.tile==id(16) then choices[event.td]=true end
+      end
+      if isolated then
+        local run,claims=current(),S.stock_rail_dispatch.life.claims
+        if run.phase=="depot" or run.station==S.tiles[id(23)].rail_station_id then
+          assert(not claims[id(20)] or run.consist.parts[1].tile==id(20) or
+            run.consist.parts[2].tile==id(20),"Unrelated PBS must not reserve empty track ahead")
+        end
       end
     end
     if bridge then
@@ -230,7 +238,11 @@ local function stamp()
     assert(S.companies[owner].cash==qa.cash+fare-(S.companies[owner].expense-qa.expense))
     if turnout then
       assert(qa.exit_curve and choices[0] and choices[8],"The restored train must run straight across the same turnout both ways")
-      assert(current().ordinary_unreserved and not next(S.stock_rail_dispatch.signals.records))
+      if isolated then
+        assert(current().local_signals and not current().ordinary_unreserved
+            and S.stock_rail_dispatch.signals.records[id(9,6)])
+        core.log("action","OWNED_RAIL_UNRELATED_PBS_NATIVE_PASS no ahead reservation from a disconnected signal")
+      else assert(current().ordinary_unreserved and not next(S.stock_rail_dispatch.signals.records)) end
       core.log("action","OWNED_RAIL_DEPOT_TURNOUT_NATIVE_PASS departure curve, then reciprocal main line through the same turnout after SQLite restore")
     end
     if branch then
@@ -291,7 +303,10 @@ local function stamp()
   end
   assert(api.trackworks.station(S,owner,id(11),id(12)))
   assert(api.trackworks.station(S,owner,id(22),id(24)))
-  if not signal_free then assert(Run.place_signal(S,owner,id(10),0,4)) end
+  if isolated then
+    for x=7,11 do S.tiles[id(x,6)]={owner=owner,build="stock_rail",rail_tracks=1,h=0,terrain="grass",variant=1} end
+    assert(Run.place_signal(S,owner,id(9,6),8,4))
+  elseif not signal_free then assert(Run.place_signal(S,owner,id(10),0,4)) end
   local west,east=S.tiles[id(11)].rail_station_id,S.tiles[id(22)].rail_station_id
   S.sites[1].tile=id(10,13);S.sites[2].tile=id(24,13)
   for _,z in ipairs({7,8,12,13}) do
@@ -352,9 +367,8 @@ local function stamp()
   assert(r.price==cost and c.cash==initial_cash-r.price)
   if branch then
     S.tiles[id(25)]={owner=owner,rail_tracks=1,build="stock_rail",h=0,terrain="grass",variant=1}
-    local bad,reason=Owned.start(S,owner,r.id,east,west)
-    assert(not bad and reason:find("Platform (24,10) has no safe exit",1,true),reason)
-    assert(Owned.get(S,owner,r.id).status=="depot")
+    -- Depot release now classifies the real signal block. A through
+    -- station is a valid order even if not itself a PBS waiting point.
     local rail=api.trackworks
     local function loop(x,z,piece)
       local tile=id(x,z)
@@ -382,7 +396,7 @@ local function stamp()
     end
   end
   local ok,note=Owned.start(S,owner,r.id,east,west);assert(ok,note)
-  if signal_free then assert(current().ordinary_unreserved and not next(S.stock_rail_dispatch.signals.records)) end
+  if signal_free and not isolated then assert(current().ordinary_unreserved and not next(S.stock_rail_dispatch.signals.records)) end
   if bridge then assert(current().bridge_collectors) end
   assert(current().stock_engine==engine and current().max_track_speed==vmax)
   local peak=0

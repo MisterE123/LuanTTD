@@ -70,6 +70,20 @@ assert(not R.check_order(board,train,{kind="station",station=19},Costs,Search,{l
 local redo=assert(R.apply(board,train,state,17,signals,{speed=0,stuck=true}))
 assert(not train.reversed and #redo.released==0 and Life.valid_state(board,state))
 assert(train.parts[1].tile==tile(11) and train.parts[1].pose.td==8)
+-- RC1 double-ended stock has a real driving-backwards state: each
+-- body keeps its position, even when physical IDs/lengths are read
+-- in the opposite moving order. There is no swap spacing correction.
+local dmu,leases,heads=fresh()
+dmu.last_can_lead=true
+dmu.parts[1].vehicle_id,dmu.parts[2].vehicle_id,dmu.parts[3].vehicle_id="front cab","coach","rear cab"
+local front_x,rear_x=dmu.parts[1].pose.x,dmu.parts[3].pose.x
+local back=assert(R.apply(board,dmu,leases,17,heads,{speed=0}))
+assert(dmu.driving_backwards and #back.adjustments==0 and back.spacing_ok)
+assert(dmu.parts[1].vehicle_id=="rear cab" and dmu.parts[1].pose.x==rear_x)
+assert(dmu.parts[3].vehicle_id=="front cab" and dmu.parts[3].pose.x==front_x)
+assert(R.apply(board,dmu,leases,17,heads,{speed=0}))
+assert(not dmu.driving_backwards and dmu.parts[1].vehicle_id=="front cab")
+assert(dmu.parts[1].pose.x==front_x and dmu.parts[3].pose.x==rear_x)
 -- Stock wholly inside depot is a no-op, not an engine/wagon queue edit.
 tiles[tile(5)]={kind="depot",trackbits=1,owner=1,railtype=0,dir=T.SW}
 local hidden=assert(K.seed_depot(board,tile(5),{8,8}))

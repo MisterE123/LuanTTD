@@ -10,6 +10,7 @@ end
 road(10,8,4);road(10,9,5);road(10,10,11);road(9,10,2);road(11,10,10);road(12,10,8)
 local cmd,registered,p,model,attached,state,hint,warning
 local removed=0
+local avatar={visual="upright_sprite",textures={"player.png"},visual_size={x=1,y=1,z=1}}
 local player_yaw,lookx,lookz=0,0,1
 p={
   get_player_name=function() return "driver" end,
@@ -18,7 +19,9 @@ p={
   get_attach=function()return attached end,
   get_look_horizontal=function()return player_yaw end,
   set_look_horizontal=function(_,x)player_yaw=x end,
-  set_look_vertical=function()end,set_properties=function()end,set_physics_override=function()end,
+  set_look_vertical=function()end,get_properties=function()return avatar end,
+  set_properties=function(_,change)for k,v in pairs(change) do avatar[k]=v end end,
+  set_physics_override=function()end,
   set_attach=function(_,q)attached=q end,set_detach=function()attached=nil end,
   hud_add=function()return 1 end,hud_change=function(_,_,_,s)hint=s end,hud_remove=function()end,
 }
@@ -47,8 +50,8 @@ local C=dofile(mod.."/avatar_car.lua")({s=S,Sim=Sim,render=rendering},W)
 local function tick(keys,n)
   for _=1,n do C.step(p,state,keys,.05) end
 end
-assert(registered.initial_properties.mesh=="bl_sightseeing_car.obj" and registered.static_save==false)
-assert(cmd("driver") and C.active(p) and attached==model)
+assert(registered.initial_properties.mesh=="bl_sightseeing_car.obj" and registered.initial_properties.static_save==false)
+assert(cmd("driver") and C.active(p) and attached==model and avatar.visual=="sprite" and avatar.visual_size.y<.01)
 local start=model.pos.z
 tick({up=true},12)
 assert(model.pos.z>start+1 and hint:find("W drive",1,true))
@@ -58,7 +61,7 @@ tick({up=true,right=true},45)
 assert(math.abs(model.pos.x-24.5)<.001 and math.abs(model.pos.z-(20.5-.155))<.001,"D did not steer right facing +Z")
 tick({down=true},55)
 assert(model.pos.x<21.7,"reverse did not move backwards")
-assert(cmd("driver") and not C.active(p) and not attached and not state and removed==1)
+assert(cmd("driver") and not C.active(p) and not attached and not state and removed==1 and avatar.visual=="upright_sprite" and avatar.textures[1]=="player.png" and avatar.visual_size.y==1)
 assert(next(S.companies)==nil,"sightseeing mutated the ledger")
 
 -- Drive exactly up to but not through a closed crossing. When it opens the

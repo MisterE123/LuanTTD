@@ -427,6 +427,19 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     return true
   end
 
+  function S.crash_rail(state,vid,tick,ctx,events)
+    local v=state.vehicles[vid]
+    if not v or v.mode~="rail" or v.crashed then return false end
+    if v.load_state then
+      local st=assert(state.stations[v.load_state.station])
+      local ops=options(state,tick,ctx,events)
+      if v.carrying_parts then DMU.leave(st,v,ops) else Loading.leave(st,v,ops) end
+    end
+    v.crashed,v.stopped,v.units,v.batches=true,true,0,{}
+    for _,part in ipairs(v.carrying_parts or {}) do part.units,part.batches=0,{} end
+    return true
+  end
+
   function S.post_motion_tick(state,tick,ctx)
     assert(state.tick==tick,"Passenger aging must follow the same absolute movement tick")
     if state.post_tick==tick then return false end

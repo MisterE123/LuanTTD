@@ -36,8 +36,8 @@ joining, sloped foundations or the full stock station selection UI.
   a choice, including the junction where a side depot meets a main
   line. The native regression buys a train, takes the depot curve,
   restarts, then crosses that turnout in both directions and earns
-  passenger fares. Mixed signals and multiple-train parity are not
-  part of this test.
+  passenger fares. A path signal on another disconnected line does
+  not add an ahead reservation; the actual depot segment decides.
 - [`rail_gui.cpp`](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/rail_gui.cpp#L109-L165):
   after successful depot construction, the callback tries the stock
   three direction-dependent track pieces on the immediately adjacent
@@ -79,6 +79,20 @@ front crosses it. The native regression saves while a train is held on
 one approach to a four-way diamond, restarts, and follows both separately
 bought trains through reciprocal trips with independent passenger fares.
 
-This pass does not enable unsignalled multiple-train operation, shared
-depot occupancy or dispatching freight and passengers together. Avoid
-single-track head-to-head routes without a passing loop.
+Several trains can wait fully inside the same depot. The stock
+37-tick release check holds the depot's track reservation only when
+a front leaves and does not release the next train while its block or
+depot exit is occupied. A native test saves with one train still
+inside, restarts, and checks both take their own turnout branch and
+earn fares.
+
+An unprotected collision is not a hidden red signal. The stock
+`CheckTrainCollision` tests real moving front and vehicle center
+coordinates, length, ownership and vertical separation after each
+physical step. In native QA, two ordered trains restored from an
+unsignalled opposite approach hit at seven stock pixels. Both stopped,
+the wrecks held the track, then the last bodies cleared and released
+it. News, accident ratings, crash effects and some tunnel/wreck cases
+remain unported. Freight and passengers do not yet share the general
+commercial dispatcher. Avoid single-track head-to-head routes without
+a passing loop.
