@@ -1471,9 +1471,15 @@ local road_visual=setmetatable({},{__mode="k"})
 function M.road_motion_timeline(s,id)
   return road_visual[s] and road_visual[s][id]
 end
+function M.road_hidden_depot(v)
+  local c=v.road_speed_state
+  local frame=c and v.road_motion_frames and v.road_motion_frames[c.index]
+  return c and (c.depot_wait or frame and frame[16]) and true or false
+end
 function M.road_motion_frame(s,v)
   local c=v.road_speed_state
-  if c and v.road_motion_frames and not c.depot_wait then
+  if c and v.road_motion_frames then
+    if M.road_hidden_depot(v) then return end
     return c.lane_pose or v.road_motion_frames[c.index]
   end
   return v.road_stop_pose
@@ -3511,7 +3517,10 @@ end
 function M.position(s,v)
   if v.route then
     if M.road_stock_service_active(s) and v.road_speed_state and v.road_motion_frames then
-      local frame=M.road_motion_frame(s,v)
+      -- The location of a hidden transit vehicle is still its depot
+      -- for commands and guards, but never an exposed viewport pose.
+      local c=v.road_speed_state
+      local frame=c.lane_pose or v.road_motion_frames[c.index]
       if frame then return frame[4] end
     end
     if M.vehicles[v.engine].mode=="air" then

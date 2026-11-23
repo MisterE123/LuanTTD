@@ -14,6 +14,10 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
   end
   local function pose(c,frames) return c and (c.lane_pose or frames[c.index]) end
   R.pose=pose
+  local function visible(c,frames)
+    local f=c and not c.depot_wait and pose(c,frames)
+    return f and not f[16] and f or nil
+  end
   local limit=dofile(base.."road_stock_speeds.lua")
   local floor=math.floor
   local function init(s,v,frames)
@@ -102,6 +106,22 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     local v,c,frames,record=a.v,a.c,a.frames,a.record
     if c.index>=#frames then return end
     local old=pose(c,frames)
+    if old[16] then
+      -- RoadVehLeaveDepot (RC1) checks the proposed outward point before
+      -- unhiding, services the same physical vehicle, sets its speed to
+      -- zero and consumes this tick without normal road acceleration.
+      local next=frames[c.index+1]
+      assert(next and next[4]==old[4] and not next[16] and is_depot(s,next[4]),
+        "Corrupt transit-depot departure")
+      record.z=road_z(s,next)
+      if W.find(record,c,next[1],next[2],next[3],false) then c.waiting="depot";return end
+      c.index,c.speed,c.heading,c.waiting=c.index+1,0,next[3],nil
+      c.overtaking,c.overtaking_ctr,c.lane_pose=nil,nil,nil
+      W.put(record,next)
+      if on_exit then on_exit(v,tick) end
+      c.ticks=c.ticks+1
+      return
+    end
     if c.depot_wait then
       record.z=road_z(s,old)
       if W.find(record,c,old[1],old[2],old[3],false) then c.waiting="depot";return end
@@ -193,6 +213,11 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         state.index=state.index+1
         old=b
         if Pass then Pass.accept(state,b,nominal) end
+        if b[16] then
+          W.erase(record)
+          state.speed=0
+          return false -- stop this movement budget until the stock depot-exit tick
+        end
         W.put(record,b,state.lane_pose~=nil)
         if state.index==#frames then state.speed=0 end
         return true
@@ -214,7 +239,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     local board=board_for(s,W)
     local actual=Pass or oneway_replan~=nil
     local function append(path,k,c,frames)
-      local f=not c.depot_wait and pose(c,frames)
+      local f=visible(c,frames)
       if actual then path.frames[k]=f or blank end
       path.cursors[k]=f and (actual and k or c.index) or 0
     end
@@ -223,9 +248,9 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       local frames=v.road_motion_frames
       if frames and limit[v.engine] then
         local c=init(s,v,frames)
-        local f=pose(c,frames)
+        local f=visible(c,frames)
         local record=record_for(v,c)
-        if not c.depot_wait then W.put(record,f,c.lane_pose~=nil) end
+        if f then W.put(record,f,c.lane_pose~=nil) end
         local path={frames=actual and {} or frames,cursors={}}
         append(path,1,c,frames)
         timelines[id]=path
@@ -263,7 +288,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       local frame
       if v.route and route then
         c=c or init(s,v,route)
-        frame=not c.depot_wait and pose(c,route) or nil
+        frame=visible(c,route)
       elseif v.road_stop_pose then frame=v.road_stop_pose end
       local a=view[id]
       if not a then a={frames={},cursors={}};view[id]=a end
@@ -283,7 +308,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         local f,c
         if v.route and v.road_motion_frames then
           c=init(s,v,v.road_motion_frames)
-          if not c.depot_wait then f=pose(c,v.road_motion_frames) end
+          f=visible(c,v.road_motion_frames)
         else f=v.road_stop_pose end
         local rec=record_for(v,c)
         records[id]=rec
@@ -299,7 +324,8 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
           local rec=records[id]
           rec.clock=c
           rec.stopped=v.running==false
-          if not c.depot_wait and not rec.tile then W.put(rec,pose(c,frames),c.lane_pose~=nil) end
+          local front=visible(c,frames)
+          if front and not rec.tile then W.put(rec,front,c.lane_pose~=nil) end
           worked[id]=true
           if v.running and not held then
             local moving={v=v,c=c,frames=frames,record=rec}

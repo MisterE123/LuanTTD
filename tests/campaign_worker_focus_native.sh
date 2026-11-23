@@ -53,6 +53,8 @@ bayline_generated_town_layout = grid2
 CONF
 if [[ ${BAYLINE_FOCUS_DEAD_END:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_focus_dead_end = true' >>"$out/native.conf"
+elif [[ ${BAYLINE_FOCUS_DEAD_END:-0} == depot ]]; then
+  printf '%s\n' 'luanttd_native_focus_terminal_depot = true' >>"$out/native.conf"
 fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null

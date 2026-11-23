@@ -32,6 +32,9 @@ core.register_on_joinplayer(function(p)
     local f=assert(io.open(path.."/native-focus-layout","r"))
     local depot,first,last,station_a,station_b,sw,se,west,approach=f:read("*n","*n","*n","*n","*n","*n","*n","*n","*n")
     f:close()
+    if core.settings:get_bool("luanttd_native_focus_terminal_depot",false) then
+      return {depot=west,station_a=station_a,station_b=station_b,loop={{first,last}}}
+    end
     local legs={{west,last},{approach,first}}
     if not core.settings:get_bool("luanttd_native_focus_dead_end",false) then
       legs[3],legs[4],legs[5]={last,se},{se,sw},{sw,first}

@@ -12,8 +12,13 @@ and `src/table/roadveh_movement.h`. The pathfinder's reversal edge
 runs the stock turning row first and is consumed only after
 `RDE_TURNED`. This does not permit reversals on signed one-way
 pavement or allow a bus to turn while exiting a drive-through stop.
-A turnaround that uses a depot as an intermediate, unordered waypoint
-is a separate case and is not supported by this change.
+If stock YAPF routes a vehicle back through its own depot without a
+depot order, it enters and hides at the source depot-stop frame. Once
+the departure point is clear, it services and exits at the normal
+outward frame, without changing its station orders. Foreign depots
+are not admitted by the existing stock follower. The hidden checkpoint
+and case with a depot at one end of the commute are tested separately
+with `tests/road_transit_depot.lua` and `BAYLINE_FOCUS_DEAD_END=depot`.
 
 `tests/road_dead_end_rc1.py` compares all eight source rows (four
 headings on each side of the road), including exact motion coordinates

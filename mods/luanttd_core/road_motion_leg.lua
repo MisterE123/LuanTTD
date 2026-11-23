@@ -107,7 +107,21 @@ return function(Motion,F,board)
         return frames
       end
       local check_x,check_y,entered
-      if v.state==Bridge.WORMHOLE then
+      local outgoing=trace[part+1]
+      if part_tile.kind=="depot" and outgoing and outgoing.tile==trace[part].tile and
+          v.state==F.direction_trackdir(F.reverse_direction(part_tile.dir)) and v.frame==Motion.DEPOT_STOP then
+        -- RC1 VehicleEnterTile_Road hides an inward head at frame 11,
+        -- regardless of whether this depot was an explicit order. The
+        -- next tick uses RoadVehLeaveDepot's outward lane and frame 6.
+        local td=F.direction_trackdir(part_tile.dir)
+        if outgoing.td~=td then return end
+        frames[#frames][16]=true
+        local x,y=board.xy(outgoing.tile)
+        local kind,px,py=Motion.sample(td,SIDE,Motion.DEPOT_START)
+        if kind~="position" then return end
+        v.x,v.y,v.direction,v.state,v.frame=x*16+px,y*16+py,part_tile.dir*2+1,td,Motion.DEPOT_START
+        part=part+1
+      elseif v.state==Bridge.WORMHOLE then
         local k,px,py,target,exit_frame=Bridge.step(board,part_tile,v)
         if not k then return end
         v.x,v.y=px,py

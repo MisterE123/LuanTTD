@@ -43,6 +43,7 @@ jobs:
             lua5.1 "tests/$t.lua"
           done
           lua5.1 tests/road_dead_end.lua
+          lua5.1 tests/road_transit_depot.lua
           lua5.1 tests/monorail_owned_runtime.lua
           lua5.1 tests/monorail_owned_runtime.lua spans
           python3 tests/advanced_guideway_art.py
@@ -266,6 +267,7 @@ jobs:
           python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
           BAYLINE_NATIVE_DISPLAY=307 timeout 220 bash tests/campaign_worker_focus_native.sh
           BAYLINE_NATIVE_DISPLAY=309 BAYLINE_FOCUS_DEAD_END=1 timeout 220 bash tests/campaign_worker_focus_native.sh
+          BAYLINE_NATIVE_DISPLAY=306 BAYLINE_FOCUS_DEAD_END=depot timeout 220 bash tests/campaign_worker_focus_native.sh
           BAYLINE_NATIVE_DISPLAY=308 BAYLINE_NATIVE_PORT=46708 timeout 220 bash tests/campaign_worker_ride_native.sh
 
   rc1-parity:

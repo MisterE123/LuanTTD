@@ -1526,7 +1526,7 @@ return function(api)
   local function position(v,t)
     local projected,pos,yaw,pitch=source_pose_model.timeline(S,v,t,road_ground)
     if projected then return pos,yaw,pitch end
-    if v.route and v.road_speed_state and v.road_speed_state.depot_wait then return end
+    if v.route and Sim.road_hidden_depot(v) then return end
     if Sim.road_motion_frame and v.road_speed_state and v.road_speed_state.lane_pose then
       -- The saved authoritative shifted frame is available one day before
       -- the next interpolation timeline. Restoring must not jump lanes.
