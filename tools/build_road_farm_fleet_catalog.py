@@ -14,7 +14,14 @@ ROWS=[
       (137,"livestock_foster","Foster Livestock Van","livestock"),(141,"grain_truck","Hereford Grain Truck","grain"),
       (142,"grain_thomas","Thomas Grain Truck","grain"),(143,"grain_goss","Goss Grain Truck","grain"),
       (144,"wood_truck","Witcombe Wood Truck","wood"),(145,"wood_foster","Foster Wood Truck","wood"),
-      (146,"wood_moreland","Moreland Wood Truck","wood")]
+      (146,"wood_moreland","Moreland Wood Truck","wood"),
+      (147,"iron_mps","MPS Iron Ore Truck","iron_ore"),(148,"iron_uhl","Uhl Iron Ore Truck","iron_ore"),
+      (149,"iron_chippy","Chippy Iron Ore Truck","iron_ore"),
+      (150,"steel_balogh","Balogh Steel Truck","steel"),(151,"steel_uhl","Uhl Steel Truck","steel"),
+      (152,"steel_kelling","Kelling Steel Truck","steel"),
+      (153,"valuables_balogh","Balogh Armoured Truck","valuables"),
+      (154,"valuables_uhl","Uhl Armoured Truck","valuables"),
+      (155,"valuables_foster","Foster Armoured Truck","valuables")]
 def generate(p):
     d=p.read_bytes()
     assert hashlib.sha256(d).hexdigest()=="d90c9b2ae091a740522b0f79078c3e5db32b2467cb2a9e0e96592c3c39ee1f74"
@@ -26,7 +33,7 @@ def generate(p):
         a=re.search(r"^\s*MR\(([^\n]+)\),\s*//\s*"+str(stock)+" "+name+r"\s*$",t,re.M)[1]
         b=re.search(r"^\s*ROV\(([^\n]+)\),\s*//\s*"+str(stock-116)+" "+name+r"\s*$",t,re.M)[1]
         intro,decay,life,base,label,*_=map(str.strip,a.split(","))
-        assert label==("MCT_GRAIN_WHEAT_MAIZE" if cargo=="grain" else "CT_"+cargo.upper())
+        assert label==({"grain":"MCT_GRAIN_WHEAT_MAIZE","valuables":"MCT_VALUABLES_GOLD_DIAMONDS"}.get(cargo,"CT_"+cargo.upper()))
         climate=re.search(r"LandscapeTypes\(\{([A-Z, ]+)\}\)",a)[1]
         bits=sum(2**"TASY".index(v) for v in climate if v in "TASY")
         im,price,run,_,speed,cap,weight,power=map(str.strip,b.split(","))
@@ -49,4 +56,4 @@ if __name__=="__main__":
     if args.write:target.write_text(text)
     else:
         assert target.read_text()==text
-        print("PASS 17 exact RC1 road stock rows, plus Foster MkII")
+        print("PASS indexed exact RC1 road stock rows, plus Foster MkII")

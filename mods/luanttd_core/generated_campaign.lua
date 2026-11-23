@@ -193,7 +193,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   return result
 end
 
-function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_count,Timber,Oil,Farm,progress)
+function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_count,Timber,Oil,Farm,progress,Heavy)
   local profile=assert(s.stock_generated_profile)
   assert(profile.town_rng and not profile.industry_rng)
   if density==6 then
@@ -236,6 +236,9 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
       chain="oil"
       assert(Oil,"Generated Oil needs its native industry world")
       placed,cells=Oil.place_generated(s,plan.kind,id,opts)
+    elseif plan.type==8 or plan.type==18 then
+      chain="heavy"
+      placed,cells=assert(Heavy).place_generated(s,plan.kind,id,opts)
     elseif plan.type==6 or plan.type==9 then
       chain="farm"
       assert(Farm,"Generated Farm needs its native industry world")
@@ -299,7 +302,8 @@ function M.forests(Sim,Terrain,s,Generator,Trees,tree_placer,pulse)
     local t=id and s.tiles[id]
     if not t or t.stock_void or t.build or t.house or t.site or t.stock_industry or t.stock_landmark then return end
     local slope,base=Terrain.tile(s.corner_grid,x,z)
-    return {class=t.terrain=="water" and 6 or 0,ground=t.stock_clear_ground or 0,
+    local field=s.stock_farm_fields and s.stock_farm_fields[id]
+    return {class=t.terrain=="water" and 6 or 0,ground=field and 3 or t.stock_clear_ground or 0,
       slope=slope,height=base,coast=t.coastal_water==true,
       bridge_above=s.bridge_above and s.bridge_above[id]~=nil or
         s.rail_bridge_above and s.rail_bridge_above[id]~=nil}

@@ -53,7 +53,7 @@ end
 assert(registered.initial_properties.mesh=="bl_sightseeing_car.obj" and registered.initial_properties.static_save==false)
 assert(cmd("driver") and C.active(p) and attached==model and avatar.visual=="sprite" and avatar.visual_size.y<.01)
 local start=model.pos.z
-tick({up=true},12)
+tick({up=true},16)
 assert(model.pos.z>start+1 and hint:find("W drive",1,true))
 tick({up=true},45)
 assert(math.abs(model.pos.z-20.5)<.001 and hint:find("No open road",1,true),"T junction arbitrarily picked an exit")
@@ -72,7 +72,7 @@ assert(cmd("driver"))
 tick({up=true},30)
 assert(model.pos.z<18 and hint:find("No open road",1,true),"entered a barred crossing")
 S.tiles[id(10,9)].level_crossing.barred=false
-tick({up=true},15)
+tick({up=true},20)
 assert(model.pos.z>18)
 S.tiles[id(10,9)].road_bits=0
 -- Remove both halves to invalidate the current or next admitted segment.
@@ -115,3 +115,24 @@ tick({up=true},22)
 assert(model.pos.z>old+1 and not next(before_move.tiles))
 C.leave("driver")
 print("PASS sightseeing car sees a live worker's new road and changing crossing, never the frozen host board")
+
+-- Measure straight-line progress after acceleration, independent of frame
+-- duration, the company speed selector, and the builder's E flight boost.
+for z=10,31 do road(20,z,z==10 and 4 or z==31 and 1 or 5) end
+lookx,lookz=0,1
+target=id(20,10)
+C=dofile(mod.."/avatar_car.lua")({s=S,Sim=Sim,render=rendering},W)
+assert(cmd("driver"))
+tick({up=true},16)
+local cruise_start=model.pos.z
+S.speed=4
+tick({up=true,aux1=true},20)
+assert(math.abs(model.pos.z-cruise_start-3)<.00001 and hint:find("42 km/h",1,true))
+tick({up=true},280)
+assert(math.abs(model.pos.z-62.5)<.00001)
+tick({down=true},10)
+local reverse_start=model.pos.z
+tick({down=true},20)
+assert(math.abs(reverse_start-model.pos.z-1.2)<.00001 and hint:find("17 km/h",1,true))
+C.leave("driver")
+print("PASS sightseeing cruise 3.00 and reverse 1.20 nodes/s; fast-forward and auxiliary key do not boost it")

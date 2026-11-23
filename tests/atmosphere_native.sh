@@ -123,7 +123,18 @@ assert levels[0]>levels[1]>levels[2]>27,levels
 assert levels[2]>levels[0]*.42,levels
 moon_box=(530,275,710,480)
 assert lunar_pixels(shots["noon"],moon_box)<10
-assert lunar_pixels(shots["moonrise"],moon_box)>500,"no moon visible at moonrise"
+moon=shots["moonrise"]
+square=[]
+for y in range(moon_box[1],moon_box[3]):
+    for x in range(moon_box[0],moon_box[2]):
+        r,g,b=moon.getpixel((x,y))
+        if r>150 and g>150 and b>144 and max(r,g,b)-min(r,g,b)<12:
+            square.append((x,y))
+assert len(square)>500,"no moon visible at moonrise"
+xs,ys=zip(*square)
+w,h=max(xs)-min(xs)+1,max(ys)-min(ys)+1
+assert abs(w-h)<=3 and len(square)>.93*w*h,(w,h,len(square))
+print(f"Square moon: {w}×{h} projected pixels, {len(square)} filled")
 assert lunar_pixels(shots["midnight"],(250,30,650,220))>500,"no moon visible by midnight"
 print("Readable lighting: noon, dusk, moonrise:",tuple(round(x,1) for x in levels))
 def light_at(p):

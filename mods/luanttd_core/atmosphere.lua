@@ -1,4 +1,4 @@
--- Native sky, sun and moon follow the campaign playback rate.
+-- Native sky, sun and moon follow the authoritative campaign calendar.
 local A={}
 local function smooth(a,b,x)
   local t=math.max(0,math.min(1,(x-a)/(b-a)))
@@ -44,39 +44,32 @@ local function set_sky(p,haze,phase)
       or {fog_color="#00000000",fog_start=-1,fog_distance=-1}})
 end
 
--- Luanti uses accelerated seconds per real second and re-reads time_speed
--- before each environment step. Let it advance/interpolate the actual sun
--- and moon. Only send a sync when playback changes; /time and the saved
--- world phase still work, unlike repeatedly deriving a phase from S.day.
-local DEFAULT_ENGINE_SPEED=72
-local DEFAULT_CAMPAIGN_SPEED=720 -- 86400 / 720 = two minutes at 1×
-local function campaign_clock(core,speed)
-  local settings=core.settings
-  local original=settings:get("time_speed")
-  local configured=tonumber(original) or DEFAULT_ENGINE_SPEED
-  if configured==0 then return function() end end -- admin or visual QA freeze
-  local base=configured==DEFAULT_ENGINE_SPEED and DEFAULT_CAMPAIGN_SPEED or math.max(0,configured)
-  local applied=configured
-  local owned=false
-  local function update()
-    local wanted=base*math.max(0,speed() or 0)
-    if wanted==applied then return end
-    settings:set("time_speed",tostring(wanted))
-    applied,owned=wanted,true
-    core.set_timeofday(core.get_timeofday()) -- prompt native phase/speed packet; do not jump
-  end
-  core.register_on_shutdown(function()
-    if not owned or tonumber(settings:get("time_speed"))~=applied then return end
-    if original then settings:set("time_speed",original) else settings:remove("time_speed") end
-  end)
-  update()
-  return update
-end
-
-function A.start(core,speed)
+-- Explicit synchronization makes core.get_timeofday() (including for
+-- headlights, beacons, and other mods) match the authoritative sun.
+function A.start(core,calendar_phase)
   local haze,moonlight=true,.53
   local joined,elapsed={},0
-  local update_clock=speed and campaign_clock(core,speed)
+  local clock_elapsed,solar_tick=.12,nil
+  local function sync_clock()
+    local phase=calendar_phase()
+    if phase==nil then return end
+    local tick=math.floor(phase*24000+.5)%24000
+    if solar_tick==tick and math.floor(core.get_timeofday()*24000+.5)%24000==tick then return end
+    solar_tick=tick
+    -- Aim inside the chosen native tick rather than at a floating-point
+    -- boundary: the engine uses a truncated integer in set_timeofday().
+    core.set_timeofday((tick+.25)/24000)
+  end
+  if calendar_phase then
+    local settings=core.settings
+    local original=settings:get("time_speed")
+    settings:set("time_speed","0")
+    core.register_on_shutdown(function()
+      if tonumber(settings:get("time_speed"))~=0 then return end
+      if original then settings:set("time_speed",original) else settings:remove("time_speed") end
+    end)
+    sync_clock()
+  end
   local function update(p,state,phase)
     local sky=phase.sky..phase.horizon..phase.fog
     if sky~=state.sky then
@@ -89,7 +82,10 @@ function A.start(core,speed)
     end
   end
   core.register_globalstep(function(dt)
-    if update_clock then update_clock() end
+    if calendar_phase then
+      clock_elapsed=clock_elapsed+dt
+      if clock_elapsed>=.12 then clock_elapsed=clock_elapsed%.12;sync_clock() end
+    end
     if not next(joined) then return end
     elapsed=elapsed+dt
     if elapsed<.6 then return end
@@ -112,6 +108,7 @@ function A.start(core,speed)
         color="#E5ECE4D2",ambient="#243B58",shadow="#91A8B8"})
     end
     if p.set_lighting then p:set_lighting({shadows={intensity=.34}}) end
+    if calendar_phase then sync_clock() end
     update(p,state,A.sample(core.get_timeofday(),moonlight))
   end
 end

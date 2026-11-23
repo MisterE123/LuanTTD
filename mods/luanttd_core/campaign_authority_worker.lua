@@ -20,6 +20,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     interval=cap.seconds_per_day or 1.25
     assert(type(interval)=="number" and interval>=.05 and interval<=15,"invalid worker day interval")
     auto=dofile(mod.."/campaign_step.lua").new(s,interval,{
+      persist_fraction=true,
       advance=function()
         runtime.day()
         -- Until the UI subscribes to notifications, do not retain
@@ -34,8 +35,21 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   end
   local inbox,outbox=channel..":request",channel..":reply"
   local seq=0
-  core.ipc_set(outbox,{seq=seq,ready=true,day=s.day,revision=s.authority_revision or 0})
   local prior=core.get_us_time()
+  local publish
+  if auto then
+    local solar=dofile(mod.."/campaign_solar_clock.lua")
+    local sample=solar.new(Sim,s,interval)
+    local last_us,last_speed
+    publish=function(now)
+      if s.speed~=last_speed or now-last_us>=solar.sample_interval*1000000 then
+        core.ipc_set(channel..":solar_clock",sample(now))
+        last_us,last_speed=now,s.speed
+      end
+    end
+    publish(prior)
+  end
+  core.ipc_set(outbox,{seq=seq,ready=true,day=s.day,revision=s.authority_revision or 0})
   local heartbeat,last_saved=prior,prior
   local function checkpoint()
     storage.write_state(s)
@@ -86,12 +100,14 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         elseif q.kind=="vehicle" then r=A.vehicle(q.player,q.mode,q.vehicle,q.locate==true)
         elseif q.kind=="demolition" then r=A.demolition(q.player,q.tile)
         elseif q.kind=="depot" then r=A.depot(q.player,q.mode,q.depot)
+        elseif q.kind=="truck_stop" then r=A.truck_stop(q.player,q.tile)
         elseif q.kind=="advance" and not auto then r=A.advance(q.days)
         elseif q.kind=="clock" then r={ok=true,day=s.day,tick=s.passenger_house_clock and
           s.passenger_house_clock.counter or 0,revision=s.authority_revision or 0}
         elseif q.kind=="command" then
           local before=s.authority_revision or 0
           r=A.command(q.player,q.command)
+          if publish and r.ok and q.command.kind=="speed" then publish(now) end
           if r.ok and cap.durable_actions and r.revision~=before then checkpoint() end
         elseif q.kind=="checkpoint" then
           checkpoint()
@@ -105,6 +121,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       r.seq=q.seq
       core.ipc_set(outbox,r)
     end
+    if publish then publish(now) end
     if auto and now-last_saved>=8000000 then checkpoint() end
   end
   storage.write_state(s)

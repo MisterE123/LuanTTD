@@ -8,11 +8,11 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
   host=host or {}
   local floor,max,min=math.floor,math.max,math.min
   local function timber_cargo(cargo)
-    return cargo=="oil" or cargo=="wood" or cargo=="goods" or cargo=="grain" or cargo=="livestock"
+    return cargo=="oil" or cargo=="wood" or cargo=="goods" or cargo=="grain" or cargo=="livestock" or cargo=="steel" or cargo=="iron_ore" or cargo=="valuables"
   end
   local function loading_name(cargo)
     return ({coal="Loading coal",mail="Loading mail",wood="Loading logs",goods="Loading goods",
-      grain="Loading grain",livestock="Loading livestock",oil="Loading crude oil"})[cargo] or "Boarding"
+      grain="Loading grain",livestock="Loading livestock",oil="Loading crude oil",steel="Loading steel",iron_ore="Loading iron ore",valuables="Loading valuables"})[cargo] or "Boarding"
   end
   -- A house can accept while under construction. The town supply module
   -- separately gates production on completion, as the stock engine does.

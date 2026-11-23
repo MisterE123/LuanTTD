@@ -10,7 +10,7 @@ local rows={
 }
 local originals=dofile(base.."/openttd/road_farm_fleet_data.lua")
 F.farm_order={"livestock_van","livestock_uhl","livestock_foster","grain_truck","grain_thomas","grain_goss","wood_truck","wood_foster","wood_moreland"}
-F.other_order={"coal_uhl","coal_dw","mail_mps","mail_reynard","mail_perry","oil_foster","oil_perry","goods_goss"}
+F.other_order={"coal_uhl","coal_dw","mail_mps","mail_reynard","mail_perry","oil_foster","oil_perry","goods_goss","iron_mps","iron_uhl","iron_chippy","steel_balogh","steel_uhl","steel_kelling","valuables_balogh","valuables_uhl","valuables_foster"}
 for k,r in pairs(originals) do rows[k]=r end
 F.road_order={}
 for _,set in ipairs({F.farm_order,F.other_order}) do

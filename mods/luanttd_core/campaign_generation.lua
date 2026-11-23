@@ -67,11 +67,13 @@ return function(core,mod,Sim,Settings)
     local Cat=dofile(src.."station_catchment.lua")(P,Rating,function()return 0 end,function()return 0 end)
     local Coal=dofile(src.."coal_industry.lua")(P,Rating,Cat,dofile(src.."income.lua"))
     local Timber=Sim.timber_rules()
-    local Industry=dofile(src.."industry_worldgen.lua")(Coal,Timber,Sim.oil_rules(),farm_rules)
+    local heavy=Sim.mount_heavy_world(S,Terrain)
+    local ready=heavy and dofile(mod.."/iron_steel_visual_assets.lua").ready(core,mod,heavy)
+    local Industry=dofile(src.."industry_worldgen.lua")(Coal,Timber,Sim.oil_rules(),farm_rules,ready)
     Campaign.industries(Sim,Terrain,S,Gen,Industry,dofile(mod.."/coal_industry_world.lua")(Sim,Terrain,Coal),
       option("industries","bayline_generated_industries",4),tonumber(settings:get("bayline_generated_industry_count")),
       dofile(mod.."/timber_world.lua")(Sim,Terrain,Timber),Oil,Farm,
-      function(i,n) progress(72+math.floor(6*i/math.max(1,n)),"Placing industries",true) end)
+      function(i,n) progress(72+math.floor(6*i/math.max(1,n)),"Placing industries",true) end,ready and heavy or nil)
     progress(79,"Adding landmarks and forests")
     Campaign.landmarks(Sim,Terrain,S,Gen,dofile(src.."scenery_object_worldgen.lua"),Calendar.date(Sim.date(S)))
     Campaign.forests(Sim,Terrain,S,Gen,dofile(src.."tree_worldgen.lua"),option("trees","bayline_generated_tree_placer",2),

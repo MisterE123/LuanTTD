@@ -11,7 +11,12 @@ return function(api,W)
   local Lanes=dofile(path.."/road_lanes.lua")
   local C,players={},{}
   local entity="luanttd_core:sightseeing_car"
-  local max_speed,reverse_speed=6.4,2.4
+  -- World nodes per real second, calibrated against the stock MPS bus and
+  -- mail truck on a straight road at normal simulation speed. Driving is
+  -- local sightseeing, so pausing/fast-forwarding and builder E do not
+  -- change the car's speed.
+  local cruise_speed,reverse_speed=3.0,1.2
+  local acceleration,reverse_acceleration,braking,coast=4.25,3.0,9.0,4.0
   local two_pi=2*math.pi
   local function wrap(y) return (y+math.pi)%two_pi-math.pi end
   local function opposite(d) return (d+1)%4+1 end
@@ -222,14 +227,14 @@ return function(api,W)
     local brake=keys.down and not keys.up
     local waiting=false
     if not drive and not brake then
-      q.speed=math.max(0,q.speed-5*dt)
+      q.speed=math.max(0,q.speed-coast*dt)
     elseif brake and not q.reversing and q.speed>0 then
-      q.speed=math.max(0,q.speed-15*dt)
+      q.speed=math.max(0,q.speed-braking*dt)
     elseif drive and q.reversing and q.next_id then
       -- Break out of reverse without cutting across a corner or teleporting.
-      q.speed=math.max(.95,q.speed-15*dt)
+      q.speed=math.max(.65,q.speed-braking*dt)
     else
-      q.speed=math.min(brake and reverse_speed or max_speed,q.speed+(brake and 4 or 6)*dt)
+      q.speed=math.min(brake and reverse_speed or cruise_speed,q.speed+(brake and reverse_acceleration or acceleration)*dt)
     end
     local distance=q.speed*dt
     while distance>0 do

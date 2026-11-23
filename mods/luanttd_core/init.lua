@@ -165,6 +165,16 @@ if generated_world or S.road_farm then
   assert(not missing,"The farm workbench is missing the asset "..tostring(missing))
   local mounted,rng=Sim.mount_farm_world(S,Terrain,true)
   api.farm_world=assert(mounted,rng)
+  local heavy=Sim.mount_heavy_world(S,Terrain)
+  if dofile(mod.."/iron_steel_visual_assets.lua").ready(core,mod,heavy) then api.heavy_world=heavy end
+  do
+    local files={}
+    for _,part in ipairs({"models","textures"}) do
+      for _,asset in ipairs(core.get_dir_list(mod.."/"..part,false)) do files[asset]=true end
+    end
+    api.capabilities.temperate_bank=not not (generated_world and files["bl_industry_temperate_bank_0_0.obj"] and
+      files["bl_industry_temperate_bank_1_0.obj"] and files["bl_industry_temperate_bank_atlas.png"])
+  end
   api.farm_visual_assets=assets
   if saved=="" and not generated_world then
     local seeded,why=api.farm_world.default_1751(S,rng)
@@ -200,6 +210,11 @@ if generated_world then
     for _,row in pairs(registry or {}) do if row.kind==kind and not row.removed then return true end end
     return false
   end
+  -- Stock road engines go on sale by date even on an island or a
+  -- funding-only map that has no current producer for their cargo.
+  S.road_heavy=api.heavy_world~=nil
+  if S.road_heavy then S.stock_heavy_industries=S.stock_heavy_industries or {} end
+  if api.capabilities.temperate_bank then S.road_bank=true;S.stock_bank_industries=S.stock_bank_industries or {} end
   S.road_farm=not not (present(S.stock_farm_industries,"farm") or present(S.stock_farm_industries,"factory"))
   S.road_oil=not not (present(S.stock_oil_industries,"oil_well") or present(S.stock_oil_industries,"oil_refinery"))
   S.rail_oil_service=S.road_oil
@@ -300,7 +315,7 @@ api.stock_timber_scenery=not not (api.timber_world and S.stock_timber_industries
 api.timber_tools=api.stock_timber_scenery and Sim.road_timber_active(S)
 api.farm_tools=api.farm_world and Sim.road_farm_active(S)
 api.oil_tools=api.oil_world and Sim.road_oil_active(S)
-api.freight_tools=(api.stock_coal_scenery and S.road_coal) or api.timber_tools or api.farm_tools or api.oil_tools
+api.freight_tools=(api.stock_coal_scenery and S.road_coal) or api.timber_tools or api.farm_tools or api.oil_tools or (api.heavy_world and Sim.road_heavy_active(S))
 local networks=simulation_bindings.networks(S,api.slope,api.terrain.tile,
   function() return not api.trackworks_demo or api.trackworks_demo.is_clear() end)
 local Track,Follow,RailCost,RailSearch=networks.track,networks.follow,networks.cost,networks.search
@@ -464,6 +479,7 @@ local headless=true
 api.offline_economy=headless
 local landscape=dofile(mod.."/campaign_landscape_async.lua").new(core,mod)
 local campaign=dofile(mod.."/campaign_step.lua").new(S,interval,{
+  persist_fraction=true,
   prepare=landscape.prepare,take=landscape.take,
   advance=Sim.daily,capture=render.capture,refresh=render.update_near,
   discard_effects=function()
@@ -489,6 +505,8 @@ core.register_globalstep(function(dt)
   local online=#players>0
   api.interest.refresh(players)
   if api.farm_view then api.farm_view.step(dt) end
+  render.step_fountains(dt)
+  render.step_lighthouse_beams(dt)
   if online then render.refresh_interest() else render.remove_vehicle_views() end
   if api.rail_platform_view then api.rail_platform_view.step(dt,online) end
 
@@ -532,10 +550,15 @@ core.register_globalstep(function(dt)
   if save_elapsed>=8 then api.save();save_elapsed=0 end
 end)
 core.register_on_shutdown(function() landscape.close();api.save() end)
+local solar=dofile(mod.."/campaign_solar_clock.lua")
+local local_solar=solar.new(Sim,S,interval)
 local atmosphere=dofile(mod.."/atmosphere.lua").start(core,function()
-  if placement then return 0 end
-  if authority then return authority.speed() end
-  return S.speed
+  if placement then return end
+  local now=core.get_us_time()
+  if authority then
+    local sample=authority.solar_clock()
+    if sample then return solar.phase(sample,now) end
+  else return solar.phase(local_solar(now),now) end
 end)
 local function open_campaign_player(p)
   local name=p:get_player_name()
@@ -637,7 +660,7 @@ core.register_on_player_receive_fields(function(p,key,f)
   return true
 end)
 if placement then core.after(0,attempt_placement) elseif worker_boot then core.after(0,start_authority) end
-core.register_on_leaveplayer(function(p) api.vehicle_ui.leave(p);ui.leave(p:get_player_name());world.leave(p:get_player_name());if authority then authority.leave(p:get_player_name()) end;if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
+core.register_on_leaveplayer(function(p) render.leave_fountains(p:get_player_name());api.vehicle_ui.leave(p);ui.leave(p:get_player_name());world.leave(p:get_player_name());if authority then authority.leave(p:get_player_name()) end;if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
 core.register_on_player_receive_fields(ui.fields)
 core.register_chatcommand("dispatch",{description="Open LuanTTD dispatcher",func=function(name)
   local p=core.get_player_by_name(name)

@@ -30,6 +30,7 @@ return function(api,ui)
   if H and api.rail_owned_pair_tools then H.enable_rail_pair() end
   if H and api.rail_block_tools then H.enable_rail_block() end
   if H and api.freight_tools then H.enable_freight() end
+  if H and api.capabilities and api.capabilities.temperate_bank then H.enable_bank() end
   if H and api.oneway_tools then H.enable_oneway() end
   if H and api.road_bay_tools then H.enable_bay_termini() end
   local function entries(state)

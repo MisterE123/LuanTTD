@@ -1,25 +1,22 @@
 # Day and night
 
-The sun and moon move along a shared orbit tilted by 20°, so the sun
-can cast diagonal shadows. The sky passes through warm twilight, and
-moonlight keeps open terrain readable for building. The moon is
-original procedural art: `python3 tools/terrain_moon_raster.py`
-rebuilds the texture.
+One sun-and-moon circuit lasts **one in-game calendar year**. January 1
+starts at noon. A leap year gets its full 366 days, while a regular
+year gets 365. Faster simulation moves the sun and moon faster;
+the simulation pause freezes them in place. Reopening a world
+resumes the saved calendar phase.
 
-The sky follows **simulation speed**. A full day takes **2 minutes at
-1×**, **1 minute at 2×**, or **30 seconds at 4×**. Pausing holds the
-current sky; resuming continues from that point. The date and economy
-progress at their existing pace. This does not change a service
-schedule or turn the sky one revolution per economy day.
+The sun and the square, cratered moon follow a shared orbit tilted by
+20°, so the sun can cast diagonal shadows. Warm twilight separates day
+from night, and moonlight keeps open terrain readable. Rebuild the
+original moon texture with `python3 tools/terrain_moon_raster.py`.
 
-Luanti still owns the world clock and its saved phase. A server
-administrator can use Luanti's `/time` command to set that phase.
-A non-default positive Luanti `time_speed` overrides the 1×
-baseline, and explicit `time_speed = 0` still freezes the sky
-regardless of the playback controls. None of this applies to the
-separate Original terrain survey.
+In an ordinary campaign, Luanti displays the simulation worker's native
+solar phase. Luanti's independent `time_speed` no longer sets an
+unrelated campaign clock. This does not affect the separate Original
+terrain survey.
 
-`lua tests/atmosphere.lua` covers visual continuity and default,
-paused, accelerated and resumed speeds. `tests/atmosphere_native.sh`
-draws the same profile in a real Luanti client. `tests/daylight_native.sh`
-checks the actual server's native time advances at the appropriate speed.
+`lua tests/atmosphere.lua` covers the calendar, speed changes, pause,
+save/reopen, and native clock synchronization. `tests/atmosphere_native.sh`
+checks the visuals in a real Luanti client. `tests/daylight_native.sh`
+exercises the actual worker's calendar and the native engine clock.

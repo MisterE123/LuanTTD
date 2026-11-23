@@ -78,32 +78,52 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     end
     return true
   end
+  -- Only the read-only kind/ground classification is shared. Field
+  -- records, ownership and corner heights are still read live.
+  local empty,protected={kind="void"},{kind="protected"}
+  local trees,shore,rough_trees={kind="trees",ground="grass"},{kind="trees",ground="shore"},{kind="trees",ground="rough"}
+  local grass,snow,dry={kind="clear",ground="grass"},{kind="clear",ground="snow",snow=true},{kind="clear",ground="desert"}
+  local rough,rocks={kind="clear",ground="rough"},{kind="clear",ground="rocks"}
   function W.field_board(s)
     -- Stock maps use a power-of-two board with void at the edge. Expose
     -- only existing LuanTTD tiles; unused columns/rows remain void.
     local width,height=64,64
-    while width<=Sim.W do width=width*2 end
-    while height<=Sim.H do height=height*2 end
+    local stock=s.stock_generated_profile
+    local freeform
+    if stock then
+      -- Generated stock axes already include the boundary void tiles.
+      width,height,freeform=Sim.W,Sim.H,s.corner_grid.freeform_edges
+    else
+      while width<=Sim.W do width=width*2 end
+      while height<=Sim.H do height=height*2 end
+      freeform=s.stock_freeform_edges
+    end
     s.stock_farm_fields=s.stock_farm_fields or {}
     local records=s.stock_farm_fields
+    local regrowth=s.stock_farm_grass
     local function base(x,z)
       local id=Sim.id(x+1,z+1)
       if not id or not s.tiles[id] then return nil end
       local t=s.tiles[id]
-      if occupied(s,id,t,true) then return nil end
-      if t.wood then return id,{kind="trees",ground=t.terrain=="shore" and "shore" or "grass"} end
-      return id,{kind="clear",ground=t.terrain=="snow" and "snow" or t.terrain=="desert" and "desert" or "grass"}
+      if t.stock_void or occupied(s,id,t,true) then return nil end
+      if t.wood then
+        local cover=type(t.wood)=="table" and t.wood.ground
+        return id,(cover==3 or t.terrain=="shore") and shore or cover==1 and rough_trees or trees
+      end
+      local g=t.stock_clear_ground
+      return id,t.terrain=="snow" and snow or t.terrain=="desert" and dry or g==1 and rough or g==2 and rocks or grass
     end
     local function dirty(id)
       s.changed=s.changed or {};s.changed[#s.changed+1]=id
     end
-    local b={width=width,height=height,freeform=not not s.stock_freeform_edges}
+    local b={width=width,height=height,freeform=not not freeform}
     function b.tile(x,z)
-      if x<0 or z<0 or x>=Sim.W or z>=Sim.H or b.freeform and (x==0 or z==0) then
-        return {kind="void"}
+      if x<0 or z<0 or x>=Sim.W or z>=Sim.H or b.freeform and (x==0 or z==0) or
+          stock and (x==width-1 or z==height-1) then
+        return empty
       end
       local id,t=base(x,z)
-      if not id then return {kind="protected"} end
+      if not id then return protected end
       local r=records[id]
       if r then
         local slope,base=Terrain.tile(s.corner_grid,x+1,z+1)
@@ -113,8 +133,9 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     end
     function b.make_field(x,z,variant,industry,counter)
       local id,t=base(x,z)
-      assert(id and Fields.suitable(t,true))
-      s.tiles[id].wood=nil
+      assert(id and Fields.suitable(t,true,true))
+      if regrowth then regrowth[id]=nil end
+      s.tiles[id].wood,s.tiles[id].stock_clear_ground=nil,nil
       local slope,base=Terrain.tile(s.corner_grid,x+1,z+1)
       records[id]={kind="clear",ground="field",variant=variant,industry=industry,counter=counter,
         fences={},slope=slope,base=base}
@@ -125,27 +146,41 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
       local field=assert(records[id]);field.fences[side]=style
       dirty(id)
     end
+    local function edge(r,id,x,z,side)
+      if r.fences[side] then return end
+      local t=b.tile(x,z)
+      if t.kind~="clear" or t.ground~="field" then r.fences[side]=3;dirty(id) end
+    end
     function b.visit(x,z,tick,editor)
       local id=Sim.id(x+1,z+1)
       local r=id and records[id]
-      if not r or r.last_tick==tick then return end
+      if not r then
+        local grow=id and regrowth and regrowth[id]
+        if grow==nil or editor then return end
+        local _,ground=base(x,z)
+        if ground~=grass then regrowth[id]=nil
+        elseif grow<7 then regrowth[id]=grow+1
+        else regrowth[id]=nil;dirty(id) end
+        return
+      end
+      if r.last_tick==tick then return end
       if b.tile(x,z)~=r then records[id]=nil;dirty(id);return end
       r.last_tick=tick
       -- Stock clear_cmd.cpp UpdateFences and the ordinary CLEAR_FIELDS
       -- TileLoop_Clear. Same physical landscape revisit as any tile.
-      local function edge(dx,dz,side)
-        local t=b.tile(x+dx,z+dz)
-        if (t.kind~="clear" or t.ground~="field") and not r.fences[side] then
-          r.fences[side]=3;dirty(id)
-        end
-      end
-      edge(1,0,2);edge(0,1,1);edge(-1,0,0);edge(0,-1,3)
+      edge(r,id,x+1,z,2);edge(r,id,x,z+1,1);edge(r,id,x-1,z,0);edge(r,id,x,z-1,3)
       if editor then return end
       if r.counter<7 then r.counter=r.counter+1;return end
       r.counter=0
       local producer=s.stock_farm_industries and s.stock_farm_industries[r.industry]
       if not producer or producer.removed then r.industry=nil end
-      if r.industry==nil and r.variant>=7 then records[id]=nil
+      if r.industry==nil and r.variant>=7 then
+        records[id]=nil
+        s.tiles[id].stock_clear_ground=nil
+        -- RC1 MakeClear(Grass, 2): the ordinary counter reaches density
+        -- 3 eight visits later. Store only active regrowth, not each tile.
+        if not regrowth then regrowth={};s.stock_farm_grass=regrowth end
+        regrowth[id]=0
       else r.variant=(r.variant+1)%9 end
       dirty(id)
     end

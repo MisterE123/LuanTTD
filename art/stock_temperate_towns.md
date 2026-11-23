@@ -4,7 +4,7 @@ There is native artwork for all 31 buildable Temperate town roots in [OpenTTD 16
 
 Twenty-six editable `town_stock_*.blend` sources were modeled with original geometry and a shared scenery palette. Five established house and shop models remain mapped to their stock identities. The stock catalog still decides the ages and zones that may build each house. No OpenTTD/OpenGFX sprite pixels are distributed here.
 
-The hotel, both stadiums and mall are modeled as continuous landmarks, then clipped at exact tile boundaries into two or four OBJ pieces. This lets the native game project each part across separately loaded worker sectors. Construction has three distinct native stages; the entire footprint is admitted, built, completed and demolished as one building. Single-tile doors use the existing deterministic frontage rule.
+The hotel, both stadiums and mall are modeled as continuous landmarks, then clipped at exact tile boundaries into two or four OBJ pieces. This lets the native game project each part across separately loaded worker sectors. Construction has three distinct native stages; the entire footprint is admitted, built, completed and demolished as one building. Single-tile doors use the existing deterministic frontage rule. The football and athletics entrances use raised Blender lettering, with an export-only handedness correction so both halves of each sign read correctly from the street.
 
 Generate assets from Blender:
 

@@ -64,7 +64,8 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
   end
   function F.cost(kind,raw_setting,base,raw_base)
     local s=assert(F.spec[kind])
-    return floor((s.life=="organic" and raw_setting==1 and (raw_base or 8000000) or (base or 1000000))*s.cost_factor/256)
+    local raw=s.life=="extractive" or s.life=="organic"
+    return floor((raw and raw_setting==1 and (raw_base or 8000000) or (base or 1000000))*s.cost_factor/256)
   end
   function F.new(kind,id,x,z,opts)
     opts=opts or {}
@@ -293,14 +294,15 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
   -- slot order is source-stable and saturation always consumes accepted
   -- input even if the shared stockpile is already full.
   function F.trigger(ind)
-    if ind.removed or ind.kind~="factory" then return 0,0,{} end
+    local scheme=F.spec[ind.kind]
+    if ind.removed or not scheme or (scheme.life~="processing" and scheme.life~="black_hole") then return 0,0,{} end
     local output=ind.produced[1]
     local before,used,details=output.waiting,0,{}
     ind.was_cargo_delivered=true
     for slot,a in ipairs(ind.accepted) do
       if a.cargo and a.waiting>0 then
         local units=a.waiting
-        output.waiting=min(F.MAX_WAITING,output.waiting+floor(units*F.spec.factory.multiplier[slot]/256))
+        output.waiting=min(F.MAX_WAITING,output.waiting+floor(units*scheme.multiplier[slot]/256))
         a.waiting=0;used=used+units;details[a.cargo]=units
       end
     end
@@ -325,7 +327,9 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
           percent=old==0 and 100 or floor(rate*100/old)-100}
       end
     end
-    if ind.kind=="farm" then
+    local spec=F.spec[ind.kind]
+    if spec.life=="black_hole" then return end
+    if spec.life~="processing" then
       if opts.original then
         if Commons.chance(3,assert(rnd)()) then
           local pct=Commons.pct_transported(ind.produced[1])
@@ -337,7 +341,7 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
           else ind.prod_level=max(4,floor(level/2)) end
           if level~=ind.prod_level or increase and level<128 then
             for slot,p in ipairs(ind.produced) do
-              if p.cargo then record(p,min(255,ceil(F.spec.farm.rates[slot]*ind.prod_level/16))) end
+              if p.cargo then record(p,min(255,ceil(spec.rates[slot]*ind.prod_level/16))) end
             end
           end
         end

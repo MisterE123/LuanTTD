@@ -32,6 +32,7 @@ local company_projection
 function U.use_worker_projection(view) company_projection=view end
 function U.install_worker_controls(client)
   local mod=core.get_modpath("luanttd_core")
+  api.worker_truck_stop=dofile(mod.."/campaign_worker_truck_stop_ui.lua")(core,client,number)
   api.worker_layer_client=client
   api.worker_bridge_client=client
   api.worker_signal_client=client
@@ -436,6 +437,7 @@ function U.fields(p,formname,f)
   if api.worker_fleet and formname==api.worker_fleet.form then return api.worker_fleet.fields(p,f) end
   if api.worker_finance and formname==api.worker_finance.form then return api.worker_finance.fields(p,f) end
   if api.worker_depot and formname==api.worker_depot.form then return api.worker_depot.fields(p,f) end
+  if api.worker_truck_stop and formname==api.worker_truck_stop.form then return api.worker_truck_stop.fields(p,f) end
   if api.world and api.world.avatar_state and api.world.avatar_state(p) then return false end
   if formname=="luanttd_core:station_layout" then return U.station_layout_fields(p,f) end
   if formname=="luanttd_core:rail_depot_direction" then return U.depot_direction_fields(p,f) end
@@ -1769,6 +1771,8 @@ local function authority_preview(p,id,hit)
   elseif tool=="clear" then
     if not V.demolition_anchor or V.demolition_anchor==id then return ids,true,"Bulldoze · Click to review layers or drag an area." end
     kind,request="terrain",{operation="bulldoze",first=V.demolition_anchor,last=id,diagonal=p:get_player_control().aux1==true}
+  elseif tool=="fund_bank" then
+    label="Fund Bank";request={tool=tool,first=id}
   elseif tool=="road_station" or tool=="road_depot" or tool=="road_bay_pair" or tool=="truck_stop_tool" then
     request={tool=tool=="truck_stop_tool" and "truck_stop" or tool,first=id}
   elseif dock=="dock" or dock=="depot" or tool=="ship_buoy" then
@@ -2074,7 +2078,7 @@ function U.is_world_tool(tool)
   if type(tool)~="string" or tool=="company" or tool=="jump" then return false end
   return not not (Sim.tools[tool] or rail_orders[tool] or rail_tool_labels[tool] or waypoint_tools[tool] or rail_spans[tool] or coal_stage_tools[tool] or
     (api.rail_oil_tools and oil_stage_tools[tool]) or (api.rail_goods_tools and goods_stage_tools[tool]) or airfield_tools[tool] or ship_mode[tool] or buoy_tools[tool] or tram_mode[tool] or
-    tool=="teleport_tile" or tool=="tram_order" or tool=="airfield_order" or tool=="ship_order" or tool=="ship_coal_order" or tool=="truck_stop_tool" or tool=="rail_crossing_tool" or tool=="oneway_drag" or
+    tool=="fund_bank" or tool=="teleport_tile" or tool=="tram_order" or tool=="airfield_order" or tool=="ship_order" or tool=="ship_coal_order" or tool=="truck_stop_tool" or tool=="rail_crossing_tool" or tool=="oneway_drag" or
     landscape_tools[tool] or bridge_tool(tool) or tool:match("^structure_"))
 end
 function U.stop_label(st)
@@ -2094,6 +2098,7 @@ function U.world_status(p,tile,show_preview,hit)
     (V.tool=="rail_crossing_tool" and crossing_tool) or (V.tool=="oneway_drag" and one_way_tool) or
     (rail_tool_labels[V.tool] and {name=rail_tool_labels[V.tool]}) or
     (waypoint_tools[V.tool] and {name=waypoint_tools[V.tool]}) or
+    (V.tool=="fund_bank" and {name="Fund Bank"}) or
     (V.tool=="truck_stop_tool" and {name="Freight loading stop"}) or
     (V.tool=="teleport_tile" and {name="Teleport to tile"}) or
     (bridge_tool(V.tool) and {name=bridge_label(bridge_tool(V.tool))}) or Sim.tools.inspect
@@ -2180,6 +2185,9 @@ function U.build_world(p,id,hit)
       local cargo=coal_stage_tools[V.tool] and "coal" or oil_stage_tools[V.tool] and "oil" or "goods"
       worker_action(n,V,{kind="rail_freight_stage",tile=id,cargo=cargo,role=stage.role,mirror=V.coal_side~=false})
       return
+    end
+    if V.tool=="fund_bank" then
+      worker_build(n,V,"road",{tool=V.tool,first=id});return
     end
     if V.tool=="truck_stop_tool" then
       worker_build(n,V,"road",{tool="truck_stop",first=id});return
@@ -2622,6 +2630,9 @@ function U.context(p,tile,hit)
       local x,z=Sim.xy(tile)
       local site=R.host_record and R.host_record("sites",t.site)
       local st=R.host_record and R.host_record("stations",t.station)
+      if st and st.mode=="road" and st.stop_type=="truck" and api.worker_truck_stop then
+        return api.worker_truck_stop.open(p,tile)
+      end
       local name=st and st.name or site and site.name or t.terrain or "Tile"
       label=("%s · %d,%d"):format(name,x,z)
       if st and st.mode=="road" and st.stop_type~="truck" and R.waiting_at then

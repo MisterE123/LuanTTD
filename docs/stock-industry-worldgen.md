@@ -54,6 +54,10 @@ legitimately omit one or more selected industries. Other climates,
 NewGRF callbacks, funding/prospecting, industry objects, dynamic
 production-driven placement, and full terrain leveling are not covered.
 
+## Temperate iron and steel
+
+The ordinary worker mounts the [16.0-RC1 Iron Ore Mine and Steel Mill](stock-iron-steel.md) on the same terrain and town board. Both use original layout 0. Type 18 excludes nearby Steel Mills, and type 8 excludes nearby Mines and Factories as in the pinned source. Because the second Steel Mill layout and placement leveling do not have native support yet, generation can still omit an eligible site on constrained terrain.
+
 ## Interface
 
 Load `openttd/industry_worldgen.lua` as `factory(Coal)` or

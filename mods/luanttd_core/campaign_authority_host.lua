@@ -65,6 +65,9 @@ return function(engine,mod,callbacks)
     end
     return false
   end
+  function H.solar_clock()
+    if state=="owned" then return client.solar_clock() end
+  end
   function H.observe(request,done)
     if state~="owned" then return nil,"CAMPAIGN_NOT_READY" end
     return client.query(request,done)

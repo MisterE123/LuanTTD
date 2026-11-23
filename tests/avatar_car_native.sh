@@ -26,6 +26,7 @@ cp -a game.conf settingtypes.txt "$game/"
 mod="$game/mods/luanttd_core"
 cp "$mod/init.lua" "$mod/init.native.lua"
 mv -f "$mod/init.native.lua" "$mod/init.lua"
+printf 'return function() return {scenario="coastal",local_replay=true} end\n' > "$mod/qa_layout.lua"
 cp tests/avatar_car_live_native.lua "$mod/avatar_car_live_native.lua"
 printf '\ndofile(mod.."/avatar_car_live_native.lua")(api)\n' >> "$mod/init.lua"
 if [[ -n ${BAYLINE_NATIVE_CACHE_SEED:-} && -d "$BAYLINE_NATIVE_CACHE_SEED/minetest" ]]; then
@@ -126,11 +127,11 @@ fi
 xdotool keydown w
 sleep 2.3
 import -window root -quality 87 "$out/car-driving.jpg"
-sleep 1.2
+sleep 3.5
 xdotool keyup w
 say "/carprobe far"
 xdotool keydown s
-sleep 2.3
+sleep 3.1
 xdotool keyup s
 say "/carprobe reverse"
 xdotool click 3
@@ -154,5 +155,11 @@ assert far[1]>entered[1]+6 and far[2]>entered[2]+.75,points
 assert reverse[1]<far[1]-2 and abs(far[3]-reverse[3])<.05,points
 assert returned[0]=="builder" and returned[7:]==before[7:],points
 assert all(abs(a-b)<.035 for a,b in zip(before[1:6],returned[1:6])),points
-print("Native /car command, hill road driving and reversing, right-click restore, and unchanged route state passed.")
+samples=[float(re.search(r"CAR_QA_SPEED (-?[0-9.]+)",line)[1])
+         for line in lines if "CAR_QA_SPEED " in line]
+assert sum(2.97<=v<=3.03 for v in samples)>=5, samples
+assert sum(-1.23<=v<=-1.17 for v in samples)>=4, samples
+assert max(samples)<=3.03 and min(samples)>=-1.23, samples
+print(f"Native /car: {max(samples):.2f} nodes/s cruise, {-min(samples):.2f} nodes/s reverse. "
+      "Hill road driving, right-click restore, and unchanged route state passed.")
 LOG

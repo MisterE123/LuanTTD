@@ -1,5 +1,7 @@
 -- Worker-facing transactions call the regular railway, water and airfield
 -- models. Their quotes are retained on the owner, not trusted from forms.
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Help=dofile(mod.."/depot_vehicle_help.lua")
 return function(Sim,R)
   local s=R.world
   local T={}
@@ -178,9 +180,25 @@ return function(Sim,R)
   function T.depot(owner,mode,key)
     local offers,vehicles,targets={},{},{}
     local airframe
-    local function add(name,cmd)
+    local function add(name,cmd,help)
       local q=T.quote(owner,cmd)
-      if q then offers[#offers+1]={name=name,price=q.price,request=q.request} end
+      if q then offers[#offers+1]={name=name,price=q.price,request=q.request,help=help} end
+    end
+    local function road_help(engine,cargo,q)
+      q=q or Sim.vehicle_offer(s,engine) or Sim.vehicles[engine] or {}
+      return Help.describe("road",cargo,q.name,{capacity=q.capacity,speed=q.display_speed or
+        (q.source_speed and math.floor(q.source_speed/2))})
+    end
+    local function ship_help(model,cargo,refit,needs_refit)
+      model=model or {}
+      return Help.describe("ship",cargo,model.name,{capacity=model.capacity,
+        capacity_unit=cargo=="oil" and "kL" or cargo=="coal" and "t of coal",
+        speed=model.max_speed and model.max_speed/2},nil,refit,needs_refit)
+    end
+    local function air_help(entry)
+      entry=entry or {}
+      return Help.describe("air",nil,entry.name,{capacity=entry.passengers,speed=entry.max_speed,
+        runway=entry.jet and "use City Airports"})
     end
     if mode=="road" and tile(key) then
       local t=s.tiles[key]
@@ -191,7 +209,7 @@ return function(Sim,R)
           if q then
             for _,cargo in ipairs(Sim.cargo_order) do
               if Sim.allowed(engine,cargo) and (not q.stock_id or cargo=="passenger") then
-                offers[#offers+1]={name=q.name.." · "..Sim.cargo[cargo].name,price=q.cost,
+                offers[#offers+1]={name=q.name.." · "..Sim.cargo[cargo].name,price=q.cost,help=road_help(engine,cargo,q),
                   request={kind="road_buy",engine=engine,cargo=cargo,depot=key,cost=q.cost}}
               end
             end
@@ -199,61 +217,78 @@ return function(Sim,R)
         end
       end
       for _,v in pairs(s.fleet) do if v.owner==owner and (v.home_depot or v.depot)==key then
-        vehicles[#vehicles+1]={id=v.id,label=v.name}
+        vehicles[#vehicles+1]={id=v.id,label=v.name,help=road_help(v.engine,v.cargo)}
       end end
     elseif mode=="rail" and R.rail and R.rail.owned and tile(key) then
       local t=s.tiles[key]
       if t.rail_depot_dir==nil or t.owner~=owner then return nil,"Choose a rail depot you own." end
+      local catalogue={}
       for _,row in ipairs(R.rail.owned.catalog(s)) do
+        catalogue[row.stock_id]=row
         if row.passenger_model_ready then
           local id=row.stock_id
-          add(row.name or tostring(id),{mode=mode,operation="buy",depot=key,parts=id==11 and {id} or {id,27}})
+          add(row.name or tostring(id),{mode=mode,operation="buy",depot=key,parts=id==11 and {id} or {id,27}},
+            Help.describe("rail","passenger",row.name,{speed=row.speed,capacity=id==11 and 76 or 40},id==11 and "dmu" or nil))
         end
       end
       for _,unit in ipairs(R.rail.owned.list(s,owner,key)) do
         local cargo=({[29]="coal",[30]="oil",[32]="goods"})[unit.stock_ids[2]]
+        local engine=catalogue[unit.stock_ids[1]] or {}
+        local part=#unit.stock_ids==1 and (unit.stock_ids[1]==11 and "dmu" or "engine") or nil
         vehicles[#vehicles+1]={id=unit.id,label="Train "..unit.unit_number..
-          (cargo and " · "..Sim.cargo[cargo].name or ""),cargo=cargo}
+          (cargo and " · "..Sim.cargo[cargo].name or ""),cargo=cargo,
+          help=Help.describe("rail",Help.rail_cargo(unit.stock_ids[2]),engine.name,{speed=engine.speed},part)}
       end
     elseif mode=="ship" and R.water and id(key) then
       local t=s.stock_ship_depots and s.stock_ship_depots[key]
       if not t or t.owner~=owner then return nil,"Choose a ship depot you own." end
       for _,engine in ipairs(R.water.roster.order or {206,207}) do
         local model=R.water.roster.model(engine)
-        add(model.name,{mode=mode,operation="buy",depot=key,engine=engine})
+        add(model.name,{mode=mode,operation="buy",depot=key,engine=engine},ship_help(model))
       end
       if R.water.coal then
         local C=R.water.coal
         for _,engine in ipairs(C.catalog) do
-          add(C.model(engine).name,{mode=mode,operation="buy",depot=key,engine=engine})
+          local model=C.model(engine)
+          add(model.name,{mode=mode,operation="buy",depot=key,engine=engine},ship_help(model,"goods",false,true))
         end
         local c=C.status(s)
         if c and c.depot==key and c.owner==owner then
-          vehicles[#vehicles+1]={id="coal",label=c.name,cargo=c.cargo==1 and "coal" or "goods"}
-          if c.cargo~=1 then add("Refit "..c.name.." to Coal",{mode=mode,operation="refit",depot=key,cargo="coal"}) end
+          local model=C.model(c.engine) or {name=c.name}
+          vehicles[#vehicles+1]={id="coal",label=c.name,cargo=c.cargo==1 and "coal" or "goods",
+            help=ship_help(model,c.cargo==1 and "coal" or "goods",false,c.cargo~=1)}
+          if c.cargo~=1 then add("Refit "..c.name.." to Coal",{mode=mode,operation="refit",depot=key,cargo="coal"},
+            ship_help(model,"coal",true)) end
         end
       end
       if R.water.tanker then
         local stock=R.water.tanker
         for _,engine in ipairs(stock.catalog) do
-          add(stock.model(engine).name,{mode=mode,operation="buy",depot=key,engine=engine})
+          local model=stock.model(engine)
+          add(model.name,{mode=mode,operation="buy",depot=key,engine=engine},ship_help(model,"oil"))
         end
         local t=R.water.tanker.status(s)
-        if t and t.depot==key and t.owner==owner then vehicles[#vehicles+1]={id=t.id,label=t.name,cargo="oil"} end
+        if t and t.depot==key and t.owner==owner then
+          vehicles[#vehicles+1]={id=t.id,label=t.name,cargo="oil",
+            help=ship_help(stock.model(t.engine) or {name=t.name},"oil")}
+        end
       end
       local ferry=s.stock_owned_ferry
-      if ferry and ferry.depot==key then vehicles[#vehicles+1]={id="ferry",label="Passenger ferry"} end
+      if ferry and ferry.depot==key then
+        local model=R.water.roster.model(ferry.engine_id) or {name="Passenger ferry"}
+        vehicles[#vehicles+1]={id="ferry",label=model.name,help=ship_help(model)}
+      end
     elseif mode=="air" and R.air and id(key) then
       local t=s.stock_small_airports and s.stock_small_airports[key]
       if not t or t.owner~=owner then return nil,"Choose an airfield you own." end
       for _,engine in ipairs(R.air.roster.catalog()) do
-        add(engine.name,{mode=mode,operation="buy",depot=key,engine=engine.stock_id})
+        add(engine.name,{mode=mode,operation="buy",depot=key,engine=engine.stock_id},air_help(engine))
       end
       local unit=R.air.owned.status(s,key)
       if unit then
         airframe=unit.stock_id
         local d=R.air.roster.entry(unit.stock_id)
-        vehicles[1]={id=unit.id,label=d and d.name or "Aircraft"}
+        vehicles[1]={id=unit.id,label=d and d.name or "Aircraft",help=air_help(d)}
       end
     else return nil,"DEPOT_UNAVAILABLE" end
     local listing=mode=="rail" and s.stock_rail_stations or mode=="air" and s.stock_small_airports

@@ -6,7 +6,6 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
   local Session={}
   local H
   local queue,admitted={},{}
-  local speed=0
   local closing,retry_scheduled,first_ready,attempts=false,false,false,0
   core.register_on_shutdown(function() closing=true end)
   local painting=dofile(mod.."/campaign_projection_painter.lua")(render,function(_,ok,why)
@@ -45,10 +44,6 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
     render.draw_worker_actors(projection)
     ui.use_worker_projection(projection)
     ui.hud()
-    for n in pairs(admitted) do
-      local v=projection.company(n)
-      if v then speed=v.speed;break end
-    end
   end
   H=Host(core,mod,{
     freeze_host=function() api.authority_handoff=true end,
@@ -74,7 +69,6 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
     present=present,
     stopped=function(why,_,_,detail)
       if closing or why=="stopped" then return end
-      speed=0
       core.log("warning","LuanTTD campaign worker interrupted; attempting checkpoint recovery: "..tostring(detail or why))
       if retry_scheduled then return end
       if attempts==0 then
@@ -109,16 +103,18 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
       local n=p:get_player_name()
       if admitted[n] then
         local pos=p:get_pos()
-        if pos then positions[#positions+1]={x=pos.x,z=pos.z,name=n} end
+        if pos then positions[#positions+1]={x=pos.x,y=pos.y,z=pos.z,name=n} end
       end
     end
     H.step(dt,positions)
     painting.step()
     if api.farm_view then api.farm_view.step(dt,positions) end
+    render.step_fountains(dt,positions)
     render.step_worker_actors(dt)
+    render.step_lighthouse_beams(dt,positions)
     if H.status()=="owned" and api.crowd then api.crowd.update(core.get_connected_players(),dt) end
   end
-  function Session.speed() return speed end
+  function Session.solar_clock() return H.solar_clock() end
   function Session.status() return H.status() end
   function Session.query(request,done) return H.query(request,done) end
   return Session

@@ -1,6 +1,6 @@
 -- Validate the normal road gesture, then quote and commit it inside the
 -- authoritative Lua VM. Only finite typed values cross the mailbox.
-return function(Sim,s,oneway)
+return function(Sim,s,oneway,Bank)
   local M={}
   local function valid(id) return type(id)=="number" and id%1==0 and s.tiles[id]~=nil end
   local methods={}
@@ -22,9 +22,15 @@ return function(Sim,s,oneway)
       return Sim.autoroad_plan(s,player,first,last,request.axis,request.start_half,request.end_half)
     elseif op=="bend" then
       return Sim.autoroad_bend_plan(s,player,first,last)
+    elseif op=="fund_bank" and first==last and Bank then
+      local q,why=Bank.plan(s,first)
+      if not q then return nil,Bank.reason(why) end
+      local changes={}
+      for i,id in ipairs(q.clears) do changes[i]={id=id,tool="fund_bank",foundation=q.town} end
+      return {cost=q.price,changes=changes,bank=q}
     elseif op=="truck_stop" and first==last then
       if not (s.road_mail and s.road_stock_house_supply) and not Sim.road_coal_active(s)
-        and not Sim.road_timber_active(s) and not Sim.road_farm_active(s) and not Sim.road_oil_active(s) then
+        and not Sim.road_timber_active(s) and not Sim.road_farm_active(s) and not Sim.road_oil_active(s) and not Sim.road_heavy_active(s) and not Sim.road_bank_active(s) then
         return nil,"No stock mail or freight service in this campaign."
       end
       if s.tiles[first].station then return nil,"Build a new truck stop rather than converting a station." end
@@ -69,6 +75,10 @@ return function(Sim,s,oneway)
       return Sim.autoroad_build(s,player,first,last,request.axis,request.start_half,request.end_half)
     elseif request.tool=="bend" then
       return Sim.autoroad_bend_build(s,player,first,last)
+    elseif request.tool=="fund_bank" then
+      local bank,ids=Bank.execute(s,player,first,q.bank)
+      if not bank then return false,Bank.reason(ids) end
+      return true,("Bank founded for $%d."):format(q.cost),ids
     elseif request.tool=="truck_stop" then
       local ok,note,ids=Sim.build_truck_stop(s,player,first)
       if ok then

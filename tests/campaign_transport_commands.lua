@@ -39,13 +39,19 @@ assert(s.tiles[lower].water_class=="canal")
 local dock1=choose("Water",{mode="ship",operation="build",kind="dock",tile=Sim.id(18,8)})
 local dock2=choose("Water",{mode="ship",operation="build",kind="dock",tile=Sim.id(18,16)})
 local ship_depot=choose("Water",{mode="ship",operation="build",kind="depot",tile=Sim.id(22,10),axis=0})
+local ferry_row=assert(A.depot("Water","ship",ship_depot).value.offers[1])
+assert(ferry_row.help.service=="Passenger ferry" and ferry_row.help.connections:find("navigable water",1,true))
 assert(choose("Water",{mode="ship",operation="buy",engine=206,depot=ship_depot})=="ferry")
+assert(A.depot("Water","ship",ship_depot).value.vehicles[1].help.model:find("MPS Passenger Ferry",1,true))
 command("Water",{kind="transport_start",mode="ship",depot=ship_depot,first=dock1,second=dock2})
 assert(not A.transport_quote("Water",{mode="ship",operation="waterwork",kind="canal",
   tile=Sim.id(7,26),last=Sim.id(9,26)}).ok)
 local ap=choose("Air",{mode="air",operation="build",tile=Sim.id(2,14)})
 local aq=choose("Air",{mode="air",operation="build",tile=Sim.id(13,19)})
+local air_row=assert(A.depot("Air","air",ap).value.offers[1])
+assert(air_row.help.service=="Passenger aircraft" and air_row.help.connections:find("compatible runway",1,true))
 assert(choose("Air",{mode="air",operation="buy",engine=215,depot=ap}))
+assert(A.depot("Air","air",ap).value.vehicles[1].help.model:find("Sampson U52",1,true))
 command("Air",{kind="transport_start",mode="air",first=ap,second=aq})
 local function track(req)
   local q=A.rail_quote("Rail",req)
@@ -59,11 +65,13 @@ track({tool="station",first=Sim.id(4,5),last=Sim.id(6,5),axis=0,tracks=1,length=
 track({tool="station",first=Sim.id(12,5),last=Sim.id(14,5),axis=0,tracks=1,length=3})
 local prospects=assert(A.depot("Rail","rail",depot).value)
 assert(#prospects.offers>=1 and #prospects.vehicles==0)
+assert(prospects.offers[1].help.connections:find("two passenger rail platforms",1,true))
 assert(not A.depot("Air","rail",depot).ok)
 local engine=choose("Rail",{mode="rail",operation="buy",depot=depot,parts={0,27}})
 command("Rail",{kind="transport_start",mode="rail",vehicle=engine,
   first=s.tiles[Sim.id(12,5)].rail_station_id,second=s.tiles[Sim.id(4,5)].rail_station_id})
-assert(A.depot("Rail","rail",depot).value.vehicles[1].id==engine)
+local rail_row=A.depot("Rail","rail",depot).value.vehicles[1]
+assert(rail_row.id==engine and rail_row.help.service=="Passenger train")
 assert(A.orders("Rail","rail",engine).ok and A.orders("Water","ship","ferry").ok and A.orders("Air","air",1).ok)
 assert(A.advance(4).tick==296 and runtime.rail.run.current(s).ticks>0)
 assert(runtime.water.run.current(s).vehicle.tick>0 and runtime.air.run.current(s).vehicle.tick>0)
@@ -79,6 +87,8 @@ local function buy_part(kind,id)
     if offer.id==id then match=offer;break end
   end
   assert(match,"eligible stock part missing")
+  assert(match.help and (kind=="engine" and match.help.connections:find("Couple it to a passenger coach",1,true) or
+    kind=="wagon" and match.help.service=="Passenger coach"))
   local money=A.company("Rail").value.cash
   command("Rail",{kind="rail_assembly",token=quote.value.token,operation=kind,stock=id})
   assert(A.company("Rail").value.cash==money-match.quote.price)
@@ -86,6 +96,7 @@ end
 buy_part("wagon",27)
 local loose=A.rail_assembly("Rail",shed).value
 assert(#loose.bodies==1 and not loose.destinations[1].unit)
+assert(loose.bodies[1].help.service=="Passenger coach")
 buy_part("engine",0)
 local staged=A.rail_assembly("Rail",shed).value
 local position

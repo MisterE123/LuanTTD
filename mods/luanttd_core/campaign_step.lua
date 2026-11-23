@@ -6,7 +6,14 @@ local min=math.min
 function M.new(s,interval,hooks)
   assert(interval>0 and hooks.advance and hooks.refresh)
   local U={}
-  local elapsed=0
+  local persistent=hooks.persist_fraction
+  local speed_before=s.speed
+  local elapsed=persistent and (s.campaign_day_fraction or 0)*interval/math.max(1,speed_before or 0) or 0
+  local function remember(step)
+    local fraction=min(1,elapsed/step)
+    if persistent then s.campaign_day_fraction=fraction end
+    return fraction
+  end
   local function note(ids)
     if not ids or #ids==0 then return end
     local set=s.offscreen_terrain_dirty or {}
@@ -25,8 +32,16 @@ function M.new(s,interval,hooks)
   function U.step(dt,online,headless)
     local speed=s.speed or 0
     if online then flush() end
+    if persistent and speed>0 and speed~=speed_before then
+      -- Switching playback changes the seconds per day, not the fraction
+      -- of today that has already run. Also restores a saved paused game.
+      elapsed=(s.campaign_day_fraction or 0)*interval/speed
+      speed_before=speed
+    elseif persistent and speed<=0 then
+      speed_before=0
+    end
     if not online and not headless or speed<=0 then
-      elapsed=0
+      if not persistent then elapsed=0 end
       return 1,0
     end
     if hooks.prepare then hooks.prepare(s) end
@@ -51,7 +66,7 @@ function M.new(s,interval,hooks)
       end
       if not online and hooks.discard_effects then hooks.discard_effects() end
     end
-    return min(1,elapsed/step),n
+    return remember(step),n
   end
   return U
 end

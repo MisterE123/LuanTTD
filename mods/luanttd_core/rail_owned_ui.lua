@@ -9,6 +9,7 @@ return function(api,status)
   local moddir=(core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core")
   local source=moddir.."/openttd/"
   local OrderList=dofile(source.."rail_order_list.lua")
+  local Help=dofile(moddir.."/depot_vehicle_help.lua")
   local serial=0
   local esc=core.formspec_escape
   local model_short={[0]="Kirby",[8]="Jubilee",[9]="Ginzu A4",[10]="SH 8P",[11]="Manley–Morel",[13]="Hendry 25",[14]="UU 37",[15]="Floss 47",[23]="SH '30'",[24]="SH '40'"}
@@ -299,6 +300,12 @@ return function(api,status)
   -- real car then an insertion point to issue the same MoveRailVehicle
   -- operation (including the Ctrl/whole trailing chain equivalent).
   local assemble_fetch={}
+  local assembly_lists={engine="engines",wagon="wagons",body="bodies",target="destinations"}
+  local assembly_titles={engine="Choose locomotive",wagon="Choose wagon",body="Choose wagon to move",target="Choose insertion point"}
+  local assembly_page_size=6
+  local function assembly_help(e)
+    return e.help or Help.describe("rail",nil,e.name)
+  end
   function U.assemble(p,id,prior,note,remote)
     local n=p:get_player_name()
     local owned=api.rail_owned
@@ -335,6 +342,7 @@ return function(api,status)
       return 1
     end
     local a={depot=id,assembly=true,revision=data.revision,tail=prior and prior.tail or false,
+      picker=prior and prior.picker,page=prior and prior.page,focus=prior and prior.focus or "engine",
       engines=engines,wagons=wagons,bodies=bodies,destinations=destinations,remote=remote}
     a.engine=find(engines,"id",prior and prior.engines[prior.engine] and prior.engines[prior.engine].id)
     a.wagon=find(wagons,"id",prior and prior.wagons[prior.wagon] and prior.wagons[prior.wagon].id)
@@ -342,19 +350,33 @@ return function(api,status)
     a.target=find(destinations,"id",prior and prior.destinations[prior.target] and prior.destinations[prior.target].id)
     serial=serial+1
     a.token=serial;panels[n]=a
-    local b={"formspec_version[7]size[13,8.2]bgcolor[#152334;false]",
-      "style_type[button;bgimg=bl_button.png;bgimg_middle=6;border=false;textcolor=#E5ECEA]"}
+    local b={"formspec_version[7]size[13,9.6]bgcolor[#152334;false]"}
     local function lab(y,t) b[#b+1]=("label[.42,%g;%s]"):format(y,esc(t)) end
     local function button(y,key,t,x,w)
       b[#b+1]=("button[%g,%g;%g,.62;assembly_%d_%s;%s]"):format(x or .42,y,w or 12.16,a.token,key,esc(t))
     end
+    local function label(e)
+      return e.name..(e.quote and (" · "..money(e.quote.price)) or "")
+    end
     local function choose(y,key,values,which)
-      if #values==0 then return end
-      local choices={}
-      for _,e in ipairs(values) do
-        choices[#choices+1]=esc(e.name..(e.quote and (" · "..money(e.quote.price)) or ""))
-      end
-      b[#b+1]=("dropdown[.42,%g;8.74,.56;assembly_%d_%s;%s;%d;true]"):format(y,a.token,key,table.concat(choices,","),which)
+      local item=values[which]
+      if not item then return end
+      local name="pick_"..key
+      button(y,name,label(item).."   ▾",.42,8.74)
+      b[#b+1]=Help.tooltip(esc,"assembly_"..a.token.."_"..name,assembly_help(item))
+    end
+    if a.picker then
+      local items=a[assembly_lists[a.picker]]
+      a.page=math.max(1,math.min(a.page or 1,math.ceil(#items/assembly_page_size)))
+      lab(.46,assembly_titles[a.picker])
+      lab(.91,"Hover over a vehicle for details. Tap or click a row to select it.")
+      Help.rows(b,esc,{x=.42,y=1.31,w=12.16,items=items,count=assembly_page_size,page=a.page,selected=a[a.picker],
+        prefix="assembly_"..a.token.."_pick_",help=assembly_help,label=label})
+      local item=items[a[a.picker]]
+      Help.card(b,esc,.42,6.26,12.16,1.42,item and assembly_help(item))
+      button(8.02,"pick_back","Return to wagon assembly")
+      core.show_formspec(n,form,table.concat(b))
+      return true
     end
     lab(.46,"Rail depot  /  Separate purchases and wagon assembly")
     lab(1.00,"Stock purchases")
@@ -392,9 +414,11 @@ return function(api,status)
       button(5.12,"move","Move after selected vehicle",.42,5.92)
       button(5.12,"loose","Move to loose wagons",6.56,6.02)
     else lab(3.51,"No wagons in the depot. Buy one or wait for a train to return.") end
-    if note then lab(6.81,note)
-    else lab(6.81,"New wagons join the only stopped train when possible; otherwise they stay loose.") end
-    button(7.29,"back","Return to trains and orders")
+    local item=a[assembly_lists[a.focus]][a[a.focus]] or engines[1] or wagons[1]
+    Help.card(b,esc,.42,6.52,12.16,1.37,item and assembly_help(item))
+    if note then lab(8.08,note)
+    else lab(8.08,"New wagons join the only stopped train when possible; otherwise they stay loose.") end
+    button(8.55,"back","Return to trains and orders")
     core.show_formspec(n,form,table.concat(b))
     return true
   end
@@ -643,6 +667,29 @@ return function(api,status)
     if a.assembly then
       local prefix="assembly_"..a.token.."_"
       local function field(k) return f[prefix..k] end
+      if a.picker then
+        local items=a[assembly_lists[a.picker]]
+        local count,page=assembly_page_size,a.page
+        if field("pick_back") then a.picker,a.page=nil,nil
+        elseif field("pick_prev") and page>1 then a.page=page-1
+        elseif field("pick_next") and page*count<#items then a.page=page+1
+        else
+          local selected
+          for i=(page-1)*count+1,math.min(page*count,#items) do
+            if field("pick_row"..i) then selected=i;break end
+          end
+          if not selected then return true end
+          a[a.picker],a.focus=selected,a.picker
+          a.picker,a.page=nil,nil
+        end
+        return U.assemble(p,a.depot,a,nil,a.remote)
+      end
+      for pick,list in pairs(assembly_lists) do
+        if field("pick_"..pick) and #a[list]>0 then
+          a.picker,a.page,a.focus=pick,math.ceil(a[pick]/assembly_page_size),pick
+          return U.assemble(p,a.depot,a,nil,a.remote)
+        end
+      end
       local updated,action=false,nil
       for _,key in ipairs({"back","buy_engine","buy_wagon","move","loose","order"}) do
         if field(key) then

@@ -862,6 +862,23 @@ def teleport_tile(i):
 
 ART["teleport_tile"] = teleport_tile
 
+def fund_bank(i):
+    i.poly([(6,19),(23,8),(40,19),(40,22),(6,22)],INK)
+    i.poly([(9,18.4),(23,9.7),(37,18.4)],CREAM)
+    i.path([(8,22),(38,22)],SLATE,2)
+    for x in (13,22,31):
+        i.rect((x-2,23,x+2,35),CREAM)
+        i.path([(x-1,25),(x-1,34)],SLATE,1.2)
+    i.rect((7,35,39,39.5),BRASS)
+    i.path([(8,38),(33,38)],CREAM,1.15)
+    i.oval((31,28,44,42),INK)
+    i.oval((32.6,29.6,42.4,40.4),BRASS,CREAM,1.10)
+    i.path([(35.2,35),(39.9,35)],INK,1.25)
+    i.path([(37.6,32.7),(37.6,37.3)],INK,1.25)
+
+ART["fund_bank"] = fund_bank
+
+
 def review(icons, target):
     sheet=Image.new("RGB",(712,162*((len(icons)+3)//4)),"#101d26")
     d=ImageDraw.Draw(sheet)

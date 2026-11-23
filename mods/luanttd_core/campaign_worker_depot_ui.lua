@@ -1,5 +1,9 @@
 -- Worker-backed depot read/purchase UI used when the host no longer owns S.
 return function(core,client,build,money,assembly)
+  local mod=core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+  local Help=dofile(mod.."/depot_vehicle_help.lua")
+  local esc=core.formspec_escape
+  local page_size=5
   local D={form="luanttd_core:worker_depot"}
   local panels={}
   local serial=0
@@ -16,42 +20,51 @@ return function(core,client,build,money,assembly)
   end
   local function draw(n,p,note)
     local data=p.data or {}
-    local offers,units,from,to={},{},{},{}
-    for i,q in ipairs(data.offers or {}) do offers[i]=core.formspec_escape(q.name.."  ·  "..money(q.price)) end
-    for i,u in ipairs(data.vehicles or {}) do units[i]=core.formspec_escape(u.label) end
+    local offers,units,from,to=data.offers or {},data.vehicles or {},{},{}
     local first,last,cargo=routes(p)
     for i,t in ipairs(first) do from[i]=core.formspec_escape(t.label) end
     for i,t in ipairs(last) do to[i]=core.formspec_escape(t.label) end
     local stem="d"..p.serial.."_"
-    local b={"formspec_version[7]size[10.8,8.35]bgcolor[#152334;false]",
-      "label[.45,.42;Company depot]","label[.45,1.05;Purchase offers]","label[5.55,1.05;Owned vehicles]",
-      ("textlist[.45,1.35;4.8,3.30;%soffer;%s;%d;false]"):format(stem,table.concat(offers,","),p.offer or 1),
-      ("textlist[5.55,1.35;4.8,3.30;%sunit;%s;%d;false]"):format(stem,table.concat(units,","),p.unit or 1)}
+    local title=({rail="Rail depot",air="Airport hangar",ship="Ship depot",road="Road depot"})[p.mode] or "Company depot"
+    local b={"formspec_version[7]size[11.4,10.03]bgcolor[#152334;false]",
+      "label[.45,.42;"..title.."]", "label[.45,.86;Hover for vehicle details, or tap or click a row.]",
+      "label[.45,1.30;Purchase offers]","label[5.82,1.30;Owned vehicles]"}
+    local function info(row)
+      local req=row.request or {}
+      return row.help or Help.describe(p.mode,row.cargo or req.cargo,row.name or row.label)
+    end
+    Help.rows(b,esc,{x=.45,y=1.57,w=5.12,items=offers,prefix=stem.."offer_",count=page_size,
+      page=p.offer_page or 1,selected=p.offer or 1,help=info,
+      label=function(q) return q.name.."  ·  "..money(q.price) end})
+    Help.rows(b,esc,{x=5.82,y=1.57,w=5.12,items=units,prefix=stem.."unit_",count=page_size,
+      page=p.unit_page or 1,selected=p.unit or 1,help=info,label=function(u) return u.label end})
+    if #offers==0 then b[#b+1]="label[.5,1.89;No vehicles currently on sale.]" end
+    if #units==0 then b[#b+1]="label[5.87,1.89;No vehicles assigned here.]" end
     if #offers>0 then
       local chosen=data.offers[p.offer or 1]
       local action=chosen.request.operation=="refit" and "Apply selected refit" or "Buy selected vehicle"
-      b[#b+1]="button[.45,4.84;4.8,.59;"..stem.."buy;"..action.."]"
+      b[#b+1]="button[.45,5.42;5.12,.59;"..stem.."buy;"..action.."]"
     end
-    if #units>0 then b[#b+1]="button[5.55,4.84;4.8,.59;"..stem.."orders;Open selected vehicle]" end
+    if #units>0 then b[#b+1]="button[5.82,5.42;5.12,.59;"..stem.."orders;Open selected vehicle]" end
     local route_ok=cargo and #first>0 and #last>0 or not cargo and #first>=2
     if route_ok and #units>0 then
       if p.mode~="air" then
-        b[#b+1]=("dropdown[.45,5.62;3.18,.57;%sfrom;%s;%d;true]"):format(stem,table.concat(from,","),p.from or 1)
+        b[#b+1]=("dropdown[.45,6.17;3.39,.57;%sfrom;%s;%d;true]"):format(stem,table.concat(from,","),p.from or 1)
       end
-      b[#b+1]=("dropdown[3.74,5.62;3.15,.57;%sto;%s;%d;true]"):format(stem,table.concat(to,","),p.to or (cargo and 1 or 2))
-      b[#b+1]="button[7.06,5.62;3.3,.57;"..stem.."start;Start service]"
+      b[#b+1]=("dropdown[3.98,6.17;3.38,.57;%sto;%s;%d;true]"):format(stem,table.concat(to,","),p.to or (cargo and 1 or 2))
+      b[#b+1]="button[7.50,6.17;3.44,.57;"..stem.."start;Start service]"
     end
     if cargo and not route_ok then
-      b[#b+1]=p.mode=="ship" and (cargo=="oil" and "label[.45,5.62;Build docks near an oil source and a refinery.]"
-          or cargo=="coal" and "label[.45,5.62;Build docks near a coal mine and a power plant.]"
-          or "label[.45,5.62;Select the Coal refit before starting this cargo service.]")
-        or "label[.45,5.62;Designate a loading and unloading platform for this cargo.]"
+      b[#b+1]="label[.45,6.45;No matching loading and unloading stops. See the vehicle details.]"
     end
+    local chosen=p.focus~="offer" and units[p.unit or 1] or offers[p.offer or 1]
+    chosen=chosen or offers[p.offer or 1]
+    Help.card(b,esc,.45,6.98,10.49,1.72,chosen and info(chosen))
     if p.mode=="rail" and assembly and p.data then
-      b[#b+1]="button[.45,7.41;4.8,.58;"..stem.."assemble;Assemble wagons]"
+      b[#b+1]="button[.45,9.09;5.12,.58;"..stem.."assemble;Assemble wagons]"
     end
-    b[#b+1]="label[.45,6.67;"..core.formspec_escape(note or "").."]"
-    b[#b+1]="button_exit[5.55,7.41;4.8,.58;close;Back to world]"
+    b[#b+1]="label[.45,8.88;"..esc(note or "").."]"
+    b[#b+1]="button_exit[5.82,9.09;5.12,.58;close;Back to world]"
     core.show_formspec(n,D.form,table.concat(b))
   end
   function D.open(player,mode,depot,note,vehicle_handler)
@@ -75,14 +88,27 @@ return function(core,client,build,money,assembly)
     if f.quit then panels[n]=nil;return true end
     if not p.data or p.pending then return true end
     local stem="d"..p.serial.."_"
-    local selected_before=p.unit
-    local offer_before=p.offer
+    local update,unit_changed=false,false
     for kind,list in pairs({offer=p.data.offers,unit=p.data.vehicles}) do
-      local key=stem..kind
-      if f[key] then
-        local i=core.explode_textlist_event(f[key]).index
-        if i and list[i] then p[kind]=i end
+      local key=stem..kind.."_"
+      local page_key=kind.."_page"
+      local page=p[page_key] or 1
+      if f[key.."prev"] and page>1 then p[page_key]=page-1;update=true
+      elseif f[key.."next"] and page*page_size<#list then p[page_key]=page+1;update=true
+      else
+        for i=(page-1)*page_size+1,math.min(page*page_size,#list) do
+          if f[key.."row"..i] then
+            unit_changed=kind=="unit" and (p.unit or 1)~=i
+            p[kind],p.focus,update=i,kind,true
+            break
+          end
+        end
       end
+    end
+    if unit_changed then p.from,p.to=nil,nil
+    else
+      p.from=tonumber(f[stem.."from"]) or p.from
+      p.to=tonumber(f[stem.."to"]) or p.to
     end
     if p.mode=="rail" and f[stem.."assemble"] and assembly then return assembly(player,p.depot) end
     if f[stem.."orders"] and p.vehicle_handler then
@@ -106,7 +132,7 @@ return function(core,client,build,money,assembly)
       return true
     end
     if not f[stem.."buy"] then
-      if (selected_before~=p.unit or offer_before~=p.offer) and (p.mode=="rail" or p.mode=="ship") then p.from,p.to=nil,nil;draw(n,p) end
+      if update then draw(n,p) end
       return true
     end
     local q=p.data.offers[p.offer or 1]

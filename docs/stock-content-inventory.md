@@ -13,7 +13,7 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | Mode | Playable stock types | Art only | Total Temperate stock types |
 | --- | ---: | ---: | ---: |
 | Rail | 15 | 1 | 53 |
-| Road | 25 | 0 | 34 |
+| Road | 34 | 0 | 34 |
 | Ship | 7 | 0 | 7 |
 | Aircraft | 8 | 0 | 35 |
 
@@ -104,15 +104,15 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 144 | Witcombe Wood Truck | Playable |  |
 | 145 | Foster Wood Truck | Playable |  |
 | 146 | Moreland Wood Truck | Playable |  |
-| 147 | MPS Iron Ore Truck | Not mounted |  |
-| 148 | Uhl Iron Ore Truck | Not mounted |  |
-| 149 | Chippy Iron Ore Truck | Not mounted |  |
-| 150 | Balogh Steel Truck | Not mounted |  |
-| 151 | Uhl Steel Truck | Not mounted |  |
-| 152 | Kelling Steel Truck | Not mounted |  |
-| 153 | Balogh Armoured Truck | Not mounted |  |
-| 154 | Uhl Armoured Truck | Not mounted |  |
-| 155 | Foster Armoured Truck | Not mounted |  |
+| 147 | MPS Iron Ore Truck | Playable |  |
+| 148 | Uhl Iron Ore Truck | Playable |  |
+| 149 | Chippy Iron Ore Truck | Playable |  |
+| 150 | Balogh Steel Truck | Playable |  |
+| 151 | Uhl Steel Truck | Playable |  |
+| 152 | Kelling Steel Truck | Playable |  |
+| 153 | Balogh Armoured Truck | Playable |  |
+| 154 | Uhl Armoured Truck | Playable |  |
+| 155 | Foster Armoured Truck | Playable |  |
 
 ## Ship
 

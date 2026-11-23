@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Temperate planting/fence rules: OpenTTD 14.1 industry_cmd.cpp
+-- Planting/fence rules: OpenTTD 16.0-RC1 industry_cmd.cpp
 -- PlantRandomFarmField, PlantFarmField, SetupFarmFieldFence and map.cpp.
 -- Board uses real source tile classifications; no time/render ownership.
 return function(Commons)
@@ -10,10 +10,16 @@ return function(Commons)
   local dx={[0]=-1,0,1,0}
   local dz={[0]=0,1,0,-1}
   local function field(t) return t and t.kind=="clear" and t.ground=="field" end
-  function F.suitable(t,allow_fields)
-    return t~=nil and (
-      t.kind=="clear" and t.ground~="snow" and t.ground~="desert" and (allow_fields or t.ground~="field") or
-      t.kind=="trees" and t.ground~="shore")
+  function F.suitable(t,allow_fields,allow_rough)
+    if not t then return false end
+    local ground=t.ground
+    if t.kind=="clear" then
+      if t.snow or ground=="snow" or ground=="desert" then return false end
+      if ground=="rough" then return allow_rough==true end
+      if ground=="field" then return allow_fields==true end
+      return true
+    end
+    return t.kind=="trees" and ground~="shore" and (allow_rough==true or ground~="rough")
   end
   function F.random(ind,b,rnd)
     local x=ind.x+floor(ind.width/2)+rnd()%31-16
@@ -26,14 +32,18 @@ return function(Commons)
   end
   function F.plant(b,x,z,industry,rnd)
     local w,h=b.width,b.height
+    -- Stock host currently mounts Temperate; snowline is only required for Arctic.
+    local arctic=b.climate=="arctic"
+    if arctic and b.height_at(x,z)+2>=b.snowline then return 0 end
     local n=rnd()
-    local size_x,size_z=4+n%4,4+floor(n/256)%4
+    local size=arctic and 8 or 4
+    local size_x,size_z=size+n%4,size+floor(n/256)%4
     x=x-min(x,floor(size_x/2));z=z-min(z,floor(size_z/2))
     size_x,size_z=min(size_x,w-x),min(size_z,h-z)
     if size_x==0 or size_z==0 then return 0 end
     local good=0
     for v=z,z+size_z-1 do for u=x,x+size_x-1 do
-      if F.suitable(b.tile(u,v),false) then good=good+1 end
+      if F.suitable(b.tile(u,v),false,false) then good=good+1 end
     end end
     if good*2<size_x*size_z then return 0 end
     n=rnd()
@@ -41,25 +51,27 @@ return function(Commons)
     local field_type=floor((floor(n/256)%256)*9/256)
     local planted=0
     for v=z,z+size_z-1 do for u=x,x+size_x-1 do
-      if F.suitable(b.tile(u,v),true) then
+      if F.suitable(b.tile(u,v),true,true) then
         b.make_field(u,v,field_type,industry,counter)
         planted=planted+1
       end
     end end
-    local fence=types[rnd()%16+1]
+    local fence=3
+    if not arctic and b.climate~="tropic" then fence=types[rnd()%16+1] end
+    local area=w*h
     local function scan(u,v,amount,side)
       local flat=v*w+u
       local step=side%2==1 and 1 or w
+      local offset=dx[side]+dz[side]*w
+      local reverse=(side+2)%4
       for _=1,amount do
-        flat=flat%(w*h)
+        flat=flat%area
         local tx,tz=flat%w,floor(flat/w)
         local old=b.tile(tx,tz)
         if field(old) then
-          local adjacent=flat+dx[side]+dz[side]*w
-          local near=adjacent>=0 and adjacent<w*h and b.tile(adjacent%w,floor(adjacent/w)) or nil
-          local reverse=(side+2)%4
-          local existing=near and near.fences and near.fences[reverse] or 0
-          if not field(near) or existing==0 then
+          local adjacent=flat+offset
+          local near=adjacent>=0 and adjacent<area and b.tile(adjacent%w,floor(adjacent/w)) or nil
+          if not field(near) or (near.fences and near.fences[reverse] or 0)==0 then
             local style=fence
             if fence==1 and Commons.chance(7,rnd()) then style=2 end
             b.set_fence(tx,tz,side,style)

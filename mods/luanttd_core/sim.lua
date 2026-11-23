@@ -13,8 +13,10 @@ M.cargo = {
   steel={name="Steel",rate=13}, goods={name="Goods",rate=15},wood={name="Wood",rate=9},
 }
 M.cargo.livestock={name="Livestock",rate=10}
+M.cargo.iron_ore={name="Iron Ore",rate=0}
+M.cargo.valuables={name="Valuables",rate=0}
 M.cargo.oil={name="Oil",rate=0} -- Actual stock pressure uses a dedicated loader.
-M.cargo_order={"passenger","mail","coal","grain","steel","goods","wood","livestock","oil"}
+M.cargo_order={"passenger","mail","coal","grain","steel","goods","wood","livestock","oil","iron_ore","valuables"}
 M.vehicles = {
   steam={name="4-4-0 Atlantic",mode="rail",cost=12500,speed=1.45,capacity=72,daily=45,year=1950},
   diesel={name="Bayliner Diesel",mode="rail",cost=20500,speed=2.35,capacity=104,daily=61,year=1958},
@@ -1671,7 +1673,11 @@ local function oil_engine(engine) return M.road_freight_cargo(engine)=="oil" or 
 local function coal_engine(engine) return M.road_freight_cargo(engine)=="coal" end
 local function mail_engine(engine) return M.road_freight_cargo(engine)=="mail" end
 local function priced_mail(engine) return engine~="mail_van" and mail_engine(engine) end
-local function industry_truck(engine) return timber_engine(engine) or farm_engine(engine) or oil_engine(engine) end
+local function heavy_engine(engine)
+  local cargo=M.road_freight_cargo(engine)
+  return cargo=="steel" or cargo=="iron_ore" or cargo=="valuables" or goods_engine(engine)
+end
+local function industry_truck(engine) return timber_engine(engine) or farm_engine(engine) or oil_engine(engine) or heavy_engine(engine) end
 local function allowed(engine,cargo)
   if engine=="leopard_bus" or engine=="foster_bus" or engine=="foster_mk2_bus" then return cargo=="passenger" end
   if mail_engine(engine) then return cargo=="mail" end
@@ -1781,7 +1787,9 @@ function M.vehicle_available(s,engine)
     local cargo=M.road_freight_cargo(engine)
     local enabled=(cargo=="coal" and M.road_coal_active(s)) or
       (cargo=="oil" and M.road_oil_active(s)) or (cargo=="mail" and s.road_mail and s.road_stock_house_supply) or
-      (cargo=="goods" and (M.road_farm_active(s) or M.road_timber_active(s) or M.road_oil_active(s)))
+      ((cargo=="steel" or cargo=="iron_ore") and M.road_heavy_active(s)) or
+      (cargo=="valuables" and M.road_bank_active(s)) or
+      (cargo=="goods" and (M.road_farm_active(s) or M.road_timber_active(s) or M.road_oil_active(s) or M.road_heavy_active(s)))
     return not not (enabled and M.engine_calendar.snapshot(market.models[M.vehicles[engine].stock_engine_id],market.epoch+s.day).public)
   end
   if engine=="mail_van" and s.stock_bus_market and extra_road_art[s] and extra_road_art[s].mail_mps then
@@ -1817,7 +1825,8 @@ function M.vehicle_available(s,engine)
     (engine=="coal_tipper" and M.road_coal_active(s)) or
     (timber_engine(engine) and M.road_timber_active(s)) or
     (farm_engine(engine) and M.road_farm_active(s)) or
-    (oil_engine(engine) and M.road_oil_active(s)))
+    (oil_engine(engine) and M.road_oil_active(s)) or
+    (heavy_engine(engine) and M.road_heavy_active(s)))
 end
 function M.purchase(s,owner,engine,cargo,station,depot)
   local c=M.company(s,owner)
@@ -2110,7 +2119,7 @@ local function passenger_modules()
     {credit=credit,news=push,coal=coal_binding,
       coal_handles=function(s,v) return M.road_coal_active(s) and coal_service.supported_vehicle(v) end,
       timber=timber_binding,timber_handles=function(s,v)
-        return (M.road_timber_active(s) and timber_service.supported_vehicle(v)) or
+        return ((M.road_heavy_active(s) or M.road_bank_active(s)) and goods.mixed and goods.mixed.supported_vehicle(v)) or (M.road_timber_active(s) and timber_service.supported_vehicle(v)) or
           (M.road_farm_active(s) and farm_service and farm_service.supported_vehicle(v)) or
           (M.road_oil_active(s) and oil.service.supported_vehicle(v))
       end})
@@ -2198,15 +2207,16 @@ local function passenger_modules()
       farm.fields,dofile(base.."timber_industry_runtime.lua"),catchment)
     local union=dofile(base.."road_farm_service.lua")(M,Rules,Adapter,passenger_rules,income_rules,kernel,rating_runtime,
       {tag="freight",label="Mixed industry",vehicles={wood="wood_truck",oil="oil_tanker",grain="grain_truck",
-       livestock="livestock_van",goods="goods_truck"},cargo={"oil","livestock","goods","grain","wood"}})
+       livestock="livestock_van",goods="goods_truck",steel="steel_balogh",iron_ore="iron_mps",valuables="valuables_balogh"},
+       cargo={"oil","livestock","goods","grain","wood","iron_ore","steel","valuables"}})
     goods.mixed=union
     function goods.mixed_enabled(s)
       local n=(M.road_timber_active(s) and 1 or 0)+(M.road_farm_active(s) and 1 or 0)+(M.road_oil_active(s) and 1 or 0)
-      return n>1
+      return n>1 or M.road_heavy_active(s) or M.road_bank_active(s)
     end
     function goods.mixed_binding(s,for_cargo,probe)
       local all,enabled={},{}
-      for _,kind in ipairs({"timber","farm","oil"}) do
+      for _,kind in ipairs({"timber","farm","oil","heavy","bank"}) do
         if M["road_"..kind.."_active"](s) then
           enabled[kind]=true
           for id,ind in pairs(s["stock_"..kind.."_industries"] or {}) do
@@ -2288,6 +2298,10 @@ function M.mount_farm_world(s,Terrain,asset_ready)
     local coal=dofile(base.."openttd/coal_industry.lua")(passenger_rules,kernel,catchment,income_rules)
     local rules=dofile(base.."openttd/farm_factory_industry.lua")(passenger_rules,catchment,kernel,
       income_rules,coal,timber_rules)
+    rules=dofile(base.."openttd/iron_steel_rules.lua")(rules,dofile(base.."openttd/iron_steel_data.lua"))
+    farm.heavy=dofile(base.."iron_steel_world.lua")(M,Terrain,rules)
+    farm.bank_rules=dofile(base.."openttd/temperate_bank_rules.lua")(rules,dofile(base.."openttd/temperate_bank_data.lua"))
+    farm.bank_factory=dofile(base.."temperate_bank_world.lua")
     local fields=dofile(base.."openttd/farm_factory_fields.lua")(coal)
     farm.rules,farm.fields=rules,fields
     local adapter=dofile(base.."farm_factory_runtime.lua")(rules,fields,
@@ -2299,6 +2313,17 @@ function M.mount_farm_world(s,Terrain,asset_ready)
   for k,v in pairs(farm_world.facilities) do M.facilities[k]=v end
   town_passengers.start(s)
   return farm_world,function() return rating_runtime.random_u32(s) end,farm.rules
+end
+function M.mount_heavy_world(s,Terrain)
+  if not farm.heavy then M.mount_farm_world(s,Terrain,true) end
+  for k,v in pairs(farm.heavy.facilities) do M.facilities[k]=v end
+  return farm.heavy
+end
+function M.mount_temperate_bank(s,Terrain,growth)
+  s.road_bank=true;s.stock_bank_industries=s.stock_bank_industries or {}
+  if not farm.bank_rules then M.mount_farm_world(s,Terrain,true) end
+  M.facilities.stock_temperate_bank={name="Bank",produces={},takes={}}
+  return farm.bank_factory(M,Terrain,farm.rules,farm.bank_rules,growth,debit,rating_runtime.random_u32)
 end
 function M.mount_coal_ship(s,Run,Passenger,Network,art)
   passenger_modules()
@@ -2496,6 +2521,14 @@ function M.road_farm_active(s)
   return not not (s.road_farm and s.road_stock_house_supply and s.stock_farm_industries and farm_service and
     M.road_stock_service_active(s))
 end
+function M.road_heavy_active(s)
+  return not not (s.road_heavy and s.road_stock_house_supply and s.stock_heavy_industries and farm.heavy and
+    M.road_stock_service_active(s))
+end
+function M.road_bank_active(s)
+  return not not (s.road_bank and s.road_stock_house_supply and s.stock_bank_industries and farm.bank_rules and
+    M.road_stock_service_active(s))
+end
 function M.road_oil_active(s)
   return not not (s.road_oil and s.road_stock_house_supply and s.stock_oil_industries and oil.service and
     M.road_stock_service_active(s))
@@ -2539,6 +2572,37 @@ function M.coal_stop_status(s,st)
   local acceptance=b.report(st)
   return b.display_waiting(st),acceptance.accepts,st.goods.coal.rating,acceptance
 end
+-- One on-demand worker snapshot of the physical truck stop. No second queue
+-- and no simulated cargo dataset projected to nearby clients every tick.
+function M.truck_stop_cargo(s,st)
+  local tick=s.passenger_house_clock and s.passenger_house_clock.counter or 0
+  local rows={}
+  local function add(cargo,count,accepts,collects,rating)
+    if count>0 or accepts or collects then
+      rows[#rows+1]={cargo=cargo,name=M.cargo[cargo].name,waiting=count,accepts=not not accepts,
+        collects=not not collects,rating=rating}
+    end
+  end
+  if s.road_mail then
+    local count,accepts,rating,known=M.mail_stop_status(s,st)
+    if count then add("mail",count,accepts,count>0,known and rating or nil) end
+  end
+  if M.road_coal_active(s) then
+    local count,accepts,rating=M.coal_stop_status(s,st)
+    add("coal",count,accepts,count>0,rating)
+  end
+  local b=timber_day_bindings[s] or timber_binding(s)
+  if b then
+    for _,cargo in ipairs({"oil","livestock","goods","grain","wood","iron_ore","steel","valuables"}) do
+      local r=b.report(st,cargo,tick)
+      if r then
+        local rating=st.goods and st.goods[cargo] and st.goods[cargo].rating
+        add(cargo,b.display_waiting(st,cargo),r.accepts,r.sources and #r.sources>0,rating)
+      end
+    end
+  end
+  return rows
+end
 function M.road_loading_events(s)
   if not M.road_stock_service_active(s) then return {} end
   passenger_modules()
@@ -2556,8 +2620,8 @@ abort_stock_stop=function(s,v)
   v.loaded_at=nil
 end
 function M.build_truck_stop(s,owner,id)
-  if not (s.road_mail and s.road_stock_house_supply) and not M.road_coal_active(s) and not M.road_timber_active(s) and not M.road_farm_active(s) and not M.road_oil_active(s) then
-    return false,"Enable stock mail or freight to build truck stops."
+  if not (s.road_mail and s.road_stock_house_supply) and not M.road_coal_active(s) and not M.road_timber_active(s) and not M.road_farm_active(s) and not M.road_oil_active(s) and not M.road_heavy_active(s) and not M.road_bank_active(s) then
+    return false,"No stock mail or freight service in this campaign."
   end
   local t=s.tiles[id]
   if not t or t.station then return false,"Build a new truck loading stop rather than converting an active terminal." end
@@ -3363,7 +3427,7 @@ function M.daily(s,traverse)
     coal=coal_binding(s,true,freight,freighter)
     coal_day_bindings[s]=coal
   end
-  if M.road_timber_active(s) or M.road_farm_active(s) or M.road_oil_active(s) then
+  if M.road_timber_active(s) or M.road_farm_active(s) or M.road_oil_active(s) or M.road_heavy_active(s) or M.road_bank_active(s) then
     passenger_modules()
     timber=timber_binding(s)
     timber_day_bindings[s]=timber
@@ -3402,7 +3466,8 @@ function M.daily(s,traverse)
       local is_mail=priced_mail(v.engine)
       local enabled=(is_mail and road_mail(s,v)) or (not is_timber and not is_mail and coal) or is_timber and timber and
         (M.road_farm_active(s) and farm_engine(v.engine) or M.road_timber_active(s) and timber_engine(v.engine)
-          or M.road_oil_active(s) and oil_engine(v.engine))
+          or M.road_oil_active(s) and oil_engine(v.engine) or
+            (M.road_heavy_active(s) or M.road_bank_active(s)) and heavy_engine(v.engine))
       local key=is_mail and "stock_mail_running_ticks" or is_timber and "stock_timber_running_ticks" or "stock_coal_running_ticks"
       local resume=is_mail and "stock_mail_resume" or is_timber and "stock_timber_resume" or "stock_coal_resume"
       -- Running-tick cost at the next economy day, not an invented fee
@@ -3587,6 +3652,10 @@ function M.daily(s,traverse)
         if M.road_oil_active(s) then
           s.changed=s.changed or {}
           for _,id in ipairs(oil.world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+        end
+        if M.road_heavy_active(s) then
+          s.changed=s.changed or {}
+          for _,id in ipairs(farm.heavy.sweep_closed(s)) do s.changed[#s.changed+1]=id end
         end
         if M.road_farm_active(s) then
           s.changed=s.changed or {}

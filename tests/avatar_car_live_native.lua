@@ -4,7 +4,9 @@ return function(api)
   local T=dofile(core.get_modpath("luanttd_core").."/openttd/terrain.lua")
   local function id(x,z) return assert(Sim.id(x,z)) end
   S.corner_grid.levels=T.new(Sim.W,Sim.H,function(x,z) return x>=13 and 1 or 0 end).levels
-  for z=8,18 do for x=8,19 do
+  -- This replaced the whole corner grid, so do not leave old generated
+  -- structures with foundations that refer to the original terrain.
+  for z=1,Sim.H do for x=1,Sim.W do
     S.tiles[id(x,z)]={terrain="grass",variant=(x+z)%4,h=x>=13 and 1 or 0}
   end end
   local owner="CarQA"
@@ -12,7 +14,7 @@ return function(api)
   assert(ok,why)
   local grade,base=Sim.road_surface(S,id(12,11))
   assert(grade==3 and base==0,"native walking fixture is not on an actual grade")
-    local function report(p,tag)
+  local function report(p,tag)
     local car=p:get_attach()
     local v=car and car:get_pos() or p:get_pos()
     local at=Sim.id(math.floor((v.x+.5)/2),math.floor((v.z+.5)/2))
@@ -38,13 +40,24 @@ return function(api)
     report(p,tag)
     return true
   end})
-  local elapsed=0
+  local elapsed,total,previous=0,0,nil
   core.register_globalstep(function(dt)
+    total=total+dt
     elapsed=elapsed+dt
     if elapsed<.24 then return end
     elapsed=0
     local p=core.get_player_by_name(owner)
-    if p and W.avatar_state(p) then report(p,"trace") end
+    if p and W.avatar_state(p) then
+      report(p,"trace")
+      local car=p:get_attach()
+      if car then
+        local v=car:get_pos()
+        if previous then
+          core.log("action",("CAR_QA_SPEED %.3f"):format((v.x-previous[1])/(total-previous[2])))
+        end
+        previous={v.x,total}
+      end
+    else previous=nil end
   end)
   core.register_on_joinplayer(function(p)
     if p:get_player_name()~=owner then return end
@@ -52,7 +65,9 @@ return function(api)
       if left~=0 then return end
       core.after(.3,function()
         local dirty={}
-        for z=8,18 do for x=8,19 do dirty[#dirty+1]=id(x,z) end end
+        -- This replaced the whole corner grid, so do not leave old generated
+  -- structures with foundations that refer to the original terrain.
+  for z=1,Sim.H do for x=1,Sim.W do dirty[#dirty+1]=id(x,z) end end
         R.update(dirty)
         assert(core.get_node({x=24,y=1,z=22}).name=="luanttd_core:road_grade_3")
         W.go_menu(p,"roads") -- preserve a non-home section through the round trip

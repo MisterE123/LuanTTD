@@ -242,6 +242,9 @@ function H.enable_bay_termini()
     [3]=item("road_bay_pair","Two-bay bus terminus","bus_terminus"),[8]=back}
   build_utilities()
 end
+function H.enable_bank()
+  H.menus.company[3]=item("fund_bank","Fund Bank")
+end
 function H.enable_freight()
   H.menus.freight={title="Road Freight",[1]=inspect,[2]=item("road","AutoRoad: click or drag"),
     [3]=item("truck_stop_tool","Truck stop","truck_stop"),[4]=item("road_depot","Road depot","depot"),

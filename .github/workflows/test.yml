@@ -39,6 +39,8 @@ jobs:
             road_bay_live road_terminus_town_limits rail_owned_service rail_owned_multi rail_paid_runtime rail_signal_ui rail_signal_curve rail_block_signals rail_block_dispatch rail_reverse rail_collision rail_accident_rating rail_station_placement rail_preview rail_diagonal rail_body_spacing rail_dispatch_view passenger_crowd passenger_terminal_crowd ship_preview_view; do
             lua5.1 "tests/$t.lua"
           done
+          lua5.1 tests/terrain_tile_lookup.lua
+          lua5.1 tests/farm_rc1_native_board.lua
           lua5.1 tests/coastal_corridor_freight.lua --async-tape
           lua5.1 tests/road_timber_live.lua craighead
           lua5.1 tests/road_timber_live.lua wood_foster
@@ -71,11 +73,13 @@ jobs:
           lua5.1 tests/rail_owned_multi.lua collision
           lua5.1 tests/rail_owned_multi.lua live_construction
           lua5.1 tests/stock_town_art.lua
+          lua5.1 tests/town_fountain_view.lua
           python3 tests/stock_town_art.py
           python3 tests/landscape_visit_rc1.py
           python3 tests/rail_diagonal_art.py
           python3 tests/rail_signal_art.py
           python3 tests/rail_architecture.py
+          lua5.1 tests/lighthouse_beam_view.lua
           python3 tests/rail_art.py
           for ship in 206 207; do lua5.1 tests/rail_paid_runtime.lua "$ship"; done
       - name: Run native startup, feature availability and SQLite checks
@@ -90,7 +94,20 @@ jobs:
           bash tests/campaign_tick_worker_native.sh "$(command -v luantiserver)" "$(mktemp -d)/ticks"
           bash tests/campaign_ordinary_worker_native.sh
           bash tests/campaign_worker_recovery_native.sh
+          bash tests/daylight_native.sh
           bash tests/stock_town_city_native.sh
+          lua5.1 tests/iron_steel_kernels.lua
+          lua5.1 tests/campaign_worker_truck_stop_ui.lua
+          for profile in early mid late; do lua5.1 tests/iron_steel_ordinary_worker.lua "$profile"; done
+          python3 tests/stock_iron_ore_road_art.py
+          python3 tests/stock_steel_trucks_art.py
+          python3 tests/stock_metal_industry_art.py
+          lua5.1 tests/temperate_bank_kernel.lua
+          lua5.1 tests/temperate_bank_world.lua
+          for profile in early mid late; do lua5.1 tests/temperate_bank_ordinary_worker.lua "$profile"; done
+          python3 tests/stock_temperate_bank_art.py
+          bash tests/temperate_bank_native.sh
+          python3 tests/stock_armoured_trucks_art.py
           lua5.1 tests/oil_ship_ordinary_worker.lua 204
           lua5.1 tests/oil_ship_ordinary_worker.lua 205
           lua5.1 tests/oil_ship_ordinary_worker.lua 204 mixed

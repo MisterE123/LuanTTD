@@ -1,6 +1,6 @@
 -- A bounded command/snapshot endpoint for a single campaign owner.
 -- A host must supply the authenticated player name, never a form field.
--- Ordinary gameplay is not switched to this endpoint yet.
+-- Ordinary gameplay routes simulation commands and snapshots here.
 return function(Sim,R,max_days)
   local s=R.world
   local A={}
@@ -141,7 +141,7 @@ return function(Sim,R,max_days)
     local out={token=ticket.token,depot=a.depot,revision=a.revision,
       engines={},wagons={},bodies=a.bodies,destinations=a.destinations,units={}}
     for _,group in ipairs({"engines","wagons"}) do
-      for i,u in ipairs(a[group]) do out[group][i]={id=u.id,name=u.name,quote={price=u.quote.price}} end
+      for i,u in ipairs(a[group]) do out[group][i]={id=u.id,name=u.name,quote={price=u.quote.price},help=u.help} end
     end
     for id,unit in pairs(a.staged) do
       out.units[id]={id=id,stocks=unit.stock_ids,passenger=R.rail.owned.passenger_consist(unit)}
@@ -218,6 +218,12 @@ return function(Sim,R,max_days)
     quote_sequence=quote_sequence+1
     bridge_quotes[name]={token=quote_sequence,quotes=by_type,topology=s.topology,terrain=s.corner_grid.revision}
     return reply(true,nil,{token=quote_sequence,offers=offers,ids=ids,minimum=minimum})
+  end
+  function A.truck_stop(name,id)
+    if not owner(name) or not s.companies[name] or not tile_id(id) then return reply(false,"Truck stop unavailable.") end
+    local st=s.stations[s.tiles[id].station]
+    if not st or st.mode~="road" or st.stop_type~="truck" then return reply(false,"There is no truck stop on this tile.") end
+    return reply(true,nil,{name=st.name,cargo=Sim.truck_stop_cargo(s,st)})
   end
   function A.depot(name,mode,id)
     if not owner(name) or not R.transport then return reply(false,"DEPOT_UNAVAILABLE") end

@@ -15,10 +15,11 @@ return function(Sim,mod,s,cap)
   Sim.restore_road_orders(s)
   B.road(s,cap.road)
   B.flood(s)
-  B.towns(s)
+  local growth=B.towns(s)
   local farm,oil
   if s.stock_generated_profile or s.road_farm then
     farm=assert(Sim.mount_farm_world(s,Terrain,true))
+    if s.stock_heavy_industries then Sim.mount_heavy_world(s,Terrain) end
   end
   if s.stock_generated_profile or s.road_oil then
     oil=assert(Sim.mount_oil_world(s,Terrain,cap.oil_tanker))
@@ -26,7 +27,8 @@ return function(Sim,mod,s,cap)
   local network=B.networks(s,Slope,tile)
   local N={world=s,network=network,farm=farm,oil=oil,terrain=Terrain}
   N.crossing_gesture=dofile(mod.."/crossing_gesture.lua")
-  N.road_construction=dofile(mod.."/campaign_road_construction.lua")(Sim,s,network.oneway)
+  if cap.temperate_bank then N.bank=Sim.mount_temperate_bank(s,Terrain,growth) end
+  N.road_construction=dofile(mod.."/campaign_road_construction.lua")(Sim,s,network.oneway,N.bank)
   N.terrain_projection=dofile(mod.."/campaign_terrain_projection.lua")
   N.landscape=dofile(mod.."/campaign_landscape_commands.lua")(Sim,s)
   local source=mod.."/openttd/"

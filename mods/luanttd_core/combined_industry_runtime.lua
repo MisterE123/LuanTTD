@@ -12,7 +12,7 @@ return function(Timber,Farm,Oil,Fields,Runtime,Catchment)
   -- Timber's early kernel has a one-cargo struct rather than a fixed
   -- array. Do not change either layout just to mount them together.
   by_kind.forest,by_kind.sawmill=Timber,Timber
-  local by_cargo={wood=Timber,goods=Timber,oil=Oil,grain=Farm,livestock=Farm}
+  local by_cargo={wood=Timber,goods=Timber,oil=Oil,grain=Farm,livestock=Farm,iron_ore=Farm,steel=Farm,valuables=Farm}
   function K.output(i,cargo)
     local r=assert(by_kind[i.kind],i.kind)
     if r==Timber then return i.produced.cargo==cargo and i.produced or nil end

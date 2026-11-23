@@ -10,7 +10,8 @@ local function road_native_scene(viewer)
   }
   local profile=core.settings:get("luanttd_qa_fleet_wave")
   local motion_test=profile=="worker_motion" or profile=="worker_motion_baseline"
-  local end_tile=motion_test and 22 or 10
+  local sightseeing_speed_test=profile=="sightseeing_speed"
+  local end_tile=(motion_test or sightseeing_speed_test) and 22 or 10
   if profile=="mid_industry" then models={
     {engine="coal_uhl",stem="stock_uhl_coal_truck",cargo="coal",price=7000},
     {engine="mail_reynard",stem="stock_reynard_mail_truck",cargo="mail",price=7382},
@@ -22,9 +23,28 @@ local function road_native_scene(viewer)
     {engine="mail_perry",stem="stock_perry_mail_truck",cargo="mail",price=7929},
   } elseif profile=="early_mail" then models={
     {engine="mail_mps",stem="stock_mps_mail_truck",cargo="mail",price=6289},
-  } elseif motion_test then
-    models={models[1]}
-  end
+  } elseif profile=="early_metal" then models={
+    {engine="iron_mps",stem="stock_mps_iron_ore_truck",cargo="iron_ore",price=6617},
+    {engine="steel_balogh",stem="stock_balogh_steel_truck",cargo="steel",price=6125},
+  } elseif profile=="mid_metal" then models={
+    {engine="iron_uhl",stem="stock_uhl_iron_ore_truck",cargo="iron_ore",price=7656},
+    {engine="steel_uhl",stem="stock_uhl_steel_truck",cargo="steel",price=7382},
+  } elseif profile=="late_metal" then models={
+    {engine="iron_chippy",stem="stock_chippy_iron_ore_truck",cargo="iron_ore",price=8203},
+    {engine="steel_kelling",stem="stock_kelling_steel_truck",cargo="steel",price=7929},
+  } elseif profile=="early_armoured" then models={
+    {engine="valuables_balogh",stem="stock_balogh_armoured_truck",cargo="valuables",price=7929},
+  } elseif profile=="mid_armoured" then models={
+    {engine="valuables_uhl",stem="stock_uhl_armoured_truck",cargo="valuables",price=9296},
+  } elseif profile=="late_armoured" then models={
+    {engine="valuables_foster",stem="stock_foster_armoured_truck",cargo="valuables",price=9843},
+  } end
+  if sightseeing_speed_test then
+    models={
+      {engine="bus",stem="town_flyer",cargo="passenger",normal_speed=3.24},
+      {engine="mail_mps",stem="stock_mps_mail_truck",cargo="mail",normal_speed=2.78},
+    }
+  elseif motion_test then models={models[1]} end
   local sites={}
   for j=4,Sim.H-4 do
     for i=4,Sim.W-end_tile-2 do
@@ -64,10 +84,34 @@ local function road_native_scene(viewer)
     ask({kind="command",command=c},function(r) revision=r.revision;cb(r) end)
   end
   local motion_probe
-  if motion_test then
+  if motion_test or sightseeing_speed_test then
     core.register_globalstep(function()
       if motion_probe then motion_probe() end
     end)
+  end
+  local test_inspection=profile and profile:find("_metal",1,true)
+  local function check_catchment(station,done)
+    if not test_inspection then return done() end
+    local t=render.host_tile(station)
+    local record=t and t.station and render.host_record("stations",t.station)
+    if not record then
+      core.after(.10,check_catchment,station,done);return
+    end
+    local display=core.show_formspec
+    core.show_formspec=function(name,kind,form)
+      display(name,kind,form)
+      if name==owner and kind=="luanttd_core:worker_truck_stop" and not form:find("Reading the catchment",1,true) then
+        core.show_formspec=display
+        assert(not form:find("unavailable",1,true))
+        assert(form:find("waiting",1,true) or form:find("in this stop's catchment",1,true))
+        core.log("action","PASS NATIVE TRUCK STOP: ordinary right-click context read the worker catchment form")
+        core.after(.20,function()
+          core.close_formspec(name,kind)
+          done()
+        end)
+      end
+    end
+    ui.context(viewer,station)
   end
   local function run(i)
     local m,site=models[i],sites[i]
@@ -80,6 +124,7 @@ local function road_native_scene(viewer)
     viewer:set_pos({x=2*x+end_tile,y=h+10,z=2*z-8})
     viewer:set_look_horizontal(0);viewer:set_look_vertical(.61)
     local depot,a,b=tile(5,1),tile(2,0),tile(end_tile-2,0)
+    if sightseeing_speed_test then a,b=b,a end -- far stop first, so the first leg reaches cruise
     local stop=m.cargo=="passenger" and "road_station" or "truck_stop"
     local tasks={
       {tool="drag",first=tile(0,0),last=tile(end_tile,0),axis=0,start_half=false,end_half=true},
@@ -93,7 +138,29 @@ local function road_native_scene(viewer)
         if actor and p and math.abs(p.z-2*z)<1 and actor.name=="luanttd_core:vehicle_"..m.engine and
             (mesh=="bl_"..m.stem..".obj" or mesh=="bl_"..m.stem.."_loaded.obj") then
           core.log("action",("Verified stock road actor %s on the running line at %.2f, %.2f"):format(m.engine,p.x,p.z))
-          if motion_test then
+          if sightseeing_speed_test then
+            local samples,attempts={},0
+            motion_probe=function()
+              attempts=attempts+1
+              local v=ref:get_pos()
+              assert(v and attempts<650,"No stock road speed sample for "..m.engine)
+              if math.abs(v.z-(2*z+.5))>.63 or v.x<2*x+15 or v.x>2*x+2*end_tile-6 then
+                samples={};return
+              end
+              local now=core.get_us_time()
+              samples[#samples+1]={v.x,now}
+              local first=samples[1]
+              if now-first[2]<1200000 then return end
+              local dx=v.x-first[1]
+              local distance=0
+              for k=2,#samples do distance=distance+math.abs(samples[k][1]-samples[k-1][1]) end
+              local rate=math.abs(dx)*1000000/(now-first[2])
+              if distance>math.abs(dx)+.01 or math.abs(rate-m.normal_speed)>.35 then table.remove(samples,1);return end
+              core.log("action",("NATIVE_STOCK_SPEED %s %.3f nodes/s over %.3f s"):format(m.engine,rate,(now-first[2])/1000000))
+              motion_probe=nil
+              core.after(.35,run,i+1)
+            end
+          elseif motion_test then
             local positions={}
             local attempts=0
             motion_probe=function()
@@ -137,7 +204,7 @@ local function road_native_scene(viewer)
         local selected
         for _,offer in ipairs(q.value.offers) do
           if offer.request.engine==m.engine then
-            assert(offer.price==m.price and offer.request.cargo==m.cargo);selected=offer.request
+            assert((not m.price or offer.price==m.price) and offer.request.cargo==m.cargo);selected=offer.request
           end
         end
         assert(selected,"Normal road depot did not expose "..m.engine)
@@ -146,7 +213,9 @@ local function road_native_scene(viewer)
           local disk=assert(OwnerCheckpoint.read())
           command({kind="road_order_add",vehicle=id,station=assert(disk.tiles[a].station)},function()
             command({kind="road_order_add",vehicle=id,station=assert(disk.tiles[b].station)},function()
-              command({kind="road_toggle",vehicle=id},observe)
+              command({kind="road_toggle",vehicle=id},function()
+                if i==1 then check_catchment(a,observe) else observe() end
+              end)
             end)
           end)
         end)

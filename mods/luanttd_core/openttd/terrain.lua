@@ -57,8 +57,18 @@ function T.corner(g,x,z,plan)
 end
 
 function T.tile(g,x,z,plan)
-  if not tile(g,x,z) then return nil end
-  local hn,hw,he,hs=T.corner(g,x,z,plan),T.corner(g,x+1,z,plan),T.corner(g,x,z+1,plan),T.corner(g,x+1,z+1,plan)
+  -- All four corners are in bounds once the tile is in bounds. Reuse its
+  -- single row-major address; preserve the same shared-corner ordering
+  -- and the same staged-plan fallback as T.corner.
+  local i=index(g,x,z)
+  if not i or x>g.width or z>g.depth then return nil end
+  local stride=g.width+1
+  local heights=g.levels
+  local hn,hw,he,hs=heights[i],heights[i+1],heights[i+stride],heights[i+stride+1]
+  if plan then
+    local staged=plan.levels
+    hn,hw,he,hs=staged[i] or hn,staged[i+1] or hw,staged[i+stride] or he,staged[i+stride+1] or hs
+  end
   local mask,base=slope.classify(hn,hw,he,hs)
   return mask,base,math.max(hn,hw,he,hs)
 end

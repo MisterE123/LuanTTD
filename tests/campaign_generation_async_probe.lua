@@ -34,6 +34,23 @@ core.register_on_mods_loaded(function()
     assert(not unexpected_table and progress_seen>0 and last==87 and heartbeats>1)
     local actual=assert(prepared.read(),"Worker success without durable result")
     compare(expected,actual)
+    local found={}
+    for _,site in ipairs(actual.stock_generated_profile.industries) do
+      if site.chain=="heavy" then
+        local record=assert(actual.stock_heavy_industries[site.industry])
+        local placement=assert(actual.stock_heavy_placements[site.industry])
+        local cells=site.kind=="iron_mine" and 16 or 12
+        assert(record.kind==site.kind and record.layout==0 and #placement.cells==cells)
+        for _,cell in ipairs(placement.cells) do
+          local part=assert(actual.tiles[cell.id].stock_industry)
+          assert(part.id==record.id and part.style=="industry_"..site.kind and part.gfx==cell.gfx)
+        end
+        found[site.kind]=(found[site.kind] or 0)+1
+      end
+    end
+    assert(found.iron_mine and found.steel_mill,("No complete heavy chain in async map: %s mine / %s mill"):format(tostring(found.iron_mine),tostring(found.steel_mill)))
+    core.log("action",("PASS NATIVE TEMPERATE HEAVY WORLDGEN: %d ore mines, %d steel mills, exact source footprints")
+      :format(found.iron_mine,found.steel_mill))
     local steps=heartbeats
     -- Obstruct the exact atomic destination, not the source or existing
     -- world. The worker must not report success for lost prepared data.

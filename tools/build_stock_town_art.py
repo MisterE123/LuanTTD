@@ -10,7 +10,7 @@ from pathlib import Path
 from random import Random
 import bpy
 import bmesh
-from mathutils import Vector
+from mathutils import Matrix, Vector
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_scenery_art import COLORS, ROOT, beam, box, bulbs, chimney, frontdoor, gable, hip, init, mesh, pane, tapered
 from build_town_props import text_plate, striped_awning
@@ -510,7 +510,8 @@ def station_entry(name,x,y):
         pane("Entry ticket windows",x+q*.176,y+.013,.194,.215,.177,f="metal",divisions=2)
     box("Entry roof coping",(x,y+.113,.421),(.84,.254,.049),"slate")
     box("Enamel name board",(x,y-.015,.371),(.594,.028,.09),"teal")
-    text_plate("Raised venue name",name,x,y-.033,.367,.077,"cream")
+    sign=text_plate("Raised venue name",name,x,y-.033,.367,.077,"cream")
+    sign["luanti_front_text"]=name
 
 
 def oval_stadium():
@@ -607,6 +608,14 @@ ASSETS={**FIRST,**SECOND,**MULTI_ASSETS}
 
 
 def join_into_native():
+    # In the multipart OBJ export, Blender front -Y becomes Luanti +Z.
+    # X then runs screen-left as viewed from that facade. Reverse the
+    # relief in its own coordinates before clipping, not the parcel or
+    # the editable Blender letters. Fix winding after the reflection.
+    for sign in bpy.context.scene.objects:
+        if sign.get("luanti_front_text"):
+            sign.data.transform(Matrix.Diagonal((-1.0,1.0,1.0,1.0)))
+            sign.data.flip_normals()
     first=next(iter(bpy.context.scene.objects))
     bpy.ops.object.select_all(action="SELECT")
     bpy.context.view_layer.objects.active=first

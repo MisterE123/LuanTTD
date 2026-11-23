@@ -270,6 +270,20 @@ return function(api)
     end
   end
   local oil_buildings={}
+  if api.heavy_world then
+    for style,parts in pairs(api.heavy_world.visual_sources()) do
+      for _,part in ipairs(parts) do
+        local mesh=("%s_%d_%d"):format(style,part[1],part[2])
+        oil_buildings[mesh]=architecture(mesh,mesh,style.."_atlas")
+      end
+    end
+  end
+  if api.capabilities and api.capabilities.temperate_bank then
+    for dx=0,1 do
+      local name="industry_temperate_bank_"..dx.."_0"
+      oil_buildings[name]=architecture(name,name,"industry_temperate_bank_atlas")
+    end
+  end
   if api.oil_world then
     for style,parts in pairs(api.oil_world.visual_sources()) do
       for _,cell in ipairs(parts) do
@@ -614,6 +628,18 @@ return function(api)
     stock_scenery.lighthouse=architecture("stock_lighthouse","stock_lighthouse","stock_landmarks_atlas")
     stock_scenery.transmitter=architecture("stock_transmitter","stock_transmitter","stock_landmarks_atlas")
   end
+  local lighthouse_beams=stock_scenery.lighthouse and dofile(modpath.."/lighthouse_beam_view.lua")(core,Sim)
+  function R.step_lighthouse_beams(dt,viewers)
+    if not lighthouse_beams then return end
+    if not viewers then
+      viewers={}
+      for _,player in ipairs(core.get_connected_players()) do
+        local at=player:get_pos()
+        if at then viewers[#viewers+1]=at end
+      end
+    end
+    lighthouse_beams.step(dt,S,viewers)
+  end
   local river_view,river_revision,river_topology,river_directions
   if S.stock_generated_profile and S.stock_generated_profile.river_stats then
     river_view=dofile(modpath.."/river_presentation.lua")(Sim)
@@ -664,6 +690,18 @@ return function(api)
   core.register_alias("mapgen_water_source",gnames.water[0])
   core.register_alias("mapgen_river_water_source",gnames.water[0])
   local frontage=dofile(modpath.."/house_frontage.lua")
+  local fountains=dofile(modpath.."/town_fountain_view.lua")(core,Sim,frontage)
+  function R.step_fountains(dt,viewers)
+    if not viewers then
+      viewers={}
+      for _,player in ipairs(core.get_connected_players()) do
+        local pos=player:get_pos()
+        if pos then pos.name=player:get_player_name();viewers[#viewers+1]=pos end
+      end
+    end
+    fountains.step(dt,S,viewers)
+  end
+  function R.leave_fountains(name) fountains.leave(name) end
   local function solid(t,id,x,z)
     if t.site or t.house then
       local record=t.source_house
@@ -835,17 +873,19 @@ return function(api)
       if y==tunnel.base+1 and x%2==0 and z%2==0 then return tunnel_portal[head.inside_direction] end
       return "air"
     end
-    if t.stock_industry and (api.stock_coal_scenery or api.stock_timber_scenery or api.farm_world or api.oil_world) then
+    if t.stock_industry and (api.stock_coal_scenery or api.stock_timber_scenery or api.farm_world or api.oil_world or api.heavy_world) then
       local b=t.stock_industry
       local _,level=terrain.tile(id)
       local registry=b.chain=="farm" and S.stock_farm_industries or
         b.chain=="timber" and S.stock_timber_industries or
-        b.chain=="oil" and S.stock_oil_industries or S.stock_coal_industries
+        b.chain=="oil" and S.stock_oil_industries or b.chain=="heavy" and S.stock_heavy_industries or
+        b.chain=="bank" and S.stock_bank_industries or S.stock_coal_industries
       local industry=registry and registry[b.id]
       if industry and not industry.removed and y==level+1 and x%2==0 and z%2==0 then
         local name=("%s_%d_%d"):format(b.style,b.x,b.z)
         if b.chain=="farm" then return assert(farm_buildings[name]) end
         if b.chain=="oil" then return assert(oil_buildings[name]) end
+        if b.chain=="heavy" or b.chain=="bank" then return oil_buildings[name] or "air" end
         if b.chain=="timber" then
           if b.kind=="forest" then
             for _,cell in ipairs(industry.tiles) do

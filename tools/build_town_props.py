@@ -57,6 +57,7 @@ def text_plate(name, letters, x,y,z, h, color):
     typ.select_set(True)
     bpy.context.view_layer.objects.active=typ
     bpy.ops.object.convert(target="MESH")
+    return bpy.context.object
 
 
 def crate(x,y,z=0,w=.21,d=.18,h=.105,tone="cedar"):

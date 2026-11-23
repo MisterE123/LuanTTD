@@ -1,8 +1,9 @@
 # Temperate farm, factory and original cargo chain
 
-Source pin: OpenTTD 14.1. This slice contains the real industry rules and
-a replay-safe host adapter, **not** an enabled campaign option. No
-production, vehicle, UI or renderer behavior changes on existing worlds.
+Source pin: OpenTTD 16.0-RC1 for field planting; OpenTTD 14.1 for the
+industry/ledger proof below. This document describes the source rules
+and replay-safe host adapter. See [FARM_FACTORY_WORLD.md](FARM_FACTORY_WORLD.md)
+for campaign placement, transport, and rendering.
 
 * Farm IndustryType 9: three original layouts (9, 12, 12 physical
   tiles, gfx 33–38). Output order is Grain then Livestock. Each has an
@@ -37,9 +38,14 @@ production, vehicle, UI or renderer behavior changes on existing worlds.
   protection, with removal on the next stock monthly pass.
 * Farm field planting attempts 50 times on build and has a 1-in-8
   chance every 256-tick production pulse. It uses shared RNG, source
-  suitability/clipping, 4–7 tile bounds, nine variants and original
-  fence rules. Farmhouse gfx 33 and 34 contribute one Passenger
-  acceptance eighth each; a lone farm accepts no whole passenger
+  suitability/clipping, 4–7 tile bounds in Temperate, nine variants
+  and original fence rules. The RC1 suitability count excludes rough
+  clear ground and rough trees, which may still be planted over if
+  enough other tiles qualify. Shore trees never qualify. The kernel
+  also carries the source snowline check, 8–11 tile Arctic bounds, and
+  fixed Arctic/Tropic fence style; this does not enable those climates
+  in LuanTTD's campaign generator. Farmhouse gfx 33 and 34 contribute one
+  Passenger acceptance eighth each; a lone farm accepts no whole passenger
   unit. Clear-ground field aging/fallow and 3D field visuals
   are separate from this source planting slice.
 
@@ -77,14 +83,15 @@ duplicate accounting. On reload a duplicate returns no payable amount.
   authentic source rates/cargo/stock truck rows; 8,000 compiled
   production, dispatch/recession and conversion cases; 6,000 compiled
   original/smooth change cases with all RNG draws checked.
-* tests/farm_factory_fields_upstream.py: 500 compiled planting scenarios
-  compare the exact tiles, all fence sides, and RNG draws including
-  normal and freeform boundaries.
+* `python3 tests/farm_factory_fields_upstream.py /path/to/OpenTTD-16.0-RC1`:
+  600 scenarios compare exact RNG draws and final state, ordered field
+  and fence writes, and all four fence sides against the original C++
+  functions. They cover square and rectangular boards, normal and
+  freeform boundaries, mixed tile types, and snowline rejection.
 * tests/farm_factory_ledger.lua and tests/farm_factory_ledger_native.sh:
   real landscape cursor, actual packet tiles and a mixed station scan.
   Two native Luanti processes persist a partial scan in SQLite and
   settle 5 grain for $43, 5 livestock for $38, and exactly one converted
   shipment of 10 crates to the town for $104, with no duplicate output
   or payments. This is a native ledger fixture, not an end-to-end
-  player truck drive or graphical port. Assets and active campaign
-  placement remain separate work.
+  player truck drive or graphical test.

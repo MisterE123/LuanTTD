@@ -41,7 +41,10 @@ core.after(0,function()
     for _,engine in ipairs({"grain_truck","livestock_van","oil_tanker","wood_truck","goods_truck","coal_tipper"}) do
       assert(Sim.vehicle_available(S,engine),engine)
     end
-    report("all eight supported industry types on the same plain map, truck/rail catalog available")
+    for _,engine in ipairs({"iron_mps","steel_balogh","valuables_balogh"}) do
+      assert(Sim.vehicle_available(S,engine),"Stock 1950 lorry missing from the ordinary market: "..engine)
+    end
+    report("all eight original supported industry types on the same plain map, with ordinary additional stock lorry offers")
     local slopes,peak,water,shore,void=counts()
     assert(slopes>60 and peak>=2 and water>30 and shore>15 and void==252)
     -- Stock generation is initially stable here. Clearing + raising a

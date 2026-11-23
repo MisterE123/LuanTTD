@@ -37,6 +37,7 @@ bayline_generated_relief = 0
 bayline_generated_coasts = 0
 bayline_generated_towns = 3
 bayline_generated_town_layout = grid2
+bayline_generated_tree_placer = ${LUANTTD_QA_FLEET_TREE_PLACER:-2}
 singleplayer_mode = false
 CONF
 printf 'screen_w = 1440\nscreen_h = 900\nenable_sound = false\n' >"$out/client.conf"

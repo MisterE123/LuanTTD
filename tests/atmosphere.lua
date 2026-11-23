@@ -69,36 +69,78 @@ end
 lifecycle()
 print("Atmosphere: smooth day/night, visible moon, haze independent, frozen/advancing clocks, reconnect and no setting or clock writes")
 
-local function clock(initial,normal)
+local Solar=dofile("mods/luanttd_core/campaign_solar_clock.lua")
+local Sim=dofile("mods/luanttd_core/sim.lua")
+local Calendar=dofile("mods/luanttd_core/openttd/stock_engine_calendar.lua")
+local Step=dofile("mods/luanttd_core/campaign_step.lua")
+local Codec=dofile("mods/luanttd_core/packed_campaign.lua")
+Sim.engine_calendar=Calendar
+local function make_world(year)
+  return {day=0,speed=1,stock_bus_market={epoch=Calendar.date(year,1,1)}}
+end
+local function test_year(year,days)
+  local s=make_world(year)
+  local sample=Solar.new(Sim,s,1.25)
+  local function phase() return Solar.phase(sample(0),0) end
+  assert(sample(0).year_days==days and eq(phase(),.5))
+  s.day=math.floor(days/2);s.campaign_day_fraction=days/2-s.day
+  assert(eq(phase(),0))
+  s.day=days-1;s.campaign_day_fraction=.999
+  assert(phase()<.5 and phase()>.49)
+  s.day=days;s.campaign_day_fraction=0
+  assert(sample(0).year==year+1 and eq(phase(),.5))
+end
+test_year(1950,365)
+test_year(2000,366)
+test_year(2100,365)
+do
+  local s=make_world(2000)
+  local sample=Solar.new(Sim,s,1.25)
+  local function step(state)
+    return Step.new(state,1.25,{persist_fraction=true,advance=function(w) w.day=w.day+1 end,refresh=function() end})
+  end
+  local owner=step(s)
+  owner.step(.5,true,true)
+  assert(eq(s.campaign_day_fraction,.4))
+  local running=sample(1000000)
+  assert(Solar.phase(running,1100000)>Solar.phase(running,1000000))
+  assert(eq(Solar.phase(running,1200000),Solar.phase(running,99999000)),"any extrapolation must be bounded")
+  s.speed=0
+  owner.step(60,false,true)
+  local pause=sample(2000000)
+  assert(eq(pause.fraction,.4) and eq(Solar.phase(pause,2000000),Solar.phase(pause,3000000)))
+  s=assert(Codec.decode(Codec.encode(s)))
+  owner=step(s)
+  assert(eq(Solar.phase(Solar.new(Sim,s,1.25)(3000000),3000000),Solar.phase(pause,2000000)))
+  s.speed=4
+  owner.step(.1875,false,true)
+  assert(s.day==1 and eq(s.campaign_day_fraction,0))
+end
+
+local function clock(initial)
   local step,shutdown,writes,sync=nil,nil,{},0
-  local rate,phase,sim=initial,.395375,1
+  local rate,phase,calendar=initial,.8,.5
   local core={settings={
     get=function(_,key)assert(key=="time_speed");return rate end,
     set=function(_,key,value)assert(key=="time_speed");writes[#writes+1]=value;rate=value end,
     remove=function(_,key)assert(key=="time_speed");rate=nil end,
   },register_globalstep=function(f)step=f end,register_on_leaveplayer=function()end,
   register_on_shutdown=function(f)shutdown=f end,
-  get_timeofday=function()return phase end,
-  set_timeofday=function(next)assert(eq(next,phase),"speed change jumped the solar phase");sync=sync+1 end}
-  A.start(core,function()return sim end)
-  if normal==0 then
-    sim=4;step(.6)
-    assert(tonumber(rate)==0 and sync==0 and #writes==0 and not shutdown)
-    return
-  end
-  assert(tonumber(rate)==normal)
-  local updated=sync
-  step(.6);assert(sync==updated)
-  sim=0;step(.1);step(2);assert(tonumber(rate)==0 and sync==updated+1)
-  sim=2;step(.1);assert(tonumber(rate)==2*normal and sync==updated+2)
-  phase=.783 -- test administrator /time is not overwritten by playback.
-  sim=4;step(.1);assert(tonumber(rate)==4*normal and sync==updated+3)
-  sim=1;step(.1);assert(tonumber(rate)==normal and sync==updated+4)
+  get_timeofday=function() return phase end,
+  set_timeofday=function(next_)phase=math.floor(next_*24000)/24000;sync=sync+1 end}
+  A.start(core,function()return calendar end)
+  assert(tonumber(rate)==0 and eq(phase,.5))
+  step(.22);assert(sync==1)
+  calendar=nil;step(.6);assert(eq(phase,.5) and sync==1)
+  calendar=.75;step(.6);assert(eq(phase,.75) and sync==2)
+  step(2);assert(sync==2)
+  calendar=.99999;step(.6);assert(eq(phase,0) and sync==3)
+  phase=.5;step(.6);assert(eq(phase,0) and sync==4,"native clock diverged from its calendar owner")
   shutdown()
-  assert(rate==initial,"temporary speed settings were not restored")
+  assert(rate==initial and writes[1]=="0","temporary simulation clock override not restored")
 end
-clock("72",720)
-clock(nil,720)
-clock("300",300)
-clock("0",0)
-print("Daylight clock: 1×/2×/4×, pause and resume, no phase jump, configurable baseline and explicit freeze")
+clock("72")
+clock(nil)
+clock("300")
+clock("0")
+print("Daylight clock: calendar year and leap days, pause/resume, bounded worker interpolation, saved phase, and exact native synchronization")

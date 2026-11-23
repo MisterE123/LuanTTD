@@ -58,4 +58,29 @@ for size,count in [(12,2),(22,4)]:
     for i in range(count):
         detail=[check(mod/"models"/f"bl_town_stock_stage_{size}_{s}_{i}.obj",70) for s in range(3)]
         assert detail[0] < detail[1] < detail[2]
+# Read the venue relief from +Z, where decreasing native X is screen-right.
+# Both name boards straddle a tile seam, so test combined glyphs, not a chunk.
+def venue_letter_widths(id, front_z):
+    intervals=[]
+    for i in (1,3):
+        geometry=(mod/"models"/f"bl_town_stock_{id:02x}_{i}.obj").read_text().splitlines()
+        vertices=[tuple(map(float,row.split()[1:])) for row in geometry if row.startswith("v ")]
+        for row in geometry:
+            if not row.startswith("f "): continue
+            face=[vertices[int(v.split("/")[0])-1] for v in row.split()[1:]]
+            if all(math.isclose(z,front_z,abs_tol=.000001) for x,y,z in face):
+                screen_x=[x-2*(i//2) for x,_,_ in face]  # OBJ import reverses X.
+                intervals.append((min(screen_x),max(screen_x)))
+    merged=[]
+    for lo,hi in sorted(intervals):
+        if merged and lo<=merged[-1][1]+.000001:
+            merged[-1]=(merged[-1][0],max(hi,merged[-1][1]))
+        else:
+            merged.append((lo,hi))
+    return [round(hi-lo,4) for lo,hi in merged]
+
+football=venue_letter_widths(0x14,1.4272)
+assert len(football)==8 and football[0]<football[-1]==football[-2] and football[1]==football[2],football
+athletics=venue_letter_widths(0x20,1.4292)
+assert len(athletics)==9 and athletics[6]==min(athletics) and athletics[1]==athletics[5],athletics
 print(f"PASS: {len(new_mounts)} distinct editable meshes checked on the native 2×2 anchor, {len(all_mounts)}/{len(source_ids)} RC1 Temperate roots mounted")

@@ -35,7 +35,7 @@ return function(engine,mod)
     local function done(why,seq,day,detail)
       if running~=t then return end
       running=nil
-      for _,suffix in ipairs({":cancel",":request",":reply"}) do engine.ipc_set(t.session..suffix,nil) end
+      for _,suffix in ipairs({":cancel",":request",":reply",":solar_clock"}) do engine.ipc_set(t.session..suffix,nil) end
       if closed then return end
       on_stop(why,seq,day,detail)
       -- Never replay an interrupted mutation. A commit might already
@@ -69,6 +69,9 @@ return function(engine,mod)
     end
     engine.after(.035,poll)
     return true
+  end
+  function C.solar_clock()
+    if not closed and running then return engine.ipc_get(running.session..":solar_clock") end
   end
   function C.query(req,receive)
     if closed or not running or running.reply or #running.deferred>0 then return nil,"AUTHORITY_BUSY" end
