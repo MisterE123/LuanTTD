@@ -1,10 +1,11 @@
 -- Wide generated campaigns need a durable process-crash checkpoint:
 -- Luanti can batch otherwise successful ModStorage writes in SQLite.
-return function(core)
+return function(core,codec)
   local name="luanttd-wide-campaign.chk"
   local dir=core.get_worldpath()
   local path=dir.."/"..name
   local prefix="LUANTTD-WIDE-CAMPAIGN-1"
+  local state_prefix="LUANTTD-WIDE-CAMPAIGN-3-STATE"
   local M={}
   function M.read()
     local found=false
@@ -19,14 +20,26 @@ return function(core)
     file:close()
     -- Never silently roll back to SQLite if the canonical file exists
     -- but is damaged or was created by an unsupported format.
-    assert(signature==prefix and payload and #payload>0 and digest==core.sha256(payload),
-      "The wide campaign checkpoint is damaged or has an unsupported format.")
-    return payload
+    local damaged="The wide campaign checkpoint is damaged or has an unsupported format."
+    assert((signature==prefix or signature==state_prefix) and payload and #payload>0
+      and digest==core.sha256(payload),damaged)
+    if signature==prefix then return payload end
+    local ok,value=pcall(core.decompress,payload,"zstd")
+    assert(ok and type(value)=="string" and #value>0,damaged)
+    local valid,state=pcall(assert(codec).decode,value)
+    assert(valid and type(state)=="table",damaged)
+    return state
   end
-  function M.write(payload)
-    local data=prefix.."\n"..core.sha256(payload).."\n"..payload
+  local function write(signature,payload)
+    local data=signature.."\n"..core.sha256(payload).."\n"..payload
     assert(core.safe_file_write(path,data),
       "Could not commit the wide campaign checkpoint. Check free disk space and world folder permissions.")
+  end
+  function M.write(payload)
+    return write(prefix,payload)
+  end
+  function M.write_state(state)
+    return write(state_prefix,core.compress(assert(codec).encode(state),"zstd",3))
   end
   return M
 end

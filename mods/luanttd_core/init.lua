@@ -3,7 +3,7 @@ local storage=core.get_mod_storage()
 local Sim=dofile(mod.."/sim.lua")
 core.set_mapgen_setting("mg_name","singlenode",true)
 core.set_mapgen_setting("mg_flags","light",true)
-local Checkpoint=dofile(mod.."/campaign_checkpoint.lua")(core)
+local Checkpoint=dofile(mod.."/campaign_checkpoint.lua")(core,dofile(mod.."/packed_campaign.lua"))
 local checkpoint=Checkpoint.read()
 local saved=checkpoint or storage:get_string("campaign")
 local settings=core.settings
@@ -34,7 +34,7 @@ local generated_world=fresh and not (fixture or request_farm or request_oil or r
 local Generated,Generator,Terrain
 local S
 if saved~="" then
-  S=core.deserialize(saved,true)
+  S=type(saved)=="table" and saved or core.deserialize(saved,true)
 elseif generated_world then
   local source=mod.."/openttd/"
   Generated=dofile(mod.."/generated_campaign.lua")
@@ -51,9 +51,9 @@ elseif generated_world then
     end,
     next_random=TG.next_random,describe=Clear.describe}
   local seed=world_options and world_options.seed or tonumber(core.settings:get("bayline_seed")) or 1751
-  local size=world_options and world_options.size or tonumber(core.settings:get("bayline_generated_map_size")) or Generated.size
+  local width,depth=WorldSetup.dimensions(settings,world_options)
   S=Generated.landscape(Sim,Terrain,Generator,{
-    width=size,depth=size,seed=seed,rng_state=TG.startup_rng(seed),
+    width=width,depth=depth,seed=seed,rng_state=TG.startup_rng(seed),
     terrain_type=world_options and world_options.relief or tonumber(core.settings:get("bayline_generated_relief")) or 1,
     quantity_sea_lakes=world_options and world_options.sea or tonumber(core.settings:get("bayline_generated_sea")) or 0,
     amount_of_rivers=world_options and world_options.rivers or tonumber(core.settings:get("bayline_generated_rivers")) or 0,
@@ -67,9 +67,12 @@ else
   S=Sim.new(fixture and tonumber(settings:get("bayline_seed")) or 1751)
 end
 if type(S)~="table" or S.version~=1 then error("Unsupported LuanTTD save; use a fresh world.") end
-assert(not checkpoint or (S.stock_generated_profile and S.stock_generated_profile.width==128),
-  "The wide campaign checkpoint does not describe a wide campaign.")
-local wide_checkpoint=S.stock_generated_profile and S.stock_generated_profile.width==128
+local profile=S.stock_generated_profile
+local world_area=profile and profile.width*profile.depth or 0
+assert(not checkpoint or world_area>=128^2,
+  "The campaign checkpoint does not describe a wide campaign.")
+local wide_checkpoint=world_area>=128^2
+local compact_checkpoint=world_area>128^2
 if S.stock_generated_profile then
   local p=S.stock_generated_profile
   local generated=Generated or dofile(mod.."/generated_campaign.lua")
@@ -77,8 +80,8 @@ if S.stock_generated_profile then
     S.corner_grid.depth==p.depth and #S.tiles==p.width*p.depth and
     #S.corner_grid.levels==(p.width+1)*(p.depth+1),"Unsupported generated campaign dimensions")
   local clock=S.passenger_house_clock
-  local width_log=p.width==128 and 7 or 6
-  assert(not clock or (clock.log_x==width_log and clock.log_y==width_log and
+  local width_log,depth_log=WorldSetup.axis_log(p.width),WorldSetup.axis_log(p.depth)
+  assert(not clock or (clock.log_x==width_log and clock.log_y==depth_log and
     type(clock.head)=="number" and clock.head%1==0 and clock.head>=1 and clock.head<p.width*p.depth),
     "Saved landscape clock does not cover the generated region")
   Sim.W,Sim.H=p.width,p.depth
@@ -302,6 +305,10 @@ end
 api.rail_owned_pair_tools,S.rail_owned_pair_enabled=true,true
 S.rail_block_preview,api.rail_block_tools,api.rail_build_tools=true,true,true
 function api.save()
+  if compact_checkpoint then
+    Checkpoint.write_state(S)
+    return
+  end
   local payload=core.serialize(S)
   -- Commit before the callback reports a successful company action.
   -- SQLite remains a compatibility mirror, never the authority when the

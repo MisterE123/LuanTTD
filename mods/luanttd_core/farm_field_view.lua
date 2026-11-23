@@ -49,8 +49,11 @@ return function(api,Terrain)
               local low,high=Terrain.corner(S.corner_grid,xa,za),Terrain.corner(S.corner_grid,xb,zb)
               local rise=math.abs(high-low)
               if rise<=1 then
-                local yaw=e[5]=="v" and -math.pi/2 or 0
-                if low>high then yaw=yaw+math.pi end
+                -- Luanti entity yaw turns model +X toward world +Z
+                -- at +pi/2. The graded OBJ's +X end must be uphill.
+                local dx,dz=xb-xa,zb-za
+                if low>high then dx,dz=-dx,-dz end
+                local yaw=math.atan2(dz,dx)
                 active[key]={id=id,name=name(style,rise),x=xa+xb-.5,y=math.min(low,high)+.5,z=za+zb-.5,yaw=yaw}
               end
             end

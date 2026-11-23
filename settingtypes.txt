@@ -1,7 +1,10 @@
 [OpenTTD world generation]
 # These are defaults for new worlds; singleplayer also offers them when creating a map.
 bayline_seed (World generation seed) int 1751 0 4294967295
-bayline_generated_map_size (Generated playable map side length) enum 64 64,128
+bayline_generated_map_size (Legacy square map side length) enum 64 64,128,256,512
+# Pick axes independently (0 inherits the legacy square side). Playable area is capped at 262,144 tiles.
+bayline_generated_map_width (Generated playable map width) enum 0 0,64,128,256,512,1024,2048,4096
+bayline_generated_map_depth (Generated playable map depth) enum 0 0,64,128,256,512,1024,2048,4096
 bayline_generated_relief (Generated landscape terrain type) int 1 0 4
 bayline_generated_smoothness (Generated landscape smoothness) int 1 0 3
 bayline_generated_coasts (Forced coastal edge mask, 16 random) int 15 0 16

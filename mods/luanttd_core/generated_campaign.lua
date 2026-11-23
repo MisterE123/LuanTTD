@@ -3,8 +3,9 @@
 -- The host mounts only the houses and ground construction it can render.
 local M={}
 M.size=64
+local axis={[64]=true,[128]=true,[256]=true,[512]=true,[1024]=true,[2048]=true,[4096]=true}
 function M.supports_size(width,depth)
-  return width==depth and (width==64 or width==128)
+  return axis[width]==true and axis[depth]==true and width*depth<=512*512
 end
 local function copy(t)
   local r={}
@@ -13,7 +14,7 @@ local function copy(t)
 end
 
 function M.landscape(Sim,Terrain,Generator,settings)
-  assert(M.supports_size(settings.width,settings.depth), "Stock campaign sizes are 64×64 and 128×128")
+  assert(M.supports_size(settings.width,settings.depth), "Stock campaign axes are powers of two from 64 to 4096, up to 262,144 tiles total.")
   local map,rivers=Generator.generate(settings)
   assert(map.width==settings.width and map.depth==settings.depth and type(map.rng_after)=="table")
   Sim.W,Sim.H=map.width,map.depth

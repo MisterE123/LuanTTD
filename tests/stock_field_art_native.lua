@@ -48,7 +48,7 @@ local function view(p,v)
 end
 local function fence(style,x,z,u,v,h,k)
   assert(math.abs(h-k)<=1)
-  local a,b=math.atan2(z-v,u-x),math.atan2(v-z,x-u)
+  local a,b=math.atan2(v-z,u-x),math.atan2(z-v,x-u)
   local e=assert(core.add_entity({x=(x+u)/2,y=.5+math.min(h,k),z=(z+v)/2},
     "goodsart:farm_fence_"..style.."_"..math.abs(h-k)))
   e:set_rotation({x=0,y=h<=k and a or b,z=0})

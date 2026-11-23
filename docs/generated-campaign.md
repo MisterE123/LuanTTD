@@ -2,20 +2,24 @@
 
 Create a **fresh ordinary LuanTTD world**, with no special settings.
 It starts with a 64×64 temperate landscape made by the OpenTTD 14.1
-TerraGenesis port. Set
-`bayline_generated_map_size = 128` before generation for a larger map.
+TerraGenesis port. In new-world setup, choose **Map width** and **Map depth**
+independently. Each axis can be a stock power of two from 64 to 4096, up to
+262,144 tiles total: for example 512×512, 1024×256, or 4096×64.
+For a dedicated server, set `bayline_generated_map_width` and
+`bayline_generated_map_depth` before generating.
 Ordinary maps can generate farms, factories, oil wells and refineries
 alongside coal and timber. You do not need a separate scenario for those
 industries. Reopening a save keeps its recorded geography; create a
 fresh world to generate the expanded roster.
 
-For 128×128 worlds, successful saves atomically replace
-`luanttd-wide-campaign.chk` inside the world folder before refreshing
-Luanti's SQLite mirror. Back up or move the **entire world folder** with
-the game closed. The checkpoint protects against a process dying before
-SQLite commits; it does not prevent the engine from crashing or
-guarantee recovery after a power loss. A damaged checkpoint stops the
-load rather than silently selecting an older mirror.
+At 16,384 tiles and above, successful saves atomically replace
+`luanttd-wide-campaign.chk` inside the world folder. Above 16,384 tiles,
+the packed file is authoritative and the campaign is not duplicated into
+SQLite. Back up or move the **entire world folder** with the game closed.
+Larger worlds paint the starting area first and stream scenery as you
+explore; towns, industries, and ground elsewhere are still simulated.
+A damaged checkpoint stops the load rather than silently selecting an old
+snapshot.
 
 The profile is not the Original read-only terrain viewer. It uses the
 pinned OpenTTD 14.1 TerraGenesis height and coast pipeline, with no GRF
@@ -147,9 +151,10 @@ save or full OpenTTD seed will recreate every tile. It skips most stock
 industry types and custom landscape objects. It mounts only modeled
 temperate house types and flat municipal growth (no town-built bridges,
 tunnels, or destructive grading), so the stock candidate rules run on
-a smaller native build set. Playable regions currently support 64×64 and
-128×128, using a dense simulation/save. The independent terrain kernel
-supports larger source dimensions. See
+a smaller native build set. The ordinary simulation still uses a dense
+tile-state array. A 4096×4096 campaign would require a different storage
+and simulation architecture and is not offered. The independent terrain
+kernel can generate larger survey dimensions. See
 [TerraGenesis](terragenesis-port.md),
 [river generation](stock-river-worldgen.md),
 [town generation](stock-town-worldgen.md),

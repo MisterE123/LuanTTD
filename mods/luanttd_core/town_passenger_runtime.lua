@@ -2,6 +2,7 @@
 -- production and catchment, not town expansion or visual buildings.
 return function(Sim,H,Packets,Rating,Mail)
   local M={}
+  local axis_log={[64]=6,[128]=7,[256]=8,[512]=9,[1024]=10,[2048]=11,[4096]=12}
   local archetype={[0]=0x19,0x18,0x1A,0x06}
   function M.stamp(s,t,id)
     if not t.house then return end
@@ -17,8 +18,12 @@ return function(Sim,H,Packets,Rating,Mail)
     -- cover their entire saved board and carry the river stage head.
     -- Imported or resumed maps keep their own stride and tick counter.
     local profile=s.stock_generated_profile
-    local size_log=profile and profile.width==128 and 7 or 6
-    s.passenger_house_clock=H.new_clock(size_log,size_log,profile and profile.river_rng_cursor)
+    local log_x,log_y=6,6
+    if profile then
+      log_x=assert(axis_log[profile.width],"Unsupported town clock width")
+      log_y=assert(axis_log[profile.depth],"Unsupported town clock depth")
+    end
+    s.passenger_house_clock=H.new_clock(log_x,log_y,profile and profile.river_rng_cursor)
     for id,t in ipairs(s.tiles) do if t.house and not t.source_house then M.stamp(s,t,id) end end
   end
   -- An alternate passenger owner replaces (never duplicates) the road

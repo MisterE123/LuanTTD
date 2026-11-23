@@ -43,8 +43,8 @@ Use entity scale 1 (ten OBJ units per native node), lighted and decorative
 For real native endpoint samples `a,b`, place the mesh centered at the
 edge midpoint, Y=min(a.y,b.y). Positive rises go along model +X, which
 must point toward the higher endpoint. Let direction dx,dz point from
-low to high (choose either if equal). Use yaw `atan2(-dz,dx)`; +X is 0,
-+Z is −π/2, −X is π, and −Z is +π/2. The cross-tile terrain validity rule
+low to high (choose either if equal). Use Luanti entity yaw `atan2(dz,dx)`; +X is 0, +Z is +π/2, −X is π,
+and −Z is −π/2. The cross-tile terrain validity rule
 limits adjacent corner heights to one native level even on stepped tiles.
 Fence directions on a stock record are 0=west (−X edge), 1=south (+Z),
 2=east (+X), 3=north (−Z). Art geometry does not invent boundaries where

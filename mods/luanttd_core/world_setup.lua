@@ -4,8 +4,13 @@ local M={form="luanttd_core:world_setup",storage_key="world_setup_v1"}
 local scenarios={"generated","farm","oil","coastal","south_coast","original"}
 local scenario_labels="Generate a world,Farm and Factory,Oil and Refinery,Coastal Landscaping,South Coast Coal,Original Terrain Survey"
 local survey_sizes={64,128,256,512,1024,2048,4096}
+local labels={"64","128","256","512","1024","2048","4096"}
+-- The ordinary campaign still keeps the complete simulation in memory.
+-- Expose independent stock axes, but cap the combined playable area.
+M.max_playable_tiles=512*512
 local items={
-  {key="size",setting="bayline_generated_map_size",default=64,values={64,128},labels={"64 x 64","128 x 128"}},
+  {key="width",default=64,values=survey_sizes,labels=labels},
+  {key="depth",default=64,values=survey_sizes,labels=labels},
   {key="relief",setting="bayline_generated_relief",default=1,values={0,1,2,3,4},
     labels={"Very flat","Flat","Hilly","Mountainous","Alpinist"}},
   {key="sea",setting="bayline_generated_sea",default=0,values={0,1,2,3},
@@ -37,16 +42,42 @@ end
 local function integer(n,low,high)
   return type(n)=="number" and n==math.floor(n) and n>=low and n<=high
 end
+function M.axis_log(n)
+  local i=index(survey_sizes,n)
+  return i and i+5
+end
+function M.supports_size(width,depth)
+  return M.axis_log(width)~=nil and M.axis_log(depth)~=nil and width*depth<=M.max_playable_tiles
+end
+function M.dimensions(settings,cfg)
+  if cfg then
+    return cfg.width or cfg.size,cfg.depth or cfg.size
+  end
+  local size=tonumber(settings:get("bayline_generated_map_size")) or 64
+  local width=tonumber(settings:get("bayline_generated_map_width")) or 0
+  local depth=tonumber(settings:get("bayline_generated_map_depth")) or 0
+  return width==0 and size or width,depth==0 and size or depth
+end
+local function set_size(cfg,width,depth)
+  cfg.width,cfg.depth=width,depth
+  cfg.size=width==depth and width or nil -- legacy square profiles
+end
+local size_error="Choose dimensions totaling at most 262,144 tiles (for example, 512 x 512)."
 function M.defaults(settings)
   local seed=tonumber(settings:get("bayline_seed"))
   local year=tonumber(settings:get("bayline_stock_bus_start_year"))
   local out={seed=integer(seed,0,4294967295) and seed or 1751,scenario="generated",survey_size=64,
     year=integer(year,1950,2050) and year or 1950}
   for _,item in ipairs(items) do
-    local v=settings:get(item.setting)
-    if type(item.default)=="number" then v=tonumber(v) end
-    out[item.key]=index(item.values,v) and v or item.default
+    if item.setting then
+      local v=settings:get(item.setting)
+      if type(item.default)=="number" then v=tonumber(v) end
+      out[item.key]=index(item.values,v) and v or item.default
+    end
   end
+  local width,depth=M.dimensions(settings)
+  if not M.supports_size(width,depth) then width,depth=64,64 end
+  set_size(out,width,depth)
   return out
 end
 function M.parse(current,fields)
@@ -57,6 +88,15 @@ function M.parse(current,fields)
     if field~=nil and v==nil then return nil,"Choose a valid generator option." end
     out[item.key]=v or current[item.key]
   end
+  local legacy=fields.setup_size
+  if legacy~=nil then
+    local size=survey_sizes[tonumber(legacy) or 0]
+    if not size then return nil,"Choose a valid map side." end
+    if fields.setup_width==nil then out.width=size end
+    if fields.setup_depth==nil then out.depth=size end
+  end
+  if not M.supports_size(out.width,out.depth) then return nil,size_error end
+  set_size(out,out.width,out.depth)
   out.scenario=current.scenario or "generated"
   if fields.setup_scenario then
     out.scenario=scenarios[tonumber(fields.setup_scenario) or 0]
@@ -83,6 +123,9 @@ function M.read(core,storage)
   if cfg.year==nil then cfg.year=M.defaults(core.settings).year end
   if not integer(cfg.year,1950,2050) then return end
   if not index(scenarios,cfg.scenario) or not index(survey_sizes,cfg.survey_size) then return end
+  local width,depth=M.dimensions(core.settings,cfg)
+  if not M.supports_size(width,depth) then return end
+  set_size(cfg,width,depth)
   for _,item in ipairs(items) do
     if item.advanced and cfg[item.key]==nil then cfg[item.key]=item.default end
     if not index(item.values,cfg[item.key]) then return end
@@ -91,7 +134,7 @@ function M.read(core,storage)
 end
 local function formspec(core,cfg,advanced,note)
   local esc=core.formspec_escape
-  local out={"formspec_version[7]size[12.4,9.1]bgcolor[#101D2C;both;#101D2C]",
+  local out={"formspec_version[7]size[12.4,10.1]bgcolor[#101D2C;both;#101D2C]",
     "box[0,0;12.4,1.44;#173043]style_type[label;textcolor=#E6ECE6]",
     "style_type[button;border=false;bgimg=bl_button.png;bgimg_middle=6;textcolor=#F6F1DF]",
     "style_type[button:hovered;bgimg=bl_button_hover.png]",
@@ -103,7 +146,7 @@ local function formspec(core,cfg,advanced,note)
   }
   out[#out+1]="button[8.43,2.15;3.47,.54;setup_advanced;"..
     (advanced and "Basic options" or "Landscape options").."]"
-  local labels={"Map size","Terrain relief","Sea level","Rivers","Town density","Town roads","Industry density","Tree placement"}
+  local labels={"Map width (tiles)","Map depth (tiles)","Terrain relief","Sea level","Rivers","Town density","Town roads","Industry density","Tree placement"}
   local n=0
   out[#out+1]="dropdown[.49,2.82;7.16,.52;setup_scenario;"..scenario_labels..";"..
     index(scenarios,cfg.scenario)..";true]"
@@ -120,7 +163,9 @@ local function formspec(core,cfg,advanced,note)
         n=n+1
       end
     end
-    if advanced then
+    if not advanced then
+      out[#out+1]="label[6.43,6.91;At most 262,144 tiles total.]"
+    else
       out[#out+1]="label[.49,5.81;Choose which edges to shape into sea, or let TerraGenesis choose.]"
       out[#out+1]="label[.49,6.13;No forced coast still allows inland water and sea-level terrain.]"
     end
@@ -134,13 +179,13 @@ local function formspec(core,cfg,advanced,note)
     out[#out+1]="label[.49,4.20;This scenario uses fixed terrain and industry sites.]"
     out[#out+1]="label[.49,4.83;Road, rail, harbor and air tools are available as usual.]"
   end
-  out[#out+1]="box[.42,6.70;11.56,.025;#466277]"
-  out[#out+1]="label[.49,7.03;"..esc(note or "Save your choices below, then reopen this same world.").."]"
-  out[#out+1]="label[.49,7.42;The next Play generates the world using these settings.]"
-  out[#out+1]="button[.49,8.02;2.40,.60;setup_defaults;Reset options]"
-  out[#out+1]="button[3.08,8.02;2.30,.60;setup_cancel;Cancel setup]"
+  out[#out+1]="box[.42,7.70;11.56,.025;#466277]"
+  out[#out+1]="label[.49,8.03;"..esc(note or "Save your choices below, then reopen this same world.").."]"
+  out[#out+1]="label[.49,8.42;The next Play generates the world using these settings.]"
+  out[#out+1]="button[.49,9.02;2.40,.60;setup_defaults;Reset options]"
+  out[#out+1]="button[3.08,9.02;2.30,.60;setup_cancel;Cancel setup]"
   out[#out+1]="style[setup_generate;bgimg=bl_button_primary.png;textcolor=#101C2B]"
-  out[#out+1]="button[7.62,8.02;4.28,.60;setup_generate;Save and return]"
+  out[#out+1]="button[7.62,9.02;4.28,.60;setup_generate;Save and return]"
   return table.concat(out)
 end
 function M.mount(core,storage)

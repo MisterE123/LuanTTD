@@ -1021,9 +1021,7 @@ return function(api)
   -- so their on_generated hooks will not run on the next startup.
   -- Explicitly paint authoritative campaign terrain into the existing
   -- chunks as well as the newly emerged ones, before enabling the camera.
-  function R.place_world(done)
-    local low={x=2-backdrop,y=-1,z=2-backdrop}
-    local high={x=Sim.W*2+1+backdrop,y=top_bound,z=Sim.H*2+1+backdrop}
+  local function place_region(low,high,done)
     local failed=false
     core.emerge_area(low,high,function(_,action,remaining)
       if action==core.EMERGE_CANCELLED or action==core.EMERGE_ERRORED then failed=true end
@@ -1041,6 +1039,32 @@ return function(api)
         if z>high.z then done(true) else core.after(0,batch) end
       end
       core.after(0,batch)
+    end)
+  end
+  function R.place_world(done)
+    local low={x=2-backdrop,y=-1,z=2-backdrop}
+    local high={x=Sim.W*2+1+backdrop,y=top_bound,z=Sim.H*2+1+backdrop}
+    if not api.generated_world or Sim.W*Sim.H<=128*128 then
+      return place_region(low,high,done)
+    end
+    -- Repair old empty singlenode blocks around the world-setup camera.
+    -- Full campaign startup is independent of map area in native nodes;
+    -- the normal on_generated hook paints unexplored sectors on demand.
+    local distance=tonumber(core.settings:get("max_block_generate_distance")) or 8
+    local radius=16*(math.max(1,math.floor(distance))+5)
+    local a={x=math.max(low.x,-radius),y=low.y,z=math.max(low.z,-radius)}
+    local b={x=math.min(high.x,radius),y=high.y,z=math.min(high.z,radius)}
+    place_region(a,b,function(ok)
+      if not ok then done(false);return end
+      local site=S.sites[1]
+      if not site then done(true);return end
+      local x,z=Sim.xy(site.tile)
+      local u,v=2*x,2*z
+      local size=48
+      local c={x=math.max(low.x,u-size),y=low.y,z=math.max(low.z,v-size)}
+      local d={x=math.min(high.x,u+size),y=high.y,z=math.min(high.z,v+size)}
+      if c.x>=a.x and c.z>=a.z and d.x<=b.x and d.z<=b.z then done(true)
+      else place_region(c,d,done) end
     end)
   end
   local function update_tile(id)
