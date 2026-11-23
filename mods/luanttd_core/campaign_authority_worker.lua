@@ -13,15 +13,38 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     Codec,filename or "luanttd-wide-campaign.chk")
   local s=assert(storage.read(),"authority requires a prepared checkpoint")
   local Sim=dofile(mod.."/sim.lua")
-  local A=endpoint(Sim,mounts(Sim,mod,s,cap))
+  local runtime=mounts(Sim,mod,s,cap)
+  local A=endpoint(Sim,runtime)
+  local auto,interval
+  if cap.autoplay then
+    interval=cap.seconds_per_day or 1.25
+    assert(type(interval)=="number" and interval>=.05 and interval<=15,"invalid worker day interval")
+    auto=dofile(mod.."/campaign_step.lua").new(s,interval,{
+      advance=function()
+        runtime.day()
+        -- Until the UI subscribes to notifications, do not retain
+        -- transient loads, arrivals or effects for an invisible world.
+        Sim.road_loading_events(s)
+        Sim.rail_loading_events(s);Sim.rail_paid_motion_events(s);Sim.rail_coal_loading_events(s)
+        Sim.ferry_loading_events(s);Sim.air_loading_events(s);Sim.air_paid_motion_events(s)
+        if runtime.water and runtime.water.coal then runtime.water.coal.take(s) end
+      end,
+      refresh=function() end,
+    })
+  end
   local inbox,outbox=channel..":request",channel..":reply"
   local seq=0
   core.ipc_set(outbox,{seq=seq,ready=true,day=s.day,revision=s.authority_revision or 0})
-  local idle=0
-  while idle<10 and not core.ipc_get(channel..":cancel") do
-    if core.ipc_poll(inbox,650) then
-      idle=0
-      if core.ipc_get(channel..":cancel") then break end
+  local prior=core.get_us_time()
+  local heartbeat=prior
+  while prior-heartbeat<6500000 and not core.ipc_get(channel..":cancel") do
+    local available=core.ipc_poll(inbox,auto and 35 or 650)
+    local now=core.get_us_time()
+    if core.ipc_get(channel..":cancel") then break end
+    if auto then auto.step((now-prior)/1000000,true,true) end
+    prior=now
+    if available then
+      heartbeat=now
       local q=assert(core.ipc_get(inbox))
       core.ipc_set(inbox,nil)
       local r
@@ -29,8 +52,14 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         r={ok=false,why="UNEXPECTED_SEQUENCE"}
       else
         seq=q.seq
-        if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h)
-        elseif q.kind=="advance" then r=A.advance(q.days)
+        if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,q.fraction)
+        elseif q.kind=="snapshots" then r=A.snapshots(q.windows,q.fraction)
+        elseif q.kind=="orders" then r=A.orders(q.player,q.mode,q.vehicle,q.page)
+        elseif q.kind=="road_quote" then r=A.road_quote(q.player,q.request)
+        elseif q.kind=="company" then r=A.company(q.player)
+        elseif q.kind=="advance" and not auto then r=A.advance(q.days)
+        elseif q.kind=="clock" then r={ok=true,day=s.day,tick=s.passenger_house_clock and
+          s.passenger_house_clock.counter or 0,revision=s.authority_revision or 0}
         elseif q.kind=="command" then r=A.command(q.player,q.command)
         elseif q.kind=="checkpoint" then
           storage.write_state(s)
@@ -42,8 +71,8 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       end
       r.seq=q.seq
       core.ipc_set(outbox,r)
-    else idle=idle+1 end
+    end
   end
   storage.write_state(s)
-  return idle==10 and "idle" or "cancelled",seq,s.day
+  return prior-heartbeat>=6500000 and "idle" or "cancelled",seq,s.day
 end

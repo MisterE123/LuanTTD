@@ -178,16 +178,7 @@ return function(api)
     core.show_formspec(p:get_player_name(),form,b:gsub("V_TOKEN_",("v%d_"):format(seq)))
     return true
   end
-  function V.open(p,kind,id,back,prior,note)
-    local n=p:get_player_name()
-    local v=get(n,kind,id)
-    if not v then
-      if api.vehicle_status then api.vehicle_status(p,"You can manage vehicles from your own company.") end
-      return false
-    end
-    local a=V.orders[kind]
-    local data,why
-    if a then data,why=a.read(n,id) end
+  local function draw_orders(p,v,kind,id,back,prior,note,data,why)
     local cargo=data and data.cargo_rules
     local b=title(v.label,cargo and 9).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
     if note or data and data.summary then
@@ -237,6 +228,30 @@ return function(api)
     b=b..("button_exit[5.55,%g;5,.57;V_TOKEN_close;Back to world]"):format(footer)
     prior.kind,prior.id,prior.back=kind,id,back
     return show(p,prior,b)
+  end
+  function V.open(p,kind,id,back,prior,note)
+    local n=p:get_player_name()
+    local v=get(n,kind,id)
+    if not v then
+      if api.vehicle_status then api.vehicle_status(p,"You can manage vehicles from your own company.") end
+      return false
+    end
+    local a=V.orders[kind]
+    if a and a.fetch then
+      local pending={kind=kind,id=id,back=back,waiting=true}
+      show(p,pending,title(v.label).."label[.45,1.20;Loading vehicle orders…]"..
+        "button_exit[5.55,7.11;5,.57;V_TOKEN_close;Back to world]")
+      local function loaded(data,why)
+        if panels[n]~=pending then return end
+        return draw_orders(p,v,kind,id,back,prior,note,data,why)
+      end
+      local queued,why=a.fetch(n,id,loaded)
+      if not queued then loaded(nil,why or "Could not load vehicle orders.") end
+      return true
+    end
+    local data,why
+    if a then data,why=a.read(n,id) end
+    return draw_orders(p,v,kind,id,back,prior,note,data,why)
   end
   function V.depot(p,kind,depot,return_)
     local n=p:get_player_name()
@@ -296,25 +311,40 @@ return function(api)
       return true
     end
     local a=V.orders[q.kind]
-    if not a or not get(n,q.kind,q.id) then return true end
+    if q.waiting or not a or not get(n,q.kind,q.id) then return true end
+    local function change(op,value,is_cargo)
+      if q.pending then return true end
+      local function completed(ok,message)
+        if panels[n]~=q then return true end
+        q.pending=nil
+        if ok then
+          if op=="up" then q.row=q.row-1 elseif op=="down" then q.row=q.row+1 end
+        end
+        return V.open(p,q.kind,q.id,q.back,q,message or
+          (is_cargo and (ok and "Cargo rule updated." or "Cargo rule not changed.")
+           or (ok and "Orders updated." or "That order change was not accepted.")))
+      end
+      if a.submit then
+        q.pending=true
+        local queued,why=a.submit(n,q.id,q.revision,op,q.row,value,completed)
+        if not queued then return completed(false,why) end
+        return true
+      end
+      local ok,msg=a.edit(n,q.id,q.revision,op,q.row,value)
+      if ok then api.save() end
+      return completed(ok,msg)
+    end
     for _,kind in ipairs({"load","unload"}) do
       if q.cargo and field("apply_"..kind) then
         local choice=q.cargo[kind][tonumber(field("choose_"..kind))]
         if not choice then return true end
-        local ok,msg=a.edit(n,q.id,q.revision,kind,q.row,choice.value)
-        if ok then api.save() end
-        return V.open(p,q.kind,q.id,q.back,q,msg or (ok and "Cargo rule updated." or "Cargo rule not changed."))
+        return change(kind,choice.value,true)
       end
     end
     for _,op in ipairs({"append","up","down","remove","skip","replace"}) do
       if field(op) then
         local target=q.targets and q.targets[q.target]
-        local ok,msg=a.edit(n,q.id,q.revision,op,q.row,target and target.id)
-        if ok then
-          if op=="up" then q.row=q.row-1 elseif op=="down" then q.row=q.row+1 end
-          api.save()
-        end
-        return V.open(p,q.kind,q.id,q.back,q,msg or (ok and "Orders updated." or "That order change was not accepted."))
+        return change(op,target and target.id,false)
       end
     end
     if q.cargo and q.row~=previous_row then return V.open(p,q.kind,q.id,q.back,q) end

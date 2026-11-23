@@ -35,6 +35,28 @@ if ship_model then Ship.settle_owned_day,Ship.count_owned_tick,Ship.paid_art_rea
 local authority=args and args[1]=="authority"
 local with_air=authority or args and args[1]=="air"
 local mount_authority=authority and dofile(root.."campaign_authority_runtime.lua")
+local mounted_runtime
+local actor_modes={}
+local function inspect_views()
+  if not mounted_runtime then return end
+  -- Four subscriptions cover this small fixture. Residents must be
+  -- selected by body position, not by the depot holding their order.
+  for _,origin in ipairs({{1,1},{25,1},{1,19},{25,19}}) do
+    local actors=mounted_runtime.actors(origin[1],origin[2],24,18,1)
+    for _,row in ipairs(actors) do
+      assert(type(row.key)=="string" and row.owner and not row.route and not row.consist)
+      if row.pos then
+        local x,z=math.floor((row.pos.x+.5)/2),math.floor((row.pos.z+.5)/2)
+        assert(x>=origin[1] and x<origin[1]+24 and z>=origin[2] and z<origin[2]+18)
+      end
+      if row.mode=="rail" then
+        assert(#row.parts>0 and row.part_count>=#row.parts)
+        for _,p in ipairs(row.parts) do assert(p.tile and p.td and p.index) end
+      end
+      actor_modes[row.mode]=true
+    end
+  end
+end
 local caps={road={start_year=1950,foster=true,craighead=true,breakdowns=0,service_interval=150},
   air={[215]=true},ferry={[206]=true,[207]=true},rail={engines={},ready={},split={}}}
 local Air,AirNet
@@ -55,6 +77,7 @@ end
 local function mount(s)
   if mount_authority then
     local mounted=mount_authority(Sim,root:sub(1,-2),s,caps)
+    mounted_runtime=mounted
     Rail,Ship,Air=mounted.rail.run,mounted.water.run,mounted.air.run
     Network,AirNet,Lab=mounted.water.network,mounted.air.network,mounted.network.lab
     return
@@ -146,6 +169,7 @@ local function daily(expect_rail)
   local oldrail,oldship=Rail.current(s).ticks,ferry.vehicle.tick
   local oldair=aircraft and (aircraft.vehicle.tick or 0)
   Sim.daily(s)
+  if s.day%5==0 then inspect_views() end
   local clock=s.passenger_house_clock.counter
   local svc=s.stock_ship_commercial.service
   assert(clock==s.stock_load_tick and clock==svc.tick and clock==svc.post_tick)
@@ -298,4 +322,8 @@ if ship_model then
   print(("PASS owned ferry %d; correct purchase, cargo, route restore, running costs and stop/resume"):format(ship_model))
 end
 
+if authority then
+  for _,mode in ipairs({"road","rail","ship","air"}) do assert(actor_modes[mode],mode.." missing from all paid snapshots") end
+  print("PASS scoped pose projections contain all four actual running transport modes")
+end
 return fares

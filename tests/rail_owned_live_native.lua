@@ -401,6 +401,21 @@ local function stamp()
     end
   end
   local ok,note=Owned.start(S,owner,r.id,east,west);assert(ok,note)
+  local ledger=assert(api.vehicle_orders.rail,"Vehicle picker must mount the train orders adapter.")
+  local data=assert(ledger.read(owner,r.id))
+  assert(#data.items==2 and data.items[1].id==east and data.items[2].id==west)
+  assert(not ledger.read("Unauthorised",r.id))
+  local markup
+  local show=core.show_formspec
+  core.show_formspec=function(name,key,body)
+    assert(name==owner and key=="luanttd_core:vehicle_details")
+    markup=body
+  end
+  local opened,result=pcall(api.vehicle_ui.open,{get_player_name=function()return owner end},"rail",r.id)
+  core.show_formspec=show
+  assert(opened and result and type(markup)=="string" and markup:find("Available destinations",1,true)
+    and markup:find("Skip to selected order",1,true))
+  core.log("action","TRAIN_ORDER_PANEL_NATIVE_PASS renders a live train's real destinations and order tools")
   if signal_free and not isolated then assert(current().ordinary_unreserved and not next(S.stock_rail_dispatch.signals.records)) end
   if bridge then assert(current().bridge_collectors) end
   assert(current().stock_engine==engine and current().max_track_speed==vmax)

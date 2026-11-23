@@ -25,6 +25,7 @@ return function(Sim,mod,s,cap)
   end
   local network=B.networks(s,Slope,tile)
   local N={world=s,network=network,farm=farm,oil=oil,terrain=Terrain}
+  N.road_construction=dofile(mod.."/campaign_road_construction.lua")(Sim,s)
   local source=mod.."/openttd/"
   if s.ship_paid_service then
     local _,_,net,roster,run,depot,freight,coal=B.water(s,network.track,function(id) return cap.ferry[id]==true end)
@@ -54,6 +55,22 @@ return function(Sim,mod,s,cap)
     if not cap.rail.ready.oil_tanker then s.rail_oil_service=false end
     network.crossings.refresh(s,network.lab.board(s))
   end
-  function N.day() Sim.daily(s) end
+  local Clock
+  if s.tram_enabled then
+    local interval=cap.seconds_per_day or 1.25
+    local net,run,clock=B.tram(s,Slope,interval)
+    N.tram={run=run,net=net}
+    Clock=function() clock(interval) end
+  end
+  N.orders=dofile(mod.."/road_vehicle_orders.lua")({s=s,Sim=Sim})
+  local project=dofile(mod.."/campaign_actor_projection.lua")
+  function N.actors(x,z,w,h,fraction) return project(Sim,N,x,z,w,h,fraction) end
+  if N.rail and N.rail.owned then
+    N.orders.rail=dofile(mod.."/rail_vehicle_orders.lua")(s,N.rail.owned,dofile(source.."rail_order_cargo.lua"))
+  end
+  local water_air=dofile(mod.."/water_air_orders.lua")(s,Sim,dofile(source.."rail_order_list.lua"),
+    N.water and N.water.run,N.water and N.water.freight,N.water and N.water.coal,N.air and N.air.run)
+  N.orders.ship,N.orders.air=water_air.ship,water_air.air
+  function N.day() Sim.daily(s);if Clock then Clock() end end
   return N
 end

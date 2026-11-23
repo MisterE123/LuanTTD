@@ -69,9 +69,18 @@ The [native mailbox probe](../tests/campaign_tick_worker_probe.lua) mounts
 one long-lived worker from a real saved campaign, queries nearby tiles and
 vehicles, stops and resumes a real bus, refuses a stale or foreign action,
 and loads its authoritative day and revision from disk in a fresh worker.
-The public game still uses its original command paths. The new endpoint
-covers a road slice; the next step is wiring the real forms and world
-actions to the worker and replacing direct reads with bounded projections. Use a sequenced command
+The native proof feeds that mailbox into the existing vehicle panel; it
+adds a destination, refuses duplicate submission, and reopens from worker
+state without saving the host view. Paid road, rail, ferry and air use the
+same order adapters on either side. Projections can batch up to nine
+nearby sectors at one committed tick and combine a train's bodies without
+mixing old and new samples. Stock road build quotes and depot purchases
+also have worker endpoints. A disposable native test now mounts a regular
+generated campaign and advances its calendar automatically inside a worker
+while the old host stays paused; no player or viewport is required. It
+saves and reopens the worker's day. The ordinary game still uses local
+simulation and command dispatch: the next integration must replace direct
+reads and mutations in the rest of the native gameplay loop. Use a sequenced command
 stream for **every** mutation, including player build/route/order requests
 and fixture actions; run authoritative quotes against the worker's topology
 revision and settle company debits there. Do not mirror writable tile or

@@ -141,3 +141,42 @@ assert(open~=before)
 fn(p,open.key,{[field(open,"choose_load")]="3",[field(open,"apply_load")]=true})
 assert(configured==3 and open.b:find("Full load any.",1,true))
 print("PASS vehicle selection and ownership, stale form rejection, six actor types, depot entry, smooth follow anchor, cleanup and exact builder restore")
+-- Use the real worker proxy against the asynchronous transport contract.
+s.fleet[1]={owner="E",id=1,home_depot=depot,name="Regal"}
+local queued
+local worker_proxy=dofile("mods/luanttd_core/campaign_authority_order_proxy.lua")({
+  query=function(req,done)
+    assert(not queued,"forms issued competing worker requests")
+    queued={req,done}
+    return true
+  end,
+},"road")
+V.orders.road=worker_proxy
+local function answer(kind,r)
+  local req,done=unpack(assert(queued))
+  assert(req.kind==kind and req.player=="E")
+  queued=nil
+  done(r)
+  return req
+end
+local receipt={ok=true,revision=9,value={items={{id=2,label="West"}},
+  targets={{id=5,label="Central"}},revision="2:normal"}}
+local old_saves=visited
+assert(V.open(p,"road",1) and open.b:find("Loading vehicle orders",1,true))
+answer("orders",receipt)
+assert(open.b:find("Central",1,true))
+local optimistic=open
+fn(p,open.key,{[field(open,"append")]=true})
+fn(p,open.key,{[field(open,"append")]=true})
+assert(optimistic==open and visited==old_saves)
+local req=answer("command",{ok=true,revision=10,why="Added Central on worker."})
+assert(req.command.revision==9 and req.command.order_revision=="2:normal" and req.command.destination==5)
+assert(open.b:find("Loading vehicle orders",1,true))
+answer("orders",{ok=true,revision=10,value={items={{id=2,label="West"},{id=5,label="Central"}},targets={},revision="2:normal/5:normal"}})
+assert(open.b:find("Added Central on worker.",1,true) and visited==old_saves)
+V.open(p,"road",1)
+fn(p,open.key,{quit=true})
+local closed_panel=open
+answer("orders",receipt)
+assert(open==closed_panel)
+print("PASS existing vehicle form uses a worker receipt, ignores double submission and never reopens a closed panel")

@@ -29,4 +29,6 @@ fi
 grep 'PASS NATIVE WORKER CAMPAIGN' "$out/server.log" || { cat "$out/server.log";exit 1; }
 grep 'PASS NATIVE FOUR-MODE ECONOMY' "$out/server.log" || { cat "$out/server.log";exit 1; }
 grep 'PASS NATIVE OWNER MAILBOX' "$out/server.log" || { cat "$out/server.log";exit 1; }
+grep 'PASS NATIVE WORKER FORMSPEC' "$out/server.log" || { cat "$out/server.log";exit 1; }
+grep 'PASS NATIVE AUTONOMOUS ECONOMY' "$out/server.log" || { cat "$out/server.log";exit 1; }
 if grep -E 'ERROR\[' "$out/server.log"; then exit 1; fi
