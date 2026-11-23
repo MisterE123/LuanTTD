@@ -9,6 +9,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local settings={forbid_90=true} -- OpenTTD 16.0-RC1 pf.forbid_90_deg default.
   local upstream=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local Collision=dofile(upstream.."rail_collision.lua")
+  local OrderList=dofile(upstream.."rail_order_list.lua")
   local path_backoff=20 -- pathfinding_settings.ini, path_backoff_interval.
   local floor,min,max=math.floor,math.min,math.max
   local has=Track.has
@@ -372,6 +373,15 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return {kind="station",station=station,nonstop=1,stop_location=Speed.FAR}
   end
 
+  local function next_passenger_order(run)
+    if run.orders then
+      local order,index=OrderList.next_manual(run.orders,run.order_cursor)
+      return order and order.station,index
+    end
+    local q=run.shuttle
+    return run.station==q.first and q.second or q.first
+  end
+
   local function waypoint_order(wp)
     return {kind="waypoint",station=wp.id,nonstop=1}
   end
@@ -469,7 +479,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return false,unsafe_platform(board,current[#current])
   end
 
-  local function start(s,owner,depot,station,second,span_mode,owned,freight,pair,is_block,cargo,via_tile)
+  local function start(s,owner,depot,station,second,span_mode,owned,freight,pair,is_block,cargo,via_tile,orders)
     local freight_mode=cargo or "coal"
     local mode_enabled=freight and s["rail_"..freight_mode.."_service"] or not freight and s.rail_paid_service
     if owned and not (s.rail_owned_service and mode_enabled and Roster) then
@@ -538,6 +548,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       max_track_speed=R.engine.speed,front_length=8,total_length=8+R.wagon.length,
       acceleration=Speed.acceleration(R.engine.power,R.engine.weight+R.wagon.weight),
       order=station_order(station)}
+    if orders then run.orders,run.order_cursor=orders,{real=0,implicit=0} end
     if pair then run.paired={first=station,second=second,arrivals=0,reversals=0} end
     if via_tile~=nil then
       local wp=Lab.waypoint_at(s,via_tile)
@@ -623,12 +634,47 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       if not run.paired.second_leg then
         return false,"The passenger pair needs a safe one-direction path from its loading platform to its terminal."
       end
+    elseif orders then
+      local arrivals={route}
+      local cursor={real=0,implicit=0}
+      for j=1,#orders do
+        local order,next_=OrderList.next_manual(orders,cursor)
+        local leg,_,_,reason=choose_leg(board,run,departure_probe(run,arrivals[#arrivals]),order.station)
+        if not leg then
+          return false,("Order %d: %s"):format(next_.real+1,reason or "No supported route to this station.")
+        end
+        if not long_enough(leg) then
+          return false,("Lengthen the platform at order %d for the whole train."):format(next_.real+1)
+        end
+        ordered(leg);arrivals[#arrivals+1]=leg;cursor=next_
+      end
+      if run.platform_lookahead and not run.local_signals then
+        for i=2,#arrivals do
+          local ok,note=validate_continuation(board,run,arrivals[i-1],arrivals[i])
+          if not ok then return false,note end
+        end
+      end
+      if run.engine_railtype==1 then
+        for _,leg in ipairs(arrivals) do
+          for _,step in ipairs(leg) do
+            local piece=board.tile(step.tile)
+            if piece and piece.kind=="bridge" and piece.transport=="rail" then
+              if not (bridge_collectors_ready and bridge_collectors_ready()) then
+                return false,"The moving electric collector is not mounted for this bridge."
+              end
+              run.bridge_collectors=true
+            end
+          end
+        end
+      end
+      run.shuttle={first=station,second=second,arrivals=0,reversals=0}
     elseif second then
       local second_leg,_,_,second_reason=choose_leg(board,run,departure_probe(run,route),second)
       if not second_leg then return false,"Second platform: "..(second_reason or "No safe route.") end
       if not long_enough(second_leg) then return false,"Lengthen the second platform to fit the whole train." end
       local repeat_leg,_,_,repeat_reason=choose_leg(board,run,departure_probe(run,second_leg),station)
       if not repeat_leg then return false,"Return to the first platform: "..(repeat_reason or "No safe route.") end
+      ordered(second_leg);ordered(repeat_leg)
       if run.platform_lookahead and not run.local_signals then
         local forward=choose_leg(board,run,departure_probe(run,repeat_leg),second)
         for _,legs in ipairs({{route,second_leg},{second_leg,repeat_leg},{repeat_leg,forward}}) do
@@ -682,6 +728,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return true,pair and "Owned steam coach ordered to board, deliver and park." or
       freight and (cargo=="goods" and "Owned Goods train ordered to repeat: full load at the sawmill, unload in town." or cargo=="oil" and "Owned oil train ordered to repeat: full load at the wells, unload at the refinery." or
         "Owned coal train ordered to repeat: full load at the mine, unload at the power station.") or
+      orders and ("Passenger train ordered to serve "..#orders.." platforms in sequence.") or
       owned and ("Owned "..stats.parts[1].name..(run.via and " shuttle ordered via the selected waypoint." or
         " shuttle ordered to alternate between both platforms.")) or
       run.paid_clock and "Paid shuttle ordered to alternate between both platforms." or
@@ -734,6 +781,29 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end
     return start(s,owner,owned.depot,first,second,Spans and s.rail_span_enabled or false,owned,
       nil,nil,nil,nil,via_tile)
+  end
+
+  function R.start_owned_sequence(s,owner,owned,stations)
+    if not Reverse or not owned or owned.owner~=owner or not R.owned_passenger_consist(owned) then
+      return false,"Choose a supported owned passenger train."
+    end
+    if type(stations)~="table" or #stations<2 or #stations>OrderList.MAX_ORDERS then
+      return false,"Choose at least two stations in visit order."
+    end
+    local registry=s.stock_rail_stations or {}
+    local orders,cursor={},{real=0,implicit=0}
+    for i,id in ipairs(stations) do
+      local st=registry[id]
+      if not st or st.owner~=owner or st.coal_role or st.oil_role or st.goods_role then
+        return false,("Order %d: choose an owned passenger station."):format(i)
+      end
+      if stations[i==1 and #stations or i-1]==id then
+        return false,"Use two different consecutive stations, including the return to the first."
+      end
+      assert(OrderList.insert(orders,cursor,#orders,station_order(id)))
+    end
+    return start(s,owner,owned.depot,stations[1],stations[2],Spans and s.rail_span_enabled or false,
+      owned,nil,nil,nil,nil,nil,orders)
   end
 
   local function clone(t)
@@ -946,7 +1016,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       for j=index,#run.route do planned[#planned+1]=run.route[j] end
       safe_index=continuation_prefix(board,run,prefix,planned)
     elseif run.platform_lookahead and run.shuttle and same_step(run.route[#run.route],target) then
-      other=run.station==run.shuttle.first and run.shuttle.second or run.shuttle.first
+      other=next_passenger_order(run)
       planned=choose_leg(board,run,departure_probe(run,run.route),other)
       safe_index=continuation_prefix(board,run,run.route,planned)
     end
@@ -1063,8 +1133,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
 
   local function switch_shuttle_order(base,d,run,events)
-    local q=run.shuttle
-    return switch_station_order(base,d,run,events,run.station==q.first and q.second or q.first,q)
+    local station,index=next_passenger_order(run)
+    switch_station_order(base,d,run,events,station,run.shuttle)
+    if index and run.station==station and not d.failure then run.order_cursor=index end
   end
 
   -- No call to the PBS lifecycle: stock path reservation is not the

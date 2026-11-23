@@ -15,13 +15,16 @@ H.order_pick=item("order_pick","Pick stop","order_stop")
 H.order_done=item("order_done","Done","order_done")
 H.order_cancel=item("order_cancel","Cancel orders","back")
 H.order_dispatch=item("order_dispatch","Dispatch","order_done")
+H.order_review=item("order_review","Review orders","rail_order_review")
 function H.order_overlay(slot,mode,label)
   if mode and mode~="road" then
     local pick=math.min(slot,3)
     local done=pick==1 and 2 or 1
     local cancel=6-pick-done
-    return {title=label or "Route orders",[pick]=H.order_pick,[done]=H.order_dispatch,[cancel]=H.order_cancel},done,
-      {[pick]=1,[done]=8,[cancel]=9},cancel
+    local menu={title=label or "Route orders",[pick]=H.order_pick,[done]=H.order_dispatch,[cancel]=H.order_cancel}
+    local layout={[pick]=1,[done]=8,[cancel]=9}
+    if mode=="rail_sequence" then menu[4]=H.order_review;layout[4]=10 end
+    return menu,done,layout,cancel
   end
   -- Luanti retains the physical wield index, clamped to the last visible
   -- slot on a shrink. Put Pick where it will land, never Done.

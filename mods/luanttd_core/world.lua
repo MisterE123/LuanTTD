@@ -408,10 +408,11 @@ return function(api,ui)
       if state.order_mode=="road" then
         if menu or key=="order_done" then ui.finish_order_pick(p)
         else ui.choose_order_stop(p,tile) end
-      elseif state.order_mode=="rail" then
+      elseif state.order_mode=="rail" or state.order_mode=="rail_sequence" then
         local rail=api.owned_rail_ui
         if menu or key=="order_cancel" then rail.cancel(p)
         elseif key=="order_dispatch" then rail.confirm(p)
+        elseif key=="order_review" then rail.review(p)
         else rail.pick(p,tile,not not H) end
         if not rail.active(p) then W.end_order_selection(p) end
       elseif state.order_mode=="fixed" then
@@ -622,11 +623,11 @@ return function(api,ui)
           focus=key=="order_done" and (H.shortcut(state.order_done).."  Done") or "Pick stops in travel order"
           help="Left-click a stop    ·    Right-click or "..H.shortcut(state.order_done).." + click to finish"
         else
-          local ready=state.order_mode=="rail" and api.owned_rail_ui.ready(p) or
+          local ready=(state.order_mode=="rail" or state.order_mode=="rail_sequence") and api.owned_rail_ui.ready(p) or
             state.order_mode=="fixed" and ui.fixed_route_ready(p)
-          focus=key=="order_cancel" and "Cancel route setup" or key=="order_dispatch" and
+          focus=key=="order_review" and "Click to review and reorder stops" or key=="order_cancel" and "Cancel route setup" or key=="order_dispatch" and
             (ready and "Click to dispatch" or "Choose the required stops first") or
-            (ready and "Destination picked: dispatch or choose another" or "Pick a highlighted target")
+            (ready and "Dispatch or add another stop" or "Pick a highlighted target")
           help=H.shortcut(state.order_done).." + click to dispatch    ·    Right-click or "..
             H.shortcut(state.order_cancel).." + click to cancel"
         end

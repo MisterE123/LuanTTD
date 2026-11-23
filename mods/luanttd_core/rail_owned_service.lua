@@ -104,6 +104,17 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     assert(Fleet.bind_dispatch(s,owner,id,id))
     return true,note,run
   end
+  function O.start_order_list(s,owner,id,stations,hooks)
+    if not (s.rail_owned_service and s.rail_paid_service and Run.start_owned_sequence) then
+      return false,"This depot cannot give passenger orders."
+    end
+    local unit,why=Fleet.prepare_dispatch(s,owner,id,mounted_hooks(hooks))
+    if not unit then return false,why end
+    local ok,note,run=Run.start_owned_sequence(s,owner,unit,stations)
+    if not ok then return false,note end
+    assert(Fleet.bind_dispatch(s,owner,id,id))
+    return true,note,run
+  end
   function O.start_pair(s,owner,a,b,hooks)
     if not s.rail_owned_pair_enabled then return false,"Enable the paired owned passenger preview first." end
     local function prepare(spec)

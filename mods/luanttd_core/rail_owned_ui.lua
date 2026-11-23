@@ -5,6 +5,9 @@ return function(api,status)
   local U={}
   local panels,orders={},{}
   local form="luanttd_core:rail_fleet"
+  local order_form="luanttd_core:rail_order_review"
+  local source=(core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  local OrderList=dofile(source.."rail_order_list.lua")
   local serial=0
   local esc=core.formspec_escape
   local model_short={[0]="Kirby",[8]="Jubilee",[9]="Ginzu A4",[10]="SH 8P",[11]="Manley–Morel",[13]="Hendry 25",[14]="UU 37",[15]="Floss 47",[23]="SH '30'",[24]="SH '40'"}
@@ -74,6 +77,16 @@ return function(api,status)
     return t and t.rail_depot_dir~=nil and t.owner==n
   end
   local function stage(q)
+    if q.sequence then
+      local n=#q.sequence
+      if n==0 then return "Click the first owned passenger platform." end
+      if q.via_tile then return n==1 and "Waypoint selected. Click the second platform." or
+        "Two stations and a waypoint selected. Choose Dispatch to start." end
+      local labels={}
+      for i=math.max(1,n-3),n do labels[#labels+1]="#"..q.sequence[i] end
+      return ("%d stop%s: %s. %s"):format(n,n==1 and "" or "s",table.concat(labels," → "),
+        n<2 and "Click another platform." or "Add another stop, or choose Dispatch.")
+    end
     if q.pending then return "Final platform selected. Choose Dispatch to start, or pick a different platform." end
     if q.pair then
       local a=q.choices[q.index]
@@ -264,7 +277,7 @@ return function(api,status)
             button(shift+.27,"unit_"..u.id,"Choose "..f.source.." and "..f.sink.." orders")
           else lab(.42,shift+.38,f.title.." orders are unavailable for this train.") end
         elseif ready and (not coal or api.rail_coal_tools) then
-          button(shift+.27,"unit_"..u.id,coal and "Choose mine and power-station orders" or "Choose its two platform orders")
+          button(shift+.27,"unit_"..u.id,coal and "Choose mine and power-station orders" or "Choose platform orders")
         elseif can_assemble then
           lab(.42,shift+.36,"Use the depot assembly panel to arrange its wagons.")
         end
@@ -374,7 +387,7 @@ return function(api,status)
   local function candidate(q,id)
     local t=id and S.tiles[id]
     local st=t and t.rail_station_id
-    if not st or st==q.first then return end
+    if not st or (q.sequence and st==q.sequence[#q.sequence] or not q.sequence and st==q.first) then return end
     local raw=S.stock_rail_stations and S.stock_rail_stations[st]
     if q.cargo then
       local f=commercial[q.cargo]
@@ -387,6 +400,8 @@ return function(api,status)
       local r=get and get(S,st)
       if role=="load" and (not r or #(r.sources or {})==0) then return nil,"This platform no longer covers a working "..f.source.." source." end
       if role=="unload" and (not r or not r.accepts) then return nil,"This platform no longer accepts "..f.noun.."." end
+    elseif q.sequence and (not raw or raw.owner~=t.owner or raw.coal_role) then
+      return nil,"Choose an owned passenger platform."
     elseif raw and (raw.oil_role or raw.goods_role) then
       return nil,raw.oil_role and "That platform is dedicated to Rail Oil." or "That platform is dedicated to Rail Goods."
     elseif q.coal then
@@ -433,7 +448,7 @@ return function(api,status)
   end
   function U.active(p) return orders[p:get_player_name()]~=nil end
   local function via_candidate(n,q,t)
-    if not q.pair and not q.cargo and not q.coal and q.first and t and t.owner==n and t.rail_waypoint_id then
+    if not q.pair and not q.cargo and not q.coal and q.first and (not q.sequence or #q.sequence==1) and t and t.owner==n and t.rail_waypoint_id then
       local waypoint=S.stock_rail_waypoints and S.stock_rail_waypoints[t.rail_waypoint_id]
       return waypoint and waypoint.owner==n
     end
@@ -454,11 +469,21 @@ return function(api,status)
   end
   function U.ready(p)
     local q=orders[p:get_player_name()]
-    return q and q.pending~=nil
+    return q and (q.sequence and #q.sequence>=2 or q.pending~=nil)
   end
   function U.confirm(p)
     local q=orders[p:get_player_name()]
     if not q then return false end
+    if q.sequence then
+      if #q.sequence<2 then status(p,stage(q));return true end
+      local n=p:get_player_name()
+      local ok,note
+      if q.via_tile then ok,note=api.rail_owned.start(S,n,q.unit,q.sequence[1],q.sequence[2],nil,q.via_tile)
+      else ok,note=api.rail_owned.start_order_list(S,n,q.unit,q.sequence) end
+      if not ok then status(p,message(note));return true end
+      orders[n]=nil;status(p,note);api.save()
+      return true
+    end
     if not q.pending then status(p,stage(q));return true end
     local tile=q.pending
     q.pending=nil
@@ -491,6 +516,16 @@ return function(api,status)
     if via_candidate(n,q,t) then q.via_tile=id;status(p,stage(q));return true end
     local st,detail=candidate(q,id)
     if not st then status(p,detail or stage(q));return true end
+    if q.sequence then
+      local raw=S.stock_rail_stations and S.stock_rail_stations[st]
+      if not raw or raw.coal_role then status(p,"Choose a passenger platform.");return true end
+      if q.via_tile and #q.sequence>=2 then status(p,"Dispatch this two-platform route via the waypoint, or cancel to change the route.");return true end
+      if #q.sequence>=254 then status(p,"This train already has 254 orders.");return true end
+      assert(OrderList.insert(q.sequence,q.cursor,#q.sequence,st))
+      q.first=q.sequence[1]
+      status(p,stage(q))
+      return true
+    end
     if not q.first then q.first=st;status(p,stage(q));return true end
     if stage_only then q.pending=id;status(p,stage(q));return true end
     local command
@@ -518,14 +553,67 @@ return function(api,status)
       (not cargo and not coal and api.rail_owned.passenger_consist and not api.rail_owned.passenger_consist(unit)) then
       return false
     end
-    orders[n]={unit=unit.id,coal=coal,cargo=cargo}
+    orders[n]={unit=unit.id,coal=coal,cargo=cargo,
+      sequence=not coal and not cargo and api.rail_owned.start_order_list and {} or nil}
     status(p,stage(orders[n]))
     panels[n]=nil;core.close_formspec(n,form)
+    if orders[n].sequence then orders[n].cursor={real=0,implicit=0} end
     if api.world and api.world.begin_order_selection then
-      api.world.begin_order_selection(p,"rail",coal and "Coal train orders" or cargo and "Freight train orders" or "Passenger train orders")
+      api.world.begin_order_selection(p,orders[n].sequence and "rail_sequence" or "rail",coal and "Coal train orders" or cargo and "Freight train orders" or "Passenger train orders")
     end
     return true
   end
+  -- A Luanti formspec adapter over the same stock draft-list mutation
+  -- rules. No train order or transaction is committed by opening it.
+  function U.review(p)
+    local n=p:get_player_name()
+    local q=orders[n]
+    if not q or not q.sequence then return false end
+    if q.via_tile then status(p,"Review is unavailable for the two-stop waypoint workflow.");return true end
+    local items={}
+    for i,id in ipairs(q.sequence) do
+      local st=S.stock_rail_stations and S.stock_rail_stations[id]
+      local tile=st and st.tiles and st.tiles[1]
+      local x,z
+      if tile then x,z=api.Sim.xy(tile) end
+      local where=x and (" (%d / %d)"):format(x,z) or " (removed)"
+      items[#items+1]=esc(("%d. Platform #%d%s"):format(i,id,where))
+    end
+    local i=math.max(1,math.min(#items,q.selected or 1))
+    core.show_formspec(n,order_form,"formspec_version[7]size[10.0,7.0]bgcolor[#152334;false]"..
+      "label[.42,.46;Passenger train orders]label[.42,.95;The train follows this list in order and repeats.]"..
+      ("textlist[.42,1.34;9.16,3.65;stops;%s;%d;false]"):format(table.concat(items,","),i)..
+      "button[.42,5.18;2.12,.65;move_up;Move up]button[2.70,5.18;2.12,.65;move_down;Move down]"..
+      "button[4.98,5.18;2.12,.65;remove;Delete]button[7.37,5.18;2.2,.65;dispatch;Dispatch]"..
+      "button_exit[.42,6.11;9.15,.61;back;Back to picking stops]")
+    return true
+  end
+  core.register_on_player_receive_fields(function(p,key,f)
+    if key~=order_form then return false end
+    local n=p:get_player_name()
+    local q=orders[n]
+    if not q or not q.sequence or f.quit or f.back then return true end
+    if f.stops then
+      local sel=core.explode_textlist_event(f.stops)
+      if sel.index and q.sequence[sel.index] then q.selected=sel.index end
+    end
+    local at=math.max(1,math.min(#q.sequence,q.selected or 1))
+    if f.move_up then
+      if OrderList.move(q.sequence,q.cursor,at-1,at-2) then q.selected=at-1 end
+    elseif f.move_down then
+      if OrderList.move(q.sequence,q.cursor,at-1,at) then q.selected=at+1 end
+    elseif f.remove then OrderList.delete(q.sequence,q.cursor,at-1)
+    elseif f.dispatch then
+      U.confirm(p)
+      if not U.active(p) then
+        core.close_formspec(n,order_form)
+        if api.world and api.world.end_order_selection then api.world.end_order_selection(p) end
+        return true
+      end
+    else return true end
+    q.first=q.sequence[1]
+    return U.review(p)
+  end)
   core.register_on_player_receive_fields(function(p,key,f)
     if key~=form then return false end
     local n=p:get_player_name()

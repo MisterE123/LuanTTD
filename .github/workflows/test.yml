@@ -42,6 +42,7 @@ jobs:
           lua5.1 tests/rail_owned_service.lua depot_turnout
           lua5.1 tests/rail_owned_service.lua mixed_signals
           lua5.1 tests/rail_owned_service.lua two_coaches
+          lua5.1 tests/rail_owned_service.lua three_stops
           lua5.1 tests/rail_owned_service.lua spans_unreserved
           lua5.1 tests/rail_owned_multi.lua shared_depot
           lua5.1 tests/rail_owned_multi.lua collision
@@ -64,6 +65,7 @@ jobs:
           BAYLINE_NATIVE_GOODS_ENGINE=13 BAYLINE_NATIVE_GOODS_YEAR=1976 LUANTTD_NATIVE_CRAIGHEAD=true bash tests/rail_goods_live_native.sh
           LUANTTD_NATIVE_PASSENGER_AND_GOODS=true bash tests/rail_goods_live_native.sh
           for year in 1950 1980; do LUANTTD_NATIVE_FERRY_YEAR="$year" bash tests/ship_coal_live_native.sh; done
+          LUANTTD_NATIVE_ORDER_SEQUENCE=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_SIGNAL_FREE=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_DEPOT_TURNOUT=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_MIXED_FLEET=true bash tests/rail_owned_live_native.sh

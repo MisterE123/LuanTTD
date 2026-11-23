@@ -1,9 +1,14 @@
 local panel,handler,left
+local handlers={}
 core={
   formspec_escape=function(s)return s end,
   show_formspec=function(n,k,m)panel={owner=n,key=k,markup=m} end,
   close_formspec=function()panel=nil end,
-  register_on_player_receive_fields=function(cb)handler=cb end,
+  register_on_player_receive_fields=function(cb)
+    handlers[#handlers+1]=cb
+    handler=function(...) for _,fn in ipairs(handlers) do if fn(...) then return true end end end
+  end,
+  explode_textlist_event=function(v)return {index=tonumber(v)}end,
   register_on_leaveplayer=function(cb)left=cb end,
 }
 local s={tiles={
@@ -236,3 +241,33 @@ left(owner)
 print("PASS: Oil tanker price, real well/refinery stage selection, guarded stop and resume, and liters independent of Coal.")
 
 print("PASS: depot ownership, quotes, individual train controls, scheduled freight parking, and atomic paired world orders")
+
+-- Ordinary passenger orders use the new stock list adapter; the review
+-- must not commit until the final dispatch, and must end the modal.
+s.stock_rail_stations={
+  [8]={owner="owner",tiles={3}},[9]={owner="owner",tiles={5}},
+  [11]={owner="owner",tiles={8}},[14]={owner="owner",tiles={13},coal_role="load"},
+}
+units={{id=15,unit_number=1,depot=1,status="depot",price=12866,stock_ids={0,27}}}
+host.rail_owned.get=function(_,n,id) return n=="owner" and id==15 and units[1] end
+host.rail_owned.running=function() end
+local mode,committed
+host.world={
+  begin_order_selection=function(_,m) mode=m end,
+  end_order_selection=function() mode=nil end,
+}
+host.rail_owned.start_order_list=function(_,name,id,seq)
+  assert(name=="owner" and id==15 and table.concat(seq,",")=="9,8,11")
+  committed=true;return true,"Ordered three platforms."
+end
+local before=saves
+assert(ui.open(owner,1) and handler(owner,panel.key,{unit_15=true}) and mode=="rail_sequence")
+assert(not select(2,ui.preview(owner,13)))
+for _,id in ipairs({3,5,8,5}) do assert(ui.pick(owner,id,true)) end
+assert(ui.review(owner) and panel.key=="luanttd_core:rail_order_review")
+assert(handler(owner,panel.key,{stops="4",remove=true}))
+assert(handler(owner,panel.key,{stops="2",move_up=true}))
+assert(panel.markup:find("1. Platform #9",1,true))
+assert(saves==before and not committed)
+assert(handler(owner,panel.key,{dispatch=true}) and committed and not mode and not panel and saves==before+1)
+print("PASS native formspec adapter stages, reorders, deletes and dispatches three passenger orders")

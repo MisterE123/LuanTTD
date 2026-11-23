@@ -157,3 +157,9 @@ the required height under overhead bridges. It will not silently clear
 an existing rail tile. Sheltered roofs, platform props and track beds
 were reduced in native size, while running rails and depot wheel/track
 anchors still align.
+
+## Passenger station orders
+
+Choose **Set orders** for a purchased passenger train in the depot, then use **Pick** to click platforms in visit order. Open **Review orders** to select a row, move it up or down, or delete it. Choose **Dispatch** when the list is ready. The train repeats the list and can reverse at an end station. A two-platform route can still use the dedicated waypoint workflow.
+
+This port uses the OpenTTD 16.0-RC1 cursor rules from [`vehicle_base.h`](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/vehicle_base.h) and the draft edit index rules from [`order_cmd.cpp`](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/order_cmd.cpp). [The test](../tests/rail_order_index_upstream.py) compares the Lua cursors against 22,580 cases executed against the pinned upstream C++ source. [The native test](../tests/rail_order_list_native.lua) exercises six arrivals and fare payment across a SQLite save and restart. This is for normal passenger station orders chosen before dispatch. Repeated adjacent entries, general waypoints, edit/skip during service, freight lists, depot/conditional orders, shared lists and timetables are not part of this proof.

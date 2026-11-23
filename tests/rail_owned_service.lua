@@ -34,8 +34,9 @@ local mode=arg and arg[1]
 local turnout=mode=="depot_turnout"
 local mixed=mode=="mixed_signals"
 local two_coaches=mode=="two_coaches"
+local three_stops=mode=="three_stops"
 local spans_unreserved=mode=="spans_unreserved"
-local Block=(mixed or spans_unreserved) and port("rail_block_signals",T,Signal) or nil
+local Block=(mixed or spans_unreserved or three_stops) and port("rail_block_signals",T,Signal) or nil
 local turnout_decisions={}
 local turnout_id
 local via_tile,via_id,via_passes,via_reloaded
@@ -115,7 +116,7 @@ else
 end
 assert(Lab.station(s,owner,id(11),id(12)))
 assert(Lab.station(s,owner,id(22),id(24)))
-if mode~="signal_free" and not turnout and not mixed and not two_coaches and not spans_unreserved then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
+if mode~="signal_free" and not turnout and not mixed and not two_coaches and not spans_unreserved and not three_stops then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
 local west,east=s.tiles[id(11)].rail_station_id,s.tiles[id(22)].rail_station_id
 s.sites[1].tile=id(10,13);s.sites[2].tile=id(24,13)
 for _,z in ipairs({7,8,12,13}) do
@@ -132,6 +133,54 @@ if mixed then
   assert(Run.place_signal(s,owner,id(18),8,Signal.PBS))
 end
 assert(Owned.initialize(s,{starting_year=1950,generation_seed=s.seed,startup_random=9001}))
+if three_stops then
+  assert(Lab.station(s,owner,id(16),id(17)))
+  local middle=s.tiles[id(16)].rail_station_id
+  for x=15,18 do for _,z in ipairs({8,9,11,12}) do
+    local t=s.tiles[id(x,z)]
+    t.house,t.parcel,t.variant=true,"shop",2
+  end end
+  local u=assert(Owned.commit(s,owner,assert(Owned.quote(s,owner,start_depot,{0,27}))))
+  assert(not Owned.start_order_list(s,owner,u.id,{east,9999,west}))
+  assert(Owned.get(s,owner,u.id).status=="depot")
+  local ok,note,run=Owned.start_order_list(s,owner,u.id,{east,middle,west})
+  assert(ok,note)
+  local expected={east,middle,west}
+  assert(run.orders[2].station==middle and run.order_cursor.real==0)
+  local count,saved=0,false
+  local function copy(t)
+    if type(t)~="table" then return t end
+    local out={}
+    for k,v in pairs(t) do out[k]=copy(v) end
+    return out
+  end
+  for _=1,140 do
+    Sim.daily(s)
+    assert(not Run.current(s).failure,Run.current(s).failure)
+    for _,event in ipairs(Sim.rail_paid_motion_events(s)) do
+      if event.kind=="arrived" then
+        assert(event.station==expected[count%#expected+1],("Incorrect order #%d: %s"):format(count+1,event.station))
+        count=count+1
+      end
+    end
+    local p=assert(Sim.rail_paid_status(s,u.id))
+    assert(p.waiting[east] and p.waiting[middle] and p.waiting[west])
+    if not saved and count==2 then
+      local expected_cursor=run.order_cursor.real
+      assert(expected_cursor==1 or expected_cursor==2)
+      s=copy(s);mount()
+      run=assert(Run.current_paid(s,u.id))
+      assert(run.order_cursor.real==expected_cursor and run.order_cursor.implicit==expected_cursor)
+      saved=true
+    end
+    if count>=6 and p.fare>0 then
+      assert(saved and run.shuttle.reversals>=2)
+      print(("PASS purchased train follows three manual stations in stock order, restores index, wraps and earns $%d"):format(p.fare))
+      return
+    end
+  end
+  error("Station order cycle did not complete")
+end
 if two_coaches then
   local before=company.cash
   local function buy(stock)

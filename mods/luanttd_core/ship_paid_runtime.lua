@@ -488,7 +488,14 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     local vehicle=service and service.vehicles[index(p.paid_clock)]
     local waiting={}
     local orders=rail and (p.paired or p.shuttle) or p
-    for _,id in ipairs({orders.first,orders.second}) do
+    local stops={orders.first,orders.second}
+    if rail and p.orders then
+      stops={}
+      for _,order in ipairs(p.orders) do
+        if order.kind=="station" then stops[#stops+1]=order.station end
+      end
+    end
+    for _,id in ipairs(stops) do
       local sid=index(id)
       local st=service and service.stations[sid]
       local visible,available=0,0
@@ -508,6 +515,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
         or Service.stock_for(mode_,engine,rail and p.stock_wagon==27).cap,
       carrying_parts=bodies,
       paid_clock=p.paid_clock,engine=p.engine_id,owner=p.owner,
+      orders=rail and p.orders or nil,order_number=rail and p.order_cursor and p.order_cursor.real+1 or nil,
       finished=rail and p.paired and p.paired.complete or nil,
       running_expense=finance and finance.expense or nil,charged_running_ticks=finance and finance.charged_ticks or nil,
       boarded=vehicle and vehicle.boarded or 0,delivered=vehicle and vehicle.delivered or 0,
