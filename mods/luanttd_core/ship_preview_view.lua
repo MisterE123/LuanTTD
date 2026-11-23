@@ -1,4 +1,4 @@
--- Native waterline presentation of the original Harbor Ferry.
+-- Native waterline presentation of the purchased MPS and FFP ferries.
 return function(api,Run,RoadVisual,seconds_per_day)
   local M={}
   local names={[206]="luanttd_core:stock_harbor_ferry",[207]="luanttd_core:stock_ffp_passenger_ferry"}
@@ -15,11 +15,12 @@ return function(api,Run,RoadVisual,seconds_per_day)
     ref,yaw=nil,nil
   end
   function M.step(dt,online,fraction)
-    if not online then acc=0;return end
+    if not online then stop();acc=0;return end
     local s=api.s
     local p=Run.current(s)
     if not p or Run.paid_art_ready and not Run.paid_art_ready(s,p) then stop();acc=0;return end
     local name=names[p.engine_id or 206]
+    if not name then stop();return end
     if s.speed>0 and not p.paid_clock then
       acc=math.min(148,acc+dt*74*s.speed/seconds_per_day)
       local ticks=math.floor(acc)
@@ -35,9 +36,14 @@ return function(api,Run,RoadVisual,seconds_per_day)
       if a and (a.x-pos.x)^2+(a.z-pos.z)^2<112^2 then nearby=true;break end
     end
     if not nearby then stop();return end
-    if ref and ref:get_luaentity().name~=name then stop() end
-    if not ref or not ref:get_pos() then ref=core.add_entity(pos,name);yaw=nil end
     if ref then
+      -- An ObjectRef can outlive its Lua entity during deactivation or
+      -- removal. Rebuild only the disposable mesh, not the ferry run.
+      local entity=ref:get_luaentity()
+      if not entity or entity.name~=name or not ref:get_pos() then stop() end
+    end
+    if not ref then ref=core.add_entity(pos,name);yaw=nil end
+    if ref and ref:get_pos() then
       ref:move_to(pos,true)
       yaw=RoadVisual.turn(yaw,RoadVisual.nose_yaw(dir),math.min(.8,dt*7))
       ref:set_rotation({x=0,y=yaw,z=0})
