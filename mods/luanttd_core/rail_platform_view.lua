@@ -21,7 +21,9 @@ return function(api,Run,Pose,seconds_per_day)
     end
     local id,td,f=Run.sample(run)
     if not id then remove();return end
-    local x,z,dx,dz=Pose.sample(td,f)
+    local x,z,dx,dz
+    if api.render and api.render.rail_diagonal_pose then x,z,dx,dz=api.render.rail_diagonal_pose(id,td,f) end
+    if x==nil then x,z,dx,dz=Pose.sample(td,f) end
     local tx,tz=Sim.xy(id)
     local base=S.tiles[id].h
     if api.terrain then local _,level=api.terrain.tile(id);base=level end

@@ -60,10 +60,10 @@ for x=2,7 do S.tiles[8+x]={owner="Alex",rail_tracks=1} end
 S.tiles[12].rail_station_id=1;S.tiles[15].rail_station_id=2
 local r={upper_signal_type=5,present_signals=8}
 S.stock_rail_dispatch={owner="Alex",signals={records={[11]=r}}}
-assert(advance():find("Place the return-direction signal",1,true))
+assert(advance():find("Signals are optional on a simple line",1,true))
 U.fields(p,"",{bl_tutorials=true});has("different signal type")
 r.upper_signal_type=4;r.present_signals=4
-assert(advance():find("Place the return-direction signal",1,true))
+assert(advance():find("Signals are optional on a simple line",1,true))
 U.fields(p,"",{bl_tutorials=true});has("faces the wrong way");has("facing west")
 r.present_signals=8
 assert(advance():find("Buy a passenger train",1,true))

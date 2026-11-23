@@ -28,8 +28,13 @@ return function(api,Lab,Track,Run,prices)
     local r=Lab.board(S).tile(id)
     if not r then
       r={kind="clear",owner=t.owner,railtype=0}
-      if t.build or t.site or t.house or t.wood or t.tram or t.ship or t.airfield or t.stock_industry or t.owner then r.kind="protected" end
-      if t.terrain=="water" then r.kind="water" end
+      if t.stock_void or t.build or t.site or t.house or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or t.owner then
+        r.kind="protected"
+      elseif t.wood then
+        r.kind="trees"
+        r.tree_count=type(t.wood)=="table" and t.wood.count or 1
+      end
+      if t.terrain=="water" and not t.stock_void then r.kind="water" end
     end
     r.slope,r.base_level=shape,base
     r.id=id
@@ -39,6 +44,9 @@ return function(api,Lab,Track,Run,prices)
   end
   local function clear_quote(t)
     if t.kind=="clear" and not t.subsurface then return 20 end
+    -- OpenTTD 16.0-RC1 ClearTile_Trees charges ClearTrees (20) per temperate stem.
+    -- Tree removal is committed by the track piece itself, never by quoting.
+    if t.kind=="trees" and not t.subsurface then return 20*t.tree_count end
     return nil,"Clear trees, structures and protected ground first."
   end
   local function opts(owner)
@@ -58,7 +66,7 @@ return function(api,Lab,Track,Run,prices)
   local quote_drag=dofile(upstream.."rail_drag_build.lua")
   local function quote_pieces(owner,list,remove,quick_drag)
     if R.busy() then return nil,blocked() end
-    local out={kind="track",pieces={},ids={},preview=list,price=0,remove=remove,quick_drag=quick_drag}
+    local out={kind="track",pieces={},ids={},preview=list,price=0,tree_count=0,remove=remove,quick_drag=quick_drag}
     local unchanged=remove and "There is no matching track to remove." or "Already built."
     local function append(item)
       local id,track=item.id,item.track
@@ -87,6 +95,7 @@ return function(api,Lab,Track,Run,prices)
         local why
         value,why=prices.track(tile,p,opts(owner))
         if value==nil then return nil,why end
+        if not remove and tile.kind=="trees" then out.tree_count=out.tree_count+tile.tree_count end
       elseif t.owner and t.owner~=owner then
         return nil,"Another company owns a tile on this route."
       else
@@ -222,6 +231,28 @@ return function(api,Lab,Track,Run,prices)
     if not signed(id) or not t or t.owner~=owner then return nil,"Choose your own path signal." end
     return budget(owner,{kind="signal_remove",id=id,ids={id},price=prices.clear_signal()})
   end
+  function R.signal_details(id)
+    local d=S.stock_rail_dispatch
+    local rec=d and d.signals and d.signals.records[id]
+    local t=id and S.tiles[id]
+    if not rec or not t or (t.rail_tracks~=1 and t.rail_tracks~=2) then return end
+    local dirs={}
+    for dir=t.rail_tracks-1,3,2 do
+      local td=Track.diagonal_trackdir(dir)
+      if Track.intersect(rec.present_signals or 0,Track.signal_along(td))~=0 then
+        dirs[#dirs+1]=dir
+      end
+    end
+    return {owner=t.owner,dirs=dirs,kind=rec.upper_signal_type,axis=t.rail_tracks-1,record=rec}
+  end
+  function R.quote_flip_signal(owner,id)
+    if R.busy() then return nil,blocked() end
+    if protected(id) then return nil,span_msg end
+    local d=R.signal_details(id)
+    if not d or d.owner~=owner or #d.dirs~=1 then return nil,"Choose an owned signal with one head." end
+    return budget(owner,{kind="signal_flip",id=id,td=Track.diagonal_trackdir(d.dirs[1]),
+      locked_record=d.record,price=0,ids={id}})
+  end
   function R.order(owner,depot,first,last)
     if not Run then return false,"Enable the rail dispatch preview." end
     if api.trackworks_demo and not api.trackworks_demo.is_clear() then return false,"Clear the surveyed train first." end
@@ -244,6 +275,34 @@ return function(api,Lab,Track,Run,prices)
     if ok then api.save() end
     return ok,msg
   end
+  -- OpenTTD 16.0-RC1 rail_gui.cpp: CcBuildTrainDepot calls
+  -- TryBuildRailDepotTrack on the mouth tile. Each eligible connection
+  -- posts its own ordinary, paid BuildRail; a failure never undoes the depot.
+  local connect_pieces={
+    [0]={{Track.LEFT,Track.SE},{Track.X,Track.SW},{Track.LOWER,Track.NW}},
+    [1]={{Track.UPPER,Track.SW},{Track.Y,Track.NW},{Track.LEFT,Track.NE}},
+    [2]={{Track.UPPER,Track.SE},{Track.X,Track.NE},{Track.RIGHT,Track.NW}},
+    [3]={{Track.RIGHT,Track.SW},{Track.Y,Track.SE},{Track.LOWER,Track.NE}},
+  }
+  local function depot_connect(owner,id,dir)
+    local board=Lab.board(S)
+    local front=board.adjacent(id,dir)
+    if not front or signed(front) then return 0 end
+    local t=S.tiles[front]
+    if not t or t.rail_depot_dir~=nil or t.rail_station_id or t.rail_waypoint_id or
+        t.level_crossing or t.rail_span_id or not t.rail_tracks then return 0 end
+    local across=board.adjacent(front,dir)
+    local next_depot=across and S.tiles[across].rail_depot_dir~=nil
+    local built=0
+    for i,c in ipairs(connect_pieces[dir]) do
+      if not (i==2 and next_depot) and
+          Track.intersect(t.rail_tracks,Track.trackbits(Track.reachable(c[2])))~=0 then
+        local piece=R.quote_track(owner,front,front,c[1],false)
+        if piece and R.build(owner,piece) then built=built+1 end
+      end
+    end
+    return built
+  end
   function R.build(owner,plan)
     if not plan or plan.owner~=owner or plan.topology~=S.topology or R.busy() then
       return false,"The railway changed. Select the construction again."
@@ -254,12 +313,12 @@ return function(api,Lab,Track,Run,prices)
     end
     local ok,note
     if plan.kind=="track" then
-      -- Physical occupancy can change without a topology revision. Requote
-      -- before applying ANY part of an ordinary drag containing crossings.
-      if plan.crossing then
+      -- Physical occupancy and forest density can change without a topology
+      -- revision. Requote before applying ANY piece of the drag.
+      if plan.crossing or (plan.tree_count or 0)>0 or not plan.remove then
         local fresh,why=quote_pieces(owner,plan.preview,plan.remove,plan.quick_drag)
         if not fresh then return false,why end
-        if not fresh.crossing or fresh.price~=plan.price or #fresh.ids~=#plan.ids then
+        if fresh.crossing~=plan.crossing or fresh.price~=plan.price or fresh.tree_count~=plan.tree_count or #fresh.ids~=#plan.ids then
           return false,"The railway changed. Select the construction again."
         end
         for i,id in ipairs(fresh.ids) do
@@ -289,6 +348,14 @@ return function(api,Lab,Track,Run,prices)
       ok,note=Lab.commit_waypoint(S,owner,plan.id,plan.axis,removal)
     elseif plan.kind=="signal" then
       ok,note=Run.place_signal(S,owner,plan.id,plan.td,plan.block and 0 or plan.one_way and 5 or 4)
+    elseif plan.kind=="signal_flip" then
+      local fresh,why=R.quote_flip_signal(owner,plan.id)
+      if not fresh then return false,why end
+      if fresh.td~=plan.td or fresh.locked_record~=plan.locked_record then
+        return false,"The signal changed. Inspect it again."
+      end
+      ok,note=Run.flip_signal(S,owner,plan.id,plan.td)
+      if ok then S.topology=S.topology+1 end
     elseif plan.kind=="signal_remove" then
       S.stock_rail_dispatch.signals.records[plan.id]=nil
       S.topology=S.topology+1
@@ -296,6 +363,10 @@ return function(api,Lab,Track,Run,prices)
     else return false,"No railway placement selected." end
     if not ok then return false,note end
     debit(owner,plan.price)
+    if plan.kind=="depot" then
+      local connections=depot_connect(owner,plan.id,plan.direction)
+      if connections>0 then note=note.." Connected to nearby track." end
+    end
     api.render.update(plan.ids);api.save()
     return true,note
   end

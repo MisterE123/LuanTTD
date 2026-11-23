@@ -485,6 +485,7 @@ return function(api,ui)
       api.selector.show(p,anchor,"anchor")
       api.selector.area(p,ids,t,anchor,shade)
       if api.selector.rail and ui.rail_overlay then api.selector.rail(p,ui.rail_overlay(p,t)) end
+      if api.selector.signal and ui.signal_arrow then api.selector.signal(p,t,world_tool and ui.signal_arrow(p,t) or nil) end
     elseif ids then api.render.preview(n,ids,valid) end
     if H and not world_tool and not picking then
       desc="" -- Menu labels sit next to the actual hotbar, not the crosshair.

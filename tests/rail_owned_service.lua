@@ -84,7 +84,7 @@ else for x=2,24 do rail(x) end end
 assert(Lab.depot(s,owner,id(2),T.SW))
 assert(Lab.station(s,owner,id(11),id(12)))
 assert(Lab.station(s,owner,id(22),id(24)))
-assert(Run.place_signal(s,owner,id(10),0,Signal.PBS))
+if mode~="signal_free" then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
 local west,east=s.tiles[id(11)].rail_station_id,s.tiles[id(22)].rail_station_id
 s.sites[1].tile=id(10,13);s.sites[2].tile=id(24,13)
 for _,z in ipairs({7,8,12,13}) do
@@ -405,6 +405,11 @@ if lookahead then
   if mode=="platform_fallback" then assert(fallback_calls>0) end
   print("PASS: reserve beyond an unsafe through platform without skipping the actual stop, take next order and repeat")
 end
+if mode=="signal_free" then
+  assert(run.ordinary_unreserved and not run.platform_lookahead and run.shuttle.reversals>=2)
+  assert(not next(s.stock_rail_dispatch.signals.records))
+  print("PASS stock default signal-free passenger shuttle reverses automatically and earns fares")
+end
 assert(had_mass and had_load_reload and had_paid_reload and Owned.running(s,owner,unit.id).future_daily_rate_fp==(jubilee and 1841 or 767))
 if jubilee and not use_spans then assert(peak>64,"Jubilee never reached original speed above the Kirby cap") end
 if use_spans then assert(at_bridge and at_tunnel and at_cross,("%s %s %s"):format(tostring(at_bridge),tostring(at_tunnel),tostring(at_cross))) end
@@ -425,7 +430,7 @@ if not mode then
   local signal=dispatch.signals.records[id(10)]
   local mask=signal.present_signals
   signal.present_signals=T.signal_along(8)
-  assert(tutorial.progress(owner,"rail")==3,"flipping the documented signal should fail the lesson")
+  assert(tutorial.progress(owner,"rail")==3,"flipping the documented signal should raise a lesson warning")
   signal.present_signals=mask
   Owned.list=fleet;s.stock_rail_dispatch=dispatch
 end

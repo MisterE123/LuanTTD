@@ -14,11 +14,11 @@ return function(api)
       {"Earn a passenger fare",nil,"Unpause and let time run. The bus earns when it drops passengers at a stop that accepts them, not when it boards them. Inspect the stops for queues and open Fleet to see the bus's operating profit."},
     }},
     rail={name="Train business",steps={
-      {"Lay a straight passenger line","railworks","Choose two places near houses on one level east–west corridor. Drag AutoRail to lay continuous track. Add two Rail stations of 2–3 tiles each. The far station should end the line; the near station must have plain track between it and the depot. Leave several tiles of clear plain track west of the near station."},
+      {"Lay a straight passenger line","railworks","Choose two places near houses on one level east–west corridor. Drag AutoRail to lay continuous track. Add two Rail stations of 2–3 tiles each. Use plain track between the two platforms and the depot. Start with one train and no signals; it reverses at each stop."},
       {"Connect the rail depot","railworks","For the example, put the depot at the WEST end on a clear tile with its door facing EAST onto the line. Rotate railway fitting is under Rail Tools & Operations → Rail Engineering. A depot is a dead end, not a through platform."},
-      {"Place the return-direction signal","railsignals","Read the line west to east:\n[Depot →] - plain track - [← PBS] - [Near] ===== [Far end]\nBuild the normal Path signal, not One-way or Block. Put it on plain straight track immediately WEST of Near, with Rotate railway fitting set to West. It faces the train heading back toward the depot, not the outbound train. One-way would block the outbound trip."},
+      {"Signals are optional on a simple line","railsignals","One train can serve both stations without signals. If you add a signal to the example, read the line west to east:\n[Depot →] - plain track - [← PBS] - [Near] ===== [Far end]\nChoose the normal Path signal, not One-way or Block. Click the plain track WEST of Near, then select East → West in the direction picker. It faces the train heading back toward the depot, not the outbound train. One-way would block the outbound trip."},
       {"Buy a passenger train",nil,"Inspect the depot and buy an available locomotive with a Passenger Carriage, such as Kirby Paul Tank in 1950. A freight wagon will not take passengers. Keep the consist short enough to fit both platforms."},
-      {"Order Far first, then Near",nil,"Inspect the depot and choose the train's two platform orders. Pick Far first and Near second. Select Dispatch on the route hotbar. If it says no safe exit or no supported route, look for gaps, confirm the depot door connects and put the ordinary west-facing signal on plain track beyond Near toward the depot. A red PBS can be normal while the track is unreserved."},
+      {"Order Far first, then Near",nil,"Inspect the depot and choose the train's two platform orders. Pick Far first and Near second. Select Dispatch on the route hotbar. If the route is rejected, check for gaps, a depot facing away from the line or a one-way signal blocking the return. Start without signals on your first line."},
       {"Earn your first rail fare",nil,"Unpause. The train may reach Far empty, then board for the return to Near. Both stations need nearby houses so passengers can be delivered. Inspect either platform to see waiting passengers and shuttle fares."},
     }},
     boat={name="Boat business",steps={
@@ -108,7 +108,7 @@ return function(api)
         if valid then sign=true;break end
         problem=problem or reason
       end
-      if not sign then return 3,nil,problem end
+      if not sign and problem then return 3,nil,problem end
       return bought and 5 or 4
     else
       local paid=Sim.ferry_paid_status and Sim.ferry_paid_status(S)

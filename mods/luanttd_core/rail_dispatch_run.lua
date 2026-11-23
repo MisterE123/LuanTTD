@@ -128,6 +128,29 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return true,name.." placed."
   end
 
+  function R.flip_signal(s,owner,id,td)
+    local d=R.current(s)
+    local base=Lab.board(s)
+    local t=base.tile(id)
+    local existing=d and d.signals.records[id]
+    if not (t and existing and d.owner==owner and t.owner==owner and #d.runs==0 and not s.stock_rail_run) then
+      return false,"The signal is not yours or this railway is in use."
+    end
+    local old=Signal.view(base,d.signals).tile(id)
+    if not Signal.along(old,td) or Signal.along(old,Track.reverse_trackdir(td)) then
+      return false,"Only a signal with a single head can be flipped."
+    end
+    local kind=Signal.signal_type(old,td)
+    local replacement=Signal.new()
+    local ok,why=Signal.place(base,replacement,owner,id,Track.track(td),{
+      kind=kind,variant=existing.upper_variant,
+      copy_mask=Track.signal_along(Track.reverse_trackdir(td))},0,false)
+    if not ok then return false,why end
+    d.signals.records[id]=replacement.records[id]
+    if kind==Signal.BLOCK then Block.update_track(base,d.signals,owner,block_occupancy(d),id,Track.track(td)) end
+    return true,"Signal turned to face the opposite approach."
+  end
+
   local ordinary_traction={[0]=true,[1]=true}
   -- A route with competing reachable pieces is safe only for a
   -- controller that verifies its stock YAPF path before PBS writes.
@@ -261,7 +284,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         end
         if run.span and not jump and board.span_seam and not board.span_seam(r.tile,r.td,n.tile,n.td) then return false end
       elseif tile.kind~="station" or tile.station~=run.station then return false,"The route does not reach the selected platform."
-      elseif not run.platform_lookahead and not Costs.safe_waiting(board,vehicle(run,r.tile),r.tile,r.td,true,settings) then
+      elseif not run.ordinary_unreserved and not run.platform_lookahead and not Costs.safe_waiting(board,vehicle(run,r.tile),r.tile,r.td,true,settings) then
         return false,unsafe_platform(board,r)
       end
     end
@@ -289,7 +312,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local td=flip and Track.reverse_trackdir(origin.pose.td) or origin.pose.td
     local view={owner=run.owner,station=station,order=order,total_length=run.total_length,
       max_track_speed=run.max_track_speed,span=run.span,shuttle=true,fleet_id=run.fleet_id,paired=run.paired,
-      branch_pbs=run.branch_pbs,platform_lookahead=run.platform_lookahead,
+      branch_pbs=run.branch_pbs,platform_lookahead=run.platform_lookahead,ordinary_unreserved=run.ordinary_unreserved,
       engine_railtype=run.engine_railtype,traction_railtypes=run.traction_railtypes}
     local best,v=search(board,view,origin.tile,td)
     view.route=best and dense_route(board,v,best,run.span)
@@ -444,6 +467,16 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end
     -- The implemented departure probe models two 8-unit vehicles on a
     -- FAR stop; don't admit new routing behavior outside those real poses.
+    -- OpenTTD 16.0-RC1 ChooseTrainTrack and ReverseTrainDirection:
+    -- with pf.reserve_paths=false (stock default), a sole reachable
+    -- track without a PBS head does not require a forward reservation.
+    -- Mount that branch first for an isolated, unsignalled owned shuttle.
+    -- Junction choices and a network containing actual signal heads still
+    -- use the existing reservation branch.
+    if run.branch_pbs and not next(d.signals.records) then
+      run.ordinary_unreserved=true
+      run.branch_pbs=nil
+    end
     if not run.via and run.branch_pbs and #consist.parts==2 and run.front_length==8 and run.total_length==16 then
       run.platform_lookahead=true
     end
@@ -943,11 +976,11 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       local next_=run.route[2]
       local id,dir,entry=next_tracks(signed(base,d),head.tile,head.pose.td)
       if id~=next_.tile then return end
-      if run.block then
+      if run.block or run.ordinary_unreserved and Block then
         local segment,_,overflow=Block.update_segment(base,d.signals,run.owner,block_occupancy(d),head.tile,Block.INVALID_SIDE)
         if overflow or segment==Block.PBS then halt(d,run,events,"Unsupported block at the depot mouth.");return end
         if segment==Block.FULL then return end
-      elseif not acquire(base,d,run,id,dir,entry,next_.td) then return end
+      elseif not run.ordinary_unreserved and not acquire(base,d,run,id,dir,entry,next_.td) then return end
       assert(ConsistMotion.release_front(run.consist))
       if run.block then
         -- CheckTrainStayInDepot updates again with the now exposed engine.
@@ -959,7 +992,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     elseif run.phase=="turnaround" then
       local next_=run.route[2]
       local id,dir,entry=next_tracks(signed(base,d),head.tile,head.pose.td)
-      if id~=next_.tile or not acquire(base,d,run,id,dir,entry,next_.td) then return end
+      if id~=next_.tile or not run.ordinary_unreserved and not acquire(base,d,run,id,dir,entry,next_.td) then return end
       run.phase="running"
       emit(d,run,events,"shuttle_departed",{tile=head.tile,station=run.station,cab_reversed=run.consist.reversed or false})
     elseif run.stuck then
@@ -1000,12 +1033,14 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         if run.block then return block_step(base,d,run,board,entry,choose) end
         return Dispatch.step(board,d.life,run.id,run.consist,choose,settings,function(_,_,t)
           local track=Track.track(t.td)
-          if Life.claim_owner(d.life,t.tile,track)~=run.id then
+          -- The consist journal still follows real front/tail occupancy.
+          -- No ahead-of-train reservation is created on the unreserved branch.
+          if not run.ordinary_unreserved and Life.claim_owner(d.life,t.tile,track)~=run.id then
             withheld=t
             return false,"unreserved"
           end
           local gate=Signal.entry_wait(board.tile(t.tile),entry,track,run,
-            {pbs_segment=true,execute_reverse=false})
+            {pbs_segment=not run.ordinary_unreserved,execute_reverse=false})
           if gate~="enter" then withheld=t;return false,gate=="reverse" and "unsupported_reverse" or "red_signal" end
           return true
         end,Crossings and function(transitions,commit)

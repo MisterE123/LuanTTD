@@ -37,6 +37,18 @@ return function(api)
     end,
   })
 
+  local arrow_name="luanttd_core:signal_approach_arrow"
+  core.register_entity(arrow_name,{
+    initial_properties={visual="mesh",mesh="bl_signal_approach_arrow.obj",
+      textures={textures.valid},visual_size={x=10,y=10,z=10},
+      physical=false,pointable=false,collide_with_objects=false,static_save=false,
+      backface_culling=false,glow=14,shaded=false},
+    on_activate=function(self,name)
+      if name=="" or not core.get_player_by_name(name) then self.object:remove();return end
+      self.object:set_observers({[name]=true})
+    end,
+  })
+
   local function pose(id)
     local tile=S.tiles[id]
     if not tile then return nil end
@@ -91,6 +103,27 @@ return function(api)
     local name=player:get_player_name()
     if not state_by_player[name] then state_by_player[name]={} end
     return name,state_by_player[name]
+  end
+
+  function X.signal(player,id,dir)
+    local name,bucket=state_for(player)
+    local item=bucket.signal
+    if not id or dir==nil then remove(item);bucket.signal=nil;return end
+    if item and item.id==id and item.dir==dir and item.object:get_pos() then return end
+    local x,z=Sim.xy(id)
+    local shape,base=api.terrain.tile(id)
+    local grade,level=api.trackworks.surface(shape,base,S.tiles[id].rail_tracks)
+    if not grade then remove(item);bucket.signal=nil;return end
+    local pos={x=2*x+.5,y=level+(grade==0 and .78 or 1.20),z=2*z+.5}
+    if not item or not item.object:get_pos() then
+      local object=core.add_entity(pos,arrow_name,name)
+      if not object then return end
+      item={object=object}
+      bucket.signal=item
+    end
+    item.object:set_pos(pos)
+    item.object:set_rotation({x=0,y=({[0]=-math.pi/2,[1]=0,[2]=math.pi/2,[3]=math.pi})[dir],z=0})
+    item.id,item.dir=id,dir
   end
 
   function X.show(player,id,state)
@@ -158,7 +191,7 @@ return function(api)
   function X.leave(name)
     local bucket=state_by_player[name]
     if not bucket then return end
-    remove(bucket.cursor);remove(bucket.anchor)
+    remove(bucket.cursor);remove(bucket.signal);remove(bucket.anchor)
     for _,entry in pairs(bucket.area or {}) do remove(entry) end
     for _,entry in pairs(bucket.rail or {}) do remove(entry) end
     state_by_player[name]=nil

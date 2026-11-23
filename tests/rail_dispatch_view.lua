@@ -1,7 +1,7 @@
 -- Fixed vehicle art mapping at actual paid dispatcher presentation layer.
 local View=dofile("mods/luanttd_core/rail_dispatch_view.lua")
 local WAGON="luanttd_core:dispatch_oil_tanker"
-local function fixture(missing_file,electric)
+local function fixture(missing_file,electric,eased)
   local d={runs={},signals={records={}}}
   local s={tiles={[1]={h=0},[2]={h=0}},speed=1,coal=0,oil=0,stock_electrification=electric}
   local registered,actors,mounted,motions={},{},{},{}
@@ -29,7 +29,7 @@ local function fixture(missing_file,electric)
     xy=function(id)return id,3 end,
     rail_paid_pose=function(state,i,fraction,fleet)
       assert(state==s and fraction==.5 and fleet==91)
-      return i,1,.25,false
+      return i,1,.25,false,eased and i==2 and {} or nil
     end,
     rail_paid_motion_events=function(state)
       assert(state==s)
@@ -39,7 +39,7 @@ local function fixture(missing_file,electric)
     rail_oil_status=function()error("sealed visual must not query the oil ledger")end,
   }
   local Run={current=function()return d end,mount_owned_model=function(id)
-    assert(id==8 or id==9 or id==10 or id==11 or id==15 or electric and (id==23 or id==24),
+    assert(id==8 or id==9 or id==10 or id==11 or id==13 or id==14 or id==15 or electric and (id==23 or id==24),
       "cargo or inactive electric art must not be registered as engines")
     mounted[id]=true
     return true
@@ -53,7 +53,11 @@ local function fixture(missing_file,electric)
       return orig(name,...)
     end
   end
-  local ok,V=pcall(View.create,{s=s,Sim=Sim},Run,{},Pose,SignalArt,2,
+  local render=eased and {rail_diagonal_pose=function(id,td,progress)
+    assert(id==1 and td==1 and progress==.25, "a wormhole must keep its stock pose")
+    return -.2,.2,1,1
+  end}
+  local ok,V=pcall(View.create,{s=s,Sim=Sim,render=render},Run,{},Pose,SignalArt,2,
     function(id,td,progress)
       assert(td==1 and progress==.25)
       return id==2 and .82 or 0,.125
@@ -98,6 +102,12 @@ assert(#actors==4 and not actors[3]:get_pos() and actors[4].name=="luanttd_core:
 dtrain.stock_wagon=27
 step(V)
 assert(#actors==5 and not actors[4]:get_pos() and actors[5].name=="luanttd_core:dispatch_wagon")
+
+local DV,DD,_,_,dactors=fixture(nil,nil,true)
+DD.runs[1]=dtrain
+step(DV)
+assert(dactors[1].pos.x==2.3 and dactors[1].pos.z==6.7 and dactors[1].rot.y==.75*math.pi)
+assert(dactors[2].pos.x==4.625 and dactors[2].pos.z==6.95 and dactors[2].rot.y==math.pi)
 
 local EV,ED,_,ecatalog,eactors=fixture(nil,true)
 assert(ecatalog["luanttd_core:dispatch_sh_30"].mesh=="bl_rail_sh_30.obj")

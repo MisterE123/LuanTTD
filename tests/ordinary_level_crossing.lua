@@ -255,3 +255,109 @@ local reverse=assert(Sim.autoroad_bend_plan(s,owner,to,from))
 assert(reverse.path[6]==at(3,35) and reverse.path[6]~=elbow)
 assert(not Sim.autoroad_bend_plan(s,owner,from,at(8,32)))
 print("PASS AutoRoad connected bend, opposite drag, half endpoints, and no partial purchase if blocked")
+
+-- Generated dry forest is part of the normal AutoRail quote, not a
+-- protected structure. Price counts stems and never mutates during hover.
+local forest=at(25,22)
+local protected=at(27,22)
+s.tiles[forest].wood={count=3,type=2,growth=3}
+s.tiles[protected].stock_landmark={kind="transmitter"}
+local x,z=Sim.xy(at(24,22))
+local u,v=Sim.xy(at(29,22))
+local start={x=16*x+8,z=16*z+8};local finish={x=16*u+8,z=16*v+8}
+local draft=assert(B.quote_autotrack(owner,start,finish))
+assert(draft.tree_count==3 and #draft.ids==3 and draft.stopped_at==protected)
+assert(draft.price==120*2+100+60 and s.tiles[forest].wood.count==3)
+local old_cash=money.cash
+s.tiles[forest].wood.count=4
+assert(not B.build(owner,draft) and money.cash==old_cash and s.tiles[forest].wood.count==4)
+draft=assert(B.quote_autotrack(owner,start,finish))
+assert(draft.tree_count==4 and draft.price==420)
+assert(B.build(owner,draft))
+assert(not s.tiles[forest].wood and s.tiles[forest].rail_tracks==1 and old_cash-money.cash==420)
+assert(s.tiles[protected].stock_landmark and not s.tiles[protected].rail_tracks and not s.tiles[at(28,22)].rail_tracks)
+print("PASS ordinary AutoRail removes dry woods with priced stems, rejects stale quotes and stops at protected landmarks")
+
+-- The real normal UI goes through a modal before removing a facility.
+local markup,form
+core={get_modpath=function()return "mods/luanttd_core" end,
+  formspec_escape=function(x)return x end,
+  show_formspec=function(_,name,data)form,markup=name,data end,
+  close_formspec=function(_,name)assert(name==form)end}
+local function player(n) return {get_player_name=function()return n end} end
+local U=m("ui")({Sim=Sim,s=s,road_first=true,rail_build=B,trackworks=Lab,
+ render={update=function(ids) updates=ids end},save=function() saves=saves+1 end})
+local p=player(owner)
+local modal="luanttd_core:demolish_layers"
+local function choice(label)
+  assert(markup:find(label,1,true),label)
+  return assert(markup:match("(bulldoze_%d+_%d+);"..label),label)
+end
+local function click(tile)
+  U.select_tool(p,"clear")
+  assert(U.begin_demolition(p,tile))
+  U.end_demolition(p,tile)
+  assert(form==modal)
+end
+for x=30,35 do rail(x,20,Track.X) end
+local a,b=at(31,20),at(32,20)
+assert(Lab.station(s,owner,a,b))
+local sid=s.tiles[a].rail_station_id
+local cash=money.cash
+local saved=saves
+click(a)
+local cancel=choice("Remove entire station platform, keep rails")
+assert(s.tiles[a].rail_station_id==sid and s.tiles[b].rail_station_id==sid and money.cash==cash and saved==saves)
+assert(U.fields(p,modal,{cancel_layers=true}))
+assert(U.fields(p,modal,{[cancel]=true}))
+assert(s.tiles[a].rail_station_id==sid and saved==saves)
+click(a)
+local stale=choice("Remove entire station platform, keep rails")
+s.topology=s.topology+1
+assert(U.fields(p,modal,{[stale]=true}) and s.tiles[a].rail_station_id==sid and saved==saves)
+click(a)
+local accepted=choice("Remove entire station platform, keep rails")
+assert(U.fields(p,modal,{[accepted]=true}))
+assert(not s.stock_rail_stations[sid] and not s.tiles[a].rail_station_id and not s.tiles[b].rail_station_id)
+assert(s.tiles[a].rail_tracks==1 and s.tiles[b].rail_tracks==1 and #updates==2 and saved+1==saves)
+assert(U.fields(p,modal,{[accepted]=true}) and saved+1==saves)
+local depot=at(30,20)
+assert(Lab.depot(s,owner,depot,Track.SW))
+Lab.owned_depot_occupied=function()return true end
+click(depot)
+assert(markup:find("unavailable") and markup:find("purchased train"))
+assert(s.tiles[depot].rail_depot_dir==Track.SW)
+Lab.owned_depot_occupied=nil
+click(depot)
+assert(U.fields(p,modal,{[choice("Remove railway depot, keep rails")]=true}))
+assert(s.tiles[depot].rail_depot_dir==nil and s.tiles[depot].rail_tracks==1)
+local stop=at(32,24)
+s.sites[1]={id=1,kind="town",name="Modalton",tile=at(30,25),stock={},received={},produced={}}
+assert(road(at(30,24),at(34,24)))
+assert(Sim.build(s,owner,"road_station",{stop}))
+assert(s.tiles[stop].stop_axis and s.tiles[stop].station)
+local id=s.tiles[stop].station
+local q=assert(Sim.clear_area(s,owner,at(31,24),at(33,24),false,false))
+for _,tile in ipairs(q.ids) do assert(tile~=stop,"Area sweep must not remove a transport facility") end
+click(stop)
+assert(choice("Remove stop and its road"))
+assert(U.fields(p,modal,{[choice("Remove stop, keep road")]=true}))
+assert(not s.stations[id] and not s.tiles[stop].station and s.tiles[stop].build=="road")
+assert(Sim.road_bits(s,stop)==10 and s.tiles[stop].owner==owner)
+print("PASS real single-tile Bulldozer modal: cancel, stale/duplicate, station/depot rail retention, separate road-stop layers")
+
+-- RC1 rail_gui.cpp depot callback adds the stock candidate pieces to the
+-- next tile only, paying their ordinary price after the depot purchase.
+local D=m("rail_construction_tools")({Sim=Sim,s=s,terrain={tile=shape},
+ render={update=function()end},save=function()end},Lab,Track,nil,{
+  track=function(t,p,o)local r,w=Q.piece(t,p.track,o);return r and r.cost,w end,
+  depot=function(t,d,o)local r,w=Q.depot(t,d,o);return r and r.cost,w end})
+local stopped=at(40,20)
+local adjacent=rail(41,20,Track.Y)
+local receipt=assert(D.quote_depot(owner,stopped,Track.SW))
+local before=money.cash
+assert(D.build(owner,receipt))
+assert(s.tiles[stopped].rail_depot_dir==Track.SW and s.tiles[adjacent].rail_tracks==2+4+32,
+  s.tiles[adjacent].rail_tracks)
+assert(before-money.cash==receipt.price+200 and not s.tiles[at(42,20)].rail_tracks)
+print("PASS OpenTTD depot auto-attachment adds and charges only valid existing-mouth connections")

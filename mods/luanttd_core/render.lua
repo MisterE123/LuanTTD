@@ -6,6 +6,12 @@ return function(api)
   local source_motion=dofile(modpath.."/road_motion_presentation.lua")(road_lanes)
   local road_fault_view=dofile(modpath.."/road_fault_view.lua")(function(p) return core.add_particle(p) end)
   local R={}
+  local rail_track=dofile(modpath.."/openttd/rail_track.lua")
+  local diagonal=dofile(modpath.."/rail_diagonal.lua")(Sim,rail_track,api.terrain,api.trackworks and api.trackworks.surface)
+  function R.rail_diagonal_pose(id,td,f)
+    local mode=diagonal.mode(S,id)
+    if mode~=0 then return diagonal.sample(td,f,mode) end
+  end
   local ids={}
   local modes={rail="railv",road="roadv",water="waterv",air="airv"}
   local function png(n) return "bl_"..n..".png" end
@@ -189,9 +195,20 @@ return function(api)
       }
     end
   end
-  local stock_rail,rail_grade={},{}
+  local stock_rail,rail_grade,rail_eased={},{},{}
   for bits=1,63 do
     stock_rail[bits]=architecture("stock_rail_"..bits,"rail_track_"..bits,"rail_atlas")
+  end
+  for _,part in ipairs({4,8,16,32}) do
+    rail_eased[part]={}
+    for mode=1,3 do
+      local name="rail_eased_"..part.."_"..mode
+      rail_eased[part][mode]=architecture(name,name,"rail_atlas")
+    end
+  end
+  function stock_rail.visual(id,bits)
+    local eased=rail_eased[bits]
+    return eased and eased[diagonal.mode(S,id)] or stock_rail[bits]
   end
   for grade=1,4 do rail_grade[grade]=architecture("stock_rail_grade_"..grade,"rail_grade_"..grade,"rail_atlas") end
   local rail_platform,rail_depot={},{}
@@ -853,7 +870,7 @@ return function(api)
               return rail_platform[t.rail_station_axis]
             end
             if t.rail_depot_dir then return rail_depot[t.rail_depot_dir] end
-            return stock_rail[t.rail_tracks]
+            return stock_rail.visual(id,t.rail_tracks)
           end
           if grade>0 then
             if y==level+1 then return ground_mesh[profile][t.variant] end

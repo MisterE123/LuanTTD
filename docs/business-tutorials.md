@@ -8,10 +8,10 @@ resumes when you rejoin. **Stop coaching** clears its HUD.
 
 - **Road business:** connect two passenger stops, build a road depot,
   buy a bus, add both stops to its orders, start service and earn a fare.
-- **Train business:** build a short line with two stations, place a depot
-  and a normal return-facing path signal, buy a locomotive with a
-  passenger carriage, order it to the far and near stations, and earn
-  a fare.
+- **Train business:** build a short connected line with two stations and
+  a depot, buy a locomotive with a passenger carriage, order it to the
+  two stations, and earn a fare. One train reverses without signals on
+  a simple isolated line. Signal practice is optional.
 - **Boat business:** place two docks on a connected waterway with houses
   nearby, build a ship depot, buy and dispatch a ferry and watch passenger fares.
 
@@ -22,25 +22,16 @@ counts for the correct transport mode and company. In a world with an
 active route already earning, the tutorial can recognize work done
 before you opened it.
 
-## The first train's signal
+## Optional: understanding signals
 
-On the example east–west line, read from west to east:
+Start your first train **without signals**. Once ready to practice, use
+**Rail Construction → Rail signals → Path signal** and aim at a piece
+of plain straight track. The green arrow shows the suggested train
+approach. Click the tile, then choose **West → East** or its opposite
+(or the corresponding north–south direction). This describes the
+train's movement, not the angle of the mast. A normal path signal
+allows the reverse direction; a one-way signal does not.
 
-    [Depot door →] --- plain track --- [← PBS] --- [Near] ===== [Far end]
-
-Choose **Rail signals → Rotate railway fitting** until the direction is
-**West**, then choose **Path signal** on a plain tile just west of Near.
-The arrow above is the **train's travel direction** when it approaches
-the signal after returning to Near. A normal PBS permits the outbound
-train to pass the other side; a **one-way** signal would block that
-movement. Do not put it on the station tile. It can show red while no
-train has reserved a path, so red alone does not indicate a bad setup.
-
-Choose **Far** first and **Near** second in the purchased train's orders,
-then select **Dispatch**. Leave plain track and room for the consist to
-fit between station, signal and depot. This lesson teaches a minimal
-one-train line, not a design for shared tracks with several trains.
-
-The ordinary service fixture tests this topology with the real bought
-train, including a fare after restart. Separate lesson tests cover wrong
-direction/one-way and completion from real road and ferry revenue.
+Inspect a placed signal to see its direction, flip it for free, or
+review removal. **Bulldozer** also offers qualified layer choices,
+such as removing a platform or depot while keeping its rail.

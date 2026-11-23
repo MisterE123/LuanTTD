@@ -248,7 +248,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     if Lab.span_protected(s,id) then return false,protected end
     local t=s.tiles[id]
     if not t then return false,"That tile is outside the region." end
-    if shape==nil or t.terrain=="water" or t.site or t.house or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or
+    if shape==nil or t.stock_void or t.terrain=="water" or t.site or t.house or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or
         (t.build and t.build~="stock_rail") or (t.owner and t.owner~=owner) or t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir then
       return false,"Trackworks currently needs clear, dry ground in your company."
     end

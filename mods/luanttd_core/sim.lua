@@ -1162,10 +1162,10 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
       if t.owner and t.owner~=owner then return nil,"Another company owns that tile." end
       if tool=="clear" and t.stock_canal then return nil,"Use the Harbor bulldozer for stock canals." end
       if tool=="clear" and t.road_tunnel_id then
-        return nil,"Use /roadtunnel X Z remove to remove both portals."
+        return nil,"Use Bulldozer on a tunnel portal to review both portals."
       end
       if tool=="clear" and t.road_bridge_id then
-        return nil,"Use /woodbridge X Z remove to remove both bridgeheads and the span together."
+        return nil,"Use Bulldozer on a bridgehead to review the whole span."
       end
       if tool=="clear" and t.rail_tracks and s.stock_rail_dispatch then
         local d=s.stock_rail_dispatch
@@ -1173,8 +1173,8 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
           return nil,"The rail dispatch pilot protects that track or path signal."
         end
       end
-      if tool=="clear" and (t.rail_station_id or t.rail_depot_dir) then
-        return nil,"Use /trackfacility X Z remove to remove the rail facility first."
+      if tool=="clear" and (t.rail_station_id or t.rail_depot_dir or t.rail_waypoint_id) then
+        return nil,"Click the facility with Bulldozer to review its track layers."
       end
       if tool=="clear" and road_sign(t)~=0 then
         local w=oneway_world(s)
@@ -1319,9 +1319,9 @@ local function apply_build(s,owner,changes,cost)
         local town=M.nearest_town(s,id)
         if town then c.rating[town.id]=math.max(10,(c.rating[town.id] or 48)-10) end
       end
-      if tile.road_town then
-        -- Remove the private stop without erasing the public through road.
-        tile.build="road";tile.station=nil;tile.owner=nil;tile.stop_axis=nil
+      if tile.road_town or item.keep_road then
+        -- Remove the stop without erasing the selected underlying road.
+        tile.build="road";tile.station=nil;tile.owner=not tile.road_town and owner or nil;tile.stop_axis=nil
       else
         tile.build=nil;tile.rail_tracks=nil;tile.rail_type=nil;tile.station=nil;tile.signal=nil;tile.closed=nil;tile.owner=nil;tile.depot_dir=nil;tile.road_bits=nil;tile.stop_axis=nil;tile.house=nil;tile.source_house=nil;tile.wood=nil
       end
@@ -1372,6 +1372,18 @@ local function build(s,owner,tool,ids,funded_clear)
   return apply_build(s,owner,changes,cost)
 end
 function M.build(s,owner,tool,ids) return build(s,owner,tool,ids) end
+function M.remove_through_road_stop(s,owner,id,preview)
+  local t=s.tiles[id]
+  if not t or t.owner~=owner or t.build~="road_station" or not t.stop_axis or t.road_stop_pair then
+    return false,"Choose an owned drive-through road stop."
+  end
+  local changes,cost=M.plan(s,owner,"clear",{id})
+  if not changes then return false,cost end
+  assert(#changes==1 and changes[1].id==id)
+  if preview then return true,cost end
+  changes[1].keep_road=true
+  return apply_build(s,owner,changes,cost)
+end
 function M.autoroad_bend_build(s,owner,start,last)
   local q,why=M.autoroad_bend_plan(s,owner,start,last)
   if not q then return false,why end
@@ -1400,9 +1412,12 @@ function M.clear_area(s,owner,first,last,diagonal,execute)
     local t=s.tiles[id]
     if not t or t.stock_void then return nil,"Outside the playable map." end
     if t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or t.ship or t.airfield or t.tram or
+        t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir~=nil or
+        (first~=last and (t.station or t.build=="road_depot")) or
         s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
-        s.tunnel_below and s.tunnel_below[id] then
-      return nil,"A protected transport structure occupies this tile."
+        s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
+        s.rail_tunnel_below and s.rail_tunnel_below[id] then
+      return nil,"A layered transport structure occupies this tile. Click it separately with Bulldozer."
     end
     local edits,cost=M.plan(s,owner,"clear",{id},true)
     if not edits then return nil,cost end

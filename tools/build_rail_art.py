@@ -65,6 +65,7 @@ class Geos:
             ("GEOSGeomFromWKT", c_void_p, c_char_p),
             ("GEOSUnaryUnionPrec", c_void_p, c_void_p, c_double),
             ("GEOSDifferencePrec", c_void_p, c_void_p, c_void_p, c_double),
+            ("GEOSIntersectionPrec", c_void_p, c_void_p, c_void_p, c_double),
             ("GEOSConstrainedDelaunayTriangulation", c_void_p, c_void_p),
             ("GEOSGeom_destroy", None, c_void_p),
             ("GEOSGeomTypeId", c_int, c_void_p),
@@ -262,11 +263,22 @@ def tie_color(x,z):
     return BALLAST_N+(int((x+2)*17)*269 ^ int((z+2)*17)*151) % len(TIES)
 
 
-def rail_geometry(mask,grade,geos,detail=True):
+def rail_geometry(mask,grade,geos,detail=True,paths=None):
     mesh=Mesh(terrain_height(grade))
-    pp=[TrackPath(i) for i in range(6) if mask&(1<<i)]
+    pp=paths or [TrackPath(i) for i in range(6) if mask&(1<<i)]
+    # Presentation-only diagonal paths have oblique seam tangents. Extend
+    # their sweeps through the ports, then trim precisely on the tile edge.
+    tile=geos.union([[(-1,-1),(1,-1),(1,1),(-1,1)]]) if paths else None
+    def union(rings):
+        g=geos.union(rings)
+        if tile is not None:
+            trimmed=geos.lib.GEOSIntersectionPrec(g,tile,GEOMETRY_PRECISION)
+            geos.free(g)
+            assert trimmed
+            return trimmed
+        return g
     def sweep(w):
-        return geos.union([p.sweep(-w,w) for p in pp])
+        return union([p.sweep(-w,w) for p in pp])
     def terrain_bed(x,z):
         d=min(p.distance(x,z) for p in pp)
         return .006+max(0,min(1,(BED_EDGE-d)/.146))*.030
@@ -285,20 +297,20 @@ def rail_geometry(mask,grade,geos,detail=True):
     chairs=[]
     for p in pp:
         count=max(1,round(p.length/.199))
-        for i in range(count):
-            t=(i+.5)/count
+        ts=p.sleeper_points(count) if paths else ((i+.5)/count for i in range(count))
+        for t in ts:
             sleeper_base.append(rect(p,t,.084,SLEEPER*2))
             sleeper_top.append(rect(p,t,.067,(SLEEPER-.015)*2,bevel=.009))
             for sign in (-1,1):
                 chairs.append(rect(p,t,.089,.117,sign*GAUGE/2, .010))
-    lower,upper=geos.union(sleeper_base),geos.union(sleeper_top)
+    lower,upper=union(sleeper_base),union(sleeper_top)
     bevel=geos.difference(lower,upper)
     mesh.side(lower,"Creosoted sleepers",END,.031,.062,geos)
     mesh.skin(bevel,"Creosoted sleepers",BEVEL,lambda x,z:.062,geos)
     mesh.side(upper,"Creosoted sleepers",BEVEL,.062,.071,geos)
     mesh.skin(upper,"Creosoted sleepers",tie_color,lambda x,z:.071,geos)
     geos.free(lower,upper,bevel)
-    chair=geos.union(chairs)
+    chair=union(chairs)
     mesh.side(chair,"Cast iron chairs",CHAIR,.071,.078,geos)
     mesh.skin(chair,"Cast iron chairs",CHAIR,lambda x,z:.078,geos)
     geos.free(chair)
@@ -308,7 +320,7 @@ def rail_geometry(mask,grade,geos,detail=True):
     # eliminating overlapping coplanar faces and doubled rail ends.
     rail_centers=(-GAUGE/2,GAUGE/2)
     def railway(w):
-        return geos.union([p.sweep(o-w,o+w) for p in pp for o in rail_centers])
+        return union([p.sweep(o-w,o+w) for p in pp for o in rail_centers])
     foot,web,head=map(railway,(FOOT,.016,HEAD))
     un_web=geos.difference(foot,web)
     mesh.side(foot,"Rail foot",FOOT_MAT,.068,.082,geos)
@@ -375,6 +387,7 @@ def rail_geometry(mask,grade,geos,detail=True):
             tip=(x+.003,z+.002,h+rng.uniform(.009,.020))
             for k in range(4):
                 mesh.tri("Loose aggregate",col,(pts[k],pts[(k+1)%4],tip))
+    if tile is not None: geos.free(tile)
     mesh.prune()
     return mesh
 

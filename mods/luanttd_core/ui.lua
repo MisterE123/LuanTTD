@@ -361,6 +361,8 @@ function U.leave(n)
   session[n]=nil;hud[n]=nil
   if Workbenches then Workbenches.leave(n) end
   if Tutorials then Tutorials.leave(n) end
+  if U.layer_bulldozer then U.layer_bulldozer.leave(n) end
+  if U.signal_ui then U.signal_ui.leave(n) end
 end
 function U.hud()
   for _,p in ipairs(core.get_connected_players()) do
@@ -385,6 +387,10 @@ local function pick(fields,id,a,prior)
   return prior
 end
 function U.fields(p,formname,f)
+  if U.signal_ui and formname==U.signal_ui.form then
+    return U.signal_ui.fields(p,f,U.layer_bulldozer.open)
+  end
+  if U.layer_bulldozer and formname==U.layer_bulldozer.form then return U.layer_bulldozer.fields(p,f) end
   if Tutorials and formname==Tutorials.form then return Tutorials.fields(p,f) end
   if Workbenches and formname==Workbenches.form then return Workbenches.fields(p,f) end
   if formname=="" then
@@ -689,6 +695,9 @@ end
 local function asset_details(p,tile)
   local t=tile and S.tiles[tile]
   if not t then return false end
+  local dispatch=S.stock_rail_dispatch
+  if U.signal_ui and dispatch and dispatch.signals and dispatch.signals.records[tile] and api.rail_build and
+      U.signal_ui.inspect(p,tile) then return true end
   if t.rail_depot_dir~=nil and api.owned_rail_ui and api.owned_rail_ui.open(p,tile) then return true end
   if t.house and t.source_house and t.source_house.town_growth then U.service(p,"growth_house",tile)
   elseif t.stock_landmark then
@@ -1279,6 +1288,15 @@ local function clear_structure(n,id,preview)
     return true,changed,changed and ("Dismantle water structure  |  "..dollars(price)) or api.shipyard.reason(price)
   end
 end
+U.signal_ui=api.road_first and dofile(core.get_modpath("luanttd_core").."/rail_signal_ui.lua")(api,U.status)
+function U.signal_arrow(p,id)
+  if not U.signal_ui or not api.rail_build or not id then return end
+  local V=view(p:get_player_name())
+  if V.pick_order or not U.signal_ui.tool(V.tool) then return end
+  local q,_,dir=U.signal_ui.preview(p,V.tool,id)
+  if q then return dir end
+end
+U.layer_bulldozer=api.road_first and dofile(core.get_modpath("luanttd_core").."/layer_bulldozer.lua")(api,clear_structure,U.status)
 local function clear_error(why)
   return why=="CLEARING_LIMIT_REACHED" and "Clearing limit reached. Let the game advance." or why
 end
@@ -1310,17 +1328,7 @@ function U.end_demolition(p,id,diagonal)
   V.demolition_anchor=nil
   if not start or V.tool~="clear" then return end
   if start==id then
-    -- A click still uses the established whole-object operations and
-    -- their refusal messages. The area tool never dismantles their layers.
-    local handled,ids,note,level=clear_structure(n,id,false)
-    if handled then
-      V.status=note
-      if ids then
-        if level then R.raise_bound(level) end
-        R.update(ids);api.save()
-      end
-      return
-    end
+    if U.layer_bulldozer and U.layer_bulldozer.open(p,id) then return end
   end
   local q,why=Sim.clear_area(S,n,start,id,diagonal,true)
   if not q then V.status=clear_error(why);return end
@@ -1482,8 +1490,8 @@ function U.preview(p,id,hit)
       return #q.ids>0 and q.ids or {V.demolition_anchor,id},q.passed>0,
         (diagonal and "Diagonal demolition  |  " or "Area demolition  |  ")..clear_ticket(q)
     end
-    local handled,ids,note=clear_structure(n,id,true)
-    if handled then return ids or {id},ids~=nil,note end
+    local choices=U.layer_bulldozer.choices(n,id)
+    if #choices>0 then return {id},true,"Bulldozer  |  Click to review removable layers" end
     if S.corner_grid and Sim.clear_area then
       local q,why=Sim.clear_area(S,n,id,id,false,false)
       return {id},q and q.passed>0 or false,
@@ -1567,12 +1575,17 @@ function U.preview(p,id,hit)
     end
     local hint=V.rail_press and "Release to build · Right-click cancels" or "Click or hold to drag"
     if plan.stopped_at then hint="Stops before obstruction · "..hint end
+    if plan.tree_count>0 then hint=("Clears %d trees · "):format(plan.tree_count)..hint end
     if (plan.skipped_start or 0)>0 then hint=("Skips %d at start · "):format(plan.skipped_start)..hint end
     return ids,true,("AutoRail  |  %s  ·  %d tiles  ·  %s"):format(dollars(plan.price),#plan.ids,hint)
   end
   if waypoint_tools[V.tool] then
     local plan,why=waypoint_quote(n,V.tool,id)
     return {id},plan~=nil,plan and (waypoint_tools[V.tool].."  |  "..dollars(plan.price)) or why
+  end
+  if U.signal_ui and api.rail_build and U.signal_ui.tool(V.tool) then
+    local q,hint=U.signal_ui.preview(p,V.tool,id)
+    return {id},q~=nil,hint
   end
   if rail_tool_labels[V.tool] and api.rail_build then
     local plan,msg,anchor=quote_rail(n,V,id)
@@ -1767,17 +1780,7 @@ function U.build_world(p,id)
   V.chosen=id
   if V.pick_order then U.choose_order_stop(p,id);return end
   if V.tool=="inspect" then U.inspect(p,id);return end
-  if api.road_first and V.tool=="clear" then
-    local handled,ids,note,level=clear_structure(n,id,false)
-    if handled then
-      V.status=note
-      if ids then
-        if level then R.raise_bound(level) end
-        R.update(ids);api.save()
-      end
-      return
-    end
-  end
+  if V.tool=="clear" and U.layer_bulldozer and U.layer_bulldozer.open(p,id) then return end
   local bridge=bridge_tool(V.tool)
   if bridge then
     if not V.anchor then V.anchor=id;V.status="First bridgehead selected. Click the opposite end.";return end
@@ -1908,6 +1911,11 @@ function U.build_world(p,id)
     return
   end
   if U.rail_gesture(V.tool) then return end -- physical release owns the command
+  if U.signal_ui and api.rail_build and U.signal_ui.tool(V.tool) then U.signal_ui.open(p,id,V.tool);return end
+  if V.tool=="rail_signal_remove" and U.layer_bulldozer then
+    if not U.layer_bulldozer.open(p,id) then V.status="Aim at a signal to review removal." end
+    return
+  end
   if rail_tool_labels[V.tool] and api.rail_build then
     local plan,note,anchor=quote_rail(n,V,id)
     if anchor then V.anchor=id;V.status="Mark the last tile.";return end
@@ -2739,12 +2747,7 @@ function U.service_fields(p,f)
     core.close_formspec(n,"luanttd_core:service");return true
   elseif kind=="rail_platform_state" and f.remove_rail_platform then
     local platform=S.stock_rail_stations and S.stock_rail_stations[id]
-    if platform and platform.owner==n and api.rail_build and api.trackworks and not api.rail_build.busy() then
-      local ok,note,dirty=api.trackworks.remove_facility(S,n,platform.tiles[1])
-      V.status=note
-      if ok then R.update(dirty);api.save() end
-    else V.status="You can only remove an owned platform when rail dispatch is clear." end
-    core.close_formspec(n,"luanttd_core:service")
+    if platform and platform.owner==n and U.layer_bulldozer then return U.layer_bulldozer.open(p,platform.tiles[1]) end
     return true
   elseif kind=="tram_depot_status" then
     if f.order_tram_here and api.tram and api.tram.facility(n,id,"depot") and not api.tram.status(n) and

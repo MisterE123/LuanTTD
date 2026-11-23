@@ -1,3 +1,4 @@
+local signal_free=core.settings:get_bool("luanttd_qa_signal_free",false)
 -- Appended only in isolated native QA. Purchase, move, board, save,
 -- reload, turn the true steam consist and deliver from the same receipt.
 local jubilee=core.settings:get_bool("bayline_native_jubilee_probe",false)
@@ -206,7 +207,7 @@ local function stamp()
   for x=1,27 do
     S.tiles[id(x)]={h=0,terrain="grass",variant=1}
   end
-  for x=2,24 do
+  for x=2,signal_free and 26 or 24 do
     if not bridge or x<15 or x>19 then
       local t=S.tiles[id(x)];t.owner=owner;t.rail_tracks=1;t.build="stock_rail"
     end
@@ -230,7 +231,7 @@ local function stamp()
   assert(api.trackworks.depot(S,owner,id(2),2))
   assert(api.trackworks.station(S,owner,id(11),id(12)))
   assert(api.trackworks.station(S,owner,id(22),id(24)))
-  assert(Run.place_signal(S,owner,id(10),0,4))
+  if not signal_free then assert(Run.place_signal(S,owner,id(10),0,4)) end
   local west,east=S.tiles[id(11)].rail_station_id,S.tiles[id(22)].rail_station_id
   S.sites[1].tile=id(10,13);S.sites[2].tile=id(24,13)
   for _,z in ipairs({7,8,12,13}) do
@@ -309,6 +310,7 @@ local function stamp()
     end
   end
   local ok,note=Owned.start(S,owner,r.id,east,west);assert(ok,note)
+  if signal_free then assert(current().ordinary_unreserved and not next(S.stock_rail_dispatch.signals.records)) end
   if bridge then assert(current().bridge_collectors) end
   assert(current().stock_engine==engine and current().max_track_speed==vmax)
   local peak=0

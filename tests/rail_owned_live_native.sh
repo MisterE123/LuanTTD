@@ -20,8 +20,10 @@ if [[ -n ${BAYLINE_NATIVE_ASSET_MOD:-} ]]; then
     cp -al "$(realpath "$BAYLINE_NATIVE_ASSET_MOD/$kind")" "$game/mods/luanttd_core/$kind"
   done
 else
-  cp -R "${BAYLINE_NATIVE_EXACT_GAME:-.}/mods" "$game/"
+  cp -al "${BAYLINE_NATIVE_EXACT_GAME:-.}/mods" "$game/" || cp -R "${BAYLINE_NATIVE_EXACT_GAME:-.}/mods" "$game/"
 fi
+cp "${BAYLINE_NATIVE_EXACT_GAME:-.}/mods/luanttd_core/init.lua" "$out/fixture-init.lua"
+mv "$out/fixture-init.lua" "$game/mods/luanttd_core/init.lua"
 cat tests/rail_owned_live_native.lua >> "$game/mods/luanttd_core/init.lua"
 cp tests/qa_layout.lua "$game/mods/luanttd_core/qa_layout.lua"
 cp tests/coastal_corridor_fixture.lua "$game/mods/luanttd_core/qa_coastal_corridor.lua"
@@ -35,6 +37,7 @@ CONF
 use_market=false
 if [[ ${BAYLINE_NATIVE_SH_8P:-false} == true || ${BAYLINE_NATIVE_MANLEY:-false} == true || ${BAYLINE_NATIVE_MANLEY_COACH:-false} == true || ${BAYLINE_NATIVE_ELECTRIC:-false} == true || ${BAYLINE_NATIVE_SH_40:-false} == true ]]; then use_market=true; fi
 cat > "$out/native.conf" <<EOF_CONF
+luanttd_qa_signal_free = ${LUANTTD_NATIVE_SIGNAL_FREE:-false}
 luanttd_qa_coastal_layout = true
 bayline_offline_economy = false
 bayline_rail_owned_preview = true

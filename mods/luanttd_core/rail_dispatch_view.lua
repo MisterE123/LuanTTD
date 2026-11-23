@@ -141,7 +141,11 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
             local kind=(i==1 or tail_cab) and engine or wagon
             local key=train.id..":"..i
             local tx,tz=Sim.xy(id)
-            local x,z,dx,dz=Pose.sample(td,progress)
+            local x,z,dx,dz
+            if not wormhole and api.render and api.render.rail_diagonal_pose then
+              x,z,dx,dz=api.render.rail_diagonal_pose(id,td,progress)
+            end
+            if x==nil then x,z,dx,dz=Pose.sample(td,progress) end
             local level,tilt
             if surface then level,tilt=surface(id,td,progress,{wormhole=wormhole}) end
             local flipped=i==1 and reversed or tail_cab and not reversed

@@ -25,7 +25,9 @@ return function(api,Track,Motion,Speed,Slope)
   local function position(run)
     local id,td,f=Course.at(run.pieces,run.at)
     local a,b=Sim.xy(id)
-    local x,z,dx,dz=Pose.sample(td,f)
+    local x,z,dx,dz
+    if api.render and api.render.rail_diagonal_pose then x,z,dx,dz=api.render.rail_diagonal_pose(id,td,f) end
+    if x==nil then x,z,dx,dz=Pose.sample(td,f) end
     local y,grade=deck(id,x,z)
     if not y then return end
     local gradients={{.5,0},{-.5,0},{0,.5},{0,-.5}}
