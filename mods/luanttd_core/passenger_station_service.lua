@@ -120,6 +120,10 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       assert(v.total_length==(def.coach and 24 or 16),"Invalid Manley-Morel physical formation")
       v.coach=def.coach or nil
       DMU.bodies(v,v.coach)
+    elseif def.mode=="rail" and def.passenger_coaches then
+      assert(def.passenger_coaches>=2 and v.total_length==(def.passenger_coaches+1)*8,
+        "Invalid physical railway coach length")
+      DMU.coaches(v,def.passenger_coaches)
     end
     state.vehicles[v.id]=v
     return v

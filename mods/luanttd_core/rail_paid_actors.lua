@@ -54,14 +54,15 @@ return function(Service,key)
       if not saved[id] then
         Service.vehicle(service,{id=id,mode="rail",owner=r.owner,length=r.total_length,
           engine=r.stock_engine==11 and r.stock_engine or nil,coach=r.stock_engine==11 and r.stock_wagon==27 or nil,
-          speed=r.max_track_speed,built=build_year(r)})
+          passenger_coaches=r.passenger_coaches,speed=r.max_track_speed,built=build_year(r)})
       else
         local v=service.vehicles[id]
         assert(v and v.owner==r.owner and v.mode=="rail" and v.total_length==r.total_length,
           "Saved train and paid passenger row disagree")
         assert((v.engine==11)==(r.stock_engine==11),"Saved train body schema disagrees with paid actor")
         if v.carrying_parts then
-          assert(#v.carrying_parts==(r.stock_wagon==27 and 3 or 2),"Saved physical Manley-Morel formation disagrees")
+          assert(#v.carrying_parts==(r.passenger_coaches or (r.stock_wagon==27 and 3 or 2)),
+            "Saved physical railway formation disagrees")
         end
       end
       live[id]=true
@@ -95,6 +96,11 @@ return function(Service,key)
       cargo_count=function(r)
         local v=service.vehicles[id(r)]
         local p=v.carrying_parts
+        if p and r.passenger_coaches then
+          local counts={}
+          for i,b in ipairs(p) do counts[i]=b.units end
+          return v.units,nil,nil,nil,counts
+        end
         if p then return v.units,p[1].units,p[#p].units,#p==3 and p[2].units or nil end
         return v.units
       end,

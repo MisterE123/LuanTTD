@@ -3,9 +3,12 @@
 return function(api)
   local Crowd={}
   local Sim,S=api.Sim,api.s
+  local Zones=Sim.commercial_passengers_waiting and
+    dofile(core.get_modpath("luanttd_core").."/passenger_waiting_zones.lua")(api)
   local state_by_player={}
   local clock,scan_due=0,0
   local platforms={}
+  local pending_boardings={}
   local SCAN_INTERVAL=.10
   local DRAW_RADIUS=32
   local DRAW_HEIGHT=24
@@ -16,6 +19,7 @@ return function(api)
   local END_MARGIN=.048
   local SIDE_MARGIN=.036
   local FADE_TIME=.36
+  local offsets={road=0,rail=1048576,ship=2097152,air=3145728}
 
   local function normalize(v)
     if not v then return nil end
@@ -48,19 +52,60 @@ return function(api)
     table.sort(result,function(a,b)
       return a.order<b.order or (a.order==b.order and a.forward<b.forward)
     end)
-    return {p=p,slots=result,along=along,side=side}
+    for _,seat in ipairs(result) do seat.p,seat.along,seat.side=p,along,side end
+    return result
   end
 
+  local function waiting(mode,id)
+    if mode=="road" then
+      local st=S.stations[id]
+      local tile=st and S.tiles[st.tile]
+      if st and st.mode=="road" and st.stop_type~="truck" and tile and tile.build=="road_station" and tile.station==id then
+        return Sim.waiting_passengers(S,st)
+      end
+    elseif Zones then
+      local records=mode=="rail" and S.stock_rail_stations or mode=="ship" and S.stock_ship_stations or S.stock_small_airports
+      if records and records[id] then return Sim.commercial_passengers_waiting(S,mode,id) end
+    end
+    return 0
+  end
+  local function add(mode,id,rectangles,count)
+    local rows,positions,slots={},{},{}
+    for _,rect in ipairs(rectangles or {}) do
+      local seats=layout(rect)
+      if seats and #seats>0 then
+        rows[#rows+1]=seats
+        positions[#positions+1]=rect
+      end
+    end
+    -- Use the whole waiting area on a long station by filling the
+    -- rows evenly. A viewer's hard cap also bounds each station's sample.
+    count=math.min(MAX_ACTIVE,math.floor(count))
+    local index=1
+    while #slots<count do
+      local before=#slots
+      for _,r in ipairs(rows) do
+        if r[index] then slots[#slots+1]=r[index] end
+        if #slots==count then break end
+      end
+      if #slots==before then break end
+      index=index+1
+    end
+    if #slots>0 then
+      platforms[#platforms+1]={id=id,key=offsets[mode]+id,mode=mode,slots=slots,positions=positions,count=#slots}
+    end
+  end
   local function scan()
     platforms={}
     for id,st in pairs(S.stations) do
-      local tile=S.tiles[st.tile]
-      if st.mode=="road" and tile and tile.build=="road_station" and tile.station==id then
-        local count=Sim.waiting_passengers(S,st)
-        local map=count>0 and layout(api.render.platform(st))
-        if map then
-          platforms[#platforms+1]={id=id,map=map,count=math.min(math.floor(count),#map.slots)}
-        end
+      local count=waiting("road",id)
+      if count>0 then add("road",id,{api.render.platform(st)},count) end
+    end
+    if not Zones then return end
+    for _,m in ipairs({{"rail",S.stock_rail_stations},{"ship",S.stock_ship_stations},{"air",S.stock_small_airports}}) do
+      for id in pairs(m[2] or {}) do
+        local count=waiting(m[1],id)
+        if count>0 then add(m[1],id,Zones[m[1]](id),count) end
       end
     end
   end
@@ -70,14 +115,13 @@ return function(api)
     return ((seed*48271)%2147483647+1)/2147483647
   end
 
-  local function spawn(name,id,index,rec,map,fade)
+  local function spawn(name,id,index,rec,slot,fade)
     if not fade then
-      local seat=map.slots[index]
-      local p,a,b=map.p,map.along,map.side
+      local p,a,b=slot.p,slot.along,slot.side
       rec.generation=rec.generation+1
       local seed=((id*7480739+index*747323+rec.generation*111200423)%2147483646)+1
-      local f=seat.forward+(rand(seed)-.5)*.044
-      local s=seat.across+(rand((seed*16807)%2147483647)-.5)*.032
+      local f=slot.forward+(rand(seed)-.5)*.044
+      local s=slot.across+(rand((seed*16807)%2147483647)-.5)*.032
       rec.pos={x=p.x+f*a.x+s*b.x,y=p.y+.004+rec.tall*.5,z=p.z+f*a.z+s*b.z}
     end
     local life=fade and FADE_TIME or .41+rand(id*23017+index*5129+rec.generation*977)*.15
@@ -105,20 +149,22 @@ return function(api)
 
     local nearby={}
     for _,entry in ipairs(platforms) do
-      local p=entry.map.p
-      local dx,dy,dz=p.x-from.x,p.y-from.y,p.z-from.z
-      local distance=dx*dx+dy*dy+dz*dz
-      if math.abs(dy)<=DRAW_HEIGHT and distance<=DRAW_RADIUS*DRAW_RADIUS then
+      local distance=math.huge
+      for _,p in ipairs(entry.positions) do
+        local dx,dy,dz=p.x-from.x,p.y-from.y,p.z-from.z
+        if math.abs(dy)<=DRAW_HEIGHT then distance=math.min(distance,dx*dx+dy*dy+dz*dz) end
+      end
+      if distance<=DRAW_RADIUS*DRAW_RADIUS then
         nearby[#nearby+1]={dist=distance,entry=entry}
       end
     end
     table.sort(nearby,function(a,b)
-      return a.dist<b.dist or (a.dist==b.dist and a.entry.id<b.entry.id)
+      return a.dist<b.dist or (a.dist==b.dist and a.entry.key<b.entry.key)
     end)
     local targets={}
     for i=1,math.min(MAX_VISIBLE_STOPS,#nearby) do
       local station=nearby[i].entry
-      targets[station.id]=station
+      targets[station.key]=station
     end
 
     local active,departed=0,{}
@@ -139,28 +185,28 @@ return function(api)
     -- Live queues take precedence over transient fades and distant stops.
     for i=1,math.min(MAX_VISIBLE_STOPS,#nearby) do
       local station=nearby[i].entry
-      local bucket=tracked[station.id] or {}
-      tracked[station.id]=bucket
+      local bucket=tracked[station.key] or {}
+      tracked[station.key]=bucket
       for seat=1,station.count do
         local rec=bucket[seat]
         if active<MAX_ACTIVE and (not rec or not rec.boarded and clock>=rec.expires) then
           if not rec then
-            local kind=(station.id*31+seat*11)%6
-            rec={generation=0,tall=.18+kind*.006,texture="bl_waiting_"..(kind+1)..".png"}
+            local kind=(station.key*31+seat*11)%6
+            rec={generation=0,tall=.18+kind*.006,texture="bl_waiting_"..(kind+1)..".png",
+              mode=station.mode,id=station.id}
             bucket[seat]=rec
           end
-          spawn(name,station.id,seat,rec,station.map,false)
+          spawn(name,station.key,seat,rec,station.slots[seat],false)
           active=active+1
         end
       end
     end
     for _,p in ipairs(departed) do
-      local st=S.stations[p.id]
-      if st and active<MAX_ACTIVE then
+      if active<MAX_ACTIVE then
         local pos=p.rec.pos
         local dx,dy,dz=pos.x-from.x,pos.y-from.y,pos.z-from.z
         if dx*dx+dy*dy+dz*dz<=DRAW_RADIUS*DRAW_RADIUS and math.abs(dy)<=DRAW_HEIGHT and
-            (p.rec.boarded or Sim.waiting_passengers(S,st)<p.seat) then
+            (p.rec.boarded or waiting(p.rec.mode,p.rec.id)<p.seat) then
           local bucket=tracked[p.id] or {}
           tracked[p.id]=bucket
           bucket[p.seat]=p.rec
@@ -175,34 +221,47 @@ return function(api)
     end
   end
 
-  function Crowd.board(station,units)
-    local remaining=Sim.waiting_passengers(S,station)
+  local function apply_boarding(event)
+    local remaining=waiting(event.mode,event.id)
     for _,tracked in pairs(state_by_player) do
-      local bucket=tracked[station.id]
+      local bucket=tracked[event.key]
       if bucket then
-        local active={}
+        local active,pending={},0
         for seat,rec in pairs(bucket) do
-          if not rec.fading then active[#active+1]=seat end
+          if not rec.fading then
+            if rec.boarded then pending=pending+1 else active[#active+1]=seat end
+          end
         end
-        local sampled=#active
-        if sampled>0 then
+        if #active>0 then
           -- Draw a proportional boarding sample even when hundreds are
           -- waiting and the finite curb remains full after a bus visit.
-          local fraction=units/math.max(1,remaining+units)
-          local n=math.max(sampled-remaining,math.floor(sampled*fraction+.5),1)
+          local fraction=event.units/math.max(1,remaining+event.units)
+          local n=math.max(#active-remaining,math.floor((#active+pending)*fraction+.5),1)
           table.sort(active,function(a,b) return a>b end)
-          for _,seat in ipairs(active) do
-            if n<=0 then break end
-            if not bucket[seat].boarded then bucket[seat].boarded=true;n=n-1 end
-          end
+          for i=1,math.min(n,#active) do bucket[active[i]].boarded=true end
         end
       end
     end
-    scan_due=clock
   end
+  function Crowd.board_terminal(mode,id,units)
+    if not id or units<=0 then return end
+    local key=offsets[mode]+id
+    local event=pending_boardings[key]
+    if event then event.units=event.units+units
+    else pending_boardings[key]={key=key,mode=mode,id=id,units=units} end
+  end
+  function Crowd.board(station,units) Crowd.board_terminal("road",station.id,units) end
 
   function Crowd.update(players,dt)
     clock=clock+dt
+    -- Gradual loading can emit many pulses in one render frame. They
+    -- share its final queue count, so sampling each separately would
+    -- fade the same reduced crowd multiple times.
+    if next(pending_boardings) then
+      for _,event in pairs(pending_boardings) do apply_boarding(event) end
+      pending_boardings={}
+      scan_due=clock
+    end
     if clock>=scan_due then
       scan_due=clock+SCAN_INTERVAL
       scan()

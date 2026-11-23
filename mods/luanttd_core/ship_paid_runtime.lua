@@ -492,7 +492,9 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       for i,v in ipairs(vehicle.carrying_parts) do bodies[i]={tile=v.cargo_tile,onboard=v.units,role=v.role} end
     end
     local engine=rail and p.stock_engine==11 and 11 or p.engine_id
-    return {onboard=vehicle and vehicle.units or 0,capacity=Service.stock_for(mode_,engine,rail and p.stock_wagon==27).cap,
+    return {onboard=vehicle and vehicle.units or 0,
+      capacity=rail and p.passenger_coaches and p.passenger_coaches*Service.stock.rail.cap
+        or Service.stock_for(mode_,engine,rail and p.stock_wagon==27).cap,
       carrying_parts=bodies,
       paid_clock=p.paid_clock,engine=p.engine_id,owner=p.owner,
       finished=rail and p.paired and p.paired.complete or nil,
@@ -504,6 +506,18 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       cargo_tile=vehicle and vehicle.cargo_tile,
       platform_tiles=load and load.platform_tiles,tick=service and service.tick,
       paused=not enabled(s,mode_) or rail and Run.paid_art_ready and not Run.paid_art_ready(s) or mode_=="air" and Run.paid_art_ready and not Run.paid_art_ready(p) or false}
+  end
+  -- A stop can already have a real waiting queue before a vehicle is
+  -- dispatched (or after the last one was withdrawn). Do not use the
+  -- vehicle's two-order status as the station presentation data source.
+  function F.terminal_waiting(s,mode_,id)
+    if not enabled(s,mode_) then return 0 end
+    local c=s.stock_ship_commercial
+    local service=c and c.service
+    local key=mode_=="rail" and rail_key(id) or mode_=="air" and air_key(id) or id
+    local st=service and service.stations[key]
+    if not st or mode(st)~=mode_ then return 0 end
+    return (Service.waiting(service,key))
   end
   return F
 end

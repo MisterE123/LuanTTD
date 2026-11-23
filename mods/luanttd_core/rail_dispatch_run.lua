@@ -368,14 +368,19 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
 
   local function departure_probe(run,route)
-    -- With the pilot's two stock 8-unit units and a FAR stop, the
-    -- locomotive stops 4 subunits short of the final end and the
-    -- carriage is 8 behind it, on that same final 16-unit tile.
-    local r=route[#route]
-    local pose={td=r.td,direction=Track.heading(r.td)}
-    return {owner=run.owner,engine_railtype=run.engine_railtype,traction_railtypes=run.traction_railtypes,
-      parts={{tile=r.tile,pose=pose,length=run.front_length},
-      {tile=r.tile,pose=pose,length=run.total_length-run.front_length}}}
+    -- Stock FAR stops the physical front's center half a vehicle short
+    -- of the far edge. Walk the real consist offsets backwards along the
+    -- approach, so CheckReverseTrain sees the actual rear tile even
+    -- when more than one coach is attached.
+    local lengths=run.body_lengths or {run.front_length,run.total_length-run.front_length}
+    local parts,offset={},0
+    local half=floor((lengths[1]+1)/2)
+    for i,len in ipairs(lengths) do
+      if i>1 then offset=offset+floor(lengths[i-1]/2)+floor((len+1)/2) end
+      local pos=route[#route-floor((half+offset-1)/16)] or route[1]
+      parts[i]={tile=pos.tile,pose={td=pos.td,direction=Track.heading(pos.td)},length=len}
+    end
+    return {owner=run.owner,engine_railtype=run.engine_railtype,traction_railtypes=run.traction_railtypes,parts=parts}
   end
 
   local function same_step(a,b)
@@ -504,6 +509,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       run.max_track_speed,run.front_length,run.total_length=stats.max_track_speed,stats.front_length,stats.total_length
       run.acceleration,run.consist_mass,run.power=stats.acceleration,stats.weight,stats.power
       run.paid_build_year=owned.parts[1].build_year
+      if not freight and #owned.stock_ids>2 and owned.stock_ids[1]~=11 then
+        run.body_lengths,run.passenger_coaches=stats.lengths,#owned.stock_ids-1
+      end
       run.running_ticks_total,run.running_year_fp=0,stats.running_year_fp
       if freight then
         run.cargo_onboard,run.freight_multiplier=0,stats.freight_trains
@@ -541,6 +549,12 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local route=best and dense_route(query,v,best,span_mode)
     run.route=route
     if not route then return false,"No connected route from the depot to the first platform. Check the depot exit, rail joints and signal direction"..(run.engine_railtype==1 and ", and make sure the whole route is electrified." or ".") end
+    local function long_enough(leg)
+      if not run.passenger_coaches then return true end
+      local last=leg[#leg]
+      return Follow.platform(board,last.tile,Track.reverse_side(Track.exit_side(last.td)))*16>=run.total_length
+    end
+    if not long_enough(route) then return false,"Lengthen the first platform to fit the whole train." end
     local valid,reason=validate(board,run)
     if not valid then return false,reason or "This railway layout is not supported for the first platform." end
     if is_block and not block_route(board,run,d) then
@@ -554,6 +568,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     elseif second then
       local second_leg,_,_,second_reason=choose_leg(board,run,departure_probe(run,route),second)
       if not second_leg then return false,"Second platform: "..(second_reason or "No safe route.") end
+      if not long_enough(second_leg) then return false,"Lengthen the second platform to fit the whole train." end
       local repeat_leg,_,_,repeat_reason=choose_leg(board,run,departure_probe(run,second_leg),station)
       if not repeat_leg then return false,"Return to the first platform: "..(repeat_reason or "No safe route.") end
       if run.platform_lookahead then
@@ -643,12 +658,19 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
 
   -- The depot adapter validates the receipt and stock identity. The
   -- paid platform engine controls the real coach, its load and readiness.
+  function R.owned_passenger_consist(unit)
+    local ids=unit and unit.stock_ids
+    local engine=ids and ids[1]
+    if not (engine and Roster and R.owned_passenger_engine(engine)) then return false end
+    if engine==11 then return #ids==1 or #ids==2 and ids[2]==27 end
+    if #ids<2 then return false end
+    for i=2,#ids do if ids[i]~=27 then return false end end
+    return true
+  end
   function R.start_owned(s,owner,owned,first,second,via_tile)
     if not Reverse then return false,"The stock reversal module is not loaded." end
     if not first or not second or first==second then return false,"Choose two different owned platforms." end
-    local ids=owned and owned.stock_ids
-    local recipe=ids and (#ids==1 and ids[1]==11 or #ids==2 and ids[2]==27)
-    if not owned or owned.owner~=owner or not Roster or not recipe or not R.owned_passenger_engine(ids[1]) then
+    if not owned or owned.owner~=owner or not R.owned_passenger_consist(owned) then
       return false,"The paid shuttle requires a supported purchased passenger consist."
     end
     return start(s,owner,owned.depot,first,second,Spans and s.rail_span_enabled or false,owned,
@@ -1230,10 +1252,12 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
             run.arrival.cargo_tile=wagon and wagon.tile
             run.arrival.platform_tiles=forward+backward-1
             local cargo_tiles,visible
-            if run.stock_engine==11 then
+            if run.stock_engine==11 or run.passenger_coaches then
               cargo_tiles,visible={},true
-              for i,part in ipairs(run.consist.parts) do
-                cargo_tiles[i]=part.tile
+              local first=run.passenger_coaches and 2 or 1
+              for i=first,#run.consist.parts do
+                local part=run.consist.parts[i]
+                cargo_tiles[#cargo_tiles+1]=part.tile
                 if part.hidden then visible=false end
               end
             end
@@ -1305,7 +1329,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if not (run.fleet_id and Roster) then return end
     run.running_ticks_total=Roster.running_tick(run.running_ticks_total or 0,run.stopped,run.speed)
     if not (paid and paid.cargo_count) then return end
-    local n,a,b,coach=paid.cargo_count(run)
+    local n,a,b,coach,counts=paid.cargo_count(run)
     local field=run.freight and "cargo_onboard" or "passengers_onboard"
     if run.stock_engine==11 then
       if a==nil or b==nil then return end
@@ -1314,6 +1338,18 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         if coach~=nil then p[2]={stock_id=27,cargo_count=coach} end
         local stats=assert(Roster.stats(p))
         run[field],run.front_passengers,run.rear_passengers,run.coach_passengers=n,a,b,coach
+        run.consist_mass,run.acceleration=stats.weight,stats.acceleration
+      end
+    elseif run.passenger_coaches and counts then
+      local different=n~=run[field] or not run.coach_loads
+      for i,count in ipairs(counts) do
+        if not run.coach_loads or count~=run.coach_loads[i] then different=true end
+      end
+      if different then
+        local parts={run.stock_engine}
+        for _,count in ipairs(counts) do parts[#parts+1]={stock_id=27,cargo_count=count} end
+        local stats=assert(Roster.stats(parts))
+        run[field],run.coach_loads=n,counts
         run.consist_mass,run.acceleration=stats.weight,stats.acceleration
       end
     elseif n~=nil and n~=run[field] then

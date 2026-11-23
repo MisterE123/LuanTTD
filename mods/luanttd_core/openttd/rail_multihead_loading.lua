@@ -26,6 +26,15 @@ function M.create(Loading,Timing)
     end
     return v.carrying_parts
   end
+  function C.coaches(v,count)
+    v.carrying_parts={}
+    for i=1,count do
+      v.carrying_parts[i]={id=v.id,owner=v.owner,mode=v.mode,cargo=v.cargo,
+        cached_max_speed=v.cached_max_speed,built=v.built,cargo_age_counter=1,
+        batches={},units=0,part=i+1,role="carriage",capacity=40}
+    end
+    return v.carrying_parts
+  end
   function C.begin(st,v,tiles,flags,ops,visit)
     local payment={route=0,visual=0,transfer=0,delivered=0}
     local out={station=st.id,ticks=Timing.initial,elapsed=0,capacity=0,reserved_units=0,
@@ -56,9 +65,13 @@ function M.create(Loading,Timing)
     -- which visits its linked rear immediately. Then the independent
     -- carriage is reached by the outer loop. Actual load/unload timing
     -- instead scans physical order: front, carriage, rear.
-    reserve(bodies[1])
-    reserve(bodies[#bodies])
-    if #bodies==3 then reserve(bodies[2]) end
+    if v.engine==11 then
+      reserve(bodies[1])
+      reserve(bodies[#bodies])
+      if #bodies==3 then reserve(bodies[2]) end
+    else
+      for _,body in ipairs(bodies) do reserve(body) end
+    end
   end
   local function settle(st,v,ops)
     local payment=v.load_state.payment

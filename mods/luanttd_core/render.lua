@@ -1346,6 +1346,7 @@ return function(api)
           cue("bayline_fare",effect.owner,effect.tile)
         elseif effect.kind=="board" and effect.units>0 then
           R.float(effect.owner,effect.tile,effect.units.." boarded the train",0x9bdce8)
+          if api.crowd then api.crowd.board_terminal("rail",effect.station_local,effect.units) end
         end
       end
     end
@@ -1356,6 +1357,7 @@ return function(api)
           cue("bayline_fare",effect.owner,effect.tile)
         elseif effect.kind=="board" and effect.units>0 then
           R.float(effect.owner,effect.tile,effect.units.." boarded the ferry",0x9bdce8)
+          if api.crowd then api.crowd.board_terminal("ship",effect.station_local,effect.units) end
         end
       end
     end
@@ -1366,6 +1368,7 @@ return function(api)
           cue("bayline_fare",effect.owner,effect.tile)
         elseif effect.kind=="board" and effect.units>0 then
           R.float(effect.owner,effect.tile,effect.units.." boarded the trimotor",0x9bdce8)
+          if api.crowd then api.crowd.board_terminal("air",effect.station_local,effect.units) end
         end
       end
     end

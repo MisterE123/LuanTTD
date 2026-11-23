@@ -42,6 +42,7 @@ CONF
 use_market=false
 if [[ ${BAYLINE_NATIVE_SH_8P:-false} == true || ${BAYLINE_NATIVE_MANLEY:-false} == true || ${BAYLINE_NATIVE_MANLEY_COACH:-false} == true || ${BAYLINE_NATIVE_ELECTRIC:-false} == true || ${BAYLINE_NATIVE_SH_40:-false} == true ]]; then use_market=true; fi
 cat > "$out/native.conf" <<EOF_CONF
+luanttd_qa_two_coaches = ${LUANTTD_NATIVE_TWO_COACHES:-false}
 luanttd_qa_depot_turnout = ${LUANTTD_NATIVE_DEPOT_TURNOUT:-false}
 luanttd_qa_signal_free = ${LUANTTD_NATIVE_SIGNAL_FREE:-false}
 luanttd_qa_coastal_layout = true
@@ -93,4 +94,7 @@ else
 fi
 if [[ ${LUANTTD_NATIVE_DEPOT_TURNOUT:-false} == true ]]; then
   grep OWNED_RAIL_DEPOT_TURNOUT_NATIVE_PASS "$out/reload.log"
+fi
+if [[ ${LUANTTD_NATIVE_TWO_COACHES:-false} == true ]]; then
+  grep OWNED_RAIL_TWO_COACHES_NATIVE_PASS "$out/reload.log"
 fi

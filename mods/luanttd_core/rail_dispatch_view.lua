@@ -38,6 +38,11 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
     return true
   end
   local path=core.get_modpath and core.get_modpath("luanttd_core")
+  local function diagonal(id,td,p)
+    if api.render and api.render.rail_diagonal_pose then return api.render.rail_diagonal_pose(id,td,p) end
+  end
+  local fit_couplings=path and Track.entry_side and
+    dofile(path.."/rail_body_spacing.lua")(Sim,Track,diagonal,Pose.sample)
   local ready={}
   local split_ready,collector={},nil
   for kind,d in pairs(models) do
@@ -139,11 +144,18 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
         end
         local parts=train.consist.parts
         local push_pull=train.stock_engine==11 and #parts>1
+        local samples={}
         for i,_ in ipairs(parts) do
           local id,td,progress,reversed,wormhole
           if train.paid_clock then id,td,progress,reversed,wormhole=Sim.rail_paid_pose(S,i,fraction,train.fleet_id)
           else id,td,progress,wormhole=Run.sample(train,i);reversed=train.consist.reversed end
-          if id and ready[engine] and ready[wagon] then
+          if id then samples[i]={id=id,td=td,progress=progress,reversed=reversed,wormhole=wormhole} end
+        end
+        if fit_couplings then samples=fit_couplings(samples,parts,push_pull) or samples end
+        for i=1,#parts do
+          local sample=samples[i]
+          if sample and ready[engine] and ready[wagon] then
+            local id,td,progress,reversed,wormhole=sample.id,sample.td,sample.progress,sample.reversed,sample.wormhole
             -- OpenTTD 16.0-RC1 ReverseTrainDirection:
             -- default single-ended trains swap positions *and* turn.
             -- A rear driving cab leads in the opposite direction without
@@ -158,9 +170,8 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
             if not push_pull then flip_epoch=reversed==true end
             local tx,tz=Sim.xy(id)
             local x,z,dx,dz
-            if not wormhole and api.render and api.render.rail_diagonal_pose then
-              x,z,dx,dz=api.render.rail_diagonal_pose(id,td,progress)
-            end
+            if sample.x then x,z,dx,dz=sample.x-2*tx,sample.z-2*tz,sample.dx,sample.dz
+            elseif not wormhole then x,z,dx,dz=diagonal(id,td,progress) end
             if x==nil then x,z,dx,dz=Pose.sample(td,progress) end
             local level,tilt
             if surface then level,tilt=surface(id,td,progress,{wormhole=wormhole}) end

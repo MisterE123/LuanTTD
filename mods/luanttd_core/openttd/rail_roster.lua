@@ -369,10 +369,13 @@ function R.quote(depot,owner,parts,opts)
     -- This stock row can be inspected/priced without licensing a live
     -- purchase until its actual freight orders and asset are mounted.
     if row.purchase_enabled==false and
-        not (row.stock_id==30 and opts.mount_oil_wagon==true and #parts==2 and R.freight_engine(stats.parts[1].stock_id)) and
-        not (row.stock_id==32 and opts.mount_goods_wagon==true and #parts==2 and R.freight_engine(stats.parts[1].stock_id)) and
+        not (row.stock_id==30 and opts.mount_oil_wagon==true and
+            (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id))) and
+        not (row.stock_id==32 and opts.mount_goods_wagon==true and
+            (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id))) and
         not (R.electric_engine(row.stock_id) and opts.mounted_electric and opts.mounted_electric[row.stock_id]==true and
-            index==1 and #parts==2 and supported_single_wagon(stats.parts[2].stock_id)) and
+            index==1 and (opts.separate_depot_purchase and #parts==1 or
+              #parts==2 and supported_single_wagon(stats.parts[2].stock_id))) and
         not (row.stock_id==11 and opts.mount_manley==true and stats.parts[1].stock_id==11 and
             (#parts==1 and #stats.parts==2 or #parts==2 and #stats.parts==3 and stats.parts[2].stock_id==27)) then
       return nil,"RAIL_VEHICLE_NOT_MOUNTED",index

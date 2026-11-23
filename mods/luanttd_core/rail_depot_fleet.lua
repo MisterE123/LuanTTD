@@ -1,8 +1,8 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- OpenTTD 14.1 public stock rail availability (engine.cpp), build checks
 -- (vehicle_cmd.cpp), and per-company train allocation (vehicle.cpp).
--- This is an owned-depot aggregate purchase with an explicit consist
--- layout, not a port of the stock loose-wagon autoattachment command.
+-- Separate purchases and ordinary depot assembly follow 16.0-RC1
+-- CmdBuildRailWagon, NormalizeTrainVehInDepot and CmdMoveRailVehicle.
 return function(Sim,Lab,Roster)
   local F={VERSION=1,MAX_POOL=0xFF000}
   local floor,min,max=math.floor,math.min,math.max
@@ -211,6 +211,7 @@ return function(Sim,Lab,Roster)
         count=count+1;used[record.unit_number]=true
       end
     end
+    for _,row in pairs(d.loose or {}) do parts=parts+#row.parts end
     if hooks and hooks.other_pool_count then parts=parts+hooks.other_pool_count(s)
     else for _ in pairs(s.fleet or {}) do parts=parts+1 end end
     if hooks and hooks.other_company_units then
@@ -257,14 +258,18 @@ return function(Sim,Lab,Roster)
     end
     return ids
   end
-  function F.quote(s,owner,depot_id,selection,hooks)
+  local function quote(s,owner,depot_id,selection,hooks,separate)
     local d=state(s)
     if not d then return nil,"RAIL_FLEET_UNAVAILABLE" end
     local company=s.companies[owner]
     if not company then return nil,"RAIL_COMPANY_REQUIRED" end
     local at=depot(s,depot_id)
     if not at or at.owner~=owner then return nil,"INVALID_OWNED_DEPOT" end
-    local ids,why,index=layout(selection)
+    local ids,why,index
+    if separate then
+      if not Roster.entry(selection) then return nil,"UNKNOWN_RAIL_VEHICLE" end
+      ids={selection}
+    else ids,why,index=layout(selection) end
     if not ids then return nil,why,index end
     local limits=read_limits(d,s,owner,hooks)
     local opts=config_options(d,s,owner,hooks)
@@ -286,6 +291,7 @@ return function(Sim,Lab,Roster)
       end
     end
     opts.cash=company.cash
+    opts.separate_depot_purchase=separate
     opts.vehicle_slots,opts.free_locomotive_numbers=limits.vehicle_slots,limits.free_locomotive_numbers
     local q
     q,why,index=Roster.quote(at,owner,ids,opts)
@@ -293,14 +299,108 @@ return function(Sim,Lab,Roster)
     q.stock_ids,q.expect_id,q.unit_number,q.depot_dir=ids,d.next_id,limits.unit_number,at.dir
     q.depot_railtype=at.railtype
     q.calendar_day=today(s,d)
+    q.separate=separate and true or nil
+    q.expect_arrangement=d.arrangement or 0
     return q
+  end
+  function F.quote(s,owner,depot_id,selection,hooks) return quote(s,owner,depot_id,selection,hooks) end
+  function F.quote_part(s,owner,depot_id,id,hooks) return quote(s,owner,depot_id,id,hooks,true) end
+  local function reindex(record)
+    local front,rear
+    record.stock_ids={}
+    for n,part in ipairs(record.parts) do
+      if part.role~="rear" then record.stock_ids[#record.stock_ids+1]=part.stock_id end
+      if part.role=="front" then front=n elseif part.role=="rear" then rear=n end
+    end
+    if front and rear then
+      record.parts[front].mate=rear
+      record.parts[rear].mate=front
+    end
+  end
+  local function ensure_ids(record)
+    local parts={}
+    for i,part in ipairs(record.parts) do
+      local p=clone(part)
+      -- Old aggregate receipts have no per-body ID. Their saved
+      -- allocation and physical slot yield stable earlier identities.
+      p.body_id=p.body_id or record.id*256+i
+      parts[i]=p
+    end
+    return parts
+  end
+  local function saved_parts(record)
+    local copy=clone(record)
+    copy.parts=ensure_ids(record)
+    return copy
+  end
+  local function loose_rows(d,depot_id,owner)
+    local rows={}
+    for _,r in pairs(d.loose or {}) do
+      if r.owner==owner and r.depot==depot_id then rows[#rows+1]=r end
+    end
+    table.sort(rows,function(a,b)return a.id<b.id end)
+    return rows
+  end
+  local function total(parts)
+    local price=0
+    for _,p in ipairs(parts) do price=price+p.purchase_value end
+    return price
+  end
+  local function combine(a,b,after)
+    local out={}
+    for i,p in ipairs(a) do
+      -- Stock dual-head normalization keeps the partner behind wagons.
+      if i==after+1 or i==#a and p.role=="rear" and after==i then
+        for _,q in ipairs(b) do out[#out+1]=q end
+      end
+      out[#out+1]=p
+    end
+    if after==#a and (#a==0 or a[#a].role~="rear") then
+      for _,q in ipairs(b) do out[#out+1]=q end
+    end
+    return out
+  end
+  local function normalized(record,parts)
+    local copy=clone(record)
+    copy.parts=parts
+    reindex(copy)
+    return copy
+  end
+  local function valid_parts(d,s,record,parts,hooks)
+    if #parts==0 then return true end
+    local r=normalized(record,parts)
+    local opts=config_options(d,s,nil,hooks)
+    local stat,why=Roster.stats(r.parts,opts)
+    if not stat then return nil,why end
+    if stat.too_long then return nil,"TRAIN_TOO_LONG" end
+    return r
+  end
+  local function set_loose(d,depot_id,owner,parts)
+    if #parts==0 then return end
+    local r={id=parts[1].body_id,depot=depot_id,owner=owner,status="loose",parts=parts}
+    d.loose=d.loose or {}
+    d.loose[r.id]=r
+    return r
+  end
+  local function unique_engine(d,owner,depot_id)
+    local found
+    for _,r in pairs(d.units) do
+      if r.owner==owner and r.depot==depot_id and r.status=="depot" then
+        if found then return nil end
+        found=r
+      end
+    end
+    return found
   end
   function F.commit(s,owner,q,hooks)
     local d=state(s)
     if not d then return nil,"RAIL_FLEET_UNAVAILABLE" end
     if type(q)~="table" or q.kind~="rail_purchase" or q.owner~=owner or q.expect_id~=d.next_id or
         d.units[d.next_id]~=nil then return nil,"STALE_RAIL_FLEET_QUOTE" end
-    local fresh,why,i=F.quote(s,owner,q.depot,q.stock_ids,hooks)
+    if q.separate and (type(q.stock_ids)~="table" or #q.stock_ids~=1 or q.expect_arrangement~=(d.arrangement or 0)) then
+      return nil,"STALE_RAIL_FLEET_QUOTE"
+    end
+    local fresh,why,i=quote(s,owner,q.depot,q.separate and q.stock_ids[1] or q.stock_ids,hooks,q.separate==true)
     if not fresh then return nil,why,i end
     if q.price~=fresh.price or q.unit_number~=fresh.unit_number or q.depot_dir~=fresh.depot_dir or
         q.depot_railtype~=fresh.depot_railtype or q.preview~=fresh.preview then return nil,"STALE_RAIL_FLEET_QUOTE" end
@@ -311,7 +411,7 @@ return function(Sim,Lab,Roster)
       depot_dir=fresh.depot_dir,stock_ids=clone(fresh.stock_ids),status="depot",purchase_day=s.day,
       price=fresh.price,expense="new_vehicles",roster_preview=fresh.preview,parts={}}
     for n,row in ipairs(fresh.stats.parts) do
-      local part={stock_id=row.stock_id,cargo_count=0,build_year=date_parts(fresh.calendar_day),
+      local part={stock_id=row.stock_id,body_id=r.id*256+n,cargo_count=0,build_year=date_parts(fresh.calendar_day),
         purchase_value=row.price,last_service_calendar=fresh.calendar_day}
       if row.multiheaded then part.role,part.mate=row.role,row.mate end
       if row.kind=="engine" then
@@ -325,29 +425,152 @@ return function(Sim,Lab,Roster)
     -- No callbacks or fallible work beyond this point. The same world
     -- snapshot persists the cash ledger, purchase receipt and identity.
     c.cash,c.expense,c.month_exp=c.cash-r.price,c.expense+r.price,c.month_exp+r.price
-    d.units[r.id],d.next_id=r,r.id+1
+    d.next_id=r.id+1
+    if q.separate then d.arrangement=(d.arrangement or 0)+1 end
+    if q.separate and fresh.stats.engine_count==0 then
+      local body=r.parts[1]
+      local chain={body}
+      for _,loose in ipairs(loose_rows(d,r.depot,owner)) do
+        if loose.parts[1].stock_id==body.stock_id then
+          local p=combine(ensure_ids(loose),chain,#loose.parts)
+          if valid_parts(d,s,loose,p,hooks) then d.loose[loose.id]=nil;chain=p;break end
+        end
+      end
+      -- Command construction first creates a free wagon; the stock GUI
+      -- callback then tries only this body on the sole stopped locomotive.
+      local engine=unique_engine(d,owner,r.depot)
+      local target=engine and valid_parts(d,s,engine,combine(ensure_ids(engine),{body},#engine.parts),hooks)
+      if target then
+        table.remove(chain,#chain)
+        target.price=engine.price+body.purchase_value
+        d.units[engine.id]=target
+      end
+      local loose=set_loose(d,r.depot,owner,chain)
+      return {kind="wagon",stock_id=body.stock_id,body_id=body.body_id,price=r.price,
+        coupled_to=target and target.unit_number,loose_id=loose and loose.id}
+    end
+    if q.separate then
+      -- Existing free chains are visited in head ID order. Each insert
+      -- goes after the engine (not the tail), and the first failure ends
+      -- normalization. The engine's paid purchase remains successful.
+      for _,loose in ipairs(loose_rows(d,r.depot,owner)) do
+        local part=ensure_ids(loose)
+        local joined=valid_parts(d,s,r,combine(ensure_ids(r),part,1),hooks)
+        if not joined then break end
+        joined.price=r.price+total(part)
+        r=joined
+        d.loose[loose.id]=nil
+      end
+    end
+    d.units[r.id]=r
+    r.purchase_charge=fresh.price
     return clone(r)
   end
   function F.get(s,owner,id)
     local d=state(s)
     local r=d and d.units[id]
-    if r and r.owner==owner then return clone(r) end
+    if r and r.owner==owner then return saved_parts(r) end
   end
   function F.list(s,owner,depot_id)
     local out={}
     local d=state(s)
     if not d then return out end
     for _,r in pairs(d.units) do
-      if r.owner==owner and (not depot_id or r.depot==depot_id) then out[#out+1]=clone(r) end
+      if r.owner==owner and (not depot_id or r.depot==depot_id) then out[#out+1]=saved_parts(r) end
     end
     table.sort(out,function(a,b) return a.unit_number<b.unit_number end)
     return out
+  end
+  function F.loose(s,owner,depot_id)
+    local out={}
+    local d=state(s)
+    if d then
+      for _,r in ipairs(loose_rows(d,depot_id,owner)) do out[#out+1]=saved_parts(r) end
+    end
+    return out,d and d.arrangement or 0
+  end
+  -- Ordinary MoveRailVehicle, no executable callbacks or NewGRF roles.
+  -- A destination body means insert AFTER it. Nil behaves like dropping
+  -- onto empty depot space: FindGoodVehiclePos tries a homogeneous loose
+  -- row first, otherwise the selected wagon(s) start a new row.
+  function F.move_wagon(s,owner,depot_id,from,to,whole_tail,revision,hooks)
+    local d=state(s)
+    local at=depot(s,depot_id)
+    if not d or not at or at.owner~=owner then return nil,"INVALID_OWNED_DEPOT" end
+    if revision~=(d.arrangement or 0) then return nil,"STALE_RAIL_FLEET_QUOTE" end
+    local loose=loose_rows(d,depot_id,owner)
+    local function by_body(id)
+      if not uint(id,(U32-1)*256+255) or id==0 then return end
+      local function find(row,is_loose)
+        if row.owner~=owner or row.depot~=depot_id or not is_loose and row.status~="depot" then return end
+        for i,p in ipairs(row.parts) do
+          if id==(p.body_id or row.id*256+i) then return row,i,is_loose end
+        end
+      end
+      for _,r in ipairs(loose) do
+        local a,i,free=find(r,true)
+        if a then return a,i,free end
+      end
+      for _,r in pairs(d.units) do
+        local a,i,free=find(r,false)
+        if a then return a,i,free end
+      end
+    end
+    local src,index,src_free=by_body(from)
+    if not src or Roster.entry(src.parts[index].stock_id).kind~="wagon" then return nil,"SELECT_DEPOT_WAGON" end
+    local dst,after,dst_free
+    if to~=nil then
+      dst,after,dst_free=by_body(to)
+      if not dst then return nil,"SELECT_DEPOT_DESTINATION" end
+    else
+      local kind=src.parts[index].stock_id
+      for _,r in ipairs(loose) do
+        local same=true
+        for _,p in ipairs(r.parts) do if p.stock_id~=kind then same=false;break end end
+        if same then dst,after,dst_free=r,1,true;break end
+      end
+    end
+    if src==dst and (index==after or whole_tail or after==index-1) then return true,"WAGON_UNCHANGED" end
+    local left,moved={},{}
+    local last=whole_tail and #src.parts or index
+    for i,p in ipairs(ensure_ids(src)) do
+      if i>=index and i<=last and p.role~="rear" then moved[#moved+1]=p
+      else left[#left+1]=p end
+    end
+    local a,b,why
+    if src==dst then
+      if after>index then after=after-1 end
+      a,why=valid_parts(d,s,src,combine(left,moved,after),hooks)
+      if not a then return nil,why end
+    else
+      a,why=valid_parts(d,s,src,left,hooks)
+      if not a then return nil,why end
+      b,why=valid_parts(d,s,dst or src,combine(dst and ensure_ids(dst) or {},moved,after or 0),hooks)
+      if not b then return nil,why end
+    end
+    if a~=true and not src_free then a.price=src.price-(src==dst and 0 or total(moved)) end
+    if b and dst and not dst_free then b.price=dst.price+total(moved) end
+    if src_free then d.loose[src.id]=nil end
+    if dst and dst~=src and dst_free then d.loose[dst.id]=nil end
+    if src_free then set_loose(d,depot_id,owner,left)
+    else d.units[src.id]=a end
+    if src==dst and src_free then
+      -- Keep the revised row, which can now have a different head ID.
+      if #left>0 then d.loose[left[1].body_id]=nil end
+      set_loose(d,depot_id,owner,a.parts)
+    elseif b then
+      if dst and not dst_free then d.units[dst.id]=b
+      else set_loose(d,depot_id,owner,b.parts) end
+    end
+    d.arrangement=(d.arrangement or 0)+1
+    return true,"WAGON_MOVED"
   end
   function F.occupies_depot(s,depot_id)
     local d=state(s)
     for _,r in pairs(d and d.units or {}) do
       if r.status=="depot" and r.depot==depot_id then return true end
     end
+    for _,r in pairs(d and d.loose or {}) do if r.depot==depot_id then return true end end
     return false
   end
   function F.prepare_dispatch(s,owner,id,hooks)
@@ -382,8 +605,10 @@ return function(Sim,Lab,Roster)
   function F.bind_dispatch(s,owner,id,run_id)
     local ok,why=F.can_bind_dispatch(s,owner,id,run_id)
     if not ok then return nil,why end
-    local r=state(s).units[id]
+    local d=state(s)
+    local r=d.units[id]
     r.status,r.run_id="dispatched",run_id
+    d.arrangement=(d.arrangement or 0)+1
     return true
   end
   return F

@@ -33,6 +33,7 @@ local s=Sim.new(1751)
 local mode=arg and arg[1]
 local turnout=mode=="depot_turnout"
 local mixed=mode=="mixed_signals"
+local two_coaches=mode=="two_coaches"
 local Block=mixed and port("rail_block_signals",T,Signal) or nil
 local turnout_decisions={}
 local turnout_id
@@ -113,7 +114,7 @@ else
 end
 assert(Lab.station(s,owner,id(11),id(12)))
 assert(Lab.station(s,owner,id(22),id(24)))
-if mode~="signal_free" and not turnout and not mixed then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
+if mode~="signal_free" and not turnout and not mixed and not two_coaches then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
 local west,east=s.tiles[id(11)].rail_station_id,s.tiles[id(22)].rail_station_id
 s.sites[1].tile=id(10,13);s.sites[2].tile=id(24,13)
 for _,z in ipairs({7,8,12,13}) do
@@ -130,6 +131,54 @@ if mixed then
   assert(Run.place_signal(s,owner,id(18),8,Signal.PBS))
 end
 assert(Owned.initialize(s,{starting_year=1950,generation_seed=s.seed,startup_random=9001}))
+if two_coaches then
+  local before=company.cash
+  local function buy(stock)
+    local quote=assert(Owned.quote_part(s,owner,start_depot,stock))
+    return assert(Owned.commit(s,owner,quote))
+  end
+  local u=buy(0)
+  local a,b=buy(27),buy(27)
+  u=assert(Owned.get(s,owner,u.id))
+  assert(#u.parts==3 and u.parts[2].body_id==a.body_id and u.parts[3].body_id==b.body_id)
+  assert(company.cash==before-u.price)
+  local ok,reason,run=Owned.start(s,owner,u.id,east,west)
+  assert(ok,reason)
+  assert(run.passenger_coaches==2 and run.total_length==24 and #run.consist.parts==3)
+  local proof={units=false,reversed=false,reloaded=false}
+  local function copy(t)
+    if type(t)~="table" then return t end
+    local out={}
+    for k,v in pairs(t) do out[k]=copy(v) end
+    return out
+  end
+  for i=1,180 do
+    Sim.daily(s)
+    assert(not Run.current(s).failure,Run.current(s).failure)
+    local st=assert(Sim.rail_paid_status(s,u.id))
+    assert(st.capacity==80 and #st.carrying_parts==2)
+    assert(Motion.check_spacing(Run.board(s),run.consist))
+    local p,q=st.carrying_parts[1],st.carrying_parts[2]
+    if st.loading then
+      assert(p.tile==run.consist.parts[2].tile and q.tile==run.consist.parts[3].tile)
+      if p.onboard>0 and q.onboard>0 then
+        assert(run.consist_mass==97+math.floor(p.onboard/16)+math.floor(q.onboard/16))
+        proof.units=true
+        if not proof.reloaded then
+          s=copy(s);mount()
+          run=assert(Run.current_paid(s,u.id))
+          proof.reloaded=true
+        end
+      end
+    end
+    if run.shuttle.reversals>=2 and st.fare>0 then
+      assert(proof.units and proof.reloaded)
+      print(("PASS purchased engine and two individual coaches use real 80-seat rolling stock, per-coach mass, paid return and save: $%d"):format(st.fare))
+      return
+    end
+  end
+  error("Two-coach stock service never paid and reversed")
+end
 local base=company.cash
 local coal=assert(Owned.commit(s,owner,assert(Owned.quote(s,owner,start_depot,{0,29}))))
 assert(not Owned.start(s,owner,coal.id,east,west))

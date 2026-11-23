@@ -1,5 +1,6 @@
 local turnout=core.settings:get_bool("luanttd_qa_depot_turnout",false)
-local signal_free=turnout or core.settings:get_bool("luanttd_qa_signal_free",false)
+local two_coaches=core.settings:get_bool("luanttd_qa_two_coaches",false)
+local signal_free=turnout or two_coaches or core.settings:get_bool("luanttd_qa_signal_free",false)
 -- Appended only in isolated native QA. Purchase, move, board, save,
 -- reload, turn the true steam consist and deliver from the same receipt.
 local jubilee=core.settings:get_bool("bayline_native_jubilee_probe",false)
@@ -21,7 +22,7 @@ local design=sh40 and {24,48804,176,984000,"sh_40","bl_rail_sh_40"}
   or jubilee and {8,22241,112,672000,"jubilee","bl_rail_chaney_jubilee"}
   or {0,12866,64,280000,"steam","bl_rail_kirby_paul_tank"}
 local engine,cost,vmax,annual,kind,art=unpack(design)
-local physical_count=coach and 3 or 2
+local physical_count=(coach or two_coaches) and 3 or 2
 local capacity=coach and 116 or 76
 local roles=coach and {"front","carriage","rear"} or {"front","rear"}
 local owner="Owned Rail QA"
@@ -126,6 +127,13 @@ local function stamp()
     assert(vector.distance(cabs[1]:get_pos(),cabs[2]:get_pos())>.95,"The two physical bodies overlap")
   end
   if qa then
+    if two_coaches then
+      cost=qa.purchase_cost
+      local st=assert(Sim.rail_paid_status(S,qa.unit))
+      assert(st.capacity==80 and st.carrying_parts[1].onboard==qa.coach1 and st.carrying_parts[2].onboard==qa.coach2)
+      assert(qa.coach1>0 and qa.coach2>0)
+      assert(#current().consist.parts==3)
+    end
     if lookahead then forward_claims() end
     local record=assert(Owned.get(S,owner,qa.unit))
     assert(record.status=="dispatched" and record.id==current().fleet_id and record.parts[1].stock_id==engine)
@@ -235,6 +243,11 @@ local function stamp()
       core.log("action",("POWERED_BRIDGE_NATIVE_PASS engine=%d ascent_fit_before=%d return_fit_after=%d min=%.3f max=%.3f"):
         format(engine,qa.fits,evidence.fits,evidence.low,evidence.high))
     end
+    if two_coaches then
+      assert(#Owned.get(S,owner,qa.unit).parts==3)
+      for i=1,3 do entity_at(current(),i,1) end
+      core.log("action",("OWNED_RAIL_TWO_COACHES_NATIVE_PASS separately purchased 2 × 40 seats, two reversals, fare=$%d"):format(fare))
+    end
     core.log("action",("OWNED_RAIL_LIVE_NATIVE_PASS engine=%d fare=$%d operating_cost=$%d peak=%d bodies=%d"):
       format(engine,fare,after.running_expense,qa.peak,physical_count))
     core.request_shutdown("Native steam ride survived restart and earned its first fare",false,0)
@@ -323,7 +336,19 @@ local function stamp()
   end
   local q=assert(Owned.quote(S,owner,depot,manley and not coach and {engine} or {engine,27}))
   local initial_cash=c.cash
-  local r=assert(Owned.commit(S,owner,q))
+  local r
+  if two_coaches then
+    local function buy(id)
+      return assert(Owned.commit(S,owner,assert(Owned.quote_part(S,owner,depot,id))))
+    end
+    r=buy(0)
+    local a,b=buy(27),buy(27)
+    r=assert(Owned.get(S,owner,r.id))
+    assert(#r.parts==3 and r.parts[2].body_id==a.body_id and r.parts[3].body_id==b.body_id)
+    cost=r.price
+  else
+    r=assert(Owned.commit(S,owner,q))
+  end
   assert(r.price==cost and c.cash==initial_cash-r.price)
   if branch then
     S.tiles[id(25)]={owner=owner,rail_tracks=1,build="stock_rail",h=0,terrain="grass",variant=1}
@@ -367,6 +392,7 @@ local function stamp()
     local s=assert(Sim.rail_paid_status(S))
     local both=not manley or (s.carrying_parts[1].onboard>0 and
       s.carrying_parts[physical_count].onboard>0 and (not coach or s.carrying_parts[2].onboard>0))
+    if two_coaches then both=s.carrying_parts[1].onboard>0 and s.carrying_parts[2].onboard>0 end
     if s.loading and s.onboard>0 and both then
       if lookahead then forward_claims() end
       for i=1,physical_count do entity_at(current(),i,1) end
@@ -377,7 +403,9 @@ local function stamp()
         running_expense=bill.running_expense,cost_fp=bill.running_cost_fp,fraction=c.stock_money_fraction,
         charged_running_ticks=bill.charged_running_ticks,peak=peak,
         front=manley and s.carrying_parts[1].onboard,rear=manley and s.carrying_parts[physical_count].onboard,
-        coach=coach and s.carrying_parts[2].onboard,exit_curve=turnout and choices[4]}
+        coach=coach and s.carrying_parts[2].onboard,exit_curve=turnout and choices[4],
+        coach1=two_coaches and s.carrying_parts[1].onboard,coach2=two_coaches and s.carrying_parts[2].onboard,
+        purchase_cost=r.price}
       if bridge then
         assert(evidence.before[id(17)],"No eastbound native contact across the bridge center")
         S.rail_owned_native_qa.fits=evidence.fits

@@ -2137,6 +2137,10 @@ function M.ferry_loading_events(s)
   if not paid_ferry_runs[s] then return {} end
   return paid_ferry.take_effects(s,"ship")
 end
+function M.commercial_passengers_waiting(s,mode,id)
+  if not paid_ferry or not id then return 0 end
+  return paid_ferry.terminal_waiting(s,mode,id)
+end
 function M.mount_paid_rail(s,Run)
   paid_rail_runs[s]=Run
   passenger_modules()

@@ -57,6 +57,24 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     if missing then return nil,missing end
     return q,why,index
   end
+  function O.quote_part(s,owner,depot,stock_id,hooks)
+    if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
+    local q,why=Fleet.quote_part(s,owner,depot,stock_id,mounted_hooks(hooks))
+    local missing=q and missing_model(q.stock_ids)
+    if missing then return nil,missing end
+    return q,why
+  end
+  function O.loose_wagons(s,owner,depot) return Fleet.loose(s,owner,depot) end
+  function O.move_wagon(s,owner,depot,from,to,tail,revision,hooks)
+    if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
+    return Fleet.move_wagon(s,owner,depot,from,to,tail,revision,hooks)
+  end
+  function O.passenger_consist(unit)
+    if Run.owned_passenger_consist then return Run.owned_passenger_consist(unit) end
+    local id=unit.stock_ids[1]
+    return Run.owned_passenger_engine(id) and
+      (#unit.stock_ids==1 and id==11 or #unit.stock_ids==2 and unit.stock_ids[2]==27)
+  end
   function O.commit(s,owner,quote,hooks)
     if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
     local missing=type(quote)=="table" and missing_model(quote.stock_ids)
@@ -72,9 +90,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     end
     local unit,why=Fleet.prepare_dispatch(s,owner,id,hooks)
     if not unit then return false,why end
-    local id0=unit.stock_ids[1]
-    local recipe=#unit.stock_ids==1 and id0==11 or #unit.stock_ids==2 and unit.stock_ids[2]==27
-    if not recipe or not Run.owned_passenger_engine(id0) then
+    if not O.passenger_consist(unit) then
       return false,"Choose a supported passenger consist with its original model."
     end
     local map=s.stock_rail_stations or {}

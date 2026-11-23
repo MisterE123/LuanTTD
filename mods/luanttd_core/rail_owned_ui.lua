@@ -5,6 +5,7 @@ return function(api,status)
   local U={}
   local panels,orders={},{}
   local form="luanttd_core:rail_fleet"
+  local serial=0
   local esc=core.formspec_escape
   local model_short={[0]="Kirby",[8]="Jubilee",[9]="Ginzu A4",[10]="SH 8P",[11]="Manley–Morel",[13]="Hendry 25",[14]="UU 37",[15]="Floss 47",[23]="SH '30'",[24]="SH '40'"}
   local orderable={{id=8,key="purchase_jubilee"},{id=9,key="purchase_a4"},{id=10,key="purchase_sh_8p"},{id=11,key="purchase_manley",dmu=true},{id=13,key="purchase_hendry_25"},{id=14,key="purchase_uu_37"},{id=15,key="purchase_floss"},
@@ -58,6 +59,12 @@ return function(api,status)
     STALE_RAIL_FLEET_QUOTE="The depot or ledger changed. Review the new price.",
     NOT_ENOUGH_MONEY="Your company cannot afford this train.",
     NOT_ENOUGH_CASH="Your company cannot afford this train.",
+    TRAIN_TOO_LONG="The receiving train or row would exceed the train length limit.",
+    TOO_MANY_VEHICLES_IN_GAME="The vehicle pool or company locomotive limit is full.",
+    SELECT_DEPOT_WAGON="Choose a wagon in this depot. Trains in service cannot be rearranged.",
+    SELECT_DEPOT_DESTINATION="Choose an insertion point in this depot.",
+    WAGON_UNCHANGED="That wagon is already in the chosen position.",
+    WAGON_MOVED="Wagons moved. No purchase or operating fee.",
   }
   local function message(why)
     return errors[why] or tostring(why or "The stock rail command did not go through.")
@@ -148,7 +155,8 @@ return function(api,status)
     local extras=#alternatives
     local freight_space=#freight_ids>1 and .73 or 0
     local height=math.max(0,extras-1)*.65+freight_space
-    local b={("formspec_version[7]size[10,%g]bgcolor[#152334;false]"):format(7.2+height),
+    local can_assemble=owned.quote_part and owned.loose_wagons and owned.move_wagon
+    local b={("formspec_version[7]size[10,%g]bgcolor[#152334;false]"):format(7.2+height+(can_assemble and .67 or 0)),
       "style_type[button;bgimg=bl_button.png;bgimg_middle=6;border=false;textcolor=#E5ECEA]",
       "style_type[label;textcolor=#E5ECEA]"}
     local function lab(x,y,text) b[#b+1]=("label[%g,%g;%s]"):format(x,y,esc(text)) end
@@ -242,22 +250,124 @@ return function(api,status)
         end
       else
         local engine_name=model_short[u.stock_ids[1]] or "Stock engine"
-        local stock=coal and (engine_name.." + coal wagon") or f and (engine_name.." + "..f.short) or
-          u.stock_ids[1]==11 and (u.stock_ids[2]==27 and "Manley–Morel DMU + carriage (116 seats)" or "Manley–Morel DMU (76 seats)") or
-          (model_short[u.stock_ids[1]] or "Stock engine").." + carriage"
+        local stock
+        if #u.stock_ids<=2 then
+          stock=coal and (engine_name.." + coal wagon") or f and (engine_name.." + "..f.short) or
+            u.stock_ids[1]==11 and (u.stock_ids[2]==27 and "Manley–Morel DMU + carriage (116 seats)" or "Manley–Morel DMU (76 seats)") or
+            (#u.stock_ids==1 and (engine_name.." locomotive only") or engine_name.." + carriage")
+        else stock=engine_name.." + "..(#u.stock_ids-1).." cars" end
         lab(.42,shift,("Train %d  ·  %s  ·  %s"):format(u.unit_number,stock,money(u.price)))
-        if f then
+        local ready=#u.stock_ids==2 and coal or owned.passenger_consist and owned.passenger_consist(u)
+          or not owned.passenger_consist and (#u.stock_ids==2 or u.stock_ids[1]==11)
+        if f and #u.stock_ids==2 then
           if can_order(u,cargo) then
             button(shift+.27,"unit_"..u.id,"Choose "..f.source.." and "..f.sink.." orders")
           else lab(.42,shift+.38,f.title.." orders are unavailable for this train.") end
-        elseif not coal or api.rail_coal_tools then
+        elseif ready and (not coal or api.rail_coal_tools) then
           button(shift+.27,"unit_"..u.id,coal and "Choose mine and power-station orders" or "Choose its two platform orders")
+        elseif can_assemble then
+          lab(.42,shift+.36,"Use the depot assembly panel to arrange its wagons.")
         end
       end
     end
     if #units>limit then lab(.42,5.18+height,"Additional consists remain saved in this depot.") end
     if note then lab(.42,5.64+height,note) end
-    button(6.38+height,"back","Back to world")
+    if can_assemble then button(6.38+height,"assemble","Buy locomotives and wagons separately") end
+    button(6.38+height+(can_assemble and .67 or 0),"back","Back to world")
+    core.show_formspec(n,form,table.concat(b))
+    return true
+  end
+  -- Formspec doesn't expose the stock depot's drag widget. Select a
+  -- real car then an insertion point to issue the same MoveRailVehicle
+  -- operation (including the Ctrl/whole trailing chain equivalent).
+  function U.assemble(p,id,prior,note)
+    local n=p:get_player_name()
+    if not owned_depot(n,id) then return false end
+    local owned=api.rail_owned
+    local rows,revision=owned.loose_wagons(S,n,id)
+    local units=owned.list(S,n,id)
+    local cat,engines,wagons={}, {}, {}
+    for _,r in ipairs(owned.catalog(S) or {}) do
+      cat[r.stock_id]=r
+      if (r.kind=="wagon" and (r.stock_id==27 or r.stock_id==29 or r.stock_id==30 or r.stock_id==32)) or r.passenger_model_ready then
+        local q=owned.quote_part(S,n,id,r.stock_id)
+        if q then
+          local target=r.kind=="wagon" and wagons or engines
+          target[#target+1]={name=r.name,quote=q,id=r.stock_id}
+        end
+      end
+    end
+    local function find(list,field,value)
+      for i,row in ipairs(list) do if row[field]==value then return i end end
+      return 1
+    end
+    local bodies,destinations={},{}
+    local function row(r,label)
+      for i,part in ipairs(r.parts) do
+        if part.role~="rear" then
+          local stock=cat[part.stock_id] or {}
+          local text=label.."  "..i..". "..(stock.name or model_short[part.stock_id] or ("#"..part.stock_id))
+          local x={id=part.body_id,name=text,unit=r.status=="depot" and r.id or nil}
+          destinations[#destinations+1]=x
+          if r.status=="loose" or i>1 then bodies[#bodies+1]=x end
+        end
+      end
+    end
+    for _,r in ipairs(units) do if r.status=="depot" then row(r,"Train "..r.unit_number.." ·") end end
+    for i,r in ipairs(rows) do row(r,"Loose row "..i.." ·") end
+    local a={depot=id,assembly=true,revision=revision,tail=prior and prior.tail or false,
+      engines=engines,wagons=wagons,bodies=bodies,destinations=destinations}
+    a.engine=find(engines,"id",prior and prior.engines[prior.engine] and prior.engines[prior.engine].id)
+    a.wagon=find(wagons,"id",prior and prior.wagons[prior.wagon] and prior.wagons[prior.wagon].id)
+    a.body=find(bodies,"id",prior and prior.bodies[prior.body] and prior.bodies[prior.body].id)
+    a.target=find(destinations,"id",prior and prior.destinations[prior.target] and prior.destinations[prior.target].id)
+    serial=serial+1
+    a.token=serial;panels[n]=a
+    local b={"formspec_version[7]size[13,8.2]bgcolor[#152334;false]",
+      "style_type[button;bgimg=bl_button.png;bgimg_middle=6;border=false;textcolor=#E5ECEA]"}
+    local function lab(y,t) b[#b+1]=("label[.42,%g;%s]"):format(y,esc(t)) end
+    local function button(y,key,t,x,w)
+      b[#b+1]=("button[%g,%g;%g,.62;assembly_%d_%s;%s]"):format(x or .42,y,w or 12.16,a.token,key,esc(t))
+    end
+    local function choose(y,key,values,which)
+      if #values==0 then return end
+      local choices={}
+      for _,e in ipairs(values) do
+        choices[#choices+1]=esc(e.name..(e.quote and (" · "..money(e.quote.price)) or ""))
+      end
+      b[#b+1]=("dropdown[.42,%g;8.74,.56;assembly_%d_%s;%s;%d;true]"):format(y,a.token,key,table.concat(choices,","),which)
+    end
+    lab(.46,"Rail depot  /  Separate purchases and wagon assembly")
+    lab(1.00,"Stock purchases")
+    if #engines>0 then
+      choose(1.25,"engine",engines,a.engine);button(1.22,"buy_engine","Buy locomotive",9.35,3.23)
+    else lab(1.52,"No affordable, compatible locomotive on sale at this depot.") end
+    if #wagons>0 then
+      choose(2.00,"wagon",wagons,a.wagon);button(1.97,"buy_wagon","Buy one wagon",9.35,3.23)
+    else lab(2.27,"No affordable compatible wagons on sale at this depot.") end
+    lab(2.87,"Move a wagon  /  Choose a car, then where it should go")
+    if #destinations>0 then
+      choose(3.90,"target",destinations,a.target)
+      b[#b+1]="label[9.4,4.17;Insert after]"
+      local selected=destinations[a.target]
+      local unit=selected and selected.unit and owned.get(S,n,selected.unit)
+      local freight=unit and cargo_of(unit)
+      if unit and (freight and can_order(unit,freight) or #unit.stock_ids==2 and unit.stock_ids[2]==29 and api.rail_coal_tools
+          or owned.passenger_consist(unit)) then
+        a.order_unit=unit.id
+        button(5.84,"order","Set orders for the selected train")
+      end
+    end
+    if #bodies>0 then
+      choose(3.15,"body",bodies,a.body)
+      b[#b+1]=("label[9.4,3.42;Wagon to move]"..
+        "checkbox[.42,4.64;assembly_%d_tail;Move this wagon and all following wagons;%s]"):format(a.token,tostring(a.tail))
+      button(5.12,"move","Move after selected vehicle",.42,5.92)
+      button(5.12,"loose","Move to loose wagons",6.56,6.02)
+    else lab(3.51,"No wagons in the depot. Buy one or wait for a train to return.") end
+    if note then lab(6.81,note)
+    else lab(6.81,"New wagons join the only stopped train when possible; otherwise they stay loose.") end
+    button(7.29,"back","Return to trains and orders")
     core.show_formspec(n,form,table.concat(b))
     return true
   end
@@ -399,12 +509,80 @@ return function(api,status)
     orders[n]=nil;status(p,"Rail orders canceled before start.")
     return true
   end
+  local function begin_unit_order(p,panel,unit)
+    local n=p:get_player_name()
+    local cargo=cargo_of(unit)
+    local coal=#unit.stock_ids==2 and unit.stock_ids[2]==29
+    if unit.status~="depot" or unit.depot~=panel.depot or
+      (cargo and not can_order(unit,cargo)) or (coal and not api.rail_coal_tools) or
+      (not cargo and not coal and api.rail_owned.passenger_consist and not api.rail_owned.passenger_consist(unit)) then
+      return false
+    end
+    orders[n]={unit=unit.id,coal=coal,cargo=cargo}
+    status(p,stage(orders[n]))
+    panels[n]=nil;core.close_formspec(n,form)
+    if api.world and api.world.begin_order_selection then
+      api.world.begin_order_selection(p,"rail",coal and "Coal train orders" or cargo and "Freight train orders" or "Passenger train orders")
+    end
+    return true
+  end
   core.register_on_player_receive_fields(function(p,key,f)
     if key~=form then return false end
     local n=p:get_player_name()
     local a=panels[n]
     if f.quit or f.back then panels[n]=nil;core.close_formspec(n,form);return true end
     if not a or not owned_depot(n,a.depot) then return true end
+    local owned=api.rail_owned
+    if a.assembly then
+      local prefix="assembly_"..a.token.."_"
+      local function field(k) return f[prefix..k] end
+      local updated,action=false,nil
+      for _,key in ipairs({"back","buy_engine","buy_wagon","move","loose","order"}) do
+        if field(key) then
+          if action then return true end
+          action=key
+        end
+      end
+      for _,pair in ipairs({{"engine","engines"},{"wagon","wagons"},{"body","bodies"},{"target","destinations"}}) do
+        local i=tonumber(field(pair[1]))
+        if i and a[pair[2]][i] and a[pair[1]]~=i then a[pair[1]]=i;updated=true end
+      end
+      if field("tail") and a.tail~=(field("tail")=="true") then a.tail=field("tail")=="true";updated=true end
+      if not action then return not updated or U.assemble(p,a.depot,a) end
+      if action=="back" then return U.open(p,a.depot) end
+      local item=action=="buy_wagon" and a.wagons[a.wagon] or action=="buy_engine" and a.engines[a.engine]
+      if item then
+        local bought,why=owned.commit(S,n,item.quote)
+        local note=message(why)
+        if bought then
+          api.save()
+          if bought.kind=="wagon" then
+            note="Purchased "..item.name.." for "..money(bought.price)..
+              (bought.coupled_to and (". Coupled to train "..bought.coupled_to..".") or ". Stored loose.")
+          else
+            note=("Purchased locomotive %d for %s."):format(bought.unit_number,money(bought.purchase_charge))
+          end
+        end
+        return U.assemble(p,a.depot,a,note)
+      end
+      if action=="move" or action=="loose" then
+        local src,dst=a.bodies[a.body],a.destinations[a.target]
+        if src and (dst or action=="loose") then
+          local ok,why=owned.move_wagon(S,n,a.depot,src.id,action=="move" and dst.id or nil,a.tail,a.revision)
+          if ok and why~="WAGON_UNCHANGED" then api.save() end
+          return U.assemble(p,a.depot,a,message(why))
+        end
+      end
+      if action=="order" and a.order_unit then
+        local selected=a.destinations[a.target]
+        local u=selected and selected.unit and selected.unit==a.order_unit and owned.get(S,n,a.order_unit)
+        if u then begin_unit_order(p,a,u) end
+      end
+      return true
+    end
+    if f.assemble and owned.quote_part and owned.loose_wagons and owned.move_wagon then
+      return U.assemble(p,a.depot)
+    end
     local selected=tonumber(f.freight_engine)
     if selected and a.freight_ids[selected] and a.freight_ids[selected]~=a.freight_pick then
       return U.open(p,a.depot,nil,a.freight_ids[selected])
@@ -419,7 +597,7 @@ return function(api,status)
     if receipt then
       local unit,why=api.rail_owned.commit(S,n,receipt)
       if unit then api.save() end
-      U.open(p,a.depot,unit and ("Purchased train "..unit.unit_number.." for "..money(unit.price)..".") or message(why),a.freight_pick)
+      U.open(p,a.depot,unit and ("Purchased train "..unit.unit_number.." for "..money(unit.purchase_charge or unit.price)..".") or message(why),a.freight_pick)
       return true
     end
     if f.park_coal and a.park then
@@ -437,14 +615,7 @@ return function(api,status)
         if not unit or unit.depot~=a.depot then return true end
         local cargo=cargo_of(unit)
         if unit.status=="depot" then
-          local coal=unit.stock_ids[2]==29
-          if (cargo and not can_order(unit,cargo)) or (coal and not api.rail_coal_tools) then return true end
-          orders[n]={unit=unit.id,coal=coal,cargo=cargo}
-          status(p,stage(orders[n]))
-          panels[n]=nil;core.close_formspec(n,form)
-          if api.world and api.world.begin_order_selection then
-            api.world.begin_order_selection(p,"rail",coal and "Coal train orders" or cargo and "Freight train orders" or "Passenger train orders")
-          end
+          begin_unit_order(p,a,unit)
         else
           if cargo then
             local c=commercial_status(unit,cargo)
