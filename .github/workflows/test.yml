@@ -15,6 +15,8 @@ jobs:
     name: Lua and headless Luanti
     runs-on: ubuntu-24.04
     container: debian:13
+    env:
+      LUA: lua5.1
     timeout-minutes: 12
     defaults:
       run:
