@@ -37,6 +37,7 @@ function T.new(width,depth,initialize,opts)
     unit_cost=opts.unit_cost or 1,
   }
   for z=1,depth+1 do
+    if opts.pulse and z%16==0 then opts.pulse((z-1)/depth) end
     for x=1,width+1 do
       local value=initialize and initialize(x,z) or 0
       assert(int(value) and value>=0 and value<=limit,"invalid initial corner height")

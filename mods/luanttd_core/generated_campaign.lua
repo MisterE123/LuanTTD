@@ -5,7 +5,7 @@ local M={}
 M.size=64
 local axis={[64]=true,[128]=true,[256]=true,[512]=true,[1024]=true,[2048]=true,[4096]=true}
 function M.supports_size(width,depth)
-  return axis[width]==true and axis[depth]==true and width*depth<=512*512
+  return axis[width]==true and axis[depth]==true
 end
 local function copy(t)
   local r={}
@@ -14,16 +14,18 @@ local function copy(t)
 end
 
 function M.landscape(Sim,Terrain,Generator,settings)
-  assert(M.supports_size(settings.width,settings.depth), "Stock campaign axes are powers of two from 64 to 4096, up to 262,144 tiles total.")
+  assert(M.supports_size(settings.width,settings.depth), "Stock campaign axes are powers of two from 64 to 4096.")
   local map,rivers=Generator.generate(settings)
   assert(map.width==settings.width and map.depth==settings.depth and type(map.rng_after)=="table")
   Sim.W,Sim.H=map.width,map.depth
   local s={version=1,seed=map.seed,day=0,tiles={},sites={},companies={},stations={},fleet={},
     next_station=1,next_vehicle=1,topology=0,subsidies={},speed=1,
     news={"A new transport charter opens in a generated region."}}
-  local corner=Terrain.new(Sim.W,Sim.H,map.corner,{freeform_edges=settings.freeform_edges,max_height=255})
+  local corner=Terrain.new(Sim.W,Sim.H,map.corner,{freeform_edges=settings.freeform_edges,max_height=255,
+    pulse=settings.corner_progress})
   s.corner_grid=corner
   for z=1,Sim.H do
+    if settings.host_progress and (z-1)%16==0 then settings.host_progress((z-1)/Sim.H) end
     for x=1,Sim.W do
       local kind,ground,clear_ground=Generator.describe(map.tile(x,z))
       local _,base=Terrain.tile(corner,x,z)
@@ -40,8 +42,10 @@ function M.landscape(Sim,Terrain,Generator,settings)
       s.tiles[Sim.id(x,z)]=t
     end
   end
+  local persisted=copy(settings)
+  persisted.progress,persisted.corner_progress,persisted.host_progress=nil,nil,nil
   s.stock_generated_profile={version=1,width=Sim.W,depth=Sim.H,terrain="terragenesis-14.1",
-    settings=copy(settings),terrain_rng=copy(map.rng_after),clear_attempts=map.clear_attempts}
+    settings=persisted,terrain_rng=copy(map.rng_after),clear_attempts=map.clear_attempts}
   if map.river_tileloop_cursor then
     s.stock_generated_profile.river_rng_cursor=map.river_tileloop_cursor
     s.stock_generated_profile.river_stats=rivers
@@ -179,12 +183,13 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   s.stock_town_growth=save
   profile.towns=#s.sites
   profile.town_settings=copy(settings)
+  profile.town_settings.progress=nil
   profile.town_rng=copy(state)
   s.passenger_rating_rng=copy(state)
   return result
 end
 
-function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_count,Timber,Oil,Farm)
+function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_count,Timber,Oil,Farm,progress)
   local profile=assert(s.stock_generated_profile)
   assert(profile.town_rng and not profile.industry_rng)
   if density==6 then
@@ -242,7 +247,7 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     return true
   end
   local result=Industry.generate(board,{random=function() return Generator.next_random(state) end,
-    density=density,custom_count=custom_count,commit=commit})
+    density=density,custom_count=custom_count,commit=commit,progress=progress})
   profile.industry_rng=copy(state)
   profile.industries=choices
   profile.timber_generation=Timber and true or nil
@@ -280,7 +285,7 @@ function M.landmarks(Sim,Terrain,s,Generator,Objects,date)
   return result
 end
 
-function M.forests(Sim,Terrain,s,Generator,Trees,tree_placer)
+function M.forests(Sim,Terrain,s,Generator,Trees,tree_placer,pulse)
   local profile=assert(s.stock_generated_profile)
   assert(not profile.forest,"Stock forests should be generated once")
   local start=profile.object_rng or profile.industry_rng or profile.town_rng
@@ -295,8 +300,11 @@ function M.forests(Sim,Terrain,s,Generator,Trees,tree_placer)
       bridge_above=s.bridge_above and s.bridge_above[id]~=nil or
         s.rail_bridge_above and s.rail_bridge_above[id]~=nil}
   end
-  local result=Trees.generate(board,start,Generator.next_random,{tree_placer=tree_placer})
+  local result=Trees.generate(board,start,Generator.next_random,{tree_placer=tree_placer,pulse=pulse})
+  local n=0
   result.each(function(x,z,record)
+    n=n+1
+    if pulse and n%2048==0 then pulse() end
     -- The existing construction/clearance paths clear wood; storing the
     -- source record here makes the whole tree tile disappear atomically.
     s.tiles[Sim.id(x,z)].wood=record

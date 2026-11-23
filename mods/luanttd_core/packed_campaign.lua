@@ -35,7 +35,7 @@ local function tile_bytes(t)
   return char(TILE,h,flags,presence,c or 0,r or 0)
 end
 
-function M.encode(root)
+function M.encode(root,pulse)
   local chunks,fragment={},{}
   local tables,strings={},{}
   local table_count,string_count=0,0
@@ -67,12 +67,16 @@ function M.encode(root)
       -- Most campaign tiles are records, not arrays.
       local dense=n>0
       if dense then
-        for i=1,n do if rawget(value,i)==nil then dense=false;break end end
+        for i=1,n do
+          if pulse and i%8192==0 then pulse() end
+          if rawget(value,i)==nil then dense=false;break end
+        end
       end
       if dense then
         tag(ARRAY);uint(n)
         if value==tiles then
           for i=1,n do
+            if pulse and i%8192==0 then pulse() end
             local t=rawget(value,i)
             local fixed=type(t)=="table" and not tables[t] and tile_bytes(t)
             if fixed then
@@ -81,7 +85,10 @@ function M.encode(root)
             else write(t) end
           end
         else
-          for i=1,n do write(rawget(value,i)) end
+          for i=1,n do
+            if pulse and i%8192==0 then pulse() end
+            write(rawget(value,i))
+          end
         end
       else tag(TAB) end
       for k,v in next,value do

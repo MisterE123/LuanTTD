@@ -5,9 +5,8 @@ local scenarios={"generated","farm","oil","coastal","south_coast","original"}
 local scenario_labels="Generate a world,Farm and Factory,Oil and Refinery,Coastal Landscaping,South Coast Coal,Original Terrain Survey"
 local survey_sizes={64,128,256,512,1024,2048,4096}
 local labels={"64","128","256","512","1024","2048","4096"}
--- The ordinary campaign still keeps the complete simulation in memory.
--- Expose independent stock axes, but cap the combined playable area.
-M.max_playable_tiles=512*512
+-- Tested working-set threshold, not a restriction on the stock sizes.
+M.tested_playable_tiles=512*512
 local items={
   {key="width",default=64,values=survey_sizes,labels=labels},
   {key="depth",default=64,values=survey_sizes,labels=labels},
@@ -47,7 +46,7 @@ function M.axis_log(n)
   return i and i+5
 end
 function M.supports_size(width,depth)
-  return M.axis_log(width)~=nil and M.axis_log(depth)~=nil and width*depth<=M.max_playable_tiles
+  return M.axis_log(width)~=nil and M.axis_log(depth)~=nil
 end
 function M.dimensions(settings,cfg)
   if cfg then
@@ -62,7 +61,7 @@ local function set_size(cfg,width,depth)
   cfg.width,cfg.depth=width,depth
   cfg.size=width==depth and width or nil -- legacy square profiles
 end
-local size_error="Choose dimensions totaling at most 262,144 tiles (for example, 512 x 512)."
+local size_error="Choose a stock power-of-two width and depth from 64 to 4096."
 function M.defaults(settings)
   local seed=tonumber(settings:get("bayline_seed"))
   local year=tonumber(settings:get("bayline_stock_bus_start_year"))
@@ -164,7 +163,9 @@ local function formspec(core,cfg,advanced,note)
       end
     end
     if not advanced then
-      out[#out+1]="label[6.43,6.91;At most 262,144 tiles total.]"
+      local big=cfg.width*cfg.depth>M.tested_playable_tiles
+      out[#out+1]="label[6.43,6.91;"..
+        (big and "High RAM use. May run out of memory." or "Larger maps need more RAM.").."]"
     else
       out[#out+1]="label[.49,5.81;Choose which edges to shape into sea, or let TerraGenesis choose.]"
       out[#out+1]="label[.49,6.13;No forced coast still allows inland water and sea-level terrain.]"
@@ -180,17 +181,32 @@ local function formspec(core,cfg,advanced,note)
     out[#out+1]="label[.49,4.83;Road, rail, harbor and air tools are available as usual.]"
   end
   out[#out+1]="box[.42,7.70;11.56,.025;#466277]"
-  out[#out+1]="label[.49,8.03;"..esc(note or "Save your choices below, then reopen this same world.").."]"
-  out[#out+1]="label[.49,8.42;The next Play generates the world using these settings.]"
+  out[#out+1]="label[.49,8.03;"..esc(note or "Generate immediately using the selected parameters.").."]"
+  out[#out+1]="label[.49,8.42;The game may reconnect once to load the finished world.]"
   out[#out+1]="button[.49,9.02;2.40,.60;setup_defaults;Reset options]"
   out[#out+1]="button[3.08,9.02;2.30,.60;setup_cancel;Cancel setup]"
   out[#out+1]="style[setup_generate;bgimg=bl_button_primary.png;textcolor=#101C2B]"
-  out[#out+1]="button[7.62,9.02;4.28,.60;setup_generate;Save and return]"
+  out[#out+1]="button[7.62,9.02;4.28,.60;setup_generate;Generate world]"
   return table.concat(out)
 end
-function M.mount(core,storage)
+function M.progress_form(core,title,pct,stage,detail)
+  local esc=core.formspec_escape
+  return "formspec_version[7]size[10,3.2]bgcolor[#111F2C;both;#111F2C]"..
+    "style_type[label;textcolor=#EEE6C9]"..
+    "label[.55,.58;"..esc(title).."]label[.55,1.20;"..esc(stage).."]"..
+    ("label[8.75,1.20;%d%%]box[.55,1.62;8.9,.20;#314959]"):format(pct)..
+    (pct>0 and ("box[.55,1.62;%g,.20;#67B6A0]"):format(8.9*pct/100) or "")..
+    "label[.55,2.28;"..esc(detail or "Please wait. The game is still preparing your world.").."]"
+end
+function M.mount(core,storage,prepare)
   local draft=M.defaults(core.settings)
-  local finished,advanced=false,false
+  local finished,advanced,busy=false,false,false
+  local stage,percent="Starting the generator",0
+  local progress_id="luanttd_core:generating_world"
+  local function progress(p,detail)
+    core.show_formspec(p:get_player_name(),progress_id,M.progress_form(core,
+      "Generating your LuanTTD world",percent,stage,detail))
+  end
   local rng=PcgRandom(core.get_us_time()%2147483647)
   local function show(p,note)
     core.show_formspec(p:get_player_name(),M.form,formspec(core,draft,advanced,note))
@@ -201,12 +217,23 @@ function M.mount(core,storage)
     p:hud_set_flags({hotbar=false,healthbar=false,crosshair=false,wielditem=false,breathbar=false,minimap=false})
     p:set_sky({type="plain",base_color="#132A3A",clouds=false})
     core.after(.2,function()
-      if p:is_player() and not finished then show(p) end
+      if not p:is_player() or finished then return end
+      if busy then progress(p) else show(p) end
     end)
   end)
   core.register_on_player_receive_fields(function(p,name,fields)
+    if name==progress_id then
+      if busy and fields.quit then
+        local n=p:get_player_name()
+        core.after(.06,function()
+          local player=core.get_player_by_name(n)
+          if player and busy then progress(player) end
+        end)
+      end
+      return true
+    end
     if name~=M.form then return false end
-    if finished then return true end
+    if finished or busy then return true end
     if fields.setup_cancel then
       finished=true
       core.request_shutdown("World setup canceled. Nothing was generated.",false,.15)
@@ -230,10 +257,49 @@ function M.mount(core,storage)
           show(p,"This file is not the supported OpenGFX 7.1 mask bank.");return true
         end
       end
-      finished=true
-      storage:set_string(M.storage_key,core.write_json(draft))
-      core.request_shutdown("World options saved. Start this same world again to generate it.",true,.15)
-    elseif fields.setup_scenario and not fields.quit then show(p,error_text)
+      local function reconnect()
+        busy=false;finished=true
+        storage:set_string(M.storage_key,core.write_json(draft))
+        core.request_shutdown("World prepared. Reopen this world once if Luanti returns to the menu.",true,.4)
+      end
+      if not prepare or draft.scenario~="generated" then reconnect();return true end
+      busy=true;percent=0;stage="Starting the generator"
+      local n=p:get_player_name()
+      progress(p)
+      local last=core.get_us_time()
+      local task=coroutine.create(function()
+        prepare(draft,function(pct,description,pulse)
+          percent=math.max(percent,pct);stage=description
+          local now=core.get_us_time()
+          if not pulse or now-last>=100000 then
+            last=now
+            coroutine.yield()
+          end
+        end)
+      end)
+      local function step()
+        local ok,why=coroutine.resume(task)
+        local player=core.get_player_by_name(n)
+        if not ok then
+          busy=false
+          core.log("error","LuanTTD world generation failed: "..tostring(why))
+          if player then
+            core.close_formspec(n,progress_id)
+            show(player,"Generation failed. Try a smaller map or different seed.")
+          end
+          return
+        end
+        if coroutine.status(task)=="dead" then
+          percent=90;stage="Map generated and saved"
+          if player then progress(player,"Reconnecting once to load the landscape.") end
+          core.after(.65,reconnect)
+        else
+          if player then progress(player) end
+          core.after(.08,step)
+        end
+      end
+      core.after(.14,step)
+    elseif (fields.setup_scenario or fields.setup_width or fields.setup_depth) and not fields.quit then show(p,error_text)
     elseif fields.quit then
       local n=p:get_player_name()
       core.after(.2,function()

@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SIZES = ((512, 512), (4096, 64), (64, 4096))
+SIZES = ((512, 512), (1024, 1024), (4096, 64), (64, 4096))
 CHECK = r"""
 local Codec=dofile("mods/luanttd_core/packed_campaign.lua")
 local s=Codec.decode(io.read("*a"))

@@ -39,10 +39,41 @@ local shell={settings=settings,get_us_time=function()return 0 end,
 local store={set_string=function(_,_,s)saved=s end}
 M.mount(shell,store)
 fields(p,M.form,{setup_defaults="true"})
-assert(shown:find("Save and return",1,true) and shown:find("Cancel setup",1,true))
+assert(shown:find("Generate world",1,true) and shown:find("Cancel setup",1,true))
 fields(p,M.form,{setup_cancel="true",setup_seed="bad"})
 assert(shutdown and shutdown[2]==false and not saved)
 M.mount(shell,store)
 fields(p,M.form,{setup_generate="true"})
 assert(shutdown and shutdown[2]==true and saved=="valid-json")
 print("PASS world setup valid defaults, draft parsing, explicit choices, range and saved validation")
+
+local queue,progress_events,reconnects={}, {}, 0
+saved=nil
+local player={
+  get_player_name=function() return "Player" end,
+}
+shell.get_player_by_name=function() return player end
+shell.after=function(_,fn,...) queue[#queue+1]={fn,...} end
+shell.show_formspec=function(_,form,body)
+  if form=="luanttd_core:generating_world" then progress_events[#progress_events+1]=body end
+end
+shell.request_shutdown=function(_,reconnect)
+  assert(reconnect and saved=="valid-json")
+  reconnects=reconnects+1
+end
+local status="pending"
+M.mount(shell,store,function(_,progress)
+  progress(5,"Shaping the landscape")
+  progress(62,"Building towns")
+  status="prepared"
+end)
+fields(player,M.form,{setup_generate=true})
+assert(not saved and #progress_events==1 and progress_events[1]:find("0%",1,true))
+fields(player,M.form,{setup_generate=true}) -- stale click must not kick twice
+while #queue>0 do
+  local job=table.remove(queue,1);job[1](unpack(job,2))
+  if status~="prepared" then assert(not saved and reconnects==0) end
+end
+assert(reconnects==1 and status=="prepared" and #progress_events==4)
+for i,pct in ipairs({0,5,62,90}) do assert(progress_events[i]:find(pct.."%",1,true)) end
+print("PASS generation starts on submit with real progress; exactly one reconnect after the campaign is prepared")

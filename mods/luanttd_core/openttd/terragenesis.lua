@@ -116,6 +116,7 @@ return function(Slope)
         local next_rows={}
         if not rows then
           for z=1,nz do
+        if p.pulse and z%16==0 then p.pulse() end
             for x=1,nx do scratch[x]=random_height(state,amp) end
             next_rows[z]=pack16(scratch,nx,pack)
           end
@@ -126,6 +127,7 @@ return function(Slope)
           end
           interp(rows[1],a)
           for z=1,nz do
+        if p.pulse and z%16==0 then p.pulse() end
             -- In source, horizontal and vertical interpolation both complete
             -- before noise is added. Keep two unperturbed even lattice rows.
             if z%2==0 then
@@ -146,6 +148,7 @@ return function(Slope)
   local function each_row(rows,p,transform)
     local n,a,buf=p.width+1,{},{}
     for z=1,p.depth+1 do
+        if p.pulse and z%16==0 then p.pulse() end
       local row=rows[z]
       for x=1,n do a[x]=transform(get16(row,x),x,z) end
       rows[z]=pack16(a,n,buf)
@@ -155,6 +158,7 @@ return function(Slope)
   local function adjust_water(rows,p,maxh)
     local hist,lo,hi={},32767,-32768
     for z=1,p.depth+1 do
+        if p.pulse and z%16==0 then p.pulse() end
       local row=rows[z]
       for x=1,p.width+1 do
         local h=get16(row,x)
@@ -226,6 +230,7 @@ return function(Slope)
     end
     local a,buf={},{}
     for z=0,h do
+        if p.pulse and z%16==0 then p.pulse() end
       local left=bit(borders,0) and cutoff(1,h-z,z,z,z) or 0
       local right=bit(borders,2) and w-1-cutoff(3,h-z,z,z,z) or w
       local row=rows[z+1]
@@ -241,6 +246,7 @@ return function(Slope)
     local function sweep(z1,z2,x1,x2,d)
       local neighbor
       for z=z1,z2,d do
+        if p.pulse and z%16==0 then p.pulse() end
         local row,prev=rows[z],32767
         for x=x1,x2,d do
           local current=get16(row,x)
@@ -382,6 +388,7 @@ return function(Slope)
     -- map. WorldStorage uses the repeated far-edge corner for its fringe.
     rows[p.depth+1]=nil
     for z=1,p.depth do
+        if p.pulse and z%16==0 then p.pulse() end
       local row=rows[z]
       for x=1,p.width do buf[x]=row_enc[clamp(floor(get16(row,x)/16),0,height)] end
       rows[z]=table.concat(buf)
@@ -391,6 +398,7 @@ return function(Slope)
       local row_new={}
       local neighbor
       for z=z1,z2,d do
+        if p.pulse and z%16==0 then p.pulse() end
         local row,prev=rows[z],255
         for x=x1,x2,d do
           local a=byte(row,x)
@@ -434,6 +442,12 @@ return function(Slope)
   end
   function G.generate(opts)
     local p=options(opts)
+    local work,label=0,"Shaping the landscape"
+    local function mark(f,name)
+      work,label=f,name or label
+      if opts.progress then opts.progress(work,label) end
+    end
+    if opts.progress then p.pulse=function() opts.progress(work,label) end end
     local w,h=p.width,p.depth
     local starting=opts.rng_state
     assert(starting==nil or (type(starting)=="table" and int(starting[1],0,U32-1)
@@ -443,17 +457,21 @@ return function(Slope)
     local start_a,start_b=state[1],state[2]
     local maxh=get_max_height(p)
     local raw=raw_perlin(p,maxh,state)
+    mark(.25,"Sculpting coastlines")
     local borders=p.freeform_edges and p.water_borders or 15
     adjust_water(raw,p,maxh)
     if borders==16 then borders=G.next_random(state)%16 end
     local roughness=7+3*p.tgen_smoothness
     coast_lines(raw,p,borders)
     smooth_slopes(raw,p,roughness)
+    mark(.55,"Smoothing slopes and coasts")
     smooth_coasts(raw,p,borders)
     smooth_slopes(raw,p,roughness)
+    mark(.74,"Finishing elevation")
     sine_transform(raw,p,maxh)
     curves(raw,p,maxh,state)
     smooth_slopes(raw,p,16)
+    mark(.90,"Finishing shared corners")
     local rows=integer_rows(raw,p,maxh)
     local id={"ott14.1-tgp-temperate-v1",w.."x"..h,("%08x"):format(p.seed),p.freeform_edges and 1 or 0,("%08x%08x"):format(start_a,start_b)}
     for _,field in ipairs(fields) do id[#id+1]=p[field] end

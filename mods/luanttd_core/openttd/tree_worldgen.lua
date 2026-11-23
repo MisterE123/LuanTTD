@@ -84,6 +84,7 @@ function T.generate(board,start,next_random,opts)
     random_draws=0,tiles=0,total_trees=0,shore_tiles=0,tree_placer=mode}
   local function random()
     S.random_draws=S.random_draws+1
+    if opts.pulse and S.random_draws%4096==0 then opts.pulse() end
     return next_random(state)
   end
   local function xy(i) return i%w+1,floor(i/w)+1 end

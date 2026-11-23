@@ -3,7 +3,10 @@ local storage=core.get_mod_storage()
 local Sim=dofile(mod.."/sim.lua")
 core.set_mapgen_setting("mg_name","singlenode",true)
 core.set_mapgen_setting("mg_flags","light",true)
-local Checkpoint=dofile(mod.."/campaign_checkpoint.lua")(core,dofile(mod.."/packed_campaign.lua"))
+local Codec=dofile(mod.."/packed_campaign.lua")
+local Checkpoints=dofile(mod.."/campaign_checkpoint.lua")
+local Checkpoint=Checkpoints(core,Codec)
+local Prepared=Checkpoints(core,Codec,"luanttd-prepared-campaign.chk")
 local checkpoint=Checkpoint.read()
 local saved=checkpoint or storage:get_string("campaign")
 local settings=core.settings
@@ -17,7 +20,11 @@ local fixture=qa.enabled
 local WorldSetup=dofile(mod.."/world_setup.lua")
 local world_options=WorldSetup.read(core,storage)
 if fresh and not fixture and not world_options and core.is_singleplayer() then
-  WorldSetup.mount(core,storage)
+  WorldSetup.mount(core,storage,function(cfg,progress)
+    local state=dofile(mod.."/campaign_generation.lua")(core,mod,Sim,WorldSetup).run(cfg,progress)
+    progress(87,"Saving your new world")
+    Prepared.write_state(state,function() progress(87,"Saving your new world",true) end)
+  end)
   return
 end
 local scenario=qa.scenario or (world_options and world_options.scenario) or "generated"
@@ -31,38 +38,15 @@ local request_oil=scenario=="oil"
 local request_coast=scenario=="coastal"
 local request_south=scenario=="south_coast"
 local generated_world=fresh and not (fixture or request_farm or request_oil or request_coast or request_south)
-local Generated,Generator,Terrain
 local S
 if saved~="" then
   S=type(saved)=="table" and saved or core.deserialize(saved,true)
+  if type(S)=="table" then Prepared.clear() end
 elseif generated_world then
-  local source=mod.."/openttd/"
-  Generated=dofile(mod.."/generated_campaign.lua")
-  Terrain=dofile(source.."terrain.lua")
-  local Slope=dofile(source.."slope.lua")
-  local TG=dofile(source.."terragenesis.lua")(Slope)
-  local Clear=dofile(source.."terragenesis_clear.lua")
-  local Rivers=dofile(source.."river_worldgen.lua")(Slope)
-  Generator={generate=function(o)
-      local base=TG.generate(o)
-      local river,stats=Rivers.generate(base,TG.next_random,{original=false,terrain=Terrain,
-        amount_of_rivers=o.amount_of_rivers,min_river_length=o.min_river_length})
-      return Clear.generate(river,TG.next_random),stats
-    end,
-    next_random=TG.next_random,describe=Clear.describe}
-  local seed=world_options and world_options.seed or tonumber(core.settings:get("bayline_seed")) or 1751
-  local width,depth=WorldSetup.dimensions(settings,world_options)
-  S=Generated.landscape(Sim,Terrain,Generator,{
-    width=width,depth=depth,seed=seed,rng_state=TG.startup_rng(seed),
-    terrain_type=world_options and world_options.relief or tonumber(core.settings:get("bayline_generated_relief")) or 1,
-    quantity_sea_lakes=world_options and world_options.sea or tonumber(core.settings:get("bayline_generated_sea")) or 0,
-    amount_of_rivers=world_options and world_options.rivers or tonumber(core.settings:get("bayline_generated_rivers")) or 0,
-    min_river_length=tonumber(core.settings:get("bayline_generated_min_river_length")) or 16,
-    tgen_smoothness=world_options and world_options.smooth or tonumber(settings:get("bayline_generated_smoothness")) or 1,
-    water_borders=world_options and world_options.coast or tonumber(settings:get("bayline_generated_coasts")) or 15,
-    variety=world_options and world_options.variety or tonumber(settings:get("bayline_generated_variety")) or 0,
-    freeform_edges=true,
-  })
+  S=world_options and Prepared.read()
+  if S then
+    core.log("action","LuanTTD opened the prepared campaign without regenerating.")
+  else S=dofile(mod.."/campaign_generation.lua")(core,mod,Sim,WorldSetup).run(world_options) end
 else
   S=Sim.new(fixture and tonumber(settings:get("bayline_seed")) or 1751)
 end
@@ -75,7 +59,7 @@ local wide_checkpoint=world_area>=128^2
 local compact_checkpoint=world_area>128^2
 if S.stock_generated_profile then
   local p=S.stock_generated_profile
-  local generated=Generated or dofile(mod.."/generated_campaign.lua")
+  local generated=dofile(mod.."/generated_campaign.lua")
   assert(p.version==1 and generated.supports_size(p.width,p.depth) and S.corner_grid.width==p.width and
     S.corner_grid.depth==p.depth and #S.tiles==p.width*p.depth and
     #S.corner_grid.levels==(p.width+1)*(p.depth+1),"Unsupported generated campaign dimensions")
@@ -172,30 +156,18 @@ do
   local src=mod.."/openttd/"
   local G=dofile(src.."town_growth.lua")
   local B=dofile(src.."town_growth_build.lua")(G,dofile(src.."town_growth_houses.lua"))
-  if Generated then
-    local layout=world_options and world_options.layout or core.settings:get("bayline_generated_town_layout") or "original"
-    local Worldgen=dofile(src.."town_worldgen.lua")(G,B)
-    local Names=dofile(src.."stock_town_name.lua")
-    local generated,why=Generated.towns(Sim,Terrain,S,Generator,Worldgen,Names,G,B,{
-      layout=layout,difficulty=world_options and world_options.towns or tonumber(core.settings:get("bayline_generated_towns")) or 2,
-      larger_towns=4,initial_city_size=2,year=Sim.date(S),
-    })
-    assert(generated,why)
-  end
   api.town_growth=dofile(mod.."/town_growth_runtime.lua")(Sim,dofile(src.."terrain.lua"),G,B,
     dofile(src.."town_passengers.lua"))
   Sim.mount_stock_town_growth(S,api.town_growth,true)
 end
-local farm_rules,oil_rules
 if generated_world or S.road_farm then
   assert(api.terrain,"The farm world requires corner terrain.")
   local Terrain=dofile(mod.."/openttd/terrain.lua")
   local assets=dofile(mod.."/farm_visual_assets.lua")
   local missing=assets.missing(core,mod)
   assert(not missing,"The farm workbench is missing the asset "..tostring(missing))
-  local mounted,rng,rules=Sim.mount_farm_world(S,Terrain,true)
+  local mounted,rng=Sim.mount_farm_world(S,Terrain,true)
   api.farm_world=assert(mounted,rng)
-  farm_rules=rules
   api.farm_visual_assets=assets
   if saved=="" and not generated_world then
     local seeded,why=api.farm_world.default_1751(S,rng)
@@ -220,28 +192,10 @@ if generated_world or S.road_oil then
     end
   end
   api.oil_world=oil
-  oil_rules=Sim.oil_rules()
   if saved=="" and not generated_world then
     local good,error_=oil.default_1751(S)
     assert(good,"No untouched oil corridor in this world: "..tostring(error_))
   end
-end
-if Generated then
-  local src=mod.."/openttd/"
-  local P,Rating=dofile(src.."passengers.lua"),dofile(src.."station_rating.lua")
-  local Cat=dofile(src.."station_catchment.lua")(P,Rating,function()return 0 end,function()return 0 end)
-  local Coal=dofile(src.."coal_industry.lua")(P,Rating,Cat,dofile(src.."income.lua"))
-  local Timber=Sim.timber_rules()
-  local Industry=dofile(src.."industry_worldgen.lua")(Coal,Timber or nil,oil_rules,farm_rules)
-  local World=dofile(mod.."/coal_industry_world.lua")(Sim,Terrain,Coal)
-  local TimberWorld=Timber and dofile(mod.."/timber_world.lua")(Sim,Terrain,Timber)
-  Generated.industries(Sim,Terrain,S,Generator,Industry,World,
-    world_options and world_options.industries or tonumber(core.settings:get("bayline_generated_industries")) or 4,
-    tonumber(core.settings:get("bayline_generated_industry_count")),TimberWorld,api.oil_world,api.farm_world)
-  local calendar=Sim.engine_calendar or dofile(src.."stock_engine_calendar.lua")
-  Generated.landmarks(Sim,Terrain,S,Generator,dofile(src.."scenery_object_worldgen.lua"),calendar.date(Sim.date(S)))
-  local mode=world_options and world_options.trees or tonumber(core.settings:get("bayline_generated_tree_placer")) or 2
-  Generated.forests(Sim,Terrain,S,Generator,dofile(src.."tree_worldgen.lua"),mode)
 end
 if generated_world then
   -- Industry geography controls available cargo, not a scenario toggle.
@@ -640,38 +594,70 @@ local function open_campaign_player(p)
     if who then ui.hud();world.hud(who) end
   end)
 end
+local placement_form="luanttd_core:placing_terrain"
+local placement_percent,placement_stage=90,"Loading the starting area"
+local retries=0
 local function show_placement(p)
   local n=p:get_player_name()
   p:set_physics_override({speed=0,jump=0,gravity=0})
   p:hud_set_flags({hotbar=false,healthbar=false,crosshair=false,wielditem=false})
-  core.show_formspec(n,"luanttd_core:placing_terrain",
-    "formspec_version[7]size[9.6,2.45]bgcolor[#111F2C;both;#111F2C]"..
-    "style_type[label;textcolor=#EEE6C9]label[.5,.70;"..
-    (placement=="failed" and "Terrain placement did not finish. Reopen this world to retry." or
-      "Placing your landscape…").."]label[.5,1.55;Your saved generator options will be kept.]")
+  local detail=placement=="failed" and "Placement needs another attempt. Your world is saved."
+  local form=WorldSetup.progress_form(core,"Opening your generated world",placement_percent,placement_stage,detail)
+  if placement=="failed" then form=form.."button[5.96,2.53;3.2,.50;retry;Try placement again]" end
+  core.show_formspec(n,placement_form,form)
+end
+local function broadcast_placement()
+  for _,p in ipairs(core.get_connected_players()) do show_placement(p) end
+end
+local attempt_placement
+attempt_placement=function()
+  placement="placing"
+  render.place_world(function(ok,why)
+    if not ok then
+      core.log("warning","LuanTTD starting-area placement: "..tostring(why))
+      retries=retries+1
+      placement=retries<=3 and "retrying" or "failed"
+      placement_stage=retries<=3 and "Retrying the starting area…" or "Starting area could not be placed"
+      broadcast_placement()
+      if retries<=3 then core.after(1.5,attempt_placement) end
+      return
+    end
+    placement_percent=100;placement_stage="World ready"
+    broadcast_placement()
+    api.save()
+    storage:set_string(placement_key,"placed")
+    placement=nil
+    for _,p in ipairs(core.get_connected_players()) do
+      core.close_formspec(p:get_player_name(),placement_form)
+      open_campaign_player(p)
+    end
+  end,function(f,stage)
+    if placement~="placing" then return end
+    local percent=math.min(99,90+math.floor(9*f))
+    if percent>placement_percent or placement_stage~=stage then
+      placement_percent=math.max(placement_percent,percent);placement_stage=stage
+      broadcast_placement()
+    end
+  end)
 end
 core.register_on_joinplayer(function(p)
   if placement then show_placement(p) else open_campaign_player(p) end
 end)
-if placement then
-  core.after(0,function()
-    render.place_world(function(ok)
-      if not ok then
-        placement="failed"
-        core.log("error","LuanTTD could not emerge the full terrain area; placement will retry on reopen.")
-        for _,p in ipairs(core.get_connected_players()) do show_placement(p) end
-        return
-      end
-      placement=nil
-      storage:set_string(placement_key,"placed")
-      api.save()
-      for _,p in ipairs(core.get_connected_players()) do
-        core.close_formspec(p:get_player_name(),"luanttd_core:placing_terrain")
-        open_campaign_player(p)
-      end
+core.register_on_player_receive_fields(function(p,key,f)
+  if key~=placement_form then return false end
+  if f.retry and placement=="failed" then
+    retries=0
+    attempt_placement()
+  elseif f.quit and placement then
+    local name=p:get_player_name()
+    core.after(.12,function()
+      local player=core.get_player_by_name(name)
+      if placement and player then show_placement(player) end
     end)
-  end)
-end
+  end
+  return true
+end)
+if placement then core.after(0,attempt_placement) end
 core.register_on_leaveplayer(function(p) api.vehicle_ui.leave(p);ui.leave(p:get_player_name());world.leave(p:get_player_name());if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
 core.register_on_player_receive_fields(ui.fields)
 core.register_chatcommand("dispatch",{description="Open LuanTTD dispatcher",func=function(name)

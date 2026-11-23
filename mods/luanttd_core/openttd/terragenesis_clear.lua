@@ -13,7 +13,7 @@ function C.describe(word)
   return word%16,floor(word/16)%16,floor(word/256)%16
 end
 
-function C.generate(base,next_random)
+function C.generate(base,next_random,pulse)
   assert(type(base)=="table" and type(base.tile)=="function" and base.rng_after
     and type(next_random)=="function","Temperate base raster and stock RNG required")
   local w,h=base.width,base.depth
@@ -29,12 +29,14 @@ function C.generate(base,next_random)
   local function paint(i,v) changed[i]=v end
   local rough=scaled(random()%1024+0x400)
   local rocky=scaled(random()%128+0x80)
-  for _=1,rough do
+  for j=1,rough do
+    if pulse and j%4096==0 then pulse() end
     local i=random()%area
     if clear(i) then paint(i,ROUGH) end
   end
   local offsets={[0]=-1,w,1,-w}
-  for _=1,rocky do
+  for j=1,rocky do
+    if pulse and j%512==0 then pulse() end
     local r=random()
     local i=r%area
     if clear(i) then

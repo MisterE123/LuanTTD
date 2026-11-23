@@ -3,8 +3,16 @@
 Create a **fresh ordinary LuanTTD world**, with no special settings.
 It starts with a 64×64 temperate landscape made by the OpenTTD 14.1
 TerraGenesis port. In new-world setup, choose **Map width** and **Map depth**
-independently. Each axis can be a stock power of two from 64 to 4096, up to
-262,144 tiles total: for example 512×512, 1024×256, or 4096×64.
+independently. Each axis can be a stock power of two from 64 to 4096.
+**Generate world** starts immediately and displays progress through towns,
+industries, saving and placement. Luanti may reconnect once (or return
+to the world menu); selecting the same world then opens the already
+generated map. The starting-area progress screen stays open until the
+terrain is ready, and retries temporary placement problems in place.
+
+Native tests covered 1024×1024, 512×512, and 4096×64 in either orientation.
+4096×4096 is selectable but not qualified end to end. It can run out of
+memory: the current simulation still keeps the complete tile state in RAM.
 For a dedicated server, set `bayline_generated_map_width` and
 `bayline_generated_map_depth` before generating.
 Ordinary maps can generate farms, factories, oil wells and refineries
@@ -152,9 +160,9 @@ industry types and custom landscape objects. It mounts only modeled
 temperate house types and flat municipal growth (no town-built bridges,
 tunnels, or destructive grading), so the stock candidate rules run on
 a smaller native build set. The ordinary simulation still uses a dense
-tile-state array. A 4096×4096 campaign would require a different storage
-and simulation architecture and is not offered. The independent terrain
-kernel can generate larger survey dimensions. See
+tile-state array, so the largest selections are resource-intensive and
+unverified. The independent terrain kernel can generate larger survey
+dimensions with much lower memory use. See
 [TerraGenesis](terragenesis-port.md),
 [river generation](stock-river-worldgen.md),
 [town generation](stock-town-worldgen.md),

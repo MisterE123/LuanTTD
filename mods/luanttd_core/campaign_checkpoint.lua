@@ -1,12 +1,13 @@
 -- Wide generated campaigns need a durable process-crash checkpoint:
 -- Luanti can batch otherwise successful ModStorage writes in SQLite.
-return function(core,codec)
-  local name="luanttd-wide-campaign.chk"
+return function(core,codec,filename)
+  local name=filename or "luanttd-wide-campaign.chk"
   local dir=core.get_worldpath()
   local path=dir.."/"..name
   local prefix="LUANTTD-WIDE-CAMPAIGN-1"
   local state_prefix="LUANTTD-WIDE-CAMPAIGN-3-STATE"
   local M={}
+  function M.clear() os.remove(path) end
   function M.read()
     local found=false
     for _,file in ipairs(core.get_dir_list(dir,false)) do
@@ -38,8 +39,8 @@ return function(core,codec)
   function M.write(payload)
     return write(prefix,payload)
   end
-  function M.write_state(state)
-    return write(state_prefix,core.compress(assert(codec).encode(state),"zstd",3))
+  function M.write_state(state,pulse)
+    return write(state_prefix,core.compress(assert(codec).encode(state,pulse),"zstd",3))
   end
   return M
 end
