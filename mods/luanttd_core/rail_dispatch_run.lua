@@ -44,7 +44,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
   local function stock_guideway_service(ids)
     local p=type(ids)=="table" and Guide.by_engine[ids[1]]
-    if not p or not model_ready[p.engine] or #ids<2 or #ids>4 then return false end
+    if not p or not model_ready[p.engine] or Roster.passenger_dmu(p.engine) or #ids<2 or #ids>4 then return false end
     for i=2,#ids do
       if (ids[i]~=p.passenger and ids[i]~=p.mail) or not advanced_wagons[ids[i]] then return false end
     end
@@ -596,6 +596,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       -- with the same physical cab when the train backs up.
       if Roster.dual_head(owned.stock_ids[1]) then
         consist.last_can_lead=true;run.dual_head=true
+        if Guide.by_engine[run.stock_engine] then
+          run.matched_cab_ids={assert(owned.parts[1].body_id),assert(owned.parts[#owned.parts].body_id)}
+        end
       end
       local engine_type=stats.parts[1].railtype
       run.advanced_gauge=Guide.by_engine[run.stock_engine] and engine_type or nil
@@ -842,6 +845,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local engine=ids and ids[1]
     if not (engine and Roster and R.owned_passenger_engine(engine)) then return false end
     if Guide.by_engine[engine] then
+      if Roster.passenger_dmu(engine) then return #ids==1 end
       local profile=stock_guideway_service(ids)
       if not profile then return false end
       for i=2,#ids do if ids[i]==profile.passenger then return true end end

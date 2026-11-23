@@ -150,6 +150,12 @@ function M.scan(path,electric,span)
       end
     end
   end
+  for _,id in ipairs(Guide.extra_engines) do
+    local p=Guide.by_engine[id]
+    local k=p.engine_visual
+    if art.advanced[Guide.by_gauge[p.gauge].engine] and has_model(k)
+        and exists("models/"..models[k].mesh:gsub("%.obj$","_body.obj")) then art.advanced[id]=true end
+  end
   art.advanced_span=art.guideway_spans[2] or false
   table.sort(art.engines)
   return art

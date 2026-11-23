@@ -40,6 +40,11 @@ if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
 fi
 export DISPLAY="127.0.0.1:$display" HOME="$out/home" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1
 export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
+# Match an ordinary returning client. Test focus/rider behavior, not two
+# cold media downloads competing for the same local server's quota.
+if [[ -z ${LUANTTD_NATIVE_MEDIA_CACHE:-} ]]; then
+  python3 tests/cache_luanti_game_media.py "$game" "$XDG_CACHE_HOME"
+fi
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!; server= client= observer=

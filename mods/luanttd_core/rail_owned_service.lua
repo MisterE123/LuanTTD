@@ -35,6 +35,11 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
         if ready[p.oil] then mounted[p.oil]=true;assert(Run.mount_advanced_wagon(p.oil)) end
       end
     end
+    for _,id in ipairs(Guide.extra_engines) do
+      if ready[id] and mounted[Guide.by_gauge[Guide.by_engine[id].gauge].engine] then
+        assert(Run.mount_owned_model(id));mounted[id]=true
+      end
+    end
     if not next(mounted) then return false end
     advanced_models,power_rules=mounted,Types
     return true

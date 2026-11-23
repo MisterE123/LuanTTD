@@ -54,10 +54,13 @@ local function entity(name,assets)
   }})
 end
 local carriages=cargo=="oil" and {profile.engine_visual,profile.oil_visual} or
+  cargo=="z1" and {"millennium_z1","millennium_z1"} or
   {profile.engine_visual,profile.passenger_visual,profile.mail_visual}
-for _,name in ipairs(carriages) do
+local registered={}
+for _,name in ipairs(carriages) do if not registered[name] then
+  registered[name]=true
   entity(name.."_body",{"bl_rail_"..name.."_body.obj","bl_rail_"..name..".png"})
-end
+end end
 for _,name in ipairs({profile.suspension,profile.coupler}) do
   entity(name,{"bl_rail_"..name..".obj","bl_rail_"..profile.engine_visual..".png"})
 end
@@ -125,7 +128,7 @@ local function diagonal_case()
     local j=10
     while f<0 do j=j-1;f=f+1 end
     local step=route[j]
-    local pos,rot,gears=bogies({route=route,index=j},{id=step.tile,td=step.td,progress=f})
+    local pos,rot,gears=bogies({route=route,index=j},{id=step.tile,td=step.td,progress=f},cargo=="z1" and i==2)
     frame.parts[i]={index=i,body_index=i,kind=carriages[i],pos=pos,rotation=rot,bogies=gears}
   end
   for i=1,#frame.parts-1 do frame.parts[i].drawbar=link(frame.parts[i],frame.parts[i+1],gauge) end

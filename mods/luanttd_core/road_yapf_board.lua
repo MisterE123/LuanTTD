@@ -50,6 +50,7 @@ return function(Sim,s,F,occupancy)
     elseif t.build=="road" then
       out.kind="road"
       out.road_bits=Sim.road_bits(s,id)
+      out.disallowed=t.road_disallowed or t.disallowed or 0
     else
       -- Legacy prototype bridges and tunnels lack paired stock records.
       return nil

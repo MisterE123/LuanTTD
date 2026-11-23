@@ -9,14 +9,21 @@ local client=m("campaign_authority_client")(core,mod)
 local file="luanttd-wide-campaign.chk"
 local checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),file)
 local initial=checkpoint.read()
-local actor="RC1 Dash Line"
+local marker=assert(io.open(core.get_worldpath().."/qa-dmu-profile.txt"))
+local variant=marker:read("*l");marker:close()
+local mag=variant=="millennium"
+local gauge=mag and 2 or nil
+local engine=mag and 55 or 12
+local art=mag and "millennium_z1" or "dash"
+local model=assert(Roster.entry(engine))
+local actor=mag and "RC1 Millennium Line" or "RC1 Dash Line"
 local balance=250000
 local function cell(x,z) return (z-1)*64+x end
 local function tile(x) return cell(x,17) end
 local first,second,depot=tile(11),tile(45),tile(6)
-local cap={road={start_year=1988,foster=true,breakdowns=0,service_interval=0},
+local cap={road={start_year=mag and 2010 or 1988,foster=true,breakdowns=0,service_interval=0},
   rail=m("rail_dispatch_manifest").scan(mod,false,false),ferry={},air={},oil_tanker=true,durable_actions=true}
-assert(cap.rail.ready.dash)
+assert(cap.rail.ready[art] and (not mag or cap.rail.advanced[engine]))
 for _,id in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..id,"air") end
 if not initial then
   local s=Sim.new(1725)
@@ -56,15 +63,26 @@ local function cmd(kind,p)
   return ask("command",{command=p})
 end
 local function lay(p)
+  p.railtype=gauge
   local q=ask("rail_quote",{request=p})
   return cmd("rail_commit",{token=q.token})
 end
+local captured
 local function visual()
   local groups=ask("actor_frames",{windows={{x=5,z=15,w=26,h=4},{x=31,z=15,w=27,h=4}},fraction=1})
   for _,sector in ipairs(groups) do for _,r in ipairs(sector.actors) do
-    if r.mode=="rail" and r.complete_parts and #r.parts==3 then
+    if r.mode=="rail" and r.complete_parts and #r.parts==(mag and 2 or 3) then
       local p=r.parts
-      assert(p[1].kind=="dash" and p[2].kind=="wagon" and p[3].kind=="dash")
+      assert(p[1].kind==art and p[#p].kind==art)
+      if mag then
+        assert(#p[1].bogies==2 and #p[2].bogies==2 and p[1].drawbar)
+        assert(math.abs((p[1].rotation.y-p[2].rotation.y)%(2*math.pi)-math.pi)<.01)
+        assert(p[1].stock_id==55 and p[2].stock_id==55 and p[1].body_id and p[2].body_id and p[1].body_id~=p[2].body_id)
+        if not captured then
+          assert(core.safe_file_write(core.get_worldpath().."/millennium-z1-frame.json",core.write_json({parts=p})))
+          captured=true
+        end
+      else assert(p[2].kind=="wagon") end
       return true,p[1].reversed
     end
   end end
@@ -73,15 +91,24 @@ local function payload()
   local s=assert(checkpoint.read())
   local r=assert(s.stock_rail_dispatch.runs[1])
   local v=assert(s.stock_ship_commercial.service.vehicles[0x4000+r.paid_clock])
-  assert(r.stock_engine==12 and r.dual_head and v.linked_heads and v.engine==12 and #v.carrying_parts==3)
-  assert(r.max_track_speed==120 and r.running_year_fp==364000 and r.total_length==24)
+  local count=mag and 2 or 3
+  local prototype=assert(Roster.stats(mag and {engine} or {engine,27}))
+  assert(r.stock_engine==engine and r.dual_head and v.linked_heads and v.engine==engine and #v.carrying_parts==count,
+    ("stock %s dual %s linked %s cargo engine %s physical bodies %s"):format(tostring(r.stock_engine),
+      tostring(r.dual_head),tostring(v.linked_heads),tostring(v.engine),tostring(v.carrying_parts and #v.carrying_parts)))
+  assert(not mag or r.advanced_gauge==2)
+  assert(r.max_track_speed==model.speed and r.running_year_fp==prototype.running_year_fp and r.total_length==prototype.length)
   local bodies=v.carrying_parts
-  local p={bodies[1].units,bodies[2].units,bodies[3].units}
-  assert(bodies[1].capacity==40 and bodies[2].capacity==40 and bodies[3].capacity==40)
-  assert(bodies[1].role=="front" and bodies[2].role=="carriage" and bodies[3].role=="rear")
-  local stats=assert(Roster.stats({{stock_id=12,cargo_count=p[1],rear_cargo_count=p[3]},
-    {stock_id=27,cargo_count=p[2]}}))
-  assert(v.units==p[1]+p[2]+p[3] and r.passengers_onboard==v.units and r.consist_mass==stats.weight)
+  local riders={}
+  for i,c in ipairs(bodies) do riders[i]=c.units end
+  assert(bodies[1].role=="front" and bodies[count].role=="rear")
+  assert(bodies[1].capacity==model.capacity and bodies[count].capacity==model.capacity)
+  if not mag then assert(bodies[2].capacity==40 and bodies[2].role=="carriage") end
+  local spec={{stock_id=engine,cargo_count=riders[1],rear_cargo_count=riders[count]}}
+  if not mag then spec[2]={stock_id=27,cargo_count=riders[2]} end
+  local stats=assert(Roster.stats(spec))
+  assert(v.units==riders[1]+riders[2]+(riders[3] or 0) and r.passengers_onboard==v.units and r.consist_mass==stats.weight)
+  local p=riders
   return s,r,v,p
 end
 local function work()
@@ -95,23 +122,23 @@ local function work()
     local pure,plus
     for _,offer in ipairs(panel.offers) do
       local ids=offer.request.parts
-      if ids[1]==12 and not ids[2] then pure=offer
-      elseif ids[1]==12 and ids[2]==27 then plus=offer end
+      if ids[1]==engine and not ids[2] then pure=offer
+      elseif ids[1]==engine and ids[2]==27 then plus=offer end
     end
-    assert(pure and plus and pure.price==21875 and plus.price==23804)
-    assert(pure.help.model:find("80 seats",1,true) and plus.help.model:find("120 seats",1,true)
-      and pure.help.model:find("120 km/h",1,true))
+    assert(pure and pure.price==Roster.purchase_price(engine))
+    assert(pure.help.model:find((model.capacity*2).." seats",1,true) and pure.help.model:find(model.speed.." km/h",1,true))
+    if not mag then assert(plus and plus.price==23804 and plus.help.model:find("120 seats",1,true)) end
     local a=ask("rail_assembly",{depot=depot})
-    local engine
-    for _,o in ipairs(a.engines) do if o.id==12 then engine=o end end
-    assert(engine and engine.quote.price==21875 and engine.help.model:find("80 seats",1,true))
-    cmd("rail_assembly",{token=a.token,operation="engine",stock=12})
+    local offer
+    for _,o in ipairs(a.engines) do if o.id==engine then offer=o end end
+    assert(offer and offer.quote.price==Roster.purchase_price(engine) and offer.help.model:find((model.capacity*2).." seats",1,true))
+    cmd("rail_assembly",{token=a.token,operation="engine",stock=engine})
     a=ask("rail_assembly",{depot=depot})
-    cmd("rail_assembly",{token=a.token,operation="wagon",stock=27})
+    if not mag then cmd("rail_assembly",{token=a.token,operation="wagon",stock=27}) end
     a=ask("rail_assembly",{depot=depot})
     local train
     for k,u in pairs(a.units) do
-      if u.stocks[1]==12 and u.stocks[2]==27 and not u.stocks[3] then train=k;assert(u.passenger) end
+      if u.stocks[1]==engine and u.stocks[2]==(not mag and 27 or nil) and not u.stocks[3] then train=k;assert(u.passenger) end
     end
     assert(train,"The ordinary depot did not couple the separate coach between both powered halves")
     ask("checkpoint")
@@ -126,8 +153,8 @@ local function work()
       displayed=visual() or displayed
       ask("checkpoint")
       local _,r,v,p=payload()
-      if displayed and not v.delivered and p[1]>0 and p[2]>0 and p[3]>0 then
-        goal=("DASH_WORKER_NATIVE_SAVED %d/%d/%d passengers in a stock #12 / Coach / #12"):format(unpack(p))
+      if displayed and not v.delivered and p[1]>0 and p[2]>0 and (mag or p[3]>0) then
+        goal=("DASH_WORKER_NATIVE_SAVED %s %s separate boarded counts"):format(art,table.concat(p,"/"))
         return {kind="stop"}
       end
     end
@@ -137,6 +164,10 @@ local function work()
   local saved=initial.stock_ship_commercial.service.vehicles[v.id]
   for i,u in ipairs(p) do assert(u>0 and saved.carrying_parts[i].units==u) end
   assert(not v.delivered and visual())
+  if mag then
+    local before=assert(initial.stock_rail_dispatch.runs[1].matched_cab_ids)
+    assert(r.matched_cab_ids[1]==before[1] and r.matched_cab_ids[2]==before[2])
+  end
   local reversed,peak
   for _=1,180 do
     ask("advance",{days=1})
@@ -144,12 +175,12 @@ local function work()
     ask("checkpoint")
     s,r,v=payload()
     peak=math.max(peak or 0,r.speed)
-    if reversed and (v.delivered or 0)>0 and peak>64 then
+    if reversed and (v.delivered or 0)==(mag and 50 or 120) and peak>64 then
       local c=assert(s.companies[actor])
       assert(c.paid_units==v.delivered and c.revenue==v.route_profit and c.cash==balance-c.expense+c.revenue)
       assert(r.passenger_finance.expense>0 and r.shuttle.reversals>0)
       goal=("DASH_WORKER_NATIVE_PASS native reversal, restored %d seats occupied, delivered %d for $%d, peak %d")
-        :format(p[1]+p[2]+p[3],v.delivered,c.revenue,peak)
+        :format(p[1]+p[2]+(p[3] or 0),v.delivered,c.revenue,peak)
       return {kind="stop"}
     end
   end

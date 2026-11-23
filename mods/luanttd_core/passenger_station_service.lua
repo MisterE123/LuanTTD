@@ -26,7 +26,9 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
 
   local mail={engine=28,cap=30,slice=5,aging=185,wait=40}
   local dmus={}
-  for _,row in ipairs(Roster.catalog()) do
+  -- Physical loading definitions come from the stock reference. Host
+  -- admission is still contingent on mapped media and a usable depot.
+  for _,row in ipairs(Roster.catalog(true,true)) do
     if Roster.passenger_dmu(row.stock_id) then
       local cap=2*row.capacity
       dmus[row.stock_id]={

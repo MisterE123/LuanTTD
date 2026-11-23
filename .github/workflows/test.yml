@@ -42,6 +42,7 @@ jobs:
           for t in rail_guideway_bogies rail_advanced_stock_purchase rail_typed_construction_runtime rail_gauge_conversion; do
             lua5.1 "tests/$t.lua"
           done
+          lua5.1 tests/road_dead_end.lua
           lua5.1 tests/monorail_owned_runtime.lua
           lua5.1 tests/monorail_owned_runtime.lua spans
           python3 tests/advanced_guideway_art.py
@@ -51,6 +52,7 @@ jobs:
           python3 tests/monorail_span_art.py maglev
           python3 tests/stock_lev1_art.py
           python3 tests/guideway_tanker_art.py
+          python3 tests/stock_millennium_art.py
           lua5.1 tests/rail_exhaust.lua
           lua5.1 tests/terrain_tile_lookup.lua
           lua5.1 tests/tunnel_bore.lua
@@ -156,6 +158,7 @@ jobs:
           LUANTTD_QA_PAID_AIRFRAME=218 bash tests/stock_aircraft_mail_live_native.sh
           bash tests/stock_rail_multi_ore_live_native.sh
           bash tests/stock_dash_worker_native.sh
+          BAYLINE_DMU_PROFILE=millennium bash tests/stock_dash_worker_native.sh
           bash tests/rail_copy_orders_worker_native.sh
           bash tests/stock_tim_worker_native.sh
           LUANTTD_NATIVE_ASIASTAR=true bash tests/stock_tim_worker_native.sh
@@ -238,6 +241,33 @@ jobs:
           LUANTTD_NATIVE_SHARED_DEPOT=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_COLLISION=true bash tests/rail_owned_live_native.sh
 
+  native-interaction:
+    name: Focus recovery and private native rides
+    runs-on: ubuntu-24.04
+    container: debian:13
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install graphical replay tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git gcc libc6-dev luanti luanti-server python3 xvfb x11-utils xauth xdotool imagemagick
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Replay focus loss, paid bus arrival and process reopen
+        run: |
+          export PATH="/usr/games:$PATH"
+          export TMPDIR="$(mktemp -d "$GITHUB_WORKSPACE/.native-ui.XXXXXX")"
+          trap 'rm -rf -- "$TMPDIR"' EXIT
+          export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/cache"
+          python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
+          BAYLINE_NATIVE_DISPLAY=307 timeout 220 bash tests/campaign_worker_focus_native.sh
+          BAYLINE_NATIVE_DISPLAY=309 BAYLINE_FOCUS_DEAD_END=1 timeout 220 bash tests/campaign_worker_focus_native.sh
+          BAYLINE_NATIVE_DISPLAY=308 BAYLINE_NATIVE_PORT=46708 timeout 220 bash tests/campaign_worker_ride_native.sh
+
   rc1-parity:
     name: Compiled OpenTTD 16.0-RC1 comparisons
     runs-on: ubuntu-24.04
@@ -266,6 +296,7 @@ jobs:
           python3 tests/stock_tricario_art.py "$src/src/table/engines.h" lua5.1
           python3 tests/advanced_rail_roster_upstream.py "$src/src/table/engines.h" lua5.1
           python3 tests/guideway_types_rc1.py "$src"
+          python3 tests/road_dead_end_rc1.py "$src"
           python3 tests/farm_factory_fields_upstream.py "$src" --lua lua5.1
           python3 tests/farm_clear_rc1_upstream.py "$src/src/clear_cmd.cpp" --lua lua5.1
           python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"

@@ -15,6 +15,7 @@ mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp "$src/game.conf" "$game/"
 cp -R "$src/mods" "$game/"
 mod="$game/mods/luanttd_core"
+cp tests/campaign_worker_focus_geography.lua "$mod/"
 python3 - "$mod/init.lua" <<'PY'
 from pathlib import Path
 import sys
@@ -24,7 +25,12 @@ insert='''if storage:get_string(WorldSetup.storage_key)=="" then
   storage:set_string(WorldSetup.storage_key,core.write_json(WorldSetup.defaults(core.settings)))
 end
 '''
-assert key in s;p.write_text(s.replace(key,insert+key))
+assert key in s
+s=s.replace(key,insert+key)
+game='local api={Sim=Sim,s=S'
+assert game in s
+s=s.replace(game, 'if not resumed_owner then dofile(mod.."/campaign_worker_focus_geography.lua")(core,S,Sim,mod) end\n' + game,1)
+p.write_text(s)
 PY
 printf '\n' >> "$mod/init.lua"
 cat tests/campaign_worker_focus_native.lua >> "$mod/init.lua"
@@ -37,11 +43,26 @@ enable_sound = false
 pause_on_lost_focus = true
 fps_max = 30
 fps_max_unfocused = 12
+bayline_seed = 1751
+bayline_generated_map_width = 64
+bayline_generated_map_depth = 64
+bayline_generated_relief = 0
+bayline_generated_coasts = 0
+bayline_generated_towns = 6
+bayline_generated_town_layout = grid2
 CONF
+if [[ ${BAYLINE_FOCUS_DEAD_END:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_focus_dead_end = true' >>"$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}
 export DISPLAY="127.0.0.1:$display"
+# Match an ordinary returning client. Test focus/rider behavior, not two
+# cold media downloads competing for the same local server's quota.
+if [[ -z ${LUANTTD_NATIVE_MEDIA_CACHE:-} ]]; then
+  python3 tests/cache_luanti_game_media.py "$game" "$XDG_CACHE_HOME"
+fi
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1180x760x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!;client=;sink=
@@ -83,6 +104,7 @@ await_log 'FOCUS_NATIVE_RECEIPT focus-return'
 xdotool keydown d; sleep 1.1; xdotool keyup d
 sleep 1
 import -window root "$out/after-focus.png"
+await_log 'FOCUS_NATIVE_PAID'
 kill -TERM "$client"
 wait "$client" || true
 client=
@@ -99,12 +121,15 @@ p=Path(sys.argv[1])
 a=(p/'first.log').read_text()
 b=(p/'reopened.log').read_text()
 def stamp(text,s):
-    n=re.search(r'FOCUS_NATIVE_RECEIPT '+s+r' day=(\d+) cash=(\d+)',text)
+    n=re.search(r'FOCUS_NATIVE_RECEIPT '+s+r' day=(\d+) cash=(\d+) bus=(\d+) delivered=(\d+) revenue=(\d+)',text)
     return tuple(map(int,n.groups()))
 initial=stamp(a,'initial')
 focus=stamp(a,'focus-return')
 reopen=stamp(b,'reopen')
-assert focus[0]>initial[0] and reopen[0]>=focus[0] and initial[1]==focus[1]==reopen[1],(initial,focus,reopen)
+assert focus[0]>initial[0] and reopen[0]>=focus[0] and initial[2]==focus[2]==reopen[2],(initial,focus,reopen)
+arrive=re.search(r'FOCUS_NATIVE_PAID bus=(\d+) delivered=(\d+) revenue=(\d+)',a)
+bus,paid,revenue=map(int,arrive.groups())
+assert bus==focus[2] and paid>focus[3] and reopen[3]>=paid and reopen[4]>=revenue>focus[4]
 def movement(log,phase):
     span=log.split('FOCUS_NATIVE_RECEIPT '+phase,1)[1]
     pos=[(float(x),float(z)) for x,y,z in re.findall(r'FOCUS_NATIVE_POSITION (-?\d+.\d+) (-?\d+.\d+) (-?\d+.\d+)',span)]
@@ -112,5 +137,5 @@ def movement(log,phase):
 after_focus=movement(a,'focus-return'); after_reopen=movement(b,'reopen')
 assert after_focus>.8 and after_reopen>.8,(after_focus,after_reopen)
 assert 'simulation owner stopped' not in a+b
-print(f'WORKER_GRAPHICAL_FOCUS_REOPEN_PASS days {initial[0]}→{focus[0]}→{reopen[0]}; movement after focus {after_focus:.2f}, after reopen {after_reopen:.2f}; same company')
+print(f'WORKER_GRAPHICAL_FOCUS_REOPEN_PASS days {initial[0]}→{focus[0]}→{reopen[0]}; movement after focus {after_focus:.2f}, after reopen {after_reopen:.2f}; same company and bus {bus}, {paid} paid passengers')
 PY

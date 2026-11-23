@@ -159,6 +159,9 @@ return function(Sim,mod,s,cap)
           elseif train.freight and train.freight_wagon_body_id then
             body.stock_id=body_index==1 and train.stock_engine or train.stock_wagon
             body.body_id=body_index==1 and train.freight_engine_body_id or train.freight_wagon_body_id
+          elseif train.matched_cab_ids and (body_index==1 or body_index==#parts) then
+            body.stock_id=train.stock_engine
+            body.body_id=train.matched_cab_ids[body_index==1 and 1 or 2]
           end
           if exhaust.profiles[kind] then
             local index=p.wormhole and s.rail_tunnel_below and s.rail_tunnel_below[p.id]

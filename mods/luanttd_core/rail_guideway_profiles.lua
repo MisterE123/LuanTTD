@@ -9,7 +9,7 @@ local P={
        engine_visual="lev1",passenger_visual="maglev_passenger",mail_visual="maglev_mail",
        offset=.713,pin_y=.094,pin_z=.455,suspension="maglev_suspension",coupler="maglev_drawbar"},
 }
-local M={by_gauge=P,gauges={2,3},by_engine={},by_stock={},visuals={}}
+local M={by_gauge=P,gauges={2,3},by_engine={},by_stock={},visuals={},extra_engines={55}}
 for gauge,p in pairs(P) do
   p.gauge=gauge
   p.stocks={p.engine,p.passenger,p.mail}
@@ -19,6 +19,14 @@ for gauge,p in pairs(P) do
     M.by_stock[id]=p
     M.visuals[id]=visual
   end
+end
+do
+  local base=P[2]
+  local p={}
+  for k,v in pairs(base) do p[k]=v end
+  p.engine,p.engine_visual=55,"millennium_z1"
+  p.stocks={55}
+  M.by_engine[55],M.by_stock[55],M.visuals[55]=p,p,p.engine_visual
 end
 function M.oil(engine,wagon)
   local p=M.by_engine[engine]

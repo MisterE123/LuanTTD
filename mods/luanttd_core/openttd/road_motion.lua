@@ -6,6 +6,10 @@ return function(data)
 local M={TILE=16, DEFAULT_START=0, TURN_AROUND_START=1, DEPOT_START=6, DEPOT_STOP=11,
   DRIVE_THROUGH_STOP=11, DEPOT_STOP=11}
 
+-- OpenTTD 16.0-RC1 roadveh_cmd.cpp _road_reverse_table, in diagonal
+-- direction order. These are movement rows, not YAPF track directions.
+local reverse_rows={[0]=6,7,14,15}
+function M.reversing_state(diag) return reverse_rows[diag] end
 local function bit(value,place) return math.floor(value/place)%2 end
 local directions={[0]=0,7,6,255,1,0,5,255,2,3,4}
 

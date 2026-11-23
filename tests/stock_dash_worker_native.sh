@@ -17,6 +17,7 @@ cp tests/stock_dash_worker_native.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
+printf '%s\n' "${BAYLINE_DMU_PROFILE:-dash}" >"$out/world/qa-dmu-profile.txt"
 port=${BAYLINE_NATIVE_PORT:-40004}
 for phase in start reload; do
   printf 'port = %s\nprometheus_listener_address = 127.0.0.1:%s\nserver_announce = false\nbind_address = 127.0.0.1\n' "$port" "$port" > "$out/server.conf"

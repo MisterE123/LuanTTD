@@ -136,19 +136,33 @@ return function(Motion,F,board)
         elseif k=="next_tile" or k=="turned" then
           local next_piece=trace[part+1]
           if not next_piece then return end
-          local target=k=="turned" and trace[part].tile or board.adjacent(trace[part].tile,px)
-          if target~=next_piece.tile then return end
-          local next_tile=board.tile(target)
-          local next_state=station_state(next_tile,next_piece.td,
-            part+1==#trace and options.arrival_bay or nil)
+          local here=trace[part].tile
+          local reverses=k=="next_tile" and next_piece.tile==here
+          local target,next_state,start
+          if reverses then
+            -- RC1 RoadVehController: when the road ahead is a dead end,
+            -- run the RvRev row on this tile. Do not consume the YAPF
+            -- reversal edge until its RDE_TURNED sample. Turning while
+            -- leaving an occupied stop or signed normal road must wait.
+            if part_tile.kind~="road" or (part_tile.disallowed or 0)~=0 then return end
+            target,next_state,start=here,Motion.reversing_state(px),Motion.DEFAULT_START
+            if not next_state then return end
+          else
+            target=k=="turned" and here or board.adjacent(here,px)
+            if target~=next_piece.tile then return end
+            next_state=station_state(board.tile(target),next_piece.td,
+              part+1==#trace and options.arrival_bay or nil)
+            start=k=="turned" and Motion.TURN_AROUND_START or Motion.DEFAULT_START
+          end
           local tx,ty=board.xy(target)
-          local start=k=="turned" and Motion.TURN_AROUND_START or Motion.DEFAULT_START
           local event
           event,v.x,v.y,v.direction,v.frame=Motion.enter(v,tx,ty,next_state,SIDE,start)
           if not event then return end
           v.state=next_state
-          part=part+1
-          entered=true
+          if not reverses then
+            part=part+1
+            entered=true
+          end
         else
           return
         end

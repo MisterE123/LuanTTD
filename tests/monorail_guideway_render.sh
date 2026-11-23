@@ -40,6 +40,11 @@ if [[ "$cargo" == oil ]]; then
   textures+=("${family}_oil_tanker")
   cp "$one/guideway-oil-loaded-frame.json" "$mod/mixed-pose-loading.json"
   cp "$one/guideway-oil-loaded-frame.json" "$mod/mixed-pose-reversed.json"
+elif [[ "$cargo" == z1 ]]; then
+  models+=(millennium_z1_body)
+  textures+=(millennium_z1)
+  cp "$one/millennium-z1-frame.json" "$mod/mixed-pose-loading.json"
+  cp "$one/millennium-z1-frame.json" "$mod/mixed-pose-reversed.json"
 else
   cp "$one"/mixed-pose-{loading,reversed}.json "$mod/"
 fi
