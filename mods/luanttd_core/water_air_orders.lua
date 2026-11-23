@@ -4,6 +4,7 @@
 return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
   local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
+  local Rig=dofile(mod.."/openttd/oil_rig.lua")
   local function label(title,id,tile)
     local x,z
     if tile then x,z=Sim.xy(tile) end
@@ -24,14 +25,15 @@ return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
       return
     end
     local st=registry(mode)[id]
-    if not st or st.owner~=owner then return end
-    local title=mode=="air" and (st.layout=="city" and "City Airport" or "Airfield") or "Dock"
+    local rig=(mode=="oil" or mode=="air") and Rig.neutral_ref(s,st)
+    if not st or st.owner~=owner and not rig then return end
+    local title=rig and rig.name or mode=="air" and (st.layout=="city" and "City Airport" or "Airfield") or "Dock"
     local o={kind="station",id=id}
     if mode=="coal" or mode=="oil" then
       local report=not saved_policy and (mode=="coal" and C.order_report(s,id) or mode=="oil" and Tanker.report(s,id))
       if check and (not report or #report.sources==0 and not report.accepts) then return end
       if saved_policy=="full" or report and #report.sources>0 then
-        o.cargo_order="full";title=mode=="oil" and "Full load at oil dock" or "Full load at mine"
+        o.cargo_order="full";title=rig and ("Full load at "..rig.name) or mode=="oil" and "Full load at oil dock" or "Full load at mine"
       elseif saved_policy=="no_load" or report and report.accepts then
         o.cargo_order="no_load";title=mode=="oil" and "Unload at refinery" or "Unload at power station"
       end

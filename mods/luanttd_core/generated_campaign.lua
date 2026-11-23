@@ -256,6 +256,7 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
   local result=Industry.generate(board,{random=function() return Generator.next_random(state) end,
     density=density,custom_count=custom_count,commit=commit,progress=progress})
   profile.industry_rng=copy(state)
+  profile.industry_density=density
   profile.industries=choices
   profile.timber_generation=Timber and true or nil
   profile.industry_stats={target=result.target,shortfall=result.shortfall,attempted=result.attempted}

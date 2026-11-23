@@ -163,5 +163,5 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 245 | FFP Hyperdart 2 | Not mounted |  |
 | 246 | Dinger 200 | Not mounted |  |
 | 247 | Dinger 1000 | Not mounted |  |
-| 253 | Tricario Helicopter | Not mounted |  |
+| 253 | Tricario Helicopter | Playable | Country/City hangars and neutral oil-rig pad, 40 seats + 15 Mail, original rotating 3D rotors. |
 | 254 | Guru X2 Helicopter | Not mounted |  |

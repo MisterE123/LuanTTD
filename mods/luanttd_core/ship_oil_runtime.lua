@@ -134,7 +134,7 @@ return function(Sim,Service,Roster,Calendar,Rules,Catchment,debit)
     local r=Rules.acceptance(st,covered,"oil",inds)
     r.sources={}
     for _,i in ipairs(Rules.ordered(inds)) do
-      if not i.removed and Rules.output(i,"oil") then
+      if not i.removed and Rules.output(i,"oil") and Rules.allowed_source(st,i) then
         for _,t in ipairs(i.tiles) do
           if Catchment.contains(covered,t.x,t.z) then r.sources[#r.sources+1]=i.id;break end
         end

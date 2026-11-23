@@ -2,10 +2,11 @@
 -- branch of OpenTTD 14.1 CmdBuildAirport / CheckFlatLandAirport.
 -- Noise, stations shared across modes, foundation clearing and airport
 -- replacement are explicit future work; the preview never clears objects.
-return function(Sim,Terrain,Small,City)
+return function(Sim,Terrain,Small,City,OilRig)
   local N={PRICE_PER_TILE=600,CLEAR_PER_TILE=30}
   function N.layout(name)
     if name=="city" then return City end
+    if name=="oilrig" then return OilRig end
     if name==nil or name=="country" then return Small end
   end
   function N.footprint(origin,name)
@@ -21,7 +22,7 @@ return function(Sim,Terrain,Small,City)
   end
   function N.quote(s,owner,origin,name)
     local field=N.layout(name)
-    if not field then return nil,"AIRPORT_TYPE_NOT_AVAILABLE" end
+    if not field or name=="oilrig" then return nil,"AIRPORT_TYPE_NOT_AVAILABLE" end
     if field.intro_year and Sim.date(s)<field.intro_year then return nil,"CITY_AIRPORT_NOT_INTRODUCED" end
     if not (s.corner_grid and origin and s.tiles[origin]) then return nil,"SELECT_AIRFIELD_ORIGIN" end
     local x,z=Sim.xy(origin)

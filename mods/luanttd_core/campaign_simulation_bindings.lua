@@ -32,7 +32,8 @@ return function(Sim,mod)
     local small=dofile(source.."airport_small.lua")
     local motion=dofile(source.."airport_motion.lua")(small)
     local city=city_ready and dofile(source.."airport_city.lua")
-    local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small,city or nil)
+    local rig=dofile(source.."airport_oil_rig.lua")
+    local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small,city or nil,rig)
     local roster=dofile(source.."airport_roster.lua")
     local run=dofile(mod.."/airport_preview_run.lua")(Sim,net,small,motion,terrain,slope,roster)
     run.paid_art_ready=function(p) return not p or not p.engine_id or ready(p.engine_id) end
@@ -70,7 +71,8 @@ return function(Sim,mod)
     end
     local tankers=dofile(source.."oil_ship_roster.lua")
     local oil_run=make({engine=tankers.model(204),engine_for=tankers.model,key="stock_oil_ship_route",
-      serial="next_stock_oil_ship_route",paid=function()return true end,validate_both=true})
+      serial="next_stock_oil_ship_route",paid=function()return true end,validate_both=true,
+      use_neutral=dofile(source.."oil_rig.lua").neutral_ref})
     local oil=Sim.mount_oil_ship(s,net,oil_run,ready,run,cargo_run)
     return terrain,water,net,roster,run,depot,cargo_run,coal,oil,oil_run
   end

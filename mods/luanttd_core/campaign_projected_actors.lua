@@ -5,10 +5,12 @@ return function(core,api,motion,models,airframes)
   local active,rail_members={},{}
   local base=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local road_art=dofile(base.."/road_stock_media.lua")
+  local rotors=dofile(base.."/airport_rotor_view.lua")(core)
   local repair_smoke=dofile(base.."/road_fault_view.lua")(core.add_particle)
   local boats={[204]="stock_mps_oil_tanker",[205]="stock_cs_inc_oil_tanker",[206]="stock_harbor_ferry",[207]="stock_ffp_passenger_ferry",[208]="stock_bakewell_300_hovercraft"}
   local function remove(id)
     local a=active[id]
+    rotors.clear(a)
     if a and a.ref:get_pos() then a.ref:remove() end
     active[id]=nil
     repair_smoke.remove(id)
@@ -56,6 +58,7 @@ return function(core,api,motion,models,airframes)
       local rotation=part and part.rotation or {x=pitch or 0,y=motion.nose_yaw(target),z=0}
       if differs(v.rotation,rotation) then v.ref:set_rotation(rotation) end
       v.rotation=rotation
+      if row.mode=="air" then rotors.step(v,airframes[row.engine],pos,row.rotor_period,dt) end
       if part then
         v.flip=part.flip
         if part.scale and (not v.scale or math.abs(v.scale-part.scale)>.002) then

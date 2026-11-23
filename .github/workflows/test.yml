@@ -162,6 +162,23 @@ jobs:
           lua5.1 tests/oil_ship_ordinary_worker.lua 204
           lua5.1 tests/oil_ship_ordinary_worker.lua 205
           lua5.1 tests/oil_ship_ordinary_worker.lua 204 mixed
+          lua5.1 tests/oil_rig_rules.lua
+          lua5.1 tests/offshore_rig_world.lua
+          lua5.1 tests/oil_rig_helicopter.lua
+          lua5.1 tests/oil_ship_ordinary_worker.lua 204 offshore
+          lua5.1 tests/oil_ship_ordinary_worker.lua 204 neutral_only
+          lua5.1 tests/industry_openings_runtime.lua
+          manifest="$(mktemp -d)"
+          for media in models textures; do find mods/luanttd_core/"$media" -maxdepth 1 -type f -printf '%f\n' > "$manifest/$media"; done
+          lua5.1 tests/offshore_generated_opening.lua "$manifest"
+          lua5.1 tests/offshore_rotary_worker.lua
+          lua5.1 tests/offshore_rotary_worker.lua city
+          python3 tests/stock_oil_rig_art.py
+          python3 tests/stock_tricario_art.py
+          bash tests/stock_offshore_tanker_worker_native.sh
+          bash tests/offshore_rotary_worker_native.sh
+          LUANTTD_QA_ROTARY_FIELD=city bash tests/offshore_rotary_worker_native.sh
+          bash tests/stock_oil_rig_art_native.sh
           lua5.1 tests/coal_ship_ordinary_worker.lua 211
           lua5.1 tests/coal_ship_ordinary_worker.lua 212
           lua5.1 tests/rail_paid_runtime.lua 208
@@ -225,6 +242,10 @@ jobs:
           git clone --quiet --depth 1 --branch 16.0-RC1 https://github.com/OpenTTD/OpenTTD.git "$src"
           test "$(git -C "$src" rev-parse HEAD)" = "$OPENTTD_RC1_REV"
           python3 tests/news_rc1.py "$src"
+          python3 tests/oil_rig_upstream.py "$src" lua5.1
+          python3 tests/industry_build_scheduler_upstream.py "$src" lua5.1
+          python3 tests/rotary_motion_upstream.py "$src" lua5.1
+          python3 tests/stock_tricario_art.py "$src/src/table/engines.h" lua5.1
           python3 tests/farm_factory_fields_upstream.py "$src" --lua lua5.1
           python3 tests/farm_clear_rc1_upstream.py "$src/src/clear_cmd.cpp" --lua lua5.1
           python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"

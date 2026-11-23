@@ -11,6 +11,8 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
   for _,row in ipairs(dofile(base.."/openttd/airport_roster.lua").catalog()) do
     aircraft[row.stock_id]={engine=row.stock_id,cap=row.passengers,mail=row.mail,slice=20,aging=185,wait=20}
   end
+  local rotary=dofile(base.."/openttd/airport_roster.lua").entry(253)
+  aircraft[253]={engine=253,cap=rotary.passengers,mail=rotary.mail,slice=20,aging=185,wait=20}
   local vessels={}
   local ships=dofile(base.."/openttd/passenger_ship_roster.lua")
   for _,id in ipairs(ships.order) do
@@ -104,7 +106,12 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
 
   function S.refresh_acceptance(state,id,ctx)
     local st=assert(state.stations[id])
-    local summary=Catchment.acceptance(coverage(state,st,ctx),"passenger",ctx.house_at)
+    local c=coverage(state,st,ctx)
+    local summary=Catchment.acceptance(c,"passenger",ctx.house_at)
+    local accepted=ctx.industry_acceptance and ctx.industry_acceptance(st,"passenger",c) or 0
+    summary.eighths=summary.eighths+accepted
+    summary.always_accepted=summary.always_accepted or accepted>0
+    if st.neutral_rig and ctx.serve_neutral==false then summary.eighths=accepted;summary.always_accepted=accepted>0 end
     st.passenger_acceptance=summary.eighths
     st.always_accept_passengers=summary.always_accepted
     return summary
@@ -112,7 +119,12 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
 
   function S.refresh_mail_acceptance(state,id,ctx)
     local st=assert(state.stations[id])
-    local summary=Catchment.acceptance(coverage(state,st,ctx,true),"mail",ctx.house_at)
+    local c=coverage(state,st,ctx,true)
+    local summary=Catchment.acceptance(c,"mail",ctx.house_at)
+    local accepted=ctx.industry_acceptance and ctx.industry_acceptance(st,"mail",c) or 0
+    summary.eighths=summary.eighths+accepted
+    summary.always_accepted=summary.always_accepted or accepted>0
+    if st.neutral_rig and ctx.serve_neutral==false then summary.eighths=accepted;summary.always_accepted=accepted>0 end
     st.mail_acceptance=summary.eighths
     st.always_accept_mail=summary.always_accepted
     return summary
@@ -122,7 +134,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
   -- loading order. Change the physical footprint through S.footprint.
   function S.station(state,def,ctx)
     assert(type(def.id)=="number" and def.owner~=nil and not state.stations[def.id],"Invalid or duplicate station")
-    local st={id=def.id,owner=def.owner,town=def.town,
+    local st={id=def.id,owner=def.owner,town=def.town,neutral_rig=def.neutral_rig,
       stock={passenger={}},loading_order={},passenger_rating_state=Rating.new(),
       rating_phase=def.rating_phase or 0,time_since_load=255,time_since_unload=255,
       tick_index=def.tick_index}
@@ -197,17 +209,18 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
   -- Newly produced packets have no loading tile, travelled vector or
   -- feeder claim. Source station bucket scans the entire manual hop
   -- backward when merging, not only the tail.
-  local function enqueue_generated(st,units,town)
+  local function enqueue_generated(st,units,source,kind)
+    kind=kind or "town"
     local queue=st.stock.passenger
     for i=#queue,1,-1 do
       local p=queue[i]
       if p.origin_station==st.id and p.origin_tile==nil and p.age==0 and
-          p.source_type=="town" and p.source==town and p.units+units<=65535 then
+          p.source_type==kind and p.source==source and p.units+units<=65535 then
         p.units=p.units+units
         return
       end
     end
-    queue[#queue+1]={units=units,source=town,source_type="town",origin_station=st.id,age=0}
+    queue[#queue+1]={units=units,source=source,source_type=kind,origin_station=st.id,age=0}
   end
 
   function S.produce(state,x,y,amount,town,ctx)
@@ -228,6 +241,41 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       local units=Packets.whole_units(st,entry.fixed)
       if units>0 then
         enqueue_generated(st,units,town)
+        Rating.observe_waiting(goods(st),units)
+        moved=moved+units
+      end
+    end
+    return moved
+  end
+
+  -- Industry::TransportIndustryGoods selects stations near any physical
+  -- industry cell, then shares goods by rating. It does not use the
+  -- station/town center or create passengers directly onboard.
+  function S.offer_industry_passengers(state,ind,amount,ctx)
+    local candidates={}
+    for _,id in ipairs(keys(state.stations)) do
+      local st=state.stations[id]
+      if (not ctx.station_active or ctx.station_active(st)) and
+        (ctx.serve_neutral~=false or
+          (ind.neutral_station==nil and st.neutral_rig==nil or st.neutral_rig==ind.id)) then
+        local c=coverage(state,st,ctx)
+        local opts={neutral_owner=ctx.neutral_owner,town_rights=ctx.town_rights,select_goods=ctx.select_goods,
+          exclusive_owner=ind.exclusive_consumer}
+        for _,t in ipairs(ind.tiles) do
+          if t.completed and not t.neutral_platform then
+            local rating=Catchment.offer(st,c,"passenger",t.x,t.z,goods,opts)
+            if rating then candidates[#candidates+1]={st=st,rating=rating};break end
+          end
+        end
+      end
+    end
+    Packets.allocate(amount,candidates)
+    local moved=0
+    for _,entry in ipairs(candidates) do
+      local st=entry.st
+      local units=Packets.whole_units(st,entry.fixed)
+      if units>0 then
+        enqueue_generated(st,units,ind.id,"industry")
         Rating.observe_waiting(goods(st),units)
         moved=moved+units
       end

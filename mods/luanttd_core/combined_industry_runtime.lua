@@ -13,6 +13,11 @@ return function(Timber,Farm,Oil,Fields,Runtime,Catchment)
   -- array. Do not change either layout just to mount them together.
   by_kind.forest,by_kind.sawmill=Timber,Timber
   local by_cargo={wood=Timber,goods=Timber,oil=Oil,grain=Farm,livestock=Farm,iron_ore=Farm,steel=Farm,valuables=Farm}
+  function K.allowed_source(st,i)
+    local r=assert(by_kind[i.kind],i.kind)
+    if r.allowed_source then return r.allowed_source(st,i) end
+    return st.serve_neutral~=false or st.neutral_rig==nil
+  end
   function K.output(i,cargo)
     local r=assert(by_kind[i.kind],i.kind)
     if r==Timber then return i.produced.cargo==cargo and i.produced or nil end
@@ -36,7 +41,7 @@ return function(Timber,Farm,Oil,Fields,Runtime,Catchment)
     -- stops share the same physical queues, regardless of source chain.
     local compatible={}
     for _,st in ipairs(all) do
-      if not st.freight_cargo or st.freight_cargo==cargo then compatible[#compatible+1]=st end
+      if (not st.freight_cargo or st.freight_cargo==cargo) and K.allowed_source(st,ind) then compatible[#compatible+1]=st end
     end
     return assert(by_kind[ind.kind]).distribute(ind,cargo,amount,compatible,covers,opts)
   end
@@ -53,6 +58,7 @@ return function(Timber,Farm,Oil,Fields,Runtime,Catchment)
     end
     function A.tile_loop(i,t,opts,offer)
       if i.kind=="oil_well" then opts.random_u32,opts.animated=ctx.random_u32,ctx.animated end
+      if i.kind=="oil_rig" then opts.complete_rig=ctx.complete_rig end
       local sprite=t.gfx
       local n,moved,details=assert(by_kind[i.kind]).tile_loop(i,t,opts,offer)
       if i.kind=="forest" and t.gfx~=sprite and ctx.forestry_changed then ctx.forestry_changed(t) end

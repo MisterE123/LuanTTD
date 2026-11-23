@@ -2,6 +2,11 @@
 -- evaluated at its original coordinates and altitude. The same Sampson
 -- scale everywhere clears the real two-aircraft taxi/stand envelope.
 return {
+  tricario={id=253,entity="luanttd_core:stock_tricario_heli",mesh="bl_stock_tricario_heli.obj",
+    atlas="bl_stock_tricario_heli_atlas.png",scale=1,
+    rotor="bl_stock_tricario_heli_rotor.obj",tail_rotor="bl_stock_tricario_heli_tail.obj",
+    rotor_offset={x=0,y=4.07,z=-.16},tail_offset={x=-.37,y=2.56,z=6.05}},
+
   darwin_200={
     id=227,entity="luanttd_core:stock_darwin_200",
     mesh="bl_stock_darwin_200.obj",

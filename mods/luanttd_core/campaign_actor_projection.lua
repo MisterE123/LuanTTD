@@ -111,7 +111,8 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       if point(p) then
         if airborne==nil then airborne=run.vehicle.airborne end
         add("air",run.paid_clock or 1,{owner=run.owner,engine=run.engine_id,pos=xyz(p),dir=dir,
-          airborne=not not airborne,label="Aircraft #"..(run.paid_clock or 1)})
+          airborne=not not airborne,rotor_period=run.vehicle.helicopter and math.floor((run.vehicle.rotor_speed or 0)/16),
+          label=R.air.run.engine_for and R.air.run.engine_for(run).name or "Aircraft #"..(run.paid_clock or 1)})
       end
     end
   end

@@ -66,8 +66,11 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
     end
     local D=s.stock_ship_depots or {}
     local S=s.stock_ship_stations or {}
+    local function permitted(st)
+      return st and (st.owner==owner or config.use_neutral and config.use_neutral(s,st,owner))
+    end
     if not (D[depot] and S[first] and S[second] and first~=second and D[depot].owner==owner and
-        S[first].owner==owner and S[second].owner==owner) then return nil,"OWN_DEPOT_AND_TWO_DOCKS_REQUIRED" end
+        permitted(S[first]) and permitted(S[second])) then return nil,"OWN_DEPOT_AND_TWO_DOCKS_REQUIRED" end
     local model=R.engine_for({engine_id=engine_id})
     if engine_id and model.id~=engine_id then return nil,"UNKNOWN_PASSENGER_FERRY" end
     local board,region=lookup(s)

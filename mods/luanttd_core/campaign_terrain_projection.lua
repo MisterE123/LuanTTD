@@ -75,11 +75,11 @@ function M.registries(s,ids)
     add(out,s,"sites",t.road_town,site_fields)
     add(out,s,"stations",t.station,station_fields)
     add(out,s,"stock_rail_stations",t.rail_station_id,station_fields)
-    if t.ship and t.ship.kind=="dock" then
-      add(out,s,"stock_ship_stations",t.ship.station,{"owner","id","land","water"})
+    if t.ship and (t.ship.kind=="dock" or t.ship.kind=="oilrig") then
+      add(out,s,"stock_ship_stations",t.ship.station,{"owner","id","land","water","neutral","oil_rig","name"})
     end
     if t.airfield then
-      add(out,s,"stock_small_airports",t.airfield.airport,{"owner","id","origin","tiles","layout"})
+      add(out,s,"stock_small_airports",t.airfield.airport,{"owner","id","origin","tiles","layout","neutral","oil_rig","name"})
     end
     -- The visual scene changes only when the ground variant or actual
     -- fence geometry changes, not when the worker visits a field.

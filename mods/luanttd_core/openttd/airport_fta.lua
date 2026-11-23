@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- OpenTTD contributors. Fixed-wing airport state machine translated from
 -- aircraft_cmd.cpp and airport.cpp; data profiles provide each stock layout.
+-- Rotary terminal sequencing and protected elevated pads verified at 16.0-RC1.
 return function(A)
   local S,B=A.state,A.block
   local terminal_actions={}
@@ -96,6 +97,8 @@ return function(A)
     return nil,"no_matching_transition"
   end
 
+  A.ordinary=ordinary
+
   local function set_airport(a,v)
     v.target=a.id
     v.pos=A.entry(v.x,v.z,a.x,a.z,a.rotation)
@@ -107,11 +110,13 @@ return function(A)
     return v.pos
   end
   function A.new(a,opts)
+    if not A.hangar then return nil,"AIRPORT_HAS_NO_HANGAR" end
     opts=opts or {}
     local x,z,_,d=A.point(0,a.rotation,a.width,a.height)
     return {pos=0,previous_pos=0,state=S.HANGAR,x=a.x+x,z=a.z+z,y=(a.ground or 0)+1,direction=d,
       owner=opts.owner,target=a.id,hidden=true,order=opts.order,speed=0,subspeed=0,progress=0,
-      acceleration=opts.acceleration or 24,max_speed=opts.max_speed or 320}
+      acceleration=opts.acceleration or 24,max_speed=opts.max_speed or 320,
+      helicopter=opts.helicopter or nil,rotor_speed=opts.helicopter and 0 or nil,rotor_hidden=opts.helicopter or nil}
   end
 
   -- Called only when the physical controller reaches the requested point.
@@ -119,7 +124,8 @@ return function(A)
   -- selection. AIRPORT_CLOSED only affects arriving aircraft.
   function A.arrive(a,v,h)
     h=h or {}
-    if v.helicopter then return nil,"fixed_wing_only" end
+    if v.helicopter and A.helicopters==false then return nil,"fixed_wing_only" end
+    if not v.helicopter and A.airplanes==false then return nil,"oilrig_helicopter_only" end
     if v.loading then return "loading" end
     local row=A.layout[v.pos]
     if not row or not A.layout[v.previous_pos] then return nil,"invalid_position" end
@@ -132,6 +138,7 @@ return function(A)
     if old==S.HANGAR then
       if v.previous_pos~=v.pos then
         v.hidden,v.speed,v.subspeed,v.progress=true,0,0,0
+        if v.helicopter then v.rotor_hidden=true end
         event="hangar"
       elseif v.wait_unbunch or (order.kind~="station" and order.kind~="depot") then
         event="wait_hangar"
@@ -142,7 +149,8 @@ return function(A)
         event="blocked"
       else
         if order.id~=a.id or A.free_terminal(a,v) then
-          if order.id~=a.id then v.state=S.TAKEOFF end
+          if order.id~=a.id then v.state=v.helicopter and S.HELITAKEOFF or S.TAKEOFF end
+          if v.helicopter then v.rotor_hidden=nil;v.rotor_speed=80 end
           v.direction=(A.hangar.dir+(a.rotation or 0))%8
           v.speed,v.subspeed,v.progress,v.hidden=0,0,0,nil
           event=ordinary(a,v)
@@ -153,6 +161,7 @@ return function(A)
     elseif terminal_actions[old] then
       if v.previous_pos~=v.pos then
         if order.kind~="depot" then v.loading=true;v.last_station=a.id end
+        if v.helicopter and A.num_helipads and A.num_helipads>0 and h.service_at_helipad then h.service_at_helipad(v,a) end
         event="terminal"
       elseif order.kind==nil or order.kind=="nothing" or order.kind=="conditional" then
         event="wait_terminal"
@@ -160,33 +169,35 @@ return function(A)
         event="blocked"
       else
         if order.kind=="depot" and order.id==a.id or (order.kind~="station" and order.kind~="depot") then
-          v.state=S.HANGAR
+          v.state=A.hangar and S.HANGAR or S.HELITAKEOFF
           if order.kind~="depot" then v.order=nil end
         else
-          v.state=S.TAKEOFF
+          v.state=v.helicopter and S.HELITAKEOFF or S.TAKEOFF
         end
         event=ordinary(a,v)
       end
     elseif old==S.TAKEOFF then v.state=S.STARTTAKEOFF;event="takeoff"
     elseif old==S.STARTTAKEOFF then v.state=S.ENDTAKEOFF;event="liftoff"
-    elseif old==S.ENDTAKEOFF then
+    elseif old==S.ENDTAKEOFF or old==S.HELITAKEOFF then
       v.state=S.FLYING
       local next=h.next_airport and h.next_airport(v,a) or (h.airports and h.airports[order.id])
       if next then
         if h.layout then h.layout(next).inbound(next,v) else set_airport(next,v) end
-        return "departed",next
       end
-      return "departed"
+      if old==S.HELITAKEOFF and h.send_automatic_service then h.send_automatic_service(v) end
+      return "departed",next
     elseif old==S.FLYING then
       local allowed=not a.closed and (a.owner==nil or a.owner==v.owner) and
         (not h.allowed or h.allowed(v,a))
       if allowed then
         for i=2,#row do
           local choice=row[i]
-          if choice[1]==S.LANDING then
+          local landing=v.helicopter and S.HELILANDING or S.LANDING
+          if choice[1]==landing then
             local speed,sub=v.speed,v.subspeed
             if not A.has_block(a,v,from,i) then
-              v.state,v.pos=S.LANDING,choice[3]
+              v.state,v.pos=landing,choice[3]
+              if v.helicopter then v.direct_descent=true end
               a.flags=union(a.flags,A.layout[v.pos][1][2])
               v.previous_pos=from
               return "approach"
@@ -198,10 +209,12 @@ return function(A)
       v.pos=c[3]
       return "hold"
     elseif old==S.LANDING then v.state=S.ENDLANDING;event="touchdown"
-    elseif old==S.ENDLANDING then
+    elseif old==S.HELILANDING then v.state=S.HELIENDLANDING;event="touchdown"
+    elseif old==S.ENDLANDING or old==S.HELIENDLANDING then
       if A.has_block(a,v,v.pos,1) then event="blocked"
       elseif order.kind=="station" and A.free_terminal(a,v) then event="assigned_terminal"
-      else v.state=S.HANGAR;event="to_hangar" end
+      elseif A.hangar then v.state=S.HANGAR;event="to_hangar"
+      else v.state=S.HELITAKEOFF;event="no_pad_departure" end
     else
       return nil,"unsupported_state"
     end

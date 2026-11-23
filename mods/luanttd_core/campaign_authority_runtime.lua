@@ -281,9 +281,35 @@ return function(Sim,mod,s,cap)
     N.water and N.water.freight or false,N.water and N.water.tanker_run or false,N.air and N.air.run or false}) do
     if run then run.news_arrival=N.news.arrive end
   end
+  local openings
+  local generated=s.stock_generated_profile
+  if generated and generated.industry_stats and oil and farm then
+    local _,_,farm_rules=Sim.mount_farm_world(s,Terrain,true)
+    local stand=dofile(source.."passengers.lua")
+    local rate=dofile(source.."station_rating.lua")
+    local catchment=dofile(source.."station_catchment.lua")(stand,rate)
+    local coal=dofile(source.."coal_industry.lua")(stand,rate,catchment,dofile(source.."income.lua"))
+    local timber=Sim.timber_rules()
+    local heavy=cap.heavy_industry and Sim.mount_heavy_world(s,Terrain) or nil
+    local rules=dofile(source.."industry_worldgen.lua")(coal,timber,Sim.oil_rules(),farm_rules,heavy~=nil)
+    local function vehicle_on_ground(tile)
+      for _,r in ipairs({N.water and N.water.run or false,N.water and N.water.freight or false,
+          N.water and N.water.tanker_run or false}) do
+        local p=r and r.current(s)
+        if p and p.vehicle.tile==tile then return true end
+      end
+      return false
+    end
+    openings=dofile(mod.."/industry_openings_runtime.lua")(Sim,mod,s,{
+      coal=dofile(mod.."/coal_industry_world.lua")(Sim,Terrain,coal),oil=oil,farm=farm,heavy=heavy,
+      bank=N.bank,timber=dofile(mod.."/timber_world.lua")(Sim,Terrain,timber)},rules,{
+        terrain=Terrain,coal=coal,density=generated.industry_density or 4,vehicle_on_ground=vehicle_on_ground,
+          advertise=N.news.industry_opened})
+  end
   function N.day()
     Sim.daily(s)
     if Clock then Clock() end
+    if openings then openings() end
     N.news.day()
   end
   return N

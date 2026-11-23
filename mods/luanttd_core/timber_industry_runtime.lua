@@ -40,6 +40,7 @@ return function(Rules,Catchment)
       end
     end
     for _,st in ipairs(ctx.stations) do
+      if ctx.serve_neutral~=nil then st.serve_neutral=ctx.serve_neutral end
       if not stations[st.id] then
         stations[st.id]=st
         covers[st.id]=ctx.coverage and ctx.coverage[st.id] or Catchment.build(st,width,height,ctx.modified)
@@ -47,6 +48,7 @@ return function(Rules,Catchment)
     end
     local opts=ctx.opts or {}
     local B={industries=industries}
+    function B.station(id) return stations[id] end
     function B.covered(id,x,z)
       return covers[id] and Catchment.contains(covers[id],x,z) or false
     end
@@ -57,7 +59,7 @@ return function(Rules,Catchment)
     -- Call from the existing landscape loop. Replay protection is per
     -- physical tile and tick, not per-industry: multiple legit tiles of
     -- one sawmill can release separate 255-unit capped lots in a tick.
-    function B.tile_visit(x,z,tick)
+    function B.tile_visit(x,z,tick,offer_rig_passengers)
       assert(uint(tick))
       if x<0 or z<0 or x>=width or z>=height then return 0,0 end
       local key=z*width+x
@@ -74,6 +76,7 @@ return function(Rules,Catchment)
       ledger.visited[key]=true
       local o={recession=opts.recession and opts.recession(world,tick),editor=opts.editor and opts.editor(world,tick)}
       return Rules.tile_loop(t.ind,t.tile,o,function(ind,cargo,n)
+        if ind.kind=="oil_rig" and cargo=="passenger" and offer_rig_passengers then return offer_rig_passengers(ind,n) end
         return Rules.distribute(ind,cargo,n,ctx.stations,covers,{
           select_goods=ctx.select_goods,town_rights=ctx.town_rights,neutral_owner=ctx.neutral_owner,
           packet_allocatable=ctx.packet_allocatable,

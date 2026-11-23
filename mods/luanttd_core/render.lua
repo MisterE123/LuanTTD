@@ -934,6 +934,13 @@ return function(api)
         end
         return coal_buildings[name] or "air"
       end
+      if b.chain=="oil" and b.kind=="rig" then
+        if y~=level then return "air" end
+        local class=t.water_class or "sea"
+        if class=="sea" then return coastal_node(t,id,x,y,z) or gnames.water[t.variant or 3] end
+        if class=="river" and stock_scenery.river then return stock_scenery.river[0][river_direction(id)] end
+        return gnames.water[t.variant or 3]
+      end
       return y<=level and gnames.grass[t.variant] or "air"
     end
     if api.farm_world then

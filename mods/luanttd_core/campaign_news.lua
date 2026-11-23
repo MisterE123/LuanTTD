@@ -92,7 +92,7 @@ return function(Sim,mod,R,cap)
       end
     end
     if R.air then
-      for _,row in ipairs(R.air.roster.catalog()) do
+      for _,row in ipairs(R.air.roster.catalog(true)) do
         if cap.air and cap.air[row.stock_id] and (not row.jet or cap.city_airport) and R.air.roster.available(Sim,s,row.stock_id) then
           add("air",row.stock_id,row.name)
         end
@@ -156,6 +156,21 @@ return function(Sim,mod,R,cap)
     if not row.ref_mode then return true end
     local m=s[stations[row.ref_mode]]
     return m and m[row.ref_station]~=nil
+  end
+  function W.industry_opened(ind)
+    local site=s.sites[ind.site or 0]
+    if not site then return end
+    for _,chain in ipairs(chains) do
+      if s[chain] and s[chain][ind.id]==ind then
+        book.industries=book.industries or {}
+        local key=chain..":"..ind.id
+        if book.industries[key] then return end
+        book.industries[key]={name=site.name,tile=site.tile}
+        return publish("open","thin",site.name.." opens",
+          site.name.." has opened. Inspect the site to see which cargos it supplies or accepts.",
+          {tile=site.tile,icon="industry"})
+      end
+    end
   end
   function W.day()
     local year,month=Sim.date(s)

@@ -3,6 +3,8 @@
 return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
   local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local O=dofile(source.."rail_order_list.lua")
+  local Rig=dofile(source.."oil_rig.lua")
+  local Rotor=dofile(source.."airport_rotary_motion.lua")(Motion)
   local R={VERSION=1,DWELL_TICKS=74,engine={id=215,visual="bayshore_trimotor",
     passengers=25,mail=4,acceleration=18,max_speed=473}} -- (37 * 128) / 10
   function R.all(s)
@@ -41,6 +43,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       return false
     end
     local design=engine and Roster and Roster.entry(engine)
+    if field.layout=="oilrig" then return design and design.helicopter==true or false end
     return not (design and design.small==false) or field.layout=="city"
   end
   local function layout(field)
@@ -68,7 +71,10 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       return nil,"STOCK_HOUSE_CLOCK_REQUIRED"
     end
     local a,b=s.stock_small_airports and s.stock_small_airports[first],s.stock_small_airports and s.stock_small_airports[second]
-    if not a or not b or a==b or a.owner~=owner or b.owner~=owner then return nil,"TWO_OWN_AIRFIELDS_REQUIRED" end
+    local neutral=R.fits(b,owned and owned.stock_id) and Rig.neutral_ref(s,b)
+    if not a or not b or a==b or a.owner~=owner or b.owner~=owner and not neutral then
+      return nil,"SELECT_YOUR_HANGAR_AND_COMPATIBLE_AIRFIELD"
+    end
     for _,field in ipairs({a,b}) do
       local ok,why=R.route_stop(s,field,owned and owned.stock_id)
       if not ok then return nil,why end
@@ -86,7 +92,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     end
     local engine=R.engine_for(p)
     p.vehicle=layout(a).new(a,{owner=owner,order={kind="station",id=second},
-      max_speed=engine.max_speed,acceleration=engine.acceleration})
+      max_speed=engine.max_speed,acceleration=engine.acceleration,helicopter=engine.helicopter})
     if s.air_paid_service then
       p.paid_clock=in_fleet and owned.serial or s.next_paid_air_run or 1
       p.paid_built_day=owned and owned.day or s.day
@@ -131,6 +137,20 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     local hooks={airports=airports,layout=layout,plane_speed=Motion.PLANE_SPEED,terrain_height=function(x,z)
       return R.terrain_under(s,x,z)
     end}
+    if v.helicopter then
+      hooks.rotary=Rotor
+      hooks.flying_state=Small.state.FLYING
+      hooks.flight_terrain_height=hooks.terrain_height
+      hooks.tile_at=function(x,z) return Sim.id(math.floor(x/16),math.floor(z/16)) end
+      hooks.slope_pixel_z=function(x,z)
+        local tx,tz=math.floor(x/16),math.floor(z/16)
+        if not Sim.id(tx,tz) then return R.terrain_under(s,x,z) end
+        local mask,zmin=Terrain.tile(s.corner_grid,tx,tz)
+        return zmin*8+Slope.pixel(x%16,z%16,mask)
+      end
+      hooks.update_aircraft_cache=function() end
+      hooks.next_airport_order=function(_,_) end
+    end
     local function find_order(advance)
       local list,c=p.transport_orders,p.transport_order_cursor
       if advance and list[c.implicit+1].id==v.last_station then
@@ -191,7 +211,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
         elseif ev=="terminal" then
           p.arrivals=p.arrivals+1;p.phase="terminal";p.dwell=paid and 0 or R.DWELL_TICKS
           p.last_airfield=a.id
-          local tile=Sim.id(math.floor(v.x/16),math.floor(v.z/16))
+          local tile=a.layout=="oilrig" and a.origin or Sim.id(math.floor(v.x/16),math.floor(v.z/16))
           if R.news_arrival then R.news_arrival("air",p.owner,a.id,tile) end
           if paid then
             local field=tile and s.tiles[tile].airfield

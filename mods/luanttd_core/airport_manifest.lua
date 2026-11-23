@@ -6,7 +6,8 @@ return function(core,mod)
   end
   local assets={}
   for _,art in pairs(dofile(mod.."/airport_airframe_art.lua")) do
-    if files[art.mesh] and files[art.atlas] and (not art.flight or files[art.flight]) then
+    if files[art.mesh] and files[art.atlas] and (not art.flight or files[art.flight])
+        and (not art.rotor or (files[art.rotor] and files[art.tail_rotor])) then
       assets[art.id]=art
     end
   end

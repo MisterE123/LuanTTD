@@ -64,22 +64,26 @@ return function(Sim,Terrain,F,R,growth,debit,random)
     return {tile=tile,pair=pair,clears=ids,removed=removed,base=levels[1],town=town.id,x=x,z=z,
       price=F.cost("temperate_bank",0),revision=s.topology,terrain_revision=s.corner_grid.revision,industry=next_}
   end
-  function W.execute(s,owner,tile,quote)
+  function W.execute(s,owner,tile,quote,opening)
     local verified,why=W.plan(s,tile)
     if not verified then return nil,why end
     if not quote or verified.revision~=quote.revision or verified.terrain_revision~=quote.terrain_revision or
         verified.price~=quote.price or verified.town~=quote.town then return nil,"BANK_STALE_QUOTE" end
     local c=s.companies[owner]
-    if not c or c.cash<verified.price then return nil,"BANK_NOT_ENOUGH_CASH" end
+    if not opening and (not c or c.cash<verified.price) then return nil,"BANK_NOT_ENOUGH_CASH" end
     local town=assert(s.sites[verified.town])
     local id=verified.industry
     local site_id=#s.sites+1
     local industry=F.new("temperate_bank",id,verified.x-1,verified.z-1,{economy_year=Sim.date(s),
-      random_u32=function() return random(s) end})
+      original=opening and true or nil,random_u32=not opening and function() return random(s) end or nil})
+    if opening then
+      local mod=core and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+      dofile(mod.."/openttd/industry_gameplay_construction.lua")(industry,opening.seed_bits,opening.random,opening.original)
+    end
     industry.town,industry.site,industry.founder=town.id,site_id,owner
     local site={id=site_id,kind="stock_temperate_bank",name=town.name.." Bank",tile=tile,stock={},produced={},received={},
       service=0,stock_industry=id,industry_chain="bank",town=town.id}
-    debit(c,verified.price)
+    if not opening then debit(c,verified.price) end
     for _,part in ipairs(verified.clears) do
       growth.remove(s,verified.removed[part])
       s.tiles[part].house,s.tiles[part].source_house=nil,nil

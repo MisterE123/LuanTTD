@@ -1,14 +1,19 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- OpenTTD 14.1 temperate land Oil Wells (11) -> Oil Refinery (4).
 -- Source: table/build_industry.h, industry_cmd.cpp, clear/map checks,
--- economy.cpp, industry.h, cargo_const.h, engines.h. Oil rig out of scope.
+-- economy.cpp, industry.h, cargo_const.h, engines.h. Oil Rig #5 spec,
+-- placement and construction completion verified in 16.0-RC1.
+local mod=core and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+local Rig=dofile(mod.."/openttd/oil_rig.lua")
 return function(SharedFactory,Packets,Catchment,Rating,Income,Commons,Timber)
   -- Private instance of the shared fixed-slot and ordinary processing
   -- flow; the installed Farm/Factory rules and queues are untouched.
   local O=SharedFactory(Packets,Catchment,Rating,Income,Commons,Timber)
   local floor,ceil,min,max=math.floor,math.ceil,math.min,math.max
   local shared_change,shared_loop,shared_produce=O.change,O.tile_loop,O.production_tick
+  local shared_acceptance,shared_distribution=O.acceptance,O.distribute
   O.layout={
+    oil_rig={[0]=Rig.cells},
     oil_well={
       [0]={{0,0,29},{1,0,29},{2,0,29},{0,1,29},{0,2,29}},
       {{0,0,29},{1,0,29},{1,1,29},{2,2,29},{2,3,29}},
@@ -21,6 +26,7 @@ return function(SharedFactory,Packets,Catchment,Rating,Income,Commons,Timber)
     },
   }
   O.spec={
+    oil_rig=Rig.spec,
     oil_well={id=11,life="extractive",minimum=5,cost_factor=220,procurement_probability=0x99999999,
       out={"oil"},rates={12},input={},multiplier={},sounds=0,climates=7,
       appearance={0,5,3,0},generation={4,5,5,0},map_colour=152,only_decreases=true,before_1950=true,
@@ -29,7 +35,7 @@ return function(SharedFactory,Packets,Catchment,Rating,Income,Commons,Timber)
       out={"goods"},rates={0},input={"oil"},multiplier={256},sounds=0,climates=7,
       appearance={2,2,2,0},generation={4,4,4,0},map_colour=191,edge_check=true,conflict="oil_rig"},
   }
-  O.cargo={goods=O.cargo.goods,oil={id=3,label="OIL_",class="liquid",weight_16=16,capacity_multiplier=256,
+  O.cargo={goods=O.cargo.goods,passenger=O.cargo.passenger or {id=0,label="PASS",class="passengers",weight_16=1,capacity_multiplier=1024,payment=3185,days1=0,days2=24,unit="passengers"},oil={id=3,label="OIL_",class="liquid",weight_16=16,capacity_multiplier=256,
     payment=4437,days1=25,days2=255,unit="1000 L"}}
   O.trucks={goods=O.trucks.goods,oil={id=132,index=16,image=3,name="Witcombe Oil Tanker",cargo="oil",
     capacity=21,buy_factor=110,running_factor=90,speed=96,climates=7,weight_quarters=38,power_tens_hp=12,
@@ -37,9 +43,10 @@ return function(SharedFactory,Packets,Catchment,Rating,Income,Commons,Timber)
   O.EDGE_LIMIT=32
   function O.cost(kind,raw_setting,base,raw_base)
     local s=assert(O.spec[kind])
-    return floor((kind=="oil_well" and raw_setting==1 and (raw_base or 8000000) or (base or 1000000))*s.cost_factor/256)
+    return floor((s.life=="extractive" and raw_setting==1 and (raw_base or 8000000) or (base or 1000000))*s.cost_factor/256)
   end
   function O.tile_acceptance(gfx,cargo)
+    if gfx>=24 and gfx<=28 then return Rig.acceptance(gfx,cargo) end
     if gfx==20 and cargo=="oil" then return 8 end
     if gfx==23 and cargo=="passenger" then return 1 end
     return 0
@@ -61,21 +68,43 @@ return function(SharedFactory,Packets,Catchment,Rating,Income,Commons,Timber)
   -- The source normal industry command consequently refuses all nonflat
   -- corners; separate TerraGenesis site leveling is not part of this API.
   function O.slope_allowed(gfx,slope)
-    return (gfx>=18 and gfx<=23 or gfx>=29 and gfx<=32) and slope==0
+    return (gfx>=18 and gfx<=32) and slope==0
   end
   function O.conflicts(kind,other_kind,dx,dz)
-    return O.spec[kind].conflict==other_kind and max(math.abs(dx),math.abs(dz))<=14
+    return (kind=="oil_rig" and other_kind=="oil_refinery" or O.spec[kind].conflict==other_kind) and max(math.abs(dx),math.abs(dz))<=14
   end
   -- The ordinary original appearance weights. Funding/prospecting uses
   -- its own command; map generation is not the random during-game path.
   function O.appearance(kind,context,opts)
     opts=opts or {}
     local s=assert(O.spec[kind])
+    if kind=="oil_rig" then return Rig.weight(context,opts) end
     if opts.enabled==false or opts.fund_only and (context~="mapgen" or not opts.editor) then return 0 end
     if context=="mapgen" then return s.generation[1] end
     assert(context=="random","Use random or mapgen appearance")
     if s.before_1950 and (opts.year or 1950)>1950 then return 0 end
     return s.appearance[1]
+  end
+
+  function O.allowed_source(st,ind)
+    if st.serve_neutral~=false then return true end
+    if st.neutral_rig then return st.neutral_rig==ind.id end
+    return ind.neutral_station==nil
+  end
+  function O.distribute(ind,cargo,amount,stations,covers,opts)
+    local list={}
+    for _,st in ipairs(stations) do
+      if O.allowed_source(st,ind) then list[#list+1]=st end
+    end
+    return shared_distribution(ind,cargo,amount,list,covers,opts)
+  end
+  function O.acceptance(st,c,cargo,industries,house_at)
+    if st.serve_neutral~=false then return shared_acceptance(st,c,cargo,industries,house_at) end
+    local list={}
+    for _,ind in pairs(industries) do
+      if O.allowed_source(st,ind) then list[#list+1]=ind end
+    end
+    return shared_acceptance(st,c,cargo,list,house_at)
   end
 
   function O.production_tick(ind,opts)
@@ -89,6 +118,9 @@ return function(SharedFactory,Packets,Catchment,Rating,Income,Commons,Timber)
     opts=opts or {}
     local completed=tile.completed
     local n,moved,detail=shared_loop(ind,tile,opts,offer)
+    if ind.kind=="oil_rig" and not completed and tile.completed and not ind.removed and opts.complete_rig then
+      opts.complete_rig(ind,tile)
+    end
     if ind.kind=="oil_well" and completed and not ind.removed and not opts.editor and tile.gfx==29 and opts.random_u32 then
       if Commons.chance(6,opts.random_u32()) then
         tile.gfx,tile.animation_frame=30,0

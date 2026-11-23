@@ -47,6 +47,7 @@ For per-model coverage, see the [Temperate stock content inventory](stock-conten
 | Rail depot build, orientation and entrance | `IN PROGRESS` | 85% | [Depot placement](rail-first-service.md#placing-a-depot) follows pinned stock terrain, foundation, bridge clearance, rotation and independently priced connector rules for the mounted depot. Right-click chooses a travel direction. This does not imply the entire NewGRF depot or multi-company economy. |
 | Single unsignalled train and depot turnout | `IN PROGRESS` | 70% | [Source and tests](rail-first-service.md). Translates the default OpenTTD 16.0-RC1 unique-track/no-PBS dispatch branch and independently quoted depot entrance pieces. Native purchased shuttle reverses and earns with zero signals, including a side-depot junction where it makes live YAPF choices from the actual approach. Not the full mixed-signal or multiple-train policy. |
 | Road/rail construction, bridges, tunnels and crossings | `IN PROGRESS` | 60% | **Ordinary** construction tools plus **scenario** proofs. [Build guide](build-in-3d.md), [level crossings](LEVEL_CROSSING_PORT.md), [rail spans](RAIL_SPAN_PORT.md). Selected span/portal types, foundations, combined crossing tiles, and cost/clearance rules exist. Do not infer arbitrary bridge type, slope, bore, underpass, or crossing parity. |
+| Post-generation industry openings and the Oil Rig | `IN PROGRESS` | 70% | **Ordinary**, generated Temperate worlds. [Runtime scope and exact-source tests](OFFSHORE_PORT.md). RC1 quotas, weighted opening targets and retry backoff; Oil Rig #5 enters the stock random pool from 1960, uses exact offshore terrain checks and constructs one neutral dock/helipad. Most non-Temperate industries, unsupported layout variants and full production-change parity remain out. |
 
 ## Vehicles, orders, and economy
 
@@ -91,6 +92,7 @@ For per-model coverage, see the [Temperate stock content inventory](stock-conten
 | OpenTTD AI and GameScript | `UNSTARTED` | 0% | No usable stock scripting interface or AI competitor port. |
 | Additional climate mechanics and base rosters | `UNSTARTED` | 0% | The playable campaign targets temperate content. Other climates and their cargo chains are not implemented as playable systems. |
 | NewGRF content loading | `UNSTARTED` | 0% | Remembering stock IDs or detecting save metadata does not load or execute NewGRF content. |
+| Tricario helicopter and commercial offshore oil | `IN PROGRESS` | 80% | **Ordinary**, [offshore routes](OFFSHORE_PORT.md). Native tanker receives the rig's oil and delivers it to a real refinery; the RC1 Tricario can buy at your Country/City hangar, land on the elevated neutral pad, and carry workers and outward Mail. Tests cover source FTA and rotor timing, restored real shipments, grounded 3D assets, and once-only refinery receipts. Other helicopters, full fleet parity, and neutral-rig passenger ferry service are not mounted. |
 
 ## Native UX and save interchange
 

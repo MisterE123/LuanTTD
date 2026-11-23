@@ -3,6 +3,8 @@
 -- Bridge an oil ship into the real farm/oil/Goods station allocator, never
 -- synthesize a shipment or allocate in a second pass. Docks use the same
 -- catchment, rating, loading/acceptance and receipt adapter as other freight.
+local mod=core and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+local Rig=dofile(mod.."/openttd/oil_rig.lua")
 return function(Sim,Roster,Packets,Rating,LoadingFactory,BaseTiming)
   local M={}
   local Timing={
@@ -26,15 +28,23 @@ return function(Sim,Roster,Packets,Rating,LoadingFactory,BaseTiming)
     for id,d in pairs(s.stock_ship_stations or {}) do
       if not owns or owns(id) then
         local shore,water=board.tile(d.land),board.tile(d.water)
-        if shore and water and shore.kind=="dock" and water.kind=="dock" and
-            shore.station==id and water.station==id and water.water_part and not shore.water_part then
+        local neutral=Rig.neutral_ref(s,d)
+        local valid_rig=neutral and shore and shore.kind=="oilrig" and shore.station==id and #board.station_dock_tiles(id)>0
+        local valid_dock=shore and water and shore.kind=="dock" and water.kind=="dock" and
+          shore.station==id and water.station==id and water.water_part and not shore.water_part
+        if valid_dock or valid_rig then
           local x,z=Sim.xy(d.land)
-          local u,v=Sim.xy(d.water)
           local slot=M.station_id(id)
           local st=state.stations[slot] or {id=slot,host_id=id,mode="ship",freight_cargo="oil",owner=d.owner,
             loading_order={},rating_phase=0,time_since_unload=255,time_since_load=255}
           assert(st.owner==d.owner and (not st.tile or #st.loading_order==0 or st.tile==d.land))
-          st.tile,st.x,st.z,st.tiles=d.land,x-1,z-1,{{x=x-1,y=z-1,kind="dock"},{x=u-1,y=v-1,kind="dock"}}
+          st.neutral_rig=valid_rig and neutral.industry or nil
+          st.serve_neutral=s.stock_serve_neutral_industries~=false
+          st.tile,st.x,st.z,st.tiles=d.land,x-1,z-1,{{x=x-1,y=z-1,kind="dock"}}
+          if valid_dock then
+            local u,v=Sim.xy(d.water)
+            st.tiles[2]={x=u-1,y=v-1,kind="dock"}
+          end
           by_dock[id]=st;list[#list+1]=st;state.stations[slot]=st
         end
       end
@@ -85,7 +95,7 @@ return function(Sim,Roster,Packets,Rating,LoadingFactory,BaseTiming)
     end
     function D.arrive(dock,visit,tick,tile,order)
       local st=by_dock[dock]
-      if not st or st.owner~=v.owner or not berth(dock,tile) then return nil,"OWN_WATER_BERTH_REQUIRED" end
+      if not st or st.owner~=v.owner and not st.neutral_rig or not berth(dock,tile) then return nil,"OWN_WATER_BERTH_REQUIRED" end
       if tick~=state.tick or tick==state.post then return nil,"WRONG_OIL_SHIP_TICK_PHASE" end
       if visit==v.visit and v.load_state and v.load_state.station==st.id and v.cargo_tile==tile then return v.load_state end
       if visit<=(v.visit or 0) or v.load_state then return nil,"STALE_OIL_SHIP_VISIT" end

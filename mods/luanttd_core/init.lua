@@ -166,7 +166,7 @@ if generated_world or S.road_farm then
   local mounted,rng=Sim.mount_farm_world(S,Terrain,true)
   api.farm_world=assert(mounted,rng)
   local heavy=Sim.mount_heavy_world(S,Terrain)
-  if dofile(mod.."/iron_steel_visual_assets.lua").ready(core,mod,heavy) then api.heavy_world=heavy end
+  if dofile(mod.."/iron_steel_visual_assets.lua").ready(core,mod,heavy) then api.heavy_world=heavy;api.capabilities.heavy_industry=true end
   do
     local files={}
     for _,part in ipairs({"models","textures"}) do
@@ -216,7 +216,7 @@ if generated_world then
   if S.road_heavy then S.stock_heavy_industries=S.stock_heavy_industries or {} end
   if api.capabilities.temperate_bank then S.road_bank=true;S.stock_bank_industries=S.stock_bank_industries or {} end
   S.road_farm=not not (present(S.stock_farm_industries,"farm") or present(S.stock_farm_industries,"factory"))
-  S.road_oil=not not (present(S.stock_oil_industries,"oil_well") or present(S.stock_oil_industries,"oil_refinery"))
+  S.road_oil=not not (present(S.stock_oil_industries,"oil_well") or present(S.stock_oil_industries,"oil_refinery") or present(S.stock_oil_industries,"oil_rig"))
   S.rail_oil_service=S.road_oil
   local mine,power
   for _,industry in pairs(S.stock_coal_industries or {}) do

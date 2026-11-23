@@ -2249,12 +2249,23 @@ local function passenger_modules()
       local list,by,map=oil.ship.stations(s)
       return list,list and {by=by,map=map}
     end
+    function oil.completion(s)
+      return function(ind,tile)
+        local station=oil.world.offshore.complete(s,ind,tile,{})
+        if station then
+          s.changed=s.changed or {}
+          for _,part in ipairs(s.stock_oil_placements[ind.id].cells) do
+            s.changed[#s.changed+1]=part.id
+          end
+        end
+      end
+    end
     function oil.binding(s,probe)
       if goods.mixed_enabled and goods.mixed_enabled(s) then return {rail=goods.mixed_binding(s,"oil",probe).rail.oil} end
       local animated,each_tick=oil.animation(s)
       local list,ports=oil.berths(s)
       local B=oil.service.bind(s,{credit=credit,station_union=oil.runtime.union(s,paid_rail_runs[s],probe),
-        animated=animated,each_tick=each_tick,ship_stations=list})
+        animated=animated,each_tick=each_tick,ship_stations=list,complete_rig=oil.completion(s)})
       B.oil_ship_binding=ports
       return B
     end
@@ -2297,7 +2308,7 @@ local function passenger_modules()
       local station_union=rail_union(s,Freight.industry,rail_controllers,for_cargo,probe)
       local list,ports=oil.berths(s)
       local B=union.bind(s,{credit=credit,industries=all,ship_stations=list,field_board=enabled.farm and farm_world.field_board(s),
-        station_union=station_union,animated=animated,each_tick=tick,forestry_changed=function(t)
+        station_union=station_union,animated=animated,each_tick=tick,complete_rig=enabled.oil and oil.completion(s),forestry_changed=function(t)
           s.changed=s.changed or {};s.changed[#s.changed+1]=M.id(t.x+1,t.z+1)
         end})
       B.mixed=true;B.oil_ship_binding=ports
@@ -2320,7 +2331,7 @@ function M.stock_random_u32(s)
   return rating_runtime.random_u32(s)
 end
 function M.mount_oil_ship(s,net,run,ready,ferry,coal)
-  if not oil.ship or not M.road_oil_active(s) then return end
+  if not oil.ship then return end
   oil.ship.mount(s,net,run,ready,ferry,coal)
   return oil.ship
 end
@@ -3312,7 +3323,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       local function landscape(x,z,tick)
         if tide then tide(x,z) end
         if coal then coal.tile_visit(x,z,tick) end
-        if timber then timber.tile_visit(x,z,tick) end
+        if timber then timber.tile_visit(x,z,tick,commercial and commercial.offer_rig_passengers) end
       end
       town_passengers.day(s,function(tick,finish_rating)
         local ready,events

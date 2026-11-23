@@ -1,7 +1,10 @@
 -- Oil industry placement in an ordinary generated map or fixed test site.
 -- No enabled game mode, production clock, renderer or fare authority here.
+local mod=core and core.get_modpath("luanttd_core") or "mods/luanttd_core"
 return function(Sim,Terrain,Rules)
+  local Offshore=dofile(mod.."/offshore_rig_world.lua")(Sim,Terrain,dofile(mod.."/openttd/oil_rig.lua"),Rules)
   local W={VERSION=1,BASE=0x3000,LIMIT=0x4000,MIN_SEPARATION=15}
+  W.offshore=Offshore
   local layout={wells=Rules.layout.oil_well[0],refinery=Rules.layout.oil_refinery[0]}
   local specs={
     wells={kind="stock_oil_wells",source="oil_well",name="Northfield Oil Wells",art="industry_oil_well",industry=11},
@@ -9,6 +12,7 @@ return function(Sim,Terrain,Rules)
   }
   W.facilities={
     stock_oil_wells={name="Oil Wells",produces={},takes={}},
+    stock_oil_rig={name="Oil Rig",produces={},takes={}},
     stock_oil_refinery={name="Oil Refinery",produces={},takes={}},
   }
   local function point(x,z)
@@ -158,30 +162,36 @@ return function(Sim,Terrain,Rules)
   -- footprint. Keep the indexed site record as a tombstone so existing
   -- station/receipt IDs remain meaningful; never erase their routes.
   function W.sweep_closed(s)
-    local dirty={}
+    local dirty,land={},false
     for id,record in pairs(s.stock_oil_placements or {}) do
       local active=s.stock_oil_industries[id]
       if active and active.removed and not record.closed then
-        record.closed=true
-        s.sites[record.site].closed=true
-        for _,cell in ipairs(record.cells) do
-          local t=s.tiles[cell.tile]
-          local mark=t and t.stock_industry
-          if mark and mark.chain=="oil" and mark.id==id then
-            t.stock_industry=nil
-            if t.site==record.site then t.site=nil end
-            if s.stock_oil_animated then s.stock_oil_animated[cell.tile]=nil end
-            dirty[#dirty+1]=cell.tile
+        if record.kind=="rig" then
+          local done=Offshore.close(s,active)
+          for _,tile in ipairs(done) do dirty[#dirty+1]=tile end
+        else
+          record.closed=true
+          s.sites[record.site].closed=true
+          for _,cell in ipairs(record.cells) do
+            local t=s.tiles[cell.tile]
+            local mark=t and t.stock_industry
+            if mark and mark.chain=="oil" and mark.id==id then
+              t.stock_industry=nil
+              if t.site==record.site then t.site=nil end
+              if s.stock_oil_animated then s.stock_oil_animated[cell.tile]=nil end
+              dirty[#dirty+1]=cell.tile
+              land=true
+            end
           end
         end
       end
     end
     table.sort(dirty)
-    if #dirty>0 then s.topology=s.topology+1 end
+    if land then s.topology=s.topology+1 end
     return dirty
   end
   function W.visual_sources()
-    return {industry_oil_well=layout.wells,industry_oil_refinery=layout.refinery}
+    return {industry_oil_well=layout.wells,industry_oil_refinery=layout.refinery,industry_oil_rig=Rules.layout.oil_rig[0]}
   end
   return W
 end

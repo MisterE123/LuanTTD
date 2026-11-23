@@ -6,6 +6,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
   local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local Roster=dofile(mod.."/openttd/rail_roster.lua")
   local Freight=dofile(mod.."/rail_freight_kinds.lua")
+  local Rig=dofile(mod.."/openttd/oil_rig.lua")
   local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
   local views=setmetatable({},{__mode="k"})
   local floor=math.floor
@@ -90,6 +91,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       gradual=s.stock_gradual_loading~=false,feeder_percent=s.stock_feeder_percent,
       select_goods=s.stock_select_goods,
       modified=s.stock_modified_catchment,
+      neutral_owner=false,serve_neutral=s.stock_serve_neutral_industries~=false,
       mail_random_u32=MailRandom and function() return MailRandom(s) end,
       year=function() return Sim.date(s) end,
       station_active=function(st) return active[mode(st)] end,
@@ -101,6 +103,21 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         if kind=="road" or mode(st)~="ship" then return st.id end
         return ship_index(st.id)
       end}
+    ctx.industry_acceptance=function(st,cargo,c)
+      if not Catchment then return 0 end
+      local out=0
+      for _,ind in pairs(s.stock_oil_industries or {}) do
+        if ind.kind=="oil_rig" and not ind.removed and
+            (ctx.serve_neutral or st.neutral_rig==ind.id or ind.neutral_station==nil and st.neutral_rig==nil) then
+          for _,tile in ipairs(ind.tiles) do
+            if tile.completed and not tile.neutral_platform and Catchment.contains(c,tile.x,tile.z) then
+              out=out+Rig.acceptance(tile.gfx,cargo)
+            end
+          end
+        end
+      end
+      return out
+    end
     ctx.production=function(service,tick) Mux.consume(s,service,tick,ctx) end
     return ctx
   end
@@ -188,15 +205,18 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     -- depot, a sign outside the platform or the occupied carriage tile.
     local function sync(id,local_id,actual,tiles,mode_,ref,base,id_for_tick)
       local st=service.stations[id]
+      local neutral=Rig.neutral_ref(s,actual)
+      local owner=actual.owner
+      if neutral then owner=false end
       local mail=mode_=="air" or mode_=="rail" and s.rail_mail_service==true and not Freight.role(actual)
       local fresh=not st or not not st.mail_enabled~=mail
       if st then
-        assert(st.owner==actual.owner and mode(st)==mode_,"Commercial station ownership changed")
+        assert(st.owner==owner and mode(st)==mode_,"Commercial station ownership changed")
         st.tick_index=id_for_tick
         if st.footprint_rev~=ref then Service.footprint(service,id,tiles,ctx) end
       else
         local town=Sim.nearest_town(s,base)
-        st=Service.station(service,{id=id,owner=actual.owner,town=town and town.id,
+        st=Service.station(service,{id=id,owner=owner,town=town and town.id,neutral_rig=neutral and neutral.industry,
           tick_index=id_for_tick,tiles=tiles},ctx)
       end
       st.host_mode,st.host_id,st.footprint_rev=mode_,local_id,ref
@@ -207,7 +227,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     end
     if active.ship then
       for id,p in pairs(ships) do
-        sync(id,id,p,{at("dock",p.land),at("dock",p.water)},"ship",p.land..":"..p.water,p.land,ship_index(id))
+        if not p.neutral then sync(id,id,p,{at("dock",p.land),at("dock",p.water)},"ship",p.land..":"..p.water,p.land,ship_index(id)) end
       end
     end
     if active.rail then
@@ -233,7 +253,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
             tiles[#tiles+1]=at(p.layout=="city" and "airport_city" or "airport",part.id);valid[#valid+1]=part.id
           end
         end
-        if #valid>0 then
+        if #valid>0 and (not p.neutral or Rig.neutral_ref(s,p)) then
+          if p.layout=="oilrig" then tiles[2]=at("dock",p.origin) end -- max of stock Airport 4 / Dock 5
           sync(air_key(id),id,p,tiles,"air",table.concat(valid,":"),p.origin,air_key(id))
         end
       end
@@ -451,7 +472,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       end
       frame.ship_serial=run
     end
-    return {before=before,after=after,hooks=hooks}
+    return {before=before,after=after,hooks=hooks,offer_rig_passengers=function(ind,amount)
+      return Service.offer_industry_passengers(service,ind,amount,ctx)
+    end}
   end
 
   function F.take_effects(s,mode_)

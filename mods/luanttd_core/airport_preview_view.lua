@@ -3,8 +3,10 @@ return function(api,Run,RoadVisual,verified_art)
   local V={}
   local S=api.s
   local mod=core.get_modpath("luanttd_core")
+  local rotors=dofile(mod.."/airport_rotor_view.lua")(core)
   local assets=verified_art or dofile(mod.."/airport_manifest.lua")(core,mod)
   for _,art in pairs(assets) do
+    rotors.register(art)
     core.register_entity(art.entity,{initial_properties={physical=false,pointable=false,
       collide_with_objects=false,static_save=false,visual="mesh",mesh=art.mesh,
       textures={art.atlas},shaded=true,backface_culling=true,
@@ -15,6 +17,7 @@ return function(api,Run,RoadVisual,verified_art)
   local function remove(id)
     local x=views[id]
     if x then
+      rotors.clear(x)
       if x.ref and x.ref:get_pos() then x.ref:remove() end
       views[id]=nil
     end
@@ -59,7 +62,8 @@ return function(api,Run,RoadVisual,verified_art)
           end
           x.pitch=airborne and x.pitch+(target-x.pitch)*math.min(1,4*dt) or 0
           x.ref:move_to(pos,true)
-          x.ref:set_rotation({x=x.pitch,y=x.yaw,z=0})
+          x.ref:set_rotation({x=art.rotor and 0 or x.pitch,y=x.yaw,z=0})
+          rotors.step(x,art,pos,math.floor((run.vehicle.rotor_speed or 0)/16),dt)
           x.last=pos
         end
       end

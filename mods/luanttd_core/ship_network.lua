@@ -23,6 +23,13 @@ return function(Sim,Terrain,Water,Facilities)
       return out
     end
     local cls=water_class(t)
+    local mark=t.stock_industry
+    if type(mark)=="table" and mark.chain=="oil" and mark.kind=="rig" then
+      local firm=(s.stock_oil_industries or {})[mark.id]
+      out.kind,out.water_class,out.water_ground="industry",cls,not not cls
+      out.neutral_station=firm and firm.neutral_station
+      return out -- preserve underlying water class, never permit sailing through a platform
+    end
     if cls and (not t.build or t.build=="canal") then
       out.kind,out.water_class,out.water_ground,out.is_water_tile=cls,cls,true,true
       return out
@@ -47,7 +54,9 @@ return function(Sim,Terrain,Water,Facilities)
       if not t or (t.kind=="lock" and t.part=="middle") or Water.at(B,id)==0 then return false end
       for d=0,3 do
         local n=B.tile(B.adjacent(id,d))
-        if n and n.kind=="dock" and n.water_part then return true end
+        if n and (n.kind=="dock" and n.water_part or n.kind=="oilrig" or n.kind=="industry" and n.neutral_station) then
+          return true
+        end
       end
       return false
     end
@@ -56,7 +65,19 @@ return function(Sim,Terrain,Water,Facilities)
     end
     function B.station_dock_tiles(id)
       local st=s.stock_ship_stations and s.stock_ship_stations[id]
-      return st and Facilities.docking_neighbors(B,st.water) or {}
+      if not st then return {} end
+      if not st.neutral or not st.oil_rig then return Facilities.docking_neighbors(B,st.water) end
+      local neutral=(s.stock_neutral_stations or {})[id]
+      local rec=neutral and (s.stock_oil_placements or {})[neutral.industry]
+      if not rec or rec.closed then return {} end
+      local docks,seen={},{}
+      for _,c in ipairs(rec.cells) do
+        for _,tile in ipairs(Facilities.docking_neighbors(B,c.id)) do
+          if not seen[tile] then docks[#docks+1]=tile;seen[tile]=true end
+        end
+      end
+      table.sort(docks)
+      return docks
     end
     function B.closest_station_tile(id,origin)
       local st=s.stock_ship_stations and s.stock_ship_stations[id]

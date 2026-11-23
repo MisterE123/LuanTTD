@@ -31,7 +31,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
         local x,z=xy(st.tile)
         st[queue_key]=st[queue_key] or {}
         st.goods=st.goods or {}
-        local point={id=st.id,st=st,tile=st.tile,x=x-1,z=z-1,town=st.town or st.site,owner=st.owner,
+        local point={id=st.id,st=st,tile=st.tile,x=x-1,z=z-1,town=st.town or st.site,owner=st.owner,serve_neutral=s.stock_serve_neutral_industries~=false,
           stock=st[queue_key],goods=st.goods,tiles={{x=x-1,y=z-1,kind="truck"}}}
         stations[#stations+1]=point;by_id[st.id]=point
       end
@@ -44,7 +44,8 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       st.goods=st.goods or {}
       local x,z=xy(st.tile)
       local point={id=st.id,st=st,tile=st.tile,x=x-1,z=z-1,town=st.town,owner=st.owner,
-        stock=st[queue_key],goods=st.goods,tiles=st.tiles,freight_cargo=st.freight_cargo}
+        stock=st[queue_key],goods=st.goods,tiles=st.tiles,freight_cargo=st.freight_cargo,
+        neutral_rig=st.neutral_rig,serve_neutral=st.serve_neutral}
       stations[#stations+1]=point;by_id[st.id]=point
     end
     table.sort(stations,function(a,b)return a.id<b.id end)
@@ -60,9 +61,10 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       if p and p.freight_cargo and p.freight_cargo~=cargo then return {accepts=false,eighths=0,sources={}} end
       local r=raw.report(id,cargo)
       if not r then return end
+      local station=p or assert(raw.station(id),"Accepted freight report has no station")
       r.sources={}
       for _,ind in ipairs(raw.industries) do
-        if not ind.removed and Rules.output(ind,cargo) then
+        if not ind.removed and Rules.output(ind,cargo) and (not Rules.allowed_source or Rules.allowed_source(station,ind)) then
           for _,t in ipairs(ind.tiles) do
             if raw.covered(id,t.x,t.z) then r.sources[#r.sources+1]=ind.id;break end
           end
@@ -93,8 +95,10 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
           if cargo==st.freight_cargo then return st.acceptance end
         end,
         select_goods=s.stock_select_goods~=false,neutral_owner=options.neutral_owner,
+        serve_neutral=s.stock_serve_neutral_industries~=false,
         town_rights=options.town_rights,modified=options.modified_catchment,refuses=options.refuses,
         packet_allocatable=options.packet_allocatable,ambient=options.ambient,animated=options.animated,
+        complete_rig=options.complete_rig,
         opts={current_payment=options.current_payment,scale=options.scale,recession=options.recession,
           economy_date=options.economy_date or function(world)return world.day end}})
       raw.report_with_sources=source_report
@@ -110,9 +114,9 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       if not (st and by_id[st.id] and pairs_by_cargo[cargo]) then return {accepts=false,eighths=0,sources={}} end
       return refresh(st,tick)[cargo]
     end
-    function B.tile_visit(x,z,tick)
+    function B.tile_visit(x,z,tick,offer_rig_passengers)
       if options.field_board and options.field_board.visit then options.field_board.visit(x,z,tick,options.editor and options.editor(s,tick)) end
-      return raw.tile_visit(x,z,tick)
+      return raw.tile_visit(x,z,tick,offer_rig_passengers)
     end
     function B.after_vehicle_tick(tick)
       for _,p in ipairs(stations) do refresh(p.st,tick,true) end

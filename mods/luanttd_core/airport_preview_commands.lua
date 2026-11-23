@@ -15,6 +15,7 @@ return function(api,Network,Run,Owned,Roster)
     NOT_ENOUGH_MONEY="Your company cannot afford the airfield.",
     SELECT_OWN_AIRFIELD="Choose a tile belonging to your airfield.",
     AIRCRAFT_OCCUPIES_AIRFIELD="Clear the flight pilot before removing its airfield.",
+    SELECT_YOUR_HANGAR_AND_COMPATIBLE_AIRFIELD="Choose your purchase hangar and a compatible stop. Oil rigs accept helicopters only.",
     TWO_OWN_AIRFIELDS_REQUIRED="Choose two different airfields owned by your company.",
     AIRCRAFT_PILOT_ALREADY_EXISTS="Clear the active flight before ordering another.",
     NO_OWN_AIRCRAFT_PILOT="Your company has no active flight pilot.",

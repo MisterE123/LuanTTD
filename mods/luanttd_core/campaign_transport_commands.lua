@@ -201,7 +201,7 @@ return function(Sim,R)
       entry=entry or {}
       return Help.describe("air",entry.mail and entry.mail>0 and "mixed" or nil,entry.name,{capacity=entry.passengers,
         capacity_unit="seats",mail_capacity=entry.mail,speed=entry.max_speed,
-        runway=entry.jet and "use City Airports"})
+        runway=entry.helicopter and "Can serve Oil Rigs; buy at your airport" or entry.jet and "use City Airports"})
     end
     if mode=="road" and tile(key) then
       local t=s.tiles[key]
@@ -341,7 +341,7 @@ return function(Sim,R)
     elseif mode=="air" and R.air and id(key) then
       local t=s.stock_small_airports and s.stock_small_airports[key]
       if not t or t.owner~=owner then return nil,"Choose an airfield you own." end
-      for _,engine in ipairs(R.air.roster.catalog()) do
+      for _,engine in ipairs(R.air.roster.catalog(true)) do
         add(engine.name,{mode=mode,operation="buy",depot=key,engine=engine.stock_id},air_help(engine))
       end
       local unit=R.air.owned.status(s,key)
@@ -354,12 +354,14 @@ return function(Sim,R)
     local listing=mode=="rail" and s.stock_rail_stations or mode=="air" and s.stock_small_airports
       or mode=="ship" and s.stock_ship_stations
     for key_,r in pairs(listing or {}) do
-      if r.owner==owner and (not airframe or not R.air.run.fits or R.air.run.fits(r,airframe)) then
+      local rig=(mode=="ship" or mode=="air" and airframe) and r.oil_rig and r.neutral and r.owner==nil and
+        (s.stock_neutral_stations or {})[key_]
+      if (r.owner==owner or rig) and (not airframe or not R.air.run.fits or R.air.run.fits(r,airframe)) then
         local cell=r.origin or r.land or r.tiles and r.tiles[1]
         local x,z
         if cell then x,z=Sim.xy(cell) end
         local cargo=Freight.role(r)
-        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or "Airfield") or "Dock")
+        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(rig and rig.name or mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or "Airfield") or "Dock")
           .." "..key_..(x and (" (%d, %d)"):format(x,z) or "")}
         if mode=="ship" and R.water.coal then
           local report=R.water.coal.order_report(s,key_)
@@ -371,7 +373,7 @@ return function(Sim,R)
         if mode=="ship" and R.water.tanker then
           local report=R.water.tanker.report(s,key_)
           if report then
-            if #report.sources>0 then targets[#targets+1]={id=key_,cargo="oil",role="load",label="Oil source dock "..key_} end
+            if #report.sources>0 then targets[#targets+1]={id=key_,cargo="oil",role="load",label=rig and rig.name or "Oil source dock "..key_} end
             if report.accepts then targets[#targets+1]={id=key_,cargo="oil",role="unload",label="Refinery dock "..key_} end
           end
         end

@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Native graphical rendering of the actual oil-sites OBJ and atlas under Luanti.
+# Inputs match tests/native.sh; isolated world and profile, no existing saves.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+repo=$PWD
+if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
+  tools=$(realpath "$BAYLINE_NATIVE_TOOLS")
+  export PATH="$tools/run/bin:$tools/usr/bin:$PATH"
+  export LD_LIBRARY_PATH="$tools/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-oil-rig-art.XXXXXX")
+echo "Native offshore rig visual evidence: $out"
+disp=${BAYLINE_NATIVE_DISPLAY:-196}
+port=${BAYLINE_NATIVE_PORT:-39996}
+pids=()
+cleanup() {
+  for pid in "${pids[@]}"; do kill -TERM "$pid" 2>/dev/null || true; done
+  wait || true
+}
+trap cleanup EXIT
+mod="$out/games/offshore/mods/rigqa"
+mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
+printf 'title = LuanTTD offshore rig art fixture\n' > "$out/games/offshore/game.conf"
+printf 'name = rigqa\n' > "$mod/mod.conf"
+cp tests/stock_oil_rig_art_native.lua "$mod/init.lua"
+cp mods/luanttd_core/models/bl_industry_oil_rig_?_?.obj "$mod/models/"
+cp mods/luanttd_core/textures/{bl_industry_oil_rig_atlas,bl_water[0-3]}.png "$mod/textures/"
+printf 'gameid = offshore\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
+shots=(approach berth pad)
+art_heli=false
+if [[ -r mods/luanttd_core/models/bl_stock_tricario_heli.obj ]]; then
+  cp mods/luanttd_core/models/bl_stock_tricario_heli*.obj "$mod/models/"
+  cp mods/luanttd_core/textures/bl_stock_tricario_heli_atlas.png "$mod/textures/"
+  cp mods/luanttd_core/{airport_rotor_view,airport_airframe_art}.lua "$mod/"
+  art_heli=true
+  shots+=(tricario)
+fi
+cat > "$out/server.conf" <<EOF
+port = $port
+prometheus_listener_address = 127.0.0.1:$port
+server_announce = false
+rig_art_helicopter = $art_heli
+bind_address = 127.0.0.1
+EOF
+cat > "$out/client.conf" <<'EOF'
+screen_w = 1300
+screen_h = 860
+fullscreen = false
+enable_sound = false
+free_move = true
+viewing_range = 80
+fps_max = 30
+EOF
+export HOME="$out/home" XDG_CACHE_HOME="$out/cache" XDG_CONFIG_HOME="$out/home/.config" \
+  LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games" \
+  LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
+export DISPLAY=":$disp" XAUTHORITY="$out/Xauthority"
+opts=(-nolisten tcp)
+lib=()
+if [[ ${BAYLINE_NATIVE_TCP:-0} == 1 ]]; then
+  cc -shared -fPIC "$repo/tests/native_loopback.c" -ldl -o "$out/loopback.so"
+  export DISPLAY="127.0.0.1:$disp"
+  opts=(-listen tcp -nolisten unix -nolisten local)
+  lib=(env "LD_PRELOAD=$out/loopback.so${LD_PRELOAD:+:$LD_PRELOAD}")
+fi
+touch "$XAUTHORITY"
+cookie=$(python3 -c 'import secrets; print(secrets.token_hex(16))')
+xauth -f "$XAUTHORITY" add "$DISPLAY" MIT-MAGIC-COOKIE-1 "$cookie"
+"${lib[@]}" Xvfb ":$disp" -screen 0 1300x860x24 "${opts[@]}" -auth "$XAUTHORITY" -noreset >"$out/xvfb.log" 2>&1 &
+pids+=("$!")
+for _ in {1..40}; do if xdpyinfo >/dev/null 2>&1; then break; fi; sleep .25; done
+if ! xdpyinfo >/dev/null 2>&1; then cat "$out/xvfb.log"; exit 1; fi
+luantiserver --world "$out/world" --config "$out/server.conf" --gameid offshore --logfile "" > "$out/server.log" 2>&1 &
+pids+=("$!")
+for _ in {1..40}; do if grep -q 'listening' "$out/server.log"; then break; fi; sleep .25; done
+grep -q 'listening' "$out/server.log" || { cat "$out/server.log"; exit 1; }
+luanti --go --address 127.0.0.1 --port "$port" --config "$out/client.conf" --name RigQA --logfile "" > "$out/client.log" 2>&1 &
+client=$!
+pids+=("$client")
+for _ in {1..120}; do if grep -q OIL_RIG_MESH_FIXTURE_READY "$out/server.log"; then break; fi; sleep .25; done
+grep -q OIL_RIG_MESH_FIXTURE_READY "$out/server.log" || { cat "$out/"{server,client}.log; exit 1; }
+win=$(xdotool search --sync --onlyvisible --pid "$client"|tail -1)
+xdotool windowfocus --sync "$win"
+xdotool mousemove 650 430
+sleep 3
+xdotool key F2
+sleep 2
+for shot in "${shots[@]}"; do
+  xdotool key t; sleep .2; xdotool type "/oilscene $shot"; xdotool key Return
+  for _ in {1..32}; do
+    if grep -q "OIL_RIG_VIEW_READY $shot" "$out/server.log"; then break; fi
+    sleep .25
+  done
+  grep -q "OIL_RIG_VIEW_READY $shot" "$out/server.log" || { cat "$out/"{server,client}.log; exit 1; }
+  sleep 2.6
+  import -window root "$out/rig-$shot.png"
+done
+! grep -Ei 'ERROR\[|could not load' "$out/client.log" "$out/server.log"
+if [[ "$art_heli" == true ]]; then grep -q OIL_RIG_ROTARY_DUAL_AXES_ATTACHED "$out/server.log"; fi
+python3 - "$out" <<'PYQA'
+from PIL import Image
+from pathlib import Path
+import sys
+shots = ["approach","berth","pad"]
+if (Path(sys.argv[1])/"rig-tricario.png").is_file():
+    shots.append("tricario")
+for label in shots:
+    im=Image.open(Path(sys.argv[1])/f"rig-{label}.png").convert("RGB").crop((150,90,1150,770))
+    pixels=list(im.get_flattened_data() if hasattr(im,"get_flattened_data") else im.getdata())
+    steel=sum(22<r<137 and 39<g<148 and 49<b<162 and r+8<g and g+3<b for r,g,b in pixels)
+    paint=sum(70<r<238 and 42<g<211 and 20<b<162 and r>g+14 and g>b+10 for r,g,b in pixels)
+    if label=="tricario":
+        ivory=sum(110<r<245 and 100<g<231 and 65<b<205 and r>g+3 and g>b+12 for r,g,b in pixels)
+        vinyl=sum(45<r<115 and 75<g<160 and 73<b<140 and g>r+18 and b>r+12 for r,g,b in pixels)
+        assert ivory>650 and vinyl>350,(label,ivory,vinyl)
+    else:
+        assert steel>1100 and paint>180,(label,steel,paint)
+    print(f"{label}: {steel} jacket/steel pixels, {paint} visible derrick or safety paint pixels")
+print("OIL_RIG_NATIVE_ART_PASS")
+PYQA

@@ -80,12 +80,20 @@ return function(FTA)
   -- Sounds, breakdown dispatch, station removal, and crashes are external.
   function M.move(a,v,h)
     h=h or {}
+    local rotary=v.helicopter and h.rotary
+    if v.helicopter and not rotary then return nil,"fixed_wing_only" end
     local field_layout=h.layout and h.layout(a) or FTA
-    if v.helicopter then return nil,"fixed_wing_only" end
     local x,z,f,exit=field_layout.point(v.pos,a.rotation,a.width,a.height)
     if not x then return nil,"invalid_position" end
+    if flag(f,F.HELI_RAISE) then
+      if not rotary then return nil,"heli_point" end
+      return rotary.raise(v,h)
+    end
+    if flag(f,F.HELI_LOWER) then
+      if not rotary then return nil,"heli_point" end
+      return rotary.lower(a,v,h)
+    end
     x,z=x+a.x,z+a.z
-    if flag(f,F.HELI_RAISE) or flag(f,F.HELI_LOWER) then return nil,"heli_point" end
     local dist=abs(x-v.x)+abs(z-v.z)
     local exact,slow,landing,brake=flag(f,F.EXACTPOS),flag(f,F.SLOWTURN),flag(f,F.LAND),flag(f,F.BRAKE)
     if not exact and dist<=(slow and 8 or 4) then return true end
@@ -115,7 +123,7 @@ return function(FTA)
       else
         local new=towards(v,x,z)
         if new~=v.direction then
-          if slow and (v.consecutive_turns or 0)<8 then
+          if slow and not v.helicopter and (v.consecutive_turns or 0)<8 then
             if (v.turn_counter or 0)==0 or new==v.last_direction then
               if new==v.last_direction then v.consecutive_turns=0
               else v.consecutive_turns=(v.consecutive_turns or 0)+1 end
@@ -142,6 +150,11 @@ return function(FTA)
       local ground=(a.ground or 0)+1
       if landing then v.y=M.glide(v.y,ground,dist) end
       if brake then v.y=v.y+sign(ground-v.y) end
+      if rotary then
+        if v.airborne then v.tile=nil
+        elseif a.layout=="oilrig" then v.tile=a.origin
+        elseif h.tile_at then v.tile=h.tile_at(px,pz) end
+      end
       v.x,v.z=px,pz
     end
     return false
@@ -153,6 +166,7 @@ return function(FTA)
   function M.tick(a,v,h)
     h=h or {}
     v.tick=(v.tick or 0)+1
+    if v.helicopter and h.rotary then h.rotary.tick(v,h) end
     local events={}
     for _=1,2 do
       if v.stopped or v.loading or v.crashed then break end
