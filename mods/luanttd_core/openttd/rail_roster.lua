@@ -108,7 +108,7 @@ local rows={
     climates=7,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,source_model_life=50,purchase_enabled=false,freight_profile=true},
 }
 local advanced_ids={}
-local advanced_art={[54]="x2001",[57]="mono_passenger",[58]="mono_mail"}
+local advanced_art=dofile(mod.."/rail_guideway_profiles.lua").visuals
 local stock_cargo_id={passenger=0,coal=1,mail=2,oil=3,livestock=4,goods=5,grain=6,wood=7,iron_ore=8,steel=9,valuables=10}
 for _,row in ipairs(Advanced.catalog()) do
   local id=row.stock_id

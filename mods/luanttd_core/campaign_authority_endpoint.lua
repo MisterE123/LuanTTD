@@ -290,6 +290,7 @@ return function(Sim,R,max_days)
     local year,month,day=Sim.date(s)
     return reply(true,nil,{cash=c.cash,loan=c.loan,revenue=c.revenue,expense=c.expense,
       month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,
+      rail_maglev=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,3) or false,
       rail_mono=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,2) or false,
       news_head=R.news and R.news.head(),
       year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name})

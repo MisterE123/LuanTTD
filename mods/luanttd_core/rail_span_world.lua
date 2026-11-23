@@ -170,7 +170,7 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
   end
   local function spec(s,owner,gauge,available)
     gauge=gauge or 0
-    if gauge~=0 and not (gauge==2 and available and available(owner,gauge)) then
+    if gauge~=0 and not ((gauge==2 or gauge==3) and available and available(owner,gauge)) then
       return nil,"Rail type is not available for this structure."
     end
     return {owner=owner,budget=authority(s,owner),railtype=gauge,

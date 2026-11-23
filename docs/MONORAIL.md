@@ -55,7 +55,6 @@ and a solid-terrain bore.
   the yard, buy actual stock and start a real service.
 
 **Scope:** First stock powered unit and two wagon types, on the
-supported ordinary tracks, facilities, and tested spans. Maglev meshes
-and data are present but not offered. Later stock, full-stock variant
+supported ordinary tracks, facilities, and tested spans. The first separate [Maglev](MAGLEV.md) family is also available. Later stock, full-stock variant
 and differing bridge styles, arbitrary mixed-gauge layouts, level
 crossings and area conversion for advanced gauges are not claimed.

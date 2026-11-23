@@ -1,6 +1,7 @@
 -- Worker-facing transactions call the regular railway, water and airfield
 -- models. Their quotes are retained on the owner, not trusted from forms.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Guide=dofile(mod.."/rail_guideway_profiles.lua")
 local Roster=dofile(mod.."/openttd/rail_roster.lua")
 local Help=dofile(mod.."/depot_vehicle_help.lua")
 local Freight=dofile(mod.."/rail_freight_kinds.lua")
@@ -241,11 +242,15 @@ return function(Sim,R)
           end
         end
       end
-      if t.rail_type==2 and catalogue[54] and catalogue[57] and catalogue[58] then
-        local combo="X2001 + Passenger Carriage + Mail Van"
-        add("X2001 · Coach and Mail",{mode=mode,operation="buy",depot=key,parts={54,57,58}},
-          Help.describe("rail","mixed",combo,{speed=catalogue[54].speed,
-            capacity=catalogue[57].capacity,mail_capacity=catalogue[58].capacity}))
+      local profile=Guide.by_gauge[t.rail_type]
+      if profile then
+        local engine,coach,mail=catalogue[profile.engine],catalogue[profile.passenger],catalogue[profile.mail]
+        if engine and coach and mail then
+          local title=engine.name:gsub("^'(.*)'$","%1")
+          local combo=title.." + Passenger Carriage + Mail Van"
+          add(title.." · Coach and Mail",{mode=mode,operation="buy",depot=key,parts=profile.stocks},
+            Help.describe("rail","mixed",combo,{speed=engine.speed,capacity=coach.capacity,mail_capacity=mail.capacity}))
+        end
       end
       local depot_cargos={"mail"}
       for _,cargo in ipairs(Freight.profile_order) do depot_cargos[#depot_cargos+1]=cargo end

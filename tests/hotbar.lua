@@ -166,3 +166,9 @@ assert(guide.menus.railengineering[1][1]=="section_railtypes")
 assert(gauges[4][1]=="rail_select_standard" and gauges[5][1]=="rail_select_monorail")
 assert(gauges[4][3]~=gauges[5][3] and gauges[8][1]=="back" and gauges[9][1]=="clear")
 print("PASS independent monorail rail type picker, unique icons and shared menu actions")
+
+guide.mount_guideway_picker(true)
+local maglev=guide.menus.railtypes
+assert(maglev[4][1]=="rail_select_standard" and maglev[5][1]=="rail_select_monorail"
+  and maglev[6][1]=="rail_select_maglev" and maglev[5][3]~=maglev[6][3] and maglev[8][1]=="back")
+print("PASS stock Maglev and monorail have distinct accessible rail type choices")

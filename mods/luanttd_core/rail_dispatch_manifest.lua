@@ -2,6 +2,7 @@
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local Freight=dofile(mod.."/rail_freight_kinds.lua")
 local Roster=dofile(mod.."/openttd/rail_roster.lua")
+local Guide=dofile(mod.."/rail_guideway_profiles.lua")
 local models={
   locomotive={mesh="bl_diesel.obj",atlas="bl_vehicle_palette.png",size={x=1,y=1,z=.54},offset=.612},
   steam={mesh="bl_rail_kirby_paul_tank.obj",atlas="bl_rail_kirby_paul_tank.png",size={x=1,y=1,z=1},offset=.614},
@@ -20,9 +21,6 @@ local models={
   asiastar={mesh="bl_rail_asiastar.obj",atlas="bl_rail_asiastar.png",size={x=1,y=1,z=1},offset=.614},
   mail_van={mesh="bl_rail_mail_van.obj",atlas="bl_rail_mail_van.png",size={x=1,y=1,z=1},offset=.614,optional=true},
   wagon={mesh="bl_rail_passenger_wagon.obj",atlas="bl_rail_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
-  x2001={mesh="bl_rail_x2001.obj",atlas="bl_rail_x2001.png",size={x=1,y=1,z=1},offset=.746,bogies=true,optional=true},
-  mono_passenger={mesh="bl_rail_mono_passenger.obj",atlas="bl_rail_mono_passenger.png",size={x=1,y=1,z=1},offset=.746,bogies=true,optional=true},
-  mono_mail={mesh="bl_rail_mono_mail.obj",atlas="bl_rail_mono_mail.png",size={x=1,y=1,z=1},offset=.746,bogies=true,optional=true},
   coal_empty={mesh="bl_rail_coal_wagon_empty.obj",atlas="bl_rail_coal_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
   coal_loaded={mesh="bl_rail_coal_wagon_loaded.obj",atlas="bl_rail_coal_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
   goods_van={mesh="bl_rail_goods_van.obj",atlas="bl_rail_goods_van.png",size={x=1,y=1,z=1},offset=.614},
@@ -36,6 +34,13 @@ for _,p in pairs(Freight.profiles) do
   end
 end
 local stock_kind={[0]="steam",[8]="jubilee",[9]="ginzu",[10]="sh_8p",[11]="manley",[12]="dash",[13]="hendry",[14]="uu37",[15]="floss",[22]="sh_125",[23]="sh_30",[24]="sh_40",[25]="tim",[26]="asiastar",[54]="x2001"}
+for id,name in pairs(Guide.visuals) do
+  local p=Guide.by_stock[id]
+  local stem="bl_rail_"..name
+  models[name]={mesh=stem..".obj",atlas=stem..".png",size={x=1,y=1,z=1},
+    offset=p.offset,bogies=true,gauge=p.gauge,optional=true}
+  if p.engine==id then stock_kind[id]=name end
+end
 local stock_extra={jubilee=8,ginzu=9,sh_8p=10,manley=11,dash=12,hendry=13,uu37=14,floss=15,sh_125=22,sh_30=23,sh_40=24,tim=25,asiastar=26}
 local M={models=models,stock_kind=stock_kind}
 function M.wagon(train,Sim,s)
@@ -44,8 +49,7 @@ function M.wagon(train,Sim,s)
     for _,part in ipairs(train.town_parts) do
       if part.stock==27 then models[part.index]="wagon"
       elseif part.stock==28 then models[part.index]="mail_van"
-      elseif part.stock==57 then models[part.index]="mono_passenger"
-      elseif part.stock==58 then models[part.index]="mono_mail" end
+      else models[part.index]=Guide.visuals[part.stock] end
     end
     return models
   end
@@ -113,25 +117,35 @@ function M.scan(path,electric,span)
       if Roster.entry(id).railtype<2 and Roster.freight_engine(id) and has_model(kind) then art.mixed_town_engines[id]=true end
     end
   end
-  art.advanced={}
-  if has_model("x2001") and has_model("mono_passenger") and has_model("mono_mail")
-      and exists("models/bl_rail_x2001_body.obj") and exists("models/bl_rail_mono_bogie.obj")
-      and exists("models/bl_rail_mono_drawbar.obj")
-      and exists("models/bl_rail_mono_passenger_body.obj") and exists("models/bl_rail_mono_mail_body.obj")
-      and exists("models/bl_guideway_mono_flat_1.obj") and exists("textures/bl_guideway_mono_atlas.png")
-      and exists("models/bl_guideway_mono_depot_1.obj") and exists("textures/bl_guideway_mono_facility_atlas.png") then
-    art.advanced={[54]=true,[57]=true,[58]=true}
-  end
-  if art.advanced[54] and exists("textures/bl_guideway_mono_span.png") then
-    local complete=true
-    for kind,n in pairs({span=1,head_flat=3,head_ramp=3,tunnel=3}) do
-      for i=0,n do
-        local stem="models/bl_guideway_mono_span_"..kind.."_"..i
-        complete=complete and exists(stem..".obj") and (kind~="span" or exists(stem.."_road_clear.obj"))
+  art.advanced,art.guideway_spans={},{}
+  for _,g in ipairs(Guide.gauges) do
+    local p=Guide.by_gauge[g]
+    local base="bl_guideway_"..p.slug
+    local ready=exists("models/bl_rail_"..p.suspension..".obj") and
+      exists("models/bl_rail_"..p.coupler..".obj") and
+      exists("models/"..base.."_flat_1.obj") and exists("textures/"..base.."_atlas.png") and
+      exists("models/"..base.."_depot_1.obj") and exists("textures/"..base.."_facility_atlas.png")
+    for _,id in ipairs(p.stocks) do
+      local kind=Guide.visuals[id]
+      ready=ready and has_model(kind) and exists("models/"..models[kind].mesh:gsub("%.obj$","_body.obj"))
+    end
+    local complete=ready and exists("textures/"..base.."_span.png")
+    if complete then
+      for kind,n in pairs({span=1,head_flat=3,head_ramp=3,tunnel=3}) do
+        for i=0,n do
+          local stem="models/"..base.."_span_"..kind.."_"..i
+          complete=complete and exists(stem..".obj") and (kind~="span" or exists(stem.."_road_clear.obj"))
+        end
       end
     end
-    art.advanced_span=complete
+    art.guideway_spans[g]=complete or nil
+    -- Maglev only mounts as a complete infrastructure set. Deliberately
+    -- don't expose modes with missing asset or UI dependencies.
+    if ready and (g==2 or complete and exists("textures/bl_dispatch_gauge_maglev.png")) then
+      for _,id in ipairs(p.stocks) do art.advanced[id]=true end
+    end
   end
+  art.advanced_span=art.guideway_spans[2] or false
   table.sort(art.engines)
   return art
 end

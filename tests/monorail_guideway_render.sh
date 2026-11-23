@@ -4,7 +4,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo=${LUANTTD_BASE:-$PWD}
-one=$(realpath "${1:?real monorail worker world output}")
+one=$(realpath "${1:?real guideway worker world output}")
+family=${BAYLINE_GUIDEWAY_TYPE:-mono}
+[[ "$family" == mono || "$family" == maglev ]]
+if [[ "$family" == maglev ]]; then
+  models=(lev1_body maglev_passenger_body maglev_mail_body maglev_suspension maglev_drawbar)
+  textures=(lev1 maglev_passenger maglev_mail)
+else
+  models=(x2001_body mono_passenger_body mono_mail_body mono_bogie mono_drawbar)
+  textures=(x2001 mono_passenger mono_mail)
+fi
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   tools=$(realpath "$BAYLINE_NATIVE_TOOLS")
   export PATH="$tools/run/bin:$tools/usr/bin:$PATH"
@@ -26,15 +35,17 @@ printf 'title = LuanTTD guideway art fixture\n' > "$out/games/rail_art/game.conf
 printf 'name = luanttd_core\n' > "$mod/mod.conf"
 cp tests/monorail_guideway_render.lua "$mod/init.lua"
 cp "$one"/mixed-pose-{loading,reversed}.json "$mod/"
-cp "$repo"/mods/luanttd_core/{rail_diagonal,rail_guideway_bogies,rail_guideway_drawbar,rail_pose,campaign_projected_actors,road_motion,road_stock_media,airport_rotor_view,road_fault_view}.lua "$mod/"
+cp "$repo"/mods/luanttd_core/{rail_diagonal,rail_guideway_bogies,rail_guideway_drawbar,rail_guideway_profiles,rail_pose,campaign_projected_actors,road_motion,road_stock_media,airport_rotor_view,road_fault_view}.lua "$mod/"
 cp "$repo"/mods/luanttd_core/openttd/rail_track.lua "$mod/"
 mkdir -p "$mod/openttd"
 cp "$repo"/mods/luanttd_core/openttd/rail_roster.lua "$mod/openttd/"
 cp "$repo"/mods/luanttd_core/openttd/{rail_types,advanced_rail_roster}.lua "$mod/openttd/"
 cp "$repo"/mods/luanttd_core/{rail_dispatch_manifest,rail_freight_kinds}.lua "$mod/"
-cp "$repo"/mods/luanttd_core/models/bl_guideway_mono_{eased,flat,platform,depot}_*.obj "$mod/models/"
-cp "$repo"/mods/luanttd_core/models/bl_rail_{x2001_body,mono_passenger_body,mono_mail_body,mono_bogie,mono_drawbar}.obj "$mod/models/"
-cp "$repo"/mods/luanttd_core/textures/{bl_guideway_mono_atlas,bl_guideway_mono_facility_atlas,bl_grass1,bl_rail_x2001,bl_rail_mono_passenger,bl_rail_mono_mail}.png "$mod/textures/"
+cp "$repo"/mods/luanttd_core/models/bl_guideway_"${family}"_{eased,flat,platform,depot}_*.obj "$mod/models/"
+for m in "${models[@]}"; do cp "$repo/mods/luanttd_core/models/bl_rail_$m.obj" "$mod/models/"; done
+for t in "${textures[@]}"; do cp "$repo/mods/luanttd_core/textures/bl_rail_$t.png" "$mod/textures/"; done
+cp "$repo"/mods/luanttd_core/textures/{bl_grass1,"bl_guideway_${family}_atlas","bl_guideway_${family}_facility_atlas"}.png "$mod/textures/"
+printf '%s\n' "$family" > "$mod/qa-variant.txt"
 printf 'gameid = rail_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port

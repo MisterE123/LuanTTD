@@ -3,7 +3,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-monorail-control-native.XXXXXX")
-echo "Native monorail input evidence: $out"
+type=${BAYLINE_GUIDEWAY_TYPE:-mono}
+[[ "$type" == mono || "$type" == maglev ]]
+echo "Native $type input evidence: $out"
 game="$out/games/luanttd"
 mkdir -p "$game" "$out/"{world,home,cache}
 cp game.conf "$game/"
@@ -13,10 +15,14 @@ mv "$out/native-init" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
 cat tests/monorail_controls_native.lua >>"$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
+printf '%s\n' "$type" >"$out/world/qa-guideway.txt"
+year=2010
+[[ "$type" != maglev ]] || year=2025
 port=${BAYLINE_NATIVE_PORT:-40615}
 display=${BAYLINE_NATIVE_DISPLAY:-195}
 cat >"$out/server.conf" <<CONF
 port = $port
+prometheus_listener_address = 127.0.0.1:$port
 bind_address = 127.0.0.1
 server_announce = false
 bayline_generated_map_width = 64
@@ -24,7 +30,7 @@ bayline_generated_map_depth = 64
 bayline_generated_relief = 0
 bayline_generated_coasts = 0
 bayline_generated_tree_placer = 0
-bayline_stock_bus_start_year = 2010
+bayline_stock_bus_start_year = $year
 CONF
 cat >"$out/client.conf" <<CONF
 screen_w = 1280
@@ -86,6 +92,27 @@ slot(){
   xdotool key "$k"; sleep .4
 }
 tap(){ xdotool mousedown "${1:-1}"; sleep .20; xdotool mouseup "${1:-1}"; }
+click_word(){
+  local key=$1 pattern=$2
+  tesseract "$out/$key.png" "$out/$key" --psm 11 tsv 2>/dev/null
+  local ax ay
+  read -r ax ay < <(awk -F '	' -v word="$pattern" 'tolower($12)~word {print $7+int($9/2),$8+int($10/2);exit}' "$out/$key.tsv")
+  [[ -n "$ax" && -n "$ay" ]]
+  xdotool mousemove "$ax" "$ay"; tap
+}
+if [[ "$type" == maglev ]]; then
+  slot FINANCE_HOME; tap
+  slot FINANCE_BUTTON; tap
+  mark MONO_UI_FINANCE_OPEN
+  for turn in 1 2 3; do
+    sleep 1
+    snap finance
+    xdotool mousemove 525 427; tap
+  done
+  mark MONO_UI_FINANCED
+  xdotool key Escape; sleep .6
+  slot FINANCE_BACK; tap
+fi
 for menu in HOME RAILWORKS OPS ENG TYPE TYPE_BACK ENG_BACK OPS_BACK; do
   slot "$menu"
   if [[ "$menu" == TYPE ]]; then snap rail-types; fi
@@ -104,14 +131,6 @@ done
 slot DEPOT_FOCUS; tap 3
 mark MONO_UI_DEPOT_OPEN
 sleep .8; snap depot
-click_word(){
-  local key=$1 pattern=$2
-  tesseract "$out/$key.png" "$out/$key" --psm 11 tsv 2>/dev/null
-  local ax ay
-  read -r ax ay < <(awk -F '	' -v word="$pattern" 'tolower($12)~word {print $7+int($9/2),$8+int($10/2);exit}' "$out/$key.tsv")
-  [[ -n "$ax" && -n "$ay" ]]
-  xdotool mousemove "$ax" "$ay"; tap
-}
 click_word depot assemble
 sleep 1; snap assembly; mark MONO_UI_ASSEMBLY
 xdotool key Escape; sleep .6; tap 3

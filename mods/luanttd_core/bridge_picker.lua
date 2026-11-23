@@ -122,7 +122,7 @@ return function(api)
     local bspec={("formspec_version[7]size[10,%g]bgcolor[#152334;false]"):format(size),
       "style_type[button;bgimg=bl_button.png;bgimg_middle=6;border=false;textcolor=#E5ECEA]",
       "style_type[label;textcolor=#E5ECEA]",
-      ("label[.45,.47;Choose a %s bridge]"):format(mode=="road" and "road" or proposal.railtype==2 and "monorail" or "railway"),
+      ("label[.45,.47;Choose a %s bridge]"):format(mode=="road" and "road" or proposal.railtype==3 and "maglev" or proposal.railtype==2 and "monorail" or "railway"),
       ("label[.45,.95;%d tiles including both ramps]"):format(#proposal.ids)}
     for i,o in ipairs(proposal.offers) do
       local label=o.name..(o.speed and ("  ·  %d km/h"):format(o.speed) or "").."  ·  "..money(o.price)

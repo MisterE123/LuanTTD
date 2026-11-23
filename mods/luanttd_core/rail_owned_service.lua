@@ -7,6 +7,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
   local Freight=dofile(mod.."/rail_freight_kinds.lua")
   local OrderList=dofile(mod.."/openttd/rail_order_list.lua")
   local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
+  local Guide=dofile(mod.."/rail_guideway_profiles.lua")
   local power_rules,advanced_models
   function O.initialize(s,cfg)
     if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
@@ -23,9 +24,18 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
   -- Only the production asset scanner can supply this host capability.
   -- It is not a save setting or a request field.
   function O.mount_advanced(Types,ready)
-    if not (Run.mount_advanced_wagon and ready and ready[54] and ready[57] and ready[58]) then return false end
-    advanced_models={[54]=true,[57]=true,[58]=true};power_rules=Types
-    assert(Run.mount_owned_model(54));assert(Run.mount_advanced_wagon(57));assert(Run.mount_advanced_wagon(58))
+    if not (Run.mount_advanced_wagon and ready) then return false end
+    local mounted={}
+    for _,g in ipairs(Guide.gauges) do
+      local p=Guide.by_gauge[g]
+      if ready[p.engine] and ready[p.passenger] and ready[p.mail] then
+        assert(Run.mount_owned_model(p.engine))
+        assert(Run.mount_advanced_wagon(p.passenger));assert(Run.mount_advanced_wagon(p.mail))
+        for _,id in ipairs(p.stocks) do mounted[id]=true end
+      end
+    end
+    if not next(mounted) then return false end
+    advanced_models,power_rules=mounted,Types
     return true
   end
   function O.railtype_mask(s,owner,Types) return Fleet.railtype_mask(s,owner,Types,advanced_models) end

@@ -203,13 +203,14 @@ function H.enable_electric_rail()
     [3]=item("rail_deelectrify","Convert to ordinary rail","rail_deelectrify"),[8]=back}
   build_utilities()
 end
-function H.mount_guideway_picker()
+function H.mount_guideway_picker(maglev,monorail)
   if not H.menus.railengineering then return end
   H.menus.railengineering[1]=section("railtypes","Rail Types","rail_types")
   local menu=H.menus.railtypes or {title="Rail Types",[1]=inspect,[8]=back}
   H.menus.railtypes=menu
   menu[4]=item("rail_select_standard","Build standard railway","gauge_standard")
-  menu[5]=item("rail_select_monorail","Build monorail","gauge_mono")
+  if monorail~=false then menu[5]=item("rail_select_monorail","Build monorail","gauge_mono") end
+  if maglev then menu[6]=item("rail_select_maglev","Build maglev","gauge_maglev") end
   build_utilities()
 end
 local function rail_freight_menu()

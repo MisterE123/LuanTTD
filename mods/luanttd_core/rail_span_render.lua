@@ -22,20 +22,24 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
     local asset="rail_tunnel_portal_"..dir
     tunnels[dir]=architecture("stock_"..asset,asset,"rail_tunnel_portal")
   end
-  local mono={span={},head_flat={},head_ramp={},tunnel={}}
-  local mono_stem="guideway_mono_span"
+  local advanced={}
   local modpath=core.get_modpath("luanttd_core")
-  local art=io.open(modpath.."/textures/bl_"..mono_stem..".png","rb")
-  local mono_clear
-  if art then
-    art:close()
-    for part,list in pairs(mono) do
-      for dir=0,part=="span" and 1 or 3 do
-        local asset=mono_stem.."_"..part.."_"..dir
-        list[dir]=architecture("stock_"..asset,asset,mono_stem)
+  local Guide=dofile(modpath.."/rail_guideway_profiles.lua")
+  for _,g in ipairs(Guide.gauges) do
+    local stem="guideway_"..Guide.by_gauge[g].slug.."_span"
+    local art=io.open(modpath.."/textures/bl_"..stem..".png","rb")
+    if art then
+      art:close()
+      local shapes={span={},head_flat={},head_ramp={},tunnel={}}
+      for part,list in pairs(shapes) do
+        for dir=0,part=="span" and 1 or 3 do
+          local asset=stem.."_"..part.."_"..dir
+          list[dir]=architecture("stock_"..asset,asset,stem)
+        end
       end
+      shapes.clear=dofile(modpath.."/bridge_clearance_render.lua")(architecture,stem)
+      advanced[g]=shapes
     end
-    mono_clear=dofile(modpath.."/bridge_clearance_render.lua")(architecture,mono_stem)
   end
   local wire_nodes={}
   local function mount(d)
@@ -66,7 +70,7 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
       if span.kind=="tunnel" then
         if y<=span.base then return ground end
         if anchor and y==span.base+1 then
-          return span.railtype==2 and mono.tunnel[head.inside_direction] or tunnels[head.inside_direction]
+          return advanced[span.railtype] and advanced[span.railtype].tunnel[head.inside_direction] or tunnels[head.inside_direction]
         end
       else
         if bridge_wire and span.railtype==1 and anchor and y==span.deck+bridge_wire.offset then
@@ -75,7 +79,7 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
         end
         if anchor and y==span.deck then
           local shape=head.flat_ramp and "head_flat" or "head_ramp"
-          return span.railtype==2 and mono[shape][head.inside_direction] or parts[shape][head.inside_direction]
+          return advanced[span.railtype] and advanced[span.railtype][shape][head.inside_direction] or parts[shape][head.inside_direction]
         end
         if y<=head.base then return head.foundation~="none" and retaining or ground end
       end
@@ -93,7 +97,8 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
       local clear=clear_span.under(s.tiles[id])
       if y==elevated.deck then
         local axis=elevated.axis
-        if elevated.railtype==2 and mono_clear then return (clear and mono_clear or mono.span)[axis] end
+        local a=advanced[elevated.railtype]
+        if a then return (clear and a.clear or a.span)[axis] end
         return (clear and clear_span or parts.span)[axis]
       end
       if not clear and y<elevated.deck then

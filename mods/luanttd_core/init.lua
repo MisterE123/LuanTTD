@@ -889,7 +889,8 @@ do
     api.rail_mixed_town_tools=S.rail_mixed_town_service
     api.rail_mail_tools=Sim.rail_mail_active(S)
     api.capabilities.rail=rail_art
-    if rail_art.advanced[54] and world.mount_guideway_picker then world.mount_guideway_picker() end
+    local mono,maglev=rail_art.advanced[54]==true,rail_art.advanced[84]==true
+    if (mono or maglev) and world.mount_guideway_picker then world.mount_guideway_picker(maglev,mono) end
     simulation_bindings.rail_media(Pilot,rail_art)
     api.rail_dispatch_view=dofile(mod.."/rail_dispatch_view.lua").create(api,Pilot,Track,Pose,
       dofile(mod.."/rail_signal_art.lua"),interval,presentation,bridge_profile,height,rail_art)

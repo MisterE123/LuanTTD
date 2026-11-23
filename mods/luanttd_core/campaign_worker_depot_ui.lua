@@ -26,7 +26,7 @@ return function(core,client,build,money,assembly)
     for i,t in ipairs(first) do from[i]=core.formspec_escape(t.label) end
     for i,t in ipairs(last) do to[i]=core.formspec_escape(t.label) end
     local stem="d"..p.serial.."_"
-    local title=p.mode=="rail" and data.railtype==2 and "Monorail depot"
+    local title=p.mode=="rail" and (data.railtype==3 and "Maglev depot" or data.railtype==2 and "Monorail depot")
       or ({rail="Rail depot",air="Airport hangar",ship="Ship depot",road="Road depot"})[p.mode] or "Company depot"
     local b={"formspec_version[7]size[11.4,10.03]bgcolor[#152334;false]",
       "label[.45,.42;"..title.."]", "label[.45,.86;Hover for vehicle details, or tap or click a row.]",

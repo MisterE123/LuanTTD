@@ -173,7 +173,7 @@ return function(Sim,mod,s,cap)
         end
       end
       if train.advanced_gauge then
-        for i=1,#out-1 do out[i].drawbar=link(out[i],out[i+1]) end
+        for i=1,#out-1 do out[i].drawbar=link(out[i],out[i+1],train.advanced_gauge) end
       end
       return out
     end
@@ -183,7 +183,9 @@ return function(Sim,mod,s,cap)
       return owned and N.rail.types.available(gauge,owned.railtype_mask(s,owner,N.rail.types))
     end
     function N.rail.span_available(owner,gauge)
-      return gauge==2 and cap.rail.advanced_span and N.rail.railtype_available(owner,gauge)
+      local spans=cap.rail.guideway_spans
+      local ready=spans and spans[gauge] or gauge==2 and cap.rail.advanced_span
+      return ready and N.rail.railtype_available(owner,gauge)
     end
     N.rail.build=B.rail_build({s=s,Sim=Sim,rail_block_tools=s.rail_block_preview,
       company_can_build_stock_railtype=N.rail.railtype_available,

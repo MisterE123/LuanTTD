@@ -2,21 +2,23 @@
 -- Visual adapter for independently pivoting straddle bogies. Does not
 -- alter source track topology, movement, ownership, or switch state.
 return function(Sim,T,diagonal,stock,surface,read)
+  local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local Guide=dofile(mod.."/rail_guideway_profiles.lua")
   local pi=math.pi
   local sqrt,sin,atan2=math.sqrt,math.sin,math.atan2
-  local function pose(id,td,f)
+  local function pose(id,td,f,gauge)
     local x,z,dx,dz=diagonal(id,td,f)
     if not x then x,z,dx,dz=stock(td,f) end
     local u,v=Sim.xy(id)
     local level,tilt=surface(id,td,f)
     if level==nil then return end
-    return {x=2*u+.5+x,y=level+.746,z=2*v+.5+z},dx,dz,tilt or 0
+    return {x=2*u+.5+x,y=level+Guide.by_gauge[gauge].offset,z=2*v+.5+z},dx,dz,tilt or 0
   end
-  local function neighbor(train,id,td)
+  local function neighbor(train,id,td,gauge)
     local exit=T.exit_side(td)
     local n=Sim.adjacent(id,4-exit)
     local tile=n and read(n)
-    if not (tile and tile.rail_tracks and tile.rail_type==2) then return end
+    if not (tile and tile.rail_tracks and tile.rail_type==gauge) then return end
     -- At a split, choose only a link actually recorded by the authority.
     -- Follow the plan either way; reversing the visual chassis does not
     -- replan the stock route or guess at a switch it hasn't crossed.
@@ -53,10 +55,10 @@ return function(Sim,T,diagonal,stock,surface,read)
     if way then return n,way end
   end
 
-  local function at_distance(train,id,td,f,distance)
+  local function at_distance(train,id,td,f,distance,gauge)
     local back=distance<0
     if back then td,f,distance=T.reverse_trackdir(td),1-f,-distance end
-    local p,dx,dz,pitch=pose(id,td,f)
+    local p,dx,dz,pitch=pose(id,td,f,gauge)
     if not p then return end
     -- Parametric tracks can be curved, eased or bank-height transitions.
     -- Measure horizontally like existing stock spacing; read the exact
@@ -64,26 +66,26 @@ return function(Sim,T,diagonal,stock,surface,read)
     while distance>1e-8 do
       local nextf=math.min(1,f+1/64)
       if nextf==f then
-        local nextid,nexttd=neighbor(train,id,td)
+        local nextid,nexttd=neighbor(train,id,td,gauge)
         local q
-        if nextid then q=pose(nextid,nexttd,0) end
+        if nextid then q=pose(nextid,nexttd,0,gauge) end
         if not q then
           p={x=p.x+dx*distance,y=p.y+sin(pitch)*distance,z=p.z+dz*distance}
           break
         end
         id,td,f=nextid,nexttd,0
-        p,dx,dz,pitch=pose(id,td,f)
+        p,dx,dz,pitch=pose(id,td,f,gauge)
       else
-        local q=pose(id,td,nextf)
+        local q=pose(id,td,nextf,gauge)
         if not q then return end
         local len=sqrt((q.x-p.x)^2+(q.z-p.z)^2)
         if len>=distance then
-          p,dx,dz,pitch=pose(id,td,f+(nextf-f)*distance/len)
+          p,dx,dz,pitch=pose(id,td,f+(nextf-f)*distance/len,gauge)
           break
         end
         distance=distance-len
         f=nextf
-        p,dx,dz,pitch=pose(id,td,f)
+        p,dx,dz,pitch=pose(id,td,f,gauge)
       end
     end
     local sign=back and -1 or 1
@@ -91,10 +93,12 @@ return function(Sim,T,diagonal,stock,surface,read)
   end
 
   return function(train,p,flipped)
-    if p.wormhole then return end
+    local tile=read(p.id)
+    local gauge=train.advanced_gauge or tile and tile.rail_type
+    if p.wormhole or not Guide.by_gauge[gauge] then return end
     local sign=flipped and -1 or 1
-    local front,fdx,fdz,fp=at_distance(train,p.id,p.td,p.progress,.259*sign)
-    local back,bdx,bdz,bp=at_distance(train,p.id,p.td,p.progress,-.246*sign)
+    local front,fdx,fdz,fp=at_distance(train,p.id,p.td,p.progress,.259*sign,gauge)
+    local back,bdx,bdz,bp=at_distance(train,p.id,p.td,p.progress,-.246*sign,gauge)
     if not (front and back) then return end
     local dx,dz=front.x-back.x,front.z-back.z
     local length=sqrt(dx*dx+dz*dz)

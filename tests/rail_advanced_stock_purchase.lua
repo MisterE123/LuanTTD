@@ -51,3 +51,27 @@ opts.company_railtypes={}
 local denied,reason=R.quote(depot,label,consist,opts)
 assert(not denied and reason=="RAIL_VEHICLE_NOT_AVAILABLE")
 print("PASS stock company gauge dates and purchase quote for X2001, 45-seat coach and 35-bag Mail Van; no mixed-gauge depot admission")
+
+local magnetic={[84]=true,[89]=true,[90]=true}
+assert(has(F.railtype_mask(late,label,Type,magnetic),3))
+assert(not has(F.railtype_mask(late,label,Type,magnetic),2))
+assert(not has(F.railtype_mask(recent,label,Type,magnetic),3))
+depot.railtype=3
+opts={available=function(id) return F.availability(late,id).public end,
+      company_railtypes={[3]=true},mounted_advanced=magnetic}
+q=assert(R.quote(depot,label,{84,89,90},opts))
+assert(q.price==113085,q.price)
+assert(q.stats.length==24 and q.stats.power==10000 and q.stats.tare==151)
+assert(q.stats.display_max_speed==400 and q.stats.cargo_capacity.passenger==47 and q.stats.cargo_capacity.mail==37)
+assert(q.stats.compatible[3] and not (q.stats.compatible[0] or q.stats.compatible[1] or q.stats.compatible[2]))
+for _,railtype in ipairs({0,1,2}) do
+  depot.railtype=railtype
+  local absent,reason=R.quote(depot,label,{84,89,90},opts)
+  assert(not absent and reason=="INCOMPATIBLE_DEPOT_RAIL")
+end
+depot.railtype=3
+opts.mounted_advanced[57]=true
+opts.company_railtypes[2]=true
+local interop,reason=R.quote(depot,label,{84,57},opts)
+assert(not interop and reason=="INCOMPATIBLE_DEPOT_RAIL",reason)
+print("PASS Lev1 exact RC1 purchase, 47/37 separate compartments, and rejection of mixed-gauge depots and wagons")

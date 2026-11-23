@@ -48,6 +48,8 @@ jobs:
           python3 tests/advanced_rail_facility_art.py
           python3 tests/stock_x2001_art.py
           python3 tests/monorail_span_art.py
+          python3 tests/monorail_span_art.py maglev
+          python3 tests/stock_lev1_art.py
           lua5.1 tests/rail_exhaust.lua
           lua5.1 tests/terrain_tile_lookup.lua
           lua5.1 tests/tunnel_bore.lua
@@ -145,6 +147,8 @@ jobs:
           BAYLINE_MIXED_FORM=mail-coach-mail bash tests/stock_mixed_town_rail_live_native.sh
           BAYLINE_MIXED_FORM=monorail bash tests/stock_mixed_town_rail_live_native.sh
           BAYLINE_MIXED_FORM=monorail-spans bash tests/stock_mixed_town_rail_live_native.sh
+          BAYLINE_MIXED_FORM=maglev bash tests/stock_mixed_town_rail_live_native.sh
+          BAYLINE_MIXED_FORM=maglev-spans bash tests/stock_mixed_town_rail_live_native.sh
           bash tests/stock_aircraft_mail_live_native.sh
           LUANTTD_QA_PAID_AIRFRAME=218 bash tests/stock_aircraft_mail_live_native.sh
           bash tests/stock_rail_multi_ore_live_native.sh
@@ -258,6 +262,7 @@ jobs:
           python3 tests/rotary_motion_upstream.py "$src" lua5.1
           python3 tests/stock_tricario_art.py "$src/src/table/engines.h" lua5.1
           python3 tests/advanced_rail_roster_upstream.py "$src/src/table/engines.h" lua5.1
+          python3 tests/guideway_types_rc1.py "$src"
           python3 tests/farm_factory_fields_upstream.py "$src" --lua lua5.1
           python3 tests/farm_clear_rc1_upstream.py "$src/src/clear_cmd.cpp" --lua lua5.1
           python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"

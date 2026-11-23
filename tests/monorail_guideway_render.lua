@@ -2,6 +2,11 @@
 -- renderer. The world only provides repeatable camera positions and lighting.
 local mod=core.get_modpath(core.get_current_modname())
 local function m(name) return dofile(mod.."/"..name..".lua") end
+local marker=assert(io.open(mod.."/qa-variant.txt"))
+local family=marker:read("*l");marker:close()
+local gauge=family=="maglev" and 3 or 2
+local profile=assert(m("rail_guideway_profiles").by_gauge[gauge])
+local stem="bl_guideway_"..family
 local Sim={tiles={}}
 function Sim.id(x,z) if x>=1 and z>=1 and x<=30 and z<=60 then return (z-1)*30+x end end
 function Sim.xy(id) return (id-1)%30+1,math.floor((id-1)/30)+1 end
@@ -34,32 +39,32 @@ end
 node("grass",nil,"bl_grass1.png")
 for mask=1,8 do
   if mask==1 or mask==4 or mask==8 then
-    node("track_"..mask,"bl_guideway_mono_flat_"..mask..".obj","bl_guideway_mono_atlas.png")
+    node("track_"..mask,stem.."_flat_"..mask..".obj",stem.."_atlas.png")
     if mask~=1 then
-      for n=1,3 do node("eased_"..mask.."_"..n,"bl_guideway_mono_eased_"..mask.."_"..n..".obj","bl_guideway_mono_atlas.png") end
+      for n=1,3 do node("eased_"..mask.."_"..n,stem.."_eased_"..mask.."_"..n..".obj",stem.."_atlas.png") end
     end
   end
 end
-node("platform","bl_guideway_mono_platform_0.obj","bl_guideway_mono_facility_atlas.png")
-node("depot","bl_guideway_mono_depot_2.obj","bl_guideway_mono_facility_atlas.png")
-local defs={x2001={"bl_rail_x2001_body.obj","bl_rail_x2001.png"},
-  mono_passenger={"bl_rail_mono_passenger_body.obj","bl_rail_mono_passenger.png"},
-  mono_mail={"bl_rail_mono_mail_body.obj","bl_rail_mono_mail.png"},
-}
+node("platform",stem.."_platform_0.obj",stem.."_facility_atlas.png")
+node("depot",stem.."_depot_2.obj",stem.."_facility_atlas.png")
 local function entity(name,assets)
   core.register_entity(":luanttd_core:dispatch_"..name,{initial_properties={
     static_save=false,physical=false,pointable=false,visual="mesh",mesh=assets[1],
     textures={assets[2]},shaded=true,backface_culling=true,visual_size={x=1,y=1,z=1},
   }})
 end
-for name,d in pairs(defs) do entity(name.."_body",d) end
-entity("mono_bogie",{"bl_rail_mono_bogie.obj","bl_rail_x2001.png"})
-entity("mono_drawbar",{"bl_rail_mono_drawbar.obj","bl_rail_x2001.png"})
+local carriages={profile.engine_visual,profile.passenger_visual,profile.mail_visual}
+for _,name in ipairs(carriages) do
+  entity(name.."_body",{"bl_rail_"..name.."_body.obj","bl_rail_"..name..".png"})
+end
+for _,name in ipairs({profile.suspension,profile.coupler}) do
+  entity(name,{"bl_rail_"..name..".obj","bl_rail_"..profile.engine_visual..".png"})
+end
 local function place(x,y,z,name)
   core.set_node({x=x,y=y,z=z},{name="monoqa:"..name})
 end
-local function translate(parts,dx,dz)
-  local function move(p) return {x=p.x+dx,y=p.y,z=p.z+dz} end
+local function translate(parts,dx,dy,dz)
+  local function move(p) return {x=p.x+dx,y=p.y+dy,z=p.z+dz} end
   local sum={x=0,y=0,z=0}
   for _,part in ipairs(parts) do
     part.pos=move(part.pos)
@@ -77,13 +82,15 @@ local function layout()
     local p=r.parts[1].pos
     local dz=(name=="loading" and 14 or 36)-math.floor(p.z/2)*2
     local dx=18-math.floor(p.x/2)*2
-    r.camera=translate(r.parts,dx,dz)
+    -- The captured service may have loaded at a different fixed height.
+    -- Translate the entire rig, including its bogies and drawbars, together.
+    r.camera=translate(r.parts,dx,1+profile.offset-p.y,dz)
     local z=math.floor(r.camera.z/2)*2
     place(8,2,z,"depot")
     for x=10,43,2 do place(x,2,z,(x>14 and x<24) and "platform" or "track_1") end
   end
   local function line(x,z,mask)
-    Sim.tiles[Sim.id(x,z)]={rail_tracks=mask,rail_type=2,h=1,owner="QA"}
+    Sim.tiles[Sim.id(x,z)]={rail_tracks=mask,rail_type=gauge,h=1,owner="QA"}
   end
   line(18,26,1);line(17,26,8)
   for i=0,10 do line(17-i,27+i,4);line(16-i,27+i,8) end
@@ -95,7 +102,7 @@ local function layout()
   end
 end
 local function aim(p,target,style)
-  local offset=style==1 and {x=3.4,y=.22,z=-4.7} or style==2 and {x=-4.2,y=5.9,z=-4.9}
+  local offset=style==1 and {x=2.6,y=.15,z=-3.3} or style==2 and {x=-3.5,y=4.6,z=-4.7}
     or {x=3.1,y=3.1,z=2.5}
   p:set_pos({x=target.x+offset.x,y=target.y+offset.y,z=target.z+offset.z})
   local eye=vector.add(p:get_pos(),{x=0,y=1.47,z=0})
@@ -110,7 +117,6 @@ local function diagonal_case()
     local two=Sim.id(16-i,27+i)
     route[#route+1]={tile=one,td=2};route[#route+1]={tile=two,td=3}
   end
-  local carriages={"x2001","mono_passenger","mono_mail"}
   local frame={parts={}}
   for i=1,3 do
     -- Straight 45-degree centerline: one stock model length per body.
@@ -121,7 +127,7 @@ local function diagonal_case()
     local pos,rot,gears=bogies({route=route,index=j},{id=step.tile,td=step.td,progress=f})
     frame.parts[i]={index=i,body_index=i,kind=carriages[i],pos=pos,rotation=rot,bogies=gears}
   end
-  for i=1,#frame.parts-1 do frame.parts[i].drawbar=link(frame.parts[i],frame.parts[i+1]) end
+  for i=1,#frame.parts-1 do frame.parts[i].drawbar=link(frame.parts[i],frame.parts[i+1],gauge) end
   frame.camera=frame.parts[2].pos
   return frame
 end

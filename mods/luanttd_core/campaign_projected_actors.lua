@@ -31,9 +31,12 @@ return function(core,api,motion,models,airframes)
     end
   end
   local collector
+  local Guide=dofile(base.."/rail_guideway_profiles.lua")
+  local geometry={}
+  for id,kind in pairs(Guide.visuals) do geometry[kind]=Guide.by_stock[id] end
   local rail_engines={locomotive=true}
   for _,kind in pairs(dofile(base.."/rail_dispatch_manifest.lua").stock_kind) do rail_engines[kind]=true end
-  local passenger_bodies={wagon=true,manley=true,dash=true,mono_passenger=true}
+  local passenger_bodies={wagon=true,manley=true,dash=true,mono_passenger=true,maglev_passenger=true}
   function A.render(rows,dt,signals)
     local visible,viewers={},nil
     repair_smoke.step(dt)
@@ -120,15 +123,16 @@ return function(core,api,motion,models,airframes)
             present(body..":collector",row,name.."_collector",nil,heel,nil,nil,
               {visual_only=true,rotation=p.rotation,flip=p.flip,scale=scale,
                 index=p.index,body_index=p.body_index,kind=p.kind},snap)
-          elseif p.bogies then
+          elseif p.bogies and geometry[p.kind] then
+            local profile=geometry[p.kind]
             present(body,row,name.."_body",nil,p.pos,nil,nil,p,snap)
             for j,gear in ipairs(p.bogies) do
-              present(body..":bogie:"..j,row,"luanttd_core:dispatch_mono_bogie",nil,gear.pos,nil,nil,
+              present(body..":bogie:"..j,row,"luanttd_core:dispatch_"..profile.suspension,nil,gear.pos,nil,nil,
                 {visual_only=true,rotation=gear.rotation,flip=p.flip,index=p.index,body_index=p.body_index,kind=p.kind},snap)
             end
             local draw=p.drawbar
             if draw then
-              present(body..":drawbar",row,"luanttd_core:dispatch_mono_drawbar",nil,draw.pos,nil,nil,
+              present(body..":drawbar",row,"luanttd_core:dispatch_"..profile.coupler,nil,draw.pos,nil,nil,
                 {visual_only=true,rotation=draw.rotation,flip=p.flip,length=draw.length,
                   index=p.index,body_index=p.body_index,kind=p.kind},snap)
             end

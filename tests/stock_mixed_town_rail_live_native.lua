@@ -11,19 +11,21 @@ local fixture=assert(io.open(core.get_worldpath().."/qa-mixed-form.txt","r"))
 local mode,form=fixture:read("*l","*l")
 fixture:close()
 assert(mode=="start" or mode=="reload" or mode=="final")
-assert(form=="coach-mail" or form=="mail-coach-mail" or form=="monorail" or form=="monorail-spans")
-local spans=form=="monorail-spans"
-local mono=form=="monorail" or spans
-local gauge=mono and 2 or nil
-local stock=mono and {54,57,58} or form=="coach-mail" and {0,27,28} or {0,28,27,28}
-local function is_coach(i) return i==27 or i==57 end
+local profiles=m("rail_guideway_profiles").by_gauge
+local gauge=form:match("^maglev") and 3 or form:match("^monorail") and 2 or nil
+local profile=profiles[gauge]
+assert(form=="coach-mail" or form=="mail-coach-mail" or
+  profile and (form==profile.title:lower() or form==profile.title:lower().."-spans"))
+local spans=form:match("%-spans$")~=nil
+local stock=profile and profile.stocks or form=="coach-mail" and {0,27,28} or {0,28,27,28}
+local function is_coach(i) return i==27 or profile and i==profile.passenger end
 local name="RC1 Mixed Town Rail"
 local function cell(x,z) return (z-1)*64+x end
 local depot,first,second=cell(6,17),cell(10,17),cell(43,17)
-local cap={road={start_year=mono and 2010 or 1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
+local cap={road={start_year=gauge==3 and 2025 or profile and 2010 or 1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
   rail=m("rail_dispatch_manifest").scan(mod,false,false),ferry={},air={},oil_tanker=true,durable_actions=true}
-assert(not mono or cap.rail.advanced[54])
-assert(not spans or cap.rail.advanced_span)
+assert(not profile or cap.rail.advanced[profile.engine])
+assert(not spans or cap.rail.guideway_spans[gauge])
 assert(cap.rail.ready.mail_van and cap.rail.mixed_town_engines[0], "Ordinary scanned stock art must enable mixed town rail")
 for _,group in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..group,"air") end
 local balance=300000
@@ -101,7 +103,7 @@ local function visual(run,capture)
         local i=part.body_index
         assert(not seen[i] and stock[i]==part.stock_id and part.rotation.y==part.rotation.y)
         seen[i]=true
-        if mono and (not spans or part.bogies) then
+        if profile and (not spans or part.bogies) then
           local gears=assert(part.bogies);assert(#gears==2)
           for _,g in ipairs(gears) do
             assert(math.abs(g.pos.y-part.pos.y)<.001 and math.abs(g.rotation.y-part.rotation.y)<.001)
@@ -109,9 +111,9 @@ local function visual(run,capture)
           local dist=math.abs(gears[1].pos.x-gears[2].pos.x)+math.abs(gears[1].pos.z-gears[2].pos.z)
           assert(math.abs(dist-.505)<.001)
         else assert(not part.bogies) end
-        if i==1 then assert(part.kind==(mono and "x2001" or "steam") and part.body_id==run.town_engine_body_id)
+        if i==1 then assert(part.kind==(profile and profile.engine_visual or "steam") and part.body_id==run.town_engine_body_id)
         else
-          assert(part.kind==(is_coach(stock[i]) and (mono and "mono_passenger" or "wagon") or mono and "mono_mail" or "mail_van"))
+          assert(part.kind==(is_coach(stock[i]) and (profile and profile.passenger_visual or "wagon") or profile and profile.mail_visual or "mail_van"))
           assert(part.body_id==run.town_parts[i-1].body_id)
         end
       end
@@ -136,21 +138,22 @@ local function totals(v)
   return passenger,mail
 end
 local function work()
-  local pax_cap,mail_cap=mono and 45 or 40,mono and 35 or (#stock-2)*30
+  local pax_cap=profile and assert(Roster.entry(profile.passenger)).capacity or 40
+  local mail_cap=profile and assert(Roster.entry(profile.mail)).capacity or (#stock-2)*30
   if mode=="start" then
     if spans then
       local function track(a,b)
         lay({tool="track",first=cell(a,17),last=cell(b,17),track=Track.X,railtype=gauge})
       end
       local bridge=ask("bridge_picker",{mode="rail",first=cell(16,17),last=cell(20,17),railtype=gauge})
-      assert(bridge.railtype==2 and #bridge.offers==1)
+      assert(bridge.railtype==gauge and #bridge.offers==1)
       command("bridge_picker",{token=bridge.token,style=bridge.offers[1].style})
       local tunnel=ask("transport_quote",{request={mode="rail",operation="tunnel",tile=cell(26,17),railtype=gauge}})
       command("transport_commit",{token=tunnel.token})
       local world=assert(Checkpoint.read())
       local bridge_rec=assert(world.stock_rail_spans[world.tiles[cell(16,17)].rail_span_id])
       local tunnel_rec=assert(world.stock_rail_spans[world.tiles[cell(26,17)].rail_span_id])
-      assert(bridge_rec.railtype==2 and bridge_rec.kind=="bridge" and tunnel_rec.railtype==2 and tunnel_rec.kind=="tunnel")
+      assert(bridge_rec.railtype==gauge and bridge_rec.kind=="bridge" and tunnel_rec.railtype==gauge and tunnel_rec.kind=="tunnel")
       track(7,15);track(21,25);track(Sim.xy(tunnel_rec["end"])+1,53)
     else
       lay({tool="track",first=cell(7,17),last=cell(53,17),track=Track.X,railtype=gauge})
@@ -183,7 +186,7 @@ local function work()
     for _,st in ipairs(panel.targets) do if not st.cargo then
       if not source then source=st.id else sink=st.id end
     end end
-    assert(selected and source and sink and source~=sink and (mono or offer))
+    assert(selected and source and sink and source~=sink and (profile or offer))
     command("transport_start",{mode="rail",vehicle=train,first=source,second=sink,cargo="mixed"})
     local function orders() return ask("orders",{mode="rail",vehicle=train,page=1}) end
     local order=orders()

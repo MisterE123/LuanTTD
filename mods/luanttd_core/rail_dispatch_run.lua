@@ -9,6 +9,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local settings={forbid_90=true} -- OpenTTD 16.0-RC1 pf.forbid_90_deg default.
   local upstream=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local Freight=dofile(upstream.."../rail_freight_kinds.lua")
+  local Guide=dofile(upstream.."../rail_guideway_profiles.lua")
   local Collision=dofile(upstream.."rail_collision.lua")
   local OrderList=dofile(upstream.."rail_order_list.lua")
   local acceleration_models={}
@@ -27,7 +28,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local bridge_collectors_ready
   function R.mount_bridge_collectors(ready) bridge_collectors_ready=ready end
   function R.mount_owned_model(id)
-    local advanced=id==54
+    local advanced=Guide.by_engine[id]~=nil
     if advanced or id==8 or id==9 or id==10 or id==13 or id==14 or id==15 or id==22 or Roster and (Roster.passenger_dmu(id) or Roster.electric_engine(id)) then
       model_ready[id]=true
       return true
@@ -36,14 +37,18 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
   function R.owned_passenger_engine(id) return model_ready[id]==true end
   function R.mount_advanced_wagon(id)
-    if id~=57 and id~=58 then return false end
+    local profile=Guide.by_stock[id]
+    if not profile or profile.engine==id then return false end
     advanced_wagons[id]=true
     return true
   end
-  local function stock_mono_service(ids)
-    if type(ids)~="table" or ids[1]~=54 or not model_ready[54] or #ids<2 or #ids>4 then return false end
-    for i=2,#ids do if not advanced_wagons[ids[i]] then return false end end
-    return true
+  local function stock_guideway_service(ids)
+    local p=type(ids)=="table" and Guide.by_engine[ids[1]]
+    if not p or not model_ready[p.engine] or #ids<2 or #ids>4 then return false end
+    for i=2,#ids do
+      if Guide.by_stock[ids[i]]~=p or not advanced_wagons[ids[i]] then return false end
+    end
+    return p
   end
 
   function R.current(s)
@@ -619,7 +624,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         for i,p in ipairs(owned.parts) do
           run.town_parts[i]={index=i,stock=p.stock_id,body_id=assert(p.body_id)}
         end
-      elseif not freight and (Roster.mixed_town_consist(owned.stock_ids) or stock_mono_service(owned.stock_ids)) then
+      elseif not freight and (Roster.mixed_town_consist(owned.stock_ids) or stock_guideway_service(owned.stock_ids)) then
         run.body_lengths,run.town_parts=stats.lengths,{}
         run.advanced_gauge=engine_type>=2 and engine_type or nil
         run.town_engine_body_id=assert(owned.parts[1].body_id)
@@ -833,9 +838,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local ids=unit and unit.stock_ids
     local engine=ids and ids[1]
     if not (engine and Roster and R.owned_passenger_engine(engine)) then return false end
-    if engine==54 then
-      if not stock_mono_service(ids) then return false end
-      for i=2,#ids do if ids[i]==57 then return true end end
+    if Guide.by_engine[engine] then
+      local profile=stock_guideway_service(ids)
+      if not profile then return false end
+      for i=2,#ids do if ids[i]==profile.passenger then return true end end
       return false
     end
     if Roster.passenger_dmu(engine) then return #ids==1 or #ids==2 and ids[2]==27 end
@@ -859,7 +865,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       and R.owned_passenger_engine(ids[1])
   end
   function R.owned_mixed_consist(s,owned)
-    if s.rail_mail_service and owned and stock_mono_service(owned.stock_ids) then return true end
+    if s.rail_mail_service and owned and stock_guideway_service(owned.stock_ids) then return true end
     return not not (s.rail_mixed_town_service and owned and Roster.mixed_town_consist(owned.stock_ids)
       and s.rail_mixed_town_engines[owned.stock_ids[1]] and R.owned_passenger_engine(owned.stock_ids[1]))
   end
@@ -877,7 +883,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
   function R.owned_town_consist(s,owned)
     return R.owned_passenger_consist(owned) or owned_mail_consist(owned,s) or R.owned_mixed_consist(s,owned)
-      or owned and stock_mono_service(owned.stock_ids)
+      or owned and stock_guideway_service(owned.stock_ids)
   end
   function R.usable_town_order(s,owner,order)
     if type(order)~="table" or order.kind~="station" then return false end
@@ -1865,8 +1871,11 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       if r.fleet_id and not R.owned_passenger_engine(r.stock_engine) then return false end
       if r.town_parts then
         if r.advanced_gauge then
-          if r.advanced_gauge~=2 or r.stock_engine~=54 or not s.rail_mail_service then return false end
-          for _,p in ipairs(r.town_parts) do if not advanced_wagons[p.stock] then return false end end
+          local profile=Guide.by_engine[r.stock_engine]
+          if not profile or profile.gauge~=r.advanced_gauge or not s.rail_mail_service then return false end
+          for _,p in ipairs(r.town_parts) do
+            if Guide.by_stock[p.stock]~=profile or not advanced_wagons[p.stock] then return false end
+          end
         elseif r.express_mail then
           if not s.rail_mail_service then return false end
         elseif not (s.rail_mixed_town_engines and s.rail_mixed_town_engines[r.stock_engine]) then

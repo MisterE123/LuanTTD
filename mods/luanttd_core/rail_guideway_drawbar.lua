@@ -2,15 +2,19 @@
 -- Presentation only: couple the two actual rolling-stock pins along their
 -- chord. Only cars next to each other in the rendered train can share it.
 local atan2,cos,sin,sqrt=math.atan2,math.cos,math.sin,math.sqrt
-local function pin(body,toward)
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local profiles=dofile(mod.."/rail_guideway_profiles.lua").by_gauge
+local function pin(body,toward,pin_y,pin_z)
   local p,r=body.pos,body.rotation
   local x,z=sin(r.y),-cos(r.y)
-  local n=(toward.x-p.x)*x+(toward.z-p.z)*z>=0 and .454 or -.454
-  return {x=p.x+x*n*cos(r.x),y=p.y+.095-n*sin(r.x),z=p.z+z*n*cos(r.x)}
+  local n=(toward.x-p.x)*x+(toward.z-p.z)*z>=0 and pin_z or -pin_z
+  return {x=p.x+x*n*cos(r.x),y=p.y+pin_y-n*sin(r.x),z=p.z+z*n*cos(r.x)}
 end
-return function(a,b)
+return function(a,b,gauge)
   if a.index+1~=b.index then return end
-  local pa,pb=pin(a,b.pos),pin(b,a.pos)
+  local p=profiles[gauge or 2]
+  if not p then return end
+  local pa,pb=pin(a,b.pos,p.pin_y,p.pin_z),pin(b,a.pos,p.pin_y,p.pin_z)
   local dx,dy,dz=pb.x-pa.x,pb.y-pa.y,pb.z-pa.z
   local length=sqrt(dx*dx+dy*dy+dz*dz)
   if length<.012 or length>.58 then return end

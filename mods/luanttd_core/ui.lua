@@ -685,12 +685,13 @@ end
 function U.select_rail_gauge(p,gauge)
   local n=p:get_player_name()
   local V=view(n)
+  local title=gauge==3 and "Maglev" or gauge==2 and "Monorail"
   local function equip(value)
-    V.rail_gauge=value==2 and 2 or nil
+    V.rail_gauge=value
     V.anchor,V.rail_press,V.rail_ghost=nil,nil,nil
-    V.status=value==2 and "Monorail selected. Use AutoRail, Platform or Depot." or "Standard rail selected."
+    V.status=title and (title.." selected. Use AutoRail, Platform or Depot.") or "Standard rail selected."
   end
-  if gauge~=2 then V.rail_gauge_request=nil;equip(0);return end
+  if not title then V.rail_gauge_request=nil;equip(nil);return end
   local client=api.worker_bridge_client
   if not client then V.status="The campaign worker is not ready.";return end
   local ticket={}
@@ -698,8 +699,9 @@ function U.select_rail_gauge(p,gauge)
   local sent,why=client.query({kind="company",player=n},function(r)
     if session[n]~=V or V.rail_gauge_request~=ticket then return end
     V.rail_gauge_request=nil
-    if r.ok and r.value.rail_mono then equip(2)
-    else V.status=r.why or "Your company does not have monorail yet." end
+    local field=gauge==3 and "rail_maglev" or "rail_mono"
+    if r.ok and r.value[field] then equip(gauge)
+    else V.status=r.why or ("Your company does not have "..title:lower().." yet.") end
   end)
   if not sent then V.rail_gauge_request=nil;V.status=why end
 end
@@ -1891,7 +1893,9 @@ local function authority_preview(p,id,hit)
   end
   if not request then return ids,false,label end
   request=U.rail_gauge_request(V,kind,request)
-  if request.railtype==2 then label="Monorail · "..label end
+  if request.railtype==2 or request.railtype==3 then
+    label=(request.railtype==3 and "Maglev" or "Monorail").." · "..label
+  end
   local q,why=client.preview(n,kind,request,core.get_us_time())
   if tool=="rail_autotrack" then V.rail_ghost=q and {id=id,pieces=q.pieces} or nil end
   if not q then return ids,false,why end
