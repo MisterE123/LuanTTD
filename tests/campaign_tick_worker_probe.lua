@@ -3,6 +3,9 @@ local mod=assert(core.get_modpath(core.get_current_modname()))
 local channel="luanttd_core:real_tick_probe"
 if not core.get_player_by_name then
   function core.luanttd_probe_campaign(phase,path)
+    if phase==3 then
+      return assert(loadfile(mod.."/rail_paid_runtime_fixture.lua"))({"authority"})
+    end
     local Sim=dofile(mod.."/sim.lua")
     local Bind=dofile(mod.."/campaign_simulation_bindings.lua")(Sim,mod)
     local T=dofile(mod.."/openttd/terrain.lua")
@@ -22,8 +25,14 @@ if not core.get_player_by_name then
       s.corner_grid=dofile(mod.."/terrain_preview.lua")(Sim,T,s)
       bind(s)
       qa=F.first(Sim,s)
+      local endpoint=dofile(mod.."/campaign_authority_endpoint.lua")(Sim,
+        {world=s,terrain=T,day=function() Sim.daily(s) end})
       core.ipc_set(channel..":status",{tick=qa.tick,day=s.day,fare=s.fleet[qa.id].revenue})
-      -- Hold live state on this worker across independent engine steps.
+      -- Keep the live world private while the host requests its visible area.
+      assert(core.ipc_poll(channel..":view",3000),"main did not request viewport")
+      local request=core.ipc_get(channel..":view")
+      local view=endpoint.snapshot(request.x,request.z,request.w,request.h)
+      core.ipc_set(channel..":projection",view)
       assert(core.ipc_poll(channel..":save",3000),"main did not request checkpoint")
       assert(core.ipc_get(channel..":save")==qa.tick,"checkpoint request does not match the current tick")
       s.authority_native_fixture=qa
@@ -41,6 +50,57 @@ if not core.get_player_by_name then
 end
 
 core.register_async_dofile(mod.."/init.lua")
+local client=dofile(mod.."/campaign_authority_client.lua")(core,mod)
+local caps={road={start_year=1950,foster=true,craighead=true,breakdowns=0,service_interval=150}}
+local function owner_run(base_day)
+  local sequence=0
+  local function ask(request,callback)
+    sequence=sequence+1
+    local wanted=sequence
+    assert(client.query(request,function(r)
+      assert(r.seq==wanted)
+      callback(r)
+    end))
+  end
+  local function advance()
+    ask({kind="advance",days=1},function(r)
+      assert(r.ok and r.day==base_day+1 and r.revision==2)
+      -- Stop is acknowledged only by the end-of-job callback, after disk.
+      ask({kind="stop"},function() error("Stop reply must be durable on job completion.") end)
+    end)
+  end
+  assert(client.start(caps,function(ready)
+    assert(ready.ready and ready.day==base_day and ready.revision==0)
+    ask({kind="snapshot",x=9,z=8,w=16,h=12},function(view)
+      assert(view.ok and #view.value.tiles==192 and #view.value.vehicles==1)
+      local id=view.value.vehicles[1].id
+      local stop={kind="road_toggle",vehicle=id,revision=0}
+      ask({kind="command",player="Stranger",command=stop},function(denied)
+        assert(denied.why=="NOT_YOUR_ROAD_VEHICLE" and denied.revision==0)
+        ask({kind="command",player="GrowthQA",command=stop},function(accepted)
+          assert(accepted.ok and accepted.revision==1)
+          ask({kind="command",player="GrowthQA",command=stop},function(stale)
+            assert(stale.why=="STALE_COMMAND" and stale.revision==1)
+            ask({kind="command",player="GrowthQA",command={kind="road_toggle",vehicle=id,revision=1}},function(resumed)
+              assert(resumed.ok and resumed.revision==2)
+              advance()
+            end)
+          end)
+        end)
+      end)
+    end)
+  end,function(why,seq,day)
+    assert(why=="stopped" and seq==sequence and day==base_day+1)
+    assert(client.start(caps,function(ready)
+      assert(ready.ready and ready.day==day and ready.revision==2)
+      assert(client.query({kind="stop"},function() end))
+    end,function(why2,seq2,day2)
+      assert(why2=="stopped" and seq2==1 and day2==day)
+      core.log("action","PASS NATIVE OWNER MAILBOX: snapshot, real road stop/resume, stale edit refused, authoritative day and revision reopened")
+      core.request_shutdown("Worker campaign checks passed",false,0)
+    end,"worker-economy.chk"))
+  end,"worker-economy.chk"))
+end
 for _,group in ipairs({"stone","water_source","river_water_source"}) do
   core.register_alias("mapgen_"..group,"air")
 end
@@ -55,7 +115,12 @@ core.register_on_mods_loaded(function()
     assert(core.handle_async(job,function(saved,complete,production,fare)
       assert(tick==saved and complete==5115 and production>complete and fare>=observed.fare)
       core.log("action",("PASS NATIVE WORKER CAMPAIGN: bus $%d; live checkpoint tick %d; house completed %d, produced cargo %d; no world returned"):format(fare,tick,complete,production))
-      core.request_shutdown("Worker campaign checks passed",false,0)
+      assert(core.handle_async(job,function(fares)
+        assert(fares.Coach>0 and fares.Rail>0 and fares.Ferry>0 and fares.Air>0)
+        core.log("action",("PASS NATIVE FOUR-MODE ECONOMY: road $%d, rail $%d, ferry $%d, air $%d; one clock through reload")
+          :format(fares.Coach,fares.Rail,fares.Ferry,fares.Air))
+        owner_run(observed.day)
+      end,3,path))
     end,2,path))
   end,1,path))
   local limit=core.get_us_time()+5000000
@@ -65,10 +130,20 @@ core.register_on_mods_loaded(function()
       assert(data.fare>0 and data.tick==74*data.day)
       observed=data
       local before=steps
-      core.after(.25,function()
-        assert(steps>before,"simulation worker stopped the engine")
-        core.ipc_set(channel..":save",data.tick)
-      end)
+      core.ipc_set(channel..":view",{x=9,z=8,w=16,h=12})
+      local function projected()
+        local view=core.ipc_get(channel..":projection")
+        if view then
+          assert(steps>before,"simulation worker stopped the engine")
+          assert(view.ok and view.tick==data.tick and #view.value.tiles==192 and #view.value.vehicles==1)
+          assert(view.value.vehicles[1].running and not view.value.fleet and not view.value.corner_grid)
+          core.ipc_set(channel..":save",data.tick)
+        else
+          assert(core.get_us_time()<limit,"worker did not project the viewport")
+          core.after(.03,projected)
+        end
+      end
+      core.after(.09,projected)
     else
       assert(core.get_us_time()<limit,"worker did not report paid service")
       core.after(.03,poll)

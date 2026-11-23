@@ -66,11 +66,16 @@ local function fixture(missing_file,electric,eased,reversal)
     assert(id==1 and td==1 and progress==.25, "a wormhole must keep its stock pose")
     return -.2,.2,1,1
   end}
+  local mod=core.get_modpath()
+  local Art=dofile(mod.."/rail_dispatch_manifest.lua")
+  local ready=Art.scan(mod,electric,false)
+  Run.mount_bridge_collectors=function(predicate) assert(not predicate()) end
+  dofile(mod.."/campaign_simulation_bindings.lua")(Sim,mod).rail_media(Run,ready)
   local ok,V=pcall(View.create,{s=s,Sim=Sim,render=render},Run,{},Pose,SignalArt,2,
     function(id,td,progress)
       assert((td==1 or reversal and td==9) and progress==.25)
       return id==2 and .82 or 0,td==9 and -.125 or .125
-    end)
+    end,nil,nil,ready)
   io.open=orig
   assert(ok,V)
   V.observe=function()end

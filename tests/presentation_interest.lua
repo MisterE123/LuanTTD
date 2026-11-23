@@ -38,15 +38,20 @@ local Run={current=function() return actor end,
   frame=function(a) assert(a==actor);return {time,0,0,42} end}
 local Pose={xy=function(x,z)return x,z end,yaw=function()return 0 end}
 local Visual={nose_yaw=function()return 0 end,turn=function()return 0 end}
+local state={speed=1}
 local V=dofile("mods/luanttd_core/tram_preview_view.lua")({
-  interest=interest,s={speed=1},terrain={tile=function() return 0,1 end}},Run,Pose,Visual,74)
+  interest=interest,s=state,terrain={tile=function() return 0,1 end}},Run,Pose,Visual)
+local clock=dofile("mods/luanttd_core/aux_transport_clock.lua")(state,74,Run.current,
+  function(n) Run.advance(state,n) end)
+local function step(dt,online) clock(dt); V.step(dt,online) end
 x,z=1000,1000;interest.refresh({p})
-V.step(10,true);assert(time==10 and #refs==0)
-x,z=10,0;interest.refresh({p});V.step(1,true)
+step(10,true);assert(time==10 and #refs==0)
+x,z=10,0;interest.refresh({p});step(1,true)
 assert(#refs==1 and refs[1]:get_pos().x==11)
-x,z=1000,1000;interest.refresh({p});V.step(10,true)
+x,z=1000,1000;interest.refresh({p});step(10,true)
 assert(time==21 and #refs==1 and not refs[1]:get_pos())
-x,z=21,0;interest.refresh({p});V.step(2,true)
+x,z=21,0;interest.refresh({p});step(2,true)
 assert(time==23 and #refs==2 and refs[2]:get_pos().x==23)
-V.step(.1,false);assert(not refs[2]:get_pos() and Run.current()==actor)
+step(2,false);assert(time==25 and not refs[2]:get_pos() and Run.current()==actor)
+state.speed=0;step(3,false);assert(time==25)
 print("PASS bounded overlapping subscriptions and actual tram spawn/despawn without stopping off-camera motion")

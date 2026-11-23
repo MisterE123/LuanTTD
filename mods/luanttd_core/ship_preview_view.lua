@@ -1,5 +1,5 @@
 -- Native waterline presentation of the purchased MPS and FFP ferries.
-return function(api,Run,RoadVisual,seconds_per_day)
+return function(api,Run,RoadVisual)
   local M={}
   local names={[206]="luanttd_core:stock_harbor_ferry",[207]="luanttd_core:stock_ffp_passenger_ferry"}
   local meshes={[206]="bl_harbor_ferry.obj",[207]="bl_ffp_passenger_ferry.obj"}
@@ -9,23 +9,18 @@ return function(api,Run,RoadVisual,seconds_per_day)
       textures={"bl_harbor_ferry_palette.png"},shaded=true,backface_culling=true,
       visual_size={x=1,y=1,z=1}}})
   end
-  local acc,ref,yaw=0,nil,nil
+  local ref,yaw
   local function stop()
     if ref and ref:get_pos() then ref:remove() end
     ref,yaw=nil,nil
   end
   function M.step(dt,online,fraction)
-    if not online then stop();acc=0;return end
+    if not online then stop();return end
     local s=api.s
     local p=Run.current(s)
-    if not p or Run.paid_art_ready and not Run.paid_art_ready(s,p) then stop();acc=0;return end
+    if not p or Run.paid_art_ready and not Run.paid_art_ready(s,p) then stop();return end
     local name=names[p.engine_id or 206]
     if not name then stop();return end
-    if s.speed>0 and not p.paid_clock then
-      acc=math.min(148,acc+dt*74*s.speed/seconds_per_day)
-      local ticks=math.floor(acc)
-      if ticks>0 then Run.tick(s,ticks);acc=acc-ticks end
-    end
     local pos,dir
     if p.paid_clock then pos,dir=api.Sim.ferry_paid_pose(s,fraction)
     else pos,dir=Run.pose(p) end

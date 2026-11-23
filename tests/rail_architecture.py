@@ -139,7 +139,7 @@ def main():
         platform_surfaces(g,i-1)
     # Measure the mounted meshes rather than demanding a full uniform
     # box as tall as the tallest chimney, which forced a giant arch.
-    dispatch=(ROOT/"mods/luanttd_core/rail_dispatch_view.lua").read_text()
+    dispatch=(ROOT/"mods/luanttd_core/rail_dispatch_manifest.lua").read_text()
     names=set(re.findall(r'mesh="(bl_[a-z_0-9]+)\.obj"',dispatch))
     assert {"bl_rail_kirby_paul_tank","bl_rail_passenger_wagon","bl_rail_chaney_jubilee"}<=names
     envelope={}

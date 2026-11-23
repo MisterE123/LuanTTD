@@ -1,3 +1,8 @@
+-- Supply an observer for deliberate native mesh assertions without a real client.
+local function render_inspection(dt,online,fraction)
+  api.interest.refresh({{get_pos=function() return {x=Sim.W+1,z=Sim.H+1} end}})
+  return api.rail_dispatch_view.step(dt,online,fraction)
+end
 local isolated=core.settings:get_bool("luanttd_qa_disconnected_path_signal",false)
 local turnout=isolated or core.settings:get_bool("luanttd_qa_depot_turnout",false)
 local two_coaches=core.settings:get_bool("luanttd_qa_two_coaches",false)
@@ -75,7 +80,7 @@ local function stamp()
       end
     end
     if bridge then
-      for t=0,74 do api.rail_dispatch_view.step(.05,true,t/74) end
+      for t=0,74 do render_inspection(.05,true,t/74) end
     end
     if manley then
       local st=assert(Sim.rail_paid_status(S))
@@ -91,7 +96,7 @@ local function stamp()
   local function entity_at(run,i,fraction)
     local tile,td,f,reversed,wormhole=Sim.rail_paid_pose(S,i,fraction)
     assert(tile and td and f and not wormhole)
-    api.rail_dispatch_view.step(.1,true,fraction)
+    render_inspection(.1,true,fraction)
     local tx,tz=Sim.xy(tile)
     local powered=i==1 or manley and i==physical_count
     local expected=powered and ("luanttd_core:dispatch_"..kind..(bridge and "_body" or "")) or "luanttd_core:dispatch_wagon"
@@ -119,7 +124,7 @@ local function stamp()
   end
   local function facing()
     if not manley then return end
-    api.rail_dispatch_view.step(.1,true,1)
+    render_inspection(.1,true,1)
     local head=select(1,Sim.rail_paid_pose(S,1,1))
     local x,z=Sim.xy(head)
     local _,level=api.terrain.tile(head)

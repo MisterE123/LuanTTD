@@ -2,7 +2,8 @@
 -- One stock map with a paid bus route, actual coupled shuttle and ferry.
 -- Pass 'air' to add two genuine airfields and verify all modes settle on
 -- the same world clock with independent ownership and catchments.
-local root="mods/luanttd_core/"
+local root=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+local args=type((...))=="table" and (...) or arg
 local function stock(file,...) return dofile(root.."openttd/"..file..".lua")(...) end
 local Sim=dofile(root.."sim.lua")
 local Terrain=dofile(root.."openttd/terrain.lua")
@@ -24,14 +25,18 @@ local W=stock("ship_follow",T)
 local Network=dofile(root.."ship_network.lua")(Sim,Terrain,W,stock("ship_facilities",T,W))
 local Roster=dofile(root.."openttd/passenger_ship_roster.lua")
 local Calendar=dofile(root.."openttd/stock_engine_calendar.lua")
-local ship_model=arg and tonumber(arg[1])
+local ship_model=args and tonumber(args[1])
 local Ship=dofile(root.."ship_preview_run.lua")(Network,T,W,stock("ship_yapf",T,W,dofile(root.."openttd/yapf_road_search.lua")),
   stock("ship_motion",T,W),dofile(root.."openttd/ship_regions.lua"),{width=Sim.W,height=Sim.H,x0=1,z0=1},
   {engine=Roster.model(206),engine_for=Roster.model,validate_both=ship_model~=nil})
 local Depot=dofile(root.."passenger_ship_depot.lua")(Sim,Roster,Calendar,Ship,function() return true end)
 if ship_model then Ship.settle_owned_day,Ship.count_owned_tick,Ship.paid_art_ready=Depot.settle,Depot.count_tick,Depot.ready end
 
-local with_air=arg and arg[1]=="air"
+local authority=args and args[1]=="authority"
+local with_air=authority or args and args[1]=="air"
+local mount_authority=authority and dofile(root.."campaign_authority_runtime.lua")
+local caps={road={start_year=1950,foster=true,craighead=true,breakdowns=0,service_interval=150},
+  air={[215]=true},ferry={[206]=true,[207]=true},rail={engines={},ready={},split={}}}
 local Air,AirNet
 if with_air then
   local Small=dofile(root.."openttd/airport_small.lua")
@@ -48,12 +53,19 @@ local function clone(t)
   return new
 end
 local function mount(s)
+  if mount_authority then
+    local mounted=mount_authority(Sim,root:sub(1,-2),s,caps)
+    Rail,Ship,Air=mounted.rail.run,mounted.water.run,mounted.air.run
+    Network,AirNet,Lab=mounted.water.network,mounted.air.network,mounted.network.lab
+    return
+  end
   Sim.mount_paid_ferry(s,Ship)
   Sim.mount_paid_rail(s,Rail)
   if Air then Sim.mount_paid_air(s,Air) end
 end
 local s=Sim.new(1751)
 if ship_model then Sim.mount_road_bus_market(s,Calendar,ship_model==207 and 1980 or 1950,true) end
+if authority then Sim.mount_road_bus_market(s,Calendar,1950,true,true) end
 s.rail_paid_service=true;s.ship_paid_service=true;s.air_paid_service=with_air
 s.road_economy=true;s.road_stock_clock=true;s.road_stock_loading=true;s.road_stock_house_supply=true
 s.corner_grid=Terrain.new(Sim.W,Sim.H,function(x) return x<19 and 1 or 0 end)
@@ -213,8 +225,8 @@ local function daily(expect_rail)
   return status
 end
 local function reload()
-  s=clone(s);run=Rail.current_paid(s);ferry=Ship.current(s)
-  mount(s)
+  s=clone(s);mount(s)
+  run=Rail.current_paid(s);ferry=Ship.current(s)
   if Air then aircraft=Air.current(s);assert(#Sim.air_loading_events(s)==0) end
   assert(#Sim.rail_loading_events(s)==0 and #Sim.ferry_loading_events(s)==0)
 end
@@ -262,7 +274,8 @@ end
 print(("PASS: one world/house clock, reload-safe road %d/$%d, rail %d/$%d, ferry %d/$%d, real carriage and source dwell")
   :format(counts.Coach,fares.Coach,counts.Rail,fares.Rail,counts.Ferry,fares.Ferry))
 
-core={get_modpath=function() return "mods/luanttd_core" end}
+local fake_engine=not core
+if fake_engine then core={get_modpath=function() return root:sub(1,-2) end} end
 local tutorial=dofile(root.."business_tutorials.lua")({s=s,Sim=Sim})
 local road_goal,road_total=tutorial.progress("Coach","road")
 local boat_goal,boat_total=tutorial.progress("Ferry","boat")
@@ -270,7 +283,7 @@ assert(road_goal==6 and road_total>=fares.Coach)
 assert(boat_goal==6 and boat_total>=fares.Ferry)
 assert(tutorial.progress("Stranger","boat")==1)
 print("PASS real paid bus and ferry complete only the correct company's lesson")
-core=nil
+if fake_engine then core=nil end
 
 if ship_model then
   local u=assert(s.stock_owned_ferry)
@@ -284,3 +297,5 @@ if ship_model then
   assert(u.running_ticks>ticks)
   print(("PASS owned ferry %d; correct purchase, cargo, route restore, running costs and stop/resume"):format(ship_model))
 end
+
+return fares

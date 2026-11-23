@@ -1,71 +1,33 @@
 -- Native presentation for two independently dispatched rail consists.
 -- All motion and the decision to show a signal aspect are controller-owned.
 local M={}
-local models={
-  locomotive={mesh="bl_diesel.obj",atlas="bl_vehicle_palette.png",size={x=1,y=1,z=.54},offset=.612},
-  steam={mesh="bl_rail_kirby_paul_tank.obj",atlas="bl_rail_kirby_paul_tank.png",size={x=1,y=1,z=1},offset=.614},
-  jubilee={mesh="bl_rail_chaney_jubilee.obj",atlas="bl_rail_chaney_jubilee.png",size={x=1,y=1,z=1},offset=.614},
-  ginzu={mesh="bl_rail_ginzu_a4.obj",atlas="bl_rail_ginzu_a4.png",size={x=1,y=1,z=1},offset=.614},
-  sh_8p={mesh="bl_rail_sh_8p.obj",atlas="bl_rail_sh_8p.png",size={x=1,y=1,z=1},offset=.614},
-  manley={mesh="bl_rail_manley_morel.obj",atlas="bl_rail_manley_morel.png",size={x=1,y=1,z=1},offset=.614},
-  hendry={mesh="bl_rail_hendry_25.obj",atlas="bl_rail_hendry_25.png",size={x=1,y=1,z=1},offset=.614},
-  uu37={mesh="bl_rail_uu_37.obj",atlas="bl_rail_uu_37.png",size={x=1,y=1,z=1},offset=.614},
-  floss={mesh="bl_rail_floss_47.obj",atlas="bl_rail_floss_47.png",size={x=1,y=1,z=1},offset=.614},
-  sh_30={mesh="bl_rail_sh_30.obj",atlas="bl_rail_sh_30.png",size={x=1,y=1,z=1},offset=.614},
-  sh_40={mesh="bl_rail_sh_40.obj",atlas="bl_rail_sh_40.png",size={x=1,y=1,z=1},offset=.614},
-  wagon={mesh="bl_rail_passenger_wagon.obj",atlas="bl_rail_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
-  coal_empty={mesh="bl_rail_coal_wagon_empty.obj",atlas="bl_rail_coal_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
-  coal_loaded={mesh="bl_rail_coal_wagon_loaded.obj",atlas="bl_rail_coal_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
-  goods_van={mesh="bl_rail_goods_van.obj",atlas="bl_rail_goods_van.png",size={x=1,y=1,z=1},offset=.614},
-  oil_tanker={mesh="bl_rail_oil_tanker.obj",atlas="bl_rail_oil_tanker.png",size={x=1,y=1,z=1},offset=.614},
-}
-local stock_kind={[0]="steam",[8]="jubilee",[9]="ginzu",[10]="sh_8p",[11]="manley",[13]="hendry",[14]="uu37",[15]="floss",[23]="sh_30",[24]="sh_40"}
-local stock_extra={jubilee=8,ginzu=9,sh_8p=10,manley=11,hendry=13,uu37=14,floss=15,sh_30=23,sh_40=24}
-function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire,signal_pixel)
+function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire,signal_pixel,verified_art)
   local V={}
   local Sim,S=api.Sim,api.s
   local refs,signs={},{}
-  local acc=0
   local function entity(name,mesh,atlas,size)
     core.register_entity("luanttd_core:"..name,{initial_properties={physical=false,pointable=false,
       collide_with_objects=false,static_save=false,visual="mesh",mesh=mesh,textures={atlas},
       shaded=true,backface_culling=true,visual_size=size}})
   end
-  local function exists(path)
-    local f=io.open(path,"rb")
-    if not f then return false end
-    f:close()
-    return true
-  end
   local path=core.get_modpath and core.get_modpath("luanttd_core")
+  local Art=dofile((path or "mods/luanttd_core").."/rail_dispatch_manifest.lua")
+  local art=verified_art or Art.scan(path,S.stock_electrification,span_wire~=nil)
+  local models,stock_kind=Art.models,Art.stock_kind
   local function diagonal(id,td,p)
     if api.render and api.render.rail_diagonal_pose then return api.render.rail_diagonal_pose(id,td,p) end
   end
   local fit_couplings=path and Track.entry_side and
     dofile(path.."/rail_body_spacing.lua")(Sim,Track,diagonal,Pose.sample)
-  local ready={}
-  local split_ready,collector={},nil
+  local ready,split_ready,collector=art.ready,art.split
   for kind,d in pairs(models) do
-    local id=stock_extra[kind]
-    local optional=id or kind=="oil_tanker" or kind=="goods_van"
-    local available=not optional or path and exists(path.."/models/"..d.mesh) and exists(path.."/textures/"..d.atlas)
-    if id==11 and available then available=exists(path.."/openttd/rail_multihead_loading.lua") end
-    if id==23 or id==24 then available=available and S.stock_electrification==true end
-    if available then
-      entity("dispatch_"..kind,d.mesh,d.atlas,d.size)
-      ready[kind]=true
-      if id then assert(Run.mount_owned_model(id)) end
-    end
-    if span_wire and available and (id==23 or id==24) then
+    if ready[kind] then entity("dispatch_"..kind,d.mesh,d.atlas,d.size) end
+    if split_ready[kind] then
       local body=d.mesh:gsub("%.obj$","_body.obj")
       local mast="bl_rail_sh_collector.obj"
-      if exists(path.."/models/"..body) and exists(path.."/models/"..mast) then
-        entity("dispatch_"..kind.."_body",body,d.atlas,d.size)
-        -- The two locomotive atlases must both qualify the shared
-        -- collector UVs; only their chassis badges and paint differ.
-        entity("dispatch_"..kind.."_collector",mast,d.atlas,d.size)
-        split_ready[kind]=true
-      end
+      entity("dispatch_"..kind.."_body",body,d.atlas,d.size)
+      -- Both locomotive atlases qualify the shared collector UVs.
+      entity("dispatch_"..kind.."_collector",mast,d.atlas,d.size)
     end
   end
   if next(split_ready) then collector=dofile(path.."/rail_pantograph.lua") end
@@ -113,22 +75,12 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
     for k in pairs(collection) do if not keep[k] then forget(collection,k) end end
   end
   function V.step(dt,online,fraction)
-    if not online then acc=0;vacuum(refs,{});vacuum(signs,{});return end
+    if not online then vacuum(refs,{});vacuum(signs,{});return end
     local dispatch=Run.current(S)
     local show_parts,show_signs={},{}
     if dispatch then
       local commercial=dispatch.runs[1] and dispatch.runs[1].paid_clock
-      if commercial then
-        acc=0
-        if V.observe then V.observe(Sim.rail_paid_motion_events(S)) end
-      elseif S.speed>0 then
-        acc=math.min(148,acc+dt*74*S.speed/seconds_per_day)
-        local ticks=math.floor(acc)
-        if ticks>0 then
-          local events=Run.tick(S,ticks);acc=acc-ticks
-          if V.observe then V.observe(events) end
-        end
-      end
+      if commercial and V.observe then V.observe(Sim.rail_paid_motion_events(S)) end
       local coal=Sim.rail_coal_status and Sim.rail_coal_status(S)
       for _,train in ipairs(dispatch.runs) do
         local engine=stock_kind[train.stock_engine] or "locomotive"
@@ -233,7 +185,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
           end
         end
       end
-    else acc=0 end
+    end
     vacuum(refs,show_parts);vacuum(signs,show_signs)
   end
   return V

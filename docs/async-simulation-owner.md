@@ -54,11 +54,24 @@ state-only constructors shared with the native game; a standalone checkpoint
 round trip verifies paid bus service and transport-backed house growth and
 production without a Luanti engine object. The [native worker economy probe](../tests/campaign_tick_worker_probe.lua)
 then runs a real paid bus and town growth on one worker and resumes
-a partially built house from disk in a new job. The host sees only a tick
-and summary counters. This proven fixture is not the ordinary gameplay
-mount and currently does not exercise rail, sea or air. The next migration must extract
-the remaining state-only fleet constructors (rail, ferry, air, traffic and
-routing) and remove engine/view hooks from progression. Use a sequenced command
+a partially built house from disk in a new job. The host sees only a tick,
+summary counters and the requested viewport. The same native probe then runs
+paid buses, trains, ferries and aircraft with the real shared clock and
+checkpoint rebinds inside a worker. State-only road/rail geometry and passenger
+fleet bindings are shared with the game. The engine discovers the model
+capabilities once; the paid controllers do not mount via a view. These are
+verified fixtures, not yet the everyday game-ownership path. The ordinary
+streetcar uses a view-independent clock and continues with no players
+connected. Noncommercial rail, ferry and air pilots also no longer depend
+on a rendering callback to advance.
+
+The [native mailbox probe](../tests/campaign_tick_worker_probe.lua) mounts
+one long-lived worker from a real saved campaign, queries nearby tiles and
+vehicles, stops and resumes a real bus, refuses a stale or foreign action,
+and loads its authoritative day and revision from disk in a fresh worker.
+The public game still uses its original command paths. The new endpoint
+covers a road slice; the next step is wiring the real forms and world
+actions to the worker and replacing direct reads with bounded projections. Use a sequenced command
 stream for **every** mutation, including player build/route/order requests
 and fixture actions; run authoritative quotes against the worker's topology
 revision and settle company debits there. Do not mirror writable tile or

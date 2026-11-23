@@ -19,6 +19,7 @@ cp -a mods/luanttd_core/openttd "$mod/"
 rm "$mod/init.lua"
 cp tests/campaign_tick_worker_probe.lua "$mod/init.lua"
 cp tests/town_growth_live_fixture.lua "$mod/"
+cp tests/rail_paid_runtime.lua "$mod/rail_paid_runtime_fixture.lua"
 printf 'gameid = tickprobe\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 printf 'port = %s\nserver_announce = false\nbind_address = 127.0.0.1\n' "${BAYLINE_NATIVE_PORT:-39674}" > "$out/server.conf"
 export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
@@ -26,4 +27,6 @@ if ! timeout 25 "$server" --config "$out/server.conf" --world "$out/world" --gam
   cat "$out/server.log";exit 1
 fi
 grep 'PASS NATIVE WORKER CAMPAIGN' "$out/server.log" || { cat "$out/server.log";exit 1; }
+grep 'PASS NATIVE FOUR-MODE ECONOMY' "$out/server.log" || { cat "$out/server.log";exit 1; }
+grep 'PASS NATIVE OWNER MAILBOX' "$out/server.log" || { cat "$out/server.log";exit 1; }
 if grep -E 'ERROR\[' "$out/server.log"; then exit 1; fi

@@ -288,43 +288,11 @@ api.timber_tools=api.stock_timber_scenery and Sim.road_timber_active(S)
 api.farm_tools=api.farm_world and Sim.road_farm_active(S)
 api.oil_tools=api.oil_world and Sim.road_oil_active(S)
 api.freight_tools=(api.stock_coal_scenery and S.road_coal) or api.timber_tools or api.farm_tools or api.oil_tools
-local Track=dofile(mod.."/openttd/rail_track.lua")
-local Follow=dofile(mod.."/openttd/rail_follow.lua")(Track)
-local RailCost=dofile(mod.."/openttd/rail_yapf_cost.lua")(Track,Follow)
-local RailSearch=dofile(mod.."/openttd/rail_yapf_search.lua")(Track,Follow,RailCost)
-api.trackworks=dofile(mod.."/trackworks.lua")(Sim,Track,Follow,api.slope or dofile(mod.."/openttd/slope.lua"),
-  RailCost,RailSearch,api.terrain and api.terrain.tile)
-do
-  local source=mod.."/openttd/"
-  S.rail_span_enabled=true
-  api.rail_span_tools=true
-  local H=dofile(source.."rail_height.lua")(Track,api.slope)
-  local Q=dofile(source.."rail_construction.lua")(Track,dofile(source.."rail_signals.lua")(Track),H)
-  local Site=dofile(source.."rail_span_site.lua")
-  local B=dofile(source.."rail_bridge.lua")(dofile(source.."road_bridge.lua")(api.slope),Q,Site)
-  local T=dofile(source.."rail_tunnel.lua")(dofile(source.."road_tunnel.lua"),Q,Site,Track)
-  api.rail_spans=dofile(mod.."/rail_span_world.lua")(Sim,dofile(source.."terrain.lua"),H,B,T,Track)
-end
-do
-  local source=mod.."/openttd/"
-  local kernel=dofile(source.."level_crossing.lua")(Track)
-  local adapter=dofile(mod.."/level_crossing_world.lua")(Sim,dofile(source.."terrain.lua"),kernel,Track)
-  api.crossings=dofile(mod.."/level_crossing_runtime.lua")(Sim,adapter)
-  S.level_crossing_enabled,api.crossing_tools=true,true
-  adapter.reindex(S)
-  Sim.mount_crossings(S,api.crossings,function(s)
-    local live=api.rail_dispatch_controller
-    return live and live.board(s) or api.trackworks.board(s)
-  end,function() return not api.trackworks_demo or api.trackworks_demo.is_clear() end)
-end
-do
-  local source=mod.."/openttd/"
-  local RoadFollow=dofile(source.."yapf_road_follow.lua")
-  local Rules=dofile(source.."road_oneway.lua")(dofile(source.."road_slope.lua"),RoadFollow)
-  local OneWay=dofile(mod.."/road_oneway_world.lua")(Sim,dofile(source.."terrain.lua"),RoadFollow,Rules)
-  api.oneway,api.oneway_tools=OneWay,true
-  Sim.mount_road_oneway(S,OneWay)
-end
+local networks=simulation_bindings.networks(S,api.slope,api.terrain.tile,
+  function() return not api.trackworks_demo or api.trackworks_demo.is_clear() end)
+local Track,Follow,RailCost,RailSearch=networks.track,networks.follow,networks.cost,networks.search
+api.trackworks,api.rail_spans,api.crossings,api.oneway=networks.lab,networks.spans,networks.crossings,networks.oneway
+api.rail_span_tools,api.crossing_tools,api.oneway_tools=true,true,true
 api.vehicle_ui=dofile(mod.."/vehicle_ui.lua")(api)
 api.vehicle_orders=api.vehicle_ui.orders
 local render=dofile(mod.."/render.lua")(api)
@@ -342,46 +310,29 @@ local world=dofile(mod.."/world.lua")(api,ui)
 api.world=world
 local interval=qa.interval or 1.25
 interval=math.max(0.05,math.min(15,interval))
+local auxiliary={}
+local function pilot_clock(active,tick)
+  auxiliary[#auxiliary+1]=dofile(mod.."/aux_transport_clock.lua")(S,interval,active,tick)
+end
 if api.tram_tools then
-  local source=mod.."/openttd/"
-  local Terrain=dofile(source.."terrain.lua")
-  local Bridge=dofile(source.."road_bridge.lua")(api.slope)
-  local Construct=dofile(source.."tram_construction.lua")(dofile(source.."road_slope.lua"),Bridge.roadtypes)
-  local Network=dofile(mod.."/tram_network.lua")(Sim,Construct,Terrain)
-  local RoadMotion=dofile(source.."road_motion.lua")(dofile(source.."road_motion_data.lua"))
-  local Motion=dofile(source.."tram_motion.lua")(dofile(source.."tram_motion_data.lua"),RoadMotion)
-  local F=dofile(source.."yapf_road_follow.lua")
-  local C=dofile(source.."yapf_road_cost.lua")(F)
-  local Y=dofile(source.."yapf_road_search.lua")(F,C)
-  local Trip=dofile(mod.."/tram_trip.lua")(F,C,Y,Motion)
-  local Run=dofile(mod.."/tram_preview_run.lua")(Network,Trip,dofile(source.."road_speed.lua"))
+  local Network,Run,clock=simulation_bindings.tram(S,api.slope,interval)
+  api.tram_clock=clock
   local Pose=dofile(mod.."/road_motion_presentation.lua")(dofile(mod.."/road_lanes.lua"))
-  api.tram_view=dofile(mod.."/tram_preview_view.lua")(api,Run,Pose,dofile(mod.."/road_motion.lua"),interval)
+  api.tram_view=dofile(mod.."/tram_preview_view.lua")(api,Run,Pose,dofile(mod.."/road_motion.lua"))
   dofile(mod.."/tram_preview_commands.lua")(api,Network,Run)
 end
 local water_order_run, coal_order_run, coal_order_runtime, air_order_run
 if api.ship_tools then
   local source=mod.."/openttd/"
-  local Water=dofile(source.."ship_follow.lua")(Track)
-  local Y=dofile(source.."ship_yapf.lua")(Track,Water,dofile(source.."yapf_road_search.lua"))
-  local Terrain=dofile(source.."terrain.lua")
-  local Facilities=dofile(source.."ship_facilities.lua")(Track,Water)
-  local Network=dofile(mod.."/ship_network.lua")(Sim,Terrain,Water,Facilities)
-  local Motion=dofile(source.."ship_motion.lua")(Track,Water)
-  local Regions=dofile(source.."ship_regions.lua")
-  local Roster=dofile(source.."passenger_ship_roster.lua")
-  local Calendar=dofile(source.."stock_engine_calendar.lua")
-  local Run=dofile(mod.."/ship_preview_run.lua")(Network,Track,Water,Y,Motion,Regions,
-    {width=Sim.W,height=Sim.H,x0=1,z0=1},{engine=Roster.model(206),engine_for=Roster.model,validate_both=true})
-  water_order_run=Run
   local art={}
   local missing={}
   for _,key in ipairs(core.get_dir_list(mod.."/models",false)) do missing[key]=true end
   for _,key in ipairs(core.get_dir_list(mod.."/textures",false)) do missing[key]=true end
   art[206]=missing["bl_harbor_ferry_palette.png"] and missing["bl_harbor_ferry.obj"]
   art[207]=missing["bl_harbor_ferry_palette.png"] and missing["bl_ffp_passenger_ferry.obj"]
-  local Depot=dofile(mod.."/passenger_ship_depot.lua")(Sim,Roster,Calendar,Run,function(id) return art[id] end)
-  Run.settle_owned_day,Run.count_owned_tick,Run.paid_art_ready=Depot.settle,Depot.count_tick,Depot.ready
+  local Terrain,Water,Network,Roster,Run,Depot,cargo_run,C=simulation_bindings.water(S,Track,
+    function(id) return art[id] end)
+  water_order_run=Run
   api.passenger_ferry={
     catalog=Roster.order,quote=function(n,depot,id) return Depot.quote(S,n,depot,id) end,
     model=Roster.model,
@@ -390,14 +341,7 @@ if api.ship_tools then
     start=function(n,depot,a,b,via) return Depot.start(S,n,depot,a,b,via) end,
     stop=function(n,stop) local ok,msg=Depot.stop(S,n,stop);if ok then api.save() end;return ok,msg end,
   }
-  S.ship_paid_service=true
-  Sim.mount_paid_ferry(S,Run)
-  if S.ship_coal_service or S.stock_coal_ship then
-    local cargo_run=dofile(mod.."/ship_preview_run.lua")(Network,Track,Water,Y,Motion,Regions,
-      {width=Sim.W,height=Sim.H,x0=1,z0=1},{engine=dofile(source.."ship_roster.lua"),
-        key="stock_coal_ship_run",serial="next_stock_coal_ship_run",paid=function() return true end,
-        validate_both=true})
-    local C=Sim.mount_coal_ship(S,cargo_run,Run,Network)
+  if C then
     coal_order_run,coal_order_runtime=cargo_run,C
     local function asset(dir,filename)
       for _,name in ipairs(core.get_dir_list(mod.."/"..dir,false)) do
@@ -457,23 +401,23 @@ if api.ship_tools then
   local Construction=dofile(source.."water_construction.lua")(Track,Water)
   api.waterworks=dofile(mod.."/ship_water_world.lua")(Sim,Network,Construction)
   api.ship_lock_view=dofile(mod.."/ship_lock_view.lua")(api,dofile(mod.."/ship_lock_presentation.lua"))
-  api.ship_view=dofile(mod.."/ship_preview_view.lua")(api,Run,dofile(mod.."/road_motion.lua"),interval)
+  api.ship_view=dofile(mod.."/ship_preview_view.lua")(api,Run,dofile(mod.."/road_motion.lua"))
+  pilot_clock(function()
+    local p=Run.current(S)
+    return p and not p.paid_clock and (p.engine_id==nil or art[p.engine_id]) and
+      (not Run.paid_art_ready or Run.paid_art_ready(S,p))
+  end,function(n) Run.tick(S,n) end)
   dofile(mod.."/ship_preview_commands.lua")(api,Network,Run)
 end
 if api.airport_tools then
-  local source=mod.."/openttd/"
-  local Terrain=dofile(source.."terrain.lua")
-  local Small=dofile(source.."airport_small.lua")
-  local Motion=dofile(source.."airport_motion.lua")(Small)
-  local Network=dofile(mod.."/airport_network.lua")(Sim,Terrain,Small)
-  local Roster=dofile(source.."airport_roster.lua")
-  local Run=dofile(mod.."/airport_preview_run.lua")(Sim,Network,Small,Motion,Terrain,api.slope,Roster)
+  local art=dofile(mod.."/airport_manifest.lua")(core,mod)
+  local Network,Run,Owned,Roster=simulation_bindings.air(S,api.slope,function(id) return art[id]~=nil end)
   air_order_run=Run
-  S.air_paid_service=true
-  Sim.mount_paid_air(S,Run)
-  api.airport_view=dofile(mod.."/airport_preview_view.lua")(api,Run,dofile(mod.."/road_motion.lua"),interval)
-  Run.paid_art_ready=function(p) return not p or not p.engine_id or api.airport_view.has(p.engine_id) end
-  local Owned=dofile(mod.."/airport_owned.lua")(Sim,Run,Roster,api.airport_view.has)
+  api.airport_view=dofile(mod.."/airport_preview_view.lua")(api,Run,dofile(mod.."/road_motion.lua"),art)
+  pilot_clock(function()
+    local p=Run.current(S)
+    return p and not p.paid_clock
+  end,function(n) Run.tick(S,n,api.airport_view.observe) end)
   dofile(mod.."/airport_preview_commands.lua")(api,Network,Run,Owned,Roster)
 end
 local ground_orders=dofile(mod.."/road_vehicle_orders.lua")(api)
@@ -536,6 +480,8 @@ core.register_globalstep(function(dt)
   if online then render.refresh_interest() else render.remove_vehicle_views() end
   if api.rail_platform_view then api.rail_platform_view.step(dt,online) end
 
+  for _,tick in ipairs(auxiliary) do tick(dt) end
+  if api.tram_clock then api.tram_clock(dt) end
   if api.tram_view then api.tram_view.step(dt,online) end
   if not online then
     campaign.step(dt,false,headless)
@@ -784,7 +730,8 @@ do
   local Run=dofile(mod.."/rail_platform_run.lua")(Sim,Track,RailMotion,RailSpeed,Lab)
   api.rail_platform_run=Run
   local Pose=dofile(mod.."/rail_pose.lua")(Track)
-  api.rail_platform_view=dofile(mod.."/rail_platform_view.lua")(api,Run,Pose,interval)
+  api.rail_platform_view=dofile(mod.."/rail_platform_view.lua")(api,Run,Pose)
+  pilot_clock(function() return Run.current(S) end,function(n) Run.tick(S,n) end)
   local function dispatch_active()
     local dispatch=S.stock_rail_dispatch
     return dispatch and #dispatch.runs>0
@@ -795,56 +742,24 @@ do
   end
   do
     local source=mod.."/openttd/"
-    local PBS=dofile(source.."rail_reservation.lua")(Track,Follow,RailCost)
-    local Life=dofile(source.."rail_consist_reservation.lua")(Track,Follow,PBS)
-    local Signal=dofile(source.."rail_signals.lua")(Track)
-    local Consist=dofile(source.."rail_consist_motion.lua")(Track,RailMotion,Follow,Life)
-    local dispatch_motion,dispatch_life=Consist,Life
-    if api.rail_spans then
-      dispatch_motion=dofile(mod.."/rail_span_consist.lua")(Track,RailMotion,Follow,Consist,Life)
-      dispatch_life=dofile(mod.."/rail_span_life.lua")(Track,PBS,Life)
-    end
-    local Dispatch=dofile(mod.."/rail_consist_dispatch.lua")(dispatch_motion,dispatch_life)
-    local Reverse=dofile(source.."rail_reverse.lua")(Track,RailMotion,Consist,Life,Signal,Follow,PBS)
-    local height,presentation
-    local graded=true
-    if graded or api.rail_spans then
-      if graded then S.rail_grade_enabled=true end
-      local H=dofile(source.."rail_height.lua")(Track,api.slope)
-      local pixel,profile=H.bind(Lab.board(S),api.terrain.tile)
-      if graded then
-        height=function(id,x,y)
-          local crossing=api.crossings and api.crossings.world.record(S,id)
-          return crossing and crossing.top*8 or pixel(id,x,y)
-        end
+    local Pilot,Signal,Roster,height,H,profile=simulation_bindings.rail(S,{
+      track=Track,follow=Follow,cost=RailCost,search=RailSearch,lab=Lab,motion=RailMotion,speed=RailSpeed,
+      slope=api.slope,terrain_tile=api.terrain.tile,spans=api.rail_spans,crossings=api.crossings,
+      owned=api.rail_owned_tools,
+    })
+    local function presentation(id,td,f,part)
+      local crossing=api.crossings and api.crossings.world.record(S,id)
+      if crossing then return crossing.top,0 end
+      if api.rail_spans then
+        local level,tilt=api.rail_spans.presentation(S,id,td,f,part)
+        if level~=nil then return level,tilt end
       end
-      presentation=function(id,td,f,part)
-        local crossing=api.crossings and api.crossings.world.record(S,id)
-        if crossing then return crossing.top,0 end
-        if api.rail_spans then
-          local level,tilt=api.rail_spans.presentation(S,id,td,f,part)
-          if level~=nil then return level,tilt end
-        end
-        local data=profile(id)
-        if data then return H.render(data,td,f) end
-      end
+      local data=profile(id)
+      if data then return H.render(data,td,f) end
     end
-    local Roster=api.rail_owned_tools and dofile(source.."rail_roster.lua") or nil
-    local Block=dofile(source.."rail_block_signals.lua")(Track,Signal)
-    local Pilot=dofile(mod.."/rail_dispatch_run.lua")(Track,Follow,RailCost,RailSearch,PBS,dispatch_life,Signal,
-      dispatch_motion,Dispatch,RailSpeed,Lab,height,Reverse,api.rail_spans,api.crossings,Roster,Block)
     if Roster then
-      local Depot=dofile(mod.."/rail_depot_fleet.lua")(Sim,Lab,Roster)
-      api.rail_owned=dofile(mod.."/rail_owned_service.lua")(Depot,Roster,Pilot,Sim.rail_coal_validate,Sim.rail_oil_validate,
-        function() return api.rail_oil_tools==true end,Sim.rail_goods_validate,Sim.rail_goods_active)
-      Lab.owned_depot_occupied=api.rail_owned.occupies_depot
-      S.rail_owned_service=true
-      if not S.stock_rail_fleet then
-        local seed=math.floor(math.abs(S.seed or 1751))%4294967296
-        local start_year=Sim.date(S,0)
-        assert(api.rail_owned.initialize(S,{starting_year=start_year,climate="temperate",
-          generation_seed=seed,startup_random=(seed*1664525+1013904223)%4294967296}))
-      end
+      api.rail_owned=simulation_bindings.owned_rail(S,Lab,Roster,Pilot,
+        function() return api.rail_oil_tools==true end)
       if api.electric_tools then
         local Types=dofile(source.."rail_types.lua")
         api.rail_owned.mount_electric(Types)
@@ -895,6 +810,7 @@ do
     api.rail_coal_tools=Sim.rail_coal_active(S)
     if api.rail_coal_tools then world.enable_rail_coal() end
     api.rail_dispatch_controller=Pilot
+    networks.dispatch=Pilot
     if rail_build_enabled then
       local Height=dofile(source.."rail_height.lua")(Track,api.slope)
       local Q=dofile(source.."rail_construction.lua")(Track,Signal,Height)
@@ -923,16 +839,25 @@ do
         local slope_index,level=Lab.surface(slope,height,mask)
         if slope_index==0 then return level end
       end)
+    local rail_art=dofile(mod.."/rail_dispatch_manifest.lua").scan(mod,S.stock_electrification,bridge_profile~=nil)
+    simulation_bindings.rail_media(Pilot,rail_art)
     api.rail_dispatch_view=dofile(mod.."/rail_dispatch_view.lua").create(api,Pilot,Track,Pose,
-      dofile(mod.."/rail_signal_art.lua"),interval,presentation,bridge_profile,height)
-    Pilot.mount_bridge_collectors(api.rail_dispatch_view.split_electric_ready)
+      dofile(mod.."/rail_signal_art.lua"),interval,presentation,bridge_profile,height,rail_art)
+    pilot_clock(function()
+      local d=Pilot.current(S)
+      return d and not (d.runs[1] and d.runs[1].paid_clock)
+    end,function(n)
+      local events=Pilot.tick(S,n)
+      local observe=api.rail_dispatch_view.observe
+      if observe then observe(events) end
+    end)
     if S.rail_goods_service then
-      Sim.mount_rail_goods(S,api.rail_dispatch_view.goods_wagon_ready)
+      Sim.mount_rail_goods(S,function() return rail_art.ready.goods_van==true end)
       api.rail_goods_tools=Sim.rail_goods_active(S)
       if api.rail_goods_tools then world.enable_rail_goods() end
     end
     if S.rail_oil_service then
-      if not api.rail_dispatch_view.oil_wagon_ready() then
+      if not rail_art.ready.oil_tanker then
         core.log("warning","Rail Oil paused: missing the stock Oil Tanker assets.")
         S.rail_oil_service=false
       else

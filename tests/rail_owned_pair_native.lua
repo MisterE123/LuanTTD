@@ -1,3 +1,8 @@
+-- Supply an observer for deliberate native mesh assertions without a real client.
+local function render_inspection(dt,online,fraction)
+  api.interest.refresh({{get_pos=function() return {x=Sim.W+1,z=Sim.H+1} end}})
+  return api.rail_dispatch_view.step(dt,online,fraction)
+end
 -- Included only in a disposable native Luanti fixture world.
 local owner="Paired Native QA"
 local function id(x,z) return Sim.id(x,z) end
@@ -27,7 +32,7 @@ local function verify()
     error("Missing independent visible steam consist part for "..r.fleet_id..":"..i)
   end
   local function rendered(a,b)
-    api.rail_dispatch_view.step(.1,true,1)
+    render_inspection(.1,true,1)
     local proof={}
     for _,r in ipairs({a,b}) do
       for i=1,2 do

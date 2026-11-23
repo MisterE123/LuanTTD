@@ -1,3 +1,8 @@
+-- Supply an observer for deliberate native mesh assertions without a real client.
+local function render_inspection(dt,online,fraction)
+  api.interest.refresh({{get_pos=function() return {x=Sim.W+1,z=Sim.H+1} end}})
+  return api.rail_dispatch_view.step(dt,online,fraction)
+end
 -- Appended only inside native QA. Uses production constructors,
 -- authority, rendering, station clock and SQLite mod storage.
 local Rail=assert(api.rail_dispatch_controller)
@@ -49,7 +54,7 @@ core.after(0,function()
   end
   assert(fixture.saved and fixture.waited and Rail.current_paid(S,fixture.a) and Rail.current_paid(S,fixture.b))
   tick_multi(130)
-  api.rail_dispatch_view.step(.1,true,1)
+  render_inspection(.1,true,1)
   local a,b=Sim.rail_paid_status(S,fixture.a),Sim.rail_paid_status(S,fixture.b)
   assert(a and b and a.fare>0 and b.fare>0 and fixture.passed[1]>=2 and fixture.passed[2]>=2)
   assert(S.companies[fixture.owner].revenue==a.fare+b.fare)

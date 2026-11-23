@@ -1,21 +1,16 @@
 -- Dedicated pilot presentation. No fleet, cargo or payment semantics.
-return function(api,Run,Pose,RoadVisual,seconds_per_day)
+return function(api,Run,Pose,RoadVisual)
   local V={}
   local S=api.s
-  local ref,acc,last_yaw
+  local ref,last_yaw
   local function remove()
     if ref and ref:get_pos() then ref:remove() end
     ref,last_yaw=nil,nil
   end
   function V.step(dt,online)
-    if not online then acc=0;remove();return end
+    if not online then remove();return end
     local pilot=Run.current(S)
-    if not pilot then remove();acc=0;return end
-    if S.speed>0 then
-      acc=math.min(148,(acc or 0)+dt*74*S.speed/seconds_per_day)
-      local n=math.floor(acc)
-      if n>0 then Run.advance(S,n);acc=acc-n end
-    end
+    if not pilot then remove();return end
     local f=Run.frame(pilot)
     if not f then remove();return end
     local x,z=Pose.xy(f[1],f[2],f[5])

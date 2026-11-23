@@ -1,3 +1,8 @@
+-- Supply an observer for deliberate native mesh assertions without a real client.
+local function render_inspection(dt,online,fraction)
+  api.interest.refresh({{get_pos=function() return {x=Sim.W+1,z=Sim.H+1} end}})
+  return api.rail_dispatch_view.step(dt,online,fraction)
+end
 -- Appended only to a private Luanti test copy; use the real Harbor
 -- board, full authoritative stock day, one SQLite world, and real assets.
 local owner,at="Harbor Goods QA",Sim.id
@@ -37,7 +42,7 @@ local function proof_goods()
       local t=assert(Sim.rail_paid_pose(S,1,1,unit))
       local hx,hz=Sim.xy(t)
       local _,hy=api.terrain.tile(t)
-      api.rail_dispatch_view.step(.1,true,1)
+      render_inspection(.1,true,1)
       local found
       for _,obj in ipairs(core.get_objects_inside_radius({x=2*hx+.5,y=hy+.614,z=2*hz+.5},2.1)) do
         local e=obj:get_luaentity()
@@ -51,7 +56,7 @@ local function proof_goods()
     end
     local tile,td=Sim.rail_paid_pose(S,2,1,unit)
     assert(tile and td,"No carrying wagon position")
-    api.rail_dispatch_view.step(.1,true,1)
+    render_inspection(.1,true,1)
     local x,z=Sim.xy(tile)
     local _,y=api.terrain.tile(tile)
     for _,obj in ipairs(core.get_objects_inside_radius({x=2*x+.5,y=y+.614,z=2*z+.5},2.1)) do

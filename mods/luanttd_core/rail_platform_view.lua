@@ -1,24 +1,16 @@
 -- Renderer for the single persisted platform pilot. Not legacy fleet or PBS.
-return function(api,Run,Pose,seconds_per_day)
+return function(api,Run,Pose)
   local V={}
   local Sim,S=api.Sim,api.s
-  local ref,acc
+  local ref
   local function remove()
     if ref and ref:get_pos() then ref:remove() end
     ref=nil
   end
   function V.step(dt,online)
-    if not online then acc=0;remove();return end
+    if not online then remove();return end
     local run=Run.current(S)
-    if not run then remove();acc=0;return end
-    if S.speed>0 then
-      acc=math.min(148,(acc or 0)+dt*74*S.speed/seconds_per_day)
-      local n=math.floor(acc)
-      if n>0 then
-        Run.tick(S,n)
-        acc=acc-n
-      end
-    end
+    if not run then remove();return end
     local id,td,f=Run.sample(run)
     if not id then remove();return end
     local x,z,dx,dz

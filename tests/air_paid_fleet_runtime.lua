@@ -5,12 +5,7 @@ local root="mods/luanttd_core/"
 local function mod(p) return dofile(root..p..".lua") end
 local Sim=mod("sim")
 local Terrain=mod("openttd/terrain")
-local Small=mod("openttd/airport_small")
-local Net=mod("airport_network")(Sim,Terrain,Small)
-local Roster=mod("openttd/airport_roster")
-local Air=mod("airport_preview_run")(Sim,Net,Small,mod("openttd/airport_motion")(Small),
-  Terrain,mod("openttd/slope"),Roster)
-local Owned=mod("airport_owned")(Sim,Air,Roster,function() return true end)
+local Bind=mod("campaign_simulation_bindings")(Sim,root:sub(1,-2))
 local function clone(t)
   if type(t)~="table" then return t end
   assert(not getmetatable(t))
@@ -18,8 +13,10 @@ local function clone(t)
   for k,v in pairs(t) do out[k]=clone(v) end
   return out
 end
+assert(core==nil,"paid aircraft should not need engine views")
 local s=Sim.new(1751)
-s.air_paid_service,s.air_owned_preview,s.air_fleet_preview=true,true,true
+local Net,Air,Owned=Bind.air(s,mod("openttd/slope"),function(id) return id==215 end)
+s.air_owned_preview,s.air_fleet_preview=true,true
 s.road_economy,s.road_stock_loading,s.road_stock_clock,s.road_stock_house_supply=true,true,true,true
 s.corner_grid=Terrain.new(Sim.W,Sim.H,function() return 0 end)
 for _,tile in ipairs(s.tiles) do
@@ -44,9 +41,11 @@ assert(u1.serial==1 and u2.serial==2)
 local spent,bank=comp.expense,comp.cash
 local advance=Air.advance_paid
 local art_missing
+local manifest_ready=Air.paid_art_ready
+assert(manifest_ready({engine_id=215}) and not manifest_ready({engine_id=216}))
 local last_world,last_actor=0,0
 local steps={}
-function Air.paid_art_ready(p) return p and p.paid_clock~=art_missing end
+function Air.paid_art_ready(p) return p and p.paid_clock~=art_missing and manifest_ready(p) end
 function Air.advance_paid(w,cb,observe,p)
   local tick=w.stock_ship_commercial.service.tick
   assert(tick~=last_world or last_actor<p.paid_clock,"Controller not in source vehicle ID order")

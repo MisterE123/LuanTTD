@@ -1,24 +1,17 @@
 -- Native gear-contact presentation of the original Sampson-class aircraft.
-return function(api,Run,RoadVisual,seconds_per_day)
+return function(api,Run,RoadVisual,verified_art)
   local V={}
   local S=api.s
   local mod=core.get_modpath("luanttd_core")
-  local files={}
-  for _,subdir in ipairs({"models","textures"}) do
-    for _,filename in ipairs(core.get_dir_list(mod.."/"..subdir,false)) do files[filename]=true end
-  end
-  local assets={}
-  for _,art in pairs(dofile(mod.."/airport_airframe_art.lua")) do
-    if files[art.mesh] and files[art.atlas] and (not art.flight or files[art.flight]) then
-      assets[art.id]=art
-      core.register_entity(art.entity,{initial_properties={physical=false,pointable=false,
-        collide_with_objects=false,static_save=false,visual="mesh",mesh=art.mesh,
-        textures={art.atlas},shaded=true,backface_culling=true,
-        visual_size={x=art.scale,y=art.scale,z=art.scale}}})
-    end
+  local assets=verified_art or dofile(mod.."/airport_manifest.lua")(core,mod)
+  for _,art in pairs(assets) do
+    core.register_entity(art.entity,{initial_properties={physical=false,pointable=false,
+      collide_with_objects=false,static_save=false,visual="mesh",mesh=art.mesh,
+      textures={art.atlas},shaded=true,backface_culling=true,
+      visual_size={x=art.scale,y=art.scale,z=art.scale}}})
   end
   function V.has(id) return assets[id]~=nil end
-  local views,acc={},0
+  local views={}
   local function remove(id)
     local x=views[id]
     if x then
@@ -27,16 +20,11 @@ return function(api,Run,RoadVisual,seconds_per_day)
     end
   end
   function V.step(dt,online,fraction)
-    if not online then acc=0;for id in pairs(views) do remove(id) end;return end
+    if not online then for id in pairs(views) do remove(id) end;return end
     local p=Run.current(S)
     if not p then
       for id in pairs(views) do remove(id) end
-      acc=0;return
-    end
-    if S.speed>0 and not p.paid_clock then
-      acc=math.min(148,acc+dt*74*S.speed/seconds_per_day)
-      local n=math.floor(acc)
-      if n>0 then Run.tick(S,n,V.observe);acc=acc-n end
+      return
     end
     local active={}
     for _,run in ipairs(Run.all(S)) do

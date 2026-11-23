@@ -71,7 +71,9 @@ local function main(x,z,level)
     ui.build_world(player,tile)
   end
   local function advance(arrival)
+    api.interest.refresh({{get_pos=function() return {x=2*x,z=2*z} end}})
     for _=1,400 do
+      api.tram_clock(.25)
       api.tram_view.step(.25,true)
       if S.tram_pilot.arrivals>=arrival then return end
     end
