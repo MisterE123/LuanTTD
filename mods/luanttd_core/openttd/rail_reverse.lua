@@ -6,14 +6,13 @@
 -- consists are a no-op; partially hidden consists and spans are excluded.
 return function(T,Raw,Consist,Life,Signal,Follow,PBS)
   local R={}
-  local ordinary_traction={[0]=true,[1]=true}
   local function copy(source)
     local out={}
     for k,v in pairs(source) do out[k]=v end
     return out
   end
   local function ordinary(t)
-    return t and (t.railtype==0 or t.railtype==1) and
+    return t and Follow.stock_railtype(t.railtype) and
       (t.kind=="rail" or t.kind=="signals" or t.kind=="crossing" or t.kind=="station" or t.kind=="waypoint")
   end
   local function stock_advance(board,parts,first,last,owner,adjustments,phase)
@@ -143,7 +142,7 @@ return function(T,Raw,Consist,Life,Signal,Follow,PBS)
       length=length+part.length
     end
     local v={owner=consist.owner,tile=head.tile,railtype=consist.engine_railtype or 0,
-      compatible=consist.traction_railtypes or ordinary_traction,
+      compatible=Follow.stock_traction(consist.engine_railtype,consist.traction_railtypes),
       length=length,max_speed=settings.max_speed or 80}
     if order.kind=="station" or order.kind=="waypoint" then
       local box,sign=board.station_area(order.station,order.kind)
@@ -191,7 +190,7 @@ return function(T,Raw,Consist,Life,Signal,Follow,PBS)
     local old_station=t.kind=="station" and t.station or nil
     local free_tile=old_station==nil
     local v={tile=at,owner=consist.owner,railtype=consist.engine_railtype or 0,
-      compatible=consist.traction_railtypes or ordinary_traction}
+      compatible=Follow.stock_traction(consist.engine_railtype,consist.traction_railtypes)}
     if T.tracks_overlap(T.union(PBS.bits(board,state.bits,at),2^T.track(td))) then return released,red end
     local function drop(tile,track)
       local claims=removed[tile]

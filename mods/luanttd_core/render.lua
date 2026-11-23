@@ -216,11 +216,37 @@ return function(api)
       rail_eased[part][mode]=architecture(name,name,"rail_atlas")
     end
   end
-  function stock_rail.visual(id,bits)
-    local eased=rail_eased[bits]
-    return eased and eased[diagonal.mode(S,id)] or stock_rail[bits]
+  stock_rail.guideway={}
+  for gauge,kind in pairs({[2]="mono",[3]="maglev"}) do
+    local guideway={flat={},eased={},grade={},station={},depot={}}
+    stock_rail.guideway[gauge]=guideway
+    local function mesh(variant)
+      local name="guideway_"..kind.."_"..variant
+      return architecture(name,name,"guideway_"..kind.."_atlas")
+    end
+    for bits=1,63 do guideway.flat[bits]=mesh("flat_"..bits) end
+    for grade=1,4 do guideway.grade[grade]=mesh("grade_"..grade) end
+    local function facility(variant)
+      local name="guideway_"..kind.."_"..variant
+      return architecture(name,name,"guideway_"..kind.."_facility_atlas")
+    end
+    for axis=0,1 do guideway.station[axis]=facility("platform_"..axis) end
+    for dir=0,3 do guideway.depot[dir]=facility("depot_"..dir) end
+    for _,bits in ipairs({4,8,16,32}) do
+      guideway.eased[bits]={}
+      for mode=1,3 do guideway.eased[bits][mode]=mesh("eased_"..bits.."_"..mode) end
+    end
+  end
+  function stock_rail.visual(id,bits,gauge)
+    local art=stock_rail.guideway[gauge]
+    local eased=art and art.eased[bits] or not art and rail_eased[bits]
+    return eased and eased[diagonal.mode(S,id)] or (art and art.flat[bits] or stock_rail[bits])
   end
   for grade=1,4 do rail_grade[grade]=architecture("stock_rail_grade_"..grade,"rail_grade_"..grade,"rail_atlas") end
+  function stock_rail.grade_art(grade,gauge)
+    local art=stock_rail.guideway[gauge]
+    return art and art.grade[grade] or rail_grade[grade]
+  end
   local rail_platform,rail_depot={},{}
   for axis=0,1 do
     local a="rail_platform_"..(2^axis)
@@ -1056,14 +1082,18 @@ return function(api)
               if art and (st.coal_stage_tile or st.tiles[#st.tiles])==id then
                 return art[t.rail_station_axis][st.coal_stage_mirror~=false and 2 or 1]
               end
-              return rail_platform[t.rail_station_axis]
+              local guideway=stock_rail.guideway[t.rail_type]
+              return guideway and guideway.station[t.rail_station_axis] or rail_platform[t.rail_station_axis]
             end
-            if t.rail_depot_dir then return rail_depot[t.rail_depot_dir] end
-            return stock_rail.visual(id,t.rail_tracks)
+            if t.rail_depot_dir then
+              local guideway=stock_rail.guideway[t.rail_type]
+              return guideway and guideway.depot[t.rail_depot_dir] or rail_depot[t.rail_depot_dir]
+            end
+            return stock_rail.visual(id,t.rail_tracks,t.rail_type)
           end
           if grade>0 then
             if y==level+1 then return ground_mesh[profile][t.variant] end
-            if y==level+2 then return rail_grade[grade] end
+            if y==level+2 then return stock_rail.grade_art(grade,t.rail_type) end
           end
         end
         return "air"

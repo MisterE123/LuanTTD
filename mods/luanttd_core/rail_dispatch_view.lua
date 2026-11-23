@@ -28,7 +28,16 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
       entity("dispatch_"..kind.."_body",body,d.atlas,d.size)
       -- Each tested locomotive atlas qualifies the shared collector UVs.
       entity("dispatch_"..kind.."_collector",mast,d.atlas,d.size)
+    elseif d.bogies and art.advanced and art.advanced[54] then
+      entity("dispatch_"..kind.."_body",d.mesh:gsub("%.obj$","_body.obj"),d.atlas,d.size)
     end
+  end
+  local project_bogies,project_drawbar
+  if art.advanced and art.advanced[54] then
+    entity("dispatch_mono_bogie","bl_rail_mono_bogie.obj",models.x2001.atlas,models.x2001.size)
+    entity("dispatch_mono_drawbar","bl_rail_mono_drawbar.obj",models.x2001.atlas,models.x2001.size)
+    project_bogies=dofile(path.."/rail_guideway_bogies.lua")(Sim,Track,diagonal,Pose.sample,surface,function(id) return S.tiles[id] end)
+    project_drawbar=dofile(path.."/rail_guideway_drawbar.lua")
   end
   if next(split_ready) then collector=dofile(path.."/rail_pantograph.lua") end
   function V.split_electric_ready() return split_ready.sh_30==true and split_ready.sh_40==true end
@@ -72,7 +81,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
     return b
   end
   local body_pose=dofile((path or "mods/luanttd_core").."/rail_visual_body.lua")(
-    Sim,models,diagonal,Pose.sample,surface,board_base)
+    Sim,models,diagonal,Pose.sample,surface,board_base,project_bogies)
   local signal_rows=dofile((path or "mods/luanttd_core").."/rail_signal_poses.lua")(
     Sim,Track,SignalArt,signal_pixel,board_base)
   local function vacuum(collection,keep)
@@ -89,6 +98,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
         local engine=stock_kind[train.stock_engine] or "locomotive"
         local wagon=Art.wagon(train,Sim,S)
         local parts=train.consist.parts
+        local visible_guideway={}
         local push_pull=(train.dual_head or train.stock_engine==11) and #parts>1
         local samples={}
         for i,_ in ipairs(parts) do
@@ -102,7 +112,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
           local sample=samples[i]
           if sample and ready[engine] and (type(wagon)=="table" or ready[wagon]) then
             local id,td,progress,reversed,wormhole=sample.id,sample.td,sample.progress,sample.reversed,sample.wormhole
-            local body,rotation,kind,body_index,flip_epoch=body_pose(train,sample,i,engine,wagon)
+            local body,rotation,kind,body_index,flip_epoch,bogies=body_pose(train,sample,i,engine,wagon)
             local key=train.id..":"..body_index
             local visible=ready[kind] and (not api.interest or api.interest.near(body,refs[key]~=nil))
             local ref
@@ -117,11 +127,35 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
               pose(refs,key..":collector","dispatch_"..kind.."_collector",heel,rotation,scale,flip_epoch)
               show_parts[key..":collector"]=true
               if V.observe_collector then V.observe_collector(train,id,move,rows,scale,td,body_index) end
+            elseif visible and bogies then
+              visible_guideway[i]={index=i,pos=body,rotation=rotation,key=key,flip=flip_epoch}
+              ref=pose(refs,key,"dispatch_"..kind.."_body",body,rotation,nil,flip_epoch)
+              for j,gear in ipairs(bogies) do
+                local part=key..":bogie:"..j
+                pose(refs,part,"dispatch_mono_bogie",gear.pos,gear.rotation,nil,flip_epoch)
+                show_parts[part]=true
+              end
             elseif visible then
               ref=pose(refs,key,"dispatch_"..kind,body,rotation,nil,flip_epoch)
             end
             if api.vehicle_ui and train.fleet_id then api.vehicle_ui.track("rail",train.fleet_id,body,ref,i==1) end
             if visible then show_parts[key]=true end
+          end
+        end
+        if project_drawbar then
+          for i=1,#parts-1 do
+            local a,b=visible_guideway[i],visible_guideway[i+1]
+            local l=a and b and project_drawbar(a,b)
+            if l then
+              local key=a.key..":drawbar"
+              local ref=pose(refs,key,"dispatch_mono_drawbar",l.pos,l.rotation,nil,a.flip)
+              local old=refs[key]
+              if ref and (not old.length or math.abs(old.length-l.length)>.002) then
+                ref:set_properties({visual_size={x=1,y=1,z=l.length}})
+                old.length=l.length
+              end
+              show_parts[key]=true
+            end
           end
         end
       end

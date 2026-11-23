@@ -33,7 +33,7 @@ return function(core,api,motion,models,airframes)
   local collector
   local rail_engines={locomotive=true}
   for _,kind in pairs(dofile(base.."/rail_dispatch_manifest.lua").stock_kind) do rail_engines[kind]=true end
-  local passenger_bodies={wagon=true,manley=true,dash=true}
+  local passenger_bodies={wagon=true,manley=true,dash=true,mono_passenger=true}
   function A.render(rows,dt,signals)
     local visible,viewers={},nil
     repair_smoke.step(dt)
@@ -61,7 +61,10 @@ return function(core,api,motion,models,airframes)
       if row.mode=="air" then rotors.step(v,airframes[row.engine],pos,row.rotor_period,dt) end
       if part then
         v.flip=part.flip
-        if part.scale and (not v.scale or math.abs(v.scale-part.scale)>.002) then
+        if part.length and (not v.scale or math.abs(v.scale-part.length)>.002) then
+          v.ref:set_properties({visual_size={x=1,y=1,z=part.length}})
+          v.scale=part.length
+        elseif part.scale and (not v.scale or math.abs(v.scale-part.scale)>.002) then
           v.ref:set_properties({visual_size={x=1,y=part.scale,z=1}})
           v.scale=part.scale
         end
@@ -117,6 +120,18 @@ return function(core,api,motion,models,airframes)
             present(body..":collector",row,name.."_collector",nil,heel,nil,nil,
               {visual_only=true,rotation=p.rotation,flip=p.flip,scale=scale,
                 index=p.index,body_index=p.body_index,kind=p.kind},snap)
+          elseif p.bogies then
+            present(body,row,name.."_body",nil,p.pos,nil,nil,p,snap)
+            for j,gear in ipairs(p.bogies) do
+              present(body..":bogie:"..j,row,"luanttd_core:dispatch_mono_bogie",nil,gear.pos,nil,nil,
+                {visual_only=true,rotation=gear.rotation,flip=p.flip,index=p.index,body_index=p.body_index,kind=p.kind},snap)
+            end
+            local draw=p.drawbar
+            if draw then
+              present(body..":drawbar",row,"luanttd_core:dispatch_mono_drawbar",nil,draw.pos,nil,nil,
+                {visual_only=true,rotation=draw.rotation,flip=p.flip,length=draw.length,
+                  index=p.index,body_index=p.body_index,kind=p.kind},snap)
+            end
           else
             present(body,row,name,nil,p.pos,nil,nil,p,snap)
           end

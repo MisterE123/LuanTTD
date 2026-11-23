@@ -37,14 +37,17 @@ function M.create(Loading,Timing)
     end
     return v.carrying_parts
   end
-  function C.town_wagons(v,parts,Roster,linked_express)
+  function C.town_wagons(v,parts,Roster,linked_express,advanced)
     if linked_express then assert(#parts==3);v.linked_heads=true end
     local seen={}
     v.carrying_parts={}
     for i,part in ipairs(parts) do
       local stock=assert(Roster.entry(part.stock))
       local expected=linked_express and (i==2 and 27 or 22)
-      local compatible=expected and stock.stock_id==expected or not expected and (stock.stock_id==27 or stock.stock_id==28)
+      local compatible=expected and stock.stock_id==expected or not expected and
+        ((not advanced and (stock.stock_id==27 or stock.stock_id==28)) or
+          advanced and stock.railtype==advanced and stock.kind=="wagon" and
+          (stock.cargo=="passenger" or stock.cargo=="mail"))
       assert(compatible and not seen[part.body_id] and part.index==i+(linked_express and 0 or 1),
         "Invalid or duplicated physical town wagon")
       seen[part.body_id]=true

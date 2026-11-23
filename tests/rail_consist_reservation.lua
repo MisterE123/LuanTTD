@@ -126,4 +126,18 @@ local target=P.choose_target(board,planned.bits,v,best)
 assert(R.reserve_path(board,planned,42,target))
 assert(R.claim_owner(planned,st1,T.X)==42 and R.claim_owner(planned,st2,T.X)==42)
 assert(R.valid_state(board,planned))
+-- Existing guideway reservation ownership can be restored for every
+-- stock rail type, but front-engine motion still follows RC1 power masks.
+for gauge=0,3 do
+  local a=tile(2,1,1,{railtype=gauge})
+  local b=tile(3,1,1,{railtype=gauge})
+  local front=tile(4,1,1,{railtype=(gauge+2)%4})
+  local db=R.new()
+  assert(R.register(board,db,"typed",1,{part(a,8),part(a,8)},{engine_railtype=gauge}))
+  assert(R.enter(board,db,"typed",1,b,8))
+  assert(R.enter(board,db,"typed",2,b,8))
+  local ok,err=R.enter(board,db,"typed",1,front,8)
+  assert(not ok and err=="incompatible_railtype",gauge)
+  assert(db.bits[b]==1 and not db.bits[front] and R.valid_state(board,db),gauge)
+end
 print("PASS: two trains at a crossing, front/tail event order, persisted ownership, platform hold/release, independent half tracks")

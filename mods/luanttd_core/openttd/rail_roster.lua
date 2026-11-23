@@ -5,6 +5,9 @@
 -- train.h, ground_vehicle.cpp, economy.cpp and company_cmd.cpp.
 -- Quotes and cached stats only. No fleet mutation, calendar invention,
 -- autoreplace, packet ownership or company ledger side effects.
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Types=dofile(mod.."/openttd/rail_types.lua")
+local Advanced=dofile(mod.."/openttd/advanced_rail_roster.lua")
 local R={VEHICLE_LENGTH=8,TILE_SIZE=16,DAY_TICKS=74,DAYS_IN_YEAR=365,CARGO_AGE_TICKS=185,
   GRADUAL_WAIT=40,RETRY_WAIT=20,DEFAULT_MAX_TRAIN_TILES=7}
 local floor,min,max=math.floor,math.min,math.max
@@ -104,6 +107,21 @@ local rows={
     cost_factor=255,speed=0,power=0,tare=30,running_factor=0,capacity=20,cargo="valuables",cargo_id=10,
     climates=7,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,source_model_life=50,purchase_enabled=false,freight_profile=true},
 }
+local advanced_ids={}
+local advanced_art={[54]="x2001",[57]="mono_passenger",[58]="mono_mail"}
+local stock_cargo_id={passenger=0,coal=1,mail=2,oil=3,livestock=4,goods=5,grain=6,wood=7,iron_ore=8,steel=9,valuables=10}
+for _,row in ipairs(Advanced.catalog()) do
+  local id=row.stock_id
+  advanced_ids[#advanced_ids+1]=id
+  row.purchase_enabled=false
+  row.visual=advanced_art[id]
+  row.engine_class=row.kind=="wagon" and "steam" or row.railtype==2 and "monorail" or "maglev"
+  row.cargo_id=stock_cargo_id[row.cargo]
+  -- Wagons keep the source's raw longevity in source_model_life; like
+  -- other stock wagons they do not run the locomotive retirement phases.
+  if row.kind=="wagon" then row.model_life=255 end
+  rows[id]=row
+end
 for id,row in pairs(rows) do
   row.stock_id=id;row.railtype=row.railtype or 0;row.shorten_factor=0
   row.length=R.VEHICLE_LENGTH;row.load_amount=5;row.tractive_effort=76;row.air_drag=0
@@ -132,10 +150,13 @@ local function get(part)
 end
 
 function R.entry(id) return rows[id] and copy(rows[id]) end
-function R.catalog(electric)
+function R.catalog(electric,advanced_ready)
   local out={}
   for i,id in ipairs(order) do out[i]=copy(rows[id]) end
   if electric==true then table.insert(out,8,copy(rows[23]));table.insert(out,9,copy(rows[24]));table.insert(out,10,copy(rows[25]));table.insert(out,11,copy(rows[26])) end
+  for _,id in ipairs(advanced_ids) do
+    if advanced_ready==true or type(advanced_ready)=="table" and advanced_ready[id] then out[#out+1]=copy(rows[id]) end
+  end
   return out
 end
 function R.dual_head(id) return not not (rows[id] and rows[id].multiheaded) end
@@ -307,11 +328,9 @@ function R.stats(parts,opts)
     if item.kind=="engine" then engines=engines+1 end
     if item.powered then
       out.tractive_effort=out.tractive_effort+item.weight*row.tractive_effort
-      -- 14.1 ConsistChanged accumulates the physical powered parts'
-      -- railtypes. An ordinary unpowered wagon cannot give an electric
-      -- locomotive permission to route on an unpowered tile.
-      out.compatible[1]=true
-      if row.railtype==0 then out.compatible[0]=true end
+      -- RC1 ConsistChanged unions GetAllPoweredRailTypes for actual
+      -- motors only. Unpowered trailers do not change the path mask.
+      for gauge=0,3 do if Types.has_power(row.railtype,gauge) then out.compatible[gauge]=true end end
     end
     if i==1 then out.offsets[i]=0
     else
@@ -444,6 +463,7 @@ function R.quote(depot,owner,parts,opts)
     -- This stock row can be inspected/priced without licensing a live
     -- purchase until its actual freight orders and asset are mounted.
     if row.purchase_enabled==false and
+        not (row.railtype>=2 and row.visual and opts.mounted_advanced and opts.mounted_advanced[row.stock_id]) and
         not (row.stock_id==28 and opts.mount_mail_wagon==true and
             (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id)
               or opts.mount_mixed_town and R.mixed_town_consist(parts))) and
@@ -475,11 +495,14 @@ function R.quote(depot,owner,parts,opts)
       if not opts.available then return nil,"ENGINE_AVAILABILITY_REQUIRED",index end
       if not opts.available(row.stock_id,owner) then return nil,"RAIL_VEHICLE_NOT_AVAILABLE",index end
       local allowed=opts.company_railtypes
-      if row.railtype==1 and (not allowed or not allowed[1]) then return nil,"RAIL_VEHICLE_NOT_AVAILABLE",index end
-      if allowed and not (allowed[0] or allowed[1]) then return nil,"RAIL_VEHICLE_NOT_AVAILABLE",index end
+      if row.railtype~=0 and not (allowed and allowed[row.railtype]) then return nil,"RAIL_VEHICLE_NOT_AVAILABLE",index end
+      if row.railtype==0 and allowed and not (allowed[0] or allowed[1]) then return nil,"RAIL_VEHICLE_NOT_AVAILABLE",index end
     end
-    if depot.railtype~=0 and depot.railtype~=1 then return nil,"INCOMPATIBLE_DEPOT_RAIL",index end
-    if row.powered and row.railtype==1 and depot.railtype~=1 then return nil,"INCOMPATIBLE_DEPOT_RAIL",index end
+    -- CmdBuildRailVehicle checks HasPowerOnRail for locomotives;
+    -- CmdBuildRailWagon uses the strictly physical IsCompatibleRail.
+    if not Types.depot_accepts(row.powered and "engine" or "wagon",row.railtype,depot.railtype) then
+      return nil,"INCOMPATIBLE_DEPOT_RAIL",index
+    end
   end
   if stats.too_long then return nil,"TRAIN_TOO_LONG" end
   if stats.engine_count>0 and not stats.can_run then return nil,"LOCOMOTIVE_MUST_LEAD" end

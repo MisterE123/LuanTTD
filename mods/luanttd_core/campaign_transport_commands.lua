@@ -37,11 +37,11 @@ return function(Sim,R)
     elseif mode=="rail" and R.rail then
       local n=R.network.spans
       local p,e
-      if op=="bridge" then p,e=n.quote_bridge(s,owner,cmd.tile,cmd.last)
-      else p,e=n.quote_tunnel(s,owner,cmd.tile) end
+      if op=="bridge" then p,e=n.quote_bridge(s,owner,cmd.tile,cmd.last,cmd.railtype,R.rail.span_available)
+      else p,e=n.quote_tunnel(s,owner,cmd.tile,cmd.railtype,R.rail.span_available) end
       if not p then return false,e end
       if quote then return true,p.price,p end
-      return n.commit(s,owner,p)
+      return n.commit(s,owner,p,R.rail.span_available)
     end
     return false,"UNSUPPORTED_SPAN_MODE"
   end
@@ -51,7 +51,7 @@ return function(Sim,R)
     if op=="bridge" or op=="tunnel" then
       local ok,price,p=spans(owner,cmd,true)
       if not ok then return nil,price end
-      return {request={mode=mode,operation=op,tile=cmd.tile,last=cmd.last,style=cmd.style},
+      return {request={mode=mode,operation=op,tile=cmd.tile,last=cmd.last,style=cmd.style,railtype=mode=="rail" and p.railtype or nil},
         price=price,tiles=span_tiles(p),speed=p.spec and p.spec.speed}
     elseif op=="build" and mode=="air" and R.air and tile(cmd.tile) then
       local q,why=R.air.network.quote(s,owner,cmd.tile,cmd.layout)
@@ -241,6 +241,12 @@ return function(Sim,R)
           end
         end
       end
+      if t.rail_type==2 and catalogue[54] and catalogue[57] and catalogue[58] then
+        local combo="X2001 + Passenger Carriage + Mail Van"
+        add("X2001 · Coach and Mail",{mode=mode,operation="buy",depot=key,parts={54,57,58}},
+          Help.describe("rail","mixed",combo,{speed=catalogue[54].speed,
+            capacity=catalogue[57].capacity,mail_capacity=catalogue[58].capacity}))
+      end
       local depot_cargos={"mail"}
       for _,cargo in ipairs(Freight.profile_order) do depot_cargos[#depot_cargos+1]=cargo end
       for _,cargo in ipairs(depot_cargos) do
@@ -383,7 +389,7 @@ return function(Sim,R)
     while #targets>96 do targets[#targets]=nil end
     table.sort(offers,function(a,b) return a.name<b.name end)
     table.sort(vehicles,function(a,b) return a.id<b.id end)
-    return {offers=offers,vehicles=vehicles,targets=targets}
+    return {offers=offers,vehicles=vehicles,targets=targets,railtype=mode=="rail" and s.tiles[key].rail_type or nil}
   end
   function T.start(owner,req)
     if req.mode=="rail_pilot" and R.rail then

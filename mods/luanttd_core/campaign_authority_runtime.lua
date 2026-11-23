@@ -103,7 +103,8 @@ return function(Sim,mod,s,cap)
     end
     local fit=dofile(mod.."/rail_body_spacing.lua")(Sim,network.track,diagonal,pose.sample)
     local body=dofile(mod.."/rail_visual_body.lua")(Sim,art.models,diagonal,pose.sample,surface,
-      function(id) local _,level=tile(id);return level end)
+      function(id) local _,level=tile(id);return level end,
+      dofile(mod.."/rail_guideway_bogies.lua")(Sim,network.track,diagonal,pose.sample,surface,function(id) return s.tiles[id] end))
     local signal_rows=dofile(mod.."/rail_signal_poses.lua")(Sim,network.track,dofile(mod.."/rail_signal_art.lua"),
       signal_pixel,function(id) local _,level=tile(id);return level end)
     function N.rail.signals_at(id,out)
@@ -129,6 +130,7 @@ return function(Sim,mod,s,cap)
       return above(s.rail_bridge_above,s.stock_rail_spans,id,y) or above(s.bridge_above,s.stock_road_bridges,id,y)
         or above(s.aqueduct_above,s.stock_aqueducts,id,y)
     end
+    local link=dofile(mod.."/rail_guideway_drawbar.lua")
     function N.rail.poses(train,fraction)
       local parts=train.consist.parts
       local samples={}
@@ -146,9 +148,9 @@ return function(Sim,mod,s,cap)
       for i=1,#parts do
         local p=samples[i]
         if p then
-          local pos,rotation,kind,body_index,flip=body(train,p,i,engine,wagon)
+          local pos,rotation,kind,body_index,flip,bogies=body(train,p,i,engine,wagon)
           local body={tile=p.id,td=p.td,fraction=p.progress,index=i,body_index=body_index,kind=kind,
-            pos=pos,rotation=rotation,reversed=not not p.reversed,flip=flip}
+            pos=pos,rotation=rotation,reversed=not not p.reversed,flip=flip,bogies=bogies}
           if train.town_parts or train.freight_parts then
             local bodies=train.town_parts or train.freight_parts
             local part=bodies[body_index-(train.express_mail and 0 or 1)]
@@ -170,9 +172,21 @@ return function(Sim,mod,s,cap)
           out[#out+1]=body
         end
       end
+      if train.advanced_gauge then
+        for i=1,#out-1 do out[i].drawbar=link(out[i],out[i+1]) end
+      end
       return out
     end
+    N.rail.types=dofile(source.."rail_types.lua")
+    function N.rail.railtype_available(owner,gauge)
+      local owned=N.rail.owned
+      return owned and N.rail.types.available(gauge,owned.railtype_mask(s,owner,N.rail.types))
+    end
+    function N.rail.span_available(owner,gauge)
+      return gauge==2 and cap.rail.advanced_span and N.rail.railtype_available(owner,gauge)
+    end
     N.rail.build=B.rail_build({s=s,Sim=Sim,rail_block_tools=s.rail_block_preview,
+      company_can_build_stock_railtype=N.rail.railtype_available,
       terrain={tile=tile},render={update=function(ids)
         local changed=s.changed or {}
         for _,id in ipairs(ids) do changed[#changed+1]=id end
@@ -194,6 +208,7 @@ return function(Sim,mod,s,cap)
           commit=function(owner,ticket) return Wire.commit(s,owner,ticket,ctx) end,
         }
       end
+      owned.mount_advanced(N.rail.types,cap.rail.advanced)
       N.rail.owned=owned
       N.rail.assembly=dofile(mod.."/rail_depot_assembly_state.lua")(s,owned)
     end

@@ -26,12 +26,17 @@ printf 'name = railpreview\n' > "$mod/mod.conf"
 cp tests/rail_span_art_native.lua "$mod/init.lua"
 cp mods/luanttd_core/models/{bl_rail_track_1.obj,bl_rail_track_2.obj,bl_land_3.obj,bl_land_6.obj,bl_land_9.obj,bl_land_12.obj,bl_steam.obj,bl_electric.obj,bl_rail_passenger_wagon.obj,bl_rail_open_wagon.obj,bl_rail_bridge_wood_*,bl_rail_tunnel_portal_*} "$mod/models/"
 cp mods/luanttd_core/textures/{bl_rail_atlas,bl_rail_wagon_atlas,bl_grass*,bl_water*,bl_rail_bridge_wood,bl_rail_tunnel_portal,bl_vehicle_palette}.png "$mod/textures/"
+if [[ ${BAYLINE_NATIVE_MONORAIL_SPANS:-false} == true ]]; then
+  cp mods/luanttd_core/models/{bl_guideway_mono_span_*,bl_guideway_mono_flat_[12],bl_rail_x2001,bl_rail_mono_passenger,bl_rail_mono_mail}.obj "$mod/models/"
+  cp mods/luanttd_core/textures/{bl_guideway_mono_span,bl_guideway_mono_atlas,bl_rail_x2001,bl_rail_mono_passenger,bl_rail_mono_mail}.png "$mod/textures/"
+fi
 printf 'gameid = rail_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port
 prometheus_listener_address = 127.0.0.1:$port
 server_announce = false
 bind_address = 127.0.0.1
+qa_monorail_spans = ${BAYLINE_NATIVE_MONORAIL_SPANS:-false}
 EOF
 cat > "$out/client.conf" <<'EOF'
 screen_w = 1300

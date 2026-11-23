@@ -156,8 +156,9 @@ return function(Sim,mod)
     end
     local prices={
       track=function(tile,p,o)
-        if p.remove then return Q.rail_clear_price(0,o) end
-        return value(Q.piece(tile,p.track,o))
+        if p.remove then return Q.rail_clear_price(tile.railtype or 0,o) end
+        local q,why=Q.piece(tile,p.track,o)
+        return q and q.cost,why,q
       end,
       station_area=function(tiles,axis,tracks,length,o) return value(Q.station(tiles,axis,tracks,length,o)) end,
       depot=function(tile,d,o) return value(Q.depot(tile,d,o)) end,

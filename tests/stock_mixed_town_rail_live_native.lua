@@ -11,13 +11,19 @@ local fixture=assert(io.open(core.get_worldpath().."/qa-mixed-form.txt","r"))
 local mode,form=fixture:read("*l","*l")
 fixture:close()
 assert(mode=="start" or mode=="reload" or mode=="final")
-assert(form=="coach-mail" or form=="mail-coach-mail")
-local stock=form=="coach-mail" and {0,27,28} or {0,28,27,28}
+assert(form=="coach-mail" or form=="mail-coach-mail" or form=="monorail" or form=="monorail-spans")
+local spans=form=="monorail-spans"
+local mono=form=="monorail" or spans
+local gauge=mono and 2 or nil
+local stock=mono and {54,57,58} or form=="coach-mail" and {0,27,28} or {0,28,27,28}
+local function is_coach(i) return i==27 or i==57 end
 local name="RC1 Mixed Town Rail"
 local function cell(x,z) return (z-1)*64+x end
 local depot,first,second=cell(6,17),cell(10,17),cell(43,17)
-local cap={road={start_year=1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
+local cap={road={start_year=mono and 2010 or 1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
   rail=m("rail_dispatch_manifest").scan(mod,false,false),ferry={},air={},oil_tanker=true,durable_actions=true}
+assert(not mono or cap.rail.advanced[54])
+assert(not spans or cap.rail.advanced_span)
 assert(cap.rail.ready.mail_van and cap.rail.mixed_town_engines[0], "Ordinary scanned stock art must enable mixed town rail")
 for _,group in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..group,"air") end
 local balance=300000
@@ -27,7 +33,13 @@ if not initial then
   Sim.W,Sim.H=64,64
   s.tiles={}
   for id=1,64*64 do s.tiles[id]={h=1,terrain="grass",variant=1} end
-  s.corner_grid=T.new(64,64,function() return 1 end)
+  s.corner_grid=T.new(64,64,function(x)
+    if not spans then return 1 end
+    if x>=27 and x<=31 then return 5 end
+    if x==18 or x==19 then return 3 end
+    return 4
+  end)
+  for id,tile in ipairs(s.tiles) do local _,h=T.tile(s.corner_grid,Sim.xy(id));tile.h=h end
   s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading,s.road_economy=true,true,true,true
   s.road_mail,s.road_junction_clearance=true,true
   s.rail_owned_service,s.rail_span_enabled,s.rail_paid_service=true,true,true
@@ -89,9 +101,17 @@ local function visual(run,capture)
         local i=part.body_index
         assert(not seen[i] and stock[i]==part.stock_id and part.rotation.y==part.rotation.y)
         seen[i]=true
-        if i==1 then assert(part.kind=="steam" and part.body_id==run.town_engine_body_id)
+        if mono and (not spans or part.bogies) then
+          local gears=assert(part.bogies);assert(#gears==2)
+          for _,g in ipairs(gears) do
+            assert(math.abs(g.pos.y-part.pos.y)<.001 and math.abs(g.rotation.y-part.rotation.y)<.001)
+          end
+          local dist=math.abs(gears[1].pos.x-gears[2].pos.x)+math.abs(gears[1].pos.z-gears[2].pos.z)
+          assert(math.abs(dist-.505)<.001)
+        else assert(not part.bogies) end
+        if i==1 then assert(part.kind==(mono and "x2001" or "steam") and part.body_id==run.town_engine_body_id)
         else
-          assert(part.kind==(stock[i]==27 and "wagon" or "mail_van"))
+          assert(part.kind==(is_coach(stock[i]) and (mono and "mono_passenger" or "wagon") or mono and "mono_mail" or "mail_van"))
           assert(part.body_id==run.town_parts[i-1].body_id)
         end
       end
@@ -109,19 +129,35 @@ local function totals(v)
   for i,a in ipairs(v.carrying_parts) do
     assert(a.stock==stock[i+1] and a.part==i+1 and not ids[a.body_id])
     assert(a.units<=a.capacity and a.cargo_age_counter>=1 and a.cargo_age_counter<=185)
-    assert(a.capacity==(a.stock==27 and 40 or 30))
+    assert(a.capacity==assert(Roster.entry(a.stock)).capacity)
     ids[a.body_id]=true
-    if a.stock==27 then passenger=passenger+a.units else mail=mail+a.units end
+    if is_coach(a.stock) then passenger=passenger+a.units else mail=mail+a.units end
   end
   return passenger,mail
 end
 local function work()
-  local pax_cap,mail_cap=40,(#stock-2)*30
+  local pax_cap,mail_cap=mono and 45 or 40,mono and 35 or (#stock-2)*30
   if mode=="start" then
-    lay({tool="track",first=cell(7,17),last=cell(53,17),track=Track.X})
-    lay({tool="depot",first=depot,direction=Track.SW})
+    if spans then
+      local function track(a,b)
+        lay({tool="track",first=cell(a,17),last=cell(b,17),track=Track.X,railtype=gauge})
+      end
+      local bridge=ask("bridge_picker",{mode="rail",first=cell(16,17),last=cell(20,17),railtype=gauge})
+      assert(bridge.railtype==2 and #bridge.offers==1)
+      command("bridge_picker",{token=bridge.token,style=bridge.offers[1].style})
+      local tunnel=ask("transport_quote",{request={mode="rail",operation="tunnel",tile=cell(26,17),railtype=gauge}})
+      command("transport_commit",{token=tunnel.token})
+      local world=assert(Checkpoint.read())
+      local bridge_rec=assert(world.stock_rail_spans[world.tiles[cell(16,17)].rail_span_id])
+      local tunnel_rec=assert(world.stock_rail_spans[world.tiles[cell(26,17)].rail_span_id])
+      assert(bridge_rec.railtype==2 and bridge_rec.kind=="bridge" and tunnel_rec.railtype==2 and tunnel_rec.kind=="tunnel")
+      track(7,15);track(21,25);track(Sim.xy(tunnel_rec["end"])+1,53)
+    else
+      lay({tool="track",first=cell(7,17),last=cell(53,17),track=Track.X,railtype=gauge})
+    end
+    lay({tool="depot",first=depot,direction=Track.SW,railtype=gauge})
     for _,x in ipairs({10,43}) do
-      lay({tool="station",first=cell(x,17),last=cell(x+2,17),axis=0,length=3,tracks=1,separate=true,drag=true})
+      lay({tool="station",first=cell(x,17),last=cell(x+2,17),axis=0,length=3,tracks=1,separate=true,drag=true,railtype=gauge})
     end
     local q=ask("rail_assembly",{depot=depot})
     command("rail_assembly",{token=q.token,operation="engine",stock=stock[1]})
@@ -129,7 +165,7 @@ local function work()
       q=ask("rail_assembly",{depot=depot})
       local offer
       for _,w in ipairs(q.wagons) do if w.id==stock[i] then offer=w end end
-      assert(offer and offer.quote.price==(stock[i]==28 and 1781 or 1929))
+      assert(offer and offer.quote.price==(is_coach(stock[i]) and 1929 or 1781))
       command("rail_assembly",{token=q.token,operation="wagon",stock=stock[i]})
     end
     q=ask("rail_assembly",{depot=depot})
@@ -147,7 +183,7 @@ local function work()
     for _,st in ipairs(panel.targets) do if not st.cargo then
       if not source then source=st.id else sink=st.id end
     end end
-    assert(selected and source and sink and source~=sink and offer)
+    assert(selected and source and sink and source~=sink and (mono or offer))
     command("transport_start",{mode="rail",vehicle=train,first=source,second=sink,cargo="mixed"})
     local function orders() return ask("orders",{mode="rail",vehicle=train,page=1}) end
     local order=orders()

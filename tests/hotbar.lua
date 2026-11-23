@@ -156,3 +156,13 @@ oil.enable_railworks();oil.enable_rail_oil();oil.enable_rail_goods()
 check(oil,"rail_oil_freight",2,"rail_oil_load")
 check(oil,"rail_oil_freight",3,"rail_oil_unload")
 print(("PASS: canonical construction routes, Back / Bulldoze, live legend, and mounted paid tools across all %d registration orders"):format(permutations))
+
+-- Missing electric assets must never hide a separately ready stock monorail.
+local guide=dofile("mods/luanttd_core/hotbar.lua")
+guide.enable_railworks(true,true,true)
+guide.mount_guideway_picker()
+local gauges=assert(guide.menus.railtypes)
+assert(guide.menus.railengineering[1][1]=="section_railtypes")
+assert(gauges[4][1]=="rail_select_standard" and gauges[5][1]=="rail_select_monorail")
+assert(gauges[4][3]~=gauges[5][3] and gauges[8][1]=="back" and gauges[9][1]=="clear")
+print("PASS independent monorail rail type picker, unique icons and shared menu actions")

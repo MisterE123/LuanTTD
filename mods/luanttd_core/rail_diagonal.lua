@@ -34,7 +34,8 @@ return function(Sim,Track,terrain,surface)
       local side=displacements[ports[i]]
       local next_id=Sim.id(x+side[1],z+side[2])
       local adjacent=next_id and s.tiles[next_id]
-      if plain(adjacent) and adjacent.owner==tile.owner and adjacent.rail_tracks==ports[3]
+      if plain(adjacent) and adjacent.owner==tile.owner and (adjacent.rail_type or 0)==(tile.rail_type or 0)
+          and adjacent.rail_tracks==ports[3]
           and flat(next_id,adjacent)==y then mode=mode+2^(i-1) end
     end
     return mode

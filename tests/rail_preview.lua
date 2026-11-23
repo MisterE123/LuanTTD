@@ -58,3 +58,14 @@ local indices={}
 for i,item in ipairs(long.pieces) do indices[item.id]=i end
 for i=2,#window do assert(indices[window[i].id]==indices[window[i-1].id]+1) end
 print("PASS: AutoRail placement ghosts exactly match built diagonals; preview is read-only, handles adjoining tracks, turnouts and grades; long ghosts stay connected")
+S.tiles[a].slope=0
+S.tiles[b].rail_type=2
+local advanced=Ghost({{id=a,tracks=8,result_railtype=2}},"QA")[1]
+assert(advanced.mesh=="bl_guideway_mono_eased_8_2.obj" and advanced.atlas=="bl_guideway_mono_atlas.png")
+assert(not S.tiles[a].rail_type,"previews must not retag the authority's tile")
+local incompatible=Ghost({{id=a,tracks=8,result_railtype=3}},"QA")[1]
+assert(incompatible.mesh=="bl_guideway_maglev_flat_8.obj" and incompatible.atlas=="bl_guideway_maglev_atlas.png")
+S.tiles[a].slope=3
+advanced=Ghost({{id=a,tracks=1,result_railtype=2}},"QA")[1]
+assert(advanced.mesh=="bl_guideway_mono_grade_1.obj" and advanced.pos.y==4.038)
+print("PASS monorail and maglev previews show their own guideway profiles without foreign-gauge easing")

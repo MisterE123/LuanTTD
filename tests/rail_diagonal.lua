@@ -53,6 +53,14 @@ local x,z,dx,dz=D.sample(wt,1,1)
 directional(x,z,dx,dz,old.sample(wt,1))
 north.rail_tracks=9;assert(D.mode(s,a)==1 and D.mode(s,n)==0)
 north.rail_tracks=8;north.rail_type=1;assert(D.mode(s,a)==1);north.rail_type=nil
+-- Alternate complementary tiles of the same advanced gauge work; a
+-- visually adjacent gauge-change must never imply a drivable seam.
+t.rail_type=2;west.rail_type=2;north.rail_type=3
+assert(D.mode(s,a)==1 and D.mode(s,n)==0)
+north.rail_type=2;assert(D.mode(s,a)==3 and D.mode(s,n)==2)
+t.rail_type=3;west.rail_type=3;north.rail_type=3
+assert(D.mode(s,a)==3 and D.mode(s,n)==2)
+t.rail_type=nil;west.rail_type=nil;north.rail_type=nil
 north.rail_waypoint_id=10;assert(D.mode(s,a)==1);north.rail_waypoint_id=nil
 north.owner="another";assert(D.mode(s,a)==1);north.owner="P"
 north.h=1;assert(D.mode(s,a)==1)

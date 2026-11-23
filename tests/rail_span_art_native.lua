@@ -1,4 +1,6 @@
 -- Standalone Linux client render of the actual shipped OBJ and atlas.
+local mono=core.settings:get_bool("qa_monorail_spans",false)
+local stem,atlas="bl_guideway_mono_span_","bl_guideway_mono_span"
 core.set_mapgen_setting("mg_name","singlenode",true)
 core.set_mapgen_setting("mg_flags","light",true)
 local function mesh(name,source,atlas)
@@ -17,31 +19,36 @@ core.register_node("railpreview:darkrock",{description="Hill interior, not part 
 for d=0,3 do
   local s=({12,6,3,9})[d+1]
   mesh("slope_"..d,"bl_land_"..s,"bl_grass1")
-  mesh("bore_"..d,"bl_rail_tunnel_portal_"..d,"bl_rail_tunnel_portal")
+  mesh("bore_"..d,mono and stem.."tunnel_"..d or "bl_rail_tunnel_portal_"..d,mono and atlas or "bl_rail_tunnel_portal")
   for _,head in ipairs({"flat","ramp"}) do
     local name="head_"..head.."_"..d
-    mesh(name,"bl_rail_bridge_wood_"..name,"bl_rail_bridge_wood")
+    mesh(name,mono and stem..name or "bl_rail_bridge_wood_"..name,mono and atlas or "bl_rail_bridge_wood")
   end
 end
 for a=0,1 do
   local b=2^a
-  mesh("rail_"..a,"bl_rail_track_"..("%d"):format(b),"bl_rail_atlas")
+  mesh("rail_"..a,(mono and "bl_guideway_mono_flat_" or "bl_rail_track_")..b,
+    mono and "bl_guideway_mono_atlas" or "bl_rail_atlas")
   for _,piece in ipairs({"span","pier"}) do
     local k=piece.."_"..a
-    mesh(k,"bl_rail_bridge_wood_"..k,"bl_rail_bridge_wood")
+    mesh(k,mono and piece=="span" and stem..k or "bl_rail_bridge_wood_"..k,
+      mono and piece=="span" and atlas or "bl_rail_bridge_wood")
   end
 end
 for _,id in ipairs({"steam","electric","rail_passenger_wagon","rail_open_wagon"}) do
+  local name=mono and ({steam="rail_x2001",electric="rail_x2001",rail_passenger_wagon="rail_mono_passenger",
+    rail_open_wagon="rail_mono_mail"})[id]
   core.register_entity("railpreview:"..id,{
-    initial_properties={visual="mesh",mesh="bl_"..id..".obj",static_save=false,
-      physical=false,pointable=false,textures={id:find("^rail_") and "bl_rail_wagon_atlas.png" or "bl_vehicle_palette.png"}},
+    initial_properties={visual="mesh",mesh="bl_"..(name or id)..".obj",static_save=false,
+      physical=false,pointable=false,textures={name and "bl_"..name..".png" or
+        id:find("^rail_") and "bl_rail_wagon_atlas.png" or "bl_vehicle_palette.png"}},
   })
 end
 local function node(x,y,z,n) core.set_node({x=x,y=y,z=z},{name="railpreview:"..n}) end
 local function roll(stock,x,y,z,angle)
   local obj=assert(core.add_entity({x=x,y=y,z=z},"railpreview:"..stock))
   obj:set_rotation({x=0,y=angle,z=0})
-  if stock=="steam" or stock=="electric" then
+  if not mono and (stock=="steam" or stock=="electric") then
     obj:set_properties({visual_size={x=1,y=1,z=.55}})
   end
 end
@@ -86,13 +93,14 @@ local function build()
     for dx=0,1 do for dz=-7,15 do node(x+dx,1,dz,"meadow1") end end
     node(x,2,8,"rail_0")
   end
-  roll("steam",15.0,1.614,8.5,-math.pi/2)
-  roll("rail_passenger_wagon",14.0,1.614,8.5,-math.pi/2)
-  roll("rail_open_wagon",13.0,1.614,8.5,-math.pi/2)
+  local deck=mono and 1.746 or 1.614
+  roll("steam",15.0,deck,8.5,-math.pi/2)
+  roll("rail_passenger_wagon",14.0,deck,8.5,-math.pi/2)
+  roll("rail_open_wagon",13.0,deck,8.5,-math.pi/2)
   -- Preserve the grade and run the approach through the genuine art bore.
   for _,z in ipairs({14,16,18,32,34}) do node(12,1,z,"rail_1") end
   node(12,1,20,"bore_1");node(12,1,30,"bore_3")
-  roll("electric",12.5,.614,20.76,math.pi)
+  roll("electric",12.5,mono and .746 or .614,20.76,math.pi)
 end
 local pending,ready=false,false
 core.register_on_joinplayer(function(p)

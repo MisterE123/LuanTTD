@@ -8,10 +8,9 @@ return function(T,F,PBS)
   local R={VERSION=1}
   local band,has,rev=T.intersect,T.has,T.reverse_side
   local connect={[0]={[0]=1,8,0,16},{[0]=4,2,16,0},{[0]=0,32,1,4},{[0]=32,0,8,2}}
-  local regular_power={[0]=true,[1]=true}
 
   local function ordinary(t)
-    return t and (t.railtype==0 or t.railtype==1) and (t.kind=="rail" or t.kind=="signals" or t.kind=="crossing" or
+    return t and F.stock_railtype(t.railtype) and (t.kind=="rail" or t.kind=="signals" or t.kind=="crossing" or
       t.kind=="station" or t.kind=="waypoint" or t.kind=="depot")
   end
   local function tile(board,id) return id~=nil and board.tile(id) or nil end
@@ -195,7 +194,7 @@ return function(T,F,PBS)
   function R.reserve_path(board,state,id,target,settings)
     local train=state.trains[id]
     if not train then return false,"invalid_train" end
-    local v={owner=train.owner,railtype=train.engine_railtype or 0,compatible=train.traction_railtypes or regular_power}
+    local v={owner=train.owner,railtype=train.engine_railtype or 0,compatible=F.stock_traction(train.engine_railtype,train.traction_railtypes)}
     local ok,claims,at=PBS.try_path(board,state.bits,v,target,settings)
     if not ok then return false,claims,at end
     local bad
@@ -234,6 +233,12 @@ return function(T,F,PBS)
     local prev,new=tile(board,old.tile),tile(board,new_id)
     if not ordinary(prev) or not ordinary(new) then return false,"unsupported_tile" end
     if new.owner~=train.owner or prev.owner~=train.owner then return false,"foreign_tile" end
+    -- TrainController calls CheckCompatibleRail on the first unit with
+    -- IsMovingFront(). Trailing wagons follow the precedent unit's track.
+    if index==1 then
+      local powered=F.stock_traction(train.engine_railtype,train.traction_railtypes)
+      if not powered or not powered[new.railtype] then return false,"incompatible_railtype" end
+    end
     local old_track=T.track(old.td)
     if not old.unreserved and (R.claim_owner(state,old.tile,old_track)~=train_id or
         not has(PBS.bits(board,state.bits,old.tile),old_track)) then return false,"missing_claim" end

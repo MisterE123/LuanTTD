@@ -682,6 +682,35 @@ function U.select_tool(p,tool)
     V.tool=tool;V.road_press=nil;V.demolition_anchor=nil;V.anchor=nil;V.rail_press=nil;V.rail_ghost=nil;V.rail_first=nil;V.airport_first=nil;V.ferry_depot=nil;V.ferry_first=nil;V.ship_coal_first=nil;V.tram_first=nil;V.ferry_via=nil
   end
 end
+function U.select_rail_gauge(p,gauge)
+  local n=p:get_player_name()
+  local V=view(n)
+  local function equip(value)
+    V.rail_gauge=value==2 and 2 or nil
+    V.anchor,V.rail_press,V.rail_ghost=nil,nil,nil
+    V.status=value==2 and "Monorail selected. Use AutoRail, Platform or Depot." or "Standard rail selected."
+  end
+  if gauge~=2 then V.rail_gauge_request=nil;equip(0);return end
+  local client=api.worker_bridge_client
+  if not client then V.status="The campaign worker is not ready.";return end
+  local ticket={}
+  V.rail_gauge_request=ticket
+  local sent,why=client.query({kind="company",player=n},function(r)
+    if session[n]~=V or V.rail_gauge_request~=ticket then return end
+    V.rail_gauge_request=nil
+    if r.ok and r.value.rail_mono then equip(2)
+    else V.status=r.why or "Your company does not have monorail yet." end
+  end)
+  if not sent then V.rail_gauge_request=nil;V.status=why end
+end
+function U.rail_gauge_request(V,kind,request)
+  if kind=="rail" and (request.tool=="autotrack" or request.tool=="track" or request.tool=="station" or request.tool=="depot") then
+    request.railtype=V.rail_gauge
+  elseif kind=="transport" and request.mode=="rail" and (request.operation=="bridge" or request.operation=="tunnel") then
+    request.railtype=V.rail_gauge
+  end
+  return request
+end
 function U.open_finance(p)
   if api.authority_handoff then
     if api.worker_finance then return api.worker_finance.show(p) end
@@ -1346,6 +1375,7 @@ local function worker_build(n,V,kind,request)
   if not api.authority_handoff then return false end
   if not api.worker_build then V.status="The campaign worker is not ready.";return true end
   V.status="Checking construction…"
+  request=U.rail_gauge_request(V,kind,request)
   local ok,why=api.worker_build.commit(n,kind,request,function(built,note,quote,tiles)
     V.status=note or (built and "Construction complete." or "That construction was not accepted.")
     if built and api.on_worker_build then api.on_worker_build(n,tiles,quote) end
@@ -1797,7 +1827,7 @@ local function authority_preview(p,id,hit)
   end
   if bridge then
     if not V.anchor then return {id},true,"Click the first bridgehead. Right-click cancels." end
-    local q,why=api.bridge_picker.quote(bridge,n,V.anchor,id)
+    local q,why=api.bridge_picker.quote(bridge,n,V.anchor,id,bridge=="rail" and V.rail_gauge or nil)
     return q and q.ids or {V.anchor,id},q~=nil,
       q and (bridge_label(bridge).." · From "..dollars(q.minimum).." · Choose a bridge type") or why
   end
@@ -1860,6 +1890,8 @@ local function authority_preview(p,id,hit)
     end
   end
   if not request then return ids,false,label end
+  request=U.rail_gauge_request(V,kind,request)
+  if request.railtype==2 then label="Monorail · "..label end
   local q,why=client.preview(n,kind,request,core.get_us_time())
   if tool=="rail_autotrack" then V.rail_ghost=q and {id=id,pieces=q.pieces} or nil end
   if not q then return ids,false,why end
@@ -1918,7 +1950,7 @@ function U.preview(p,id,hit)
   local bridge=bridge_tool(V.tool)
   if bridge then
     if not V.anchor then return {id},true,"Click the first bridgehead. Right-click cancels." end
-    local q,why=api.bridge_picker.quote(bridge,n,V.anchor,id)
+    local q,why=api.bridge_picker.quote(bridge,n,V.anchor,id,bridge=="rail" and V.rail_gauge or nil)
     if not q then return {V.anchor,id},false,why or "No bridge can join these heads." end
     return q.ids or {V.anchor,id},true,bridge_label(bridge)..
       (q.minimum and ("  |  From "..dollars(q.minimum)) or "").."  ·  Click to choose a bridge type."
@@ -2226,7 +2258,7 @@ function U.build_world(p,id,hit)
     local ok,why=api.bridge_picker.open(p,bridge,V.anchor,id,function(built,note)
       if note then V.status=note
       elseif built then V.status="Bridge built." end
-    end)
+    end,bridge=="rail" and V.rail_gauge or nil)
     if ok then V.anchor=nil else V.status=why or "No bridge can join these heads." end
     return
   end

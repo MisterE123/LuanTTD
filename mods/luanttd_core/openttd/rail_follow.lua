@@ -7,6 +7,15 @@ return function(T)
 local R={EC_NONE=0,EC_OWNER=1,EC_RAIL_ROAD_TYPE=2,EC_90DEG=3,EC_NO_WAY=4,EC_RESERVED=5}
 local band,remove,union,reverse=T.intersect,T.remove,T.union,T.reverse_side
 
+-- RC1 railtypes.h stock powered sets (not the broader physical
+-- compatibility set of electric rail). The live consist's union of
+-- powered engine types supersedes them, per train_cmd.cpp ConsistChanged.
+local stock_power={[0]={[0]=true,[1]=true},[1]={[1]=true},[2]={[2]=true},[3]={[3]=true}}
+function R.stock_railtype(gauge) return stock_power[gauge]~=nil end
+function R.stock_traction(engine,consist_mask)
+  return consist_mask or stock_power[engine or 0]
+end
+
 -- board.tile(id) -> tile record or nil; board.adjacent(id,side) -> id or nil.
 -- Record kind/trackbits/axis/dir/signals per rail_track.lua plus:
 -- owner, railtype, station ID (platforms), other/skip (bridge/tunnel),

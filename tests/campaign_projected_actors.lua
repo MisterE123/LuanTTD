@@ -113,3 +113,29 @@ assert(frame() and #particles==3,"viewport reentry must not inherit old delay")
 while fault.breakdown_ctr~=0 do K.tick(fault,{cur_speed=0,front=true}) end
 assert(not frame(.8) and #particles==3,"no new particles after stock recovery")
 print("PASS real stock road fault projects viewer-local smoke and clears it on recovery, pause, depot and cull")
+local tracked,auxiliary=0,0
+local project_gear=dofile(mod.."campaign_projected_actors.lua")(engine,{vehicle_ui={
+  track=function()tracked=tracked+1 end,
+  ride_track=function(_,_,_,_,_,part)
+    if part.auxiliary then auxiliary=auxiliary+1 end
+  end,
+}},dofile(mod.."road_motion.lua"),{}, {})
+local before=n
+local mono={mode="rail",id=7,parts={{
+  body_index=1,index=1,kind="x2001",pos={x=8,y=2,z=2},
+  rotation={x=0,y=1,z=0},flip=false,bogies={
+    {pos={x=8.259,y=2,z=2},rotation={x=0,y=.9,z=0}},
+    {pos={x=7.754,y=2,z=2},rotation={x=0,y=1.1,z=0}},
+  },
+}}}
+project_gear.render({["rail:7"]=mono},.05)
+assert(n==before+3 and tracked==1 and auxiliary==2)
+assert(live[before+1].name=="luanttd_core:dispatch_x2001_body")
+assert(live[before+2].name=="luanttd_core:dispatch_mono_bogie" and live[before+2].rotation.y==.9)
+assert(live[before+3].name=="luanttd_core:dispatch_mono_bogie" and live[before+3].rotation.y==1.1)
+mono.parts[1].flip=true
+project_gear.render({["rail:7"]=mono},.05)
+for j=1,3 do assert(live[before+j].snapped) end
+project_gear.render({},.05)
+for j=1,3 do assert(not live[before+j]:get_pos()) end
+print("PASS projected monorail articulated body and gears appear, snap and cull together; only body is selectable")

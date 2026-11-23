@@ -168,11 +168,11 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     if cargo=="mixed" then
       local parts=def.town_parts
       local express=def.express_heads==true
-      assert(#parts>=2 and #parts<=3 and (#parts+(express and 0 or 1))*8==v.total_length and not def.engine
+      assert(#parts>=(def.advanced_gauge and 1 or 2) and #parts<=3 and (#parts+(express and 0 or 1))*8==v.total_length and not def.engine
         and (express==not not def.dual_head) and (not express or #parts==3),
         "Unsupported mixed town formation")
       v.town_mixed=true
-      Compartments.town_wagons(v,parts,Roster,express)
+      Compartments.town_wagons(v,parts,Roster,express,def.advanced_gauge)
     elseif cargo=="mail" then
       assert(v.total_length==16 and not def.coach and not def.dual_head and not def.passenger_coaches,
         "Only the single stock Mail Van formation is mounted")

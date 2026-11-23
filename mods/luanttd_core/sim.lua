@@ -244,6 +244,7 @@ local crossing_errors={
   RESERVATION_UNKNOWN="Wait for the rail reservation to be confirmed.",
   OCCUPANCY_UNKNOWN="Wait for crossing traffic position to be confirmed.",
   ELECTRIC_CROSSING_NOT_MOUNTED="Electrified crossings are not available yet.",
+  GUIDEWAY_CROSSING_NOT_MOUNTED="Monorail needs a bridge to cross a road.",
   CROSSING_ON_ONEWAY_ROAD="Remove the one-way restriction before building a crossing.",
   CLEAR_EXCLUSIVE_RAIL_PILOT="Clear the running train pilot before building the crossing.",
   CLEAR_SURVEYED_TRAIN="Clear the surveyed train before building the crossing.",

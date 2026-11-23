@@ -20,6 +20,32 @@ assert(Q.rail_price(0)==100 and Q.rail_clear_price(0)==-70)
 assert(Q.rail_price(1)==150 and Q.rail_price(2)==200 and Q.rail_price(3)==300)
 assert(Q.prices(0).rail==75 and Q.prices(2).rail==112)
 assert(Q.prices(2,65536).clear_rail==-79)
+-- RC1 chooses the requested construction price, then (only when
+-- needed) charges separately for all existing track being converted.
+local function typed(bits,r)
+  local t=rail(bits);t.railtype=r;return t
+end
+for r=0,3 do
+  local ask={owner="A",railtype=r}
+  local price=({[0]=100,150,200,300})[r]
+  local first=assert(Q.piece(ground(0,0),T.X,ask))
+  assert(first.railtype==r and first.cost==price and not first.convert_from)
+  local branch=assert(Q.piece(typed(1,r),T.Y,ask))
+  assert(branch.railtype==r and branch.cost==price and branch.trackbits==3 and not branch.convert_from)
+  for incompatible=2,3 do
+    if incompatible~=r then
+      expect_error("IMPOSSIBLE_TRACK_COMBINATION",Q.piece(typed(1,r),T.X,{owner="A",railtype=incompatible}))
+    end
+  end
+end
+local overlay=assert(Q.piece(typed(12,0),T.X,{owner="A",railtype=1}))
+assert(overlay.railtype==1 and overlay.convert_from==0 and overlay.parts.track==150 and
+  overlay.parts.conversion==136 and overlay.cost==286)
+local retain=assert(Q.piece(typed(1,1),T.Y,{owner="A",railtype=0}))
+assert(retain.railtype==1 and retain.cost==100 and retain.parts.conversion==0)
+expect_error("INVALID_PARAMETER",Q.piece(ground(),T.X,{owner="A",railtype=3,available=false}))
+expect_error("OWNED_BY_ANOTHER",Q.piece(typed(1,3),T.X,{owner="B",railtype=0}))
+
 local plan=assert(Q.piece(ground(0,0),T.X,o));assert(plan.cost==100 and plan.profile.base_z==16)
 plan=assert(Q.piece(ground(),T.Y,o));assert(plan.cost==120 and plan.parts.clearing==20)
 plan=assert(Q.piece(ground(8,0),T.X,o));assert(plan.cost==350 and plan.foundation_changed and plan.profile.surface==12)

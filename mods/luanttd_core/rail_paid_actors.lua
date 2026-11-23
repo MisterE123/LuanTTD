@@ -57,7 +57,7 @@ return function(Service,key)
       local dmu=Roster.passenger_dmu(r.stock_engine)
       if not saved[id] then
         Service.vehicle(service,{id=id,mode="rail",owner=r.owner,length=r.total_length,
-          cargo=r.town_parts and "mixed" or r.stock_wagon==28 and "mail" or "passenger",wagon=r.stock_wagon,town_parts=r.town_parts,
+          cargo=r.town_parts and "mixed" or r.stock_wagon==28 and "mail" or "passenger",wagon=r.stock_wagon,town_parts=r.town_parts,advanced_gauge=r.advanced_gauge,
           engine=dmu and r.stock_engine or nil,coach=dmu and r.stock_wagon==27 or nil,
           dual_head=r.dual_head and not dmu,express_heads=r.express_mail,passenger_coaches=r.passenger_coaches,speed=r.max_track_speed,built=build_year(r)})
       else

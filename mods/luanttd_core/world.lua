@@ -279,6 +279,11 @@ return function(api,ui)
           end
           W.hud(p);return item
         end
+        if key=="rail_select_standard" or key=="rail_select_monorail" then
+          ui.select_rail_gauge(p,key=="rail_select_monorail" and 2 or 0)
+          W.hud(p)
+          return item
+        end
         if key=="rail_piece_remove" then ui.toggle_rail_remove(p);return item end
         if key=="rail_clear_run" then ui.clear_rail_run(p);return item end
         if key=="airfield_clear" then ui.clear_airfield_run(p);return item end
@@ -342,6 +347,7 @@ return function(api,ui)
       end
     end
   end
+  function W.mount_guideway_picker() mount_menu("mount_guideway_picker") end
   function W.enable_rail_coal() mount_menu("enable_rail_coal") end
   function W.enable_rail_goods() mount_menu("enable_rail_goods") end
   function W.enable_rail_oil() mount_menu("enable_rail_oil") end

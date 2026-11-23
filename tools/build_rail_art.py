@@ -449,9 +449,9 @@ def to_blender(mesh,coll,mats):
         coll.objects.link(ob)
 
 
-def export_obj(filename,mesh,vertical_origin=.5):
+def export_obj(filename,mesh,vertical_origin=.5,generator="build_rail_art.py"):
     v_off=1
-    content=["# LuanTTD original track art; regenerate with tools/build_rail_art.py",
+    content=[f"# LuanTTD original track art; regenerate with tools/{generator}",
              *(f"vt {(i+.5)/len(COLORS):.6f} .5" for i in range(len(COLORS)))]
     for name,faces in mesh.parts.items():
         content.append("o "+name.replace(" ","_"))

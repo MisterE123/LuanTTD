@@ -55,6 +55,8 @@ return function(Sim,R,max_days)
     if not owner(name) or not rail or type(request)~="table" or not s.companies[name] then
       return reply(false,"RAIL_QUOTE_UNAVAILABLE")
     end
+    local gauge=request.railtype
+    if gauge~=nil and not integer(gauge,0,3) then return reply(false,"INVALID_RAIL_TYPE") end
     if request.tool=="autotrack" then
       local start,last=request.start,request.finish
       if type(start)~="table" or type(last)~="table" or
@@ -63,7 +65,7 @@ return function(Sim,R,max_days)
         or math.abs(start.x-last.x)+math.abs(start.z-last.z)>=128*16 then
         return reply(false,"INVALID_RAIL_DRAG")
       end
-      local q,why=rail.quote_autotrack(name,start,last)
+      local q,why=rail.quote_autotrack(name,start,last,gauge)
       if peek then return reply(q~=nil,why,q and {tiles=q.ids,cost=q.price,pieces=q.pieces,
         stopped_at=q.stopped_at,skipped_start=q.skipped_start,tree_count=q.tree_count}) end
       rail_quotes[name]=nil
@@ -92,7 +94,10 @@ return function(Sim,R,max_days)
       rail_quotes[name]={token=quote_sequence,wire=true,plan=plan}
       return reply(true,nil,{tiles=plan.ids,cost=plan.cost,token=quote_sequence,kind="wire"})
     elseif request.tool=="crossing" then
-      if s.tiles[first].rail_type==1 then return reply(false,"Electric level crossing is not available.") end
+      local gauge=s.tiles[first].rail_type or 0
+      if gauge~=0 then
+        return reply(false,Sim.crossing_construction_error(gauge==1 and "ELECTRIC_CROSSING_NOT_MOUNTED" or "GUIDEWAY_CROSSING_NOT_MOUNTED"))
+      end
       local n=R.network
       local c,error_=R.crossing_gesture(Sim,s,first)
       if not c then return reply(false,error_) end
@@ -106,14 +111,14 @@ return function(Sim,R,max_days)
     elseif request.tool=="waypoint" then
       q,why=rail.quote_waypoint(name,first,request.remove==true)
     elseif request.tool=="track" and integer(request.track,0,5) then
-      q,why=rail.quote_track(name,first,last,request.track,request.remove==true)
+      q,why=rail.quote_track(name,first,last,request.track,request.remove==true,gauge)
     elseif request.tool=="depot" and integer(request.direction,0,3) then
-      q,why=rail.quote_depot(name,first,request.direction)
+      q,why=rail.quote_depot(name,first,request.direction,gauge)
     elseif request.tool=="station" and integer(request.axis,0,1) and
       integer(request.length,1,16) and integer(request.tracks,1,16) then
       if (math.abs(x-u)+1)*(math.abs(z-v)+1)>256 then return reply(false,"RAIL_STATION_TOO_LARGE") end
       q,why=rail.quote_station(name,first,last,{axis=request.axis,length=request.length,
-        tracks=request.tracks,separate=request.separate==true,drag=request.drag==true})
+        tracks=request.tracks,separate=request.separate==true,drag=request.drag==true,railtype=gauge})
     elseif request.tool=="signal" and integer(request.trackdir,0,13) and
       (request.kind==0 or request.kind==4 or request.kind==5) then
       q,why=rail.quote_signal_track(name,first,request.trackdir,request.kind,request.both==true)
@@ -200,14 +205,14 @@ return function(Sim,R,max_days)
     return reply(true,nil,{token=quote_sequence,cost=quote.price,tiles=quote.tiles})
   end
   local bridge_quotes={}
-  function A.bridge_picker(name,mode,a,b,peek)
+  function A.bridge_picker(name,mode,a,b,peek,gauge)
     if not owner(name) or not s.companies[name] or not tile_id(a) or not tile_id(b) or a==b
-      or (mode~="rail" and mode~="road") or not R.transport then return reply(false,"Choose two distinct bridgeheads.") end
+      or (mode~="rail" and mode~="road") or gauge~=nil and (mode~="rail" or not integer(gauge,0,3)) or not R.transport then return reply(false,"Choose two distinct bridgeheads.") end
     local styles={[0]="Timber",[1]="Concrete",[2]="Steel girder"}
     local offers,by_type,ids,minimum,why={},{}
     if not peek then bridge_quotes[name]=nil end
     for style=0,mode=="road" and 2 or 0 do
-      local q,error_=R.transport.quote(name,{mode=mode,operation="bridge",tile=a,last=b,style=style})
+      local q,error_=R.transport.quote(name,{mode=mode,operation="bridge",tile=a,last=b,style=style,railtype=gauge})
       if q then
         offers[#offers+1]={style=style,name=styles[style],price=q.price,speed=q.speed}
         ids=ids or q.tiles
@@ -216,10 +221,10 @@ return function(Sim,R,max_days)
       else why=why or error_ end
     end
     if #offers==0 then return reply(false,why or "No available bridge fits this span.") end
-    if peek then return reply(true,nil,{offers=offers,ids=ids,minimum=minimum}) end
+    if peek then return reply(true,nil,{offers=offers,ids=ids,minimum=minimum,railtype=gauge}) end
     quote_sequence=quote_sequence+1
     bridge_quotes[name]={token=quote_sequence,quotes=by_type,topology=s.topology,terrain=s.corner_grid.revision}
-    return reply(true,nil,{token=quote_sequence,offers=offers,ids=ids,minimum=minimum})
+    return reply(true,nil,{token=quote_sequence,offers=offers,ids=ids,minimum=minimum,railtype=gauge})
   end
   function A.rail_mail_station(name,id)
     if not owner(name) or not tile_id(id) then return reply(false,"INVALID_REQUEST") end
@@ -285,6 +290,7 @@ return function(Sim,R,max_days)
     local year,month,day=Sim.date(s)
     return reply(true,nil,{cash=c.cash,loan=c.loan,revenue=c.revenue,expense=c.expense,
       month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,
+      rail_mono=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,2) or false,
       news_head=R.news and R.news.head(),
       year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name})
   end

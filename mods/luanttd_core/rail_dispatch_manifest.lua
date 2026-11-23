@@ -20,6 +20,9 @@ local models={
   asiastar={mesh="bl_rail_asiastar.obj",atlas="bl_rail_asiastar.png",size={x=1,y=1,z=1},offset=.614},
   mail_van={mesh="bl_rail_mail_van.obj",atlas="bl_rail_mail_van.png",size={x=1,y=1,z=1},offset=.614,optional=true},
   wagon={mesh="bl_rail_passenger_wagon.obj",atlas="bl_rail_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
+  x2001={mesh="bl_rail_x2001.obj",atlas="bl_rail_x2001.png",size={x=1,y=1,z=1},offset=.746,bogies=true,optional=true},
+  mono_passenger={mesh="bl_rail_mono_passenger.obj",atlas="bl_rail_mono_passenger.png",size={x=1,y=1,z=1},offset=.746,bogies=true,optional=true},
+  mono_mail={mesh="bl_rail_mono_mail.obj",atlas="bl_rail_mono_mail.png",size={x=1,y=1,z=1},offset=.746,bogies=true,optional=true},
   coal_empty={mesh="bl_rail_coal_wagon_empty.obj",atlas="bl_rail_coal_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
   coal_loaded={mesh="bl_rail_coal_wagon_loaded.obj",atlas="bl_rail_coal_wagon_atlas.png",size={x=1,y=1,z=1},offset=.614},
   goods_van={mesh="bl_rail_goods_van.obj",atlas="bl_rail_goods_van.png",size={x=1,y=1,z=1},offset=.614},
@@ -32,7 +35,7 @@ for _,p in pairs(Freight.profiles) do
       size={x=1,y=1,z=1},offset=.614,optional=true}
   end
 end
-local stock_kind={[0]="steam",[8]="jubilee",[9]="ginzu",[10]="sh_8p",[11]="manley",[12]="dash",[13]="hendry",[14]="uu37",[15]="floss",[22]="sh_125",[23]="sh_30",[24]="sh_40",[25]="tim",[26]="asiastar"}
+local stock_kind={[0]="steam",[8]="jubilee",[9]="ginzu",[10]="sh_8p",[11]="manley",[12]="dash",[13]="hendry",[14]="uu37",[15]="floss",[22]="sh_125",[23]="sh_30",[24]="sh_40",[25]="tim",[26]="asiastar",[54]="x2001"}
 local stock_extra={jubilee=8,ginzu=9,sh_8p=10,manley=11,dash=12,hendry=13,uu37=14,floss=15,sh_125=22,sh_30=23,sh_40=24,tim=25,asiastar=26}
 local M={models=models,stock_kind=stock_kind}
 function M.wagon(train,Sim,s)
@@ -40,7 +43,9 @@ function M.wagon(train,Sim,s)
     local models={}
     for _,part in ipairs(train.town_parts) do
       if part.stock==27 then models[part.index]="wagon"
-      elseif part.stock==28 then models[part.index]="mail_van" end
+      elseif part.stock==28 then models[part.index]="mail_van"
+      elseif part.stock==57 then models[part.index]="mono_passenger"
+      elseif part.stock==58 then models[part.index]="mono_mail" end
     end
     return models
   end
@@ -105,8 +110,27 @@ function M.scan(path,electric,span)
   art.mixed_town_engines={}
   if art.ready.mail_van and has_model("wagon") then
     for id,kind in pairs(stock_kind) do
-      if Roster.freight_engine(id) and has_model(kind) then art.mixed_town_engines[id]=true end
+      if Roster.entry(id).railtype<2 and Roster.freight_engine(id) and has_model(kind) then art.mixed_town_engines[id]=true end
     end
+  end
+  art.advanced={}
+  if has_model("x2001") and has_model("mono_passenger") and has_model("mono_mail")
+      and exists("models/bl_rail_x2001_body.obj") and exists("models/bl_rail_mono_bogie.obj")
+      and exists("models/bl_rail_mono_drawbar.obj")
+      and exists("models/bl_rail_mono_passenger_body.obj") and exists("models/bl_rail_mono_mail_body.obj")
+      and exists("models/bl_guideway_mono_flat_1.obj") and exists("textures/bl_guideway_mono_atlas.png")
+      and exists("models/bl_guideway_mono_depot_1.obj") and exists("textures/bl_guideway_mono_facility_atlas.png") then
+    art.advanced={[54]=true,[57]=true,[58]=true}
+  end
+  if art.advanced[54] and exists("textures/bl_guideway_mono_span.png") then
+    local complete=true
+    for kind,n in pairs({span=1,head_flat=3,head_ramp=3,tunnel=3}) do
+      for i=0,n do
+        local stem="models/bl_guideway_mono_span_"..kind.."_"..i
+        complete=complete and exists(stem..".obj") and (kind~="span" or exists(stem.."_road_clear.obj"))
+      end
+    end
+    art.advanced_span=complete
   end
   table.sort(art.engines)
   return art

@@ -35,11 +35,11 @@ return function(api)
     return {ids=ids,minimum=minimum,offers=offers}
   end
   local hover={}
-  function W.quote(mode,n,a,b)
+  function W.quote(mode,n,a,b,gauge)
     if not api.authority_handoff then return evaluate(mode,n,a,b) end
     local client=api.worker_bridge_client
     if not client then return nil,"Campaign worker is not ready." end
-    local key=mode..":"..a..":"..b
+    local key=mode..":"..a..":"..b..":"..(gauge or 0)
     local shown=hover[n]
     local now=core.get_us_time()
     if shown and shown.key==key and shown.ready and now-shown.ready<650000 then
@@ -51,7 +51,7 @@ return function(api)
       local q={key=key}
       hover[n]=q
       local observe=client.observe or client.query
-      local ok=observe({kind="bridge_picker",player=n,mode=mode,first=a,last=b,peek=true},function(r)
+      local ok=observe({kind="bridge_picker",player=n,mode=mode,first=a,last=b,peek=true,railtype=gauge},function(r)
         if hover[n]~=q then return end
         q.ready=core.get_us_time()
         q.value,q.why=r.value,r.why
@@ -122,7 +122,7 @@ return function(api)
     local bspec={("formspec_version[7]size[10,%g]bgcolor[#152334;false]"):format(size),
       "style_type[button;bgimg=bl_button.png;bgimg_middle=6;border=false;textcolor=#E5ECEA]",
       "style_type[label;textcolor=#E5ECEA]",
-      ("label[.45,.47;Choose a %s bridge]"):format(mode=="road" and "road" or "railway"),
+      ("label[.45,.47;Choose a %s bridge]"):format(mode=="road" and "road" or proposal.railtype==2 and "monorail" or "railway"),
       ("label[.45,.95;%d tiles including both ramps]"):format(#proposal.ids)}
     for i,o in ipairs(proposal.offers) do
       local label=o.name..(o.speed and ("  ·  %d km/h"):format(o.speed) or "").."  ·  "..money(o.price)
@@ -133,14 +133,14 @@ return function(api)
     return true
   end
   local fetching={}
-  function W.open(player,mode,a,b,callback)
+  function W.open(player,mode,a,b,callback,gauge)
     local n=player:get_player_name()
     if api.authority_handoff then
       local client=api.worker_bridge_client
       if not client then return nil,"Campaign worker is not ready." end
       local token={}
       pending[n]=nil;fetching[n]=token
-      local sent,why=client.query({kind="bridge_picker",player=n,mode=mode,first=a,last=b},function(r)
+      local sent,why=client.query({kind="bridge_picker",player=n,mode=mode,first=a,last=b,railtype=gauge},function(r)
         if fetching[n]~=token then return end
         fetching[n]=nil
         if r.ok then show(player,mode,a,b,callback,r.value,{token=r.value.token,revision=r.revision})

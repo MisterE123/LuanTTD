@@ -7,6 +7,7 @@ return function(api,root)
   local terrain=api.terrain
   local diagonal=dofile(root.."rail_diagonal.lua")(Sim,track,terrain,surface)
   local limit=96
+  local family={[2]="mono",[3]="maglev"}
   return function(pieces,owner,eye)
     local tiles=setmetatable({},{__index=S.tiles})
     local projected={tiles=tiles}
@@ -15,7 +16,7 @@ return function(api,root)
     for _,p in ipairs(pieces) do
       local tile=S.tiles[p.id]
       tiles[p.id]=setmetatable({
-        owner=owner,rail_tracks=p.tracks,
+        owner=owner,rail_tracks=p.tracks,rail_type=p.result_railtype,
         level_crossing=p.crossing_quote and true or tile.level_crossing,
       },{__index=tile})
     end
@@ -43,7 +44,15 @@ return function(api,root)
         local mesh=mode>0 and ("bl_rail_eased_"..p.tracks.."_"..mode..".obj")
           or grade==0 and ("bl_rail_track_"..p.tracks..".obj")
           or ("bl_rail_grade_"..grade..".obj")
-        out[#out+1]={id=p.id,mesh=mesh,
+        local gauge=family[tiles[p.id].rail_type]
+        local atlas="bl_rail_atlas.png"
+        if gauge then
+          local stem="bl_guideway_"..gauge
+          local variant=mode>0 and ("_eased_"..p.tracks.."_"..mode)
+            or grade>0 and ("_grade_"..grade) or ("_flat_"..p.tracks)
+          mesh,atlas=stem..variant..".obj",stem.."_atlas.png"
+        end
+        out[#out+1]={id=p.id,mesh=mesh,atlas=atlas,
           pos={x=2*x,y=level+(grade==0 and 1 or 2)+.038,z=2*z}}
       end
     end

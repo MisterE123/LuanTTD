@@ -85,7 +85,8 @@ return function(Sim,Terrain,Crossing,Track)
       base_record.disallowed,base_record.roadworks=t.road_disallowed or t.disallowed,t.roadworks
     elseif r.kind=="road" and t.build=="stock_rail" and t.rail_tracks then
       if (r.roadtype or 0)~=0 then return nil,"HOST_ROADTYPE_UNSUPPORTED" end
-      if (t.rail_type or t.railtype or 0)~=0 then return nil,"ELECTRIC_CROSSING_NOT_MOUNTED" end
+      local gauge=t.rail_type or t.railtype or 0
+      if gauge~=0 then return nil,gauge==1 and "ELECTRIC_CROSSING_NOT_MOUNTED" or "GUIDEWAY_CROSSING_NOT_MOUNTED" end
       if (r.disallowed or 0)~=0 then return nil,"CROSSING_ON_ONEWAY_ROAD" end
       base_record.kind="rail"
       base_record.trackbits,base_record.railtype=t.rail_tracks,0

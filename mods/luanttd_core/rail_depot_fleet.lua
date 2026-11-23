@@ -171,10 +171,10 @@ return function(Sim,Lab,Roster)
     if not d then return nil,"RAIL_FLEET_UNAVAILABLE" end
     return availability(d,id,today(s,d))
   end
-  function F.catalog(s)
+  function F.catalog(s,advanced_ready)
     local d=state(s)
     if not d then return nil,"RAIL_FLEET_UNAVAILABLE" end
-    local rows=Roster.catalog(s.stock_electrification==true)
+    local rows=Roster.catalog(s.stock_electrification==true,advanced_ready)
     local day=today(s,d)
     for _,row in ipairs(rows) do
       row.availability=availability(d,row.stock_id,day)
@@ -182,7 +182,7 @@ return function(Sim,Lab,Roster)
     end
     return rows
   end
-  function F.railtype_mask(s,owner,Types)
+  function F.railtype_mask(s,owner,Types,advanced_ready)
     local d=state(s)
     if not (d and s.companies[owner]) then return 0 end
     local climate=type(d.config.climate)=="number" and d.config.climate or
@@ -192,7 +192,7 @@ return function(Sim,Lab,Roster)
     local candidates={}
     -- This host models public sale only and uses the same current
     -- public state for each company (no exclusive preview offer yet).
-    for _,row in ipairs(Roster.catalog(s.stock_electrification==true)) do
+    for _,row in ipairs(Roster.catalog(s.stock_electrification==true,advanced_ready)) do
       local a=availability(d,row.stock_id,now)
       candidates[#candidates+1]={intended_railtype=row.railtype,kind=row.kind,climates=row.climates,
         company_avail=a.public and 1 or 0,intro_date=a.intro}
@@ -275,7 +275,7 @@ return function(Sim,Lab,Roster)
     if not ids then return nil,why,index end
     local limits=read_limits(d,s,owner,hooks)
     local opts=config_options(d,s,owner,hooks)
-    if not opts.company_railtypes[0] and not opts.company_railtypes[1] then
+    if not next(opts.company_railtypes) then
       return nil,"RAIL_VEHICLE_NOT_AVAILABLE"
     end
     -- Derive availability from live service and scanned stock art. Never
@@ -304,6 +304,7 @@ return function(Sim,Lab,Roster)
     opts.mount_sh_125=s.rail_paid_service==true and hooks and
       hooks.sh_125_ready and hooks.sh_125_ready(s)==true or false
     opts.mounted_electric={}
+    opts.mounted_advanced=hooks and hooks.mounted_advanced
     if s.stock_electrification==true and hooks and hooks.electric_model_ready then
       for _,id in ipairs(ids) do
         if Roster.electric_engine(id) then opts.mounted_electric[id]=hooks.electric_model_ready(id)==true end
@@ -607,7 +608,7 @@ return function(Sim,Lab,Roster)
     if not r then return nil,"UNKNOWN_OWNED_RAIL_CONSIST" end
     if r.status~="depot" then return nil,"RAIL_CONSIST_ALREADY_DISPATCHED" end
     local at=depot(s,r.depot)
-    if not at or at.owner~=owner or at.dir~=r.depot_dir or at.railtype~=0 and at.railtype~=1 then
+    if not at or at.owner~=owner or at.dir~=r.depot_dir or not uint(at.railtype,3) then
       return nil,"INVALID_OWNED_DEPOT"
     end
     local stats,why=Roster.stats(r.parts,config_options(d,s,nil,hooks))

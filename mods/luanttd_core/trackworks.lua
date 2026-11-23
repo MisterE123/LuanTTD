@@ -80,7 +80,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     end
     return true,group,axis
   end
-  function Lab.commit_station(s,owner,group,axis,area,join)
+  function Lab.commit_station(s,owner,group,axis,area,join,gauge)
     for _,tile in ipairs(group) do
       if Lab.span_protected(s,tile) then return false,protected end
     end
@@ -105,6 +105,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     for _,tile in ipairs(group) do
       local t=s.tiles[tile]
       t.rail_station_id=id;t.rail_station_axis=axis
+      if gauge~=nil then t.rail_type=gauge end
       t.build,t.owner,t.rail_tracks,t.wood="stock_rail",owner,2^axis,nil
     end
     s.topology=s.topology+1
@@ -309,7 +310,8 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     t.build=new>0 and "stock_rail" or nil
     t.owner=new>0 and owner or nil
     t.rail_tracks=new>0 and new or nil
-    if new==0 then t.rail_type=nil end
+    if new==0 then t.rail_type=nil
+    elseif plan.result_railtype and plan.result_railtype~=0 then t.rail_type=plan.result_railtype end
     t.wood=nil
     s.topology=s.topology+1
     return true

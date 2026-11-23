@@ -26,7 +26,8 @@ return function()
       if not a.parts or not b.parts or #a.parts~=#b.parts then return a end
       for i,p in ipairs(a.parts) do
         local q=b.parts[i]
-        if p.body_index~=q.body_index or p.kind~=q.kind or p.flip~=q.flip then return a end
+        if p.body_index~=q.body_index or p.kind~=q.kind or p.flip~=q.flip or
+            (p.bogies and #p.bogies)~=(q.bogies and #q.bogies) then return a end
       end
       local row=copy(a)
       row.parts={}
@@ -35,6 +36,17 @@ return function()
         local body=copy(p)
         body.pos=v3(p.pos,q.pos,t)
         body.rotation=rot(p.rotation,q.rotation,t)
+        if p.bogies then
+          body.bogies={}
+          for j,g in ipairs(p.bogies) do
+            local h=q.bogies[j]
+            body.bogies[j]={pos=v3(g.pos,h.pos,t),rotation=rot(g.rotation,h.rotation,t)}
+          end
+        end
+        local l,r=p.drawbar,q.drawbar
+        if l and r then
+          body.drawbar={pos=v3(l.pos,r.pos,t),rotation=rot(l.rotation,r.rotation,t),length=mixed(l.length,r.length,t)}
+        end
         row.parts[i]=body
       end
       return row

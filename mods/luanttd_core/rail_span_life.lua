@@ -49,7 +49,7 @@ return function(T,PBS,Life)
     local incoming={}
     for _,c in ipairs(claims) do
       local record=board.tile(c.tile)
-      if not record or record.owner~=train.owner or (record.railtype~=0 and record.railtype~=1) or Life.claim_owner(state,c.tile,c.track) or
+      if not record or record.owner~=train.owner or not (record.railtype==0 or record.railtype==1 or record.railtype==2 or record.railtype==3) or Life.claim_owner(state,c.tile,c.track) or
           (record.kind~="rail" and record.kind~="signals" and record.kind~="station" and
            record.kind~="depot" and record.kind~="crossing" and record.kind~="waypoint" and not span(record)) then return false,"unsupported_claim",c.tile end
       local bucket=incoming[c.tile] or {};incoming[c.tile]=bucket;bucket[c.track]=true
@@ -89,6 +89,8 @@ return function(T,PBS,Life)
     end
     if to_span then
       if T.exit_side(td)~=q.dir then return false,"invalid_wormhole_entry" end
+      local compatible=train.traction_railtypes or ordinary_traction
+      if index==1 and not compatible[q.railtype] then return false,"incompatible_railtype" end
       if not own(new,q.axis) or not own(q.other,q.axis) then
         if not permit_unreserved or index~=1 then return false,"unreserved_span" end
         -- Ordinary RC1 approaches do not reserve an empty route ahead.

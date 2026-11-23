@@ -27,9 +27,10 @@ return function(api)
     end,
   })
 
+  local rail_tint="^[colorize:#53f0c8:138^[opacity:222"
   core.register_entity(rail_entity,{
     initial_properties={visual="mesh",mesh="bl_rail_track_1.obj",
-      textures={"bl_rail_atlas.png^[colorize:#53f0c8:138^[opacity:222"},
+      textures={"bl_rail_atlas.png"..rail_tint},
       -- Node meshes are authored in tile units; entities normally load
       -- OBJ dimensions at one tenth of that scale.
       visual_size={x=10,y=10,z=10},use_texture_alpha=true,
@@ -184,7 +185,10 @@ return function(api)
           if object and object:get_pos() then p={object=object,y=pos.y};rail[id]=p end
         end
         if p then
-          if p.mesh~=mesh then p.object:set_properties({mesh=mesh});p.mesh=mesh end
+          if p.mesh~=mesh or p.atlas~=record.atlas then
+            p.object:set_properties({mesh=mesh,textures={(record.atlas or "bl_rail_atlas.png")..rail_tint}})
+            p.mesh,p.atlas=mesh,record.atlas
+          end
           if p.y~=pos.y then p.object:set_pos(pos);p.y=pos.y end
           keep[id]=true
         end

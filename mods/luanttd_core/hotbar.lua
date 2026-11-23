@@ -203,6 +203,15 @@ function H.enable_electric_rail()
     [3]=item("rail_deelectrify","Convert to ordinary rail","rail_deelectrify"),[8]=back}
   build_utilities()
 end
+function H.mount_guideway_picker()
+  if not H.menus.railengineering then return end
+  H.menus.railengineering[1]=section("railtypes","Rail Types","rail_types")
+  local menu=H.menus.railtypes or {title="Rail Types",[1]=inspect,[8]=back}
+  H.menus.railtypes=menu
+  menu[4]=item("rail_select_standard","Build standard railway","gauge_standard")
+  menu[5]=item("rail_select_monorail","Build monorail","gauge_mono")
+  build_utilities()
+end
 local function rail_freight_menu()
   if not H.menus.railops then return end
   H.menus.railops[5]=section("railfreight","Rail Freight","rail_freight")

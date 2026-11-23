@@ -22,6 +22,21 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
     local asset="rail_tunnel_portal_"..dir
     tunnels[dir]=architecture("stock_"..asset,asset,"rail_tunnel_portal")
   end
+  local mono={span={},head_flat={},head_ramp={},tunnel={}}
+  local mono_stem="guideway_mono_span"
+  local modpath=core.get_modpath("luanttd_core")
+  local art=io.open(modpath.."/textures/bl_"..mono_stem..".png","rb")
+  local mono_clear
+  if art then
+    art:close()
+    for part,list in pairs(mono) do
+      for dir=0,part=="span" and 1 or 3 do
+        local asset=mono_stem.."_"..part.."_"..dir
+        list[dir]=architecture("stock_"..asset,asset,mono_stem)
+      end
+    end
+    mono_clear=dofile(modpath.."/bridge_clearance_render.lua")(architecture,mono_stem)
+  end
   local wire_nodes={}
   local function mount(d)
     if not wire_nodes[d.name] then
@@ -50,14 +65,17 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
       local head=span.start==id and span.head or span.tail
       if span.kind=="tunnel" then
         if y<=span.base then return ground end
-        if anchor and y==span.base+1 then return tunnels[head.inside_direction] end
+        if anchor and y==span.base+1 then
+          return span.railtype==2 and mono.tunnel[head.inside_direction] or tunnels[head.inside_direction]
+        end
       else
         if bridge_wire and span.railtype==1 and anchor and y==span.deck+bridge_wire.offset then
           local cable=bridge_wire.overlay(head.flat_ramp and "head_flat" or "head_ramp",head.inside_direction)
           if cable then return wire_nodes[cable.name] end
         end
         if anchor and y==span.deck then
-          return parts[head.flat_ramp and "head_flat" or "head_ramp"][head.inside_direction]
+          local shape=head.flat_ramp and "head_flat" or "head_ramp"
+          return span.railtype==2 and mono[shape][head.inside_direction] or parts[shape][head.inside_direction]
         end
         if y<=head.base then return head.foundation~="none" and retaining or ground end
       end
@@ -73,7 +91,11 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
         if cable then return wire_nodes[cable.name] end
       end
       local clear=clear_span.under(s.tiles[id])
-      if y==elevated.deck then return (clear and clear_span or parts.span)[elevated.axis] end
+      if y==elevated.deck then
+        local axis=elevated.axis
+        if elevated.railtype==2 and mono_clear then return (clear and mono_clear or mono.span)[axis] end
+        return (clear and clear_span or parts.span)[axis]
+      end
       if not clear and y<elevated.deck then
         local _,_,top=terrain.tile(id)
         if y>top then return parts.pier[elevated.axis] end

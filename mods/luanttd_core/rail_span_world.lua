@@ -123,7 +123,7 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
         dirt.base,dirt.slope,dirt.max_z=base,shape,top
       elseif t.rail_tracks then
         dirt.kind=t.rail_depot_dir and "depot" or t.rail_station_id and "station" or "rail"
-        dirt.railtype=0
+        dirt.railtype=t.rail_type or 0
       elseif t.tunnel_id or t.road_tunnel_id then dirt.kind="tunnel";dirt.transport="road"
       elseif t.road_bridge_id then
         local st=s.stock_road_bridges and s.stock_road_bridges[t.road_bridge_id]
@@ -168,11 +168,21 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
     plan.owner=owner
     return plan
   end
-  function W.quote_bridge(s,owner,a,b)
+  local function spec(s,owner,gauge,available)
+    gauge=gauge or 0
+    if gauge~=0 and not (gauge==2 and available and available(owner,gauge)) then
+      return nil,"Rail type is not available for this structure."
+    end
+    return {owner=owner,budget=authority(s,owner),railtype=gauge,
+      can_build_railtype=function(r) return r==gauge end}
+  end
+  function W.quote_bridge(s,owner,a,b,gauge,available)
     local ok,err=precheck(s)
     if not ok then return nil,err end
+    local options,e=spec(s,owner,gauge,available)
+    if not options then return nil,e end
     local terrain_board=raw_board(s)
-    local p,why,id=Bridge.plan(terrain_board,a,b,0,{owner=owner,budget=authority(s,owner)})
+    local p,why,id=Bridge.plan(terrain_board,a,b,0,options)
     if p then
       -- First renderer doesn't stack rail infrastructure over other
       -- portals, roads with worn metadata, or another span layer.
@@ -189,11 +199,13 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
     end
     return quote(s,owner,p,why,id)
   end
-  function W.quote_tunnel(s,owner,start)
+  function W.quote_tunnel(s,owner,start,gauge,available)
     local ok,err=precheck(s)
     if not ok then return nil,err end
+    local options,e=spec(s,owner,gauge,available)
+    if not options then return nil,e end
     local board=raw_board(s)
-    local p,why,id=Tunnel.plan(board,start,{owner=owner,budget=authority(s,owner)})
+    local p,why,id=Tunnel.plan(board,start,options)
     if p then
       if p.excavation or p.tail.slope~=15-p.head.slope then
         return nil,"The native portal needs an unmodified opposite slope.",p["end"]
@@ -208,11 +220,11 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
     end
     return quote(s,owner,p,why,id)
   end
-  function W.commit(s,owner,p)
+  function W.commit(s,owner,p,available)
     if not p or p.topology~=s.topology or p.owner~=owner then return false,"The railway changed. Quote it again." end
     local checked,why,at
-    if p.kind=="bridge" then checked,why,at=W.quote_bridge(s,owner,p.start,p["end"])
-    elseif p.kind=="tunnel" then checked,why,at=W.quote_tunnel(s,owner,p.start)
+    if p.kind=="bridge" then checked,why,at=W.quote_bridge(s,owner,p.start,p["end"],p.railtype,available)
+    elseif p.kind=="tunnel" then checked,why,at=W.quote_tunnel(s,owner,p.start,p.railtype,available)
     else return false,"No rail span selected." end
     if not checked then return false,why,at end
     if checked.price~=p.price or checked["end"]~=p["end"] then return false,"The span price or geometry changed. Quote it again." end

@@ -848,7 +848,8 @@ do
     if api.crossings then
       api.crossings.refresh(S,Lab.board(S))
       function api.crossing_quote(owner,id,request)
-        if S.tiles[id] and S.tiles[id].rail_type==1 then return nil,"ELECTRIC_CROSSING_NOT_MOUNTED" end
+        local gauge=S.tiles[id] and S.tiles[id].rail_type or 0
+        if gauge~=0 then return nil,gauge==1 and "ELECTRIC_CROSSING_NOT_MOUNTED" or "GUIDEWAY_CROSSING_NOT_MOUNTED" end
         if api.trackworks_demo and not api.trackworks_demo.is_clear() then return nil,"CLEAR_SURVEYED_TRAIN" end
         return api.crossings.quote(S,owner,id,request,Lab.board(S))
       end
@@ -888,6 +889,7 @@ do
     api.rail_mixed_town_tools=S.rail_mixed_town_service
     api.rail_mail_tools=Sim.rail_mail_active(S)
     api.capabilities.rail=rail_art
+    if rail_art.advanced[54] and world.mount_guideway_picker then world.mount_guideway_picker() end
     simulation_bindings.rail_media(Pilot,rail_art)
     api.rail_dispatch_view=dofile(mod.."/rail_dispatch_view.lua").create(api,Pilot,Track,Pose,
       dofile(mod.."/rail_signal_art.lua"),interval,presentation,bridge_profile,height,rail_art)

@@ -3,8 +3,11 @@
 -- OpenTTD 14.1 rail_cmd.cpp ordinary CmdBuildSingleRail, CmdBuildTrainDepot,
 -- CmdBuildSingleSignal, and station_cmd.cpp CalculateRailStationCost,
 -- CheckBuildableTile/CheckFlatLandRailStation, depot_func.h, table/pricebase.h.
--- Normal rail only; no roads/crossing construction, game-world spending,
+-- Stock gauges in CmdBuildSingleRail verified against 16.0-RC1. No
+-- roads/crossing construction, game-world spending,
 -- custom railtypes, NewGRF station specs, or mutation/signal recomputation.
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local RailTypes=dofile(mod.."/openttd/rail_types.lua")
 return function(Track,Signal,Height)
   local Q={}
   local floor,max=math.floor,math.max
@@ -104,14 +107,18 @@ return function(Track,Signal,Height)
 
   function Q.piece(tile,track,o)
     o=o or {}
-    if not tile or not valid_track(track) or not normal(o) then return nil,"INVALID_PARAMETER" end
+    local request=o.railtype or RailTypes.RAIL
+    if not tile or not valid_track(track) or o.available==false or not RailTypes.entry(request) then
+      return nil,"INVALID_PARAMETER"
+    end
     local shape=tile.slope or 0
     if not slopes[shape] then return nil,"INVALID_PARAMETER" end
-    local existing=0
+    local existing,prior_type=0
     if plain(tile) or tile.kind=="depot" then
       if not check_owner(tile,o) then return nil,"OWNED_BY_ANOTHER" end
       if not plain(tile) then return nil,"BUILDING_MUST_BE_DEMOLISHED" end
-      if tile.railtype~=nil and tile.railtype~=0 then return nil,"UNSUPPORTED_RAIL_TYPE" end
+      prior_type=tile.railtype or RailTypes.RAIL
+      if not RailTypes.is_compatible(prior_type,request) then return nil,"IMPOSSIBLE_TRACK_COMBINATION" end
       existing=tile.trackbits or 0
       if Track.has(existing,track) then return nil,"ALREADY_BUILT" end
       if (tile.occupied and tile.train_bits==nil) or Q.occupied_track(tile.train_bits or 0,track) then
@@ -140,14 +147,28 @@ return function(Track,Signal,Height)
       if clear==nil then return nil,failure end
       if water_ground then clear=clear-cost(o,"clear_water")+cost(o,"clear_rough") end
     end
-    local parts={track=Q.rail_price(0,o),clearing=clear,foundation=changed and cost(o,"foundation") or 0,
-      signals=#removed_signals*cost(o,"clear_signal")}
+    local result_type,convert=request,false
+    local conversion_cost=0
+    if prior_type then
+      result_type,convert=RailTypes.add_piece_type(prior_type,request)
+      if result_type==nil then return nil,convert end
+      if convert then
+        -- CmdConvertRail prices the count of existing tracks (not the
+        -- squared count that the infrastructure ledger uses on overlaps).
+        local count=0
+        for k=0,5 do if Track.has(existing,k) then count=count+1 end end
+        conversion_cost=count*RailTypes.convert_cost(prior_type,result_type,o.prices)
+      end
+    end
+    local parts={track=Q.rail_price(request,o),clearing=clear,foundation=changed and cost(o,"foundation") or 0,
+      conversion=conversion_cost,signals=#removed_signals*cost(o,"clear_signal")}
     local result_kind=tile.kind=="signals" and #removed_signals==0 and "signals" or "rail"
-    local p={kind=result_kind,railtype=0,owner=o.owner,trackbits=combined,track=track,
+    local p={kind=result_kind,railtype=result_type,convert_from=convert and prior_type or nil,
+      owner=o.owner,trackbits=combined,track=track,
       foundation=foundation,foundation_corner=corner,foundation_changed=changed,
       remove_signals=removed_signals,water_ground=water_ground,
       affected_reservations=reservation_flags(tile,0,removed_signals),parts=parts}
-    p.cost=parts.track+parts.clearing+parts.foundation+parts.signals
+    p.cost=parts.track+parts.clearing+parts.foundation+parts.signals+parts.conversion
     if Height and tile.base_level~=nil then p.profile=Height.profile({
       kind=result_kind,trackbits=combined,slope=shape},tile.base_level) end
     return p
@@ -221,13 +242,14 @@ return function(Track,Signal,Height)
   function Q.station(tiles,axis,numtracks,length,o)
     o=o or {}
     if o.authority_denied then return nil,"AUTHORITY_REFUSES" end
-    if not normal(o) or (axis~=Track.X and axis~=Track.Y) or not uint(numtracks,255) or
+    local gauge=o.railtype or RailTypes.RAIL
+    if o.available==false or not RailTypes.entry(gauge) or (axis~=Track.X and axis~=Track.Y) or not uint(numtracks,255) or
         not uint(length,255) or numtracks==0 or length==0 or type(tiles)~="table" or
         #tiles~=numtracks*length then return nil,"INVALID_PARAMETER" end
     if o.station_spread and max(length,numtracks)>o.station_spread then return nil,"STATION_SPREAD" end
     local tracknum,length_ready=0,true
     local allowed,station=nil,nil
-    local out={cost=0,kind="station",railtype=0,axis=axis,owner=o.owner,numtracks=numtracks,length=length,tiles={},
+    local out={cost=0,kind="station",railtype=gauge,axis=axis,owner=o.owner,numtracks=numtracks,length=length,tiles={},
       parts={foundation=0,clearing=0,track=0,station=0,length=0}}
     for i,tile in ipairs(tiles) do
       if tile.overhead then return nil,"MUST_DEMOLISH_BRIDGE_FIRST",i end
@@ -250,9 +272,10 @@ return function(Track,Signal,Height)
         if station==nil then station=tile.station
         elseif station~=tile.station then return nil,"ADJOINS_MORE_THAN_ONE_EXISTING",i end
         affected=tile.reserved_bits or 0
-      elseif tile.kind=="rail" and (tile.railtype==nil or tile.railtype==0) and tile.trackbits==2^axis then
+      elseif tile.kind=="signals" then return nil,"MUST_REMOVE_SIGNALS_FIRST",i
+      elseif tile.kind=="rail" and RailTypes.has_power(tile.railtype or 0,gauge) and tile.trackbits==2^axis then
         if not check_owner(tile,o) then return nil,"OWNED_BY_ANOTHER",i end
-        clear=Q.rail_clear_price(0,o)
+        clear=Q.rail_clear_price(tile.railtype or 0,o)
         affected=reservation_flags(tile,2^axis)
       else
         local failure
@@ -267,7 +290,7 @@ return function(Track,Signal,Height)
         local charges=out.parts
         charges.foundation=charges.foundation+foundation
         charges.clearing=charges.clearing+clear
-        local track=Q.rail_price(0,o)
+        local track=Q.rail_price(gauge,o)
         local plat=cost(o,"station")
         charges.station=charges.station+plat
         charges.track=charges.track+track

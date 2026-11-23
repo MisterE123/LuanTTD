@@ -25,7 +25,7 @@ jobs:
       - name: Install test tools
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git lua5.1 luanti-server python3 python3-pil zstd
+          apt-get install -y --no-install-recommends ca-certificates git lua5.1 luanti luanti-server python3 python3-pil zstd xvfb x11-utils xauth xdotool imagemagick
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -39,6 +39,15 @@ jobs:
             road_bay_live road_terminus_town_limits rail_owned_service rail_owned_multi rail_paid_runtime rail_signal_ui rail_signal_curve rail_block_signals rail_block_dispatch rail_reverse rail_collision rail_accident_rating rail_station_placement rail_preview rail_diagonal rail_body_spacing rail_dispatch_view passenger_crowd passenger_terminal_crowd ship_preview_view; do
             lua5.1 "tests/$t.lua"
           done
+          for t in rail_guideway_bogies rail_advanced_stock_purchase rail_typed_construction_runtime rail_gauge_conversion; do
+            lua5.1 "tests/$t.lua"
+          done
+          lua5.1 tests/monorail_owned_runtime.lua
+          lua5.1 tests/monorail_owned_runtime.lua spans
+          python3 tests/advanced_guideway_art.py
+          python3 tests/advanced_rail_facility_art.py
+          python3 tests/stock_x2001_art.py
+          python3 tests/monorail_span_art.py
           lua5.1 tests/rail_exhaust.lua
           lua5.1 tests/terrain_tile_lookup.lua
           lua5.1 tests/tunnel_bore.lua
@@ -134,6 +143,8 @@ jobs:
           bash tests/stock_sh125_mail_worker_native.sh
           bash tests/stock_mixed_town_rail_live_native.sh
           BAYLINE_MIXED_FORM=mail-coach-mail bash tests/stock_mixed_town_rail_live_native.sh
+          BAYLINE_MIXED_FORM=monorail bash tests/stock_mixed_town_rail_live_native.sh
+          BAYLINE_MIXED_FORM=monorail-spans bash tests/stock_mixed_town_rail_live_native.sh
           bash tests/stock_aircraft_mail_live_native.sh
           LUANTTD_QA_PAID_AIRFRAME=218 bash tests/stock_aircraft_mail_live_native.sh
           bash tests/stock_rail_multi_ore_live_native.sh
@@ -246,6 +257,7 @@ jobs:
           python3 tests/industry_build_scheduler_upstream.py "$src" lua5.1
           python3 tests/rotary_motion_upstream.py "$src" lua5.1
           python3 tests/stock_tricario_art.py "$src/src/table/engines.h" lua5.1
+          python3 tests/advanced_rail_roster_upstream.py "$src/src/table/engines.h" lua5.1
           python3 tests/farm_factory_fields_upstream.py "$src" --lua lua5.1
           python3 tests/farm_clear_rc1_upstream.py "$src/src/clear_cmd.cpp" --lua lua5.1
           python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"

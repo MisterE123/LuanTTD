@@ -2,6 +2,7 @@
 -- are supplied by the pinned construction kernel, not the menu.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local Freight=dofile(mod.."/rail_freight_kinds.lua")
+local Types=dofile(mod.."/openttd/rail_types.lua")
 return function(api,Lab,Track,Run,prices)
   local R={}
   local Sim,S=api.Sim,api.s
@@ -95,9 +96,18 @@ return function(api,Lab,Track,Run,prices)
   local Waypoint=dofile(upstream.."rail_waypoint.lua")
   local quote_drag=dofile(upstream.."rail_drag_build.lua")
   local Depot=dofile(upstream.."rail_depot_construction.lua")(Track,dofile(upstream.."rail_construction.lua")(Track))
-  local function quote_pieces(owner,list,remove,quick_drag)
+  local function gauge_allowed(owner,gauge)
+    return gauge==nil or gauge==Types.RAIL or Types.entry(gauge) and
+      api.company_can_build_stock_railtype and api.company_can_build_stock_railtype(owner,gauge)
+  end
+  local function quote_pieces(owner,list,remove,quick_drag,gauge)
     if R.busy() then return nil,blocked() end
-    local out={kind="track",pieces={},ids={},preview=list,price=0,tree_count=0,remove=remove,quick_drag=quick_drag}
+    gauge=gauge or Types.RAIL
+    if not gauge_allowed(owner,gauge) then
+      return nil,"This rail type is not available to your company."
+    end
+    local out={kind="track",pieces={},ids={},preview=list,price=0,tree_count=0,
+      remove=remove,quick_drag=quick_drag,gauge=gauge}
     local unchanged=remove and "There is no matching track to remove." or "Already built."
     local function append(item)
       local id,track=item.id,item.track
@@ -108,11 +118,13 @@ return function(api,Lab,Track,Run,prices)
       end
       local p,value
       if t.level_crossing then
+        if gauge~=Types.RAIL then return nil,"This crossing uses a different rail type." end
         if remove or track~=t.level_crossing.rail_axis then return nil,span_msg end
         if t.level_crossing.rail_owner~=owner then return nil,"Another company owns a tile on this route." end
         return false,unchanged
       elseif protected(id) then return nil,span_msg
       elseif not remove and S.level_crossing_enabled and t.build=="road" and not t.rail_tracks then
+        if gauge~=Types.RAIL then return nil,"Build this rail type away from road crossings." end
         local q,why=Sim.crossing_construction_quote(S,owner,id,{kind="rail",track=track})
         if not q then return nil,Sim.crossing_construction_error(why) end
         p={id=id,track=track,shape=q.crossing.slope,tracks=2^track,crossing_quote=q}
@@ -136,14 +148,27 @@ return function(api,Lab,Track,Run,prices)
           end
         end
         if tile.overhead or tile.subsurface then return nil,"This railway preview cannot build on protected structure layers." end
-        local why
-        value,why=prices.track(tile,p,opts(owner))
+        local why,quote
+        local options=opts(owner)
+        options.railtype=gauge
+        value,why,quote=prices.track(tile,p,options)
         if value==nil then return nil,why end
+        if quote and quote.railtype==Types.ELECTRIC and Track.tracks_overlap(p.tracks) then
+          return nil,"This electrified junction has no mounted catenary model."
+        end
+        -- Normal quotes preserve an existing rail type when no
+        -- conversion is needed. Explicit advanced quotes use the
+        -- returned type, never the player's requested type blindly.
+        if quote then p.result_railtype=quote.railtype
+        elseif gauge~=Types.RAIL and not remove then return nil,"No builder for this rail type." end
         if p.remove_signal then value=value+prices.clear_signal() end
         if not remove and tile.kind=="trees" then out.tree_count=out.tree_count+tile.tree_count end
       elseif t.owner and t.owner~=owner then
         return nil,"Another company owns a tile on this route."
       else
+        if not remove and t.rail_tracks and not Types.is_compatible(t.rail_type or Types.RAIL,gauge) then
+          return nil,"IMPOSSIBLE_TRACK_COMBINATION"
+        end
         return false,unchanged
       end
       out.price=out.price+value
@@ -163,7 +188,7 @@ return function(api,Lab,Track,Run,prices)
     if #out.ids==0 then return nil,unchanged end
     return budget(owner,out)
   end
-  function R.quote_track(owner,first,last,track,remove)
+  function R.quote_track(owner,first,last,track,remove,gauge)
     local x,z=Sim.xy(first)
     local u,v=Sim.xy(last)
     if first~=last and not (track==0 and z==v or track==1 and x==u) then
@@ -171,9 +196,9 @@ return function(api,Lab,Track,Run,prices)
     end
     local list={}
     for _,id in ipairs(Sim.line(first,last)) do list[#list+1]={id=id,track=track} end
-    return quote_pieces(owner,list,remove)
+    return quote_pieces(owner,list,remove,false,gauge)
   end
-  function R.quote_autotrack(owner,first,last)
+  function R.quote_autotrack(owner,first,last,gauge)
     local track,u,v=Autorail.snap(first.x,first.z,last.x,last.z)
     local trace=Autorail.trace(math.floor(first.x/16),math.floor(first.z/16),u,v,track)
     local list={}
@@ -183,12 +208,13 @@ return function(api,Lab,Track,Run,prices)
       list[#list+1]={id=id,track=p.track}
     end
     if #list==0 then return nil,"Aim along a straight or diagonal railway.",list end
-    local plan,why=quote_pieces(owner,list,false,#list>1)
+    local plan,why=quote_pieces(owner,list,false,#list>1,gauge)
     return plan,why,list
   end
   local StationPlacement=dofile(upstream.."rail_station_placement.lua")
   function R.quote_station(owner,first,last,layout)
     if R.busy() then return nil,blocked() end
+    if not gauge_allowed(owner,layout.railtype) then return nil,"This rail type is not available to your company." end
     local x,z=Sim.xy(first)
     local u,v=Sim.xy(last)
     local area=StationPlacement.bounds(x,z,u,v,layout)
@@ -233,9 +259,12 @@ return function(api,Lab,Track,Run,prices)
         return nil,"Clear the station's designated freight role before extending it.",group
       end
     end
-    local value,why=prices.station_area(topics,area.axis,area.tracks,area.length,opts(owner))
+    local options=opts(owner)
+    options.railtype=layout.railtype
+    local value,why=prices.station_area(topics,area.axis,area.tracks,area.length,options)
     if value==nil then return nil,why,group end
-    return budget(owner,{kind="platform",axis=area.axis,area=area,combined=combined,join=join and join.id,ids=group,price=value})
+    return budget(owner,{kind="platform",axis=area.axis,area=area,combined=combined,join=join and join.id,
+      ids=group,price=value,gauge=layout.railtype})
   end
   function R.quote_platform(owner,first,last,d)
     local x,z=Sim.xy(first)
@@ -252,8 +281,9 @@ return function(api,Lab,Track,Run,prices)
     if value==nil then return nil,why end
     return budget(owner,{kind="platform",axis=axis,ids=group,price=value})
   end
-  function R.quote_depot(owner,id,dir)
+  function R.quote_depot(owner,id,dir,gauge)
     if R.busy() then return nil,blocked() end
+    if not gauge_allowed(owner,gauge) then return nil,"This rail type is not available to your company." end
     local tile=record(id)
     local t=id and S.tiles[id]
     if not t or not tile or not tile.slope or tile.subsurface or
@@ -271,7 +301,7 @@ return function(api,Lab,Track,Run,prices)
     tile.deck=above and above.deck
     local lib=opts(owner)
     lib.build_on_slopes=S.rail_build_on_slopes~=false
-    lib.railtype=tile.kind=="depot" and tile.railtype or 0
+    lib.railtype=gauge or tile.kind=="depot" and tile.railtype or 0
     local guard=live_edit_guard(id)
     tile.occupied=Lab.owned_depot_occupied and Lab.owned_depot_occupied(S,id) or nil
     local function clear_depot_tile(r)
@@ -314,6 +344,7 @@ return function(api,Lab,Track,Run,prices)
     if guard and not depot.noop then return nil,guard end
     depot.kind,depot.id,depot.ids,depot.price="depot",id,{id},depot.cost
     depot.clear_coast=t.coastal_water or nil
+    depot.requested_railtype=gauge
     return budget(owner,depot)
   end
   function R.quote_waypoint(owner,id,remove)
@@ -451,10 +482,9 @@ return function(api,Lab,Track,Run,prices)
     return ok,msg
   end
   local function depot_connect(owner,id,dir,railtype)
-    -- Existing electrified depots can rotate in-place; this track tool
-    -- only posts ordinary BuildRail, so don't substitute that for a
-    -- separately selected electrified connector.
-    if railtype~=0 then return 0 end
+    -- Stock GUI auto-connection quotes every connector piece in the
+    -- same rail type as the depot; never add a misplaced normal rail.
+    if not gauge_allowed(owner,railtype) then return 0 end
     local board=Lab.board(S)
     local read=board.tile
     function board.tile(tile)
@@ -465,7 +495,7 @@ return function(api,Lab,Track,Run,prices)
       return p
     end
     return Depot.connect(board,id,dir,{auto_remove_signals=false},function(front,track)
-      local piece=R.quote_track(owner,front,front,track,false)
+      local piece=R.quote_track(owner,front,front,track,false,railtype)
       return piece and R.build(owner,piece)
     end)
   end
@@ -485,13 +515,15 @@ return function(api,Lab,Track,Run,prices)
       -- Physical occupancy and forest density can change without a topology
       -- revision. Requote before applying ANY piece of the drag.
       if plan.preview then
-        local fresh,why=quote_pieces(owner,plan.preview,plan.remove,plan.quick_drag)
+        local fresh,why=quote_pieces(owner,plan.preview,plan.remove,plan.quick_drag,plan.gauge)
         if not fresh then return false,why end
         if fresh.crossing~=plan.crossing or fresh.price~=plan.price or fresh.tree_count~=plan.tree_count or #fresh.ids~=#plan.ids then
           return false,"The railway changed. Select the construction again."
         end
         for i,id in ipairs(fresh.ids) do
-          if id~=plan.ids[i] then return false,"The railway changed. Select the construction again." end
+          if id~=plan.ids[i] or fresh.pieces[i].result_railtype~=plan.pieces[i].result_railtype then
+            return false,"The railway changed. Select the construction again."
+          end
         end
         plan=fresh
       end
@@ -508,9 +540,10 @@ return function(api,Lab,Track,Run,prices)
       end
       ok,note=true,plan.crossing and "Track laid, including level crossing work." or "Track pieces updated."
     elseif plan.kind=="platform" then
-      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis,plan.combined or plan.area,plan.join)
+      if not gauge_allowed(owner,plan.gauge) then return false,"This rail type is not available to your company." end
+      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis,plan.combined or plan.area,plan.join,plan.gauge)
     elseif plan.kind=="depot" then
-      local fresh,why=R.quote_depot(owner,plan.id,plan.direction)
+      local fresh,why=R.quote_depot(owner,plan.id,plan.direction,plan.requested_railtype)
       if not fresh then return false,why end
       if fresh.price~=plan.price or fresh.level~=plan.level or fresh.shape~=plan.shape or
           fresh.railtype~=plan.railtype or fresh.rotate~=plan.rotate or fresh.noop~=plan.noop or

@@ -7,7 +7,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
   local Freight=dofile(mod.."/rail_freight_kinds.lua")
   local OrderList=dofile(mod.."/openttd/rail_order_list.lua")
   local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
-  local power_rules
+  local power_rules,advanced_models
   function O.initialize(s,cfg)
     if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
     return Fleet.initialize(s,cfg)
@@ -20,9 +20,17 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     return not Roster.dual_head(id) and not Roster.electric_engine(id) and Run.owned_passenger_engine(id)
   end
   function O.mount_electric(Types) power_rules=Types end
-  function O.railtype_mask(s,owner,Types) return Fleet.railtype_mask(s,owner,Types) end
+  -- Only the production asset scanner can supply this host capability.
+  -- It is not a save setting or a request field.
+  function O.mount_advanced(Types,ready)
+    if not (Run.mount_advanced_wagon and ready and ready[54] and ready[57] and ready[58]) then return false end
+    advanced_models={[54]=true,[57]=true,[58]=true};power_rules=Types
+    assert(Run.mount_owned_model(54));assert(Run.mount_advanced_wagon(57));assert(Run.mount_advanced_wagon(58))
+    return true
+  end
+  function O.railtype_mask(s,owner,Types) return Fleet.railtype_mask(s,owner,Types,advanced_models) end
   function O.catalog(s)
-    local rows,why=Fleet.catalog(s)
+    local rows,why=Fleet.catalog(s,advanced_models)
     if not rows then return nil,why end
     for _,row in ipairs(rows) do
       if row.kind=="engine" then row.passenger_model_ready=Run.owned_passenger_engine(row.stock_id) end
@@ -55,8 +63,9 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     out.dmu_ready=function(id) return Run.owned_passenger_engine(id) end
     out.sh_125_ready=function() return Run.owned_passenger_engine(22) end
     out.electric_model_ready=function(id) return Run.owned_passenger_engine(id) end
+    out.mounted_advanced=advanced_models
     if power_rules and not out.company_railtypes then
-      out.company_railtypes=function(s,owner) return power_rules.flags(Fleet.railtype_mask(s,owner,power_rules)) end
+      out.company_railtypes=function(s,owner) return power_rules.flags(Fleet.railtype_mask(s,owner,power_rules,advanced_models)) end
     end
     return out
   end

@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- OpenTTD contributors, pinned 14.1: table/railtypes.h, rail_type.h,
 -- rail.h/.cpp, rail_map.h, rail_cmd.cpp, elrail.cpp, train.h, train_cmd.cpp.
--- Standalone original railtype facts and read-only RAIL ↔ ELRL plans.
+-- Stock facts and conversion permissions checked against 16.0-RC1
+-- table/railtypes.h, rail.h and CmdConvertRail in rail_cmd.cpp.
 local R={RAIL=0,ELECTRIC=1,MONO=2,MAGLEV=3,INVALID=255,
   STATION_FACTOR=1,CROSSING_FACTOR=2,SPAN_FACTOR=4,DAYS_IN_YEAR=365}
 local floor,min,max=math.floor,math.min,math.max
@@ -198,7 +199,7 @@ end
 -- sorted by track. Span reservations are inspected on the chosen portal.
 function R.quote_convert(board,tiles,target,o)
   o=o or {}
-  if target~=0 and target~=1 then return nil,"UNSUPPORTED_RAILTYPE_CONVERSION" end
+  if not kinds[target] then return nil,"UNSUPPORTED_RAILTYPE_CONVERSION" end
   if not R.available(target,o.available,o.hidden) or type(tiles)~="table" or #tiles<1 then
     return nil,"INVALID_PARAMETER"
   end
@@ -207,7 +208,7 @@ function R.quote_convert(board,tiles,target,o)
     if not uint(id,(board.size or 2^32)-1) or selected[id] then return nil,"INVALID_PARAMETER" end
     selected[id]=true
   end
-  local out={target=target,cost=0,updates={},charged={},errors={},free_reservations={},infra={[0]=0,[1]=0}}
+  local out={target=target,cost=0,updates={},charged={},errors={},free_reservations={},infra={[0]=0,[1]=0,[2]=0,[3]=0}}
   local err="NO_SUITABLE_RAILROAD_TRACK"
   local accepted_span={}
   for _,id in ipairs(tiles) do
@@ -217,33 +218,53 @@ function R.quote_convert(board,tiles,target,o)
       if t.owner~=o.owner then
         err="OWNED_BY_ANOTHER"
         out.errors[#out.errors+1]={id=id,error=err}
-      elseif t.railtype~=0 and t.railtype~=1 then
+      elseif not kinds[t.railtype] then
         return nil,"UNSUPPORTED_RAILTYPE_CONVERSION"
       elseif not span(t) or not accepted_span[id] and not (selected[t.other] and t.other<id) then
         local price_parts,infra_parts=type_counts(t)
         if not price_parts then return nil,"INVALID_RAIL_TILE" end
         local edits={id}
+        local other
         if span(t) then
-          local other=t.other and board.tile(t.other)
+          other=t.other and board.tile(t.other)
           if not other or t.other==id or not span(other) or other.kind~=t.kind or other.other~=id or
               other.railtype~=t.railtype or other.owner~=t.owner or other.length~=t.length then
             return nil,"INVALID_RAIL_SPAN"
           end
-          accepted_span[id],accepted_span[t.other]=true,true
           edits[2]=t.other
         end
-        for _,tile in ipairs(edits) do
-          out.updates[#out.updates+1]={id=tile,from=t.railtype,to=target}
+        local busy,why
+        if not R.is_compatible(t.railtype,target) then
+          if other and board.span_occupied then busy,why=board.span_occupied(id,t.other)
+          elseif not other and board.tile_occupied then
+            busy,why=board.tile_occupied(id,normal(t) and t.trackbits or nil)
+          else busy=t.occupied or other and other.occupied end
         end
-        local cost=price_parts*R.convert_cost(t.railtype,target,o.prices)
-        out.charged[#out.charged+1]={id=id,pieces=price_parts,infrastructure=infra_parts,cost=cost}
-        out.cost=out.cost+cost
-        out.infra[t.railtype]=out.infra[t.railtype]-infra_parts
-        out.infra[target]=out.infra[target]+infra_parts
-        if board.reservations then
-          for _,r in ipairs(board.reservations(id) or {}) do
-            if not R.has_power(r.railtype,target) then
-              out.free_reservations[#out.free_reservations+1]={id=id,track=r.track,train=r.train}
+        if busy then
+          err=why or "RAIL_CONVERSION_OCCUPIED"
+          out.errors[#out.errors+1]={id=id,error=err}
+        else
+          if other then accepted_span[id],accepted_span[t.other]=true,true end
+          for _,tile in ipairs(edits) do
+            out.updates[#out.updates+1]={id=tile,from=t.railtype,to=target}
+          end
+          local cost=price_parts*R.convert_cost(t.railtype,target,o.prices)
+          out.charged[#out.charged+1]={id=id,pieces=price_parts,infrastructure=infra_parts,cost=cost}
+          out.cost=out.cost+cost
+          out.infra[t.railtype]=out.infra[t.railtype]-infra_parts
+          out.infra[target]=out.infra[target]+infra_parts
+          if board.reservations then
+            for _,r in ipairs(board.reservations(id) or {}) do
+              local powered=R.has_power(r.railtype,target)
+              if r.railtypes then
+                powered=false
+                for e=0,3 do
+                  if has(r.railtypes,e) and R.has_power(e,target) then powered=true;break end
+                end
+              end
+              if not powered then
+                out.free_reservations[#out.free_reservations+1]={id=id,track=r.track,train=r.train}
+              end
             end
           end
         end

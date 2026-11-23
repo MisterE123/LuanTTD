@@ -1,6 +1,6 @@
 -- Shared projected body pose for the native dispatcher and worker
 -- snapshots. Travel-order indices are distinct from physical body IDs.
-return function(Sim,models,diagonal,stock,surface,fallback)
+return function(Sim,models,diagonal,stock,surface,fallback,bogies)
   return function(train,sample,i,engine,wagon)
     local id,td,f=sample.id,sample.td,sample.progress
     local count=#train.consist.parts
@@ -19,6 +19,10 @@ return function(Sim,models,diagonal,stock,surface,fallback)
     local level,tilt
     if surface then level,tilt=surface(id,td,f,{wormhole=sample.wormhole}) end
     local flipped=rear~=backing
+    if bogies and models[kind].bogies then
+      local pos,rotation,gears=bogies(train,sample,flipped)
+      if gears then return pos,rotation,kind,body_index,flip,gears end
+    end
     return {x=2*tx+.5+x,y=(level or fallback(id))+models[kind].offset,z=2*tz+.5+z},
       {x=(tilt or 0)*(flipped and 1 or -1),y=math.pi-math.atan2(dx,dz)+(flipped and math.pi or 0),z=0},
       kind,body_index,flip

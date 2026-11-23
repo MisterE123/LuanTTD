@@ -11,6 +11,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local Freight=dofile(upstream.."../rail_freight_kinds.lua")
   local Collision=dofile(upstream.."rail_collision.lua")
   local OrderList=dofile(upstream.."rail_order_list.lua")
+  local acceleration_models={}
+  do local types=dofile(upstream.."rail_types.lua")
+    for gauge=0,3 do acceleration_models[gauge]=types.entry(gauge).acceleration end
+  end
   local CargoOrder=dofile(upstream.."rail_order_cargo.lua")
   local path_backoff=20 -- pathfinding_settings.ini, path_backoff_interval.
   local floor,min,max=math.floor,math.min,math.max
@@ -19,16 +23,28 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   -- files freezes its restored work rather than rolling invisibly or
   -- using some other engine's model.
   local model_ready={[0]=true}
+  local advanced_wagons={}
   local bridge_collectors_ready
   function R.mount_bridge_collectors(ready) bridge_collectors_ready=ready end
   function R.mount_owned_model(id)
-    if id==8 or id==9 or id==10 or id==13 or id==14 or id==15 or id==22 or Roster and (Roster.passenger_dmu(id) or Roster.electric_engine(id)) then
+    local advanced=id==54
+    if advanced or id==8 or id==9 or id==10 or id==13 or id==14 or id==15 or id==22 or Roster and (Roster.passenger_dmu(id) or Roster.electric_engine(id)) then
       model_ready[id]=true
       return true
     end
     return false
   end
   function R.owned_passenger_engine(id) return model_ready[id]==true end
+  function R.mount_advanced_wagon(id)
+    if id~=57 and id~=58 then return false end
+    advanced_wagons[id]=true
+    return true
+  end
+  local function stock_mono_service(ids)
+    if type(ids)~="table" or ids[1]~=54 or not model_ready[54] or #ids<2 or #ids>4 then return false end
+    for i=2,#ids do if not advanced_wagons[ids[i]] then return false end end
+    return true
+  end
 
   function R.current(s)
     local d=s.stock_rail_dispatch
@@ -576,10 +592,11 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       if Roster.dual_head(owned.stock_ids[1]) then
         consist.last_can_lead=true;run.dual_head=true
       end
-      if stats.parts[1].railtype==1 then
-        run.engine_railtype,run.traction_railtypes=1,stats.compatible
+      local engine_type=stats.parts[1].railtype
+      if engine_type~=0 then
+        run.engine_railtype,run.traction_railtypes=engine_type,stats.compatible
         if not run.traction_railtypes[dt.railtype] then return false,"The depot does not supply power to this locomotive." end
-        consist.engine_railtype,consist.traction_railtypes=1,stats.compatible
+        consist.engine_railtype,consist.traction_railtypes=engine_type,stats.compatible
       end
       run.max_track_speed,run.front_length,run.total_length=stats.max_track_speed,stats.front_length,stats.total_length
       run.acceleration,run.consist_mass,run.power=stats.acceleration,stats.weight,stats.power
@@ -602,8 +619,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         for i,p in ipairs(owned.parts) do
           run.town_parts[i]={index=i,stock=p.stock_id,body_id=assert(p.body_id)}
         end
-      elseif not freight and Roster.mixed_town_consist(owned.stock_ids) then
+      elseif not freight and (Roster.mixed_town_consist(owned.stock_ids) or stock_mono_service(owned.stock_ids)) then
         run.body_lengths,run.town_parts=stats.lengths,{}
+        run.advanced_gauge=engine_type>=2 and engine_type or nil
         run.town_engine_body_id=assert(owned.parts[1].body_id)
         for i=2,#owned.stock_ids do
           local p=owned.parts[i]
@@ -815,6 +833,11 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local ids=unit and unit.stock_ids
     local engine=ids and ids[1]
     if not (engine and Roster and R.owned_passenger_engine(engine)) then return false end
+    if engine==54 then
+      if not stock_mono_service(ids) then return false end
+      for i=2,#ids do if ids[i]==57 then return true end end
+      return false
+    end
     if Roster.passenger_dmu(engine) then return #ids==1 or #ids==2 and ids[2]==27 end
     if #ids<2 then return false end
     for i=2,#ids do if ids[i]~=27 then return false end end
@@ -836,6 +859,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       and R.owned_passenger_engine(ids[1])
   end
   function R.owned_mixed_consist(s,owned)
+    if s.rail_mail_service and owned and stock_mono_service(owned.stock_ids) then return true end
     return not not (s.rail_mixed_town_service and owned and Roster.mixed_town_consist(owned.stock_ids)
       and s.rail_mixed_town_engines[owned.stock_ids[1]] and R.owned_passenger_engine(owned.stock_ids[1]))
   end
@@ -853,6 +877,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
   function R.owned_town_consist(s,owned)
     return R.owned_passenger_consist(owned) or owned_mail_consist(owned,s) or R.owned_mixed_consist(s,owned)
+      or owned and stock_mono_service(owned.stock_ids)
   end
   function R.usable_town_order(s,owner,order)
     if type(order)~="table" or order.kind~="station" then return false end
@@ -1533,7 +1558,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       local stop=Speed.station_step(board,new.tile,new.pose,run,old.pose.direction)
       run.stock_steps=run.stock_steps+1
       run.direction=new.pose.direction
-      Speed.after_turn(run,old.pose.direction,new.pose.direction,0)
+      -- TrainController picks the current tile's acceleration model,
+      -- not the vehicle's nominal class (RC1 Train::GetAccelerationType).
+      local section=board.tile(new.tile)
+      Speed.after_turn(run,old.pose.direction,new.pose.direction,section and acceleration_models[section.railtype] or 0)
       if run.span then
         local z=new.z
         if not new.span_prepared then Speed.after_grade(run,run.z,z) end
@@ -1836,8 +1864,14 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     for _,r in ipairs(R.paid_passengers(s)) do
       if r.fleet_id and not R.owned_passenger_engine(r.stock_engine) then return false end
       if r.town_parts then
-        if r.express_mail and not s.rail_mail_service then return false end
-        if not r.express_mail and not (s.rail_mixed_town_engines and s.rail_mixed_town_engines[r.stock_engine]) then return false end
+        if r.advanced_gauge then
+          if r.advanced_gauge~=2 or r.stock_engine~=54 or not s.rail_mail_service then return false end
+          for _,p in ipairs(r.town_parts) do if not advanced_wagons[p.stock] then return false end end
+        elseif r.express_mail then
+          if not s.rail_mail_service then return false end
+        elseif not (s.rail_mixed_town_engines and s.rail_mixed_town_engines[r.stock_engine]) then
+          return false
+        end
       end
       if r.bridge_collectors and not (bridge_collectors_ready and bridge_collectors_ready(r.stock_engine)) then return false end
     end
