@@ -1,0 +1,14 @@
+# Stock T.I.M. express power head (#25)
+
+Original Blender model for the conventional electric dual-head T.I.M. stock vehicle. The native model uses a formed copper-orange express nose, two steep panoramic driving panes, separate forward and tail lamp bowls, roof bus bars, raised traction grilles and an inboard inter-car gangway. Four wheelsets have editable pivots. No source sprite pixels or upstream mesh are included.
+
+The playing position is the conventional one-tile envelope at gauge 0.424. The rail-native nose is -Z, the two drawheads end at ±0.499, and the collector shoe's normal contact is at Y = 0.784 above the rail datum. The whole mesh and the fixed shell plus the shared sprung collector reassemble exactly, with identical collector UV indices and colors. T.I.M. is offered by date at powered conventional depots in ordinary play. The pair itself carries no passengers; buy a standard Passenger Carriage separately or choose the bundled passenger offer.
+
+The OpenTTD 16.0-RC1 `MM` and `RVI` rows give calendar day 23376, decay 20, life 25, model availability 30; conventional electric paired heads, 240 km/h, 7,000 hp total and 90 t per body, no integral cargo, cost factor 40 and electric running factor 240. The real pair must be created by the stock dual-head build path, not two independent engine purchases. Passenger service requires a separate coach. An electric depot and electrified route are required; decorative raised collectors do not grant traction.
+
+Rebuild with `blender -b -t 3 --python-exit-code 1 --python tools/build_stock_tim_art.py`. Set `TIM_REVIEW` to a directory for renders. Check the two physical heads, bends, tunnel envelope and geometry at the wire with `python3 tests/stock_tim_art.py --upstream-engines /path/to/OpenTTD-16.0-RC1/src/table/engines.h`. The default medium price for the two heads is $62,500, or $64,429 with the 40-seat coach. The pair cannot start across an unwired bridge. The same original dual-head normalization and reversing drive state as the stock diesel expresses are reused, with both wheels and both wire contacts projected independently.
+
+Native Linux proofs:
+
+- The purchased train was refused on the unelectrified route, then crossed a real raised bridge at up to 240 km/h. A Lua probe of the two actual collector objects checked both physical heads' wire contact across the bridge in both directions after SQLite reload. The paid service delivered and reversed, with correct operating cost and one middle passenger body.
+- The ordinary separate simulation worker purchased a powered set from the normal depot catalogue, projected two physical head collectors and the middle coach, saved ten seated passengers, restored them and paid the exact company ledger for forty riders. There is no bypass or fallback to a generic engine model.

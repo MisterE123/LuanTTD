@@ -1,10 +1,12 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Explicit owned train handoff. Procurement is independent of the preview
 -- timetable. Coal is an explicit single delivery, not passenger stock.
-return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,validate_goods,goods_wagon_ready,profile_hooks)
+return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,validate_goods,goods_wagon_ready,profile_hooks,mail_wagon_ready)
   local O={}
   local mod=(core and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local Freight=dofile(mod.."/rail_freight_kinds.lua")
+  local OrderList=dofile(mod.."/openttd/rail_order_list.lua")
+  local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
   local power_rules
   function O.initialize(s,cfg)
     if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
@@ -34,19 +36,23 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     if id==9 and not Run.owned_passenger_engine(id) then return "GINZU_MODEL_NOT_AVAILABLE" end
     if id==10 and not Run.owned_passenger_engine(id) then return "SH_8P_MODEL_NOT_AVAILABLE" end
     if id==11 and not Run.owned_passenger_engine(id) then return "MANLEY_MODEL_NOT_AVAILABLE" end
+    if id==12 and not Run.owned_passenger_engine(id) then return "DASH_MODEL_NOT_AVAILABLE" end
     if (id==13 or id==14) and not Run.owned_passenger_engine(id) then return "DIESEL_MODEL_NOT_AVAILABLE" end
     if id==15 and not Run.owned_passenger_engine(id) then return "FLOSS_MODEL_NOT_AVAILABLE" end
     if id==22 and not Run.owned_passenger_engine(id) then return "SH_125_MODEL_NOT_AVAILABLE" end
     if id==23 and not Run.owned_passenger_engine(id) then return "SH_30_MODEL_NOT_AVAILABLE" end
     if id==24 and not Run.owned_passenger_engine(id) then return "SH_40_MODEL_NOT_AVAILABLE" end
+    if id==25 and not Run.owned_passenger_engine(id) then return "TIM_MODEL_NOT_AVAILABLE" end
+    if id==26 and not Run.owned_passenger_engine(id) then return "ASIASTAR_MODEL_NOT_AVAILABLE" end
   end
   local function mounted_hooks(hooks)
     local out={}
     for k,v in pairs(hooks or {}) do out[k]=v end
+    out.mail_wagon_ready=mail_wagon_ready
     out.oil_wagon_ready=oil_wagon_ready
     out.goods_wagon_ready=goods_wagon_ready
     out.profile_wagon_ready=profile_hooks and profile_hooks.active
-    out.manley_ready=function() return Run.owned_passenger_engine(11) end
+    out.dmu_ready=function(id) return Run.owned_passenger_engine(id) end
     out.sh_125_ready=function() return Run.owned_passenger_engine(22) end
     out.electric_model_ready=function(id) return Run.owned_passenger_engine(id) end
     if power_rules and not out.company_railtypes then
@@ -78,7 +84,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     if Run.owned_passenger_consist then return Run.owned_passenger_consist(unit) end
     local id=unit.stock_ids[1]
     return Run.owned_passenger_engine(id) and
-      (#unit.stock_ids==1 and id==11 or #unit.stock_ids==2 and unit.stock_ids[2]==27)
+      (#unit.stock_ids==1 and Roster.passenger_dmu(id) or #unit.stock_ids==2 and unit.stock_ids[2]==27)
   end
   function O.commit(s,owner,quote,hooks)
     if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
@@ -109,12 +115,36 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     assert(Fleet.bind_dispatch(s,owner,id,id))
     return true,note,run
   end
+  function O.mixed_consist(s,owned)
+    return Run.owned_mixed_consist and Run.owned_mixed_consist(s,owned) or false
+  end
+  function O.start_mixed(s,owner,id,first,second,hooks)
+    if not s.rail_mixed_town_service then return false,"Mixed town rail is not mounted." end
+    local unit,why=Fleet.prepare_dispatch(s,owner,id,mounted_hooks(hooks))
+    if not unit then return false,why end
+    local ok,note,run=Run.start_owned_mixed(s,owner,unit,first,second)
+    if not ok then return false,note end
+    assert(Fleet.bind_dispatch(s,owner,id,id))
+    return true,note,run
+  end
+  function O.start_mail(s,owner,id,first,second,hooks)
+    if not (mail_wagon_ready and mail_wagon_ready(s)) then return false,"Rail Mail service is not mounted." end
+    local unit,why=Fleet.prepare_dispatch(s,owner,id,mounted_hooks(hooks))
+    if not unit then return false,why end
+    local ok,note,run=Run.start_owned_mail(s,owner,unit,first,second)
+    if not ok then return false,note end
+    assert(Fleet.bind_dispatch(s,owner,id,id))
+    return true,note,run
+  end
   function O.start_order_list(s,owner,id,stations,hooks)
     if not (s.rail_owned_service and s.rail_paid_service and Run.start_owned_sequence) then
       return false,"This depot cannot give passenger orders."
     end
     local unit,why=Fleet.prepare_dispatch(s,owner,id,mounted_hooks(hooks))
     if not unit then return false,why end
+    if unit.stock_ids[2]==28 and #unit.stock_ids==2 and not (mail_wagon_ready and mail_wagon_ready(s)) then
+      return false,"Rail Mail service is not mounted."
+    end
     local ok,note,run=Run.start_owned_sequence(s,owner,unit,stations)
     if not ok then return false,note end
     assert(Fleet.bind_dispatch(s,owner,id,id))
@@ -193,14 +223,18 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     assert(Fleet.bind_dispatch(s,owner,id,id))
     return true,note,run
   end
+  function O.profile_consist(s,unit,cargo)
+    return Run.owned_profile_consist and Run.owned_profile_consist(s,unit,cargo) or false
+  end
   for _,key in ipairs(Freight.profile_order) do
     local cargo,p=key,Freight.profiles[key]
     O["start_"..cargo]=function(s,owner,id,first,second,hooks)
       if not (profile_hooks and profile_hooks.active(s,cargo)) then return false,"Rail "..p.name.." service is unavailable." end
       local unit,why=Fleet.prepare_dispatch(s,owner,id,mounted_hooks(hooks))
       if not unit then return false,why end
-      if #unit.stock_ids~=2 or not O.freight_engine(unit.stock_ids[1]) or unit.stock_ids[2]~=p.wagon then
-        return false,"Choose a modeled locomotive and one "..Roster.entry(p.wagon).name.."."
+      if not O.profile_consist(s,unit,cargo) then
+        return false,"Choose a modeled locomotive with "..(p.max_wagons and "one or two matching " or "one ")..
+          Roster.entry(p.wagon).name..(p.max_wagons and "s." or ".")
       end
       local valid,reason=profile_hooks.validate(s,cargo,owner,first,second)
       if not valid then return false,reason end
@@ -210,10 +244,80 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
       return true,note,run
     end
   end
+  local function parked(s,owner,id,depot)
+    local r=Fleet.get(s,owner,id)
+    local tile=depot and s.tiles[depot]
+    if r and tile and tile.owner==owner and tile.rail_depot_dir~=nil and r.depot==depot and r.status=="depot"
+        and Run.owned_town_consist and Run.owned_town_consist(s,r) then return r end
+  end
+  local function draft_revision(unit)
+    return "rail-parked:"..(unit.order_draft and unit.order_draft.revision or 0)
+  end
+  local function snapshot(s,owner,r)
+    if r.status=="dispatched" then return Run.copyable_orders(s,owner,r.id) end
+    if r.order_draft and #r.order_draft.orders>0 then return r.order_draft.orders,draft_revision(r) end
+  end
+  local function copied(s,owner,src,dst)
+    local orders,revision=snapshot(s,owner,src)
+    if not orders or #orders==0 then return nil,"The source train has no compatible orders." end
+    local d=dst.order_draft or {orders={},cursor={real=0,implicit=0}}
+    local clone,cursor=OrderList.copy(orders,d.orders,d.cursor,function(o) return Run.usable_town_order(s,owner,o) end)
+    if not clone then return nil,cursor end
+    return clone,cursor,revision
+  end
+  function O.copy_order_sources(s,owner,id,depot)
+    local dst=parked(s,owner,id,depot)
+    if not dst then return nil,"Choose a parked passenger, Mail or Coach/Mail train in this depot." end
+    local sources={}
+    for _,u in ipairs(Fleet.list(s,owner)) do
+      if u.id~=id and Run.owned_town_consist(s,u) then
+        local orders,_,revision=copied(s,owner,u,dst)
+        if orders then
+          sources[#sources+1]={id=u.id,label="Train "..u.unit_number,cargo="Town rail",count=#orders,revision=revision}
+        end
+      end
+    end
+    return {vehicle=id,label="Train "..dst.unit_number,count=dst.order_draft and #dst.order_draft.orders or 0,
+      revision=draft_revision(dst),sources=sources}
+  end
+  function O.copy_orders(s,owner,id,depot,source,source_revision,target_revision)
+    local dst=parked(s,owner,id,depot)
+    local src=source~=id and Fleet.get(s,owner,source)
+    if not (dst and src and Run.owned_town_consist(s,src)) then return false,"Choose a different compatible owned train." end
+    local orders,cursor,rev=copied(s,owner,src,dst)
+    if not orders then return false,cursor end
+    if rev~=source_revision or draft_revision(dst)~=target_revision then
+      return false,"The orders changed. Review the latest lists and try again."
+    end
+    local ok,note=Fleet.write_order_draft(s,owner,id,depot,orders,cursor)
+    return ok,ok and ("Copied %d orders. Use Start copied orders when ready."):format(#orders) or note
+  end
+  function O.start_copied_orders(s,owner,id,depot,revision)
+    local dst=parked(s,owner,id,depot)
+    local draft=dst and dst.order_draft
+    if not draft or revision~=draft_revision(dst) then return false,"Review the latest copied orders in your depot first." end
+    local unit,note=Fleet.prepare_dispatch(s,owner,id,mounted_hooks())
+    if not unit then return false,note end
+    local ok,why,run=Run.start_owned_orders(s,owner,unit,draft.orders)
+    if not ok then return false,why end
+    assert(Fleet.bind_dispatch(s,owner,id,id))
+    return true,why,run
+  end
   function O.order_state(s,owner,id)
     local unit=Fleet.get(s,owner,id)
-    if not unit or unit.status~="dispatched" then return end
-    return Run.order_state(s,owner,id)
+    if not unit then return end
+    if unit.status=="dispatched" then return Run.order_state(s,owner,id) end
+    local d=unit.order_draft
+    if not d then return nil,"Copy orders or select destinations in the depot first." end
+    local out={orders={},cargo={},stops={},revision=draft_revision(unit),capabilities={},read_only=true,
+      reason="Copied independently. Start this list from the depot."}
+    for i,o in ipairs(d.orders) do
+      out.orders[i]=o.station
+      local st=(s.stock_rail_stations or {})[o.station]
+      if st and st.name then out.stops[#out.stops+1]={id=o.station,label=st.name} end
+      out.cargo[i]={load=o.load_type or 0,unload=o.unload_type or 0,summary=CargoOrder.summary(o)}
+    end
+    return out
   end
   function O.edit_orders(s,owner,id,revision,action,row,value)
     local unit=Fleet.get(s,owner,id)
@@ -246,8 +350,8 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     local ticks=p.running_ticks_total or 0
     local finance=p.freight or p.passenger_finance or {}
     return {phase=p.phase,stopped=not not p.stopped,speed=p.speed,mass=p.consist_mass,
-      passengers=p.passengers_onboard,cargo=p.freight and (p.freight.cargo or "coal") or "passenger",
-      units=p.freight and p.cargo_onboard or p.passengers_onboard,running_ticks=ticks,running_year_fp=p.running_year_fp,
+      passengers=p.passengers_onboard,cargo=p.freight and (p.freight.cargo or "coal") or p.town_parts and "mixed" or p.stock_wagon==28 and "mail" or "passenger",
+      units=p.freight and p.cargo_onboard or p.town_parts and ((p.passengers_onboard or 0)+(p.mail_onboard or 0)) or p.stock_wagon==28 and p.mail_onboard or p.passengers_onboard,running_ticks=ticks,running_year_fp=p.running_year_fp,
       running_expense=finance.expense or finance.running_expense or 0,
       charged_running_ticks=finance.charged_ticks or finance.charged_running_ticks or 0,
       running_cost_fp=finance.fixed,legacy_unbilled_running_ticks=finance.legacy_ticks,

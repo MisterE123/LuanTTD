@@ -8,7 +8,7 @@ return function(Sim,models,diagonal,stock,surface,fallback)
     local backing=push_pull and sample.reversed==true
     local body_index=backing and count-i+1 or i
     local rear=push_pull and body_index==count
-    local kind=(body_index==1 or rear) and engine or wagon
+    local kind=(body_index==1 or rear) and engine or (type(wagon)=="table" and wagon[body_index] or wagon)
     local flip
     if not push_pull then flip=sample.reversed==true end
     local tx,tz=Sim.xy(id)

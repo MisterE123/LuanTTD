@@ -51,4 +51,32 @@ assert(R.quote(d,"Ada",{0,27},opts))
 opts.available=function(id) return not R.electric_engine(id) end
 reject("RAIL_VEHICLE_NOT_AVAILABLE")
 reject("RAIL_VEHICLE_NOT_AVAILABLE",24)
-print("PASS exact electric SH30 and SH40 rows, per-model mounting, powered depot purchase, and stock prices")
+
+local tim=assert(R.entry(25))
+eq(tim.image_index,21);eq(tim.base_intro,23376);eq(tim.vehicle_life,25);eq(tim.model_life,30)
+assert(R.dual_head(25) and R.electric_engine(25) and not R.freight_engine(25))
+opts.available=function() return true end
+reject("RAIL_VEHICLE_NOT_MOUNTED",25)
+opts.mounted_electric[25]=true
+local q=assert(R.quote(d,"Ada",{25,27},opts))
+eq(q.price,64429)
+local pair=q.stats
+eq(pair.total_length,24);eq(pair.power,7000);eq(pair.weight,205);eq(pair.max_track_speed,240)
+eq(pair.running_year_fp,1152000);eq(pair.cargo_capacity.passenger,40)
+assert(pair.parts[1].power==3500 and pair.parts[3].power==3500 and pair.parts[1].mate==3
+  and pair.parts[2].stock_id==27 and pair.parts[3].mate==1 and not pair.compatible[0] and pair.compatible[1])
+d.railtype=0
+reject("INCOMPATIBLE_DEPOT_RAIL",25)
+d.railtype=1
+assert(not R.quote(d,"Ada",{25,28},opts) and not R.quote(d,"Ada",{25,27,27},opts))
+local asia=assert(R.entry(26))
+eq(asia.image_index,23);eq(asia.base_intro,26298);eq(asia.model_life,50)
+reject("RAIL_VEHICLE_NOT_MOUNTED",26)
+opts.mounted_electric[26]=true
+local express=assert(R.quote(d,"Ada",{26,27},opts))
+eq(express.price,69116)
+local a=express.stats
+eq(a.total_length,24);eq(a.power,8000);eq(a.weight,215);eq(a.max_track_speed,264)
+eq(a.running_year_fp,1200000);eq(a.cargo_capacity.passenger,40)
+assert(a.parts[1].mate==3 and a.parts[3].mate==1 and a.parts[1].power==4000 and a.parts[3].power==4000)
+print("PASS exact electric SH30, SH40, T.I.M. and AsiaStar rows, linked heads, gate and stock prices")

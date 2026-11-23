@@ -22,7 +22,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local bridge_collectors_ready
   function R.mount_bridge_collectors(ready) bridge_collectors_ready=ready end
   function R.mount_owned_model(id)
-    if id==8 or id==9 or id==10 or id==11 or id==13 or id==14 or id==15 or id==22 or Roster and Roster.electric_engine(id) then
+    if id==8 or id==9 or id==10 or id==13 or id==14 or id==15 or id==22 or Roster and (Roster.passenger_dmu(id) or Roster.electric_engine(id)) then
       model_ready[id]=true
       return true
     end
@@ -558,7 +558,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       max_track_speed=R.engine.speed,front_length=8,total_length=8+R.wagon.length,
       acceleration=Speed.acceleration(R.engine.power,R.engine.weight+R.wagon.weight),
       order=station_order(station)}
-    if orders then run.orders,run.order_cursor=orders,{real=0,implicit=0} end
+    if orders then run.orders,run.order_cursor,run.order=orders,{real=0,implicit=0},orders[1] end
     if pair then run.paired={first=station,second=second,arrivals=0,reversals=0} end
     if via_tile~=nil then
       local wp=Lab.waypoint_at(s,via_tile)
@@ -584,14 +584,32 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       run.max_track_speed,run.front_length,run.total_length=stats.max_track_speed,stats.front_length,stats.total_length
       run.acceleration,run.consist_mass,run.power=stats.acceleration,stats.weight,stats.power
       run.paid_build_year=owned.parts[1].build_year
-      if not freight and (#owned.stock_ids>2 and owned.stock_ids[1]~=11 or owned.stock_ids[1]==22) then
+      if freight and #owned.stock_ids>2 then
+        run.body_lengths,run.freight_parts=stats.lengths,{}
+        run.freight_engine_body_id=assert(owned.parts[1].body_id)
+        for i=2,#owned.stock_ids do
+          local p=owned.parts[i]
+          assert(p.stock_id==owned.stock_ids[i])
+          run.freight_parts[#run.freight_parts+1]={index=i,stock=p.stock_id,body_id=assert(p.body_id)}
+        end
+      elseif not freight and Roster.mixed_town_consist(owned.stock_ids) then
+        run.body_lengths,run.town_parts=stats.lengths,{}
+        run.town_engine_body_id=assert(owned.parts[1].body_id)
+        for i=2,#owned.stock_ids do
+          local p=owned.parts[i]
+          assert(p.stock_id==owned.stock_ids[i])
+          run.town_parts[#run.town_parts+1]={index=i,stock=p.stock_id,body_id=assert(p.body_id)}
+        end
+      elseif not freight and (#owned.stock_ids>2 and not Roster.passenger_dmu(owned.stock_ids[1]) or Roster.dual_head(owned.stock_ids[1]) and not Roster.passenger_dmu(owned.stock_ids[1])) then
         run.body_lengths,run.passenger_coaches=stats.lengths,#owned.stock_ids-1
       end
       run.running_ticks_total,run.running_year_fp=0,stats.running_year_fp
       if freight then
         run.cargo_onboard,run.freight_multiplier=0,stats.freight_trains
       else
-        run.passengers_onboard=0
+        if run.town_parts then run.passengers_onboard,run.mail_onboard=0,0
+        elseif run.stock_wagon==28 then run.mail_onboard=0
+        else run.passengers_onboard=0 end
         run.passenger_finance={charged_ticks=0,expense=0,fixed=0,legacy_ticks=0}
       end
     end
@@ -625,7 +643,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     run.route=route
     if not route then return false,"No connected route from the depot to the first platform. Check the depot exit, rail joints and signal direction"..(run.engine_railtype==1 and ", and make sure the whole route is electrified." or ".") end
     local function long_enough(leg)
-      if not run.passenger_coaches then return true end
+      if not run.passenger_coaches and not run.town_parts and not run.freight_parts then return true end
       local last=leg[#leg]
       return Follow.platform(board,last.tile,Track.reverse_side(Track.exit_side(last.td)))*16>=run.total_length
     end
@@ -671,7 +689,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           for _,step in ipairs(leg) do
             local piece=board.tile(step.tile)
             if piece and piece.kind=="bridge" and piece.transport=="rail" then
-              if not (bridge_collectors_ready and bridge_collectors_ready()) then
+              if not (bridge_collectors_ready and bridge_collectors_ready(run.stock_engine)) then
                 return false,"The moving electric collector is not mounted for this bridge."
               end
               run.bridge_collectors=true
@@ -702,7 +720,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           end
         end
         if crosses_bridge(route) or crosses_bridge(second_leg) or crosses_bridge(repeat_leg) then
-          if not (bridge_collectors_ready and bridge_collectors_ready()) then
+          if not (bridge_collectors_ready and bridge_collectors_ready(run.stock_engine)) then
             return false,"The moving electric collector is not mounted for this bridge."
           end
           run.bridge_collectors=true
@@ -716,11 +734,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         cargo=="oil" and "No safe rail route from the wells to the refinery platform." or
         product and ("No safe rail route from the "..product.source.." to the "..product.sink..".") or
         "No safe rail route from mine to accepting power platform." end
+      if not long_enough(loaded) then return false,"Lengthen the destination platform to fit the whole freight train." end
       local empty=choose_leg(board,run,departure_probe(run,loaded),station)
       if not empty then return false,cargo=="goods" and "No safe rail return from the town platform to the sawmill." or
         cargo=="oil" and "No safe rail return from the refinery platform to the wells." or
         product and ("No safe rail return from the "..product.sink.." to the "..product.source..".") or
         "No safe rail return from the power platform to the mine." end
+      if not long_enough(empty) then return false,"Lengthen the source platform to fit the whole freight train." end
       ordered(loaded);ordered(empty)
       run.freight={mine=station,power=freight,cargo=cargo,visits=0,reversals=0,cycles=0,repeat_route=true}
     end
@@ -744,7 +764,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       freight and (cargo=="goods" and "Owned Goods train ordered to repeat: full load at the sawmill, unload in town." or cargo=="oil" and "Owned oil train ordered to repeat: full load at the wells, unload at the refinery." or
         Freight.profiles[cargo] and ("Owned "..Freight.profiles[cargo].name.." train ordered to repeat: full load at the "..Freight.profiles[cargo].source..", unload at the "..Freight.profiles[cargo].sink..".") or
         "Owned coal train ordered to repeat: full load at the mine, unload at the power station.") or
-      orders and ("Passenger train ordered to serve "..#orders.." platforms in sequence.") or
+      orders and ((run.town_parts and "Coach and Mail" or run.stock_wagon==28 and "Mail" or "Passenger").." train ordered to serve "..#orders.." platforms in sequence.") or
+      run.stock_wagon==28 and "Owned Mail train ordered to serve both town platforms." or
       owned and ("Owned "..stats.parts[1].name..(run.via and " shuttle ordered via the selected waypoint." or
         " shuttle ordered to alternate between both platforms.")) or
       run.paid_clock and "Paid shuttle ordered to alternate between both platforms." or
@@ -784,7 +805,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local ids=unit and unit.stock_ids
     local engine=ids and ids[1]
     if not (engine and Roster and R.owned_passenger_engine(engine)) then return false end
-    if engine==11 then return #ids==1 or #ids==2 and ids[2]==27 end
+    if Roster.passenger_dmu(engine) then return #ids==1 or #ids==2 and ids[2]==27 end
     if #ids<2 then return false end
     for i=2,#ids do if ids[i]~=27 then return false end end
     return true
@@ -799,27 +820,62 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       nil,nil,nil,nil,via_tile)
   end
 
-  function R.start_owned_sequence(s,owner,owned,stations)
-    if not Reverse or not owned or owned.owner~=owner or not R.owned_passenger_consist(owned) then
-      return false,"Choose a supported owned passenger train."
+  local function owned_mail_consist(owned,s)
+    local ids=owned and owned.stock_ids
+    return s.rail_mail_service and ids and #ids==2 and ids[2]==28 and Roster.freight_engine(ids[1])
+      and R.owned_passenger_engine(ids[1])
+  end
+  function R.owned_mixed_consist(s,owned)
+    return not not (s.rail_mixed_town_service and owned and Roster.mixed_town_consist(owned.stock_ids)
+      and s.rail_mixed_town_engines[owned.stock_ids[1]] and R.owned_passenger_engine(owned.stock_ids[1]))
+  end
+  function R.start_owned_mixed(s,owner,owned,first,second)
+    if not R.owned_mixed_consist(s,owned) then
+      return false,"Mixed town rail needs one modeled locomotive and two or three coach and Mail wagons."
     end
+    return R.start_owned_sequence(s,owner,owned,{first,second})
+  end
+  function R.start_owned_mail(s,owner,owned,first,second)
+    if not owned_mail_consist(owned,s) then
+      return false,"Choose a modeled locomotive with exactly one stock Mail Van."
+    end
+    return R.start_owned_sequence(s,owner,owned,{first,second})
+  end
+  function R.owned_town_consist(s,owned)
+    return R.owned_passenger_consist(owned) or owned_mail_consist(owned,s) or R.owned_mixed_consist(s,owned)
+  end
+  function R.usable_town_order(s,owner,order)
+    if type(order)~="table" or order.kind~="station" then return false end
+    -- vehicle.cpp CanVehicleUseStation for trains tests the station's
+    -- rail facility, not the reachability of this particular vehicle.
+    -- The mounted campaign also separates owned town and freight platforms.
+    local st=s.stock_rail_stations and s.stock_rail_stations[order.station]
+    return st and st.owner==owner and type(st.tiles)=="table" and #st.tiles>0 and not Freight.role(st)
+  end
+  function R.start_owned_orders(s,owner,owned,orders)
+    if not Reverse or not owned or owned.owner~=owner or not R.owned_town_consist(s,owned) then
+      return false,"Choose a supported owned passenger or Mail train."
+    end
+    if type(orders)~="table" or #orders<2 or #orders>OrderList.MAX_ORDERS then
+      return false,"Choose at least two stations in visit order."
+    end
+    local cloned,note=OrderList.copy(orders,{},{real=0,implicit=0},function(o) return R.usable_town_order(s,owner,o) end)
+    if not cloned then return false,note end
+    for i,o in ipairs(cloned) do
+      if cloned[i==1 and #cloned or i-1].station==o.station then
+        return false,"Use two different consecutive stations, including the return to the first."
+      end
+    end
+    return start(s,owner,owned.depot,cloned[1].station,cloned[2].station,Spans and s.rail_span_enabled or false,
+      owned,nil,nil,nil,nil,nil,cloned)
+  end
+  function R.start_owned_sequence(s,owner,owned,stations)
     if type(stations)~="table" or #stations<2 or #stations>OrderList.MAX_ORDERS then
       return false,"Choose at least two stations in visit order."
     end
-    local registry=s.stock_rail_stations or {}
-    local orders,cursor={},{real=0,implicit=0}
-    for i,id in ipairs(stations) do
-      local st=registry[id]
-      if not st or st.owner~=owner or Freight.role(st) then
-        return false,("Order %d: choose an owned passenger station."):format(i)
-      end
-      if stations[i==1 and #stations or i-1]==id then
-        return false,"Use two different consecutive stations, including the return to the first."
-      end
-      assert(OrderList.insert(orders,cursor,#orders,station_order(id)))
-    end
-    return start(s,owner,owned.depot,stations[1],stations[2],Spans and s.rail_span_enabled or false,
-      owned,nil,nil,nil,nil,nil,orders)
+    local orders={}
+    for i,id in ipairs(stations) do orders[i]=station_order(id) end
+    return R.start_owned_orders(s,owner,owned,orders)
   end
 
   local function clone(t)
@@ -839,7 +895,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local function unit_valid(x)
       local u=x and x.unit
       return u and u.owner==owner and x.first and x.second and x.first~=x.second and
-        #u.stock_ids==2 and u.stock_ids[1]~=11 and not Roster.electric_engine(u.stock_ids[1]) and
+        #u.stock_ids==2 and not Roster.passenger_dmu(u.stock_ids[1]) and not Roster.electric_engine(u.stock_ids[1]) and
         R.owned_passenger_engine(u.stock_ids[1]) and u.stock_ids[2]==27
     end
     if not unit_valid(a) or not unit_valid(b) or a.unit.id==b.unit.id or a.second==b.second then
@@ -917,15 +973,19 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return start(s,owner,owned.depot,mill,nil,Block and Spans and s.rail_span_enabled or false,owned,town,nil,nil,"goods")
   end
 
+  function R.owned_profile_consist(s,owned,cargo)
+    local p=Freight.profiles[cargo]
+    return not not (p and owned and Roster and s["rail_"..cargo.."_service"] and
+      Roster.profile_consist(owned.stock_ids,p.wagon,p.max_wagons) and R.owned_passenger_engine(owned.stock_ids[1]))
+  end
   function R.start_owned_profile(s,owner,owned,first,second,cargo)
     local p=Freight.profiles[cargo]
     if not (p and Reverse and Roster and s["rail_"..cargo.."_service"] and s.road_stock_house_supply and s.corner_grid) then
       return false,"Enable the appropriate stock rail freight service first."
     end
     if not first or not second or first==second or not owned or owned.owner~=owner or
-        not owned.stock_ids or #owned.stock_ids~=2 or not Roster.freight_engine(owned.stock_ids[1]) or
-        not R.owned_passenger_engine(owned.stock_ids[1]) or owned.stock_ids[2]~=p.wagon then
-      return false,"Use a modeled owned locomotive and one "..Roster.entry(p.wagon).name.."."
+        not R.owned_profile_consist(s,owned,cargo) then
+      return false,"Use a modeled locomotive with a supported homogeneous "..p.name.." formation."
     end
     return start(s,owner,owned.depot,first,nil,Block and Spans and s.rail_span_enabled or false,owned,second,nil,nil,cargo)
   end
@@ -1247,8 +1307,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         local hit=d.runs[id]
         if not hit.crashed then
           local handler=service and service(hit) or paid
-          local passengers=not hit.freight and handler and handler.cargo_count and handler.cargo_count(hit) or
-            (not hit.freight and hit.passengers_onboard or 0)
+          local riders=not hit.freight and (hit.town_parts or hit.stock_wagon~=28)
+          local count=handler and (handler.passengers or (not hit.town_parts and handler.cargo_count))
+          local passengers=riders and count and count(hit) or
+            (riders and hit.passengers_onboard or 0)
           victims=victims+2+(passengers or 0)
           hit.crashed,hit.phase,hit.crash_age,hit.speed,hit.subspeed,hit.progress,hit.stopped=
             true,"crashed",1,0,0,0,true
@@ -1501,10 +1563,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
             run.arrival.cargo_tile=wagon and wagon.tile
             run.arrival.platform_tiles=forward+backward-1
             local cargo_tiles,visible
-            if run.stock_engine==11 or run.passenger_coaches then
+            if (Roster and Roster.passenger_dmu(run.stock_engine)) or run.passenger_coaches or run.town_parts or run.freight_parts then
               cargo_tiles,visible={},true
-              local first=run.passenger_coaches and 2 or 1
-              local last=#run.consist.parts-(run.stock_engine==22 and 1 or 0)
+              local first=(run.passenger_coaches or run.town_parts or run.freight_parts) and 2 or 1
+              local last=#run.consist.parts-(run.dual_head and run.passenger_coaches and 1 or 0)
               for i=first,last do
                 local n=run.dual_head and run.consist.driving_backwards and #run.consist.parts-i+1 or i
                 local part=run.consist.parts[n]
@@ -1542,6 +1604,12 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return {station_order(first),station_order(second)},{real=i,implicit=i}
   end
 
+  function R.copyable_orders(s,owner,id)
+    local r=R.current_paid(s,id)
+    if not (r and id and r.owner==owner) or r.freight or r.via then return end
+    local orders=current_order_list(r)
+    if orders then return orders,"rail-active:"..(r.order_revision or 0) end
+  end
   function R.order_state(s,owner,id)
     local r=R.current_paid(s,id)
     if not r or not id or r.owner~=owner then return end
@@ -1757,7 +1825,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   function R.paid_art_ready(s)
     for _,r in ipairs(R.paid_passengers(s)) do
       if r.fleet_id and not R.owned_passenger_engine(r.stock_engine) then return false end
-      if r.bridge_collectors and not (bridge_collectors_ready and bridge_collectors_ready()) then return false end
+      if r.town_parts and not (s.rail_mixed_town_engines and s.rail_mixed_town_engines[r.stock_engine]) then return false end
+      if r.bridge_collectors and not (bridge_collectors_ready and bridge_collectors_ready(r.stock_engine)) then return false end
     end
     return true
   end
@@ -1797,11 +1866,42 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     run.running_ticks_total=Roster.running_tick(run.running_ticks_total or 0,run.stopped,run.speed)
     if not (paid and paid.cargo_count) then return end
     local n,a,b,coach,counts=paid.cargo_count(run)
-    local field=run.freight and "cargo_onboard" or "passengers_onboard"
-    if run.stock_engine==11 then
+    local field=run.freight and "cargo_onboard" or run.stock_wagon==28 and "mail_onboard" or "passengers_onboard"
+    if run.freight_parts and counts then
+      local different=not run.freight_counts
+      for i,count in ipairs(counts) do
+        if not run.freight_counts or run.freight_counts[i]~=count then different=true end
+      end
+      if different then
+        local parts={run.stock_engine}
+        for i,part in ipairs(run.freight_parts) do
+          parts[#parts+1]={stock_id=part.stock,cargo_count=assert(counts[i])}
+        end
+        local stats=assert(Roster.stats(parts,{freight_trains=run.freight_multiplier}))
+        run.cargo_onboard,run.freight_counts=n,counts
+        run.consist_mass,run.acceleration=stats.weight,stats.acceleration
+      end
+    elseif run.town_parts and counts then
+      local different=not run.town_counts
+      for i,count in ipairs(counts) do
+        if not run.town_counts or run.town_counts[i]~=count then different=true end
+      end
+      if different then
+        local parts={run.stock_engine}
+        local riders,mail=0,0
+        for i,part in ipairs(run.town_parts) do
+          local units=assert(counts[i])
+          if part.stock==28 then mail=mail+units else riders=riders+units end
+          parts[#parts+1]={stock_id=part.stock,cargo_count=units}
+        end
+        local stats=assert(Roster.stats(parts))
+        run.town_counts,run.mail_onboard,run.passengers_onboard=counts,mail,riders
+        run.consist_mass,run.acceleration=stats.weight,stats.acceleration
+      end
+    elseif Roster.passenger_dmu(run.stock_engine) then
       if a==nil or b==nil then return end
       if n~=run[field] or a~=run.front_passengers or b~=run.rear_passengers or coach~=run.coach_passengers then
-        local p={{stock_id=11,cargo_count=a,rear_cargo_count=b}}
+        local p={{stock_id=run.stock_engine,cargo_count=a,rear_cargo_count=b}}
         if coach~=nil then p[2]={stock_id=27,cargo_count=coach} end
         local stats=assert(Roster.stats(p))
         run[field],run.front_passengers,run.rear_passengers,run.coach_passengers=n,a,b,coach

@@ -11,9 +11,11 @@ return function(core,client,build,money,assembly)
     local unit=data.vehicles and data.vehicles[p.unit or 1]
     local cargo=unit and unit.cargo
     local first,last={},{}
+    if unit and unit.unsupported then return first,last,cargo end
     for _,r in ipairs(data.targets or {}) do
-      if r.cargo==cargo and (not cargo or r.role=="load") then first[#first+1]=r end
-      if r.cargo==cargo and (not cargo or r.role=="unload") then last[#last+1]=r end
+      local town_mail=p.mode=="rail" and (cargo=="mail" or cargo=="mixed") and not r.cargo
+      if town_mail or r.cargo==cargo and (not cargo or r.role=="load") then first[#first+1]=r end
+      if town_mail or r.cargo==cargo and (not cargo or r.role=="unload") then last[#last+1]=r end
     end
     return first,last,cargo
   end
@@ -48,23 +50,31 @@ return function(core,client,build,money,assembly)
       local action=(chosen.request.operation=="refit" and "Refit" or "Buy").." for "..money(chosen.price)
       b[#b+1]="button[.45,5.42;5.12,.59;"..stem.."buy;"..action.."]"
     end
+    local active=units[p.unit or 1]
     if #units>0 then
-      if p.mode=="road" then
-        b[#b+1]="button[5.82,5.42;2.54,.59;"..stem.."orders;Open vehicle]"
+      if p.mode=="road" or p.mode=="rail" and active and active.order_copy then
+        b[#b+1]="button[5.82,5.42;2.54,.59;"..stem.."orders;"..(active and active.copied and "Review orders" or "Open vehicle").."]"
         b[#b+1]="button[8.47,5.42;2.47,.59;"..stem.."copy;Copy orders…]"
         b[#b+1]="tooltip["..stem.."copy;Copy an independent order list from another vehicle to the selected vehicle.]"
       else b[#b+1]="button[5.82,5.42;5.12,.59;"..stem.."orders;Open selected vehicle]" end
     end
-    local route_ok=cargo and #first>0 and #last>0 or not cargo and #first>=2
-    if route_ok and #units>0 then
+    local town_mail=p.mode=="rail" and (cargo=="mail" or cargo=="mixed")
+    local route_ok=(not cargo or town_mail) and #first>=2 or cargo and not town_mail and #first>0 and #last>0
+    if p.mode=="rail" and active and active.copied then
+      b[#b+1]="label[.45,6.47;"..active.copied.." copied station orders. Start when the route is ready.]"
+      b[#b+1]="button[7.50,6.17;3.44,.57;"..stem.."start_copied;Start copied orders]"
+    elseif route_ok and #units>0 then
       if p.mode~="air" then
         b[#b+1]=("dropdown[.45,6.17;3.39,.57;%sfrom;%s;%d;true]"):format(stem,table.concat(from,","),p.from or 1)
       end
-      b[#b+1]=("dropdown[3.98,6.17;3.38,.57;%sto;%s;%d;true]"):format(stem,table.concat(to,","),p.to or (cargo and 1 or 2))
+      b[#b+1]=("dropdown[3.98,6.17;3.38,.57;%sto;%s;%d;true]"):format(stem,table.concat(to,","),p.to or (cargo and cargo~="mail" and cargo~="mixed" and 1 or 2))
       b[#b+1]="button[7.50,6.17;3.44,.57;"..stem.."start;Start service]"
     end
-    if cargo and not route_ok then
-      b[#b+1]="label[.45,6.45;No matching loading and unloading stops. See the vehicle details.]"
+    if units[p.unit or 1] and units[p.unit or 1].unsupported then
+      b[#b+1]="label[.45,6.45;Unsupported freight formation. Rearrange its wagons in the depot.]"
+    elseif cargo and not route_ok and not (active and active.copied) then
+      b[#b+1]=town_mail and "label[.45,6.45;Build two ordinary rail stations near town houses.]"
+        or "label[.45,6.45;No matching loading and unloading stops. See the vehicle details.]"
     end
     local chosen=p.focus~="offer" and units[p.unit or 1] or offers[p.offer or 1]
     chosen=chosen or offers[p.offer or 1]
@@ -76,7 +86,7 @@ return function(core,client,build,money,assembly)
     b[#b+1]="button_exit[5.82,9.09;5.12,.58;close;Back to world]"
     core.show_formspec(n,D.form,table.concat(b))
   end
-  function D.open(player,mode,depot,note,vehicle_handler)
+  function D.open(player,mode,depot,note,vehicle_handler,selected_vehicle)
     local name=player:get_player_name()
     serial=serial+1
     local p={serial=serial,mode=mode,depot=depot,vehicle_handler=vehicle_handler,focus="offer"}
@@ -84,7 +94,12 @@ return function(core,client,build,money,assembly)
     draw(name,p,note or "Reading the depot…")
     local sent,why=client.query({kind="depot",player=name,mode=mode,depot=depot},function(reply)
       if panels[name]~=p then return end
-      if reply.ok then p.data,p.revision=reply.value,reply.revision end
+      if reply.ok then
+        p.data,p.revision=reply.value,reply.revision
+        for i,row in ipairs(p.data.vehicles or {}) do
+          if row.id==selected_vehicle then p.unit,p.focus=i,"unit";break end
+        end
+      end
       draw(name,p,note or reply.why)
     end)
     if not sent then draw(name,p,why) end
@@ -106,9 +121,9 @@ return function(core,client,build,money,assembly)
     if data.sources and #data.sources>0 then
       Help.rows(b,esc,{x=.45,y=2.20,w=10.49,h=3.85,items=data.sources,
         prefix=stem.."source_",scroll=c.scroll,selected=c.selected,
-        help=function(row) return {model=named_vehicle(row.label,row.id),service=row.cargo or "Road vehicle",
+        help=function(row) return {model=named_vehicle(row.label,row.id),service=row.cargo or "Vehicle",
           connections=("Copy all %d orders in their current sequence."):format(row.count)} end,
-        label=function(row) return named_vehicle(row.label,row.id),(row.cargo or "Road vehicle").." · "..row.count.." orders" end})
+        label=function(row) return named_vehicle(row.label,row.id),(row.cargo or "Vehicle").." · "..row.count.." orders" end})
     end
     b[#b+1]="textarea[.48,6.19;10.27,.68;;;"..esc(note or "").."]"
     b[#b+1]="button[.45,7.08;5.10,.66;"..stem.."back;Back to depot]"
@@ -137,7 +152,7 @@ return function(core,client,build,money,assembly)
     end)
     if not sent then c.pending=nil;draw_copy(n,p,c,why) end
   end
-  local function copy_fields(n,p,c,f)
+  local function copy_fields(n,p,c,f,player)
     local stem="dc"..c.token.."_"
     if f[stem.."back"] then p.copy=nil;draw(n,p);return true end
     if not c.data or c.pending then return true end
@@ -155,6 +170,9 @@ return function(core,client,build,money,assembly)
         local note=r.why=="STALE_COMMAND" and "The campaign changed. Review the latest orders and try again." or r.why
         return read_copy(n,p,c,note,source.id)
       end
+      if p.mode=="rail" then
+        return D.open(player,p.mode,p.depot,r.why or "Orders copied.",p.vehicle_handler,c.vehicle)
+      end
       p.copy=nil;p.revision=r.revision
       draw(n,p,r.why or "Orders copied.")
     end)
@@ -167,7 +185,7 @@ return function(core,client,build,money,assembly)
     local p=panels[n]
     if not p then return true end
     if f.quit then panels[n]=nil;return true end
-    if p.copy then return copy_fields(n,p,p.copy,f) end
+    if p.copy then return copy_fields(n,p,p.copy,f,player) end
     if not p.data or p.pending then return true end
     local stem="d"..p.serial.."_"
     local update,unit_changed=false,false
@@ -186,9 +204,9 @@ return function(core,client,build,money,assembly)
       p.from=tonumber(f[stem.."from"]) or p.from
       p.to=tonumber(f[stem.."to"]) or p.to
     end
-    if p.mode=="road" and f[stem.."copy"] then
+    if f[stem.."copy"] then
       local u=p.data.vehicles[p.unit or 1]
-      if u then
+      if u and (p.mode=="road" or p.mode=="rail" and u.order_copy) then
         serial=serial+1
         local c={vehicle=u.id,label=u.label,token=serial}
         p.copy=c
@@ -202,11 +220,23 @@ return function(core,client,build,money,assembly)
       if u then p.vehicle_handler(p.mode,u.id) end
       return true
     end
+    if p.mode=="rail" and f[stem.."start_copied"] then
+      local u=p.data.vehicles[p.unit or 1]
+      if not (u and u.copied and u.draft_revision) then return true end
+      p.pending=true
+      local sent,why=client.query({kind="command",player=n,command={kind="transport_start",mode="rail",
+        vehicle=u.id,depot=p.depot,copied=true,draft_revision=u.draft_revision,revision=p.revision}},
+        function(r)
+          if panels[n]==p then return D.open(player,p.mode,p.depot,r.why,p.vehicle_handler,u.id) end
+        end)
+      if not sent then p.pending=nil;draw(n,p,why) end
+      return true
+    end
     if f[stem.."start"] then
       local unit=p.data.vehicles[p.unit or 1]
       local sources,sinks,cargo=routes(p)
       local first=sources[tonumber(f[stem.."from"]) or p.from or 1]
-      local last=sinks[tonumber(f[stem.."to"]) or p.to or (cargo and 1 or 2)]
+      local last=sinks[tonumber(f[stem.."to"]) or p.to or (cargo and cargo~="mail" and cargo~="mixed" and 1 or 2)]
       if not (unit and first and last) then return true end
       p.pending=true
       local sent,why=client.query({kind="command",player=n,command={kind="transport_start",mode=p.mode,

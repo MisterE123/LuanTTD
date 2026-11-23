@@ -5,6 +5,7 @@
 return function(Service,key)
   local base=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
   local CargoOrder=dofile(base.."/openttd/rail_order_cargo.lua")
+  local Roster=dofile(base.."/openttd/rail_roster.lua")
   local A={}
 
   function A.gather(Rail,s)
@@ -53,17 +54,29 @@ return function(Service,key)
     local live={}
     for _,r in ipairs(actors) do
       local id=key(r.paid_clock)
+      local dmu=Roster.passenger_dmu(r.stock_engine)
       if not saved[id] then
         Service.vehicle(service,{id=id,mode="rail",owner=r.owner,length=r.total_length,
-          engine=r.stock_engine==11 and r.stock_engine or nil,coach=r.stock_engine==11 and r.stock_wagon==27 or nil,
-          dual_head=r.stock_engine==22,passenger_coaches=r.passenger_coaches,speed=r.max_track_speed,built=build_year(r)})
+          cargo=r.town_parts and "mixed" or r.stock_wagon==28 and "mail" or "passenger",wagon=r.stock_wagon,town_parts=r.town_parts,
+          engine=dmu and r.stock_engine or nil,coach=dmu and r.stock_wagon==27 or nil,
+          dual_head=r.dual_head and not dmu,passenger_coaches=r.passenger_coaches,speed=r.max_track_speed,built=build_year(r)})
       else
         local v=service.vehicles[id]
         assert(v and v.owner==r.owner and v.mode=="rail" and v.total_length==r.total_length,
           "Saved train and paid passenger row disagree")
-        assert((v.engine==11)==(r.stock_engine==11),"Saved train body schema disagrees with paid actor")
+        assert(v.engine==(dmu and r.stock_engine or nil),"Saved train body schema disagrees with paid actor")
+        if dmu then v.linked_heads=true end
+        assert((v.cargo=="mail")== (not r.town_parts and r.stock_wagon==28),"Saved train Mail body disagrees with the purchased consist")
+        assert(not not v.town_mixed==not not r.town_parts,"Saved town consist mode disagrees")
+        if r.town_parts then
+          for i,body in ipairs(r.town_parts) do
+            local saved_part=v.carrying_parts[i]
+            assert(saved_part.body_id==body.body_id and saved_part.stock==body.stock and saved_part.part==body.index,
+              "Saved physical wagon identity disagrees with the train")
+          end
+        end
         if v.carrying_parts then
-          assert(#v.carrying_parts==(r.passenger_coaches or (r.stock_wagon==27 and 3 or 2)),
+          assert(#v.carrying_parts==(r.town_parts and #r.town_parts or r.passenger_coaches or (r.stock_wagon==27 and 3 or 2)),
             "Saved physical railway formation disagrees")
         end
       end
@@ -80,8 +93,8 @@ return function(Service,key)
       train.stopped=r.phase=="blocked" or r.stopped or nil
       train.broken=r.breakdown or nil
       if r.load_type_update~=nil then
-        local full,no_load=CargoOrder.load_flags(r.load_type_update)
-        Service.update_load_type(train,full,no_load)
+        local full,no_load,any=CargoOrder.load_flags(r.load_type_update)
+        Service.update_load_type(train,full,no_load,any)
         r.load_type_update=nil
       end
     end
@@ -110,10 +123,19 @@ return function(Service,key)
         local row=assert(service.vehicles[n])
         return (skip_order or ready[n]) and Service.leave(service,n,row.visit,tick,ctx,events,skip_order) or false
       end,
+      passengers=function(r)
+        local v=service.vehicles[id(r)]
+        if v.town_mixed then
+          local riders=0
+          for _,body in ipairs(v.carrying_parts) do if body.cargo=="passenger" then riders=riders+body.units end end
+          return riders
+        end
+        return v.cargo=="passenger" and v.units or 0
+      end,
       cargo_count=function(r)
         local v=service.vehicles[id(r)]
         local p=v.carrying_parts
-        if p and r.passenger_coaches then
+        if p and (r.passenger_coaches or r.town_parts) then
           local counts={}
           for i,b in ipairs(p) do counts[i]=b.units end
           return v.units,nil,nil,nil,counts

@@ -11,8 +11,8 @@ return function(S,Owned,flags)
       items[i]={id=x,label=(labels[x] or ("Station #"..x))..(f and f.summary or ""),cargo=f}
     end
     local c=d.capabilities or {}
-    return {items=items,targets=d.stops,active=d.active,revision=d.revision,can_insert=c.add,
-      can_reorder=c.move,can_remove=c.remove,can_skip=c.skip,can_replace=c.replace,summary=d.reason,
+    return {items=items,targets=d.read_only and {} or d.stops,active=d.active,revision=d.revision,read_only=d.read_only,can_insert=c.add==true,
+      can_reorder=c.move==true,can_remove=c.remove==true,can_skip=c.skip==true,can_replace=c.replace==true,summary=d.reason,
       cargo_rules=c.load and {load=flags.load,unload=flags.unload} or nil}
   end
   function A.edit(owner,id,rev,op,i,dest)
@@ -23,6 +23,12 @@ return function(S,Owned,flags)
     local val=op=="up" and i-1 or op=="down" and i+1 or dest
     if op=="append" then i=nil end
     return Owned.edit_orders(S,owner,id,rev,verbs[op] or op,i,val)
+  end
+  function A.copy_sources(owner,id,depot)
+    return Owned.copy_order_sources(S,owner,id,depot)
+  end
+  function A.copy(owner,id,depot,source,source_revision,target_revision)
+    return Owned.copy_orders(S,owner,id,depot,source,source_revision,target_revision)
   end
   return A
 end

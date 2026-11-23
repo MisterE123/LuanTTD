@@ -109,7 +109,7 @@ return function(Packets,Rating,passenger_acceptance,mail_acceptance)
     opts=opts or {}
     if opts.exclusive_owner~=nil and opts.exclusive_owner~=st.owner then return end
     if opts.town_rights and st.owner~=opts.neutral_owner then
-      local rights=opts.town_rights(st.town)
+      local rights=opts.town_rights(opts.station_town and opts.station_town(st) or st.town)
       if rights and rights.exclusive_counter>0 and rights.exclusivity~=st.owner then return end
     end
     local g=get_goods(st,cargo)

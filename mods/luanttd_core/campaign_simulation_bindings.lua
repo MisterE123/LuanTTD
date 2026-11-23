@@ -133,7 +133,8 @@ return function(Sim,mod)
   function B.owned_rail(s,lab,roster,pilot,oil_active)
     local depot=dofile(mod.."/rail_depot_fleet.lua")(Sim,lab,roster)
     local owned=dofile(mod.."/rail_owned_service.lua")(depot,roster,pilot,Sim.rail_coal_validate,Sim.rail_oil_validate,
-      oil_active,Sim.rail_goods_validate,Sim.rail_goods_active,{active=Sim.rail_profile_active,validate=Sim.rail_profile_validate})
+      oil_active,Sim.rail_goods_validate,Sim.rail_goods_active,{active=Sim.rail_profile_active,validate=Sim.rail_profile_validate},
+      Sim.rail_mail_active)
     lab.owned_depot_occupied=owned.occupies_depot
     s.rail_owned_service=true
     if not s.stock_rail_fleet then
@@ -168,7 +169,11 @@ return function(Sim,mod)
   end
   function B.rail_media(pilot,art)
     for _,id in ipairs(art.engines) do assert(pilot.mount_owned_model(id)) end
-    pilot.mount_bridge_collectors(function() return art.split.sh_30==true and art.split.sh_40==true end)
+    local Art=dofile(mod.."/rail_dispatch_manifest.lua")
+    pilot.mount_bridge_collectors(function(id)
+      if not id then return art.split.sh_30==true and art.split.sh_40==true end
+      return art.split[Art.stock_kind[id]]==true
+    end)
   end
   function B.tram(s,slope,interval)
     local terrain=dofile(source.."terrain.lua")

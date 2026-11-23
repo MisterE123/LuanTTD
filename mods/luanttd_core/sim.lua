@@ -2311,7 +2311,8 @@ local function passenger_modules()
   local commercial=dofile(base.."passenger_station_service.lua")(catchment,passenger_rules,income_rules,kernel,
     rating_runtime,loading_factory,timing)
   local mux=dofile(base.."passenger_supply_mux.lua")(M,catchment,passenger_rules,rating_runtime,kernel)
-  paid_ferry=dofile(base.."ship_paid_runtime.lua")(M,commercial,mux,credit,push,dofile(base.."rail_paid_actors.lua"))
+  paid_ferry=dofile(base.."ship_paid_runtime.lua")(M,commercial,mux,credit,push,
+    dofile(base.."rail_paid_actors.lua"),mail_runtime,catchment,rating_runtime.random_u32)
   return passenger_rules,income_rules
 end
 function M.stock_random_u32(s)
@@ -2523,6 +2524,26 @@ for _,key in ipairs(FreightKinds.profile_order) do
     local r=profiled.runtime[cargo]
     return r and r.take(s,"events") or {}
   end
+end
+function M.mount_rail_mail(s,asset,mixed_engines)
+  s.rail_mail_service=not not (asset and s.rail_paid_service and s.rail_owned_service and
+    s.road_stock_house_supply and s.corner_grid)
+  s.rail_mixed_town_engines=s.rail_mail_service and mixed_engines or nil
+  s.rail_mixed_town_service=not not (s.rail_mixed_town_engines and next(s.rail_mixed_town_engines))
+end
+function M.rail_mail_active(s)
+  return not not (s.rail_mail_service and paid_rail_runs[s] and s.stock_rail_fleet)
+end
+function M.rail_mail_stop_status(s,id)
+  return M.rail_mail_active(s) and paid_ferry.mail_station(s,id) or nil
+end
+function M.rail_mixed_status(s,fleet_id)
+  local q=M.rail_paid_status(s,fleet_id)
+  return q and q.cargo=="mixed" and q or nil
+end
+function M.rail_mail_status(s,fleet_id)
+  local q=M.rail_paid_status(s,fleet_id)
+  return q and q.cargo=="mail" and q or nil
 end
 function M.rail_paid_status(s,fleet_id)
   local rail=paid_rail_runs[s]
@@ -2772,7 +2793,8 @@ function M.waiting_passengers(s,st)
   return waiting
 end
 function M.rail_accident_ratings(s,owner,x,y)
-  return rating_runtime and rating_runtime.accident(s,owner,x,y) or 0
+  return rating_runtime and rating_runtime.accident(s,owner,x,y,
+    s.road_mail and mail_runtime and mail_runtime.accepts) or 0
 end
 
 function M.passenger_rating(s,st)
@@ -3325,7 +3347,8 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
           -- Timber scene IDs begin in the next band after stock coal.
           timber.after_vehicle_tick(tick)
         end
-      end,{passenger=commercial and commercial.hooks.passenger,landscape_tile=landscape,
+      end,{passenger=commercial and commercial.hooks.passenger,
+        mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
         growth=growth and growth.world,traverse=traverse})
     end
   else
@@ -3640,7 +3663,8 @@ function M.daily(s,traverse)
     town_passengers.day(s,function(tick)
       local ready,events=commercial.before(tick)
       commercial.after(tick,ready,events)
-    end,{passenger=commercial.hooks.passenger,landscape_tile=coastal_visit(s),traverse=traverse})
+    end,{passenger=commercial.hooks.passenger,mail=commercial.hooks.mail,
+      landscape_tile=coastal_visit(s),traverse=traverse})
   elseif road_supply then
     passenger_modules()
     if s.road_stock_house_supply then

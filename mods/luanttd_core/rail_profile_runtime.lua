@@ -8,7 +8,7 @@ local Runtime=dofile(mod.."/rail_industry_runtime.lua")
 return function(cargo,Sim,Rules,Catchment,Roster,FreightStation,Packets,Rating,Station,Loader,Timing,debit,credit,ready)
   local p=assert(Freight.profiles[cargo])
   local service=Service({tag=cargo:upper(),single_error="SINGLE_STOCK_"..cargo:upper().."_WAGON_REQUIRED",
-    wagon=assert(Roster.entry(p.wagon))},Sim,Rules,Catchment,Roster,FreightStation,Packets,Rating,Station,Loader,Timing)
+    wagon=assert(Roster.entry(p.wagon)),max_wagons=p.max_wagons},Sim,Rules,Catchment,Roster,FreightStation,Packets,Rating,Station,Loader,Timing)
   return Runtime({cargo=cargo,name="Rail "..p.name,block="block_"..cargo,
     enabled=function(s) return ready(s,cargo) and Sim["road_"..p.system.."_active"](s) end,
     distinct_industries=p.distinct_industries,

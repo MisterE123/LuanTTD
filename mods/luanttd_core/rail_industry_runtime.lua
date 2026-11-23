@@ -127,7 +127,7 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
   local function samples(s,Run,r)
     local out={}
     if r then
-      for i=1,2 do
+      for i=1,#r.consist.parts do
         local a,b,c,w,subsurface
         if Run.presentation_sample then a,b,c,w,subsurface=Run.presentation_sample(s,r,i)
         else a,b,c,w=Run.sample(r,i) end
@@ -170,7 +170,7 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     if r then
       if not state.vehicle then
         local v,why=b.vehicle({id=id,wagon=r.stock_wagon,owner=r.owner,length=r.total_length,
-          speed=r.max_track_speed,built=r.paid_build_year})
+          speed=r.max_track_speed,built=r.paid_build_year,parts=r.freight_parts})
         assert(v,why)
       end
       assert(state.vehicle.id==id and state.vehicle.owner==r.owner,"Only one bought "..cargo.." carrier can own this save")
@@ -218,10 +218,15 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
         local v=state.vehicle
         local callbacks={
           leave=function() return ready and b.leave(v.visit,tick) or false end,
-          cargo_count=function() return v.units end,
-          arrive=function(q,wagon)
+          cargo_count=function()
+            if not v.carrying_parts then return v.units end
+            local units={}
+            for i,p in ipairs(v.carrying_parts) do units[i]=p.units end
+            return v.units,nil,nil,nil,units
+          end,
+          arrive=function(q,wagon,_,cargo_tiles)
             local head=q.consist.parts[1].tile
-            return not not b.arrive(q.station,q.freight.visits,tick,head,wagon)
+            return not not b.arrive(q.station,q.freight.visits,tick,head,wagon,cargo_tiles)
           end,
         }
         if register then register(cargo,callbacks,finish)
@@ -236,7 +241,17 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     local state=s[storage]
     local v=state and state.vehicle
     local l=v and v.load_state
-    return {cargo=cargo,owner=r.owner,capacity=Service.wagon.capacity,onboard=v and v.units or 0,
+    local wagons
+    if r.freight_parts then
+      wagons={}
+      for i,p in ipairs(r.freight_parts) do
+        local vpart=v and v.carrying_parts[i]
+        wagons[i]={index=p.index,body_id=p.body_id,stock_id=p.stock,tile=vpart and vpart.cargo_tile,
+          capacity=Service.wagon.capacity,onboard=vpart and vpart.units or 0}
+      end
+    end
+    return {cargo=cargo,owner=r.owner,capacity=Service.wagon.capacity*(wagons and #wagons or 1),
+      wagons=wagons,onboard=v and v.units or 0,
       boarded=v and v.boarded or 0,delivered=v and v.delivered or 0,fare=v and v.revenue or 0,
       last_fare=v and v.last_fare,phase=r.phase,loading=l~=nil,finished=not not r.freight.complete,
       cargo_tile=v and v.cargo_tile,head_tile=v and v.head_tile,platform_tiles=l and l.platform_tiles,

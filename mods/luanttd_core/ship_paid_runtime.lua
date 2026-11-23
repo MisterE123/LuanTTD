@@ -1,8 +1,12 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Paid stock water/rail/air controllers share the house event mux and one
 -- station clock. The original paid-ferry save key remains stable.
-return function(Sim,Service,Mux,credit,news,RailActors)
+return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom)
   local F={}
+  local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local Roster=dofile(mod.."/openttd/rail_roster.lua")
+  local Freight=dofile(mod.."/rail_freight_kinds.lua")
+  local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
   local views=setmetatable({},{__mode="k"})
   local floor=math.floor
   local function commercial(s)
@@ -85,6 +89,8 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     local ctx={width=Sim.W,height=Sim.H,xy=Sim.xy,house_at=house_at,
       gradual=s.stock_gradual_loading~=false,feeder_percent=s.stock_feeder_percent,
       select_goods=s.stock_select_goods,
+      modified=s.stock_modified_catchment,
+      mail_random_u32=MailRandom and function() return MailRandom(s) end,
       year=function() return Sim.date(s) end,
       station_active=function(st) return active[mode(st)] end,
       vehicle_active=function(v) return active[v.mode] end,
@@ -115,16 +121,18 @@ return function(Sim,Service,Mux,credit,news,RailActors)
         credit(company,e.amount)
         if company.paid_units==0 and news then
           local line=e.mode=="rail" and "rail" or e.mode=="air" and "air" or "ferry"
+          local cargo=e.cargo=="mixed" and " passengers and mail bags" or e.cargo=="mail" and " mail bags" or " passengers"
           news(s,owner.." made their first paid delivery: "..e.units..
-            " "..line.." passengers for $"..e.amount..".")
+            " "..line..cargo.." for $"..e.amount..".")
         end
         company.units=company.units+e.units
         company.paid_units=company.paid_units+e.units
       elseif e.kind=="deliver" then
         local town=sink and s.sites[sink.town]
         if town then
-          town.received.passenger=(town.received.passenger or 0)+e.units
-          town.service=(town.service or 0)+e.units
+          local cargo=e.cargo or "passenger"
+          town.received[cargo]=(town.received[cargo] or 0)+e.units
+          if cargo=="passenger" then town.service=(town.service or 0)+e.units end
         end
       end
       frame.events[#frame.events+1]=e
@@ -151,13 +159,17 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     for _,p in ipairs(aircraft) do
       local id=air_key(p.paid_clock)
       local model=Air.engine_for and Air.engine_for(p) or Air.engine
+      local mail=p.engine_id and model and model.mail and model.mail>0 and
+        (not Air.paid_art_ready or Air.paid_art_ready(p))
       if not saved[id] then
         Service.vehicle(service,{id=id,mode="air",owner=p.owner,engine=p.engine_id,
-          speed=assert(model,"Unknown stock aircraft").max_speed,built=p.paid_build_year or Sim.date(s,p.paid_built_day or s.day)})
+          speed=assert(model,"Unknown stock aircraft").max_speed,built=p.paid_build_year or Sim.date(s,p.paid_built_day or s.day),
+          air_mail=mail})
       else
         local v=service.vehicles[id]
         assert(v and v.mode=="air" and v.owner==p.owner and (v.engine or 215)==(p.engine_id or 215),
           "Saved aircraft and its commercial cargo row disagree")
+        if mail then Service.mount_air_mail(v) end
       end
       serials[id]=true
     end
@@ -176,6 +188,8 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     -- depot, a sign outside the platform or the occupied carriage tile.
     local function sync(id,local_id,actual,tiles,mode_,ref,base,id_for_tick)
       local st=service.stations[id]
+      local mail=mode_=="air" or mode_=="rail" and s.rail_mail_service==true and not Freight.role(actual)
+      local fresh=not st or not not st.mail_enabled~=mail
       if st then
         assert(st.owner==actual.owner and mode(st)==mode_,"Commercial station ownership changed")
         st.tick_index=id_for_tick
@@ -186,6 +200,8 @@ return function(Sim,Service,Mux,credit,news,RailActors)
           tick_index=id_for_tick,tiles=tiles},ctx)
       end
       st.host_mode,st.host_id,st.footprint_rev=mode_,local_id,ref
+      st.mail_enabled=mail or nil
+      if mail and fresh then Service.refresh_mail_acceptance(service,id,ctx) end
       if not st.sign then local x,y=Sim.xy(base);st.sign={x=x,y=y} end
       if mode_=="ship" then st.land,st.water=actual.land,actual.water end
     end
@@ -309,6 +325,30 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     end
     if Air then reconcile_air(s,c,Air,aircraft,ctx,first_tick) end
     sync_stations(s,c,ctx,active)
+    local hooks=Mux.town_hooks
+    if (s.rail_mail_service and active.rail or active.air and next(s.stock_small_airports or {})) and Mail and Catchment then
+      local physical={}
+      for _,st in pairs(service.stations) do
+        if st.mail_enabled and active[mode(st)] then physical[#physical+1]=st end
+      end
+      if s.road_mail then
+        for _,st in ipairs(Mail.stops(s)) do physical[#physical+1]=st end
+      end
+      local function rights(id)
+        local growth=s.stock_town_growth
+        return growth and growth.towns[id]
+      end
+      local allocator=Mail.shared_allocator(Catchment,ctx.width,ctx.height,physical,{
+        select_goods=ctx.select_goods,neutral_owner=ctx.neutral_owner,town_rights=rights,
+        station_town=function(st) return st.town or st.site end,
+        modified=s.stock_modified_catchment,tiles=function(st)
+          if Mail.truck_stop(st) then return {at("truck",st.tile)} end
+          return st.tiles
+        end})
+      hooks={passenger=hooks.passenger,mail=function(_,units,x,z,house)
+        return allocator.offer(units,x,z,house)
+      end}
+    end
     if service.tick and service.tick<first_tick-1 then
       -- All services may have been suspended. Rebase their shared clock
       -- without aging or moving paused vehicles behind the player's back.
@@ -328,6 +368,11 @@ return function(Sim,Service,Mux,credit,news,RailActors)
         plane.stopped=not air_ready[n] or a.phase=="blocked" or a.stopped or a.vehicle.stopped or nil
         plane.broken=a.vehicle.broken or nil
         plane.crashed=a.vehicle.crashed or nil
+        if air_ready[n] and plane.load_state and (a.transport_cancel_full or a.transport_live_load~=nil) then
+          local full,no_load,full_any=CargoOrder.load_flags(a.transport_cancel_full and 0 or a.transport_live_load)
+          Service.update_load_type(plane,full,no_load,full_any)
+          a.transport_cancel_full,a.transport_live_load=nil,nil
+        end
         if not air_ready[n] and plane.load_state then
           held=held or {}
           held[plane.load_state]=plane.load_state.elapsed
@@ -380,7 +425,9 @@ return function(Sim,Service,Mux,credit,news,RailActors)
             leave=function(_,force) return leave(id,force) end,
             arrive=function(q,tile)
               assert(q.paid_clock==a.paid_clock,"Paid air movement selected another actor")
-              return Service.begin(service,id,air_key(q.last_airfield),q.arrivals,tile,{},tick,ctx,events)
+              local order=q.vehicle.order
+              return Service.begin(service,id,air_key(q.last_airfield),q.arrivals,tile,
+                order and order.kind=="station" and order.id==q.last_airfield and CargoOrder.arrival(order,{}) or {},tick,ctx,events)
             end,
           },function(name,q,airport)
             assert(q.paid_clock==a.paid_clock,"Paid air motion event selected another actor")
@@ -404,7 +451,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       end
       frame.ship_serial=run
     end
-    return {before=before,after=after,hooks=Mux.town_hooks}
+    return {before=before,after=after,hooks=hooks}
   end
 
   function F.take_effects(s,mode_)
@@ -491,6 +538,8 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     local index=rail and rail_key or mode_=="air" and air_key or function(k)return k end
     local vehicle=service and service.vehicles[index(p.paid_clock)]
     local waiting={}
+    local cargo=vehicle and vehicle.cargo or rail and p.town_parts and "mixed"
+      or rail and p.stock_wagon==28 and "mail" or "passenger"
     local orders=rail and (p.paired or p.shuttle) or p
     local stops={orders.first,orders.second}
     local list=rail and p.orders or p.transport_orders
@@ -504,20 +553,46 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       local sid=index(id)
       local st=service and service.stations[sid]
       local visible,available=0,0
-      if st then visible,available=Service.waiting(service,sid) end
-      waiting[id]={waiting=visible,available=available,accepts=st and st.passenger_acceptance>=8 or false}
+      local primary=cargo=="mixed" and "passenger" or cargo
+      if st then visible,available=Service.waiting(service,sid,primary) end
+      local accepted=st and (primary=="mail" and (st.mail_acceptance or 0) or st.passenger_acceptance)
+      local row={waiting=visible,available=available,accepts=(accepted or 0)>=8}
+      if cargo=="mixed" and st then
+        local mail,mail_available=Service.waiting(service,sid,"mail")
+        row.mail={waiting=mail,available=mail_available,accepts=(st.mail_acceptance or 0)>=8}
+      end
+      waiting[id]=row
     end
     local load=vehicle and vehicle.load_state
     local finance=rail and p.passenger_finance or mode_=="air" and p.finance or mode_=="ship" and p.owned and s.stock_owned_ferry
     local bodies
+    local capacities,onboard
+    if cargo=="mixed" then
+      capacities,onboard={passenger=0,mail=0},{passenger=0,mail=0}
+      if vehicle then
+        for _,part in ipairs(vehicle.carrying_parts) do
+          capacities[part.cargo]=capacities[part.cargo]+part.capacity
+          onboard[part.cargo]=onboard[part.cargo]+part.units
+        end
+      else
+        for _,part in ipairs(p.town_parts) do
+          local kind=part.stock==28 and "mail" or "passenger"
+          local stock=Service.stock_for("rail",nil,nil,kind)
+          capacities[kind]=capacities[kind]+stock.cap
+        end
+      end
+    end
     if vehicle and vehicle.carrying_parts then
       bodies={}
-      for i,v in ipairs(vehicle.carrying_parts) do bodies[i]={tile=v.cargo_tile,onboard=v.units,role=v.role} end
+      for i,v in ipairs(vehicle.carrying_parts) do bodies[i]={tile=v.cargo_tile,onboard=v.units,role=v.role,cargo=v.cargo,capacity=v.capacity,body_id=v.body_id,stock_id=v.stock} end
     end
-    local engine=rail and p.stock_engine==11 and 11 or p.engine_id
+    local engine=rail and Roster.passenger_dmu(p.stock_engine) and p.stock_engine or p.engine_id
     return {onboard=vehicle and vehicle.units or 0,
-      capacity=rail and p.passenger_coaches and p.passenger_coaches*Service.stock.rail.cap
-        or Service.stock_for(mode_,engine,rail and p.stock_wagon==27).cap,
+      capacity=capacities and capacities.passenger+capacities.mail or rail and p.passenger_coaches and p.passenger_coaches*Service.stock.rail.cap
+        or Service.stock_for(mode_,engine,rail and p.stock_wagon==27,cargo).cap,
+      cargo=cargo,cargo_capacity=capacities,
+      cargo_onboard=onboard,
+      cargo_totals=vehicle and vehicle.cargo_totals,
       carrying_parts=bodies,
       paid_clock=p.paid_clock,engine=p.engine_id,owner=p.owner,
       orders=rail and p.orders or nil,order_number=rail and p.order_cursor and p.order_cursor.real+1 or nil,
@@ -530,6 +605,38 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       cargo_tile=vehicle and vehicle.cargo_tile,
       platform_tiles=load and load.platform_tiles,tick=service and service.tick,
       paused=not enabled(s,mode_) or rail and Run.paid_art_ready and not Run.paid_art_ready(s) or mode_=="air" and Run.paid_art_ready and not Run.paid_art_ready(p) or false}
+  end
+  function F.mail_station(s,id)
+    local c=s.stock_ship_commercial
+    local service=c and c.service
+    local st=service and service.stations[rail_key(id)]
+    local physical=s.stock_rail_stations and s.stock_rail_stations[id]
+    if not physical or Freight.role(physical) then return end
+    -- A newly built/extended platform is inspectable while the clock
+    -- is paused. Recompute on a footprint edit, not for every steady read.
+    local valid,tiles={},{}
+    for _,tile in ipairs(physical.tiles or {}) do
+      local row=s.tiles[tile]
+      if row and row.rail_station_id==id and row.owner==physical.owner then
+        valid[#valid+1]=tile
+        tiles[#tiles+1]=at("rail",tile)
+      end
+    end
+    if #tiles==0 then return end
+    local waiting,available,rating=0,0,nil
+    if st and st.mail_enabled then
+      waiting,available=Service.waiting(service,st.id,"mail")
+      local g=st.mail_rating_state
+      rating=g and g.has_rating and g.rating
+      if st.footprint_rev==table.concat(valid,":") then
+        return {waiting=waiting,available=available,eighths=st.mail_acceptance or 0,
+          accepts=(st.mail_acceptance or 0)>=8,rating=rating or nil}
+      end
+    end
+    local catchment=Catchment.build({id=rail_key(id),tiles=tiles},
+      Sim.W,Sim.H,s.stock_modified_catchment)
+    local accept=Catchment.acceptance(catchment,"mail",context(s,{}).house_at)
+    return {waiting=waiting,available=available,eighths=accept.eighths,accepts=accept.accepts,rating=rating or nil}
   end
   -- A stop can already have a real waiting queue before a vehicle is
   -- dispatched (or after the last one was withdrawn). Do not use the

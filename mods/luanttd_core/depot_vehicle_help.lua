@@ -35,6 +35,15 @@ local function service(m,c,part,refit,needs_refit)
     elseif m=="ship" then return "Passenger ferry", "Build passenger docks near homes in two towns. Connect both docks and the ship depot by navigable water, then order the ferry to both docks."
     elseif m=="air" then return "Passenger aircraft", "Connect two airports near town homes. Use airports with a compatible runway, and order the plane from this hangar to the other airport." end
   end
+  if m=="air" and c=="mixed" then
+    return "Passenger and Mail aircraft","Order two airports near homes with compatible runways. The cabin and Mail hold earn their own fares. Full load any requires a full passenger cabin."
+  end
+  if m=="rail" and c=="mixed" then
+    return "Coach and Mail train","Use two ordinary town rail stations. Each physical wagon serves its own cargo. Full load any waits for all wagons of one cargo kind; full load all needs every wagon."
+  end
+  if m=="rail" and c=="mail" then
+    return "Rail Mail",prefix.."Order two different town rail platforms. Mail uses the houses in each platform's real catchment. No dedicated freight stage is needed."
+  end
   if m=="road" and c=="mail" then
     return "Mail van", "Place truck stops in two towns that produce and accept mail. Connect them and the depot by road, then order the van to both stops."
   end
@@ -71,6 +80,7 @@ function H.describe(m,c,model,stats,part,refit,needs_refit)
   if capacity and capacity>0 then
     info[#info+1]=("%g %s"):format(capacity,stats.capacity_unit or capacity_units[c or "passenger"] or "cargo units")
   end
+  if stats.mail_capacity and stats.mail_capacity>0 then info[#info+1]=("%d Mail bags"):format(stats.mail_capacity) end
   local speed=tonumber(stats.speed)
   if speed and speed>0 then info[#info+1]=("%g km/h"):format(speed) end
   if part=="dmu" then info[#info+1]="self-powered; no separate engine needed"

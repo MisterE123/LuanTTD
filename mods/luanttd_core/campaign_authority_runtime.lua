@@ -149,6 +149,12 @@ return function(Sim,mod,s,cap)
           local pos,rotation,kind,body_index,flip=body(train,p,i,engine,wagon)
           local body={tile=p.id,td=p.td,fraction=p.progress,index=i,body_index=body_index,kind=kind,
             pos=pos,rotation=rotation,reversed=not not p.reversed,flip=flip}
+          if train.town_parts or train.freight_parts then
+            local bodies=train.town_parts or train.freight_parts
+            local part=bodies[body_index-1]
+            body.stock_id=part and part.stock or train.stock_engine
+            body.body_id=part and part.body_id or train.town_engine_body_id or train.freight_engine_body_id
+          end
           if exhaust.profiles[kind] then
             local index=p.wormhole and s.rail_tunnel_below and s.rail_tunnel_below[p.id]
             local bore=index and (s.stock_rail_spans or {})[index]
@@ -156,7 +162,7 @@ return function(Sim,mod,s,cap)
             body.exhaust=exhaust.work(train,kind,body_index,s.tiles[p.id],
               network.spans.by_portal(s,p.id),underground or covered(p.id,pos.y))
           end
-          if i==1 and train.bridge_collectors and cap.rail.split[kind] then
+          if train.bridge_collectors and cap.rail.split[kind] then
             local rows,axis,side
             if span_wire then rows,axis,side=span_wire(s,p.id,p.td,p.wormhole) end
             body.collector={rows=rows,axis=axis,side=side}
@@ -193,6 +199,7 @@ return function(Sim,mod,s,cap)
     end
     B.rail_media(rail,cap.rail)
     Sim.mount_paid_rail(s,rail)
+    Sim.mount_rail_mail(s,cap.rail.ready.mail_van,cap.rail.mixed_town_engines)
     if s.rail_goods_service then
       Sim.mount_rail_goods(s,function() return cap.rail.ready.goods_van==true end)
     end

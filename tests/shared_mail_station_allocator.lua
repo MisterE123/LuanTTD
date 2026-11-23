@@ -30,4 +30,17 @@ local d=stop(5,"truck",12,13,1,"Competitor")
 local held=Mail.shared_allocator(Catchment,64,64,{a,d},{exclusive_owner="Carrier"})
 held.loading(d.id,"road",96,1980,1979,22)
 assert(held.offer(20,14,13,record)>0 and Mail.waiting(d)==0)
-print("PASS a single stock house Mail emission shares road/rail ratings, exact station footprints and cargo filters")
+local road,rail,airport=stop(2,"truck",12,13,1),stop(0x4002,"rail",16,13,3),stop(0xC001,"airport_city",16,13,6)
+local air=Mail.shared_allocator(Catchment,64,64,{airport,road,rail})
+assert(air.near(airport.id,25,13) and not air.near(airport.id,27,13))
+local old_catchment=Mail.shared_allocator(Catchment,64,64,{airport},{modified=false})
+assert(old_catchment.near(airport.id,25,13) and not old_catchment.near(airport.id,26,13))
+for _,slot in ipairs({{road,"road",96,104},{rail,"rail",150,147},{airport,"air",1120,203}}) do
+  air.loading(slot[1].id,slot[2],slot[3],1980,1978,20)
+  slot[1].mail_rating_state.rating=slot[4]
+end
+local accepted=air.offer(34,14,13,record)
+assert(accepted==26 and Mail.waiting(road)==6 and Mail.waiting(rail)==8 and Mail.waiting(airport)==12)
+assert(airport.stock.mail[1].origin_station==airport.id and airport.stock.mail[1].source==2)
+assert(air.acceptance(airport.id,house).accepts and airport.mail_rating_state.last_speed==87)
+print("PASS one stock house Mail emission competes among road, rail and air, with physical footprint and cargo filters")

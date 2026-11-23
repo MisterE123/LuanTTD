@@ -56,7 +56,16 @@ s.stock_ship_commercial={service={stations=stations,vehicles={}}}
 -- really transfers them from the platform into the vehicle.
 stations[keys.rail].stock.passenger[1].units=count.rail-2
 stations[keys.rail].loading_order={7}
-s.stock_ship_commercial.service.vehicles[7]={load_state={reserved_units=2}}
+local live_boarding={cargo="passenger",load_state={reserved_units=2}}
+s.stock_ship_commercial.service.vehicles[7]=live_boarding
+assert(Sim.commercial_passengers_waiting(s,"rail",1)==count.rail)
+-- A real mixed train reserves two passenger packets and seven bags.
+-- Passenger silhouettes include the reserved people, never Mail.
+live_boarding.cargo="mixed"
+live_boarding.carrying_parts={
+  {cargo="passenger",load_state={reserved_units=2}},
+  {cargo="mail",load_state={reserved_units=7}},
+}
 for mode,c in pairs(count) do
   assert(Sim.commercial_passengers_waiting(s,mode,1)==c,mode)
 end

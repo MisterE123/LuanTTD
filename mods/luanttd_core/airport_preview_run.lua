@@ -155,7 +155,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
         v.loading=nil
         if p.transport_orders then v.order=find_order(not skipped)
         else v.order={kind="station",id=v.last_station==p.first and p.second or p.first} end
-        p.transport_skip_loading,p.transport_cancel_full=nil,nil
+        p.transport_skip_loading,p.transport_cancel_full,p.transport_live_load=nil,nil,nil
         p.phase="taxi"
       end
       if p.transport_orders and not v.loading and not v.stopped then
@@ -173,6 +173,8 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
             a=dest
             p.target,p.phase=a.id,"flying"
           end
+        else
+          v.order=order
         end
       end
       if p.finance and not v.stopped then p.finance.ticks=p.finance.ticks+1 end

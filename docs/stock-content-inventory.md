@@ -12,7 +12,7 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 
 | Mode | Playable stock types | Art only | Total Temperate stock types |
 | --- | ---: | ---: | ---: |
-| Rail | 21 | 1 | 53 |
+| Rail | 25 | 0 | 53 |
 | Road | 34 | 0 | 34 |
 | Ship | 7 | 0 | 7 |
 | Aircraft | 16 | 0 | 35 |
@@ -26,17 +26,17 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 9 | Ginzu 'A4' (Steam) | Playable |  |
 | 10 | SH '8P' (Steam) | Playable |  |
 | 11 | Manley-Morel DMU (Diesel) | Playable |  |
-| 12 | 'Dash' (Diesel) | Not mounted |  |
+| 12 | 'Dash' (Diesel) | Playable | Powered twin, 80 seats; 120 with a separately purchasable Passenger Carriage. |
 | 13 | SH/Hendry '25' (Diesel) | Playable |  |
 | 14 | UU '37' (Diesel) | Playable |  |
 | 15 | Floss '47' (Diesel) | Playable |  |
 | 22 | SH '125' (Diesel) | Playable | Paired power heads; paid with passenger carriage. Internal Mail holds are not active. |
 | 23 | SH '30' (Electric) | Playable |  |
 | 24 | SH '40' (Electric) | Playable |  |
-| 25 | 'T.I.M.' (Electric) | Not mounted |  |
-| 26 | 'AsiaStar' (Electric) | Not mounted |  |
+| 25 | 'T.I.M.' (Electric) | Playable | Paired 240 km/h conventional electric heads; one separately purchasable carriage. |
+| 26 | 'AsiaStar' (Electric) | Playable | Paired 264 km/h conventional electric heads; one separately purchasable carriage. |
 | 27 | Passenger Carriage | Playable |  |
-| 28 | Mail Van | Art only | Native Mail Van asset and data; no rail Mail service yet. |
+| 28 | Mail Van | Playable | Native 30-bag van; shared town Mail allocator with road, ordinary rail orders and paid SQLite restart proof. |
 | 29 | Coal Truck | Playable | One mounted coal wagon service. |
 | 30 | Oil Tanker | Playable | One mounted oil wagon service. |
 | 31 | Livestock Van | Playable | Livestock from a Farm to a Factory. |

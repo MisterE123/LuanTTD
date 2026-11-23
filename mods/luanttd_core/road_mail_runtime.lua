@@ -112,7 +112,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     local waiting=M.waiting(st)
     local random=function() return Station.random_u32(s) end
     local r=Kernel.step(g,{waiting=waiting,destinations=waiting>0 and 1 or 0,
-      select_goods=true,random_u32=random})
+      select_goods=s.stock_select_goods~=false,random_u32=random})
     g.rating,g.has_rating,g.time_since_pickup=r.rating,r.has_rating,r.time_since_pickup
     g.last_speed,g.last_age,g.max_waiting_cargo=r.last_speed,r.last_age,r.max_waiting_cargo
     if r.drop>0 then
@@ -136,7 +136,24 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   -- The shared TownGenerateCargo output is not aggregated by town/center.
   -- Feed each finished house emission, in stock tick order. x,z are
   -- zero-based coordinates from H.advance_houses; callbacks do no RNG.
-  local function allocate(amount,record,list)
+  local function generated(st,units,record,source_type)
+    if source_type=="town" then
+      local q=st.stock.mail or {}
+      st.stock.mail=q
+      for i=#q,1,-1 do
+        local p=q[i]
+        if p.origin_station==st.id and p.origin_tile==nil and (p.age or 0)==0 and
+            (p.source_type==nil or p.source_type=="town") and p.source==record.town and p.units+units<=65535 then
+          p.units,p.source_type=p.units+units,"town"
+          return
+        end
+      end
+      q[#q+1]={units=units,source=record.town,source_type="town",origin_station=st.id,age=0}
+    else
+      M.enqueue(st,{units=units,source=record.town,origin_station=st.id,age=0})
+    end
+  end
+  local function allocate(amount,record,list,source_type)
     if #list==0 then return 0 end
     Packets.allocate(amount,list)
     local moved=0
@@ -144,7 +161,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
       local st=entry.st
       local units=M.whole_units(st,entry.fixed)
       if units>0 then
-        M.enqueue(st,{units=units,source=record.town,origin_station=st.id,age=0})
+        generated(st,units,record,source_type)
         Kernel.observe_waiting(goods(st),units)
         moved=moved+units
       end
@@ -169,28 +186,39 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   -- emission. Do not dispatch beside from_house: the two eligible modes
   -- must compete in this single MoveGoodsToStation call.
   function M.shared_allocator(Catchment,width,depth,physical,options)
-    local stations,by_id={},{}
+    local stations,by_id,nearby={},{},{}
     for _,st in ipairs(physical) do
       assert(not by_id[st.id],"Duplicate physical mail station")
-      local region=Catchment.build(st,width,depth,options and options.modified)
+      local tiles=options and options.tiles and options.tiles(st)
+      local region=Catchment.build(tiles and {id=st.id,tiles=tiles} or st,width,depth,options and options.modified)
       by_id[st.id]={st=st,region=region}
       stations[#stations+1]=by_id[st.id]
     end
     table.sort(stations,function(a,b)return a.st.id<b.st.id end)
+    -- Build one reverse index for the day's stable physical stations.
+    -- Houses only compete among covering stations, not every platform
+    -- on a 4096-tile edge; candidate order remains stable StationID.
+    for _,q in ipairs(stations) do
+      for tile in pairs(q.region.tiles) do
+        local a=nearby[tile]
+        if not a then a={};nearby[tile]=a end
+        a[#a+1]=q
+      end
+    end
     local S={}
     local function lookup(id)
       local x=assert(by_id[id],"Unknown shared mail station")
       return x.st,x.region
     end
     function S.offer(amount,x,z,record)
-      if amount<=0 then return 0 end
+      if amount<=0 or x<0 or x>=width or z<0 or z>=depth then return 0 end
       assert(record and record.town,"Mail origin requires the emitting house's town")
       local list={}
-      for _,q in ipairs(stations) do
+      for _,q in ipairs(nearby[z*width+x] or {}) do
         local rank=Catchment.offer(q.st,q.region,"mail",x,z,goods,options)
         if rank then list[#list+1]={st=q.st,rating=rank} end
       end
-      return allocate(amount,record,list)
+      return allocate(amount,record,list,"town")
     end
     function S.acceptance(id,house_at)
       local _,region=lookup(id)

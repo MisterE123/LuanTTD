@@ -48,8 +48,12 @@ auth_backend = sqlite3
 mod_storage_backend = sqlite3
 CONF
 use_market=false
-if [[ ${BAYLINE_NATIVE_SH_8P:-false} == true || ${BAYLINE_NATIVE_MANLEY:-false} == true || ${BAYLINE_NATIVE_MANLEY_COACH:-false} == true || ${BAYLINE_NATIVE_ELECTRIC:-false} == true || ${BAYLINE_NATIVE_SH_40:-false} == true ]]; then use_market=true; fi
+if [[ ${LUANTTD_NATIVE_ASIASTAR:-false} == true || ${LUANTTD_NATIVE_TIM:-false} == true || ${LUANTTD_NATIVE_DASH:-false} == true || ${LUANTTD_NATIVE_DASH_COACH:-false} == true || ${BAYLINE_NATIVE_SH_8P:-false} == true || ${BAYLINE_NATIVE_MANLEY:-false} == true || ${BAYLINE_NATIVE_MANLEY_COACH:-false} == true || ${BAYLINE_NATIVE_ELECTRIC:-false} == true || ${BAYLINE_NATIVE_SH_40:-false} == true ]]; then use_market=true; fi
 cat > "$out/native.conf" <<EOF_CONF
+luanttd_qa_asiastar = ${LUANTTD_NATIVE_ASIASTAR:-false}
+luanttd_qa_tim = ${LUANTTD_NATIVE_TIM:-false}
+luanttd_qa_dash = ${LUANTTD_NATIVE_DASH:-false}
+luanttd_qa_dash_coach = ${LUANTTD_NATIVE_DASH_COACH:-false}
 luanttd_qa_live_order_edit = ${LUANTTD_NATIVE_LIVE_ORDER_EDIT:-false}
 luanttd_qa_cargo_order_edit = ${LUANTTD_NATIVE_CARGO_ORDER_EDIT:-false}
 luanttd_qa_two_coaches = ${LUANTTD_NATIVE_TWO_COACHES:-false}

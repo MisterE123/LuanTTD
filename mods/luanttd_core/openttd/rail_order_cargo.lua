@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- OpenTTD 16.0-RC1 src/order_type.h and src/order_cmd.cpp CmdModifyOrder
 -- MOF_LOAD/MOF_UNLOAD. This adapter handles station orders of passenger
--- trains, which have exactly one cargo type even with several coaches.
+-- trains, with full-any matching completion of any whole cargo type.
 local M={}
 M.load={
   {value=0,label="Load if available"}, {value=2,label="Full load all"},
@@ -26,10 +26,10 @@ function M.change(order,kind,value,unbunching)
   return false
 end
 function M.load_flags(value)
-  return value==2 or value==3,value==4
+  return value==2 or value==3,value==4,value==3
 end
 function M.arrival(order,opts)
-  opts.full,opts.no_load=M.load_flags(order.load_type)
+  opts.full,opts.no_load,opts.full_any=M.load_flags(order.load_type)
   opts.force_unload=order.unload_type==1
   opts.transfer=order.unload_type==2
   opts.no_unload=order.unload_type==4

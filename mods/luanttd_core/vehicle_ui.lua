@@ -280,10 +280,14 @@ return function(api)
       local pick_append=not not (adapter and adapter.submit_tile and data.can_insert~=false)
       local pick_replace=not not (adapter and adapter.submit_tile and data.can_replace and items[row])
       for i,o in ipairs(items) do labels[i]={label=(data.active==i and "▶ " or "   ")..i..". "..(o.label or tostring(o.id))} end
-      b=b.."label[.45,1.05;Orders]label[5.65,1.05;Available destinations]"..
-        ("textlist[.45,1.30;4.98,3.72;V_TOKEN_row;%s;%d;false]"):format(texts(labels,"(No orders)"),row)..
-        ("textlist[5.55,1.30;5,%g;V_TOKEN_target;%s;%d;false]"):format(
-          (pick_append or pick_replace) and 3.08 or 3.72,texts(targets,"(No destinations)"),target)
+      b=b.."label[.45,1.05;Orders]"..
+        ("textlist[.45,1.30;%g,3.72;V_TOKEN_row;%s;%d;false]"):format(
+          data.read_only and 10.10 or 4.98,texts(labels,"(No orders)"),row)
+      if not data.read_only then
+        b=b.."label[5.65,1.05;Available destinations]"..
+          ("textlist[5.55,1.30;5,%g;V_TOKEN_target;%s;%d;false]"):format(
+            (pick_append or pick_replace) and 3.08 or 3.72,texts(targets,"(No destinations)"),target)
+      end
       if pick_append then
         b=b..("button[5.55,4.43;%g,.57;V_TOKEN_pick_world;Pick in world]"):format(pick_replace and 2.37 or 5)
       end
@@ -301,7 +305,7 @@ return function(api)
       end
       if data.can_replace then
         b=b.."button[5.55,5.78;5,.53;V_TOKEN_replace;Replace selected order]"
-      else b=b.."label[5.65,5.99;Select an order or a destination first.]" end
+      elseif not data.read_only then b=b.."label[5.65,5.99;Select an order or a destination first.]" end
       if cargo and items[row] and items[row].cargo then
         local f=items[row].cargo
         b=b.."label[.45,6.53;Cargo rules for selected order]"

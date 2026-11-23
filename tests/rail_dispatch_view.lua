@@ -42,7 +42,7 @@ local function fixture(missing_file,electric,eased,reversal)
     rail_oil_status=function()error("sealed visual must not query the oil ledger")end,
   }
   local Run={current=function()return d end,mount_owned_model=function(id)
-    assert(id==8 or id==9 or id==10 or id==11 or id==13 or id==14 or id==15 or id==22 or electric and (id==23 or id==24),
+    assert(id==8 or id==9 or id==10 or id==11 or id==12 or id==13 or id==14 or id==15 or id==22 or electric and (id==23 or id==24 or id==25 or id==26),
       "cargo or inactive electric art must not be registered as engines")
     mounted[id]=true
     return true
@@ -174,23 +174,28 @@ for _,clock in ipairs({true,false}) do
   step(X)
   assert(a.pos.x==out_a and b.pos.x==out_b and angle(a.rot.y,math.pi) and angle(b.rot.y,math.pi))
 end
-for _,coach in ipairs({true,false}) do
-  local X,D,S,_,A=fixture(nil,nil,nil,true)
-  local parts={{},{}}
-  if coach then parts[3]={} end
-  D.runs[1]={id="Manley with rear driving cab",stock_engine=11,stock_wagon=coach and 27 or nil,
-    fleet_id=91,paid_clock=true,consist={parts=parts}}
-  step(X)
-  assert(#A==#parts and A[1].name=="luanttd_core:dispatch_manley" and A[#A].name==A[1].name)
-  local saved={}
-  for i,a in ipairs(A) do saved[i]={x=a.pos.x,yaw=a.rot.y,pitch=a.rot.x} end
-  assert(angle(saved[1].yaw,math.pi) and angle(saved[#A].yaw,0), "both cabs face out")
-  S.reversed=true;step(X)
-  assert(#A==#parts, "no vehicle respawns on push-pull change")
-  for i,a in ipairs(A) do
-    assert(a.pos.x==saved[i].x and angle(a.rot.y,saved[i].yaw) and a.rot.x==saved[i].pitch,
-      "push-pull must preserve each body position and facing")
+local _,_,_,no_dash=fixture("bl_rail_dash.obj")
+assert(not no_dash["luanttd_core:dispatch_dash"] and no_dash["luanttd_core:dispatch_manley"])
+for _,design in ipairs({{11,"manley"},{12,"dash"}}) do
+  for _,coach in ipairs({true,false}) do
+    local X,D,S,_,A=fixture(nil,nil,nil,true)
+    local parts={{},{}}
+    if coach then parts[3]={} end
+    D.runs[1]={id=design[2].." with rear driving cab",stock_engine=design[1],stock_wagon=coach and 27 or nil,
+      dual_head=true,
+      fleet_id=91,paid_clock=true,consist={parts=parts}}
+    step(X)
+    assert(#A==#parts and A[1].name==("luanttd_core:dispatch_"..design[2]) and A[#A].name==A[1].name)
+    local saved={}
+    for i,a in ipairs(A) do saved[i]={x=a.pos.x,yaw=a.rot.y,pitch=a.rot.x} end
+    assert(angle(saved[1].yaw,math.pi) and angle(saved[#A].yaw,0), "both cabs face out")
+    S.reversed=true;step(X)
+    assert(#A==#parts, "no vehicle respawns on push-pull change")
+    for i,a in ipairs(A) do
+      assert(a.pos.x==saved[i].x and angle(a.rot.y,saved[i].yaw) and a.rot.x==saved[i].pitch,
+        "push-pull must preserve each body position and facing")
+    end
   end
 end
-print("RAIL_REVERSAL_VIEW_PASS: steam and coach change leading position and face travel; Manley changes cabs without flipping vehicles.")
+print("RAIL_REVERSAL_VIEW_PASS: steam and coach change leading position and face travel; Manley and Dash change cabs without flipping vehicles.")
 print("RAIL_DISPATCH_VIEW_PASS: paid Oil #30 uses the sealed original at all cargo, missing mesh/atlas detected, unchanged Coal #29 and Passenger #27.")

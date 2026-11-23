@@ -278,21 +278,29 @@ return function(Sim,Lab,Roster)
     if not opts.company_railtypes[0] and not opts.company_railtypes[1] then
       return nil,"RAIL_VEHICLE_NOT_AVAILABLE"
     end
-    -- Only a verified live host can open this opted-in wagon. Never
+    -- Derive availability from live service and scanned stock art. Never
     -- accept a request-side flag from the selection or persisted receipt.
+    opts.mount_mixed_town=s.rail_mixed_town_engines and s.rail_mixed_town_engines[ids[1]]==true
+    opts.mount_mail_wagon=s.rail_mail_service==true and hooks and
+      hooks.mail_wagon_ready and hooks.mail_wagon_ready(s)==true or false
     opts.mount_oil_wagon=s.rail_oil_service==true and hooks and
       hooks.oil_wagon_ready and hooks.oil_wagon_ready(s)==true or false
     opts.mount_goods_wagon=s.rail_goods_service==true and hooks and
       hooks.goods_wagon_ready and hooks.goods_wagon_ready(s)==true or false
-    opts.mount_profile_wagons={}
+    opts.mount_profile_wagons,opts.profile_max_wagons={},{}
     if hooks and hooks.profile_wagon_ready then
       for cargo,p in pairs(Freight.profiles) do
         local wagon=p.wagon
         opts.mount_profile_wagons[wagon]=s["rail_"..cargo.."_service"]==true and hooks.profile_wagon_ready(s,cargo)==true
+        if opts.mount_profile_wagons[wagon] then opts.profile_max_wagons[wagon]=p.max_wagons end
       end
     end
-    opts.mount_manley=s.rail_paid_service==true and hooks and
-      hooks.manley_ready and hooks.manley_ready(s)==true or false
+    opts.mounted_dmus={}
+    if s.rail_paid_service==true and hooks and hooks.dmu_ready then
+      for _,id in ipairs(ids) do
+        if Roster.passenger_dmu(id) then opts.mounted_dmus[id]=hooks.dmu_ready(id)==true end
+      end
+    end
     opts.mount_sh_125=s.rail_paid_service==true and hooks and
       hooks.sh_125_ready and hooks.sh_125_ready(s)==true or false
     opts.mounted_electric={}
@@ -492,6 +500,15 @@ return function(Sim,Lab,Roster)
     table.sort(out,function(a,b) return a.unit_number<b.unit_number end)
     return out
   end
+  function F.write_order_draft(s,owner,id,at,orders,cursor)
+    local d=state(s)
+    local r=d and d.units[id]
+    if not r or r.owner~=owner or r.depot~=at or r.status~="depot" then
+      return nil,"Select a parked train in this depot."
+    end
+    r.order_draft={orders=clone(orders),cursor=clone(cursor),revision=(r.order_draft and r.order_draft.revision or 0)+1}
+    return true
+  end
   function F.loose(s,owner,depot_id)
     local out={}
     local d=state(s)
@@ -618,7 +635,7 @@ return function(Sim,Lab,Roster)
     if not ok then return nil,why end
     local d=state(s)
     local r=d.units[id]
-    r.status,r.run_id="dispatched",run_id
+    r.status,r.run_id,r.order_draft="dispatched",run_id,nil
     d.arrangement=(d.arrangement or 0)+1
     return true
   end

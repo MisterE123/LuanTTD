@@ -2,6 +2,8 @@
 -- Adapters for live ship/aircraft orders. List index updates use the
 -- translated OpenTTD 16.0-RC1 order_cmd.cpp/vehicle_base.h rules.
 return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
+  local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
   local function label(title,id,tile)
     local x,z
     if tile then x,z=Sim.xy(tile) end
@@ -76,7 +78,8 @@ return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
       for i,o in ipairs(list) do
         local dest=key(o)
         local _,desc=order(mode,owner,dest,nil,o.cargo_order)
-        items[i]={id=dest,label=desc or ("Removed stop "..tostring(dest))}
+        items[i]={id=dest,label=(desc or ("Removed stop "..tostring(dest)))..(mode=="air" and CargoOrder.summary(o) or ""),
+          cargo=mode=="air" and {load=o.load_type or 0,unload=o.unload_type or 0} or nil}
       end
       local ids={}
       for id in pairs(registry(mode)) do ids[#ids+1]=id end
@@ -98,7 +101,8 @@ return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
         end
       end
       return {items=items,targets=targets,revision=p.transport_orders_revision or 0,
-        active=cursor.real+1,can_toggle=mode~="air",running=mode~="air" and not p.stopped or nil}
+        active=cursor.real+1,can_toggle=mode~="air",running=mode~="air" and not p.stopped or nil,
+        cargo_rules=mode=="air" and {load=CargoOrder.load,unload=CargoOrder.unload} or nil}
     end
     function A.edit(owner,id,revision,op,index,target)
       local mode=mode_of(id)
@@ -129,6 +133,11 @@ return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
         if index==c.implicit+1 or #seq<2 then return false,"This is already the current order." end
         c.real,c.implicit=index-1,index-1
         O.update_real(seq,c)
+      elseif mode=="air" and (op=="load" or op=="unload") then
+        local setting={}
+        for k,v in pairs(seq[index]) do setting[k]=v end
+        if not CargoOrder.change(setting,op,target) then return false,"That cargo rule is already set or is not supported." end
+        seq[index]=setting
       else return false,"Unknown order command." end
       local n,first,second=0
       local has_full,has_unload
@@ -155,6 +164,8 @@ return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
       elseif op=="remove" and current and p.vehicle.loading then
         -- DeleteOrder cancels compulsory full loading, not the entire stop.
         p.transport_cancel_full=true
+      elseif mode=="air" and op=="load" and current and p.vehicle.loading then
+        p.transport_live_load=target
       end
       return true,op=="skip" and "Vehicle order changed." or "Vehicle orders updated."
     end

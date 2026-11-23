@@ -48,6 +48,8 @@ local function transfer_ordinary(viewer)
   local caps={autoplay=true,seconds_per_day=.16,durable_actions=true}
   for k,value in pairs(api.capabilities) do if caps[k]==nil then caps[k]=value end end
   assert(caps.air[215] and caps.ferry[206] and #caps.rail.engines>0)
+  assert(api.rail_mixed_town_tools and caps.rail.mixed_town_engines[0],
+    "Regular game did not derive mixed town rail from native assets")
   local filename="ordinary-worker-qa.chk"
   local disk=dofile(mod.."/campaign_checkpoint.lua")(core,dofile(mod.."/packed_campaign.lua"),filename)
   local frozen=false
@@ -411,10 +413,20 @@ local function transfer_ordinary(viewer)
           {"rail",{tool="signal",first=signal_tile,trackdir=0,kind=4}},
           {"transport",{mode="rail",operation="buy",depot=depot,parts={0,27}},nil,function(bought)
             train_id=bought.value.id
-            ask({kind="command",command={kind="transport_start",mode="rail",vehicle=train_id,
-              first=2,second=1,revision=bought.revision}},function(started)
-              assert(started.ok,started.why)
-              watch()
+            ask({kind="depot",mode="rail",depot=depot},function(d)
+              assert(d.ok,d.why)
+              local mixed
+              for _,item in ipairs(d.value.offers) do
+                local p=item.request.parts
+                if p and #p==3 and p[1]==0 and p[2]==27 and p[3]==28 then mixed=true;break end
+              end
+              assert(mixed,"Regular authority depot did not offer the verified mixed formation")
+              core.log("action","PASS NATIVE DEFAULT MIXED RAIL CAPABILITY")
+              ask({kind="command",command={kind="transport_start",mode="rail",vehicle=train_id,
+                first=2,second=1,revision=d.revision}},function(started)
+                assert(started.ok,started.why)
+                watch()
+              end)
             end)
           end},
           })

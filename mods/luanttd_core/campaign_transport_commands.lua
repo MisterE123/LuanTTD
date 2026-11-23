@@ -1,6 +1,7 @@
 -- Worker-facing transactions call the regular railway, water and airfield
 -- models. Their quotes are retained on the owner, not trusted from forms.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Roster=dofile(mod.."/openttd/rail_roster.lua")
 local Help=dofile(mod.."/depot_vehicle_help.lua")
 local Freight=dofile(mod.."/rail_freight_kinds.lua")
 return function(Sim,R)
@@ -198,7 +199,8 @@ return function(Sim,R)
     end
     local function air_help(entry)
       entry=entry or {}
-      return Help.describe("air",nil,entry.name,{capacity=entry.passengers,speed=entry.max_speed,
+      return Help.describe("air",entry.mail and entry.mail>0 and "mixed" or nil,entry.name,{capacity=entry.passengers,
+        capacity_unit="seats",mail_capacity=entry.mail,speed=entry.max_speed,
         runway=entry.jet and "use City Airports"})
     end
     if mode=="road" and tile(key) then
@@ -228,35 +230,72 @@ return function(Sim,R)
         catalogue[row.stock_id]=row
         if row.passenger_model_ready then
           local id=row.stock_id
-          add(row.name or tostring(id),{mode=mode,operation="buy",depot=key,parts=id==11 and {id} or {id,27}},
-            Help.describe("rail","passenger",row.name,{speed=row.speed,capacity=id==11 and 76 or 40},id==11 and "dmu" or nil))
+          local dmu=Roster.passenger_dmu(id)
+          local capacity=dmu and row.capacity*2 or 40
+          add(row.name or tostring(id),{mode=mode,operation="buy",depot=key,parts=dmu and {id} or {id,27}},
+            Help.describe("rail","passenger",row.name,{speed=row.speed,capacity=capacity},dmu and "dmu" or nil))
+          if dmu then
+            add(row.name.." + Passenger Carriage",{mode=mode,operation="buy",depot=key,parts={id,27}},
+              Help.describe("rail","passenger",row.name.." + Passenger Carriage",{speed=row.speed,capacity=capacity+40},"dmu"))
+          end
         end
       end
-      for _,cargo in ipairs(Freight.profile_order) do
-        local p=Freight.profiles[cargo]
-        local car=catalogue[p.wagon]
+      local depot_cargos={"mail"}
+      for _,cargo in ipairs(Freight.profile_order) do depot_cargos[#depot_cargos+1]=cargo end
+      for _,cargo in ipairs(depot_cargos) do
+        local wagon=cargo=="mail" and 28 or Freight.profiles[cargo].wagon
+        local car=catalogue[wagon]
         if car then
           for _,stock in ipairs({0,8,9,10,13,14,15,23,24}) do
             local engine=catalogue[stock]
             if engine and engine.passenger_model_ready then
-              local cmd={mode=mode,operation="buy",depot=key,parts={stock,p.wagon}}
+              local cmd={mode=mode,operation="buy",depot=key,parts={stock,wagon}}
               local q=T.quote(owner,cmd)
               if q then
                 offers[#offers+1]={name=engine.name.." + "..car.name,price=q.price,request=q.request,
                   help=Help.describe(mode,cargo,car.name,{capacity=car.capacity,speed=engine.speed})}
+                local f=Freight.profiles[cargo]
+                if f and f.max_wagons==2 then
+                  local pair={mode=mode,operation="buy",depot=key,parts={stock,wagon,wagon}}
+                  local together=T.quote(owner,pair)
+                  if together then
+                    offers[#offers+1]={name=engine.name.." + 2 "..car.name.."s",price=together.price,request=together.request,
+                      help=Help.describe(mode,cargo,"2 "..car.name.."s",{capacity=2*car.capacity,speed=engine.speed})}
+                  end
+                end
                 break
               end
             end
           end
         end
       end
+      if s.rail_mixed_town_service then
+        local cmd={mode=mode,operation="buy",depot=key,parts={0,27,28}}
+        local q=T.quote(owner,cmd)
+        if q then
+          offers[#offers+1]={name="Kirby + Passenger Carriage + Mail Van",price=q.price,request=q.request,
+            help=Help.describe(mode,"mixed","Coach and Mail train")}
+        end
+      end
       for _,unit in ipairs(R.rail.owned.list(s,owner,key)) do
-        local cargo=Freight.wagons[unit.stock_ids[2]]
+        local mixed=R.rail.owned.mixed_consist and R.rail.owned.mixed_consist(s,unit)
+        local cargo=mixed and "mixed" or unit.stock_ids[2]==28 and "mail" or Freight.wagons[unit.stock_ids[2]]
         local engine=catalogue[unit.stock_ids[1]] or {}
-        local part=#unit.stock_ids==1 and (unit.stock_ids[1]==11 and "dmu" or "engine") or nil
+        local profile=Freight.profiles[cargo]
+        local unsupported=profile and R.rail.owned.profile_consist and not R.rail.owned.profile_consist(s,unit,cargo)
+        local car=profile and catalogue[profile.wagon]
+        local wagon_count=car and not unsupported and #unit.stock_ids-1 or nil
+        local dmu=Roster.passenger_dmu(unit.stock_ids[1])
+        local part=dmu and "dmu" or #unit.stock_ids==1 and "engine" or nil
+        local seats=dmu and (2*Roster.entry(unit.stock_ids[1]).capacity+(unit.stock_ids[2]==27 and 40 or 0)) or nil
         vehicles[#vehicles+1]={id=unit.id,label="Train "..unit.unit_number..
-          (cargo and " · "..Sim.cargo[cargo].name or ""),cargo=cargo,
-          help=Help.describe("rail",Help.rail_cargo(unit.stock_ids[2]),engine.name,{speed=engine.speed},part)}
+          (cargo and " · "..(cargo=="mixed" and "Coach and Mail" or Sim.cargo[cargo].name) or "")..
+          (wagon_count and wagon_count>1 and (" · "..wagon_count.." wagons") or ""),cargo=cargo,unsupported=unsupported or nil,
+          order_copy=unit.status=="depot" and (not cargo and R.rail.owned.passenger_consist(unit) or cargo=="mixed" or cargo=="mail") or nil,
+          copied=unit.order_draft and #unit.order_draft.orders,
+          draft_revision=unit.order_draft and "rail-parked:"..unit.order_draft.revision,
+          help=Help.describe("rail",mixed and "mixed" or Help.rail_cargo(unit.stock_ids[2]),engine.name,
+            {speed=engine.speed,capacity=wagon_count and car.capacity*wagon_count or seats},part)}
       end
     elseif mode=="ship" and R.water and id(key) then
       local t=s.stock_ship_depots and s.stock_ship_depots[key]
@@ -365,13 +404,17 @@ return function(Sim,R)
       local ok,why=R.tram.run.clear(s,owner)
       return ok,ok and "Test streetcar removed. Your tramway and stops remain." or why
     end
+    if req.mode=="rail" and req.copied==true and R.rail and R.rail.owned and id(req.vehicle) and tile(req.depot) then
+      if type(req.draft_revision)~="string" or #req.draft_revision>32 then return false,"Invalid order list." end
+      return R.rail.owned.start_copied_orders(s,owner,req.vehicle,req.depot,req.draft_revision)
+    end
     if not (id(req.first) and id(req.second)) or req.first==req.second then return false,"INVALID_DESTINATIONS" end
     if req.mode=="tram" and R.tram and tile(req.depot) and tile(req.first) and tile(req.second) then
       local run,why=R.tram.run.start(s,owner,req.depot,req.first,req.second)
       return run~=nil,run and "Test streetcar dispatched between the two stops. It does not carry passengers." or why
     elseif req.mode=="rail" and R.rail and R.rail.owned and id(req.vehicle) then
       local start=R.rail.owned.start
-      if Freight.known(req.cargo) then
+      if req.cargo=="mixed" or req.cargo=="mail" or Freight.known(req.cargo) then
         start=R.rail.owned["start_"..req.cargo]
       elseif req.cargo~=nil then return false,"Unsupported train cargo." end
       return start(s,owner,req.vehicle,req.first,req.second)

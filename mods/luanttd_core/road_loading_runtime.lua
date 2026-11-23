@@ -4,7 +4,7 @@
 -- and CargoPayment; cargopacket.cpp Stage, ChooseAction, Unload and Reserve;
 -- cargoaction.cpp packet movement; vehicle.cpp BeginLoading/HandleLoading.
 -- Callbacks supply actual station acceptance, payments, and presentation.
--- No NewGRF callbacks, auto-refit, addressed cargo flow, or articulated consists.
+-- Optional train assembly provides per-body parameters and one shared payment.
 return function(Timing,Packets)
   local L={}
   local floor,min,max=math.floor,math.min,math.max
@@ -205,6 +205,13 @@ return function(Timing,Packets)
           pay.route=pay.route+income
           pay.visual=pay.visual+income-(p.feeder_share or 0)
           pay.delivered=pay.delivered+p.units
+          if pay.by_cargo then
+            local detail=pay.by_cargo[v.cargo]
+            if not detail then detail={route=0,visual=0,transfer=0,delivered=0};pay.by_cargo[v.cargo]=detail end
+            detail.route=detail.route+income
+            detail.visual=detail.visual+income-(p.feeder_share or 0)
+            detail.delivered=detail.delivered+p.units
+          end
           delivered=delivered+p.units
         end
         unloaded=unloaded+p.units
@@ -297,7 +304,7 @@ return function(Timing,Packets)
         local v=vehicles[order[i]]
         if not v.stopped and not v.crashed then
           if v.carrying_parts then
-            local c=assert(ops.consist,"Multiple cargo stores need one fitted train controller")
+            local c=assert(ops.consist,"Multiple cargo stores need one shared carrier controller")
             c.reserve(st,v,ops)
             if v.load_state.ticks==0 then rounds[#rounds+1]=c.round(st,v,ops) end
           else

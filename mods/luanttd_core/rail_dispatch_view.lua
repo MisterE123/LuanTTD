@@ -26,7 +26,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
       local body=d.mesh:gsub("%.obj$","_body.obj")
       local mast="bl_rail_sh_collector.obj"
       entity("dispatch_"..kind.."_body",body,d.atlas,d.size)
-      -- Both locomotive atlases qualify the shared collector UVs.
+      -- Each tested locomotive atlas qualifies the shared collector UVs.
       entity("dispatch_"..kind.."_collector",mast,d.atlas,d.size)
     end
   end
@@ -100,13 +100,13 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
         if fit_couplings then samples=fit_couplings(samples,parts,push_pull) or samples end
         for i=1,#parts do
           local sample=samples[i]
-          if sample and ready[engine] and ready[wagon] then
+          if sample and ready[engine] and (type(wagon)=="table" or ready[wagon]) then
             local id,td,progress,reversed,wormhole=sample.id,sample.td,sample.progress,sample.reversed,sample.wormhole
             local body,rotation,kind,body_index,flip_epoch=body_pose(train,sample,i,engine,wagon)
             local key=train.id..":"..body_index
-            local visible=not api.interest or api.interest.near(body,refs[key]~=nil)
+            local visible=ready[kind] and (not api.interest or api.interest.near(body,refs[key]~=nil))
             local ref
-            if visible and i==1 and train.bridge_collectors and split_ready[kind] then
+            if visible and train.bridge_collectors and split_ready[kind] then
               local rows,axis,side=span_wire(S,id,td,wormhole)
               local move=rows and collector.mount(rows,axis,side,body,rotation,vector.rotate,.03,.45)
               local heel=move and move.heel or vector.add(body,vector.rotate(collector.heel,rotation))
@@ -116,7 +116,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
               ref=pose(refs,key,"dispatch_"..kind.."_body",body,rotation,nil,flip_epoch)
               pose(refs,key..":collector","dispatch_"..kind.."_collector",heel,rotation,scale,flip_epoch)
               show_parts[key..":collector"]=true
-              if V.observe_collector then V.observe_collector(train,id,move,rows,scale,td) end
+              if V.observe_collector then V.observe_collector(train,id,move,rows,scale,td,body_index) end
             elseif visible then
               ref=pose(refs,key,"dispatch_"..kind,body,rotation,nil,flip_epoch)
             end

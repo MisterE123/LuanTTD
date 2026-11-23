@@ -46,10 +46,10 @@ assert(three.total_length==24 and table.concat(three.offsets,",")=="0,8,16")
 assert(three.cargo_capacity.passenger==116 and three.cargo_count.passenger==116 and three.cargo_load_per_pulse.passenger==15)
 assert(three.parts[1].mate==3 and three.parts[2].stock_id==27 and three.parts[2].price==1929 and three.parts[3].mate==1)
 local depot={kind="depot",owner="A",railtype=0,id=2}
-fails("TOO_MANY_VEHICLES_IN_GAME",R.quote(depot,"A",{11,27},{roster_preview=true,mount_manley=true,vehicle_slots=2}))
-local q=assert(R.quote(depot,"A",{11,27},{roster_preview=true,mount_manley=true,vehicle_slots=3,free_locomotive_numbers=1}))
+fails("TOO_MANY_VEHICLES_IN_GAME",R.quote(depot,"A",{11,27},{roster_preview=true,mounted_dmus={[11]=true},vehicle_slots=2}))
+local q=assert(R.quote(depot,"A",{11,27},{roster_preview=true,mounted_dmus={[11]=true},vehicle_slots=3,free_locomotive_numbers=1}))
 assert(q.price==19116)
-fails("RAIL_VEHICLE_NOT_MOUNTED",R.quote(depot,"A",{11,27,27},{roster_preview=true,mount_manley=true}))
+fails("RAIL_VEHICLE_NOT_MOUNTED",R.quote(depot,"A",{11,27,27},{roster_preview=true,mounted_dmus={[11]=true}}))
 
 assert(R.loading_wait(16,1,10,0)==40 and R.loading_wait(16,1,10,0,{gradual_loading=false})==10)
 assert(R.load_slice({stock_id=11,cargo_count=35},50)==3 and R.unload_slice({stock_id=11,cargo_count=38})==5)
@@ -72,7 +72,7 @@ assert(Fleet.initialize(world,{starting_year=1960,startup_random=9001,generation
   climate="temperate",vehicle_pool=2}))
 assert(Fleet.availability(world,11).public)
 local prior=c.cash
-fails("RAIL_VEHICLE_NOT_MOUNTED",Fleet.quote(world,"A",at,{11},{mount_manley=true}))
+fails("RAIL_VEHICLE_NOT_MOUNTED",Fleet.quote(world,"A",at,{11},{mounted_dmus={[11]=true}}))
 assert(c.cash==prior and not Fleet.occupies_depot(world,at))
 -- Prepare uses explicit role/mate after a save, not the single logical
 -- design id. This injection models a future paid constructor receipt,

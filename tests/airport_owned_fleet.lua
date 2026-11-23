@@ -50,7 +50,8 @@ local function run_both()
     for _,a in ipairs(Run.gather(s)) do assert(a.phase~="blocked",a.failure) end
     if first and second and first.fare>x and second.fare>y then
       assert(first.tick==second.tick and first.tick==s.passenger_house_clock.counter)
-      assert(first.capacity==25 and second.capacity==25 and first.fare+second.fare==Sim.company(s,"A").revenue)
+      assert(first.cargo_capacity.passenger==25 and second.cargo_capacity.passenger==25 and
+        first.cargo_capacity.mail==4 and second.cargo_capacity.mail==4 and first.fare+second.fare==Sim.company(s,"A").revenue)
       assert(first.running_expense>0 and second.running_expense>0)
       assert(first.delivered+second.delivered==Sim.company(s,"A").paid_units)
       return first,second

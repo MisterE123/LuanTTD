@@ -120,7 +120,7 @@ local first_tick,first_fare
 for _=1,425 do
   Sim.daily(s)
   local p=assert(Sim.air_paid_status(s,unit.id))
-  assert(p.capacity==selected[1] and run.phase~="blocked",run.failure)
+  assert(p.cargo_capacity.passenger==selected[1] and p.cargo_capacity.mail==selected[2] and run.phase~="blocked",run.failure)
   local st=s.stock_ship_commercial.service.stations[0xC000+a.id]
   assert(#st.tiles==36 and st.tiles[1].kind=="airport_city")
   if p.fare>0 and not first_fare then

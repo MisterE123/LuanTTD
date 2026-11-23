@@ -8,7 +8,7 @@
 local R={VEHICLE_LENGTH=8,TILE_SIZE=16,DAY_TICKS=74,DAYS_IN_YEAR=365,CARGO_AGE_TICKS=185,
   GRADUAL_WAIT=40,RETRY_WAIT=20,DEFAULT_MAX_TRAIN_TILES=7}
 local floor,min,max=math.floor,math.min,math.max
-local order={0,1,8,9,10,11,13,14,15,22,27,28,29,30,31,32,33,34,35,36,37}
+local order={0,1,8,9,10,11,12,13,14,15,22,27,28,29,30,31,32,33,34,35,36,37}
 local rows={
   [0]={name="Kirby Paul Tank",kind="engine",visual="steam",image_index=2,engine_class="steam",
     cost_factor=7,speed=64,power=300,tare=47,running_factor=50,running_class="run_steam",
@@ -29,6 +29,11 @@ local rows={
     multiheaded=true,multiple_unit=true,cost_factor=11,speed=112,power=600,tare=32,
     running_factor=85,running_class="run_diesel",capacity=38,cargo="passenger",
     climates=1,base_intro=13149,decay_speed=20,vehicle_life=12,model_life=30,purchase_enabled=false},
+  -- OpenTTD 16.0-RC1 table/engines.h: MM and RVI rows #12.
+  [12]={name="'Dash'",kind="engine",visual="dash",image_index=10,engine_class="diesel",
+    multiheaded=true,multiple_unit=true,cost_factor=14,speed=120,power=700,tare=38,
+    running_factor=70,running_class="run_diesel",capacity=40,cargo="passenger",
+    climates=1,base_intro=23376,decay_speed=20,vehicle_life=15,model_life=35,purchase_enabled=false},
   -- OpenTTD 16.0-RC1 table/engines.h: MT and RVI rows #13 and #14.
   [13]={name="SH/Hendry '25'",kind="engine",visual="hendry_25",image_index=4,engine_class="diesel",
     cost_factor=15,speed=128,power=1250,tare=72,running_factor=95,running_class="run_diesel",
@@ -49,6 +54,16 @@ local rows={
   [24]={name="SH '40'",kind="engine",visual="sh_40",image_index=20,engine_class="electric",railtype=1,
     cost_factor=30,speed=176,power=5000,tare=82,running_factor=205,running_class="run_electric",
     capacity=0,climates=1,base_intro=19359,decay_speed=20,vehicle_life=23,model_life=80,purchase_enabled=false},
+  -- Pinned OpenTTD 16.0-RC1 MM/RVI stock #25. Two linked powered units.
+  [25]={name="'T.I.M.'",kind="engine",visual="tim",image_index=21,engine_class="electric",railtype=1,
+    multiheaded=true,cost_factor=40,speed=240,power=7000,tare=90,running_factor=240,
+    running_class="run_electric",capacity=0,climates=1,base_intro=23376,
+    decay_speed=20,vehicle_life=25,model_life=30,purchase_enabled=false},
+  -- Pinned OpenTTD 16.0-RC1 MM/RVI stock #26, later conventional electric express.
+  [26]={name="'AsiaStar'",kind="engine",visual="asiastar",image_index=23,engine_class="electric",railtype=1,
+    multiheaded=true,cost_factor=43,speed=264,power=8000,tare=95,running_factor=250,
+    running_class="run_electric",capacity=0,climates=1,base_intro=26298,
+    decay_speed=20,vehicle_life=25,model_life=50,purchase_enabled=false},
   [27]={name="Passenger Carriage",kind="wagon",visual="passenger_wagon",image_index=33,engine_class="steam",
     cost_factor=247,speed=0,power=0,tare=25,running_factor=0,
     capacity=40,cargo="passenger",climates=15,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255},
@@ -120,10 +135,14 @@ function R.entry(id) return rows[id] and copy(rows[id]) end
 function R.catalog(electric)
   local out={}
   for i,id in ipairs(order) do out[i]=copy(rows[id]) end
-  if electric==true then table.insert(out,8,copy(rows[23]));table.insert(out,9,copy(rows[24])) end
+  if electric==true then table.insert(out,8,copy(rows[23]));table.insert(out,9,copy(rows[24]));table.insert(out,10,copy(rows[25]));table.insert(out,11,copy(rows[26])) end
   return out
 end
 function R.dual_head(id) return not not (rows[id] and rows[id].multiheaded) end
+function R.passenger_dmu(id)
+  local row=rows[id]
+  return not not (row and row.kind=="engine" and row.multiheaded and row.cargo=="passenger")
+end
 function R.electric_engine(id)
   local row=rows[id]
   return not not (row and row.kind=="engine" and row.railtype==1)
@@ -168,7 +187,7 @@ function R.next_offset(length,next_length) return calc_offset(length,next_length
 -- OpenTTD AddRearEngineToMultiheadedTrain/NormaliseDualHeads: the two
 -- actual bodies are one purchased design. Keep the rear as the last
 -- part before the next independent engine, behind any intervening wagons.
--- Never interpret two logical #11 selections as the two halves of one.
+-- Never interpret two logical engine selections as the two halves of one.
 function R.physical_parts(parts)
   if type(parts)~="table" or #parts==0 then return nil,"EMPTY_CONSIST" end
   local explicit=false
@@ -384,8 +403,32 @@ function R.freight_engine(id)
   local row=rows[id]
   return not not (row and row.kind=="engine" and not row.multiheaded and row.capacity==0)
 end
+function R.mixed_town_consist(parts)
+  if type(parts)~="table" or #parts<3 or #parts>4 then return false end
+  local first=get(parts[1])
+  if not first or not R.freight_engine(first.stock_id) then return false end
+  local coach,mail=false,false
+  for i=2,#parts do
+    local q=get(parts[i])
+    if not q or q.stock_id~=27 and q.stock_id~=28 then return false end
+    if q.stock_id==27 then coach=true else mail=true end
+  end
+  return coach and mail
+end
+-- Shape only. The mounted profile and engine/media check are supplied by
+-- the owning depot/dispatcher; never infer a service from similar tare.
+function R.profile_consist(parts,wagon,max_wagons)
+  if type(parts)~="table" or #parts<2 or #parts>(max_wagons or 1)+1 then return false end
+  local first=get(parts[1])
+  if not first or not R.freight_engine(first.stock_id) then return false end
+  for i=2,#parts do
+    local p=get(parts[i])
+    if not p or p.stock_id~=wagon then return false end
+  end
+  return true
+end
 local function supported_single_wagon(id)
-  return id==27 or id==29 or id==30 or id==32 or rows[id] and rows[id].freight_profile
+  return id==27 or id==28 or id==29 or id==30 or id==32 or rows[id] and rows[id].freight_profile
 end
 
 -- Combined quote for explicit purchases at an owned depot; opts.available
@@ -401,19 +444,29 @@ function R.quote(depot,owner,parts,opts)
     -- This stock row can be inspected/priced without licensing a live
     -- purchase until its actual freight orders and asset are mounted.
     if row.purchase_enabled==false and
+        not (row.stock_id==28 and opts.mount_mail_wagon==true and
+            (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id)
+              or opts.mount_mixed_town and R.mixed_town_consist(parts))) and
         not (row.stock_id==30 and opts.mount_oil_wagon==true and
             (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id))) and
         not (row.stock_id==32 and opts.mount_goods_wagon==true and
             (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id))) and
         not (opts.mount_profile_wagons and opts.mount_profile_wagons[row.stock_id]==true and
             row.freight_profile and
-            (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id))) and
-        not (R.electric_engine(row.stock_id) and opts.mounted_electric and opts.mounted_electric[row.stock_id]==true and
+            (opts.separate_depot_purchase and #parts==1 or
+              R.profile_consist(parts,row.stock_id,opts.profile_max_wagons and opts.profile_max_wagons[row.stock_id]))) and
+        not (R.electric_engine(row.stock_id) and not row.multiheaded and opts.mounted_electric and opts.mounted_electric[row.stock_id]==true and
             index==1 and (opts.separate_depot_purchase and #parts==1 or
-              #parts==2 and supported_single_wagon(stats.parts[2].stock_id))) and
+              #parts==2 and supported_single_wagon(stats.parts[2].stock_id) or opts.mount_mixed_town and R.mixed_town_consist(parts)
+              or opts.profile_max_wagons and #parts>2 and R.profile_consist(parts,stats.parts[2].stock_id,
+                opts.profile_max_wagons[stats.parts[2].stock_id]))) and
+        not (R.electric_engine(row.stock_id) and row.multiheaded and opts.mounted_electric
+            and opts.mounted_electric[row.stock_id] and stats.parts[1].stock_id==row.stock_id and
+            (#parts==1 and #stats.parts==2 or #parts==2 and #stats.parts==3 and stats.parts[2].stock_id==27)) and
         not (row.stock_id==22 and opts.mount_sh_125==true and stats.parts[1].stock_id==22 and
             (#parts==1 and #stats.parts==2 or #parts==2 and #stats.parts==3 and stats.parts[2].stock_id==27)) and
-        not (row.stock_id==11 and opts.mount_manley==true and stats.parts[1].stock_id==11 and
+        not (R.passenger_dmu(row.stock_id) and opts.mounted_dmus and opts.mounted_dmus[row.stock_id] and
+            stats.parts[1].stock_id==row.stock_id and
             (#parts==1 and #stats.parts==2 or #parts==2 and #stats.parts==3 and stats.parts[2].stock_id==27)) then
       return nil,"RAIL_VEHICLE_NOT_MOUNTED",index
     end

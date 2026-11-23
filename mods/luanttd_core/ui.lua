@@ -33,7 +33,9 @@ local company_projection
 function U.use_worker_projection(view) company_projection=view end
 function U.install_worker_controls(client)
   local mod=core.get_modpath("luanttd_core")
-  api.worker_truck_stop=dofile(mod.."/campaign_worker_truck_stop_ui.lua")(core,client,number)
+  local Stop=dofile(mod.."/campaign_worker_truck_stop_ui.lua")
+  api.worker_truck_stop=Stop(core,client,number)
+  api.worker_rail_mail_station=Stop(core,client,number,true)
   api.worker_layer_client=client
   api.worker_bridge_client=client
   api.worker_signal_client=client
@@ -461,6 +463,7 @@ function U.fields(p,formname,f)
   if api.worker_news and formname==api.worker_news.form then return api.worker_news.fields(p,f) end
   if api.worker_depot and formname==api.worker_depot.form then return api.worker_depot.fields(p,f) end
   if api.worker_truck_stop and formname==api.worker_truck_stop.form then return api.worker_truck_stop.fields(p,f) end
+  if api.worker_rail_mail_station and formname==api.worker_rail_mail_station.form then return api.worker_rail_mail_station.fields(p,f) end
   if api.world and api.world.avatar_state and api.world.avatar_state(p) then return false end
   if formname=="luanttd_core:station_layout" then return U.station_layout_fields(p,f) end
   if formname=="luanttd_core:rail_depot_direction" then return U.depot_direction_fields(p,f) end
@@ -2711,6 +2714,10 @@ function U.context(p,tile,hit)
       if st and st.mode=="road" and st.stop_type=="truck" and api.worker_truck_stop then
         return api.worker_truck_stop.open(p,tile)
       end
+      if t.rail_station_id and api.rail_mail_tools and api.worker_rail_mail_station then
+        local platform=R.host_record and R.host_record("stock_rail_stations",t.rail_station_id)
+        if platform and not Freight.role(platform) then return api.worker_rail_mail_station.open(p,tile) end
+      end
       local name=st and st.name or site and site.name or t.terrain or "Tile"
       label=("%s · %d,%d"):format(name,x,z)
       if st and st.mode=="road" and st.stop_type~="truck" and R.waiting_at then
@@ -3051,7 +3058,12 @@ function U.service(p,kind,id)
       if q then label(.4,2.23,number(q.waiting or 0)..(" "..(Freight.profiles[cargo].unit or "tons").." waiting")) end
     end
     local paid=Sim.rail_paid_status and Sim.rail_paid_status(S)
-    local waiting=paid and paid.waiting and paid.waiting[id]
+    local waiting=paid and paid.cargo~="mail" and paid.waiting and paid.waiting[id]
+    local mail=Sim.rail_mail_stop_status and Sim.rail_mail_stop_status(S,id)
+    if mail and not Freight.role(platform) then
+      label(.4,3.19,("%s mail bags waiting · %s"):format(number(mail.waiting),
+        mail.accepts and "Accepts Mail" or "Not enough nearby houses to accept Mail"))
+    end
     if waiting and not Freight.role(platform) then
       label(.4,1.71,number(waiting.waiting or 0).." passengers waiting")
       label(.4,2.28,waiting.accepts and "Accepts passengers." or "Not enough nearby houses to accept passengers.")
@@ -3172,6 +3184,11 @@ function U.service(p,kind,id)
     label(.4,.45,("%s #%d  ·  %s"):format(field.layout=="city" and "City Airport" or "Country airfield",id,field.owner))
     label(.4,1.20,math.floor(field.flags/256)%2==1 and "Runway reserved." or "Runway clear.")
     local flights=api.airfield.at(id)
+    local function air_load(stats)
+      local a,b=stats.cargo_onboard,stats.cargo_capacity
+      if a then return ("%d/%d passengers, %d/%d Mail bags"):format(a.passenger,b.passenger,a.mail,b.mail) end
+      return ("%d/%d passengers"):format(stats.onboard,stats.capacity)
+    end
     local unit=api.airfield.owned(id)
     local flight=flights[1]
     if #flights>=2 then
@@ -3179,19 +3196,22 @@ function U.service(p,kind,id)
         local stats=Sim.air_paid_status(S,f.paid_clock)
         local row=1.82+(i-1)*1.09
         label(.4,row,("#%d  %s  ·  %s"):format(f.paid_clock,api.airfield.engine_name(f),f.phase))
-        if stats then label(.4,row+.5,("%s/%s aboard   ·   %s in fares   ·   %s running"):format(
-          stats.onboard,stats.capacity,dollars(stats.fare),dollars(stats.running_expense or 0))) end
+        if stats then label(.4,row+.5,("%s  ·  %s fares"):format(air_load(stats),dollars(stats.fare))) end
       end
       local e=Sim.air_paid_status(S,flight.paid_clock)
-      if e and e.waiting[id] then label(.4,4.10,number(e.waiting[id].waiting or 0).." passengers waiting between both flights") end
+      if e and e.waiting[id] then
+        local stop=e.waiting[id]
+        label(.4,4.10,number(stop.waiting or 0).." passengers"..(stop.mail and (" and "..number(stop.mail.waiting).." Mail bags") or "").." waiting")
+      end
     elseif flight and (not unit or unit.status=="dispatched") then
       label(.4,1.78,("%s %s  ·  %d terminal stops"):format(api.airfield.engine_name(flight),flight.phase,flight.arrivals))
       local paid=Sim.air_paid_status and Sim.air_paid_status(S,flight.paid_clock)
       local stop=paid and paid.waiting[id]
       if stop then
-        label(.4,2.35,number(stop.waiting or 0).." passengers waiting")
-        label(.4,2.90,stop.accepts and "Accepts passengers." or "Not enough nearby houses to accept passengers.")
-        label(.4,3.49,("%d/%d aboard  ·  %s in fares"):format(paid.onboard,paid.capacity,dollars(paid.fare)))
+        label(.4,2.35,number(stop.waiting or 0).." passengers"..(stop.mail and (" and "..number(stop.mail.waiting).." Mail bags") or "").." waiting")
+        label(.4,2.90,("Accepts passengers: %s%s"):format(stop.accepts and "yes" or "no",
+          stop.mail and ("   Mail: "..(stop.mail.accepts and "yes" or "no")) or ""))
+        label(.4,3.49,("%s  ·  %s fares"):format(air_load(paid),dollars(paid.fare)))
         if paid.paused then label(.4,4.04,"Paid air service paused or aircraft model missing.")
         elseif paid.running_expense then label(.4,4.04,dollars(paid.running_expense).." in running costs") end
       end
@@ -3207,13 +3227,13 @@ function U.service(p,kind,id)
           local quote=api.airfield.quote(n,id,e.stock_id)
           if quote then
             button(.4,1.60+shown*.67,8.6,"buy_aircraft_"..e.stock_id,
-              ("Buy %s  /  %d seats  /  %s"):format(e.name,quote.passengers,dollars(quote.price)))
+              ("Buy %s / %d seats + %d Mail / %s"):format(e.name,quote.passengers,quote.mail,dollars(quote.price)))
             shown=shown+1
           end
         end
         if shown==0 then label(.4,1.78,"No aircraft available for this hangar.") end
         label(.4,3.82,S.air_fleet_preview and "Two Sampsons can share. Other aircraft fly solo."
-          or "One aircraft per preview. Passenger service only.")
+          or "One aircraft per preview. Carries passengers and Mail.")
       end
     else label(.4,1.78,"Use Order trimotor in the Airfields hotbar.") end
   elseif kind=="fleet" then
@@ -3493,7 +3513,12 @@ function U.service_fields(p,f)
     end
   elseif kind=="airfield_status" and S.air_owned_preview then
     if f.order_aircraft_here and api.world and api.world.begin_order_selection then
-      local unit=api.airfield.owned(id)
+      local function air_load(stats)
+      local a,b=stats.cargo_onboard,stats.cargo_capacity
+      if a then return ("%d/%d passengers, %d/%d Mail bags"):format(a.passenger,b.passenger,a.mail,b.mail) end
+      return ("%d/%d passengers"):format(stats.onboard,stats.capacity)
+    end
+    local unit=api.airfield.owned(id)
       if unit and unit.owner==n and unit.hangar==id and unit.status=="hangar" then
         U.select_tool(p,"airfield_order")
         U.begin_fixed_route(p,"airfield_order")

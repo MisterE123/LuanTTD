@@ -112,4 +112,26 @@ function O.delete(orders,index,slot)
   end
   return true
 end
+-- order_cmd.cpp CmdCloneOrder / CO_COPY (16.0-RC1). The host checks
+-- primary vehicle type, ownership and station-facility access. Then it
+-- constructs a new, independent list and resets indices only if the
+-- order count changed. Neither the live order nor the source cursor is copied.
+function O.copy(source,dest,index,usable)
+  if type(source)~="table" or #source>O.MAX_ORDERS then return nil,"Invalid number of orders." end
+  local function deep(v)
+    if type(v)~="table" then return v end
+    local result={}
+    for key,x in pairs(v) do result[key]=deep(x) end
+    return result
+  end
+  local out={}
+  for i,o in ipairs(source) do
+    if type(o)~="table" or not usable(o) then
+      return nil,("Order %d: this train cannot use that destination."):format(i)
+    end
+    out[i]=deep(o)
+  end
+  local cursor=#source==#dest and deep(index) or {real=0,implicit=0}
+  return out,cursor
+end
 return O

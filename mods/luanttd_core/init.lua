@@ -884,6 +884,9 @@ do
       end)
     local rail_art=dofile(mod.."/rail_dispatch_manifest.lua").scan(mod,S.stock_electrification,bridge_profile~=nil)
     rail_art.bridge_wire=bridge_profile~=nil
+    Sim.mount_rail_mail(S,rail_art.ready.mail_van,rail_art.mixed_town_engines)
+    api.rail_mixed_town_tools=S.rail_mixed_town_service
+    api.rail_mail_tools=Sim.rail_mail_active(S)
     api.capabilities.rail=rail_art
     simulation_bindings.rail_media(Pilot,rail_art)
     api.rail_dispatch_view=dofile(mod.."/rail_dispatch_view.lua").create(api,Pilot,Track,Pose,

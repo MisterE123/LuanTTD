@@ -60,13 +60,13 @@ assert(Owned.start(s,"A",B,H))
 Sim.daily(s)
 local shared=s.stock_ship_commercial
 local v2=assert(shared.service.vehicles[0xC002])
-local before_age=v2.cargo_age_counter
+local before_age=v2.carrying_parts[1].cargo_age_counter
 shared.air_serials=nil
 assert(shared.air_serial==0xC002)
 assert(Owned.start(s,"A",A,H))
 Sim.daily(s)
 assert(shared.air_serial==0xC001 and shared.air_serials[0xC001] and shared.air_serials[0xC002])
-assert(shared.service.vehicles[0xC002]==v2 and v2.cargo_age_counter~=before_age)
+assert(shared.service.vehicles[0xC002]==v2 and v2.carrying_parts[1].cargo_age_counter~=before_age)
 local fares,paid,arrivals,boarded={0,0},{0,0},{0,0},{0,0}
 local function day()
   Sim.daily(s)
@@ -94,7 +94,7 @@ local function day()
       assert(marker and marker.airport==e.station_local and e.tile~=s.stock_small_airports[e.station_local].origin)
       arrivals[id]=arrivals[id]+1
     elseif e.kind=="board" then
-      assert(e.units<=20);boarded[id]=boarded[id]+e.units
+      assert(e.units<=(e.cargo=="mail" and 5 or 20));boarded[id]=boarded[id]+e.units
     elseif e.kind=="fare" then
       fares[id],paid[id]=fares[id]+e.amount,paid[id]+e.units
     end
@@ -103,7 +103,9 @@ local function day()
   assert(c.cash==bank+c.revenue-(c.expense-spent) and c.paid_units==c.units)
   assert(not Air.current(s,1).failure and not Air.current(s,2).failure)
   local v1,v2=svc.vehicles[0xC001],svc.vehicles[0xC002]
-  assert(v1.units<=25 and v2.units<=25)
+  for _,plane in ipairs({v1,v2}) do
+    assert(plane.carrying_parts[1].units<=25 and plane.carrying_parts[2].units<=4)
+  end
   assert(Air.current(s,1).finance and Air.current(s,2).finance)
   return v1,v2
 end
@@ -116,7 +118,7 @@ for _=1,500 do
   local r=Air.current(s,1)
   if not checkpoint and r.phase=="terminal" and v1.load_state and v1.units>0 then
     local save={units=v1.units,ticks=v1.load_state.ticks,elapsed=v1.load_state.elapsed,
-      reserved=v1.load_state.reserved_units,age=v1.cargo_age_counter,x=r.vehicle.x,z=r.vehicle.z,
+      reserved=v1.load_state.reserved_units,age=v1.carrying_parts[1].cargo_age_counter,x=r.vehicle.x,z=r.vehicle.z,
       terminal=v1.cargo_tile}
     s=clone(s)
     Sim.mount_paid_air(s,Air)
@@ -132,7 +134,7 @@ for _=1,500 do
       r=Air.current(s,1)
       local l=assert(v1.load_state)
       assert(v1.units==save.units and l.ticks==save.ticks and l.elapsed==save.elapsed and
-        l.reserved_units==save.reserved and v1.cargo_age_counter==save.age and v1.cargo_tile==save.terminal)
+        l.reserved_units==save.reserved and v1.carrying_parts[1].cargo_age_counter==save.age and v1.cargo_tile==save.terminal)
       assert(r.vehicle.x==save.x and r.vehicle.z==save.z and Sim.air_paid_status(s,1).paused)
       assert(not Sim.air_paid_status(s,2).paused)
     end

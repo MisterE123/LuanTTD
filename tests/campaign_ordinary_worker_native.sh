@@ -40,6 +40,7 @@ if ! timeout 35 luantiserver --world "$out/world" --config "$out/default.conf" -
 fi
 grep 'PASS NATIVE ORDINARY HANDOFF' "$out/server.log" || { cat "$out/server.log"; exit 1; }
 grep 'PASS NATIVE ORDINARY WORKER BUILD' "$out/server.log"
+grep 'PASS NATIVE DEFAULT MIXED RAIL CAPABILITY' "$out/server.log"
 grep 'PASS NATIVE PROJECTED PAINTER' "$out/server.log"
 grep 'PASS NATIVE PROJECTED ROLLING STOCK' "$out/server.log"
 grep 'PASS NATIVE PROJECTED TRAIN FORM' "$out/server.log"

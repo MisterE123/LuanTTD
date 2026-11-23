@@ -70,7 +70,16 @@ jobs:
           lua5.1 tests/rail_owned_service.lua two_coaches
           lua5.1 tests/rail_owned_service.lua sh_125
           lua5.1 tests/shared_mail_station_allocator.lua
+          lua5.1 tests/stock_rail_mail_service.lua
+          lua5.1 tests/stock_mixed_town_rail_service.lua
+          lua5.1 tests/stock_aircraft_mail_service.lua
+          lua5.1 tests/stock_rail_multi_ore_service.lua
+          lua5.1 tests/rail_copy_order_list.lua
+          lua5.1 tests/rail_electric_roster.lua
           python3 tests/stock_rail_f_art.py
+          python3 tests/stock_dash_art.py
+          python3 tests/stock_tim_art.py
+          python3 tests/stock_tim_art.py --variant asiastar
           lua5.1 tests/rail_owned_service.lua three_stops
           lua5.1 tests/rail_owned_service.lua live_orders
           lua5.1 tests/rail_owned_service.lua live_pbs_orders
@@ -120,6 +129,19 @@ jobs:
           python3 tests/stock_rail_wood_truck_art.py
           bash tests/stock_rail_valuables_live_native.sh
           bash tests/stock_rail_farm_live_native.sh
+          bash tests/stock_rail_mail_live_native.sh
+          bash tests/stock_mixed_town_rail_live_native.sh
+          BAYLINE_MIXED_FORM=mail-coach-mail bash tests/stock_mixed_town_rail_live_native.sh
+          bash tests/stock_aircraft_mail_live_native.sh
+          bash tests/stock_rail_multi_ore_live_native.sh
+          bash tests/stock_dash_worker_native.sh
+          bash tests/rail_copy_orders_worker_native.sh
+          bash tests/stock_tim_worker_native.sh
+          LUANTTD_NATIVE_ASIASTAR=true bash tests/stock_tim_worker_native.sh
+          LUANTTD_NATIVE_TIM=true BAYLINE_NATIVE_ELECTRIC_BRIDGE=true BAYLINE_NATIVE_STEAM_START_YEAR=1988 bash tests/rail_owned_live_native.sh
+          LUANTTD_NATIVE_ASIASTAR=true BAYLINE_NATIVE_ELECTRIC_BRIDGE=true BAYLINE_NATIVE_STEAM_START_YEAR=1995 bash tests/rail_owned_live_native.sh
+          LUANTTD_NATIVE_DASH=true BAYLINE_NATIVE_STEAM_START_YEAR=1988 bash tests/rail_owned_live_native.sh
+          LUANTTD_NATIVE_DASH_COACH=true BAYLINE_NATIVE_STEAM_START_YEAR=1988 bash tests/rail_owned_live_native.sh
           bash tests/stock_rail_wood_live_native.sh
           BAYLINE_WOOD_MIXED=true bash tests/stock_rail_wood_live_native.sh
           lua5.1 tests/iron_steel_kernels.lua
@@ -201,3 +223,6 @@ jobs:
           python3 tests/news_rc1.py "$src"
           python3 tests/farm_factory_fields_upstream.py "$src" --lua lua5.1
           python3 tests/farm_clear_rc1_upstream.py "$src/src/clear_cmd.cpp" --lua lua5.1
+          python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"
+          python3 tests/stock_tim_art.py --upstream-engines "$src/src/table/engines.h"
+          python3 tests/stock_tim_art.py --variant asiastar --upstream-engines "$src/src/table/engines.h"

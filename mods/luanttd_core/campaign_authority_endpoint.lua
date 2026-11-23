@@ -221,6 +221,15 @@ return function(Sim,R,max_days)
     bridge_quotes[name]={token=quote_sequence,quotes=by_type,topology=s.topology,terrain=s.corner_grid.revision}
     return reply(true,nil,{token=quote_sequence,offers=offers,ids=ids,minimum=minimum})
   end
+  function A.rail_mail_station(name,id)
+    if not owner(name) or not tile_id(id) then return reply(false,"INVALID_REQUEST") end
+    local tile=s.tiles[id]
+    local st=tile and tile.rail_station_id
+    local q=st and Sim.rail_mail_stop_status(s,st)
+    if not q then return reply(false,"This is not an ordinary rail platform with Mail service.") end
+    return reply(true,nil,{name="Rail station #"..st,cargo={{cargo="mail",name="Mail bags",waiting=q.waiting,
+      accepts=q.accepts,collects=q.waiting>0,rating=q.rating,eighths=q.eighths}}})
+  end
   function A.truck_stop(name,id)
     if not owner(name) or not s.companies[name] or not tile_id(id) then return reply(false,"Truck stop unavailable.") end
     local st=s.stations[s.tiles[id].station]

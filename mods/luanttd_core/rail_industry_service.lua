@@ -1,8 +1,10 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Shared ordinary single-wagon freight actor. Station geometry and
+-- Shared ordinary homogeneous freight actor. Station geometry and
 -- clock are physical; the producer, queue competition and unload receipt
 -- always come from the one existing industry pipeline.
 return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,Station,LoaderFactory,Timing)
+  local root=(core and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local Ordered=dofile(root.."/openttd/rail_multihead_loading.lua")
   local R={version=1,wagon=profile.wagon}
   local stock=Roster.entry(R.wagon.stock_id)
   if stock then
@@ -128,7 +130,7 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
       body.kind,body.cargo,body.mode=kind,cargo_name,"rail"
       body.tick,body.station,body.station_local,body.vehicle,body.owner,body.visit=
         tick,st.id,st.host_id,v.id,v.owner,v.visit
-      body.tile=v.cargo_tile
+      body.tile,body.body_id,body.part=v.cargo_tile,v.body_id,v.part
       if ctx.emit then ctx.emit(body) end
     end
     local timing_frame
@@ -136,10 +138,12 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
       assert(timing_frame)
       return R.loading_pulse(m,timing_frame.length,timing_frame.load_state.platform_tiles,ctx.platform_penalty)
     end},Packets)
+    local compartments=Ordered.create(Load,Timing)
     local function ops(tick)
       local tokens,moved=0,false
       local result={
         slice=R.wagon.load_amount,gradual=s.stock_gradual_loading~=false,feeder_percent=s.stock_feeder_percent,
+        consist=compartments,
         queue=function(st) return st.stock[cargo_name] end,
         accepts=function(st) return st.last_acceptance end,
         can_load=function(st,v) return Catchment.may_load(st,v.owner,ctx.town_rights and ctx.town_rights(st.town),ctx.neutral_owner) end,
@@ -155,7 +159,9 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
         end,
         unloaded=function(st) Station.unloaded(st) end,
         deliver=function(st,v,packet)
-          local l=v.load_state
+          -- One payment/receipt sequence spans all wagon drops in this
+          -- physical station visit. Wagon ordinals never reset it.
+          local l=state.vehicle.load_state
           local seq=(l[sequence] or 0)+1
           local token=table.concat({route_tag,v.id,v.visit,seq},":")
           local r,why=pipeline.stage(st.id,tick,token,packet,v.cargo_tile)
@@ -191,36 +197,69 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
     end
 
     function B.vehicle(def)
-      if state.vehicle or def.wagon~=R.wagon.stock_id or def.length~=2*R.wagon.length or
-          not uint(def.id) or not def.owner or not uint(def.built) or not uint(def.speed) then
+      local parts=def.parts
+      local count=parts and #parts or 1
+      if state.vehicle or def.wagon~=R.wagon.stock_id or def.length~=(count+1)*R.wagon.length
+          or parts and (count<2 or count>(profile.max_wagons or 1))
+          or not uint(def.id) or not def.owner or not uint(def.built) or not uint(def.speed) then
         return nil,profile.single_error
       end
       local v={id=def.id,wagon=def.wagon,length=def.length,owner=def.owner,built=def.built,speed=def.speed,
         cargo=cargo_name,mode="rail",units=0,batches={},cargo_age_counter=1,delivered=0,revenue=0}
+      if parts then
+        local seen={}
+        v.carrying_parts={}
+        for i,part in ipairs(parts) do
+          if part.stock~=R.wagon.stock_id or part.index~=i+1 or not uint(part.body_id) or seen[part.body_id] then
+            return nil,"INVALID_PHYSICAL_FREIGHT_WAGON"
+          end
+          seen[part.body_id]=true
+          v.carrying_parts[i]={id=v.id,owner=v.owner,built=v.built,speed=v.speed,mode="rail",cargo=cargo_name,
+            body_id=part.body_id,part=part.index,stock=part.stock,capacity=R.wagon.capacity,
+            slice=R.wagon.load_amount,aging=R.wagon.cargo_age_ticks,cargo_age_counter=1,batches={},units=0}
+        end
+      end
       state.vehicle=v
       return v
     end
-    function B.arrive(local_id,visit,tick,head,cargo)
+    function B.arrive(local_id,visit,tick,head,cargo,cargo_tiles)
       local v=state.vehicle
       local id=R.index(local_id)
       if not v or not uint(visit) or visit==0 or state.tick~=tick or state.aged_tick==tick then return nil,"WRONG_VEHICLE_PHASE" end
       if v.visit==visit and v.load_state and v.load_state.station==id and v.head_tile==head and v.cargo_tile==cargo then
-        return v.load_state
+        if not v.carrying_parts then return v.load_state end
+        if cargo_tiles and #cargo_tiles==#v.carrying_parts then
+          local same=true
+          for i,part in ipairs(v.carrying_parts) do same=same and part.cargo_tile==cargo_tiles[i] end
+          if same then return v.load_state end
+        end
       end
       if visit<=(v.visit or 0) or v.load_state then return nil,"DUPLICATE_OR_STALE_VISIT" end
       local st,room=state.stations[id],rooms[id]
       if not room or st.owner~=v.owner then return nil,"OWN_STOCK_RAIL_PLATFORM_REQUIRED" end
       local n=RailStation.platform(s,room.raw,head)
       if not n or not room.tiles[cargo] then return nil,"ACTUAL_WAGON_PLATFORM_TILE_REQUIRED" end
-      -- This narrow two-part body is entirely on one directional
-      -- platform. Never substitute the sign origin for the actual unit.
-      local x,z=tile_xy(head)
-      local u,w=tile_xy(cargo)
-      if Sim.distance(head,cargo)>1 or room.raw.axis==0 and z~=w or room.raw.axis==1 and x~=u then
-        return nil,"ACTUAL_COUPLED_WAGON_TILE_REQUIRED"
+      -- All actual bodies must occupy the same directional platform;
+      -- adjacent 8-unit bodies may share one physical tile.
+      local tiles=cargo_tiles or {cargo}
+      if v.carrying_parts and (#tiles~=#v.carrying_parts or tiles[1]~=cargo) then
+        return nil,"ACTUAL_FREIGHT_BODY_TILES_REQUIRED"
+      end
+      local last=head
+      for _,tile in ipairs(tiles) do
+        if not room.tiles[tile] then return nil,"ACTUAL_WAGON_PLATFORM_TILE_REQUIRED" end
+        local x,z=tile_xy(last)
+        local u,w=tile_xy(tile)
+        if Sim.distance(last,tile)>1 or room.raw.axis==0 and z~=w or room.raw.axis==1 and x~=u then
+          return nil,"ACTUAL_COUPLED_WAGON_TILE_REQUIRED"
+        end
+        last=tile
       end
       v.visit,v.head_tile,v.cargo_tile=visit,head,cargo
-      local l=Load.begin(st,v,R.wagon.capacity,{full=st.role=="load",no_load=st.role=="unload"},ops(tick))
+      local flags={full=st.role=="load",no_load=st.role=="unload"}
+      local o=ops(tick)
+      local l=v.carrying_parts and compartments.begin(st,v,tiles,flags,o,visit) or
+        Load.begin(st,v,R.wagon.capacity,flags,o)
       l.arrived_tick,l.platform_tiles=tick,n
       event("arrive",st,v,tick,{head=head,platform_tiles=n})
       return l
@@ -237,6 +276,11 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
             RailStation.platform(s,room.raw,v.head_tile)~=l.platform_tiles then
           return nil,profile.tag.."_RAIL_PLATFORM_LOST"
         end
+        for _,body in ipairs(v.carrying_parts or {}) do
+          if not room.tiles[body.cargo_tile] or not RailStation.platform(s,room.raw,body.cargo_tile) then
+            return nil,profile.tag.."_RAIL_PLATFORM_LOST"
+          end
+        end
       end
       state.tick=tick
       if not v then return true end
@@ -249,6 +293,9 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
       local good,rounds,leaves=pcall(Load.tick,st,{[v.id]=v},o)
       timing_frame=nil
       if not good then error(rounds) end
+      for _,r in ipairs(rounds) do
+        if r.consist then l.ticks=R.loading_pulse(r,v.length,l.platform_tiles,ctx.platform_penalty) end
+      end
       o.finish(st)
       if #leaves>0 then l.ready_tick=tick end
       return true,l.ready_tick==tick
@@ -259,7 +306,8 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
       if not l or v.visit~=visit or l.ready_tick~=tick or state.tick~=tick or state.aged_tick==tick then return false end
       local st=state.stations[l.station]
       local o=ops(tick)
-      Load.leave(st,v,o);o.finish(st)
+      if v.carrying_parts then compartments.leave(st,v,o) else Load.leave(st,v,o) end
+      o.finish(st)
       event("leave",st,v,tick)
       v.head_tile,v.cargo_tile=nil,nil
       return true
@@ -267,7 +315,11 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
     function B.after_motion(tick)
       if state.tick~=tick then return nil,"WRONG_VEHICLE_PHASE" end
       if state.aged_tick==tick then return false end
-      if state.vehicle then Load.age_vehicle(state.vehicle,1,R.wagon.cargo_age_ticks) end
+      local v=state.vehicle
+      if v then
+        if v.carrying_parts then compartments.age(v,R.wagon.cargo_age_ticks)
+        else Load.age_vehicle(v,1,R.wagon.cargo_age_ticks) end
+      end
       if ctx.rating then
         for _,st in ipairs(views) do
           local p,n=Rating.advance_clock(st.rating_phase or 0,1)

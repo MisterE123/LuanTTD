@@ -302,7 +302,7 @@ def atlas(name,colors):
     p.write_bytes(b"\x89PNG\r\n\x1a\n"+ch(b"IHDR",struct.pack(">IIBBBBB",len(colors)*8,8,8,2,0,0,0))+
       ch(b"IDAT",zlib.compress((b"\0"+row)*8,9))+ch(b"IEND",b""))
 
-def render(sc,name,review):
+def render(sc,name,review,center=.261,side_scale=1.27):
     s=bpy.data.collections.new("90 • Optional inspection camera and ballast")
     sc.collection.children.link(s)
     bpy.ops.mesh.primitive_plane_add(size=10,location=(0,0,-.010))
@@ -319,8 +319,8 @@ def render(sc,name,review):
         bpy.ops.object.camera_add(location=p)
         c=bpy.context.object
         c.name=n.title()+" art inspection"
-        c.rotation_euler=(Vector((0,0,.261))-c.location).to_track_quat("-Z","Y").to_euler()
-        c.data.type="ORTHO";c.data.ortho_scale=1.27 if n=="side" else 1.45
+        c.rotation_euler=(Vector((0,0,center))-c.location).to_track_quat("-Z","Y").to_euler()
+        c.data.type="ORTHO";c.data.ortho_scale=side_scale if n=="side" else 1.45
         move(c);cs.append((n,c))
     sc.camera=cs[0][1]
     sc.render.engine="BLENDER_WORKBENCH"

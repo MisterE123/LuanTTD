@@ -1,16 +1,15 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Passenger-only, manual OpenTTD 14.1 service adapter for transport pilots.
--- A coupled train has one passenger carriage or two reciprocally
--- powered DMU bodies; a ferry or fixed-wing aircraft has one passenger body. Aircraft mail
--- holds are not mounted; the selected orders are ordinary passenger
--- stops. Existing packet and station kernels own
+-- Manual town-cargo service adapter for paid rail, water and air.
+-- Rail bodies and aircraft compartments share the ordered carrier
+-- visit and payout. A ferry has one passenger body. Packet and station kernels own
 -- reserve/stage/load/drop/timetable and payment arithmetic. Side effects
 -- below are saved; all host geometry, events and hooks are injected.
 return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
   local base=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+  local Roster=dofile(base.."/openttd/rail_roster.lua")
   local aircraft={}
   for _,row in ipairs(dofile(base.."/openttd/airport_roster.lua").catalog()) do
-    aircraft[row.stock_id]={engine=row.stock_id,cap=row.passengers,slice=20,aging=185,wait=20}
+    aircraft[row.stock_id]={engine=row.stock_id,cap=row.passengers,mail=row.mail,slice=20,aging=185,wait=20}
   end
   local vessels={}
   local ships=dofile(base.."/openttd/passenger_ship_roster.lua")
@@ -23,11 +22,22 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     air=aircraft[215],
   }}
 
-  local manley={engine=11,cap=76,slice=5,aging=185,wait=40}
-  local manley_coach={engine=11,cap=116,slice=5,aging=185,wait=40}
-  function S.stock_for(mode,engine,coach)
+  local mail={engine=28,cap=30,slice=5,aging=185,wait=40}
+  local dmus={}
+  for _,row in ipairs(Roster.catalog()) do
+    if Roster.passenger_dmu(row.stock_id) then
+      local cap=2*row.capacity
+      dmus[row.stock_id]={
+        solo={engine=row.stock_id,cap=cap,slice=row.load_amount,aging=row.cargo_age_ticks,wait=40},
+        coach={engine=row.stock_id,cap=cap+S.stock.rail.cap,slice=row.load_amount,aging=row.cargo_age_ticks,wait=40},
+        body=row.capacity,
+      }
+    end
+  end
+  function S.stock_for(mode,engine,coach,cargo)
+    if mode=="rail" and cargo=="mail" then return mail end
     if mode=="ship" and engine then return vessels[engine] end
-    if mode=="rail" and engine==11 then return coach and manley_coach or manley end
+    if mode=="rail" and dmus[engine] then return dmus[engine][coach and "coach" or "solo"] end
     if mode=="air" and engine then return aircraft[engine] end
     return S.stock[mode]
   end
@@ -43,7 +53,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     end,
   },Packets)
 
-  local DMU=dofile(base.."/openttd/rail_multihead_loading.lua").create(Loading,BaseTiming)
+  local Compartments=dofile(base.."/openttd/rail_multihead_loading.lua").create(Loading,BaseTiming)
 
   local function keys(t,predicate)
     local out={}
@@ -53,7 +63,17 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     table.sort(out)
     return out
   end
-  local function goods(st) return st.passenger_rating_state end
+  local function goods(st,cargo)
+    if cargo=="mail" then
+      st.mail_rating_state=st.mail_rating_state or Rating.new()
+      return st.mail_rating_state
+    end
+    return st.passenger_rating_state
+  end
+  local function entitled(st,cargo)
+    if cargo=="mail" then return st.mail_enabled and (st.mail_acceptance or 0)>=8 or false end
+    return (st.passenger_acceptance or 0)>=8
+  end
   local function town_rights(ctx,town) return ctx.town_rights and ctx.town_rights(town) end
   local function neutral(st,ctx) return ctx.neutral_owner~=nil and st.owner==ctx.neutral_owner end
   local function count(packets)
@@ -67,14 +87,17 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
   end
 
   local geometry=setmetatable({},{__mode="k"})
-  local function coverage(state,st,ctx)
+  local function coverage(state,st,ctx,mail_catchment)
     local cache=geometry[state]
     if not cache then cache={};geometry[state]=cache end
-    local c=cache[st.id]
-    if not c or c.footprint~=st.tiles or c.width~=ctx.width or c.height~=ctx.height or c.modified~=ctx.modified then
-      c=Catchment.build(st,ctx.width,ctx.height,ctx.modified)
-      c.footprint,c.modified=st.tiles,ctx.modified
-      cache[st.id]=c
+    local key=mail_catchment and (st.id+0x10000) or st.id
+    local modified=ctx.modified
+    if mail_catchment and ctx.mail_modified~=nil then modified=ctx.mail_modified end
+    local c=cache[key]
+    if not c or c.footprint~=st.tiles or c.width~=ctx.width or c.height~=ctx.height or c.modified~=modified then
+      c=Catchment.build(st,ctx.width,ctx.height,modified)
+      c.footprint,c.modified=st.tiles,modified
+      cache[key]=c
     end
     return c
   end
@@ -84,6 +107,14 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     local summary=Catchment.acceptance(coverage(state,st,ctx),"passenger",ctx.house_at)
     st.passenger_acceptance=summary.eighths
     st.always_accept_passengers=summary.always_accepted
+    return summary
+  end
+
+  function S.refresh_mail_acceptance(state,id,ctx)
+    local st=assert(state.stations[id])
+    local summary=Catchment.acceptance(coverage(state,st,ctx,true),"mail",ctx.house_at)
+    st.mail_acceptance=summary.eighths
+    st.always_accept_mail=summary.always_accepted
     return summary
   end
 
@@ -107,29 +138,58 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       copy[i]={x=tile.x,y=tile.y,kind=tile.kind,station=tile.station}
     end
     st.tiles=copy
+    if st.mail_enabled then S.refresh_mail_acceptance(state,id,ctx) end
     return S.refresh_acceptance(state,id,ctx)
   end
 
   function S.vehicle(state,def)
     assert(type(def.id)=="number" and def.owner~=nil and not state.vehicles[def.id],"Invalid or duplicate vehicle")
-    local stock=assert(S.stock_for(def.mode,def.engine,def.coach),"Only mounted stock passenger bodies")
+    local cargo=def.cargo or "passenger"
+    assert(cargo=="passenger" or cargo=="mail" and def.mode=="rail" and def.wagon==28
+      or cargo=="mixed" and def.mode=="rail" and def.town_parts,"Invalid town cargo body")
+    local stock=assert(S.stock_for(def.mode,def.engine,def.coach,cargo),"Only mounted stock cargo bodies")
     assert(type(def.speed)=="number" and type(def.built)=="number",
       "Stock speed-cache units and calendar build year are required")
-    local v={id=def.id,owner=def.owner,mode=def.mode,engine=def.engine,cargo="passenger",cached_max_speed=def.speed,
+    local v={id=def.id,owner=def.owner,mode=def.mode,engine=def.engine,cargo=cargo,cached_max_speed=def.speed,
       built=def.built,cargo_age_counter=1,batches={},units=0}
     if def.mode=="rail" then v.total_length=assert(def.length,"Train total length in 1/16-tile units required") end
-    if def.mode=="rail" and def.engine==11 then
-      assert(v.total_length==(def.coach and 24 or 16),"Invalid Manley-Morel physical formation")
+    if cargo=="mixed" then
+      local parts=def.town_parts
+      assert(#parts>=2 and #parts<=3 and #parts*8+8==v.total_length and not def.engine and not def.dual_head,
+        "Unsupported mixed town formation")
+      v.town_mixed=true
+      Compartments.town_wagons(v,parts,Roster)
+    elseif cargo=="mail" then
+      assert(v.total_length==16 and not def.coach and not def.dual_head and not def.passenger_coaches,
+        "Only the single stock Mail Van formation is mounted")
+      v.wagon=28
+    elseif def.mode=="rail" and dmus[def.engine] then
+      assert(v.total_length==(def.coach and 24 or 16),"Invalid passenger multiple-unit physical formation")
       v.coach=def.coach or nil
-      DMU.bodies(v,v.coach)
+      Compartments.bodies(v,v.coach,dmus[v.engine].body)
     elseif def.mode=="rail" and def.passenger_coaches then
       local paired=def.dual_head==true
       assert(def.passenger_coaches>=(paired and 1 or 2) and v.total_length==(def.passenger_coaches+(paired and 2 or 1))*8,
         "Invalid physical railway coach length")
-      DMU.coaches(v,def.passenger_coaches)
+      Compartments.coaches(v,def.passenger_coaches)
     end
     state.vehicles[v.id]=v
+    if def.air_mail then assert(S.mount_air_mail(v)) end
     return v
+  end
+
+  -- A passenger-only save can be converted safely between visits. Never
+  -- recreate or debit an already active passenger visit or its packets.
+  function S.mount_air_mail(v)
+    if v.mode~="air" then return false end
+    if v.air_mail then return true end
+    if v.load_state then return false end
+    local stock=S.stock_for("air",v.engine)
+    if not stock or not stock.mail or stock.mail<1 then return false end
+    assert(v.cargo=="passenger" and not v.carrying_parts)
+    Compartments.aircraft(v,stock)
+    v.air_mail,v.cargo=true,"mixed"
+    return true
   end
 
   -- Newly produced packets have no loading tile, travelled vector or
@@ -173,12 +233,18 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     return moved
   end
 
-  function S.waiting(state,id)
+  function S.waiting(state,id,cargo)
     local st=assert(state.stations[id])
-    local available=Packets.waiting(st)
+    cargo=cargo or "passenger"
+    local available=count(st.stock[cargo] or {})
     local reserved=0
     for _,vid in ipairs(st.loading_order) do
-      reserved=reserved+assert(state.vehicles[vid].load_state).reserved_units
+      local v=assert(state.vehicles[vid])
+      if v.carrying_parts then
+        for _,body in ipairs(v.carrying_parts) do
+          if body.cargo==cargo then reserved=reserved+assert(body.load_state).reserved_units end
+        end
+      elseif v.cargo==cargo then reserved=reserved+assert(v.load_state).reserved_units end
     end
     return available+reserved,available
   end
@@ -190,30 +256,45 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     st.rating_phase=phase
     if events>0 then
       Rating.increment_station_timers(st)
-      local g=goods(st)
-      local waiting=Packets.waiting(st)
-      local random=function() return (ctx.random_u32 or Queue.random_u32)(state) end
-      local r=Catchment.rating_step(st,g,{waiting=waiting,destinations=waiting>0 and 1 or 0,
-        select_goods=ctx.select_goods~=false,random_u32=random})
-      for _,k in ipairs({"rating","has_rating","time_since_pickup","last_speed","last_age","max_waiting_cargo"}) do g[k]=r[k] end
-      if r.drop>0 then
-        for sid,retained in pairs(Queue.truncate(st.stock.passenger,waiting,r.drop,random)) do
-          local source=state.stations[sid]
-          if source then
-            local origin=goods(source);origin.max_waiting_cargo=max(origin.max_waiting_cargo,retained)
+      local function rate(cargo,dirty)
+        local g=goods(st,cargo)
+        local stock=st.stock[cargo] or {}
+        local waiting=count(stock)
+        local random=function()
+          if cargo=="mail" and ctx.mail_random_u32 then return ctx.mail_random_u32() end
+          return (ctx.random_u32 or Queue.random_u32)(state)
+        end
+        local r=Catchment.rating_step(st,g,{waiting=waiting,destinations=waiting>0 and 1 or 0,
+          select_goods=ctx.select_goods~=false,random_u32=random,waiting_changed=dirty})
+        for _,k in ipairs({"rating","has_rating","time_since_pickup","last_speed","last_age","max_waiting_cargo"}) do g[k]=r[k] end
+        if r.drop>0 then
+          for sid,retained in pairs(Queue.truncate(stock,waiting,r.drop,random)) do
+            local source=state.stations[sid]
+            if source then
+              local origin=goods(source,cargo);origin.max_waiting_cargo=max(origin.max_waiting_cargo,retained)
+            end
           end
         end
+        return r.waiting_changed
       end
+      -- One physical station phase and timers, iterating the mounted
+      -- cargo entries in RC1 CargoID order (passengers #0, mail #2).
+      local dirty=rate("passenger")
+      if st.mail_enabled then rate("mail",dirty) end
     end
     if (tick+(st.tick_index or st.id))%250==0 then
       goods(st).accepted_bigtick=nil
       S.refresh_acceptance(state,st.id,ctx)
+      if st.mail_enabled then
+        goods(st,"mail").accepted_bigtick=nil
+        S.refresh_mail_acceptance(state,st.id,ctx)
+      end
     end
   end
 
   local function emit(events,kind,st,v,tick,values)
     local e={kind=kind,station=st.id,vehicle=v.id,mode=v.mode,visit=v.visit,tick=tick,tile=v.cargo_tile,
-      part=v.part,role=v.role}
+      part=v.part,body_id=v.body_id,role=v.role,cargo=v.cargo or "passenger"}
     for k,value in pairs(values or {}) do e[k]=value end
     if events then events[#events+1]=e end
     return e
@@ -224,14 +305,14 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     -- carriage or vessel at arrival), not station sign, locomotive,
     -- nominal port tile, straight spline length or arbitrary time ratio.
     local d=Packets.distance(p,v.cargo_tile,ctx.xy)
-    return Income.regular(p.units,d,p.age or 0,unpack(Income.temperate.passenger)),d
+    return Income.regular(p.units,d,p.age or 0,unpack(Income.temperate[v.cargo or "passenger"])),d
   end
 
   local function options(state,tick,ctx,events)
     local function carrier(st,v) return {id=st.id,tile=v.cargo_tile} end
     return {
-      gradual=ctx.gradual~=false,feeder_percent=ctx.feeder_percent,consist=DMU,
-      accepts=function(st) return st.passenger_acceptance>=8 end,
+      gradual=ctx.gradual~=false,feeder_percent=ctx.feeder_percent,consist=Compartments,
+      accepts=function(st,v) return entitled(st,v.cargo) end,
       can_load=function(st,v)
         return Catchment.may_load(st,v.owner,town_rights(ctx,st.town),ctx.neutral_owner)
       end,
@@ -239,26 +320,37 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       drop=function(st,v,p) Packets.drop(p,carrier(st,v),ctx.xy) end,
       attempt=function(st,v,capacity_left)
         local speed=ctx.speed and ctx.speed(v) or v.cached_max_speed
-        Catchment.observe_loading(goods(st),v.mode,speed,ctx.year(tick),v.built,capacity_left)
+        Catchment.observe_loading(goods(st,v.cargo),v.mode,speed,ctx.year(tick),v.built,capacity_left)
       end,
       loaded=function(st,v,n)
         Catchment.loaded(st,v.mode,n)
-        local train=v.part and assert(state.vehicles[v.id]) or v
-        train.boarded=(train.boarded or 0)+n
-        train.last_board=emit(events,"board",st,v,tick,{units=n})
+        local carrier=v.part and assert(state.vehicles[v.id]) or v
+        carrier.boarded=(carrier.boarded or 0)+n
+        if carrier.cargo=="mixed" then
+          carrier.boarded_cargos=carrier.boarded_cargos or {}
+          carrier.boarded_cargos[v.cargo]=(carrier.boarded_cargos[v.cargo] or 0)+n
+        end
+        carrier.last_board=emit(events,"board",st,v,tick,{units=n})
       end,
       unloaded=function(st) st.time_since_unload=0 end,
       transferred=function(st,v,p)
-        local g=goods(st)
+        local g=goods(st,v.cargo)
         if not g.has_rating then g.has_rating=true;g.time_since_pickup=0 end
         emit(events,"transfer",st,v,tick,{units=p.units,source=p.source})
       end,
       deliver=function(st,v,p)
-        assert(st.always_accept_passengers,"House delivery staged without stock always-acceptance")
-        -- DeliverGoods credits the station's associated town, not which
-        -- catchment block has the most houses, or the trip origin's town.
-        if st.town~=nil then state.towns[st.town]=(state.towns[st.town] or 0)+p.units end
-        local g=goods(st)
+        local is_mail=v.cargo=="mail"
+        assert((is_mail and st.always_accept_mail or not is_mail and st.always_accept_passengers),
+          "House delivery staged without stock always-acceptance")
+        -- DeliverGoods credits the station-associated town; this is never
+        -- the emitting town or whichever house has most acceptance.
+        if st.town~=nil then
+          if is_mail then
+            state.mail_towns=state.mail_towns or {}
+            state.mail_towns[st.town]=(state.mail_towns[st.town] or 0)+p.units
+          else state.towns[st.town]=(state.towns[st.town] or 0)+p.units end
+        end
+        local g=goods(st,v.cargo)
         g.ever_accepted,g.current_month,g.accepted_bigtick=true,true,true
         local amount,distance=fare(v,p,ctx)
         if ctx.subsidy then amount=ctx.subsidy(st,v,p,amount) end
@@ -270,6 +362,14 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       payment=function(st,v,payment)
         v.route_profit=(v.route_profit or 0)+payment.route
         v.visual_profit=(v.visual_profit or 0)+payment.visual+payment.transfer
+        if payment.by_cargo then
+          v.cargo_totals=v.cargo_totals or {}
+          for cargo,detail in pairs(payment.by_cargo) do
+            local own=v.cargo_totals[cargo] or {route=0,visual=0,transfer=0,delivered=0}
+            v.cargo_totals[cargo]=own
+            for _,k in ipairs({"route","visual","transfer","delivered"}) do own[k]=own[k]+detail[k] end
+          end
+        end
         if payment.delivered>0 then
           local company=state.companies[v.owner] or {cash=0,revenue=0,units=0}
           state.companies[v.owner]=company
@@ -277,7 +377,8 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
           company.revenue=company.revenue+payment.route
           company.units=company.units+payment.delivered
           v.delivered=(v.delivered or 0)+payment.delivered
-          v.last_fare=emit(events,"fare",st,v,tick,{units=payment.delivered,amount=payment.route})
+          v.last_fare=emit(events,"fare",st,v,tick,{units=payment.delivered,amount=payment.route,
+            by_cargo=payment.by_cargo})
         end
       end,
     }
@@ -290,9 +391,10 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     local st,v=state.stations[id],state.vehicles[vid]
     assert(v and type(visit)=="number" and type(cargo_tile)=="number","Invalid carrier, visit or cargo tile")
     assert(tick==state.tick and state.post_tick~=tick,"Arrival must follow this tick's station pass")
+    local tiles=v.air_mail and {cargo_tile,cargo_tile} or order and order.cargo_tiles
     if v.visit then
       if visit==v.visit and v.load_state and id==v.load_state.station and cargo_tile==v.cargo_tile then
-        local t=order and order.cargo_tiles
+        local t=tiles
         local same=not v.carrying_parts or type(t)=="table" and #t==#v.carrying_parts
         if same and v.carrying_parts then
           for i,body in ipairs(v.carrying_parts) do
@@ -304,8 +406,8 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       if visit<=v.visit then return nil,"DUPLICATE_OR_STALE_VISIT" end
       if v.load_state then return nil,"ALREADY_LOADING" end
     end
-    local stock=S.stock_for(v.mode,v.engine,v.coach)
-    if not st or (st.owner~=v.owner and not neutral(st,ctx)) or
+    local stock=S.stock_for(v.mode,v.engine,v.coach,v.cargo)
+    if not st or (v.cargo=="mail" or v.cargo=="mixed") and not st.mail_enabled or (st.owner~=v.owner and not neutral(st,ctx)) or
        not coverage(state,st,ctx).facilities[v.mode=="rail" and "rail" or v.mode=="air" and "airport" or "dock"] then
       return nil,"INCOMPATIBLE_STATION"
     end
@@ -314,7 +416,6 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       assert(type(order.platform_tiles)=="number" and order.platform_tiles>=1,
         "Pass stock continuous platform length including both directions")
     end
-    local tiles=order.cargo_tiles
     if v.carrying_parts then
       if type(tiles)~="table" or #tiles~=#v.carrying_parts or cargo_tile~=tiles[1] then
         return nil,"ACTUAL_RAIL_BODY_TILES_REQUIRED"
@@ -325,12 +426,12 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     end
     v.visit,v.cargo_tile=visit,cargo_tile
     local flags=Loading.compact_order(order.action)
-    for _,name in ipairs({"full","force_unload","transfer","no_load","no_unload"}) do
+    for _,name in ipairs({"full","full_any","force_unload","transfer","no_load","no_unload"}) do
       if order[name]~=nil then flags[name]=order[name] end
     end
     flags.wait,flags.lateness=order.wait or 0,order.lateness or 0
     local ops=options(state,tick,ctx,events);ops.slice=stock.slice
-    local load=v.carrying_parts and DMU.begin(st,v,tiles,flags,ops,visit) or Loading.begin(st,v,stock.cap,flags,ops)
+    local load=v.carrying_parts and Compartments.begin(st,v,tiles,flags,ops,visit) or Loading.begin(st,v,stock.cap,flags,ops)
     load.platform_tiles=order.platform_tiles
     load.arrived_tick=tick
     v.travel_ticks=v.last_left and tick-v.last_left or nil
@@ -340,11 +441,11 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
 
   -- OpenTTD 16.0-RC1 CmdModifyOrder: change the active loading flag,
   -- without redoing BeginLoading or changing the unloading designations.
-  function S.update_load_type(v,full,no_load)
+  function S.update_load_type(v,full,no_load,full_any)
     local l=v.load_state
     if not l then return end
     local function apply(a)
-      a.full,a.no_load=full,no_load
+      a.full,a.no_load,a.full_any=full,no_load,full_any
     end
     apply(l)
     for _,body in ipairs(v.carrying_parts or {}) do apply(body.load_state) end
@@ -420,7 +521,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     assert(state.tick==tick and state.post_tick~=tick,"Departure must follow this tick's station pass")
     local st=assert(state.stations[l.station])
     local ops=options(state,tick,ctx,events)
-    if v.carrying_parts then DMU.leave(st,v,ops) else Loading.leave(st,v,ops) end
+    if v.carrying_parts then Compartments.leave(st,v,ops) else Loading.leave(st,v,ops) end
     v.last_left=tick
     emit(events,"leave",st,v,tick)
     v.cargo_tile=nil
@@ -436,7 +537,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     if v.load_state then
       local st=assert(state.stations[v.load_state.station],"Cannot withdraw from a missing station")
       local ops=options(state,tick,ctx,events)
-      if v.carrying_parts then DMU.leave(st,v,ops) else Loading.leave(st,v,ops) end
+      if v.carrying_parts then Compartments.leave(st,v,ops) else Loading.leave(st,v,ops) end
     end
     state.vehicles[vid]=nil
     return true
@@ -448,9 +549,13 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       local sign=st.sign or st.tiles[1]
       if sign then
         local g=goods(st)
-        rows[#rows+1]={owner=st.owner,x=sign.x,y=sign.y,goods={{
-          active=g.has_rating or (st.passenger_acceptance or 0)>=8 or st.always_accept_passengers,
-          state=g}}}
+        local rated={{active=g.has_rating or entitled(st,"passenger") or st.always_accept_passengers,state=g}}
+        if st.mail_enabled then
+          local post=goods(st,"mail")
+          rated[#rated+1]={active=post.has_rating or entitled(st,"mail") or post.ever_accepted
+            or post.current_month or post.accepted_bigtick,state=post}
+        end
+        rows[#rows+1]={owner=st.owner,x=sign.x,y=sign.y,goods=rated}
       end
     end
     return Rating.modify_around(rows,owner,x,y,-160,30)
@@ -462,7 +567,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     if v.load_state then
       local st=assert(state.stations[v.load_state.station])
       local ops=options(state,tick,ctx,events)
-      if v.carrying_parts then DMU.leave(st,v,ops) else Loading.leave(st,v,ops) end
+      if v.carrying_parts then Compartments.leave(st,v,ops) else Loading.leave(st,v,ops) end
     end
     v.crashed,v.stopped,v.units,v.batches=true,true,0,{}
     for _,part in ipairs(v.carrying_parts or {}) do part.units,part.batches=0,{} end
@@ -474,8 +579,8 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     if state.post_tick==tick then return false end
     for _,v in pairs(state.vehicles) do
       if not ctx or not ctx.vehicle_active or ctx.vehicle_active(v) then
-        local aging=S.stock_for(v.mode,v.engine,v.coach).aging
-        if v.carrying_parts then DMU.age(v,aging) else Loading.age_vehicle(v,1,aging) end
+        local aging=S.stock_for(v.mode,v.engine,v.coach,v.cargo).aging
+        if v.carrying_parts then Compartments.age(v,aging) else Loading.age_vehicle(v,1,aging) end
       end
     end
     state.post_tick=tick

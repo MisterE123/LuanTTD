@@ -157,14 +157,19 @@ return function(Sim,Kernel,Packets)
     end
   end
 
-  function R.accident(s,owner,x,y)
+  function R.accident(s,owner,x,y,accepts_mail)
     local rows={}
     for _,st in pairs(s.stations) do
       if st.mode=="road" then
         local xx,yy=Sim.xy(st.tile)
         local g=goods(s,st)
-        rows[#rows+1]={owner=st.owner,x=xx,y=yy,goods={{
-          state=g,active=g.has_rating or (st.passenger_acceptance or 0)>=8}}}
+        local entries={{state=g,active=g.has_rating or (st.passenger_acceptance or 0)>=8}}
+        local mail=st.mail_rating_state
+        if mail then
+          entries[#entries+1]={state=mail,active=mail.has_rating or mail.ever_accepted or
+            mail.current_month or mail.accepted_bigtick or accepts_mail and accepts_mail(s,st)}
+        end
+        rows[#rows+1]={owner=st.owner,x=xx,y=yy,goods=entries}
       end
     end
     return Kernel.modify_around(rows,owner,x,y,-160,30)

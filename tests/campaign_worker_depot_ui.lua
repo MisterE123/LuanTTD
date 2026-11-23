@@ -110,3 +110,34 @@ assembly({assembly_3_buy_wagon=true})
 assert(request.command.operation=="wagon" and request.command.stock==30 and request.command.token==12)
 _G.core=nil
 print("PASS assembly picker rows have their own tooltip and selection, even for unowned wagons")
+
+local picked=nil
+assert(D.open(mock,"rail",69,nil,function(mode,id) picked={mode,id} end))
+local rail_depot={offers={},targets={{id=8,label="Near"},{id=9,label="Far"}},vehicles={
+  {id=21,label="Train 1"}, {id=22,label="Train 2",order_copy=true}}}
+done({ok=true,revision=21,value=rail_depot})
+assert(not body:find("Copy orders…",1,true),"Only the parked train exposes Copy Orders.")
+local prefix=assert(body:match("(d%d+_)unit_row2"))
+D.fields(mock,{[prefix.."unit_row2"]=true})
+assert(body:find("Copy orders…",1,true))
+D.fields(mock,{[prefix.."copy"]=true})
+assert(request.kind=="depot_order_sources" and request.mode=="rail" and request.vehicle==22)
+done({ok=true,revision=21,value={vehicle=22,count=0,revision="rail-parked:0",
+  sources={{id=21,label="Train 1",count=3,revision="rail-active:4",cargo="Town rail"}}}})
+local cp=assert(body:match("(dc%d+_)apply"))
+D.fields(mock,{[cp.."apply"]=true})
+assert(request.command.source==21 and request.command.vehicle==22 and request.command.source_revision=="rail-active:4")
+done({ok=true,revision=22,why="Copied 3 orders."})
+assert(request.kind=="depot" and request.depot==69)
+rail_depot.vehicles[2].copied=3
+rail_depot.vehicles[2].draft_revision="rail-parked:1"
+done({ok=true,revision=22,value=rail_depot})
+local start=assert(body:match("(d%d+_)start_copied"))
+assert(body:find("Copied 3 orders.",1,true) and body:find("Review orders",1,true) and
+  not body:find("Start service",1,true))
+D.fields(mock,{[start.."orders"]=true})
+assert(picked[1]=="rail" and picked[2]==22)
+D.fields(mock,{[start.."start_copied"]=true})
+assert(request.command.mode=="rail" and request.command.copied and request.command.vehicle==22
+  and request.command.draft_revision=="rail-parked:1" and request.command.first==nil)
+print("PASS railway depot keeps the parked destination selected and can review/start its independent copied orders")

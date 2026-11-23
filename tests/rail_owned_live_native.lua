@@ -12,24 +12,33 @@ local signal_free=turnout or two_coaches or core.settings:get_bool("luanttd_qa_s
 local jubilee=core.settings:get_bool("bayline_native_jubilee_probe",false)
 local sh=core.settings:get_bool("bayline_native_sh_8p_probe",false)
 local sh40=core.settings:get_bool("bayline_native_sh_40_probe",false)
-local electric=sh40 or core.settings:get_bool("bayline_native_electric_probe",false)
+local asiastar=core.settings:get_bool("luanttd_qa_asiastar",false)
+local tim=asiastar or core.settings:get_bool("luanttd_qa_tim",false)
+local electric=tim or sh40 or core.settings:get_bool("bayline_native_electric_probe",false)
 local bridge=core.settings:get_bool("bayline_native_electric_bridge_probe",false)
 local lookahead=core.settings:get_bool("bayline_native_platform_lookahead_probe",false)
 local branch=lookahead or core.settings:get_bool("bayline_native_rail_branch_probe",false)
 assert(not bridge or electric)
 assert(not branch or not bridge and not electric)
-local coach=core.settings:get_bool("bayline_native_manley_coach_probe",false)
-local manley=coach or core.settings:get_bool("bayline_native_manley_probe",false)
-assert(not (jubilee and sh or manley and (jubilee or sh)))
-local design=sh40 and {24,48804,176,984000,"sh_40","bl_rail_sh_40"}
+local dash_coach=core.settings:get_bool("luanttd_qa_dash_coach",false)
+local dash=dash_coach or core.settings:get_bool("luanttd_qa_dash",false)
+local coach=dash_coach or core.settings:get_bool("bayline_native_manley_coach_probe",false)
+local dmu=dash or coach or core.settings:get_bool("bayline_native_manley_probe",false)
+assert(not (jubilee and sh or dmu and (jubilee or sh)))
+local design=asiastar and {26,69116,264,1200000,"asiastar","bl_rail_asiastar"}
+  or tim and {25,64429,240,1152000,"tim","bl_rail_tim"}
+  or sh40 and {24,48804,176,984000,"sh_40","bl_rail_sh_40"}
   or electric and {23,42554,160,864000,"sh_30","bl_rail_sh_30"}
-  or manley and {11,coach and 19116 or 17187,112,436800,"manley","bl_rail_manley_morel"}
+  or dash and {12,coach and 23804 or 21875,120,364000,"dash","bl_rail_dash"}
+  or dmu and {11,coach and 19116 or 17187,112,436800,"manley","bl_rail_manley_morel"}
   or sh and {10,36304,144,728000,"sh_8p","bl_rail_sh_8p"}
   or jubilee and {8,22241,112,672000,"jubilee","bl_rail_chaney_jubilee"}
   or {0,12866,64,280000,"steam","bl_rail_kirby_paul_tank"}
 local engine,cost,vmax,annual,kind,art=unpack(design)
-local physical_count=(coach or two_coaches) and 3 or 2
-local capacity=coach and 116 or 76
+local push_pull=dmu or tim
+local physical_count=(coach or tim or two_coaches) and 3 or 2
+local seat_count=dash and 40 or 38
+local capacity=2*seat_count+(coach and 40 or 0)
 local roles=coach and {"front","carriage","rear"} or {"front","rear"}
 local owner="Owned Rail QA"
 local mod_path=core.get_modpath("luanttd_core")
@@ -50,14 +59,19 @@ local function stamp()
     assert(claimed(25,10,0)==run.id and claimed(26,10,5)==run.id and claimed(23,15,0)==run.id)
     assert(not claimed(22,15,0),"Should stop reserving before the next PBS signal")
   end
-  local evidence={fits=0,low=10,high=0,ramps={},before={},after={}}
+  local evidence={fits=0,low=10,high=0,ramps={},before={},after={},cab_before={},cab_after={}}
   if bridge then
     assert(api.rail_dispatch_view.split_electric_ready())
-    api.rail_dispatch_view.observe_collector=function(run,tile,mount,wire,scale,td)
+    api.rail_dispatch_view.observe_collector=function(run,tile,mount,wire,scale,td,body_index)
       if not wire then return end
       assert(mount,"The physical shoe lost the wired route at "..tile)
-      if td==8 then evidence.before[tile]=true
-      elseif td==0 then evidence.after[tile]=true end
+      if td==8 then
+        evidence.before[tile]=true
+        if tile==id(17) then evidence.cab_before[body_index]=true end
+      elseif td==0 then
+        evidence.after[tile]=true
+        if tile==id(17) then evidence.cab_after[body_index]=true end
+      end
       evidence.fits=evidence.fits+1
       evidence.low,evidence.high=math.min(evidence.low,scale),math.max(evidence.high,scale)
       if tile==id(15) or tile==id(19) then evidence.ramps[tile]=true end
@@ -82,15 +96,15 @@ local function stamp()
     if bridge then
       for t=0,74 do render_inspection(.05,true,t/74) end
     end
-    if manley then
+    if dmu then
       local st=assert(Sim.rail_paid_status(S))
       local r=current()
-      local mass=coach and 89 or 64
+      local mass=(dash and 76 or 64)+(coach and 25 or 0)
       for i,p in ipairs(st.carrying_parts) do
         mass=mass+math.floor(p.onboard/16)
         if st.loading then assert(p.tile==r.arrival.cargo_tiles[i]) end
       end
-      assert(r.consist_mass==mass and r.acceleration==4*math.floor(600/mass))
+      assert(r.consist_mass==mass and r.acceleration==4*math.floor((dash and 700 or 600)/mass))
     end
   end
   local function entity_at(run,i,fraction)
@@ -98,7 +112,7 @@ local function stamp()
     assert(tile and td and f and not wormhole)
     render_inspection(.1,true,fraction)
     local tx,tz=Sim.xy(tile)
-    local powered=i==1 or manley and i==physical_count
+    local powered=i==1 or push_pull and i==physical_count
     local expected=powered and ("luanttd_core:dispatch_"..kind..(bridge and "_body" or "")) or "luanttd_core:dispatch_wagon"
     local mesh=powered and (art..(bridge and "_body" or "")..".obj") or "bl_rail_passenger_wagon.obj"
     local _,level=api.terrain.tile(tile)
@@ -113,7 +127,7 @@ local function stamp()
         if powered then assert(prop.textures[1]==art..".png") end
         assert(math.abs(obj:get_pos().y-(level+.614))<.002)
         assert(prop.visual_size.z==1)
-        local own_direction=manley and (i==physical_count or (not powered and reversed))
+        local own_direction=push_pull and (i==physical_count or (not powered and reversed))
         local wanted=math.pi-math.atan2(dx,dz)+(own_direction and math.pi or 0)
         assert(math.abs(math.cos(obj:get_rotation().y-wanted)-1)<.001,
           "Native locomotive must lead facing travel; the reciprocal tail cab must face out")
@@ -123,7 +137,7 @@ local function stamp()
     error("Native stock train part not spawned: "..mesh)
   end
   local function facing()
-    if not manley then return end
+    if not push_pull then return end
     render_inspection(.1,true,1)
     local head=select(1,Sim.rail_paid_pose(S,1,1))
     local x,z=Sim.xy(head)
@@ -131,10 +145,10 @@ local function stamp()
     local cabs,coaches={},0
     for _,obj in ipairs(core.get_objects_inside_radius({x=2*x+.5,y=level+.614,z=2*z+.5},4)) do
       local ent=obj:get_luaentity()
-      if ent and ent.name=="luanttd_core:dispatch_manley" then cabs[#cabs+1]=obj
+      if ent and ent.name=="luanttd_core:dispatch_"..kind..(bridge and "_body" or "") then cabs[#cabs+1]=obj
       elseif ent and ent.name=="luanttd_core:dispatch_wagon" then coaches=coaches+1 end
     end
-    assert(#cabs==2 and coaches==(coach and 1 or 0),"Incorrect independent native body meshes")
+    assert(#cabs==2 and coaches==((coach or tim) and 1 or 0),"Incorrect independent native body meshes")
     local yaw=cabs[1]:get_rotation().y-cabs[2]:get_rotation().y
     assert(math.abs(math.cos(yaw)+1)<.03,"Its two native driver cabs must face outward")
     assert(vector.distance(cabs[1]:get_pos(),cabs[2]:get_pos())>.95,"The two physical bodies overlap")
@@ -152,7 +166,7 @@ local function stamp()
     assert(record.status=="dispatched" and record.id==current().fleet_id and record.parts[1].stock_id==engine)
     assert(current().running_year_fp==annual and current().max_track_speed==vmax)
     if electric then
-      assert(Sim.date(S,0)==(sh40 and 1978 or 1970) and current().engine_railtype==1 and current().traction_railtypes[1] and
+      assert(Sim.date(S,0)==(asiastar and 1995 or tim and 1988 or sh40 and 1978 or 1970) and current().engine_railtype==1 and current().traction_railtypes[1] and
         not current().traction_railtypes[0])
       assert(S.tiles[id(20)].rail_type==1 and S.tiles[id(2)].rail_type==1)
       assert(core.get_node({x=40,y=bridge and 3 or 2,z=20}).name=="luanttd_core:rail_catenary_1_1")
@@ -162,14 +176,21 @@ local function stamp()
         assert(core.get_node({x=34,y=3,z=20}).name:find("rail_bridge_catenary",1,true))
       end
     end
-    if sh or manley then assert(Sim.date(S,0)==1960 and current().stock_steps>100) end
-    if manley then
+    if sh or dmu then assert(Sim.date(S,0)==(dash and 1988 or 1960) and current().stock_steps>100) end
+    if dmu then
       assert(#record.stock_ids==(coach and 2 or 1) and #record.parts==physical_count and
         record.parts[1].mate==physical_count and record.parts[physical_count].mate==1)
       local actor=Sim.rail_paid_status(S)
       assert(actor.capacity==capacity and actor.carrying_parts[1].onboard==qa.front
         and actor.carrying_parts[physical_count].onboard==qa.rear)
       if coach then assert(actor.carrying_parts[2].onboard==qa.coach and qa.coach>0) end
+      facing()
+    end
+    if tim then
+      assert(#record.parts==3 and record.parts[1].mate==3 and record.parts[3].mate==1
+        and record.parts[2].stock_id==27 and current().power==(asiastar and 8000 or 7000))
+      local state=Sim.rail_paid_status(S)
+      assert(state.capacity==40 and #state.carrying_parts==1 and state.carrying_parts[1].role=="carriage")
       facing()
     end
     local present=Sim.rail_paid_status(S)
@@ -215,7 +236,7 @@ local function stamp()
         if e.kind=="fare" then
           assert(not F[e.visit],"A reciprocal train paid twice for one loading visit")
           F[e.visit]=true;fare=fare+e.amount
-        elseif manley and e.kind=="deliver" then
+        elseif dmu and e.kind=="deliver" then
           assert(roles[e.part]==e.role)
           delivered=delivered+e.units;part_visits[e.part]=(part_visits[e.part] or 0)+e.units
         end
@@ -228,13 +249,13 @@ local function stamp()
       assert(saw_extension_tail and current().shuttle.arrivals>=3 and current().shuttle.reversals==0)
       core.log("action","OWNED_RAIL_THROUGH_NATIVE_PASS first platform claims survive SQLite reload; released tail, paid second station and repeated")
     else assert(current().shuttle.reversals>=2 and saw_return_heading) end
-    if manley then
+    if dmu then
       for i=1,physical_count do
         assert(part_visits[i] and part_visits[i]>0,"Missing a native body delivery")
         entity_at(current(),i,1)
       end
       assert(S.companies[owner].paid_units==delivered)
-      assert(current().max_track_speed==112 and current().running_year_fp==436800)
+      assert(current().max_track_speed==vmax and current().running_year_fp==annual)
       facing()
     end
     assert(Owned.get(S,owner,qa.unit).price==cost)
@@ -257,6 +278,11 @@ local function stamp()
     if bridge then
       assert(qa.fits>35 and evidence.fits>35 and evidence.ramps[id(15)] and evidence.ramps[id(19)])
       assert(evidence.after[id(17)],"No restored westbound native contact across the bridge center")
+      if tim then
+        assert(qa.cab_fits and evidence.cab_after[1] and evidence.cab_after[3],
+          "Both physical electric express cabs must contact real wire on the return")
+        core.log("action","ELECTRIC_EXPRESS_BOTH_COLLECTORS_NATIVE_PASS exact contact for both physical heads, both directions")
+      end
       core.log("action",("POWERED_BRIDGE_NATIVE_PASS engine=%d ascent_fit_before=%d return_fit_after=%d min=%.3f max=%.3f"):
         format(engine,qa.fits,evidence.fits,evidence.low,evidence.high))
     end
@@ -322,7 +348,7 @@ local function stamp()
     end
   end
   assert(not Owned.quote(S,owner,depot,{1,27}))
-  if jubilee or sh or manley or electric then
+  if jubilee or sh or dmu or electric then
     local catalog=assert(Owned.catalog(S))
     local found=false
     for _,row in ipairs(catalog) do
@@ -344,17 +370,18 @@ local function stamp()
     assert(api.electric_commit(owner,quote))
     assert(S.tiles[id(20)].rail_type==nil and S.tiles[id(2)].rail_type==1)
   end
-  if manley then
+  if dmu then
     local saved=core.show_formspec
     local ticket
     core.show_formspec=function(_,form,body) if form=="luanttd_core:rail_fleet" then ticket=body end end
     assert(api.owned_rail_ui.open({get_player_name=function() return owner end},id(2)))
     core.show_formspec=saved
-    assert(ticket and ticket:find("purchase_manley",1,true) and ticket:find("76 seats",1,true))
-    assert(ticket:find("purchase_manley_coach",1,true) and ticket:find("116 seats",1,true))
-    assert(not Owned.quote(S,owner,depot,{11,27,27}))
+    local button="purchase_"..kind
+    assert(ticket and ticket:find(button,1,true) and ticket:find((2*seat_count).." seats",1,true))
+    assert(ticket:find(button.."_coach",1,true) and ticket:find((2*seat_count+40).." seats",1,true))
+    assert(not Owned.quote(S,owner,depot,{engine,27,27}))
   end
-  local q=assert(Owned.quote(S,owner,depot,manley and not coach and {engine} or {engine,27}))
+  local q=assert(Owned.quote(S,owner,depot,dmu and not coach and {engine} or {engine,27}))
   local initial_cash=c.cash
   local r
   if two_coaches then
@@ -424,25 +451,26 @@ local function stamp()
     day()
     peak=math.max(peak,current().speed)
     local s=assert(Sim.rail_paid_status(S))
-    local both=not manley or (s.carrying_parts[1].onboard>0 and
+    local both=not dmu or (s.carrying_parts[1].onboard>0 and
       s.carrying_parts[physical_count].onboard>0 and (not coach or s.carrying_parts[2].onboard>0))
     if two_coaches then both=s.carrying_parts[1].onboard>0 and s.carrying_parts[2].onboard>0 end
     if s.loading and s.onboard>0 and both then
       if lookahead then forward_claims() end
       for i=1,physical_count do entity_at(current(),i,1) end
-      if jubilee or sh or manley then assert(peak>64,"Native source locomotive did not exceed the Kirby maximum") end
+      if jubilee or sh or dmu then assert(peak>64,"Native source locomotive did not exceed the Kirby maximum") end
       local bill=assert(Owned.running(S,owner,r.id))
       assert(bill.running_expense>0 and bill.charged_running_ticks>0)
       S.rail_owned_native_qa={unit=r.id,quote=q,passengers=s.onboard,cash=c.cash,expense=c.expense,day=S.day,
         running_expense=bill.running_expense,cost_fp=bill.running_cost_fp,fraction=c.stock_money_fraction,
         charged_running_ticks=bill.charged_running_ticks,peak=peak,
-        front=manley and s.carrying_parts[1].onboard,rear=manley and s.carrying_parts[physical_count].onboard,
+        front=dmu and s.carrying_parts[1].onboard,rear=dmu and s.carrying_parts[physical_count].onboard,
         coach=coach and s.carrying_parts[2].onboard,exit_curve=turnout and choices[4],
         coach1=two_coaches and s.carrying_parts[1].onboard,coach2=two_coaches and s.carrying_parts[2].onboard,
         purchase_cost=r.price}
       if bridge then
         assert(evidence.before[id(17)],"No eastbound native contact across the bridge center")
         S.rail_owned_native_qa.fits=evidence.fits
+        S.rail_owned_native_qa.cab_fits=evidence.cab_before[1] and evidence.cab_before[3]
       end
       api.save()
       core.log("action","OWNED_RAIL_SAVE_LOADING")

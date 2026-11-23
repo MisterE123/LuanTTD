@@ -13,14 +13,19 @@ return function(api,status)
   local Freight=dofile(moddir.."/rail_freight_kinds.lua")
   local serial=0
   local esc=core.formspec_escape
-  local model_short={[0]="Kirby",[8]="Jubilee",[9]="Ginzu A4",[10]="SH 8P",[11]="Manley–Morel",[13]="Hendry 25",[14]="UU 37",[15]="Floss 47",[23]="SH '30'",[24]="SH '40'"}
-  local orderable={{id=8,key="purchase_jubilee"},{id=9,key="purchase_a4"},{id=10,key="purchase_sh_8p"},{id=11,key="purchase_manley",dmu=true},{id=13,key="purchase_hendry_25"},{id=14,key="purchase_uu_37"},{id=15,key="purchase_floss"},
-    {id=23,key="purchase_sh_30",electric=true},{id=24,key="purchase_sh_40",electric=true}}
+  local Roster=dofile((core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/rail_roster.lua")
+  local model_short={[0]="Kirby",[8]="Jubilee",[9]="Ginzu A4",[10]="SH 8P",[11]="Manley–Morel",[12]="Dash",[13]="Hendry 25",[14]="UU 37",[15]="Floss 47",[23]="SH '30'",[24]="SH '40'",[25]="T.I.M.",[26]="AsiaStar"}
+  local orderable={{id=8,key="purchase_jubilee"},{id=9,key="purchase_a4"},{id=10,key="purchase_sh_8p"},{id=11,key="purchase_manley",dmu=true},{id=12,key="purchase_dash",dmu=true},{id=13,key="purchase_hendry_25"},{id=14,key="purchase_uu_37"},{id=15,key="purchase_floss"},
+    {id=23,key="purchase_sh_30",electric=true},{id=24,key="purchase_sh_40",electric=true},{id=25,key="purchase_tim",electric=true},{id=26,key="purchase_asiastar",electric=true}}
   local function money(n) return "$"..string.format("%d",math.floor(n)) end
   local function litres(units)
     return ("%.0f"):format((units or 0)*1000):reverse():gsub("(%d%d%d)","%1,"):reverse():gsub("^,","").." L"
   end
   local commercial={
+    mixed={wagon=28,title="Coach and Mail",noun="Coach and Mail",unit=function(n) return ("%d units"):format(n or 0) end,
+      name="Coach plus Mail Van",short="Coach and Mail train",tip="Use ordinary town platforms with independent passenger and Mail queues."},
+    mail={wagon=28,title="Mail",noun="Mail",unit=function(n) return ("%d bags"):format(n or 0) end,
+      name="30-bag Mail Van",short="Mail Van",tip="Use both ordinary owned town platforms, no dedicated freight stage."},
     oil={wagon=30,title="Oil",noun="oil",source="Oil Wells",sink="Oil Refinery",unit=litres,
       name="30,000 L Oil Tanker",short="Oil Tanker",parked="Parked at refinery",
       tip="Rail Freight: designate an Oil Wells loader and an Oil Refinery unloader before ordering this train."},
@@ -37,20 +42,26 @@ return function(api,status)
         "Rail Freight → "..(p.menu or "Iron and steel trains")..": designate a "..p.source.." loading platform and a "..p.sink.." unloading platform."}
   end
   local function cargo_of(u)
+    if api.rail_owned.mixed_consist and api.rail_owned.mixed_consist(S,u) then return "mixed" end
     local id=u.stock_ids[2]
-    local cargo=Freight.wagons[id]
+    local cargo=id==28 and "mail" or Freight.wagons[id]
     return commercial[cargo] and cargo or nil
   end
-  local function available(cargo) return api["rail_"..cargo.."_tools"] end
+  local function available(cargo) return cargo=="mixed" and api.rail_mixed_town_tools or api["rail_"..cargo.."_tools"] end
   local function freight_engine(id)
     return api.rail_owned.freight_engine and api.rail_owned.freight_engine(id) or id==0
   end
   local function can_order(u,cargo)
-    return available(cargo) and api.rail_owned["start_"..cargo] and #u.stock_ids==2 and freight_engine(u.stock_ids[1])
+    local owned=api.rail_owned
+    if Freight.profiles[cargo] and owned.profile_consist then
+      return available(cargo) and owned["start_"..cargo] and owned.profile_consist(S,u,cargo)
+    end
+    return available(cargo) and owned["start_"..cargo] and (cargo=="mixed" or #u.stock_ids==2) and freight_engine(u.stock_ids[1])
   end
   local function commercial_status(u,cargo)
     local get=api.Sim["rail_"..cargo.."_status"]
-    local c=get and get(S)
+    local c=get and get(S,(cargo=="mail" or cargo=="mixed") and u.id or nil)
+    if cargo=="mail" or cargo=="mixed" then return c and c.owner==u.owner and c or nil end
     if c and c.fleet_id==u.id and (not c.owner or c.owner==u.owner) then return c end
   end
   local errors={
@@ -109,6 +120,9 @@ return function(api,status)
     if q.coal then
       return q.first and "Click the designated power-station unloading platform." or "Click the designated coal mine loading platform."
     end
+    if q.cargo=="mail" or q.cargo=="mixed" then
+      return q.first and "Click a different owned town rail platform." or "Click the first owned town rail platform."
+    end
     if q.cargo then
       local profile=commercial[q.cargo]
       return q.first and "Click your designated "..profile.sink.." unloading platform." or
@@ -131,7 +145,7 @@ return function(api,status)
       if row.passenger_model_ready then catalogue[row.stock_id]=row end
     end
     local alternatives={}
-    local representative=api.rail_coal_tools and 29
+    local representative=api.rail_coal_tools and 29 or api.rail_mail_tools and 28
     if not representative then
       for _,cargo in ipairs(Freight.industry) do
         if available(cargo) then representative=commercial[cargo].wagon;break end
@@ -158,11 +172,22 @@ return function(api,status)
     if engine and api.rail_coal_tools then
       alternatives[1]={key="purchase_coal",ids={engine,29},name=label.." + 30-ton coal wagon"}
     end
-    for _,cargo in ipairs(Freight.industry) do
+    local offered={"mail"}
+    for _,cargo in ipairs(Freight.industry) do offered[#offered+1]=cargo end
+    for _,cargo in ipairs(offered) do
       local f=commercial[cargo]
       if engine and available(cargo) then
         alternatives[#alternatives+1]={key="purchase_"..cargo,cargo=cargo,ids={engine,f.wagon},name=label.." + "..f.name,tip=f.tip}
+        local p=Freight.profiles[cargo]
+        if p and p.max_wagons==2 then
+          alternatives[#alternatives+1]={key="purchase_"..cargo.."_pair",cargo=cargo,ids={engine,f.wagon,f.wagon},
+            name=label.." + 2 "..f.short.."s",tip=f.tip}
+        end
       end
+    end
+    if engine and available("mixed") then
+      alternatives[#alternatives+1]={key="purchase_mixed",cargo="mixed",ids={engine,27,28},
+        name=label.." + carriage + Mail Van",tip=commercial.mixed.tip}
     end
     for _,design in ipairs(orderable) do
       local row=catalogue[design.id]
@@ -170,13 +195,13 @@ return function(api,status)
           (not design.electric or (api.electric_tools and S.tiles[id].rail_type==1)) then
         alternatives[#alternatives+1]={key=design.key,ids=design.dmu and {design.id} or {design.id,27},
           name=design.dmu and model_short[design.id].." DMU" or model_short[design.id].." + coach",
-          tip=design.dmu and row.name..": two powered bodies, 76 seats."
+          tip=design.dmu and (row.name..": two powered bodies, "..(2*row.capacity).." seats.")
             or row.name.." with a 40-seat passenger carriage.",
           speed=row.speed}
         if design.dmu then
-          alternatives[#alternatives+1]={key="purchase_manley_coach",ids={design.id,27},
+          alternatives[#alternatives+1]={key=design.key.."_coach",ids={design.id,27},
             name=model_short[design.id].." + coach",speed=row.speed,
-            tip=row.name.." with two powered bodies plus an intermediate carriage, 116 seats."}
+            tip=row.name.." with two powered bodies plus an intermediate carriage, "..(2*row.capacity+40).." seats."}
         end
       end
     end
@@ -237,9 +262,13 @@ return function(api,status)
         local c=commercial_status(u,cargo)
         lab(.42,shift,("%s train %d  ·  %s aboard  ·  %s delivered"):format(
           f.title,u.unit_number,f.unit(c and c.onboard),f.unit(c and c.delivered)))
+        if cargo=="mixed" and c and c.cargo_onboard then
+          lab(6.50,shift+.37,("%d passengers / %d bags"):format(c.cargo_onboard.passenger,c.cargo_onboard.mail))
+        end
         local state=not available(cargo) and "Service unavailable" or not c and f.title.." service status unavailable" or
           c.finished and f.parked or c.failure and "Blocked" or c.paused and "Service unavailable" or
-          run and run.stopped and "Stopped" or c.loading and c.last_platform==c.mine and "Loading at "..f.source or
+          run and run.stopped and "Stopped" or (cargo=="mail" or cargo=="mixed") and (c.loading and "Loading/unloading at platform" or "In service") or
+          c.loading and c.last_platform==c.mine and "Loading at "..f.source or
           c.loading and c.last_platform==c.power and (f.sink_state or "Unloading at "..f.sink) or "In service"
         lab(.42,shift+.38,state.."   /   "..money(c and c.fare or 0).." earned   /   "..
           money(c and c.running_expense or run and run.running_expense or 0).." operating costs")
@@ -281,13 +310,16 @@ return function(api,status)
         local stock
         if #u.stock_ids<=2 then
           stock=coal and (engine_name.." + coal wagon") or f and (engine_name.." + "..f.short) or
-            u.stock_ids[1]==11 and (u.stock_ids[2]==27 and "Manley–Morel DMU + carriage (116 seats)" or "Manley–Morel DMU (76 seats)") or
+            Roster.passenger_dmu(u.stock_ids[1]) and (engine_name.." DMU"..
+              (u.stock_ids[2]==27 and " + carriage" or "").." ("..(Roster.entry(u.stock_ids[1]).capacity*2+
+              (u.stock_ids[2]==27 and 40 or 0)).." seats)") or
             (#u.stock_ids==1 and (engine_name.." locomotive only") or engine_name.." + carriage")
+        elseif f and Freight.profiles[cargo] and can_order(u,cargo) then stock=engine_name.." + "..(#u.stock_ids-1).." "..f.short.."s"
         else stock=engine_name.." + "..(#u.stock_ids-1).." cars" end
         lab(.42,shift,("Train %d  ·  %s  ·  %s"):format(u.unit_number,stock,money(u.price)))
         local ready=#u.stock_ids==2 and coal or owned.passenger_consist and owned.passenger_consist(u)
-          or not owned.passenger_consist and (#u.stock_ids==2 or u.stock_ids[1]==11)
-        if f and #u.stock_ids==2 then
+          or not owned.passenger_consist and (#u.stock_ids==2 or Roster.passenger_dmu(u.stock_ids[1]))
+        if f and (#u.stock_ids>1 or can_order(u,cargo)) then
           if can_order(u,cargo) then
             button(shift+.27,"unit_"..u.id,"Choose "..f.source.." and "..f.sink.." orders")
           else lab(.42,shift+.38,f.title.." orders are unavailable for this train.") end
@@ -439,7 +471,10 @@ return function(api,status)
     local st=t and t.rail_station_id
     if not st or (q.sequence and st==q.sequence[#q.sequence] or not q.sequence and st==q.first) then return end
     local raw=S.stock_rail_stations and S.stock_rail_stations[st]
-    if q.cargo then
+    if q.cargo=="mail" or q.cargo=="mixed" then
+      if not available(q.cargo) then return nil,"This town rail service is unavailable in this world." end
+      if not raw or raw.owner~=t.owner or Freight.role(raw) then return nil,"Choose an owned ordinary town rail platform." end
+    elseif q.cargo then
       local f=commercial[q.cargo]
       if not available(q.cargo) then return nil,"Rail "..f.title.." service is unavailable in this world." end
       local role=q.first and "unload" or "load"

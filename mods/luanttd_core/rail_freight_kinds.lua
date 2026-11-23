@@ -6,7 +6,7 @@ M.industry={"oil","goods","iron_ore","steel","valuables","livestock","grain","wo
 M.wagons={[29]="coal",[30]="oil",[31]="livestock",[32]="goods",[33]="grain",[34]="wood",[35]="iron_ore",[36]="steel",[37]="valuables"}
 M.profile_order={"iron_ore","steel","valuables","livestock","grain","wood"}
 M.profiles={
-  iron_ore={wagon=35,stem="iron_ore_hopper",name="Iron Ore",source="Iron Ore Mine",sink="Steel Mill",
+  iron_ore={wagon=35,max_wagons=2,stem="iron_ore_hopper",name="Iron Ore",source="Iron Ore Mine",sink="Steel Mill",
     capacity_name="30-ton Iron Ore Hopper",short="Iron Ore Hopper",system="heavy"},
   steel={wagon=36,stem="steel_truck",name="Steel",source="Steel Mill",sink="Factory",
     capacity_name="20-ton Steel Truck",short="Steel Truck",system="heavy"},

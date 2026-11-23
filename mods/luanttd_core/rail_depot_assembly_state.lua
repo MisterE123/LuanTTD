@@ -1,5 +1,6 @@
 -- Shared assembly view of the real stock depot. No formspec or renderer.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Roster=dofile(mod.."/openttd/rail_roster.lua")
 local Help=dofile(mod.."/depot_vehicle_help.lua")
 local Freight=dofile(mod.."/rail_freight_kinds.lua")
 return function(S,owned)
@@ -12,12 +13,13 @@ return function(S,owned)
     local cat,engines,wagons={}, {}, {}
     local function help(stock,id)
       local cargo=Help.rail_cargo(id)
-      return Help.describe("rail",cargo,stock.name,{speed=stock.speed,capacity=stock.capacity},
-        stock.kind=="wagon" and "wagon" or id==11 and "dmu" or "engine")
+      local dmu=Roster.passenger_dmu(id)
+      return Help.describe("rail",cargo,stock.name,{speed=stock.speed,capacity=dmu and stock.capacity*2 or stock.capacity},
+        stock.kind=="wagon" and "wagon" or dmu and "dmu" or "engine")
     end
     for _,r in ipairs(owned.catalog(S) or {}) do
       cat[r.stock_id]=r
-      if (r.kind=="wagon" and (r.stock_id==27 or Freight.wagons[r.stock_id])) or r.passenger_model_ready then
+      if (r.kind=="wagon" and (r.stock_id==27 or r.stock_id==28 or Freight.wagons[r.stock_id])) or r.passenger_model_ready then
         local q=owned.quote_part(S,n,id,r.stock_id)
         if q then
           local target=r.kind=="wagon" and wagons or engines

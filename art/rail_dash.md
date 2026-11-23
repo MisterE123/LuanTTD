@@ -1,0 +1,14 @@
+# Stock 'Dash' DMU (#12)
+
+An original close-to-track-scale late diesel railcar for the Temperate roster. Amber pilot cab, cobalt lower sill, ivory pressed shell, contrasting sliding doors, recessed blue glazing, rooftop HVAC, a distinct inboard corridor and visible wheel hardware. The edit file has four independently pivoted wheelsets and studio cameras; it is not a set of extracted sprites. Like other conventional rolling stock, the native mesh faces -Z, uses a 0.424 gauge and connects at the stock one-tile body spacing.
+
+Stock data reference: OpenTTD 16.0-RC1, `src/table/engines.h` #12, the `MM` passenger calendar and `RVI` dual-head row. The worker and native depot offer both 80-seat Dash and a 120-seat formation with a Passenger Carriage. Separate purchases put the carriage between the heads. The front and rear each retain their own 40 seats; stock maximum speed is 120 km/h and default medium purchase costs $21,875 (or $23,804 with the coach). A route needs no signals if it is a unique, unsignalled shuttle.
+
+Rebuild from repo root: `blender -b -t 3 --python-exit-code 1 --python tools/build_stock_dash_art.py`. Set `DASH_REVIEW` to an existing folder for three rendered inspection views. For headless mesh, track and tunnel verification run `python3 tests/stock_dash_art.py`, optionally passing `--upstream-engines /path/to/16.0-RC1/src/table/engines.h`.
+
+## Stock behavior and verification
+
+- The supplied RC1 `MM` and `RVI` rows come from [table/engines.h](https://github.com/OpenTTD/OpenTTD/blob/07b339c0aaeb0a87be9490b2f1c3f17c6b00b837/src/table/engines.h#L115). [train_cmd.cpp](https://github.com/OpenTTD/OpenTTD/blob/07b339c0aaeb0a87be9490b2f1c3f17c6b00b837/src/train_cmd.cpp#L764) creates two linked bodies, splits value and running costs between halves, and places the rear after loose wagons up to the next independent engine.
+- [economy.cpp](https://github.com/OpenTTD/OpenTTD/blob/07b339c0aaeb0a87be9490b2f1c3f17c6b00b837/src/economy.cpp#L1566) reserves front then linked rear, then the independent carriage. Its physical load/unload loop visits front, carriage, rear with one train timer, one station visit, and one company payment. The existing DMU path is shared; Dash does not implement a second simulation.
+- `tests/stock_dash_worker_native.sh`: actual worker depot lists prices and tooltips, buys the model and coach separately, starts it on a normal route, and spawns both Dash cabs and the coach. SQLite restart restored 5 passengers in each body. The train reached 120 km/h, reversed, and delivered all 120 seats for $1,600; the company ledger agreed.
+- `LUANTTD_NATIVE_DASH=true BAYLINE_NATIVE_STEAM_START_YEAR=1988 bash tests/rail_owned_live_native.sh` and the corresponding `LUANTTD_NATIVE_DASH_COACH=true` validate the actual Luanti model entities, opposing cabs and paid fares after restart. This is a scoped DMU service, not a claim of complete rail operations.

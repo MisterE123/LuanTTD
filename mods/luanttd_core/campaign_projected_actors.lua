@@ -31,7 +31,7 @@ return function(core,api,motion,models,airframes)
   local collector
   local rail_engines={locomotive=true}
   for _,kind in pairs(dofile(base.."/rail_dispatch_manifest.lua").stock_kind) do rail_engines[kind]=true end
-  local passenger_bodies={wagon=true,manley=true}
+  local passenger_bodies={wagon=true,manley=true,dash=true}
   function A.render(rows,dt,signals)
     local visible,viewers={},nil
     repair_smoke.step(dt)

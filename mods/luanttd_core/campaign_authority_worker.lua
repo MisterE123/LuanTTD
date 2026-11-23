@@ -102,6 +102,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         elseif q.kind=="demolition" then r=A.demolition(q.player,q.tile)
         elseif q.kind=="depot" then r=A.depot(q.player,q.mode,q.depot)
         elseif q.kind=="depot_order_sources" then r=A.depot_order_sources(q.player,q.mode,q.vehicle,q.depot)
+        elseif q.kind=="rail_mail_station" then r=A.rail_mail_station(q.player,q.tile)
         elseif q.kind=="truck_stop" then r=A.truck_stop(q.player,q.tile)
         elseif q.kind=="advance" and not auto then r=A.advance(q.days)
         elseif q.kind=="clock" then r={ok=true,day=s.day,tick=s.passenger_house_clock and

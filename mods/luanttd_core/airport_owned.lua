@@ -1,6 +1,6 @@
 -- Actual company hangar purchase, independent of presentation. These
 -- pinned stock small planes are already available at the 1950 start.
--- Later model retirement/maintenance and the mail hold are not mounted.
+-- Later model retirement/maintenance and non-default refits are not mounted.
 return function(Sim,Run,Roster,model_ready)
   local O={}
   local function plane_count(s)

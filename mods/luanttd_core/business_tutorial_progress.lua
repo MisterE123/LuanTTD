@@ -1,6 +1,8 @@
 -- Stock tutorial milestones without a player, map handle, or UI.
 return function(api,Track,depot_lookup)
   local S,Sim=api.s,api.Sim
+  local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local Roster=dofile(mod.."/openttd/rail_roster.lua")
   local function own_count(records,n,predicate)
     local count=0
     for _,r in pairs(records or {}) do
@@ -68,7 +70,7 @@ return function(api,Track,depot_lookup)
           started=true
         end
         for _,stock in ipairs(u.stock_ids or {}) do if stock==27 then bought=true end end
-        if u.stock_ids and u.stock_ids[1]==11 then bought=true end -- Manley Morel carries passengers without a coach
+        if u.stock_ids and Roster.passenger_dmu(u.stock_ids[1]) then bought=true end
       end
       if started then return 6 end
       if own_count(S.stock_rail_stations,n)<2 then return 1 end
