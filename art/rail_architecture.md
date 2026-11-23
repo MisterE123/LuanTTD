@@ -7,6 +7,16 @@ The models use the existing original railway meshes and wheel gauge, so
 approach rails join the ordinary Trackworks rails without a position or
 height seam.
 
+The timber canopy and fixtures were shortened independently of the
+coping and deck. The boarding surface remains .280 above the ground
+while the canopy is .729; the smaller street pedestrian is .291 tall.
+The brick shed is now 0.82 of the previous shell width and about 0.81
+of its previous height. The actual mounted stock body envelopes clear
+the more compact vault. The depot's front-only opening, rail endpoints,
+buffer and foundation interface stay fixed. The slim running formation
+is .716 wide on a straight, with .600 sleepers; its .424 gauge and .114
+running-rail crown are unchanged.
+
 - `bl_rail_platform_1.obj` is a straight X-axis platform and track;
   `bl_rail_platform_2.obj` is its Z-axis counterpart. The stone deck can
   run across multiple station tiles; the coping and track profile are

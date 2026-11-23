@@ -13,36 +13,43 @@ return function(api,status)
   }
   local direction={[0]="West",[1]="South",[2]="East",[3]="North"}
   local function opposite(dir) return (dir+2)%4 end
-  local function axis(id)
-    local t=id and S.tiles[id]
-    return t and (t.rail_tracks==1 and 0 or t.rail_tracks==2 and 1 or nil)
+  local Track=dofile((core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/rail_track.lua")
+  local function rail_at(id,hit)
+    return api.rail_build.signal_track(id,hit)
   end
   function W.tool(tool) return options[tool]~=nil end
-  local function preferred(p,id,ax)
-    if not p.get_pos then return ax+2 end
+  local function preferred(p,id,track)
+    if not p.get_pos then return track+8 end
     local x,z=Sim.xy(id)
     local here=p:get_pos()
-    return ax==0 and (here.x<2*x+.5 and 2 or 0)
-      or (here.z<2*z+.5 and 1 or 3)
+    local function approach(td)
+      local side=Track.entry_side(td)
+      local dx=side==0 and -1 or side==2 and 1 or 0
+      local dz=side==1 and 1 or side==3 and -1 or 0
+      return (here.x-2*x-.5-dx)^2+(here.z-2*z-.5-dz)^2
+    end
+    return approach(track)<=approach(track+8) and track or track+8
   end
-  local function quote(n,id,dir,kind,both)
-    return api.rail_build.quote_signal(n,id,dir,kind==5,kind==0,both)
+  local function quote(n,id,td,kind,both)
+    return api.rail_build.quote_signal_track(n,id,td,kind,both)
   end
-  function W.preview(p,tool,id)
-    local ax=axis(id)
-    if ax==nil then return nil,"Aim at owned, straight track. Avoid platforms and junctions." end
-    local dir=preferred(p,id,ax)
-    local q,why=quote(p:get_player_name(),id,dir,options[tool])
-    return q,q and ("Train travels "..direction[dir].."  ·  Click to pick direction") or why,dir
+  function W.preview(p,tool,id,hit)
+    local track=rail_at(id,hit)
+    if track==nil then return nil,"Aim at an owned rail piece. Avoid platforms and junctions." end
+    local td=preferred(p,id,track)
+    local dir=Track.exit_side(td)
+    local q,why=quote(p:get_player_name(),id,td,options[tool])
+    local arrow=track<=1 and dir or {td=td,dir=dir}
+    return q,q and ("Train travels "..direction[dir].."  ·  Click to pick direction") or why,arrow
   end
-  local function panel(p,id,kind,inspecting)
+  local function panel(p,id,kind,inspecting,hit)
     local n=p:get_player_name()
     local B=api.rail_build
-    local ax=axis(id)
-    local details=inspecting and B.signal_details(id)
+    local track=rail_at(id,hit)
+    local details=inspecting and (not hit or track~=nil) and B.signal_details(id,track)
     if inspecting and not details then return false end
-    if ax==nil then status(p,"Aim at owned, straight track. Avoid platforms and junctions.");return false end
-    if details then kind=details.kind end
+    if track==nil then status(p,"Aim at an owned rail piece. Avoid platforms and junctions.");return false end
+    if details then kind,track=details.kind,details.track end
     local x,z=Sim.xy(id)
     serial=serial+1
     local token=serial
@@ -59,38 +66,40 @@ return function(api,status)
       local shown={}
       for _,dir in ipairs(details.dirs) do shown[#shown+1]=direction[dir] end
       label(.4,2.51,"Protects trains travelling "..table.concat(shown," and ")..".")
-      local turn,reason=B.quote_flip_signal(n,id)
+      local turn,reason=B.quote_flip_signal(n,id,track)
       if turn then button(.4,3.03,5.56,"flip","Flip 180° (free)") else label(.4,3.28,reason or "This signal cannot be flipped.") end
       button(6.24,3.03,5.63,"remove","Review signal removal")
       label(.4,4.16,"Normal path signals can be red until a train reserves a path.")
     else
       label(.4,2.50,"Which way will the arriving train travel?")
-      local from=preferred(p,id,ax)
-      for i,dir in ipairs({from,opposite(from)}) do
-        local q,why=quote(n,id,dir,kind)
+      local from=preferred(p,id,track)
+      for i,td in ipairs({from,Track.reverse_trackdir(from)}) do
+        local q,why=quote(n,id,td,kind)
         local x_=i==1 and .4 or 6.24
-        local travel=direction[opposite(dir)].."  →  "..direction[dir]
-        if q then button(x_,3.04,5.62,"dir"..dir,travel.."    $"..q.price)
+        local travel=direction[Track.entry_side(td)].."  →  "..direction[Track.exit_side(td)]
+        local key=track<=1 and ("dir"..Track.exit_side(td)) or ("td"..td)
+        if q then button(x_,3.04,5.62,key,travel.."    $"..q.price)
         else label(x_,3.31,travel);b[#b+1]=("textarea[%g,3.64;5.58,1.03;;;%s]"):format(x_,esc(why or "Not available.")) end
       end
       if kind==0 then
-        local q=quote(n,id,ax,kind,true)
+        local q=quote(n,id,track,kind,true)
         if q then button(.4,4.05,11.47,"both","Both directions    $"..q.price) end
       end
       label(.4,5.01,"Start with one train on a connected route: signals are optional there.")
       label(.4,5.49,"Add signals when trains need to share track. Place them on plain rail, not a station.")
     end
     b[#b+1]="button_exit[.4,6.15;11.5,.62;signal_exit;Back to railway]"
-    pending[n]={id=id,kind=kind,inspect=inspecting,token=token,topology=S.topology}
+    pending[n]={id=id,kind=kind,track=track,inspect=inspecting,token=token,topology=S.topology}
     core.show_formspec(n,W.form,table.concat(b))
     return true
   end
-  function W.open(p,id,tool)
-    local detail=api.rail_build.signal_details(id)
-    if detail then return panel(p,id,nil,true) end
-    return panel(p,id,options[tool],false)
+  function W.open(p,id,tool,hit)
+    local track=rail_at(id,hit)
+    local detail=track~=nil and api.rail_build.signal_details(id,track)
+    if detail then return panel(p,id,nil,true,hit) end
+    return panel(p,id,options[tool],false,hit)
   end
-  function W.inspect(p,id) return panel(p,id,nil,true) end
+  function W.inspect(p,id,hit) return panel(p,id,nil,true,hit) end
   function W.fields(p,f,remove)
     local n=p:get_player_name()
     local q=pending[n]
@@ -107,12 +116,13 @@ return function(api,status)
     if q.topology~=S.topology then status(p,"The railway changed. Select the tile again.");return true end
     if q.inspect and action=="remove" then return remove(p,q.id) end
     local plan,why
-    if q.inspect and action=="flip" then plan,why=api.rail_build.quote_flip_signal(n,q.id)
+    if q.inspect and action=="flip" then plan,why=api.rail_build.quote_flip_signal(n,q.id,q.track)
     elseif not q.inspect then
       local both=action=="both" and q.kind==0
-      local dir=both and axis(q.id) or tonumber(action:match("^dir([0-3])$"))
-      if not dir or dir%2~=axis(q.id) then return true end
-      plan,why=quote(n,q.id,dir,q.kind,both)
+      local dir=tonumber(action:match("^dir([0-3])$"))
+      local td=both and q.track or dir and Track.diagonal_trackdir(dir) or tonumber(action:match("^td(%d+)$"))
+      if not Track.valid_trackdir(td) or Track.track(td)~=q.track then return true end
+      plan,why=quote(n,q.id,td,q.kind,both)
     end
     if not plan then status(p,why or "No change made.");return true end
     local ok,note=api.rail_build.build(n,plan)

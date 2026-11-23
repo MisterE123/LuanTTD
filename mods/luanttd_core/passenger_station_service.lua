@@ -427,6 +427,20 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     return true
   end
 
+  function S.accident_rating(state,owner,x,y)
+    local rows={}
+    for _,st in pairs(state.stations) do
+      local sign=st.sign or st.tiles[1]
+      if sign then
+        local g=goods(st)
+        rows[#rows+1]={owner=st.owner,x=sign.x,y=sign.y,goods={{
+          active=g.has_rating or (st.passenger_acceptance or 0)>=8 or st.always_accept_passengers,
+          state=g}}}
+      end
+    end
+    return Rating.modify_around(rows,owner,x,y,-160,30)
+  end
+
   function S.crash_rail(state,vid,tick,ctx,events)
     local v=state.vehicles[vid]
     if not v or v.mode~="rail" or v.crashed then return false end

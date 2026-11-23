@@ -1,6 +1,6 @@
 -- Isolated actual Luanti sky, time, lighting and original terrain textures.
 local world=core.get_modpath("atmosphere")
-local open=dofile(world.."/atmosphere.lua").start(core,core.settings)
+local open=dofile(world.."/atmosphere.lua").start(core)
 core.set_mapgen_setting("mg_name","singlenode",true)
 core.set_mapgen_setting("mg_flags","light",true)
 core.register_node("atmosphere:meadow",{tiles={"bl_grass2.png","bl_grass2.png","bl_grass_side.png"}})

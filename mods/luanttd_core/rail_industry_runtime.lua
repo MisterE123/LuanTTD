@@ -19,7 +19,7 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     if #list>4096 then table.remove(list,1) end
   end
   local function run_of(s,Run)
-    local r=Run and Run.current_paid(s)
+    local r=Run and (Run.freight_paid and Run.freight_paid(s,cargo) or Run.current_paid(s))
     return r and r.freight and r.freight.cargo==cargo and r or nil
   end
   function R.present(s,Run) return run_of(s,Run)~=nil end
@@ -193,19 +193,22 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
         end
         return ready or false
       end,
-      after=function(tick,ready)
-        if r and not (blocked or r.failure) then
-          local v=state.vehicle
-          motion(Run.advance_paid(s,{
-            leave=function() return ready and b.leave(v.visit,tick) or false end,
-            cargo_count=function() return v.units end,
-            arrive=function(q,wagon)
-              local head=q.consist.parts[1].tile
-              return not not b.arrive(q.station,q.freight.visits,tick,head,wagon)
-            end,
-          }),tick)
+      after=function(tick,ready,register)
+        local function finish(moved)
+          motion(moved,tick);f.samples[#f.samples+1]=samples(Run,r)
         end
-        f.samples[#f.samples+1]=samples(Run,r)
+        if not r or blocked or r.failure then return finish() end
+        local v=state.vehicle
+        local callbacks={
+          leave=function() return ready and b.leave(v.visit,tick) or false end,
+          cargo_count=function() return v.units end,
+          arrive=function(q,wagon)
+            local head=q.consist.parts[1].tile
+            return not not b.arrive(q.station,q.freight.visits,tick,head,wagon)
+          end,
+        }
+        if register then register(cargo,callbacks,finish)
+        else finish(Run.advance_paid(s,callbacks)) end
       end,
       post=function(tick) if state.tick==tick then assert(b.after_motion(tick)) end end,
     }

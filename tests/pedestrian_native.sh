@@ -94,6 +94,15 @@ say() {
   xdotool key t; sleep .24; xdotool type "$1"; xdotool key Return; sleep .52
 }
 say "/walkprobe before"
+import -window root "$out/builder-first.png"
+xdotool key c
+sleep .45
+import -window root "$out/builder-rear.png"
+xdotool key c
+sleep .45
+import -window root "$out/builder-front.png"
+xdotool key c
+sleep .4
 say "/walk"
 sleep 1.1
 say "/walkprobe entered"
@@ -125,15 +134,21 @@ xdotool keyup w
 sleep .8
 say "/walkprobe blocked"
 import -window root "$out/walk-house-stop.png"
+say "/walkprobe doorway"
 xdotool key c
-sleep .35
+sleep .40
 xdotool key c
-sleep .35
+sleep .55
+import -window root "$out/walk-door-eye.png"
+xdotool key c
+sleep .5
+import -window root "$out/walk-door-scale.png"
 xdotool click 3
 sleep .7
 say "/walkprobe returned"
 import -window root "$out/walk-returned.png"
 grep "WALK_QA" "$out/server.log"
 grep "WALK_AVATAR" "$out/server.log"
+grep "WALK_DOOR_EYE" "$out/server.log"
 ! grep -E 'ERROR\[' "$out/"{server,client}.log
 python3 "$repo/tests/pedestrian_native_evidence.py" "$out/server.log"

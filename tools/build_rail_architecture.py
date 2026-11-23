@@ -180,11 +180,17 @@ def platform(geos):
         slab(m,"Platform coach lamps","Forest ironwork",x,.767,.030,.030,.278,.753,.006)
         slab(m,"Platform coach lamps","Signal gold",x,.767,.072,.071,.725,.788,.014)
         slab(m,"Platform coach lamps","Forest ironwork",x,.767,.080,.079,.785,.800,.011)
-    return m
+    def platform_profile(_,x,z,h):
+        # Keep the flush join and boarding level. Size railings,
+        # benches, lighting and canopy to the pedestrian palette.
+        return x,z,h if h<=.284 else .284+(h-.284)*.78
+    return rail.reprofile(m,platform_profile)
 
 
 def shed(geos):
     m=clip_behind(rail.rail_geometry(2,0,geos),-.831)
+    running_groups=set(m.parts)
+    running_groups.update(("Cast end-of-track buffer",))
     # Stock depot faces +Z before the rotated variants are generated.
     outline=.756
     arch=.442
@@ -280,7 +286,13 @@ def shed(geos):
         slab(m,"Bollards","Iron base",x,.833,.103,.097,.002,.063,.010)
         slab(m,"Bollards","Signal gold",x,.833,.061,.058,.053,.242,.011)
         slab(m,"Bollards","Iron base",x,.833,.061,.058,.134,.178,.011)
-    return m
+    def depot_profile(group,x,z,h):
+        # Station coordinates/portal direction and running way stay
+        # stock. Refit the oversized brick shell to one road-size shed.
+        if group in running_groups:
+            return x,z,h
+        return .82*x,z,h if h<=.128 else .128+(h-.128)*.79
+    return rail.reprofile(m,depot_profile)
 
 
 def atlas():

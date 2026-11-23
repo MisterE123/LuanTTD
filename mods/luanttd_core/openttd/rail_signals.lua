@@ -148,6 +148,15 @@ return function(T)
     return true
   end
 
+  function R.remove_track(board,state,id,track)
+    local t=R.view(board,state).tile(id)
+    if not R.on_track(t,track) then return false end
+    local rec=metadata(t)
+    rec.present_signals=remove(rec.present_signals,on_track[track])
+    if rec.present_signals==0 then state.records[id]=nil else state.records[id]=rec end
+    return true
+  end
+
   function R.set_aspect(board,state,id,td,green)
     local t=R.view(board,state).tile(id)
     if not R.along(t,td) then return false end

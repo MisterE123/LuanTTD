@@ -9,6 +9,11 @@ return function(Sim,s,Lab,Owned,Run,T,Signals)
   assert(Lab.depot(s,owner,id(29,15),T.NE))
   assert(Lab.station(s,owner,id(7,15),id(8,15)))
   assert(Lab.station(s,owner,id(25,15),id(26,15)))
+  for _,x in ipairs({7,8,9,10,24,25,26,27}) do
+    for _,z in ipairs({12,13,14,16,17,18}) do
+      local t=s.tiles[id(x,z)];t.house,t.parcel,t.variant=true,"shop",2
+    end
+  end
   local A=s.tiles[id(7,15)].rail_station_id
   local B=s.tiles[id(25,15)].rail_station_id
   local L,R=id(6,15),id(27,15)

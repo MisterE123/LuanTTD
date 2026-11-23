@@ -28,9 +28,10 @@ GEOMETRY_PRECISION = 1e-6
 GAUGE = .424
 HEAD = .030    # half-width of the worn running surface
 FOOT = .043    # half-width of flared rail foot
-SLEEPER = .339
+SLEEPER = .300
 TRACK_TOP = .114
-BED_EDGE = .451
+BED_EDGE = .358
+BED_CROWN = .284
 BALLAST = ["6b6457", "71695a", "776d5c", "776f63", "82786a", "696257"]
 TIES = ["725440", "654737", "77503a", "60483a", "735641"]
 COLORS = BALLAST + TIES + [
@@ -63,6 +64,7 @@ class Geos:
         for sig in (
             ("initGEOS", None, c_void_p, c_void_p),
             ("GEOSGeomFromWKT", c_void_p, c_char_p),
+            ("GEOSBufferWithStyle", c_void_p, c_void_p, c_double, c_int, c_int, c_int, c_double),
             ("GEOSUnaryUnionPrec", c_void_p, c_void_p, c_double),
             ("GEOSDifferencePrec", c_void_p, c_void_p, c_void_p, c_double),
             ("GEOSIntersectionPrec", c_void_p, c_void_p, c_void_p, c_double),
@@ -105,6 +107,14 @@ class Geos:
         g = self.lib.GEOSDifferencePrec(a,b,GEOMETRY_PRECISION)
         assert g
         return g
+
+    def ribbon(self, points, half_width):
+        line = self.lib.GEOSGeomFromWKT(("LINESTRING(" + ",".join(f"{x:.7f} {z:.7f}" for x,z in points) + ")").encode())
+        assert line
+        out = self.lib.GEOSBufferWithStyle(line, half_width, 4, 2, 1, 1.)
+        self.free(line)
+        assert out
+        return out
 
     def members(self,g):
         if self.lib.GEOSisEmpty(g):
@@ -245,6 +255,16 @@ class Mesh:
                 del self.parts[group]
 
 
+def reprofile(mesh,profile):
+    """Rebuild a shaped native mesh; authored boundaries keep shared vertices."""
+    out=Mesh(terrain_height(0))
+    for group,faces in mesh.parts.items():
+        verts=mesh.vertices[group]
+        for indices,col in faces:
+            out.face(group,col,[profile(group,*verts[i]) for i in indices])
+    return out
+
+
 def rect(path,t,length,width,side=0,bevel=.012):
     x,z,tx,tz=path.sample(t)
     nx,nz=-tz,tx
@@ -269,23 +289,28 @@ def rail_geometry(mask,grade,geos,detail=True,paths=None):
     # Presentation-only diagonal paths have oblique seam tangents. Extend
     # their sweeps through the ports, then trim precisely on the tile edge.
     tile=geos.union([[(-1,-1),(1,-1),(1,1),(-1,1)]]) if paths else None
-    def union(rings):
-        g=geos.union(rings)
+    def clip(g):
         if tile is not None:
             trimmed=geos.lib.GEOSIntersectionPrec(g,tile,GEOMETRY_PRECISION)
             geos.free(g)
             assert trimmed
             return trimmed
         return g
+    def union(rings):
+        return clip(geos.union(rings))
     def sweep(w):
+        if paths and len(pp)==1 and hasattr(pp[0],"ribbon_points"):
+            # Buffer the centerline instead of ever folding a broad
+            # shoulder's inner offsets over themselves at a tight easing.
+            return clip(geos.ribbon(pp[0].ribbon_points(),w))
         return union([p.sweep(-w,w) for p in pp])
     def terrain_bed(x,z):
         d=min(p.distance(x,z) for p in pp)
-        return .006+max(0,min(1,(BED_EDGE-d)/.146))*.030
+        return .006+max(0,min(1,(BED_EDGE-d)/(BED_EDGE-BED_CROWN)))*.030
 
     # Union outlines before generating ballast, so switches use a single bed.
     shoulder=sweep(BED_EDGE)
-    crown=sweep(.305)
+    crown=sweep(BED_CROWN)
     bank=geos.difference(shoulder,crown)
     mesh.skin(bank,"Ballast shoulder",lambda x,z: top_color(x,z),terrain_bed,geos)
     mesh.skin(crown,"Compacted ballast",lambda x,z:2+(top_color(x,z)%2),lambda x,z:.036,geos)
@@ -377,7 +402,7 @@ def rail_geometry(mask,grade,geos,detail=True,paths=None):
         for _ in range(226):
             x,z=(rng.uniform(-.965,.965) for _ in range(2))
             d=min(p.distance(x,z) for p in pp)
-            if not (.345<d<.437 or .06<d<.24 and rng.random()<.42):
+            if not (BED_EDGE-.066<d<BED_EDGE-.014 or .06<d<.24 and rng.random()<.42):
                 continue
             s=rng.uniform(.013,.033)
             h=terrain_bed(x,z)

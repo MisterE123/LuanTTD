@@ -186,6 +186,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
           tick_index=id_for_tick,tiles=tiles},ctx)
       end
       st.host_mode,st.host_id,st.footprint_rev=mode_,local_id,ref
+      if not st.sign then local x,y=Sim.xy(base);st.sign={x=x,y=y} end
       if mode_=="ship" then st.land,st.water=actual.land,actual.water end
     end
     if active.ship then
@@ -338,7 +339,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       for _,id in ipairs(ids) do ready[id]=true end
       return ready,events
     end
-    local function after(tick,ready,events)
+    local function after(tick,ready,events,advance_rail)
       local function leave(id)
         local vehicle=service.vehicles[id]
         return ready[id] and Service.leave(service,id,vehicle.visit,tick,ctx,events) or false
@@ -352,9 +353,19 @@ return function(Sim,Service,Mux,credit,news,RailActors)
           end,
         })
       end
-      if #rails>0 and active.rail then
-        local moved=Rail.advance_paid(s,Actors.callbacks(c,ready,ctx,tick,events))
+      local callbacks=active.rail and #rails>0 and Actors.callbacks(c,ready,ctx,tick,events) or nil
+      local moved=advance_rail and advance_rail(callbacks) or callbacks and Rail.advance_paid(s,callbacks)
+      if moved then
         for _,e in ipairs(moved) do
+          if e.kind=="rail_collision" then
+            local x,y=Sim.xy(e.tile)
+            Service.accident_rating(service,e.owner,x,y)
+            Sim.rail_accident_ratings(s,e.owner,x,y)
+            local news=s.stock_rail_accidents or {}
+            s.stock_rail_accidents=news
+            news[#news+1]={tile=e.tile,owner=e.owner,victims=e.victims,tick=tick}
+            if #news>16 then table.remove(news,1) end
+          end
           e.world_tick=tick
           frame.rail_motion[#frame.rail_motion+1]=e
         end

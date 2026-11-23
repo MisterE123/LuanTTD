@@ -11,6 +11,32 @@ def sample(row):
                  "hud": hud, "menu": menu, "topology": topology}
 
 
+def check_rendered_views(folder):
+    if not (folder / "builder-first.png").is_file():
+        return
+    from PIL import Image
+
+    def rgb(name):
+        return Image.open(folder / f"{name}.png").convert("RGB")
+
+    for name in ("builder-first", "builder-rear", "builder-front", "walk-returned"):
+        image = rgb(name)
+        field = image.crop((int(image.width*.06), int(image.height*.12),
+                            int(image.width*.94), int(image.height*.72)))
+        pixels = field.get_flattened_data() if hasattr(field, "get_flattened_data") else field.getdata()
+        green = sum(r <= 3 and b <= 3 and g > 35 for r,g,b in pixels)
+        assert green < 12, (name, "Luanti default player billboard visible", green)
+    doorway = rgb("walk-door-eye")
+    # The actual horizon line cuts the nearby pane of house-door glazing,
+    # not the upper story, facade above the door, or far-off roof.
+    pane = doorway.crop((int(doorway.width*.623), doorway.height//2-3,
+                         int(doorway.width*.632), doorway.height//2+4))
+    pixels = pane.get_flattened_data() if hasattr(pane, "get_flattened_data") else pane.getdata()
+    glass = sum(17 < r < 40 and 30 < g < 57 and 46 < b < 75 for r,g,b in pixels)
+    assert glass >= pane.width*pane.height*.65, "street camera is not level with house-door glazing"
+    print("Rendered eye level intersects door glazing; invisible in three builder cameras and after walking.")
+
+
 def main(log):
     trace = []
     phases = {}
@@ -39,6 +65,7 @@ def main(log):
     assert len(ramp)>1, ramp
     assert all(abs(d["pos"][1]-d["surface"])<.26 for d in ramp), ramp
     assert any(.82<d["pos"][1]<1.42 for d in ramp), ramp
+    check_rendered_views(Path(log).parent)
     print(f"Native /walk crossed {len(ramp)} grade samples, stopped at the house, returned exactly to builder.")
 
 

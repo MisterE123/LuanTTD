@@ -15,6 +15,7 @@ local nilhit,flat=false,false
 local index=1
 local look={x=.1,y=-1,z=.2}
 local p={
+  set_properties=function()end,
   get_player_name=function()return "Alex" end,
   is_player=function()return true end,
   get_pos=function()return {x=2.25,y=6,z=3.25} end,

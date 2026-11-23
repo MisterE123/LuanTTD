@@ -30,6 +30,14 @@ core.after(0,function()
     for i in ipairs(S.tiles) do S.tiles[i]={terrain="grass",h=0,variant=1} end
     fixture=dofile(mod.."/qa_rail_multi.lua")(Sim,S,api.trackworks,Own,Rail,StockTrack,StockSignal)
     fixture.passed={}
+    local tool=assert(api.rail_build)
+    assert(not tool.busy(), "Ordinary owned trains must not close the construction menu")
+    local first,last=Sim.id(31,29),Sim.id(36,29)
+    local post=Sim.id(33,29)
+    assert(tool.build(fixture.owner,assert(tool.quote_track(fixture.owner,first,last,0,false))))
+    assert(tool.build(fixture.owner,assert(tool.quote_signal(fixture.owner,post,2,false,false))))
+    assert(tool.build(fixture.owner,assert(tool.quote_remove_signal(fixture.owner,post))))
+    assert(S.tiles[post].rail_tracks==1 and not Rail.current(S).signals.records[post])
     tick_multi(130)
     assert(fixture.waited)
     fixture.saved=true

@@ -28,7 +28,7 @@ printf 'title = LuanTTD track art fixture\n' > "$out/games/rail_art/game.conf"
 printf 'name = %s\n' "$name" > "$mod/mod.conf"
 if [[ $preview == 1 ]]; then
   cp tests/rail_preview_native.lua "$mod/init.lua"
-  cp mods/luanttd_core/{rail_diagonal.lua,rail_preview.lua,tile_selector.lua} "$mod/"
+  cp mods/luanttd_core/{rail_diagonal.lua,rail_preview.lua,rail_pose.lua,tile_selector.lua} "$mod/"
   mkdir "$mod/openttd"
   cp mods/luanttd_core/openttd/{rail_track.lua,autorail.lua,slope.lua} "$mod/openttd/"
   for file in "$repo"/mods/luanttd_core/models/{bl_selector_0.obj,bl_rail_track_{1,2,4,5,8}.obj,bl_rail_eased_{4,8}_*}; do ln -s "$file" "$mod/models/"; done

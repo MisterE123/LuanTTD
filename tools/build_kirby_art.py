@@ -271,15 +271,15 @@ def tank(m):
 def cab(m):
     # A true hollow assembly. Jambs and roof carry the weather protection;
     # side entry and small spectacle windows are not decals on a solid box.
-    slab(m,"Engineer cab floor","Cab inside",0,.244,.390,.252,.240,.261,.017)
+    slab(m,"Engineer cab floor","Cab inside",0,.244,.390,.252,.225,.246,.017)
     slab(m,"Rear cab lower apron","Tank dark",0,.337,.383,.023,.258,.548,.009)
     slab(m,"Forward cab lower wall","Tank dark",0,.138,.390,.026,.253,.495,.012)
     for s in (-1,1):
         front=.131
-        for z,h,w,hei in ((.150,.467,.043,.203),(.303,.294,.040,.327),(.217,.504,.128,.033),(.228,.622,.166,.050)):
+        for z,h,w,hei in ((.150,.467,.043,.203),(.303,.294,.040,.327),(.217,.658,.128,.016),(.228,.672,.166,.014)):
             side(m,"Molded cab frames and quarter panels","Tank dark",s,z,h,w,hei,.185,.034,.009)
-        side(m,"Cab doorway reveal","Frame seam",s,.234,.499,.108,.016,.203,.008,.004)
-        side(m,"Cab bottom rail","Tank light",s,.228,.315,.133,.019,.204,.007)
+        side(m,"Cab doorway reveal","Frame seam",s,.234,.654,.108,.016,.203,.008,.004)
+        side(m,"Cab bottom rail","Tank light",s,.228,.238,.133,.014,.204,.007)
         side(m,"Side cab small forward glazing","Glass dark",s,.169,.550,.030,.070,.2039,.004,.006)
         side(m,"Glazing catchlights","Glass mid",s,.168,.563,.006,.043,.2064,.001,.001)
         for z in (.151,.281):
@@ -369,7 +369,14 @@ def build():
     tank(m)
     cab(m)
     lamps(m)
-    return m
+    def body_profile(_,x,z,h):
+        # Keep the frame, tread contacts, wheel centres, and coupler
+        # envelope fixed. Shrink only the envelope above the footplate.
+        if h<=.246:
+            return x,z,h
+        width=1-.055*min(1,(h-.246)/.100)
+        return x*width,z,.246+(h-.246)*.73
+    return rail.reprofile(m,body_profile)
 
 
 def atlas():

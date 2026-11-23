@@ -68,3 +68,37 @@ local function lifecycle()
 end
 lifecycle()
 print("Atmosphere: smooth day/night, visible moon, haze independent, frozen/advancing clocks, reconnect and no setting or clock writes")
+
+local function clock(initial,normal)
+  local step,shutdown,writes,sync=nil,nil,{},0
+  local rate,phase,sim=initial,.395375,1
+  local core={settings={
+    get=function(_,key)assert(key=="time_speed");return rate end,
+    set=function(_,key,value)assert(key=="time_speed");writes[#writes+1]=value;rate=value end,
+    remove=function(_,key)assert(key=="time_speed");rate=nil end,
+  },register_globalstep=function(f)step=f end,register_on_leaveplayer=function()end,
+  register_on_shutdown=function(f)shutdown=f end,
+  get_timeofday=function()return phase end,
+  set_timeofday=function(next)assert(eq(next,phase),"speed change jumped the solar phase");sync=sync+1 end}
+  A.start(core,function()return sim end)
+  if normal==0 then
+    sim=4;step(.6)
+    assert(tonumber(rate)==0 and sync==0 and #writes==0 and not shutdown)
+    return
+  end
+  assert(tonumber(rate)==normal)
+  local updated=sync
+  step(.6);assert(sync==updated)
+  sim=0;step(.1);step(2);assert(tonumber(rate)==0 and sync==updated+1)
+  sim=2;step(.1);assert(tonumber(rate)==2*normal and sync==updated+2)
+  phase=.783 -- test administrator /time is not overwritten by playback.
+  sim=4;step(.1);assert(tonumber(rate)==4*normal and sync==updated+3)
+  sim=1;step(.1);assert(tonumber(rate)==normal and sync==updated+4)
+  shutdown()
+  assert(rate==initial,"temporary speed settings were not restored")
+end
+clock("72",720)
+clock(nil,720)
+clock("300",300)
+clock("0",0)
+print("Daylight clock: 1×/2×/4×, pause and resume, no phase jump, configurable baseline and explicit freeze")

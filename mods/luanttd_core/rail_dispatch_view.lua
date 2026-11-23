@@ -75,7 +75,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
   for _,variant in ipairs({"light","semaphore"}) do
     for _,aspect in ipairs({"green","red"}) do
       entity("dispatch_signal_"..variant.."_"..aspect,SignalArt.mesh(variant,aspect=="green"),
-        SignalArt.atlas,{x=1,y=1,z=1})
+        SignalArt.atlas,{x=.65,y=.65,z=.65})
     end
   end
   local function forget(collection,key)
@@ -207,21 +207,24 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
       for id,r in pairs(dispatch.signals.records) do
         if visible(id) then
           local tx,tz=Sim.xy(id)
-          for _,td in ipairs({0,1,8,9}) do
+          for _,td in ipairs({0,1,2,3,4,5,8,9,10,11,12,13}) do
             local signal=Track.signal_along(td)
             local mask=S.tiles[id].rail_tracks or 0
             if Track.has(mask,Track.track(td)) and Track.intersect(r.present_signals,signal)~=0 then
-              local model=r.upper_variant==1 and "semaphore" or "light"
+              local secondary=Track.track(td)==3 or Track.track(td)==5
+              local variant=secondary and r.lower_variant or r.upper_variant
+              local model=variant==1 and "semaphore" or "light"
               local green=Track.intersect(r.green_signals,signal)~=0
-              -- GetSafeSlopeZ in OpenTTD 16.0-RC1 samples the actual
-              -- signal anchor on straight track, not the tile origin.
-              local u,v=SignalArt.anchor(td,false)
-              local pixel=signal_pixel and signal_pixel(id,u,v)
-              local y=(pixel and pixel/8 or board_base(id))+.5
-              local position,rotation=SignalArt.pose(tx,tz,y,td,false)
-              local key=id..":"..td
-              pose(signs,key,"dispatch_signal_"..model.."_"..(green and "green" or "red"),position,rotation)
-              show_signs[key]=true
+              -- Sample the exact rendered rail foundation at the mast.
+              local u,v=SignalArt.world_anchor(td,false,mask)
+              if u~=nil then
+                local pixel=signal_pixel and signal_pixel(id,u,v)
+                local y=(pixel and pixel/8 or board_base(id))+.5
+                local position,rotation=SignalArt.pose(tx,tz,y,td,false,mask)
+                local key=id..":"..td
+                pose(signs,key,"dispatch_signal_"..model.."_"..(green and "green" or "red"),position,rotation)
+                show_signs[key]=true
+              end
             end
           end
         end

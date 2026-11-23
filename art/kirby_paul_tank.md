@@ -41,10 +41,12 @@ imported or traced.
 - The two knuckle faces stop at Z ±.499, centered .157 above rail crown,
   leaving .002 longitudinal play at 1.000-node stock straight center
   spacing to the existing passenger or open freight wagon. As on the
-  other LuanTTD rolling stock, linked drawbar animation or flex across
-  the sharp curves is separate from the meshes. The model's maximum
-  half-width is .264 and its highest point is .749 above rail crown.
-  The native masonry rail portal clears the actual envelope.
+  other LuanTTD rolling stock, diagonal alignment and wheelbase chord
+  are handled in presentation, independently of the mesh. The model's
+  maximum half-width is .264 at the running gear and its refitted
+  highest point is .613 above rail crown. The cab has a lowered side
+  rail and raised doorway reveal, without moving any wheel contacts
+  or coupling mounts.
 
 ## Rebuild and verify
 

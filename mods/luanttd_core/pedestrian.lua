@@ -2,7 +2,12 @@
 -- Authoritative simulation remains separate: pedestrians don't buy/build
 -- or affect any route, vehicle reservation, or cargo.
 local unpack_values=table.unpack or unpack
-local P={eye_height=.462,visual_height=.511}
+-- House doors are .335 nodes tall, with their thresholds .05 above
+-- tile level. Size the walker to fit under those doors, with eyes near
+-- their glazing rather than the upper window/roof line.
+local scale=.57
+local P={eye_height=.462*scale,visual_height=.511*scale,visual_scale=scale}
+local hidden_texture="bl_sightseeing_hidden_player.png"
 local model="bl_street_pedestrian.glb"
 local idle,walking={x=0,y=1},{x=2,y=14}
 local walk_rate=15
@@ -22,6 +27,14 @@ local function position(p,pos,yaw,pitch)
   if math.abs(v.x)+math.abs(v.y)+math.abs(v.z)>.05 then
     p:add_velocity({x=-v.x,y=-v.y,z=-v.z})
   end
+end
+
+function P.hide_builder(p)
+  -- PlayerSAO ignores is_visible=false on some engine versions. A fully
+  -- transparent sprite works in all camera views and for other clients
+  -- without affecting the local eye height or flight physics.
+  p:set_properties({visual="sprite",mesh="",textures={hidden_texture},
+    visual_size={x=.001,y=.001,z=.001},nametag_color={r=255,g=255,b=255,a=0}})
 end
 
 function P.capture(p)
@@ -121,9 +134,9 @@ function P.new(api)
   function W.enter(p,state,land)
     state.last_dry=land
     p:set_eye_offset()
-    p:set_properties({eye_height=P.eye_height,collisionbox={-.105,0,-.105,.105,.56,.105},stepheight=.28,
+    p:set_properties({eye_height=P.eye_height,collisionbox={-.064,0,-.064,.064,.32,.064},stepheight=.28,
       visual="mesh",mesh=model,textures={"bl_street_pedestrian_atlas.png"},
-      visual_size={x=1,y=1,z=1},backface_culling=false})
+      visual_size={x=scale,y=scale,z=scale},backface_culling=false})
     p:set_physics_override({gravity=1,jump=.27,sneak=true,speed=1,speed_walk=.38,
       speed_crouch=.67,acceleration_default=1,acceleration_air=1})
     if p.set_local_animation then p:set_local_animation(idle,walking,idle,walking,walk_rate) end

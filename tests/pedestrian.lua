@@ -43,7 +43,9 @@ local p={
   set_look_horizontal=function(_,v)yaw=v end,
   set_look_vertical=function(_,v)pitch=v end,
   get_properties=function()return properties end,
-  set_properties=function(_,v)properties=v end,
+  set_properties=function(_,v)
+    for k,value in pairs(v) do properties[k]=value end
+  end,
   get_physics_override=function()return physics end,
   set_physics_override=function(_,v)physics=v end,
   hud_get_flags=function()return flags end,
@@ -55,11 +57,16 @@ local target=assert(walk.find(p,2,{x=4.5,z=2.5}))
 assert(target.x==6.5 and target.y>2.29 and target.y<2.30,"choose a road instead of burrowing into a house")
 local edge=assert(walk.find(p,3,{x=5.51,z=3.49}))
 assert(edge.x==5.75 and edge.z==3.25,"keep spawn footprint clear of neighbor tiles")
+P.hide_builder(p)
+assert(properties.eye_height==1.63 and properties.visual=="sprite" and properties.mesh==""
+  and properties.textures[1]=="bl_sightseeing_hidden_player.png" and properties.visual_size.y==.001
+  and properties.nametag_color.a==0)
 local avatar={saved=P.capture(p)}
 walk.enter(p,avatar,target)
 assert(pos==target and pos.y<3 and yaw==1.2 and pitch==0)
-assert(physics.gravity==1 and physics.speed_walk==.38 and properties.eye_height==P.eye_height and P.eye_height<.49
-  and properties.visual=="mesh" and properties.collisionbox[4]==.105)
+assert(physics.gravity==1 and physics.speed_walk==.38 and properties.eye_height==P.eye_height and P.eye_height>.23 and P.eye_height<.28
+  and P.visual_height>.28 and P.visual_height<.31 and properties.visual_size.y==P.visual_scale
+  and properties.visual=="mesh" and properties.collisionbox[4]==.064)
 assert(vel.x==0 and vel.y==0 and vel.z==0)
 pos={x=8.5,y=.12,z=2.5};vel.y=-2
 walk.step(p,avatar)
@@ -68,5 +75,6 @@ P.restore_controls(p,avatar.saved)
 P.restore_pose(p,avatar.saved)
 assert(pos.x==3 and pos.y==15 and yaw==1.2 and pitch==.62)
 assert(properties.eye_height==1.63 and physics.gravity==0 and flags.crosshair and flags.hotbar and eye.z==.3)
-assert(properties.visual=="upright_sprite" and properties.textures[1]=="builder.png" and properties.visual_size.y==2)
+assert(properties.visual=="sprite" and properties.textures[1]=="bl_sightseeing_hidden_player.png"
+  and properties.visual_size.y==.001 and properties.nametag_color.a==0)
 print("Pedestrian: safe landing, slope support, client walking parameters, shoreline recovery and builder state restore")

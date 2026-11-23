@@ -157,6 +157,19 @@ return function(Sim,Kernel,Packets)
     end
   end
 
+  function R.accident(s,owner,x,y)
+    local rows={}
+    for _,st in pairs(s.stations) do
+      if st.mode=="road" then
+        local xx,yy=Sim.xy(st.tile)
+        local g=goods(s,st)
+        rows[#rows+1]={owner=st.owner,x=xx,y=yy,goods={{
+          state=g,active=g.has_rating or (st.passenger_acceptance or 0)>=8}}}
+      end
+    end
+    return Kernel.modify_around(rows,owner,x,y,-160,30)
+  end
+
   function R.advance(s,ticks,other_goods)
     local events={}
     for _,st in pairs(s.stations) do

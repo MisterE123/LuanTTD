@@ -1,6 +1,6 @@
 -- Owner-attributed stock portal reservation overlay. Ordinary behavior
--- remains delegated to the existing lifecycle; spans are only in the
--- exclusive one-way rail preview, never in mixed two-train dispatch.
+-- remains delegated to the stock lifecycle; both physical portal
+-- flags are accounted together when a native wormhole is traversed.
 return function(T,PBS,Life)
   local L={}
   local ordinary_traction={[0]=true,[1]=true}
@@ -41,8 +41,7 @@ return function(T,PBS,Life)
   function L.reserve_path(board,state,id,target,settings)
     local train=state.trains[id]
     if not train then return false,"invalid_train" end
-    local limited=board.span_enabled and #state.trains==1
-    if not limited then return Life.reserve_path(board,state,id,target,settings) end
+    if not board.span_enabled then return Life.reserve_path(board,state,id,target,settings) end
     local bits=copy(state.bits)
     local v={owner=train.owner,railtype=train.engine_railtype or 0,compatible=train.traction_railtypes or ordinary_traction}
     local ok,claims,at=PBS.try_path(board,bits,v,target,settings)
@@ -52,7 +51,7 @@ return function(T,PBS,Life)
       local record=board.tile(c.tile)
       if not record or record.owner~=train.owner or (record.railtype~=0 and record.railtype~=1) or Life.claim_owner(state,c.tile,c.track) or
           (record.kind~="rail" and record.kind~="signals" and record.kind~="station" and
-           record.kind~="depot" and record.kind~="crossing" and not span(record)) then return false,"unsupported_claim",c.tile end
+           record.kind~="depot" and record.kind~="crossing" and record.kind~="waypoint" and not span(record)) then return false,"unsupported_claim",c.tile end
       local bucket=incoming[c.tile] or {};incoming[c.tile]=bucket;bucket[c.track]=true
     end
     for tile,claims_ in pairs(incoming) do
@@ -88,8 +87,24 @@ return function(T,PBS,Life)
       train.parts[index]={tile=new,td=td}
       return true,{{kind="span_exited",phase="after_position",tile=new,from=old.tile,td=td,train=id,index=index}}
     end
-    if to_span and (T.exit_side(td)~=q.dir or not own(new,q.axis) or not own(q.other,q.axis)) then
-      return false,"unreserved_span"
+    if to_span then
+      if T.exit_side(td)~=q.dir then return false,"invalid_wormhole_entry" end
+      if not own(new,q.axis) or not own(q.other,q.axis) then
+        if not permit_unreserved or index~=1 then return false,"unreserved_span" end
+        -- Ordinary RC1 approaches do not reserve an empty route ahead.
+        -- The stock TrainController writes the approached span flag
+        -- underneath the front; maintain the paired portal accounting
+        -- when the same physical train enters the native wormhole.
+        local other=board.tile(q.other)
+        if not span(other) or other.other~=new or other.axis~=q.axis then return false,"invalid_wormhole_pair" end
+        for _,tile in ipairs({new,q.other}) do
+          if not own(tile,q.axis) then
+            local ok=PBS.try_reserve(board,state.bits,tile,q.axis,false)
+            if not ok then return false,"span_occupied" end
+            state.claims[tile]={[q.axis]=id}
+          end
+        end
+      end
     end
     local last_exiting=from_span and index==#train.parts and T.exit_side(old.td)==T.reverse_side(p.dir)
     if last_exiting then
@@ -99,7 +114,7 @@ return function(T,PBS,Life)
       end
       if not own(p.other,p.axis) then return false,"unpaired_span" end
     end
-    local ok,events=Life.enter(ordinary_view(board),state,id,index,new,td,settings)
+    local ok,events=Life.enter(ordinary_view(board),state,id,index,new,td,settings,observe,permit_unreserved and not to_span)
     if not ok then return ok,events end
     if last_exiting then
       -- ClearPathReservation's tunnel/bridge branch clears BOTH flags

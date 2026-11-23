@@ -570,7 +570,9 @@ core.register_globalstep(function(dt)
   if save_elapsed>=8 then api.save();save_elapsed=0 end
 end)
 core.register_on_shutdown(api.save)
-local atmosphere=dofile(mod.."/atmosphere.lua").start(core)
+local atmosphere=dofile(mod.."/atmosphere.lua").start(core,function()
+  return not placement and S.speed or 0
+end)
 local function open_campaign_player(p)
   local name=p:get_player_name()
   Sim.company(S,name)
@@ -874,6 +876,7 @@ do
         signal=function(tile,d,oneway,o)
           return value(Q.signal(tile,d%2,{kind=oneway and Signal.PBS_ONEWAY or Signal.PBS},o))
         end,
+        signal_track=function(tile,track,kind,o) return value(Q.signal(tile,track,{kind=kind},o)) end,
         clear_signal=function()return Q.base_prices().clear_signal end,
       }
       api.rail_build=dofile(mod.."/rail_construction_tools.lua")(api,Lab,Track,Pilot,prices)

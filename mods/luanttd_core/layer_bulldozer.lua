@@ -56,7 +56,15 @@ return function(api,clear_structure,status)
       rail_action("waypoint","Remove waypoint, keep rails",api.rail_build.quote_waypoint(n,id,true))
     end
     if api.rail_build and d and d.signals and d.signals.records[id] then
-      rail_action("signal","Remove signal, keep rails",api.rail_build.quote_remove_signal(n,id))
+      if api.rail_build.signal_details then
+        local track_name={[2]="upper curve",[3]="lower curve",[4]="left curve",[5]="right curve"}
+        for track=0,5 do
+          if api.rail_build.signal_details(id,track) then
+            local title=track_name[track] and ("Remove signal on "..track_name[track]..", keep rails") or "Remove signal, keep rails"
+            rail_action("signal_"..track,title,api.rail_build.quote_remove_signal(n,id,track))
+          end
+        end
+      else rail_action("signal","Remove signal, keep rails",api.rail_build.quote_remove_signal(n,id)) end
     end
     if t.build=="road_station" and t.stop_axis and not t.road_stop_pair and Sim.remove_through_road_stop then
       local can,cost=Sim.remove_through_road_stop(S,n,id,true)

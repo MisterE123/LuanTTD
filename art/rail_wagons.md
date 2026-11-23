@@ -25,6 +25,10 @@ door. These are original meshes and liveries. No OpenTTD artwork is used.
   node between paired metal faces. The passenger flexible diaphragm
   reaches farther than its rigid body but all non-knuckle geometry
   remains within |Z|=.478.
+- The lower passenger roof tops out at .600 above the rails; the thinner
+  upper shell keeps .322 of clear door height. Steps match the existing
+  platform elevation and extend slightly farther out toward its coping.
+  Neither the wheel gauge nor the couplings were narrowed.
 - The standalone locomotives are physically wider in the longitudinal
   axis than that stock coupled center spacing. If using the existing
   locomotive meshes in a stock consist, only shorten their longitudinal

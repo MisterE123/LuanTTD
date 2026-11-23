@@ -1,6 +1,8 @@
 -- Explicit source rail topology, independent of the legacy rail prototype.
 return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
   local Lab={}
+  local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  Lab.depot_surface=dofile(source.."rail_depot_construction.lua")(Track).surface
   local pieces={x=0,y=1,upper=2,lower=3,left=4,right=5}
   function Lab.piece(word) return pieces[word] end
   function Lab.span_protected(s,id)
@@ -156,12 +158,22 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     end
     return true,{id}
   end
-  function Lab.commit_depot(s,owner,id,dir)
-    if Lab.span_protected(s,id) then return false,protected end
+  function Lab.commit_depot(s,owner,id,dir,railtype,allow_under_bridge,clear_coast)
     local t=s.tiles[id]
+    if Lab.span_protected(s,id) and not (allow_under_bridge and s.rail_bridge_above and s.rail_bridge_above[id] and
+        t and not t.rail_span_id and not t.level_crossing and not (s.rail_tunnel_below and s.rail_tunnel_below[id])) then
+      return false,protected
+    end
+    if not t then return false,"Choose an in-map depot tile." end
+    local rotating=t.rail_depot_dir~=nil
+    if clear_coast then
+      t.terrain,t.water_class,t.coastal_water,t.stock_river_bits="grass",nil,nil,nil
+    end
     t.build,t.owner,t.rail_tracks,t.rail_depot_dir,t.wood="stock_rail",owner,2^(dir%2),dir,nil
+    t.rail_type=railtype or t.rail_type or 0
+    t.stock_clear_ground=nil
     s.topology=s.topology+1
-    return true,"Rail depot placed.",{id}
+    return true,rotating and "Rail depot rotated." or "Rail depot placed.",{id}
   end
   function Lab.depot(s,owner,id,dir)
     local ok,msg=Lab.depot_plan(s,owner,id,dir)

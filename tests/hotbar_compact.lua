@@ -61,6 +61,7 @@ local function noop() end
 function ItemStack(id) return {get_name=function() return id end} end
 local p={
   is_player=function()return true end,get_player_name=function()return "Alex" end,
+  set_properties=noop,
   set_pos=noop,set_look_horizontal=noop,set_look_vertical=noop,set_physics_override=noop,hud_set_flags=noop,
   get_pos=function()return {x=2.25,y=6,z=3.25} end,
   get_properties=function()return {}end,

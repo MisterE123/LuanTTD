@@ -1,4 +1,4 @@
--- Presentation driven by the native world clock, not by the economy.
+-- Native sky, sun and moon follow the campaign playback rate.
 local A={}
 local function smooth(a,b,x)
   local t=math.max(0,math.min(1,(x-a)/(b-a)))
@@ -44,9 +44,39 @@ local function set_sky(p,haze,phase)
       or {fog_color="#00000000",fog_start=-1,fog_distance=-1}})
 end
 
-function A.start(core)
+-- Luanti uses accelerated seconds per real second and re-reads time_speed
+-- before each environment step. Let it advance/interpolate the actual sun
+-- and moon. Only send a sync when playback changes; /time and the saved
+-- world phase still work, unlike repeatedly deriving a phase from S.day.
+local DEFAULT_ENGINE_SPEED=72
+local DEFAULT_CAMPAIGN_SPEED=720 -- 86400 / 720 = two minutes at 1×
+local function campaign_clock(core,speed)
+  local settings=core.settings
+  local original=settings:get("time_speed")
+  local configured=tonumber(original) or DEFAULT_ENGINE_SPEED
+  if configured==0 then return function() end end -- admin or visual QA freeze
+  local base=configured==DEFAULT_ENGINE_SPEED and DEFAULT_CAMPAIGN_SPEED or math.max(0,configured)
+  local applied=configured
+  local owned=false
+  local function update()
+    local wanted=base*math.max(0,speed() or 0)
+    if wanted==applied then return end
+    settings:set("time_speed",tostring(wanted))
+    applied,owned=wanted,true
+    core.set_timeofday(core.get_timeofday()) -- prompt native phase/speed packet; do not jump
+  end
+  core.register_on_shutdown(function()
+    if not owned or tonumber(settings:get("time_speed"))~=applied then return end
+    if original then settings:set("time_speed",original) else settings:remove("time_speed") end
+  end)
+  update()
+  return update
+end
+
+function A.start(core,speed)
   local haze,moonlight=true,.53
   local joined,elapsed={},0
+  local update_clock=speed and campaign_clock(core,speed)
   local function update(p,state,phase)
     local sky=phase.sky..phase.horizon..phase.fog
     if sky~=state.sky then
@@ -59,6 +89,7 @@ function A.start(core)
     end
   end
   core.register_globalstep(function(dt)
+    if update_clock then update_clock() end
     if not next(joined) then return end
     elapsed=elapsed+dt
     if elapsed<.6 then return end

@@ -7,6 +7,8 @@ return function(api)
   local base=source and source:match("^@(.*/)tile_selector%.lua$")
   base=base or (core.get_modpath("luanttd_core").."/")
   local slopes=api.slope or dofile(base.."openttd/slope.lua")
+  local Track=dofile(base.."openttd/rail_track.lua")
+  local RailPose=dofile(base.."rail_pose.lua")(Track)
   local rail_preview=api.trackworks and api.terrain and dofile(base.."rail_preview.lua")(api,base)
   local state_by_player={}
   local entity_name="luanttd_core:tile_selector"
@@ -110,12 +112,22 @@ return function(api)
     local name,bucket=state_for(player)
     local item=bucket.signal
     if not id or dir==nil then remove(item);bucket.signal=nil;return end
-    if item and item.id==id and item.dir==dir and item.object:get_pos() then return end
+    local td
+    if type(dir)=="table" then td=dir.td;dir=dir.dir end
+    if item and item.id==id and item.dir==dir and item.td==td and item.object:get_pos() then return end
     local x,z=Sim.xy(id)
     local shape,base=api.terrain.tile(id)
     local grade,level=api.trackworks.surface(shape,base,S.tiles[id].rail_tracks)
     if not grade then remove(item);bucket.signal=nil;return end
     local pos={x=2*x+.5,y=level+(grade==0 and .78 or 1.20),z=2*z+.5}
+    local yaw=({[0]=-math.pi/2,[1]=0,[2]=math.pi/2,[3]=math.pi})[dir]
+    if td then
+      local a,b,dx,dz
+      if api.render and api.render.rail_diagonal_pose then a,b,dx,dz=api.render.rail_diagonal_pose(id,td,.5) end
+      if a==nil then a,b,dx,dz=RailPose.sample(td,.5) end
+      pos.x,pos.z=pos.x+a,pos.z+b
+      yaw=math.atan2(dx,dz)
+    end
     if not item or not item.object:get_pos() then
       local object=core.add_entity(pos,arrow_name,name)
       if not object then return end
@@ -123,8 +135,8 @@ return function(api)
       bucket.signal=item
     end
     item.object:set_pos(pos)
-    item.object:set_rotation({x=0,y=({[0]=-math.pi/2,[1]=0,[2]=math.pi/2,[3]=math.pi})[dir],z=0})
-    item.id,item.dir=id,dir
+    item.object:set_rotation({x=0,y=yaw,z=0})
+    item.id,item.dir,item.td=id,dir,td
   end
 
   function X.show(player,id,state)

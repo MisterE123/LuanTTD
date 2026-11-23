@@ -19,6 +19,24 @@ function R.new()
     last_speed=0,last_age=255,max_waiting_cargo=0}
 end
 
+-- OpenTTD 16.0-RC1 station_cmd.cpp ModifyStationRatingAround.
+-- Each adapter supplies the station sign coordinates and represented
+-- GoodsEntry status. This never modifies town authority ratings.
+function R.modify_around(stations,owner,x,y,amount,radius)
+  local affected=0
+  for _,st in ipairs(stations) do
+    if st.owner==owner and math.abs(st.x-x)+math.abs(st.y-y)<=radius then
+      for _,entry in ipairs(st.goods) do
+        if entry.active then
+          entry.state.rating=clamp(entry.state.rating+amount,0,255)
+          affected=affected+1
+        end
+      end
+    end
+  end
+  return affected
+end
+
 -- Stock road vehicle loading uses cached maximum speed / 2. The caller
 -- supplies speed already converted to station-rating units, not the
 -- tile-per-day simulation speed. A full vehicle can still report speed

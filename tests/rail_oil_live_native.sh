@@ -12,8 +12,11 @@ echo "Native oil rail logs: $out"
 game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp game.conf "$game"
-cp -R mods "$game/"
+cp -al mods "$game/" || cp -R mods "$game/"
+cp mods/luanttd_core/init.lua "$out/current-init.lua"
+mv "$out/current-init.lua" "$game/mods/luanttd_core/init.lua"
 cp tests/rail_oil_live_layout.lua "$game/mods/luanttd_core/"
+cp tests/qa_layout.lua "$game/mods/luanttd_core/qa_layout.lua"
 cat tests/rail_oil_live_native.lua >> "$game/mods/luanttd_core/init.lua"
 cat > "$out/world/world.mt" <<'CONF'
 gameid = luanttd
@@ -24,6 +27,7 @@ mod_storage_backend = sqlite3
 CONF
 cat > "$out/native.conf" <<EOF_CONF
 bayline_seed = 1751
+bayline_seconds_per_day = 15
 bayline_scenario = oil
 bayline_rail_owned_preview = true
 bayline_rail_oil_preview = true

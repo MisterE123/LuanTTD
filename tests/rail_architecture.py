@@ -3,7 +3,10 @@
 from pathlib import Path
 from itertools import combinations, product
 from math import isclose
+import re
 import struct
+
+from rail_span_art import vehicle
 
 ROOT=Path(__file__).resolve().parents[1]
 MODELS=ROOT/"mods/luanttd_core/models"
@@ -131,18 +134,34 @@ def main():
         g=read(f"platform_{i}")
         assert edges(g)==([GAUGE,(),GAUGE,()] if i==1 else [(),GAUGE,(),GAUGE])
         assert "Timber_seat" in g and "Platform_canopy" in g
+        shade=[p[2] for tri in g["Platform_canopy"] for p in tri]
+        assert .29<min(shade)-.280<.42 and .71<max(shade)<.73
         platform_surfaces(g,i-1)
+    # Measure the mounted meshes rather than demanding a full uniform
+    # box as tall as the tallest chimney, which forced a giant arch.
+    dispatch=(ROOT/"mods/luanttd_core/rail_dispatch_view.lua").read_text()
+    names=set(re.findall(r'mesh="(bl_[a-z_0-9]+)\.obj"',dispatch))
+    assert {"bl_rail_kirby_paul_tank","bl_rail_passenger_wagon","bl_rail_chaney_jubilee"}<=names
+    envelope={}
+    for name in sorted(names):
+        for x,z,h in vehicle(name):
+            i=round(x/.02)
+            envelope[i]=max(envelope.get(i,0),h+.114)
     rays=0
     for i,(dx,dz) in enumerate(DIRECTIONS):
         g=read(f"depot_{i}")
         assert edges(g)==[GAUGE if dir==i else () for dir in range(4)]
         assert "Dressed_stone_arch_voussoirs" in g and "Cast_end-of-track_buffer" in g
-        # Stock locomotive bodies are at most 0.533 node wide and 0.805 high
-        # relative to the cargo root. Include margin in every orientation.
-        for x in (-.27,-.21,0,.21,.27):
-            for y in (.122,.26,.49,.73,.94,.98):
-                assert not along_portal(g,dx,dz,x,y,-.635,1.10),(i,x,y)
+        shell={k:v for k,v in g.items() if k in
+          {"Masonry_gable","Dressed_stone_arch_voussoirs","Stone_jambs","Masonry_porch_piers","Brick_side_walls","Slate_roof"}}
+        whole=[p for gg in shell.values() for tri in gg for p in tri]
+        assert 1.21<max(h for _,_,h in whole)<1.32
+        for bin_,top in envelope.items():
+            x=bin_*.02
+            for y in (.122,(top+.122)*.5,top+.022):
+                assert not along_portal(shell,dx,dz,x,y,-.635,1.10),(i,x,y)
                 rays+=1
+        for x in (-.27,0,.27):
             assert along_portal(g,dx,dz,x,.55,-1.1,-.798),(i,x)
     print(f"PASS: nonoverlapping deck faces, recessed platform ends, and exact rail seams in both axes; {rays} locomotive envelope rays clear four depot arches")
 if __name__=="__main__":

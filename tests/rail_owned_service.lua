@@ -34,14 +34,15 @@ local mode=arg and arg[1]
 local turnout=mode=="depot_turnout"
 local mixed=mode=="mixed_signals"
 local two_coaches=mode=="two_coaches"
-local Block=mixed and port("rail_block_signals",T,Signal) or nil
+local spans_unreserved=mode=="spans_unreserved"
+local Block=(mixed or spans_unreserved) and port("rail_block_signals",T,Signal) or nil
 local turnout_decisions={}
 local turnout_id
 local via_tile,via_id,via_passes,via_reloaded
 local lookahead=mode=="platform_lookahead" or mode=="platform_fallback" or mode=="platform_claim_rollback"
 local real_find,fallback_calls=Search.find,0
 local jubilee=mode=="jubilee" or mode=="jubilee_spans"
-local use_spans=mode=="spans" or mode=="jubilee_spans"
+local use_spans=mode=="spans" or mode=="jubilee_spans" or spans_unreserved
 local engine=jubilee and 8 or 0
 local power,mass,vmax,accel,annual=jubilee and 1000 or 300,jubilee and 156 or 72,
   jubilee and 112 or 64,jubilee and 24 or 16,jubilee and 672000 or 280000
@@ -114,7 +115,7 @@ else
 end
 assert(Lab.station(s,owner,id(11),id(12)))
 assert(Lab.station(s,owner,id(22),id(24)))
-if mode~="signal_free" and not turnout and not mixed and not two_coaches then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
+if mode~="signal_free" and not turnout and not mixed and not two_coaches and not spans_unreserved then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
 local west,east=s.tiles[id(11)].rail_station_id,s.tiles[id(22)].rail_station_id
 s.sites[1].tile=id(10,13);s.sites[2].tile=id(24,13)
 for _,z in ipairs({7,8,12,13}) do
@@ -504,7 +505,7 @@ if mixed then
   assert(mixed_path and mixed_closed and mixed_reopened,"mixed entrance must reserve after entry, and occupancy must close and reopen it")
   print("PASS 16.0-RC1 live mixed entrance reserves after crossing its conventional signal, reopens behind its last wagon")
 end
-if mode=="signal_free" or turnout then
+if mode=="signal_free" or turnout or spans_unreserved then
   assert(run.ordinary_unreserved and not run.platform_lookahead and run.shuttle.reversals>=2)
   assert(not next(s.stock_rail_dispatch.signals.records))
   if turnout then

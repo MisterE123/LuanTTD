@@ -242,10 +242,10 @@ return function(api,status)
         local model=model_short[u.stock_ids[1]] or "Stock engine"
         lab(.42,shift,("Train %d (%s)  ·  %d aboard  ·  %s in fares"):format(u.unit_number,model,run.passengers or 0,money(paid and paid.fare or 0)))
         if run.running_expense~=nil then
-          lab(.42,shift+.38,((paid and paid.finished) and "Parked at destination" or run.stopped and "Stopped" or "In service")..
+          lab(.42,shift+.38,(run.phase=="crashed" and "Crashed" or (paid and paid.finished) and "Parked at destination" or run.stopped and "Stopped" or "In service")..
             "   /   "..money(run.running_expense).." operating costs")
         end
-        if not (paid and paid.finished) then
+        if run.phase~="crashed" and not (paid and paid.finished) then
           button(shift-.03,"unit_"..u.id,run.stopped and "Resume this shuttle" or "Pause this shuttle",6.8,2.78)
         end
       else

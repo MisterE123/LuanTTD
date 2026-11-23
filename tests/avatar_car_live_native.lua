@@ -23,8 +23,12 @@ return function(api)
     if mode and mode.mode=="car" then
       assert(car and graphics.visual_size.y<.01 and graphics.textures[1]=="bl_sightseeing_hidden_player.png",
         "driver billboard visible while attached")
-    else assert(graphics.visual_size.y>=.01 and graphics.textures[1]~="bl_sightseeing_hidden_player.png",
-      "car exit left player model hidden") end
+    else
+      assert(graphics.eye_height>1 and graphics.mesh=="" and graphics.visual=="sprite",
+        "car exit did not restore the builder camera")
+      assert(graphics.visual_size.y<.01 and graphics.textures[1]=="bl_sightseeing_hidden_player.png",
+        "car exit did not restore the invisible builder")
+    end
     core.log("action",("CAR_QA %s %s %.3f %.3f %.3f %.4f %.4f %.3f %s %s %s"):format(
       tag,mode and mode.mode or "builder",v.x,v.y,v.z,p:get_look_horizontal(),p:get_look_vertical(),
       R.surface(at,v.x,v.z),tostring(flags.hotbar),tostring(W.menu(p)),tostring(S.topology)))

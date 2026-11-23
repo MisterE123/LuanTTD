@@ -476,9 +476,16 @@ return function(api)
     if not terrain then return false end
     local t=S.tiles[id]
     return t and not t.stock_void and (t.coastal_water or t.water_class=="river" or
-      (not t.site and not t.house and not t.build and t.terrain~="water") or road_surface(id)~=nil)
+      (not t.site and not t.house and not t.build and t.terrain~="water") or road_surface(id)~=nil or
+      t.rail_depot_dir~=nil)
   end
   function R.surface(id,x,z)
+    local t=S.tiles[id]
+    if t and t.rail_depot_dir~=nil and api.trackworks then
+      local shape,base=terrain.tile(id)
+      local _,level=api.trackworks.depot_surface(shape,base)
+      if level then return level+.5 end
+    end
     local slope,base=road_surface(id)
     if slope then
       local u,v=Sim.xy(id)
@@ -855,7 +862,9 @@ return function(api)
     if t.rail_tracks then
       local shape,base=0,t.h
       if terrain then shape,base=terrain.tile(id) end
-      local grade,level,foundation,profile=api.trackworks.surface(shape,base,t.rail_tracks)
+      local grade,level,foundation,profile
+      if t.rail_depot_dir~=nil then grade,level,foundation=api.trackworks.depot_surface(shape,base)
+      else grade,level,foundation,profile=api.trackworks.surface(shape,base,t.rail_tracks) end
       if grade then
         if t.rail_waypoint_id and grade==0 and y==level+1 and x%2==1 and z%2==1 then
           return stock_scenery.waypoint[t.rail_tracks==1 and 0 or 1]

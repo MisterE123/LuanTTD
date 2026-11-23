@@ -95,6 +95,11 @@ def main():
                     expected[side]=CROSS
         assert actual==expected,(mask,actual,expected)
         meshes[mask]=actual
+        if mask==1:
+            toe=[abs(z) for face in groups["Ballast_shoulder"] for _,z,_ in face]
+            sleeper=[abs(z) for face in groups["Creosoted_sleepers"] for _,z,_ in face]
+            assert isclose(max(toe),.358,abs_tol=2e-6)
+            assert isclose(max(sleeper),.300,abs_tol=2e-6)
     joints=0
     for a,b in product(meshes.values(),repeat=2):
         for side,cross in enumerate(a):

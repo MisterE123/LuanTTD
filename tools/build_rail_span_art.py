@@ -59,8 +59,8 @@ def full_track(m,h,ballast,guards=None):
     else:
         start=None
     if start is not None:
-        sidew=lambda v:bed if ballast=="full" else bed-.104*max(0,(v+1)/(start+1))
-        center=lambda v:.305 if ballast=="full" else .305-.025*max(0,(v+1)/(start+1))
+        sidew=lambda v:bed if ballast=="full" else bed-.075*max(0,(v+1)/(start+1))
+        center=lambda v:normal.BED_CROWN if ballast=="full" else normal.BED_CROWN-.025*max(0,(v+1)/(start+1))
         cells=12
         for i in range(cells):
             a=-1+i*(start+1)/cells
@@ -76,16 +76,17 @@ def full_track(m,h,ballast,guards=None):
         if ballast!="full":
             # End of the formation has a real sloped cut to the old timbers.
             end=start+.20
+            end_width=normal.SLEEPER-.02
             m.poly("Cinder termination","Cinder 1",(-sidew(start),start,h(start)+.006),
-                   (-center(start),start,h(start)+.036),(-.312,end,h(end)+.022))
+                   (-center(start),start,h(start)+.036),(-end_width,end,h(end)+.022))
             m.poly("Cinder termination","Cinder 2",(-center(start),start,h(start)+.036),
-                   (center(start),start,h(start)+.036),(.312,end,h(end)+.022),(-.312,end,h(end)+.022))
+                   (center(start),start,h(start)+.036),(end_width,end,h(end)+.022),(-end_width,end,h(end)+.022))
             m.poly("Cinder termination","Cinder 1",(center(start),start,h(start)+.036),
-                   (sidew(start),start,h(start)+.006),(.312,end,h(end)+.022))
+                   (sidew(start),start,h(start)+.006),(end_width,end,h(end)+.022))
     for i in range(10):
         v=-.9+.20*i
         # Rusty inset fastening plates, beveled transverse sleepers.
-        m.box("Creosoted rail sleepers",track_color(normal.END),-.339,.339,v-.046,v+.046,
+        m.box("Creosoted rail sleepers",track_color(normal.END),-normal.SLEEPER,normal.SLEEPER,v-.046,v+.046,
               lambda s:h(s)+.026,lambda s:h(s)+.059,
               face_colors={"top":track_color(normal.BEVEL),"under":"Timber shadow"})
         m.box("Sleeper upper mill marks",track_color(6+i%5),-.325,.325,v-.036,v+.038,
@@ -146,7 +147,7 @@ def timber(m,h,head):
                   lo,hi,a,b,lambda v:h(v)-.059,lambda v:h(v)+.022,
                   end_faces=i not in (0,n-1),face_colors={"under":"Timber shadow"})
             if i%3 != 0:
-                lo,hi=sorted((sign*.334,sign*.339))
+                lo,hi=sorted((sign*(normal.SLEEPER-.005),sign*normal.SLEEPER))
                 m.section("Walking plank weathering","Grain line",lo,hi,a+.012,b-.016,lambda v:h(v)+.0227)
         # A central board connects to the inner walkways. Slight recess exposes sleeper profile.
         m.box("Inner timber bridge filler",palette[(i+2)%4],-.092,.092,a,b,
@@ -287,8 +288,8 @@ def tunnel():
         pts=tuple(-1+i*(MOUTH+1)/13 for i in range(14))
         for i,(a,b) in enumerate(zip(pts,pts[1:])):
             bi=lambda v:.002*min(1,(v+1)*7)
-            sidepoly("Rail cut drainage ways",dirt[i%3],[(side*.451,a,bi(a)),(side*width(a),a,bi(a)),
-                      (side*width(b),b,bi(b)),(side*.451,b,bi(b))])
+            sidepoly("Rail cut drainage ways",dirt[i%3],[(side*normal.BED_EDGE,a,bi(a)),(side*width(a),a,bi(a)),
+                      (side*width(b),b,bi(b)),(side*normal.BED_EDGE,b,bi(b))])
             sidepoly("Dressed wing cap blocks","Dressed cap",[(side*width(a),a,incline(a)),
                       (side*(width(a)+.081),a,incline(a)),(side*(width(b)+.081),b,incline(b)),
                       (side*width(b),b,incline(b))])

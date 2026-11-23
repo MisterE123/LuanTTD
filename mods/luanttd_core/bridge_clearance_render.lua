@@ -9,7 +9,7 @@ return function(architecture,prefix)
   end
   function R.under(t)
     return t and (t.build=="road" or t.build=="road_station" or t.build=="road_depot" or
-      t.level_crossing~=nil or t.tram~=nil)
+      t.level_crossing~=nil or t.tram~=nil or t.rail_depot_dir~=nil)
   end
   return R
 end

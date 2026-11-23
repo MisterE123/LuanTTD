@@ -3,6 +3,7 @@
 local owner,at="Harbor Goods QA",Sim.id
 local engine=tonumber(core.settings:get("bayline_rail_goods_qa_engine")) or 0
 local craighead=core.settings:get_bool("bayline_native_craighead_goods",false)
+local mixed_rail=core.settings:get_bool("luanttd_qa_passenger_and_goods",false)
 local empty_mass,full_mass,purchase_price=68,80,12421
 if engine==8 then empty_mass,full_mass,purchase_price=152,164,21796 end
 if engine==13 then empty_mass,full_mass,purchase_price=93,105,24921 end
@@ -20,8 +21,10 @@ local function proof_goods()
   local qa=S.rail_goods_native_qa
   local depot=at(17,20)
   local function day()
+    local prior=assert(Run.current(S)).ticks
     Sim.daily(S)
     local d=assert(Run.current(S))
+    if mixed_rail then assert(d.ticks-prior==74,"Passenger and freight must share precisely one train tick") end
     assert(not d.failure,d.failure)
     local st=assert(Sim.rail_goods_status(S))
     assert(st.tick==S.passenger_house_clock.counter and st.tick==S.stock_load_tick)
@@ -69,7 +72,11 @@ local function proof_goods()
     assert(c.cash==qa.cash and c.revenue==qa.revenue and c.expense==qa.expense)
     assert(not Owned.commit(S,owner,qa.quote))
     assert(unit.status=="dispatched" and r.stock_engine==engine and r.stock_wagon==32 and r.freight.cargo=="goods")
-    assert(not Sim.rail_coal_status(S) and not Sim.rail_oil_status(S) and not Sim.rail_paid_status(S))
+    assert(not Sim.rail_coal_status(S) and not Sim.rail_oil_status(S))
+    if mixed_rail then
+      assert(qa.passenger and Run.current_paid(S,qa.passenger))
+      assert(Sim.rail_paid_status(S,qa.passenger))
+    else assert(not Sim.rail_paid_status(S)) end
     local charge,delivered,peak=0,0,0
     art(unit.id)
     local road_goods=qa.goods_truck and assert(S.fleet[qa.goods_truck])
@@ -87,7 +94,9 @@ local function proof_goods()
           delivered=delivered+e.units
         elseif e.kind=="fare" then charge=charge+e.amount end
       end
-      if phase.delivered>=25 and (not road_goods or road_goods.delivered>0) then
+      local passenger=mixed_rail and assert(Sim.rail_paid_status(S,qa.passenger))
+      if phase.delivered>=25 and (not road_goods or road_goods.delivered>0)
+          and (not mixed_rail or passenger.fare>0) then
         local truck=assert(S.fleet[qa.truck])
         local mill=S.stock_timber_industries[qa.mill]
         local town=S.sites[qa.town]
@@ -104,12 +113,17 @@ local function proof_goods()
         assert(phase.running_expense>0 and r.running_ticks_total>qa.ticks)
         assert(mill.wood_received>=25 and truck.delivered>0 and truck.revenue>0 and truck.expense>0)
         assert(town.received.goods>=delivered and delivered_goods()==delivered+road_crates)
-        assert(c.paid_units==truck.delivered+delivered+road_crates and mill.wood_received>=delivered+road_crates)
-        assert(c.revenue==truck.revenue+charge+road_money and
+        assert(c.paid_units==truck.delivered+delivered+road_crates+(passenger and passenger.delivered or 0)
+          and mill.wood_received>=delivered+road_crates)
+        assert(c.revenue==truck.revenue+charge+road_money+(passenger and passenger.fare or 0) and
           qa.cash+(c.revenue-qa.revenue)-(c.expense-qa.expense)==c.cash)
         assert(not S.timber_transactions.open_station)
         art(unit.id)
         api.save()
+        if mixed_rail then
+          assert(assert(Owned.running(S,owner,qa.passenger)).running_expense>0)
+          core.log("action",("MIXED_PASSENGER_GOODS_NATIVE_PASS real passenger fares $%d and Goods $%d in same 74-tick trains"):format(passenger.fare,charge))
+        end
         core.log("action",("RAIL_GOODS_LIVE_NATIVE_PASS crates=%d/$%d road_wood=%d/$%d road_goods=%d/$%d peak_mass=%d operating_cost=$%d"):
           format(delivered,charge,truck.delivered,truck.revenue,road_crates,road_money,peak,phase.running_expense))
         return core.request_shutdown("Stock forest-sawmill train paid after native SQLite restoration",false,0)
@@ -189,12 +203,32 @@ local function proof_goods()
   local ok,note,r=Owned.start_goods(S,owner,unit.id,source,sink)
   assert(ok,note)
   assert(r.freight.repeat_route and r.freight.cargo=="goods" and r.consist_mass==empty_mass and r.stock_engine==engine)
+  local passenger
+  if mixed_rail then
+    local grid=S.corner_grid
+    for z=29,36 do for x=29,49 do grid.levels[(z-1)*(grid.width+1)+x]=2 end end
+    local row=32
+    for x=30,47 do
+      S.tiles[at(x,row)]={terrain="grass",h=2,variant=1}
+    end
+    for _,z in ipairs({30,31,33,34}) do for _,x in ipairs({33,34,35,36,37,42,43,44,45,46,47}) do
+      S.tiles[at(x,z)]={terrain="grass",h=2,variant=2,house=true,parcel="shop"}
+    end end
+    lay(31,row,47,row,Track.X)
+    checked(Build.quote_depot(owner,at(30,row),Track.SW))
+    checked(Build.quote_platform(owner,at(34,row),at(36,row),Track.SW))
+    checked(Build.quote_platform(owner,at(44,row),at(47,row),Track.SW))
+    local train=assert(Owned.commit(S,owner,assert(Owned.quote(S,owner,at(30,row),{0,27}))))
+    passenger=train.id
+    local ok,why=Owned.start(S,owner,passenger,S.tiles[at(47,row)].rail_station_id,S.tiles[at(34,row)].rail_station_id)
+    assert(ok,why)
+  end
   for _=1,420 do
     local phase=day()
     if phase.loading and phase.onboard>0 and phase.onboard<25 then
       art(unit.id)
       S.rail_goods_native_qa={unit=unit.id,units=phase.onboard,source=source,sink=sink,mill=a.sources[1],
-        town=z.station.town,quote=q,truck=truck,goods_truck=second_truck,cash=c.cash,revenue=c.revenue,expense=c.expense,ticks=r.running_ticks_total}
+        town=z.station.town,quote=q,truck=truck,goods_truck=second_truck,passenger=passenger,cash=c.cash,revenue=c.revenue,expense=c.expense,ticks=r.running_ticks_total}
       api.save()
       core.log("action","RAIL_GOODS_NATIVE_SAVE_LOADING")
       return core.request_shutdown("Stock physical Goods Van saved mid-loading",false,0)

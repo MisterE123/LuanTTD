@@ -33,8 +33,8 @@ jobs:
           for t in sim pedestrian avatar_car world_setup workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere hotbar ordinary_level_crossing \
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight rail_owned_default \
-            rail_depot_fleet rail_loose_wagons rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
-            road_bay_live road_terminus_town_limits rail_owned_service rail_owned_multi rail_paid_runtime rail_signal_ui rail_block_signals rail_block_dispatch rail_reverse rail_collision rail_station_placement rail_preview rail_diagonal rail_body_spacing rail_dispatch_view passenger_crowd passenger_terminal_crowd ship_preview_view; do
+            rail_depot_fleet rail_depot_construction rail_loose_wagons rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
+            road_bay_live road_terminus_town_limits rail_owned_service rail_owned_multi rail_paid_runtime rail_signal_ui rail_signal_curve rail_block_signals rail_block_dispatch rail_reverse rail_collision rail_accident_rating rail_station_placement rail_preview rail_diagonal rail_body_spacing rail_dispatch_view passenger_crowd passenger_terminal_crowd ship_preview_view; do
             lua5.1 "tests/$t.lua"
           done
           lua5.1 tests/road_timber_live.lua craighead
@@ -42,9 +42,14 @@ jobs:
           lua5.1 tests/rail_owned_service.lua depot_turnout
           lua5.1 tests/rail_owned_service.lua mixed_signals
           lua5.1 tests/rail_owned_service.lua two_coaches
+          lua5.1 tests/rail_owned_service.lua spans_unreserved
           lua5.1 tests/rail_owned_multi.lua shared_depot
           lua5.1 tests/rail_owned_multi.lua collision
+          lua5.1 tests/rail_owned_multi.lua live_construction
           python3 tests/rail_diagonal_art.py
+          python3 tests/rail_signal_art.py
+          python3 tests/rail_architecture.py
+          python3 tests/rail_art.py
           for ship in 206 207; do lua5.1 tests/rail_paid_runtime.lua "$ship"; done
       - name: Run native startup, feature availability and SQLite checks
         run: |
@@ -57,6 +62,7 @@ jobs:
             BAYLINE_NATIVE_GOODS_ENGINE="$n" BAYLINE_NATIVE_GOODS_YEAR=1968 bash tests/rail_goods_live_native.sh
           done
           BAYLINE_NATIVE_GOODS_ENGINE=13 BAYLINE_NATIVE_GOODS_YEAR=1976 LUANTTD_NATIVE_CRAIGHEAD=true bash tests/rail_goods_live_native.sh
+          LUANTTD_NATIVE_PASSENGER_AND_GOODS=true bash tests/rail_goods_live_native.sh
           for year in 1950 1980; do LUANTTD_NATIVE_FERRY_YEAR="$year" bash tests/ship_coal_live_native.sh; done
           LUANTTD_NATIVE_SIGNAL_FREE=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_DEPOT_TURNOUT=true bash tests/rail_owned_live_native.sh

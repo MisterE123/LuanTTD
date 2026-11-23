@@ -42,7 +42,10 @@ def check(upstream):
     close((max(v[2] for v in couplers)+min(v[2] for v in couplers))/2,.157)
     allv=[v for g in m.values() for v in g]
     assert max(abs(x) for x,z,h in allv)<.266
-    assert max(h for x,z,h in allv)<.751
+    assert .612<max(h for x,z,h in allv)<.616
+    sill=max(h for _,_,h in m["Cab_bottom_rail"])
+    lintel=min(h for _,_,h in m["Cab_doorway_reveal"])
+    assert lintel-sill>=.291,"the crew opening must clear the street-scale avatar"
     assert max(abs(z) for name,group in m.items() if name!="Coupler_knuckles" for x,z,h in group)<.488
     for wagon in ("rail_passenger_wagon","rail_open_wagon"):
         tail=max(z for _,z,_ in mesh(wagon)["Coupler_knuckles"])

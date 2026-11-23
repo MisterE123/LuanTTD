@@ -103,6 +103,27 @@ local fixture=dofile("tests/rail_owned_multi_fixture.lua")(Sim,s,Lab,Owned,Run,T
 local owner=fixture.owner
 local u,v={id=fixture.a},{id=fixture.b}
 local id=Sim.id
+local edit=arg and arg[1]=="live_construction"
+if edit then
+  -- Keep the existing two paid trains running and use the same validator
+  -- and commits as AutoRail / rail construction tools.
+  local function value(q,why) return q and q.cost,why end
+  local api={Sim=Sim,s=s,terrain={tile=terrain},rail_block_tools=true,
+    render={update=function()end},save=function()end}
+  local Tools=dofile(root.."rail_construction_tools.lua")(api,Lab,T,Run,{
+    track=function(t,p,o)return p.remove and Q.rail_clear_price(0,o) or value(Q.piece(t,p.track,o))end,
+    signal=function(t,dir,oneway,o)return value(Q.signal(t,dir%2,{kind=Signal.PBS},o))end,
+    clear_signal=function()return Q.base_prices().clear_signal end})
+  assert(not Tools.busy())
+  local planned,why=Tools.quote_track(owner,id(13,15),id(13,15),T.X,true)
+  assert(not planned and why:match("running train"),why)
+  local a,b=id(31,30),id(36,30)
+  assert(Tools.build(owner,assert(Tools.quote_track(owner,a,b,T.X,false))))
+  local post=id(34,30)
+  assert(Tools.build(owner,assert(Tools.quote_signal(owner,post,T.SW,false,false))))
+  assert(Tools.build(owner,assert(Tools.quote_remove_signal(owner,post))))
+  assert(s.tiles[post].rail_tracks==1 and not Run.current(s).signals.records[post])
+end
 local waited,passed,paid,reload={},{},{},false
 local diamond=id(15,15)
 local function copy(t)
@@ -135,4 +156,5 @@ for _=1,250 do
 end
 assert(reload and paid[u.id] and paid[v.id] and passed[1]>=2 and passed[2]>=2 and next(waited))
 assert(s.companies[owner].revenue==paid[u.id]+paid[v.id])
+if edit then print("PASS built and signalled new rail while paid shuttles kept running; occupied and ordered rail protected") end
 print(("PASS two independently bought and ordered shuttles share a mixed-signal diamond; waits and rear clears, both reverse, cross after restore, and earn $%d/$%d"):format(paid[u.id],paid[v.id]))

@@ -19,7 +19,7 @@ return function(Sim,Service,Roster,debit,credit,receive)
     return s.stock_rail_coal
   end
   local function run_of(s,Run)
-    local r=Run and Run.current_paid(s)
+    local r=Run and (Run.freight_paid and Run.freight_paid(s,"coal") or Run.current_paid(s))
     return r and r.freight and (r.freight.cargo==nil or r.freight.cargo=="coal") and r or nil
   end
   function R.active(s,Run)
@@ -174,25 +174,27 @@ return function(Sim,Service,Roster,debit,credit,receive)
       for _,who in ipairs(ids) do if who==id then return true end end
       return false
     end
-    local function after(tick,ready)
-      if id then
-        local v=state.vehicles[id]
-        local moved=Run.advance_paid(s,{
-          leave=function() return ready and b.leave(id,v.visit,tick) or false end,
-          cargo_count=function() return v.units end,
-          arrive=function(q,wagon)
-            local head=q.consist.parts[1]
-            local used=b.arrive(id,q.station,q.freight.visits,tick,head.tile,wagon,
-              q.station==q.freight.mine and {full=true} or {no_load=true})
-            return not not used
-          end,
-        })
-        for _,e in ipairs(moved) do
-          e.world_tick,e.cargo=tick,"coal"
-          push(frame.motion,e)
+    local function after(tick,ready,register)
+      local function finish(moved)
+        for _,e in ipairs(moved or {}) do
+          e.world_tick,e.cargo=tick,"coal";push(frame.motion,e)
         end
+        frame.samples[#frame.samples+1]=sample(Run,run)
       end
-      frame.samples[#frame.samples+1]=sample(Run,run)
+      if not id then return finish() end
+      local v=state.vehicles[id]
+      local callbacks={
+        leave=function() return ready and b.leave(id,v.visit,tick) or false end,
+        cargo_count=function() return v.units end,
+        arrive=function(q,wagon)
+          local head=q.consist.parts[1]
+          local used=b.arrive(id,q.station,q.freight.visits,tick,head.tile,wagon,
+            q.station==q.freight.mine and {full=true} or {no_load=true})
+          return not not used
+        end,
+      }
+      if register then register("coal",callbacks,finish)
+      else finish(Run.advance_paid(s,callbacks)) end
     end
     local function post(tick) assert(b.after_motion(tick)) end
     return {extend=b.extend,before=before,after=after,post=post}

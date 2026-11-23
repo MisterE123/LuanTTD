@@ -8,8 +8,9 @@ or reference art is embedded.
 
 `street_pedestrian.blend` includes the material swatches, editable
 geometry, 12-bone gait rig and the original keyframed idle/walk action.
-The GLB root sits at the soles with a nominal standing height of
-0.511 Luanti nodes at runtime. Street camera eyes are at 0.462 nodes.
+The GLB root sits at the soles. The asset is authored at 0.511 nodes
+before engine scaling; Street View renders it at 57% (about 0.291
+nodes tall, with eyes at 0.263 nodes) to fit town doorways.
 The Lua walk controller preserves the builder's original model, eye
 position and animations on exit.
 

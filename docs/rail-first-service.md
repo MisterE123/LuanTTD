@@ -92,7 +92,68 @@ coordinates, length, ownership and vertical separation after each
 physical step. In native QA, two ordered trains restored from an
 unsignalled opposite approach hit at seven stock pixels. Both stopped,
 the wrecks held the track, then the last bodies cleared and released
-it. News, accident ratings, crash effects and some tunnel/wreck cases
-remain unported. Freight and passengers do not yet share the general
-commercial dispatcher. Avoid single-track head-to-head routes without
-a passing loop.
+it. The crash record applies the stock 160-point rating loss to
+represented active passenger cargo at owned stations within 30
+Manhattan tiles. Full news presentation, crash effects, all freight
+rating entries and some tunnel/wreck cases remain unported. Avoid
+single-track head-to-head routes without a passing loop.
+
+
+While ordinary owned trains run, you can add independent railway and
+place, flip or remove its signals. The tools still protect occupied,
+reserved and currently ordered tracks; destructive edits that require
+full stock rerouting are not enabled by this change. Native mixed-fleet
+QA builds and signals another line while both existing trains continue
+to earn fares across a restart.
+
+
+## Passenger and freight trains on the same clock
+
+The source train tick processes all vehicles once, in pool order. The
+rail adapters now prepare independent cargo callbacks and advance the
+physical fleet once per simulation tick. Passenger boarding and Goods
+loading do not advance each other's trains a second time. One freight
+train and multiple passenger trains may coexist; native QA verifies a
+Goods Van still loading after SQLite restart, then paid Goods delivery
+and passenger fares on the same company clock. Arbitrary freight fleets
+and wagons beyond the mounted cargo formations are still in progress.
+
+An ordinary approach can enter an unreserved bridge or tunnel without
+forcing a reservation to its destination. It occupies the span as it
+enters and releases the physical portals after its last car clears. A
+signal-free round-trip test goes over a bridge, through a tunnel and
+across a road, then reverses and earns fares after save/restore.
+
+
+## Signal placement on curves
+
+On plain track, aim at the actual piece. For parallel half tracks, the
+same 16-by-16 fractional tile selection as OpenTTD 16.0-RC1
+[`GenericPlaceSignals`](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/rail_gui.cpp)
+chooses the track. Pick its travel direction in the placement panel or
+both heads for a conventional signal. To remove only one signal, choose
+the matching curve in the Bulldozer layer dialog. Junctions where the
+actual tracks overlap cannot hold these signals.
+
+Linux native verification built a path signal and a bidirectional block
+signal on different halves of one tile and mounted all three physical
+heads. The 3D mast starts at the stock sprite anchor and may move
+slightly to clear the swept train body on curves; this does not change
+which track or direction it protects.
+
+
+## Placing a depot
+
+With **Rail depot** selected, right-click and choose the exit direction,
+then use the ordinary placement preview and click. The same tool can
+rotate a clear owned depot; a no-change quote costs nothing. Keep the
+exit next to the line if you want automatic attachment. The post-build
+connections are independent stock rail quotes, not free automatic
+trackwork. A refused or unaffordable connection does not undo the depot.
+
+The construction command uses the 16.0-RC1 direction-dependent
+foundation and clearance checks, including supported steep slopes and
+the required height under overhead bridges. It will not silently clear
+an existing rail tile. Sheltered roofs, platform props and track beds
+were reduced in native size, while running rails and depot wheel/track
+anchors still align.

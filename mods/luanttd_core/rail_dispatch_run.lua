@@ -61,21 +61,30 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
 
   local function block_occupancy(d) return function(id) return physical_train_tracks(d,id) end end
-  local function has_active_bodies(d)
-    for _,r in ipairs(d.runs) do if #r.consist.parts>0 then return true end end
-    return false
-  end
 
   -- Modes never share a dispatch save while the other policy's signal
   -- heads are present. The detached stock solver supports mixed boundaries,
   -- but this two-consist pilot does not run stock mixed admission/mode changes.
+  local function edit_signal_allowed(d,id)
+    if d.life and d.life.bits and d.life.bits[id] then return false end
+    for _,r in ipairs(d.runs) do
+      if not r.crashed and not r.local_signals then return false end
+      for _,p in ipairs(r.consist.parts) do if p.tile==id then return false end end
+      if not r.crashed then
+        if r.ordered_tiles and r.ordered_tiles[id] then return false end
+        for _,step in ipairs(r.route or {}) do if step.tile==id then return false end end
+      end
+    end
+    return true
+  end
+
   local function compatible_signals(base,d,is_block)
     local board=signed(base,d)
     for id in pairs(d.signals.records) do
       local tile=board.tile(id)
       if is_block and not (tile and tile.kind=="signals") then return false end
       for td=0,13 do
-        if Track.valid_trackdir(td) and Signal.along(tile,td) then
+        if Track.valid_trackdir(td) and tile and has(tile.trackbits or 0,Track.track(td)) and Signal.along(tile,td) then
           local kind=Signal.signal_type(tile,td)
           if is_block and kind~=Signal.BLOCK or not is_block and not Signal.pbs(kind) then return false end
         end
@@ -118,7 +127,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       return false,"Choose a track and signal direction."
     end
     local d=state(s,owner)
-    if not d or d.owner~=owner or has_active_bodies(d) or s.stock_rail_run then
+    if not d or d.owner~=owner or not edit_signal_allowed(d,id) or s.stock_rail_run then
       return false,"Clear the active pilot before changing dispatch signals."
     end
     local base=Lab.board(s)
@@ -141,22 +150,50 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local base=Lab.board(s)
     local t=base.tile(id)
     local existing=d and d.signals.records[id]
-    if not (t and existing and d.owner==owner and t.owner==owner and not has_active_bodies(d) and not s.stock_rail_run) then
+    if not (t and existing and d.owner==owner and t.owner==owner and edit_signal_allowed(d,id) and not s.stock_rail_run) then
       return false,"The signal is not yours or this railway is in use."
     end
     local old=Signal.view(base,d.signals).tile(id)
     if not Signal.along(old,td) or Signal.along(old,Track.reverse_trackdir(td)) then
       return false,"Only a signal with a single head can be flipped."
     end
-    local kind=Signal.signal_type(old,td)
+    local kind,track=Signal.signal_type(old,td),Track.track(td)
     local replacement=Signal.new()
-    local ok,why=Signal.place(base,replacement,owner,id,Track.track(td),{
-      kind=kind,variant=existing.upper_variant,
+    replacement.records[id]=existing
+    assert(Signal.remove_track(base,replacement,id,track))
+    local variant=(track==Track.LOWER or track==Track.RIGHT) and existing.lower_variant or existing.upper_variant
+    local ok,why=Signal.place(base,replacement,owner,id,track,{
+      kind=kind,variant=variant,
       copy_mask=Track.signal_along(Track.reverse_trackdir(td))},0,false)
     if not ok then return false,why end
     d.signals.records[id]=replacement.records[id]
-    if kind==Signal.BLOCK then Block.update_track(base,d.signals,owner,block_occupancy(d),id,Track.track(td)) end
+    if Block then
+      Block.update_track(Life.view(base,d.life),d.signals,owner,block_occupancy(d),id,Track.track(td))
+    end
     return true,"Signal turned to face the opposite approach."
+  end
+
+  function R.remove_signal(s,owner,id,track)
+    local d=R.current(s)
+    local base=Lab.board(s)
+    local tile=base.tile(id)
+    if not d or not tile or tile.owner~=owner or d.owner~=owner or
+        not d.signals.records[id] or not edit_signal_allowed(d,id) then
+      return false,"The signal is reserved, in use or not yours."
+    end
+    if track~=nil then
+      if not Signal.remove_track(base,d.signals,id,track) then return false,"Choose a track that has a signal." end
+    else d.signals.records[id]=nil end
+    if Block then
+      local board=Life.view(base,d.life)
+      for i=0,5 do
+        if (track==nil or i==track) and has(tile.trackbits,i) then
+          Block.update_track(board,d.signals,owner,block_occupancy(d),id,i)
+        end
+      end
+    end
+    s.topology=s.topology+1
+    return true,"Signal removed; rail remains."
   end
 
   local ordinary_traction={[0]=true,[1]=true}
@@ -456,11 +493,16 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     -- Native owned passenger runs can share one live signal graph and
     -- commercial clock. Legacy pilot pairs and freight controllers retain
     -- their specific actor contracts until ported onto the same dispatcher.
-    local shared=local_signals and second and not freight
+    local shared=local_signals and (second or freight)
     if shared then
       for _,other in ipairs(d.runs) do
-        if not (other.local_signals and other.fleet_id and other.shuttle and not other.freight)
+        if not (other.local_signals and other.fleet_id and (other.shuttle or other.freight))
             or (not not other.span)~=(not not span_mode) then shared=false;break end
+        if freight and other.freight then
+          -- The physical network is shared; individual freight loading
+          -- still has one owned carrier per cargo controller.
+          return false,"This world already has an owned freight train."
+        end
       end
     end
     if not shared and ((span_mode and #d.runs~=0) or (d.runs[1] and d.runs[1].span)) then
@@ -570,6 +612,12 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if is_block and not block_route(board,run,d) then
       return false,"Use a flat straight corridor with forward block signals guarding both sides of every diamond."
     end
+    local function ordered(leg)
+      if not run.local_signals then return end
+      run.ordered_tiles=run.ordered_tiles or {}
+      for _,step in ipairs(leg) do run.ordered_tiles[step.tile]=true end
+    end
+    ordered(route)
     if pair then
       run.paired.second_leg=choose_leg(board,run,departure_probe(run,route),second)
       if not run.paired.second_leg then
@@ -612,6 +660,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       if not empty then return false,cargo=="goods" and "No safe rail return from the town platform to the sawmill." or
         cargo=="oil" and "No safe rail return from the refinery platform to the wells." or
         "No safe rail return from the power platform to the mine." end
+      ordered(loaded);ordered(empty)
       run.freight={mine=station,power=freight,cargo=cargo,visits=0,reversals=0,cycles=0,repeat_route=true}
     end
     if not is_block then
@@ -755,7 +804,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         not R.owned_passenger_engine(owned.stock_ids[1]) or owned.stock_ids[2]~=29 then
       return false,"Use a modeled owned locomotive and one Coal Truck wagon."
     end
-    return start(s,owner,owned.depot,mine,nil,false,owned,power)
+    return start(s,owner,owned.depot,mine,nil,Block and Spans and s.rail_span_enabled or false,owned,power)
   end
 
   function R.start_owned_oil(s,owner,owned,wells,refinery)
@@ -767,7 +816,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         not R.owned_passenger_engine(owned.stock_ids[1]) or owned.stock_ids[2]~=30 then
       return false,"Use a modeled owned locomotive and one Oil Tanker wagon."
     end
-    return start(s,owner,owned.depot,wells,nil,false,owned,refinery,nil,nil,"oil")
+    return start(s,owner,owned.depot,wells,nil,Block and Spans and s.rail_span_enabled or false,owned,refinery,nil,nil,"oil")
   end
 
   function R.start_owned_goods(s,owner,owned,mill,town)
@@ -779,7 +828,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         not R.owned_passenger_engine(owned.stock_ids[1]) or owned.stock_ids[2]~=32 then
       return false,"Use a modeled owned locomotive and one Goods Van."
     end
-    return start(s,owner,owned.depot,mill,nil,false,owned,town,nil,nil,"goods")
+    return start(s,owner,owned.depot,mill,nil,Block and Spans and s.rail_span_enabled or false,owned,town,nil,nil,"goods")
   end
 
   -- Explicitly stop at the next completed power order; never delete or
@@ -846,11 +895,15 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
   local function block_freight(s,why,cargo)
     local d=R.current(s)
-    local run=d and d.runs[1]
+    local run=R.freight_paid(s,cargo)
     local events={}
-    if run and run.freight and (run.freight.cargo or "coal")==cargo and not run.freight.complete and not d.failure then
+    if run and not run.freight.complete and not d.failure then
       run.stopped=true
-      halt(d,run,events,why)
+      if #d.runs==1 then halt(d,run,events,why)
+      else
+        run.phase,run.failure,run.speed,run.progress="blocked",why,0,0
+        emit(d,run,events,"blocked",{reason=why})
+      end
     end
     return events
   end
@@ -1002,6 +1055,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     run.direction=head.direction
     run.station=station;run.order=order;run.route=route;run.index=1
     run.reserved_through_station=nil
+    if run.ordered_tiles then for _,step in ipairs(route) do run.ordered_tiles[step.tile]=true end end
     run.speed=0;run.subspeed=0;run.progress=0;run.wait_counter=0;run.stuck=false
     run.slowing=false;run.phase="turnaround";orders.dwell_until=nil
     local height=run.span and base.stock_height or stock_height
@@ -1048,7 +1102,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return {events=events,reveals=move.reveals}
   end
 
-  local function check_collision(base,d,run,events,paid)
+  local function check_collision(base,d,run,events,paid,service)
     if not run.local_signals or #d.runs<2 then return false end
     local function physical(r,p)
       local t=base.tile(p.tile)
@@ -1085,12 +1139,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       for _,id in ipairs({first,second}) do
         local hit=d.runs[id]
         if not hit.crashed then
-          local passengers=not hit.freight and paid and paid.cargo_count and paid.cargo_count(hit) or
+          local handler=service and service(hit) or paid
+          local passengers=not hit.freight and handler and handler.cargo_count and handler.cargo_count(hit) or
             (not hit.freight and hit.passengers_onboard or 0)
           victims=victims+2+(passengers or 0)
           hit.crashed,hit.phase,hit.crash_age,hit.speed,hit.subspeed,hit.progress,hit.stopped=
             true,"crashed",1,0,0,0,true
-          if paid and paid.crash then paid.crash(hit) end
+          if handler and handler.crash then handler.crash(hit) end
         end
         -- The stock collision handles two crashes in order and tries
         -- to re-reserve under both even if one was already a wreck.
@@ -1104,11 +1159,11 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       return victims
     end
     local hit,victims=Collision.scan(head,world,crash)
-    if hit then emit(d,run,events,"rail_collision",{tile=head.tile,victims=victims}) end
+    if hit then emit(d,run,events,"rail_collision",{tile=head.tile,owner=run.owner,victims=victims}) end
     return hit
   end
 
-  local function pass(s,base,d,run,events,mode,paid)
+  local function pass(s,base,d,run,events,mode,paid,service)
     local head=run.consist.parts[1]
     if run.phase=="depot" then
       run.wait_counter=run.wait_counter+1
@@ -1240,7 +1295,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         end
       end
       if not r then
-        if why=="ROAD_DRAINING" or why=="unobserved" then
+        if why=="ROAD_DRAINING" or why=="unobserved" or why=="span_occupied" then
           run.speed=0;run.subspeed=0
           hold(d,run,events,next_ and next_.tile or old.tile,why)
         elseif withheld and why~="unsupported_reverse" then
@@ -1313,7 +1368,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         local z=stock_height(new.tile,new.pose.x%16,new.pose.y%16)
         Speed.after_grade(run,run.z,z);run.z=z
       end
-      if check_collision(base,d,run,events,paid) then return "crashed" end
+      if check_collision(base,d,run,events,paid,service) then return "crashed" end
       if stop=="arrived" then
         Speed.begin_loading(run,run.station)
         run.phase="arrived"
@@ -1361,6 +1416,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local d=R.current(s)
     for _,r in ipairs(d and d.runs or {}) do
       if r.paid_clock and (not fleet_id or r.fleet_id==fleet_id) then return r end
+    end
+  end
+
+  function R.freight_paid(s,cargo)
+    local d=R.current(s)
+    for _,r in ipairs(d and d.runs or {}) do
+      if r.paid_clock and r.freight and (r.freight.cargo or "coal")==cargo then return r end
     end
   end
 
@@ -1444,10 +1506,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end
   end
 
-  local function tick(s,ticks,paid)
+  local function tick(s,ticks,paid,service)
     local events,d={},R.current(s)
     if not d or #d.runs==0 or d.failure or
-        (R.current_paid(s)~=nil)~=(paid~=nil) or paid and not R.paid_art_ready(s) then return events end
+        (R.current_paid(s)~=nil)~=(paid~=nil or service~=nil) or paid and not R.paid_art_ready(s) then return events end
     local is_block=d.runs[1].block
     if is_block and not (Block and s.rail_block_preview) then return events end
     local base=rail_board(s,d.runs[1] and d.runs[1].span)
@@ -1476,7 +1538,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       -- Each vehicle's Train::Tick runs false then true before the next
       -- vehicle in stock pool order. Our two IDs are in creation order.
       for _,run in ipairs(d.runs) do
-        if not run.crashed then stock_owned_tick(run,paid) end
+        local callback=service and service(run) or paid
+        if not run.crashed and (not service or callback) then stock_owned_tick(run,callback) end
         if run.crashed then
           run.crash_age=run.crash_age+1
           if run.crash_age>=4440 and d.ticks%32==0 and #run.consist.parts>0 then
@@ -1493,12 +1556,15 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
             end
             emit(d,run,events,"wreck_body_removed",{tile=tail.tile})
           end
+        elseif run.failure or service and not callback then
+          -- Missing or paused commercial service does not advance this
+          -- vehicle, but cannot freeze a different cargo or company.
         elseif run.fleet_id and run.stopped and run.speed==0 then
           -- The real stock handler returns here. Do not leave a depot
           -- or station, move a stopped wagon, or discard path holdings.
         elseif run.phase=="dwell" then
           if run.paired then
-            if paid and paid.leave(run) then
+            if callback and callback.leave(run) then
               if run.station==run.paired.first then
                 switch_station_order(base,d,run,events,run.paired.second,run.paired)
               else
@@ -1509,7 +1575,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
               if d.failure then return events end
             end
           elseif run.freight then
-            if paid and paid.leave(run) then
+            if callback and callback.leave(run) then
               local q=run.freight
               if run.station==q.mine then
                 switch_station_order(base,d,run,events,q.power,q)
@@ -1528,15 +1594,15 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
               end
               if d.failure then return events end
             end
-          elseif paid and paid.leave(run) or not paid and d.ticks>=run.shuttle.dwell_until then
+          elseif callback and callback.leave(run) or not callback and d.ticks>=run.shuttle.dwell_until then
             switch_shuttle_order(base,d,run,events)
             if d.failure then return events end
           end
         elseif run.phase~="arrived" and run.phase~="freight_complete" and run.phase~="passenger_complete" then
           run.ticks=run.ticks+1
-          pass(s,base,d,run,events,false,paid)
+          pass(s,base,d,run,events,false,callback,service)
           if d.failure then return events end
-          if run.phase~="arrived" and run.phase~="dwell" then pass(s,base,d,run,events,true,paid) end
+          if run.phase~="arrived" and run.phase~="dwell" then pass(s,base,d,run,events,true,callback,service) end
           if d.failure then return events end
         end
       end
@@ -1549,6 +1615,11 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   -- stock world clock may advance them. One-way pilots remain non-paying.
   function R.tick(s,ticks) return tick(s,ticks,nil) end
   function R.advance_paid(s,callbacks) return tick(s,1,callbacks) end
+  function R.advance_services(s,handlers)
+    return tick(s,1,nil,function(r)
+      return handlers[r.freight and (r.freight.cargo or "coal") or "passenger"]
+    end)
+  end
 
   function R.sample(run,index)
     local part=run and run.consist.parts[index or 1]

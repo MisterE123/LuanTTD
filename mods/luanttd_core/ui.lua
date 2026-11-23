@@ -394,6 +394,7 @@ end
 function U.fields(p,formname,f)
   if api.world and api.world.avatar_state and api.world.avatar_state(p) then return false end
   if formname=="luanttd_core:station_layout" then return U.station_layout_fields(p,f) end
+  if formname=="luanttd_core:rail_depot_direction" then return U.depot_direction_fields(p,f) end
   if U.signal_ui and formname==U.signal_ui.form then
     return U.signal_ui.fields(p,f,U.layer_bulldozer.open)
   end
@@ -699,12 +700,12 @@ function U.speed(p,key)
     U.status(p,speed==0 and "Simulation paused." or ("Simulation speed: "..speed.."×"))
   end
 end
-local function asset_details(p,tile)
+local function asset_details(p,tile,hit)
   local t=tile and S.tiles[tile]
   if not t then return false end
   local dispatch=S.stock_rail_dispatch
   if U.signal_ui and dispatch and dispatch.signals and dispatch.signals.records[tile] and api.rail_build and
-      U.signal_ui.inspect(p,tile) then return true end
+      U.signal_ui.inspect(p,tile,hit) then return true end
   if t.rail_depot_dir~=nil and api.owned_rail_ui and api.owned_rail_ui.open(p,tile) then return true end
   if t.house and t.source_house and t.source_house.town_growth then U.service(p,"growth_house",tile)
   elseif t.stock_landmark then
@@ -877,6 +878,41 @@ function U.rotate_rail(p)
   local V=view(p:get_player_name())
   V.rail_dir=((V.rail_dir or 2)+1)%4
   V.status="Rail fitting direction: "..tram_dir[V.rail_dir].."."
+end
+function U.open_depot_direction(p)
+  local n=p:get_player_name()
+  local V=view(n)
+  V.depot_direction_open=true
+  local b={"formspec_version[7]size[8.2,4.22]bgcolor[#152334;false]",
+    "label[.4,.45;Rail depot / Door direction]",
+    "label[.4,1.06;Choose the side that connects to the track.]"}
+  for _,dir in ipairs({3,0,2,1}) do
+    local x,y=dir==0 and .42 or dir==2 and 5.47 or 2.94,dir==3 and 1.48 or dir==1 and 3.18 or 2.34
+    local active=(V.rail_dir or 2)==dir
+    local key="rail_door_"..dir
+    if active then b[#b+1]="style["..key..";bgimg=bl_button_active.png]" end
+    b[#b+1]=("button[%g,%g;2.31,.64;%s;%s]"):format(x,y,key,esc(tram_dir[dir]))
+  end
+  core.show_formspec(n,"luanttd_core:rail_depot_direction",table.concat(b))
+  return true
+end
+function U.depot_direction_fields(p,f)
+  local n=p:get_player_name()
+  local V=view(n)
+  if not V.depot_direction_open then return true end
+  if f.quit then V.depot_direction_open=nil;return true end
+  local chosen
+  for d=0,3 do
+    if f["rail_door_"..d] then
+      if chosen then return true end
+      chosen=d
+    end
+  end
+  if not chosen then return true end
+  V.rail_dir,V.depot_direction_open=chosen,nil
+  core.close_formspec(n,"luanttd_core:rail_depot_direction")
+  U.status(p,"Depot door faces "..tram_dir[chosen]..". Click a tile to build or turn an empty depot.")
+  return true
 end
 function U.toggle_rail_remove(p)
   local V=view(p:get_player_name())
@@ -1355,11 +1391,11 @@ local function clear_structure(n,id,preview)
   end
 end
 U.signal_ui=api.road_first and dofile(core.get_modpath("luanttd_core").."/rail_signal_ui.lua")(api,U.status)
-function U.signal_arrow(p,id)
+function U.signal_arrow(p,id,hit)
   if not U.signal_ui or not api.rail_build or not id then return end
   local V=view(p:get_player_name())
   if V.pick_order or not U.signal_ui.tool(V.tool) then return end
-  local q,_,dir=U.signal_ui.preview(p,V.tool,id)
+  local q,_,dir=U.signal_ui.preview(p,V.tool,id,hit)
   if q then return dir end
 end
 U.layer_bulldozer=api.road_first and dofile(core.get_modpath("luanttd_core").."/layer_bulldozer.lua")(api,clear_structure,U.status)
@@ -1657,14 +1693,16 @@ function U.preview(p,id,hit)
       .. (plan.join and (" · Joins #%d"):format(plan.join) or " · Right-click for layout")
   end
   if U.signal_ui and api.rail_build and U.signal_ui.tool(V.tool) then
-    local q,hint=U.signal_ui.preview(p,V.tool,id)
+    local q,hint=U.signal_ui.preview(p,V.tool,id,hit)
     return {id},q~=nil,hint
   end
   if rail_tool_labels[V.tool] and api.rail_build then
     local plan,msg,anchor=quote_rail(n,V,id)
     if not plan then return {id},not not anchor,msg end
     local title=rail_tool_labels[V.tool]
-    if plan.kind=="depot" then title=title.."  ·  Door faces "..tram_dir[V.rail_dir or 2]
+    if plan.kind=="depot" then
+      title=(plan.rotate and "Rotate depot" or title).."  ·  Door faces "..tram_dir[V.rail_dir or 2]
+        ..(plan.foundation=="leveled" and "  ·  Level foundation" or "").."  ·  Right-click for direction"
     elseif plan.kind=="signal" then title=title.."  ·  Train travels "..tram_dir[V.rail_dir or 2] end
     if V.rail_remove and plan.kind=="track" then title="Remove "..title:lower() end
     return plan.ids,true,("%s  |  %s  ·  %d tiles"):format(title,dollars(plan.price),#plan.ids)
@@ -1848,7 +1886,7 @@ function U.world_status(p,tile,show_preview,hit)
   end
   return (bid or (tool.name.."   |   "..target)),status,ids,valid
 end
-function U.build_world(p,id)
+function U.build_world(p,id,hit)
   local n=p:get_player_name();local V=view(n)
   V.chosen=id
   if V.pick_order then U.choose_order_stop(p,id);return end
@@ -1984,7 +2022,7 @@ function U.build_world(p,id)
     return
   end
   if U.rail_gesture(V.tool) then return end -- physical release owns the command
-  if U.signal_ui and api.rail_build and U.signal_ui.tool(V.tool) then U.signal_ui.open(p,id,V.tool);return end
+  if U.signal_ui and api.rail_build and U.signal_ui.tool(V.tool) then U.signal_ui.open(p,id,V.tool,hit);return end
   if V.tool=="rail_signal_remove" and U.layer_bulldozer then
     if not U.layer_bulldozer.open(p,id) then V.status="Aim at a signal to review removal." end
     return
@@ -2148,7 +2186,7 @@ function U.build_world(p,id)
     V.anchor=nil;R.update(changed);api.save()
   end
 end
-function U.context(p,tile)
+function U.context(p,tile,hit)
   local n=p:get_player_name();local V=view(n)
   if V.pick_order then U.finish_order_pick(p);return end
   V.context_tile=tile
@@ -2157,7 +2195,7 @@ function U.context(p,tile)
     if t and t.build=="road_depot" then U.service(p,"depot",tile)
     elseif t and t.station and S.stations[t.station] and S.stations[t.station].stop_type=="truck" then
       U.service(p,"stop",t.station)
-    elseif not asset_details(p,tile) then U.service(p,"context",tile) end
+    elseif not asset_details(p,tile,hit) then U.service(p,"context",tile) end
     return
   end
   if tile then V.chosen=tile end

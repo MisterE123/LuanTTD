@@ -69,7 +69,7 @@ def check_assets():
 def check_positions(lua,source):
     probe='''
 local A=dofile("mods/luanttd_core/rail_signal_art.lua")
-assert(A.pose(9,11,6.5,4,true)==nil)
+assert(A.pose(9,11,6.5,4,true))
 assert(A.mesh("light",false)=="bl_rail_signal_light_red.obj")
 assert(A.mesh("semaphore",true)=="bl_rail_signal_semaphore_green.obj")
 for _,right in ipairs({false,true}) do
@@ -108,9 +108,10 @@ end
         for td in TD:
             u,v=values[offset+SLOT[td]]
             assert tuple(map(int,next(out).split()))==(td,u,v)
-            if td not in STRAIGHT:
-                continue
             x,y,z,angle=map(float,next(out).split())
+            if td not in STRAIGHT:
+                assert y==6.5 and 17.5<=x<=19.5 and 21.5<=z<=23.5
+                continue
             assert (x,y,z)==(2*9-.5+u/8,6.5,2*11-.5+v/8)
             dx,dz=STRAIGHT[td]
             assert isclose(sin(angle),-dx,abs_tol=1e-12) and isclose(-cos(angle),-dz,abs_tol=1e-12)

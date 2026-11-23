@@ -400,7 +400,7 @@ return function(api,ui)
   end
   function W.click(p,menu)
     local n=p:get_player_name()
-    local tile=W.target(p)
+    local tile,hit=W.target(p)
     local state=controls[n]
     if state and state.order_mode then
       local selected=entries(state)[p:get_wield_index()]
@@ -430,9 +430,10 @@ return function(api,ui)
       local entry=state and entries(state)[p:get_wield_index()]
       if entry and entry[1]=="teleport_tile" then ui.inspect(p,tile);return end
       if entry and ui.station_gesture and ui.station_gesture(entry[1]) then ui.open_station_layout(p);return end
-      ui.context(p,tile);return
+      if entry and entry[1]=="rail_depot_tool" and ui.open_depot_direction then ui.open_depot_direction(p);return end
+      ui.context(p,tile,hit);return
     end
-    if tile then ui.build_world(p,tile)
+    if tile then ui.build_world(p,tile,hit)
     else ui.inspect(p,nil) end
     W.hud(p,0)
   end
@@ -530,6 +531,7 @@ return function(api,ui)
   function W.spawn(p)
     local n=p:get_player_name()
     controls[n]={elapsed=0,menus={"home"},sprinting=false}
+    Pedestrian.hide_builder(p)
     if api.generated_world and S.sites[1] then
       local id=S.sites[1].tile
       local x,z=Sim.xy(id)
@@ -589,7 +591,7 @@ return function(api,ui)
       -- staircase of square outlines obscures its continuous diagonal.
       api.selector.area(p,not rail and ids or nil,t,anchor,shade)
       if api.selector.rail then api.selector.rail(p,rail or nil) end
-      if api.selector.signal and ui.signal_arrow then api.selector.signal(p,t,world_tool and ui.signal_arrow(p,t) or nil) end
+      if api.selector.signal and ui.signal_arrow then api.selector.signal(p,t,world_tool and ui.signal_arrow(p,t,hit) or nil) end
     elseif ids then api.render.preview(n,ids,valid) end
     if H and not world_tool and not picking then
       desc="" -- Menu labels sit next to the actual hotbar, not the crosshair.

@@ -71,6 +71,14 @@ class EasedPath(art.TrackPath):
             return out
         return run(low) + list(reversed(run(high)))
 
+    def ribbon_points(self):
+        points = [self.a, self.b] if self.direct else list(self.sections)
+        if self.sides & 1:
+            points.insert(0, tuple(self.a[i]-.8*self.t0[i] for i in (0,1)))
+        if self.sides & 2:
+            points.append(tuple(self.b[i]+.8*self.t1[i] for i in (0,1)))
+        return points
+
     def distance(self, x, z):
         if self.direct:
             dx, dz = self.unit

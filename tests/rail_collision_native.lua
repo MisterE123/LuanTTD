@@ -29,6 +29,16 @@ core.after(0,function()
   assert(hit and d.runs[1].crashed and d.runs[2].crashed and d.life.bits[hit.tile])
   local a,b=d.runs[1].consist.parts[1].pose,d.runs[2].consist.parts[1].pose
   assert(math.abs(a.x-b.x)==7 and a.y==b.y)
+  local news=S.stock_rail_accidents
+  assert(news and #news==1 and news[1].tile==hit.tile and news[1].victims==4)
+  local ratings=0
+  for _,st in pairs(S.stock_ship_commercial.service.stations) do
+    if st.host_mode=="rail" and st.owner==proof.owner then
+      assert(st.passenger_rating_state.rating<=17)
+      ratings=ratings+1
+    end
+  end
+  assert(ratings==2)
   for i=1,10 do
     Sim.daily(S)
     assert(d.runs[1].consist.parts[1].pose==a and d.runs[2].consist.parts[1].pose==b)

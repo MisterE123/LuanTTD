@@ -2211,26 +2211,18 @@ function M.rail_goods_loading_events(s)
   return goods.runtime and goods.runtime.take(s,"events") or {}
 end
 function M.rail_paid_status(s,fleet_id)
-  if not paid_rail_runs[s] or rail_coal.present(s,paid_rail_runs[s]) or
-      (oil.runtime and oil.runtime.present(s,paid_rail_runs[s])) or
-      (goods.runtime and goods.runtime.present(s,paid_rail_runs[s])) then return end
-  return paid_ferry.status(s,paid_rail_runs[s],"rail",fleet_id)
+  local rail=paid_rail_runs[s]
+  if not rail then return end
+  return paid_ferry.status(s,rail,"rail",fleet_id)
 end
 function M.rail_paid_pose(s,part,fraction,fleet_id)
-  if not paid_rail_runs[s] then return end
   local rail=paid_rail_runs[s]
-  if goods.runtime and goods.runtime.present(s,rail) then
-    if not fleet_id or rail.current_paid(s,fleet_id) then return goods.runtime.pose(s,rail,part,fraction) end
-    return
-  end
-  if oil.runtime and oil.runtime.present(s,rail) then
-    if not fleet_id or rail.current_paid(s,fleet_id) then return oil.runtime.pose(s,rail,part,fraction) end
-    return
-  end
-  if rail_coal.present(s,rail) then
-    if not fleet_id or rail.current_paid(s,fleet_id) then return rail_coal.pose(s,rail,part,fraction) end
-    return
-  end
+  if not rail then return end
+  local carrier=rail.current_paid(s,fleet_id)
+  local kind=carrier and carrier.freight and (carrier.freight.cargo or "coal")
+  if kind=="goods" and goods.runtime then return goods.runtime.pose(s,rail,part,fraction) end
+  if kind=="oil" and oil.runtime then return oil.runtime.pose(s,rail,part,fraction) end
+  if kind=="coal" then return rail_coal.pose(s,rail,part,fraction) end
   return paid_ferry.rail_pose(s,rail,part,fraction,fleet_id)
 end
 function M.rail_loading_events(s)
@@ -2238,11 +2230,30 @@ function M.rail_loading_events(s)
   return paid_ferry.take_effects(s,"rail")
 end
 function M.rail_paid_motion_events(s)
-  if not paid_rail_runs[s] then return {} end
-  if goods.runtime and goods.runtime.present(s,paid_rail_runs[s]) then return goods.runtime.take(s,"motion") end
-  if oil.runtime and oil.runtime.present(s,paid_rail_runs[s]) then return oil.runtime.take(s,"motion") end
-  if rail_coal.present(s,paid_rail_runs[s]) then return rail_coal.take(s,"motion") end
-  return paid_ferry.take_rail_motion(s)
+  local rail=paid_rail_runs[s]
+  if not rail then return {} end
+  local out=paid_ferry.take_rail_motion(s)
+  local function append(items)
+    for _,e in ipairs(items) do
+      -- The common frame already carries incidents for station ratings;
+      -- do not report that physical impact twice to world observers.
+      if e.kind~="rail_collision" then out[#out+1]=e end
+    end
+  end
+  if goods.runtime and goods.runtime.present(s,rail) then append(goods.runtime.take(s,"motion")) end
+  if oil.runtime and oil.runtime.present(s,rail) then append(oil.runtime.take(s,"motion")) end
+  if rail_coal.present(s,rail) then append(rail_coal.take(s,"motion")) end
+  if #out>1 then
+    local seq={}
+    for i,e in ipairs(out) do seq[e]=i end
+    table.sort(out,function(a,b)
+      local x,y=a.world_tick or a.tick or 0,b.world_tick or b.tick or 0
+      if x~=y then return x<y end
+      if a.train~=b.train then return (a.train or 0)<(b.train or 0) end
+      return seq[a]<seq[b]
+    end)
+  end
+  return out
 end
 function M.mount_paid_air(s,Run)
   paid_air_runs[s]=Run
@@ -2402,6 +2413,10 @@ function M.waiting_passengers(s,st)
   for _,batch in ipairs(st.stock.passenger or {}) do waiting=waiting+batch.units end
   return waiting
 end
+function M.rail_accident_ratings(s,owner,x,y)
+  return rating_runtime and rating_runtime.accident(s,owner,x,y) or 0
+end
+
 function M.passenger_rating(s,st)
   if not st or not s.road_economy or st.mode~="road" then return end
   passenger_modules()
@@ -2866,6 +2881,37 @@ local function automatic_road_service(s,faults,v,f,difficulty,date,random)
     v.road_auto_service,v.road_return_depot=nil,nil
   end
 end
+-- Station controllers prepare cargo independently; physical Run advances
+-- once per source simulation tick in the Train pool's order. Do not run
+-- a second world tick for freight just because its loading service differs.
+local function rail_tick_broker(s)
+  local run=paid_rail_runs[s]
+  if not run or not run.advance_services then return end
+  local handlers,finishes,flushed={},{},false
+  local function register(cargo,callbacks,finish)
+    assert(not handlers[cargo],"Duplicate rail cargo adapter "..cargo)
+    handlers[cargo],finishes[cargo]=callbacks,finish
+  end
+  local function advance(passenger)
+    assert(not flushed,"Rail world tick already advanced")
+    flushed=true
+    handlers.passenger=passenger
+    if not next(handlers) then return {} end
+    local moved=run.advance_services(s,handlers)
+    local d=run.current(s)
+    local by={passenger={}}
+    for _,e in ipairs(moved) do
+      local train=d and d.runs[e.train]
+      local cargo=train and train.freight and (train.freight.cargo or "coal") or "passenger"
+      local list=by[cargo] or {};by[cargo]=list;list[#list+1]=e
+      if e.kind=="rail_collision" and cargo~="passenger" then by.passenger[#by.passenger+1]=e end
+    end
+    for _,name in ipairs({"coal","oil","goods"}) do if finishes[name] then finishes[name](by[name]) end end
+    return by.passenger
+  end
+  return register,advance,function() return flushed end
+end
+
 local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train)
   local clock
   local faults=road_faults_mount[s]
@@ -2887,9 +2933,11 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if commercial then ready,events=commercial.before(tick) end
         if freighter then freighter.rating(tick) end
         callback(tick)
-        if freight then freight.after(tick,freight_ready) end
-        if industry_train then industry_train.after(tick,industry_ready) end
-        if commercial then commercial.after(tick,ready,events) end
+        local register,advance,flushed=rail_tick_broker(s)
+        if freight then freight.after(tick,freight_ready,register) end
+        if industry_train then industry_train.after(tick,industry_ready,register) end
+        if commercial then commercial.after(tick,ready,events,advance) end
+        if advance and not flushed() then advance() end
         if freighter then freighter.after(tick,ship_ready) end
         if growth and growth.new then growth.world.tick(s,tick,growth_random) end
         if finish_rating then finish_rating() end

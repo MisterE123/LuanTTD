@@ -6,7 +6,8 @@ looks around the target or below the camera for nearby dry land.
 
 Use **WASD** to walk, the mouse to look, Space for a short hop and
 Shift to crouch. Press Luanti's camera key (**C** by default) to see
-the animated street avatar from behind or in front. The camera follows the terrain and ordinary graded
+the animated street avatar from behind or in front. It is scaled to
+the game's house doors. The camera follows the terrain and ordinary graded
 roads. Houses and shops have solid walls; the sightseeing mode does
 not reserve a traffic lane, interact with vehicles, or change the map.
 
@@ -16,7 +17,8 @@ A drive is for sightseeing, not a company vehicle purchase.
 
 For either mode, **right-click** or repeat its command to restore the
 builder camera at the same aerial position and angle. The previous
-hotbar and construction controls are restored.
+hotbar and construction controls are restored. The builder has no
+visible body in any camera mode.
 
 `lua tests/pedestrian.lua` checks candidate landing and grade collision
 profiles. `tests/pedestrian_native.sh` exercises the real Luanti

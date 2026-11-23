@@ -8,6 +8,7 @@ local status=""
 local next_hud=0
 local function noop() end
 local p={
+  set_properties=function()end,
   get_player_name=function()return "Pilot" end,is_player=function()return true end,
   get_player_control=function()return keys end,
   get_pos=function()return pos end,

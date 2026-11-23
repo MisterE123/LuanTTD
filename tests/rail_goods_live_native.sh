@@ -31,6 +31,8 @@ bayline_rail_owned_preview = true
 bayline_preview_paid_rail = true
 bayline_rail_construction_preview = true
 luanttd_qa_coastal_layout = true
+bayline_seconds_per_day = 15
+luanttd_qa_passenger_and_goods = ${LUANTTD_NATIVE_PASSENGER_AND_GOODS:-false}
 bayline_road_timber_preview = true
 bayline_native_craighead_goods = ${LUANTTD_NATIVE_CRAIGHEAD:-false}
 bayline_native_rail_goods_competition = ${BAYLINE_NATIVE_GOODS_COMPETITION:-false}
@@ -48,3 +50,6 @@ for step in server reload; do
   if [[ $step == server ]]; then mark=RAIL_GOODS_NATIVE_SAVE_LOADING; else mark=RAIL_GOODS_LIVE_NATIVE_PASS; fi
   grep "$mark" "$out/$step.log" || { cat "$out/$step.log"; exit 1; }
 done
+if [[ ${LUANTTD_NATIVE_PASSENGER_AND_GOODS:-false} == true ]]; then
+  grep MIXED_PASSENGER_GOODS_NATIVE_PASS "$out/reload.log"
+fi

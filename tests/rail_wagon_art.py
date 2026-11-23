@@ -41,12 +41,19 @@ def check(key,axles):
         if name in ("Coupler_knuckles",): continue
         assert max(abs(v[1]) for v in verts)<=.478+EPS,(key,name)
     allv=[v for verts in g.values() for v in verts]
-    assert max(abs(v[0]) for v in allv)<.268
+    assert max(abs(v[0]) for v in allv)<(.273 if key.endswith("passenger_wagon") else .268)
     assert max(v[2] for v in allv)<.710
     assert "Recessed_saloon_end_door" in g or "Raised_wagon_side_planks" in g
     if key.endswith("open_wagon"):
         assert "Individual_open-bed_floor_planks" in g
         assert not any(abs(x)<.16 and abs(z)<.32 and h>.251 for x,z,h in allv)
+    else:
+        assert .598<max(v[2] for v in allv)<.602
+        door=g["Vestibule_doors"]
+        assert .317<max(v[2] for v in door)-min(v[2] for v in door)<.330
+        step=g["Vestibule_risers"]
+        assert any(abs(abs(x)-.270)<EPS and abs(h-.182)<EPS for x,_,h in step)
+        assert max(abs(x) for x,_,_ in g["Elliptical_saloon_roof"])<.235
     return .499
 
 

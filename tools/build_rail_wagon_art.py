@@ -188,8 +188,8 @@ def passenger():
             side_box(m,"Vestibule doors","Dark teal",side,z,.226,.102,.574,.229,.020,.010)
             side_box(m,"Vestibule glazing","Dark glazing",side,z,.436,.071,.547,.244,.008,.007)
             side_box(m,"Vestibule bronze catches","Handle brass",side,z-.020,.383,.033,.397,.248,.007)
-            side_box(m,"Vestibule risers","Coupler iron",side,z,.190,.124,.215,.234,.054)
-            side_box(m,"Vestibule risers","Flange steel",side,z,.162,.092,.182,.220,.056)
+            side_box(m,"Vestibule risers","Coupler iron",side,z,.190,.124,.215,.244,.054)
+            side_box(m,"Vestibule risers","Flange steel",side,z,.162,.092,.182,.242,.056)
         for z in (-.17,.17):
             side_box(m,"Car identification plate","Cream shade",side,z,.268,.090,.296,.240,.009)
         for z in (-.192,-.170,-.148,.148,.170,.192):
@@ -227,7 +227,17 @@ def passenger():
         for side in (-1,1):
             slab(m,"Roof vents","Roof edges",side*.061,z,.046,.063,.682,.704,.010,"Coach roof")
             slab(m,"Vent dark exhaust slots","Dark frame",side*.061,z,.025,.037,.703,.706,.007)
-    return m
+    def saloon_profile(_,x,z,h):
+        # Leave platform-level steps, boarding floor, running gear and
+        # standardized drawgear in place. Replace the tall body/attic
+        # with a low barrel roof, keeping .322 of real door height.
+        if h<=.226:
+            return x,z,h
+        width=1-.095*min(1,(h-.226)/.080)
+        if h<=.574:
+            return x*width,z,.226+(h-.226)*(.322/.348)
+        return x*width,z,.548+(h-.574)*(.052/.132)
+    return rail.reprofile(m,saloon_profile)
 
 
 def freight():
