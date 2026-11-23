@@ -38,8 +38,16 @@ assert(Sim.add_order(s,owner,id,mine.id,"normal"))
 assert(Sim.add_order(s,owner,id,plant.id,"normal"))
 assert(Sim.toggle(s,owner,id))
 local v=s.fleet[id]
+local H=arg and arg[1]=="--async-tape" and load("openttd/town_passengers")
 for _=1,70 do
-  Sim.daily(s)
+  local traverse
+  if H and s.passenger_house_clock then
+    local live=s.passenger_house_clock
+    local clock=H.new_clock(live.log_x,live.log_y,live.head,live.counter)
+    local tape=H.tape(clock,H.day_ticks)
+    traverse=H.tape_reader(live,H.day_ticks,tape,clock.head)
+  end
+  Sim.daily(s,traverse)
   if v.revenue>0 then
     assert(v.delivered==20 and v.revenue==140)
     assert(s.sites[s.stock_coal_industries[seeded.power].site].received.coal==20)

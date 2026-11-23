@@ -29,12 +29,20 @@ function M.new(s,interval,hooks)
       elapsed=0
       return 1,0
     end
+    if hooks.prepare then hooks.prepare(s) end
     elapsed=min(elapsed+dt,5*interval)
     local step=interval/speed
     local n=0
     while elapsed>=step and n<12 do
+      local plan
+      if hooks.take then
+        local ready,result=hooks.take(s)
+        if not ready then break end
+        plan=result
+      end
       if online and hooks.capture then hooks.capture() end
-      hooks.advance(s)
+      hooks.advance(s,plan)
+      if hooks.prepare then hooks.prepare(s) end
       elapsed=elapsed-step;n=n+1
       local edits=s.changed
       if edits then

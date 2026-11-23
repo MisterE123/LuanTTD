@@ -12,6 +12,16 @@ for i=2,128*128 do
   root.corners[i]=i%87
 end
 root.tiles[#root.tiles]=shared
+-- A two-byte array length leaves 2,044 one-byte values plus headers
+-- and terminator in exactly one 2,048-fragment output block.
+for n=2043,2045 do
+  local a={}
+  for i=1,n do a[i]=i%2==1 end
+  local bytes=P.encode(a)
+  assert(#bytes==n+4)
+  local b=P.decode(bytes)
+  assert(#b==n and b[1] and b[n]==a[n])
+end
 local enc=P.encode(root)
 local result=P.decode(enc)
 assert(type(result)=="table" and result==result.self and result.identity==result.tiles[1]

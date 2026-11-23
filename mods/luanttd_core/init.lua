@@ -69,6 +69,7 @@ if S.stock_generated_profile then
   generated_world=true
 end
 Sim.restore_road_orders(S)
+local simulation_bindings=dofile(mod.."/campaign_simulation_bindings.lua")(Sim,mod)
 local api={Sim=Sim,s=S,generated_world=generated_world,road_first=true,
   interest=dofile(mod.."/presentation_interest.lua").new()}
 local farm_profile=not generated_world and (S.stock_farm_industries~=nil or fresh and request_farm)
@@ -105,16 +106,15 @@ do
   for _,part in ipairs({"models","textures"}) do
     for _,name in ipairs(core.get_dir_list(mod.."/"..part,false)) do files[name]=true end
   end
-  Sim.mount_road_bus_market(S,dofile(mod.."/openttd/stock_engine_calendar.lua"),
-    world_options and world_options.year or tonumber(settings:get("bayline_stock_bus_start_year")) or 1950,
-    files["bl_foster_bus.obj"] and files["bl_foster_bus_atlas.png"],
-    files["bl_craighead_goods_truck.obj"] and files["bl_craighead_goods_truck_atlas.png"])
   api.bus_breakdowns=tonumber(settings:get("bayline_stock_bus_breakdowns")) or 2
   api.bus_service_interval=tonumber(settings:get("bayline_stock_bus_service_interval")) or 150
-  Sim.mount_road_faults(S,dofile(mod.."/openttd/road_breakdowns.lua"),
-    dofile(mod.."/road_faults_runtime.lua"),api.bus_breakdowns,
-    {kernel=dofile(mod.."/openttd/road_depot_service.lua"),
-     interval=api.bus_service_interval,percent=settings:get_bool("bayline_stock_bus_service_percent",false)})
+  simulation_bindings.road(S,{
+    start_year=world_options and world_options.year or tonumber(settings:get("bayline_stock_bus_start_year")) or 1950,
+    foster=files["bl_foster_bus.obj"] and files["bl_foster_bus_atlas.png"],
+    craighead=files["bl_craighead_goods_truck.obj"] and files["bl_craighead_goods_truck_atlas.png"],
+    breakdowns=api.bus_breakdowns,service_interval=api.bus_service_interval,
+    service_percent=settings:get_bool("bayline_stock_bus_service_percent",false),
+  })
   if saved=="" then
     if not generated_world then dofile(mod.."/town_layout.lua")(Sim,S) end
     S.road_economy=true
@@ -132,11 +132,7 @@ do
     end
   end
   S.corner_grid=grid
-  if S.stock_coastal_profile then
-    S.road_stock_house_supply=true
-    Sim.mount_coastal_flood(S)
-    api.coastal_flood_tools=true
-  end
+  if simulation_bindings.flood(S) then api.coastal_flood_tools=true end
   local Landscape=dofile(mod.."/openttd/landscaping.lua")(Terrain)
   function api.landscape_tiles(x,z,u,v,diagonal)
     local ids={}
@@ -149,15 +145,7 @@ do
   api.slope=dofile(mod.."/openttd/slope.lua")
   api.terrain=dofile(mod.."/terrain_view.lua")(Sim,Terrain,grid)
 end
-do
-  S.road_stock_loading,S.road_stock_clock,S.road_stock_house_supply,S.road_economy=true,true,true,true
-  local src=mod.."/openttd/"
-  local G=dofile(src.."town_growth.lua")
-  local B=dofile(src.."town_growth_build.lua")(G,dofile(src.."town_growth_houses.lua"))
-  api.town_growth=dofile(mod.."/town_growth_runtime.lua")(Sim,dofile(src.."terrain.lua"),G,B,
-    dofile(src.."town_passengers.lua"))
-  Sim.mount_stock_town_growth(S,api.town_growth,true)
-end
+api.town_growth=simulation_bindings.towns(S)
 if generated_world or S.road_farm then
   assert(api.terrain,"The farm world requires corner terrain.")
   local Terrain=dofile(mod.."/openttd/terrain.lua")
@@ -525,7 +513,9 @@ local placement=world_options
 local save_elapsed,hud_elapsed=0,0
 local headless=true
 api.offline_economy=headless
+local landscape=dofile(mod.."/campaign_landscape_async.lua").new(core,mod)
 local campaign=dofile(mod.."/campaign_step.lua").new(S,interval,{
+  prepare=landscape.prepare,take=landscape.take,
   advance=Sim.daily,capture=render.capture,refresh=render.update_near,
   discard_effects=function()
     Sim.road_loading_events(S)
@@ -583,7 +573,7 @@ core.register_globalstep(function(dt)
   if n>0 or hud_elapsed>=.23 then ui.hud();hud_elapsed=0 end
   if save_elapsed>=8 then api.save();save_elapsed=0 end
 end)
-core.register_on_shutdown(api.save)
+core.register_on_shutdown(function() landscape.close();api.save() end)
 local atmosphere=dofile(mod.."/atmosphere.lua").start(core,function()
   return not placement and S.speed or 0
 end)

@@ -72,6 +72,7 @@ return function(Sim,H,Packets,Rating,Mail)
     local update_rating=function() Rating.advance(s,1,mail and mail.step_rating or nil) end
     local clock=s.passenger_house_clock
     local landscape_tile=hooks and hooks.landscape_tile
+    local traverse=hooks and hooks.traverse
     if after_tick then
       -- Use the same landscape cursor for housing and industry. The
       -- existing road passenger rating callback retains its placement.
@@ -79,15 +80,15 @@ return function(Sim,H,Packets,Rating,Mail)
         if growth then
           -- Source OnTick_Town precedes OnTick_Station. The mounted
           -- adapter calls this rating hook after town and vehicle work.
-          H.advance_houses(clock,1,house,{},random,emit,nil,landscape_tile)
+          H.advance_houses(clock,1,house,{},random,emit,nil,landscape_tile,traverse)
           after_tick(clock.counter,update_rating)
         else
-          H.advance_houses(clock,1,house,{},random,emit,update_rating,landscape_tile)
+          H.advance_houses(clock,1,house,{},random,emit,update_rating,landscape_tile,traverse)
           after_tick(clock.counter)
         end
       end
     else
-      H.advance_houses(clock,H.day_ticks,house,{},random,emit,update_rating,landscape_tile)
+      H.advance_houses(clock,H.day_ticks,house,{},random,emit,update_rating,landscape_tile,traverse)
     end
   end
   return M

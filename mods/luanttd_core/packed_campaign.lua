@@ -37,14 +37,18 @@ end
 
 function M.encode(root,pulse)
   local chunks,fragment={},{}
+  local fragment_count=0
   local tables,strings={},{}
   local table_count,string_count=0,0
   local tiles=type(root)=="table" and root.tiles
   local function put(value)
-    fragment[#fragment+1]=value
-    if #fragment==2048 then
+    fragment_count=fragment_count+1
+    fragment[fragment_count]=value
+    if fragment_count==2048 then
+      -- Reuse one scratch array. Allocating another 2048-slot table per
+      -- fragment leaves tens of MiB of garbage in a dense campaign save.
       chunks[#chunks+1]=table.concat(fragment)
-      fragment={}
+      fragment_count=0
     end
   end
   local function tag(n) put(symbols[n]) end
@@ -113,7 +117,9 @@ function M.encode(root,pulse)
     else error("Unsupported packed campaign value: "..kind) end
   end
   write(root)
-  chunks[#chunks+1]=table.concat(fragment)
+  if fragment_count~=0 then
+    chunks[#chunks+1]=table.concat(fragment,"",1,fragment_count)
+  end
   return table.concat(chunks)
 end
 

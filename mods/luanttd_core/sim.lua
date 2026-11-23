@@ -3017,7 +3017,7 @@ local function rail_tick_broker(s)
   return register,advance,function() return flushed end
 end
 
-local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train)
+local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train,traverse)
   local clock
   local faults=road_faults_mount[s]
   local freight_ready,ship_ready,industry_ready
@@ -3027,7 +3027,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
   if s.road_stock_house_supply then
     town_passengers.start(s)
     clock=function(callback)
-      if not commercial and not coal and not timber and not growth and not tide then return town_passengers.day(s,callback) end
+      if not commercial and not coal and not timber and not growth and not tide then return town_passengers.day(s,callback,{traverse=traverse}) end
       local function landscape(x,z,tick)
         if tide then tide(x,z) end
         if coal then coal.tile_visit(x,z,tick) end
@@ -3066,7 +3066,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
           timber.after_vehicle_tick(tick)
         end
       end,{passenger=commercial and commercial.hooks.passenger,landscape_tile=landscape,
-        growth=growth and growth.world})
+        growth=growth and growth.world,traverse=traverse})
     end
   else
     generate_passengers(s,legacy_supply)
@@ -3225,7 +3225,7 @@ function M.position(s,v)
   end
   return v.depot or (s.stations[v.station] and s.stations[v.station].tile)
 end
-function M.daily(s)
+function M.daily(s,traverse)
   s.day=s.day+1
   local faults=road_faults_mount[s]
   if faults and M.road_stock_service_active(s) then
@@ -3366,16 +3366,16 @@ function M.daily(s)
   local commercial=paid_transport_day(s)
   if stock_service then
     passenger_modules()
-    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train)
+    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,traverse)
   elseif commercial then
     town_passengers.day(s,function(tick)
       local ready,events=commercial.before(tick)
       commercial.after(tick,ready,events)
-    end,{passenger=commercial.hooks.passenger,landscape_tile=coastal_visit(s)})
+    end,{passenger=commercial.hooks.passenger,landscape_tile=coastal_visit(s),traverse=traverse})
   elseif road_supply then
     passenger_modules()
     if s.road_stock_house_supply then
-      town_passengers.day(s,nil,{landscape_tile=coastal_visit(s)})
+      town_passengers.day(s,nil,{landscape_tile=coastal_visit(s),traverse=traverse})
     else
       rating_runtime.advance(s,rating_runtime.day_ticks)
       generate_passengers(s,road_supply)

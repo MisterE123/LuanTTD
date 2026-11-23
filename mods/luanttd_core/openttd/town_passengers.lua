@@ -77,6 +77,51 @@ function H.advance(clock,ticks,visit,before_tick)
   clock.head,clock.counter=tile,time
 end
 
+-- Exact source order, three little-endian bytes per zero-based tile.
+-- No map state/RNG crosses the worker boundary. Don't filter holes:
+-- a preceding tick can build a house on a not-yet-visited tile.
+function H.tape(clock,ticks)
+  local rows,row,n={},{},0
+  local unpack_,char=unpack or table.unpack,string.char
+  H.advance(clock,ticks,function(tile)
+    local rest=floor(tile/256)
+    row[n+1],row[n+2],row[n+3]=tile%256,rest%256,floor(rest/256)
+    n=n+3
+    if n==1536 then rows[#rows+1]=char(unpack_(row,1,n));n=0 end
+  end)
+  if n~=0 then rows[#rows+1]=char(unpack_(row,1,n)) end
+  return table.concat(rows)
+end
+
+function H.tape_reader(c,ticks,bytes,last)
+  local visits=2^(c.log_x+c.log_y-8)
+  assert(type(bytes)=="string" and #bytes==3*visits*ticks)
+  local start=c.counter
+  local p=1
+  return function(clock,n,visit,before_tick)
+    local time=clock.counter
+    assert(clock==c and (time-start)*visits*3+1==p and n>=1 and time+n<=start+ticks,
+      "Out-of-order landscape tape use")
+    for i=1,n do
+      local tick=time+i
+      if before_tick then before_tick(tick) end
+      for _=1,visits do
+        local a,b,d=bytes:byte(p,p+2)
+        p=p+3
+        visit(a+b*256+d*65536,tick)
+      end
+    end
+    -- At the periodic zero visit the normal nonzero cursor follows it.
+    local head=last
+    if time+n<start+ticks then
+      local q=(time+n+1)%256==0 and p+3 or p
+      local a,b,d=bytes:byte(q,q+2)
+      head=a+b*256+d*65536
+    end
+    clock.head,clock.counter=head,time+n
+  end
+end
+
 local function chance16(a,b,r)
   return floor(((r%65536)*b+floor(b/2))/65536)<a
 end
@@ -257,9 +302,10 @@ end
 -- emit(name,amount,x,z,house,tick) may apply catchment and station ratings.
 -- before_tick is for running station rating before tile production at a
 -- given tick, as OpenTTD's tick timer runs before RunTileLoop.
-function H.advance_houses(clock,ticks,map_house,settings,random,emit,before_tick,landscape_tile)
+function H.advance_houses(clock,ticks,map_house,settings,random,emit,before_tick,landscape_tile,advance)
   local width=2^clock.log_x
-  H.advance(clock,ticks,function(tile,tick)
+  local traverse=advance or H.advance
+  traverse(clock,ticks,function(tile,tick)
     local x,z=tile%width,floor(tile/width)
     if landscape_tile then landscape_tile(x,z,tick) end
     local house=map_house(x,z)
