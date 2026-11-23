@@ -17,6 +17,11 @@ local rows={
   [217]={stock_id=217,name="FFP Dart",image=2,passengers=90,mail=10,acceleration=35,
     source_speed=74,intro_after_1920=12659,life=18,model_life=20,buy_factor=16,running_factor=130,
     small=false,jet=true,visual="ffp_dart"},
+  -- Pinned 16.0-RC1 MA #218 and AVI #3: the genuine fast CTOL,
+  -- not a regular ninety-something-passenger 74-unit jet.
+  [218]={stock_id=218,name="Yate Haugan",image=8,passengers=100,mail=20,acceleration=50,
+    source_speed=181,intro_after_1920=17652,life=25,model_life=35,buy_factor=75,running_factor=250,
+    small=false,jet=true,visual="yate_haugan"},
   [220]={stock_id=220,name="Bakewell Luckett LB-8",image=6,passengers=200,mail=30,acceleration=40,
     source_speed=74,intro_after_1920=13695,life=23,model_life=25,buy_factor=18,running_factor=240,
     small=false,jet=true,visual="bakewell_luckett_lb8"},
@@ -69,7 +74,7 @@ function A.entry(id)
 end
 function A.catalog()
   local out={}
-  for _,id in ipairs({215,219,216,217,220,225,226,221,227,228,223,222,230,229,224,231}) do
+  for _,id in ipairs({215,219,216,217,220,225,226,221,227,228,218,223,222,230,229,224,231}) do
     out[#out+1]=A.entry(id)
   end
   return out
@@ -81,7 +86,7 @@ function A.available(Sim,s,id)
   if not (row.jet or row.dated) then return true end
   local market=s.stock_bus_market
   if not market then
-    return Sim.date(s)>=({[217]=1955,[220]=1958,[221]=1964,[222]=1978,[223]=1970,[224]=1989,[225]=1962,[226]=1963,[227]=1967,[228]=1968,
+    return Sim.date(s)>=({[217]=1955,[218]=1969,[220]=1958,[221]=1964,[222]=1978,[223]=1970,[224]=1989,[225]=1962,[226]=1963,[227]=1967,[228]=1968,
       [229]=1982,[230]=1981,[231]=1995})[id]
   end
   local cached=calendar_cache[market]

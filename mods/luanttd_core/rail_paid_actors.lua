@@ -59,13 +59,13 @@ return function(Service,key)
         Service.vehicle(service,{id=id,mode="rail",owner=r.owner,length=r.total_length,
           cargo=r.town_parts and "mixed" or r.stock_wagon==28 and "mail" or "passenger",wagon=r.stock_wagon,town_parts=r.town_parts,
           engine=dmu and r.stock_engine or nil,coach=dmu and r.stock_wagon==27 or nil,
-          dual_head=r.dual_head and not dmu,passenger_coaches=r.passenger_coaches,speed=r.max_track_speed,built=build_year(r)})
+          dual_head=r.dual_head and not dmu,express_heads=r.express_mail,passenger_coaches=r.passenger_coaches,speed=r.max_track_speed,built=build_year(r)})
       else
         local v=service.vehicles[id]
         assert(v and v.owner==r.owner and v.mode=="rail" and v.total_length==r.total_length,
           "Saved train and paid passenger row disagree")
         assert(v.engine==(dmu and r.stock_engine or nil),"Saved train body schema disagrees with paid actor")
-        if dmu then v.linked_heads=true end
+        if dmu or r.express_mail then v.linked_heads=true end
         assert((v.cargo=="mail")== (not r.town_parts and r.stock_wagon==28),"Saved train Mail body disagrees with the purchased consist")
         assert(not not v.town_mixed==not not r.town_parts,"Saved town consist mode disagrees")
         if r.town_parts then

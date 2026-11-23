@@ -2,6 +2,7 @@
 local started=false
 local stock=tonumber(core.settings:get("luanttd_qa_airframe")) or 226
 local models={
+  [218]={visual="yate_haugan",price=205078,flight=true},
   [220]={visual="bakewell_luckett_lb8",price=49218},[228]={visual="darwin_300",price=82031},
   [217]={visual="ffp_dart",price=43750},[225]={visual="yate_yac_1_11",price=43750},[226]={visual="darwin_100",price=49218},
   [221]={visual="bakewell_luckett_lb9",price=46484,flight=true},

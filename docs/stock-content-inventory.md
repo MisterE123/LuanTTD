@@ -15,7 +15,7 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | Rail | 25 | 0 | 53 |
 | Road | 34 | 0 | 34 |
 | Ship | 7 | 0 | 7 |
-| Aircraft | 16 | 0 | 35 |
+| Aircraft | 17 | 0 | 35 |
 
 ## Rail
 
@@ -30,7 +30,7 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 13 | SH/Hendry '25' (Diesel) | Playable |  |
 | 14 | UU '37' (Diesel) | Playable |  |
 | 15 | Floss '47' (Diesel) | Playable |  |
-| 22 | SH '125' (Diesel) | Playable | Paired power heads; paid with passenger carriage. Internal Mail holds are not active. |
+| 22 | SH '125' (Diesel) | Playable | Paired power heads with 4 Mail bags per head and one 40-seat passenger carriage. Stock loading, reversal and payment verified. |
 | 23 | SH '30' (Electric) | Playable |  |
 | 24 | SH '40' (Electric) | Playable |  |
 | 25 | 'T.I.M.' (Electric) | Playable | Paired 240 km/h conventional electric heads; one separately purchasable carriage. |
@@ -133,7 +133,7 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 215 | Sampson U52 | Playable |  |
 | 216 | Coleman Count | Playable |  |
 | 217 | FFP Dart | Playable | Paid passenger service; City Airport required. |
-| 218 | Yate Haugan | Not mounted |  |
+| 218 | Yate Haugan | Playable | Fast jet; City Airport; 100 passengers and 20 Mail bags. |
 | 219 | Bakewell Cotswald LB-3 | Playable |  |
 | 220 | Bakewell Luckett LB-8 | Playable | Paid passenger service; City Airport required. |
 | 221 | Bakewell Luckett LB-9 | Playable | Country or City Airport; stock conventional class. |

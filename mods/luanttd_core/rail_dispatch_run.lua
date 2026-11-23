@@ -592,6 +592,16 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           assert(p.stock_id==owned.stock_ids[i])
           run.freight_parts[#run.freight_parts+1]={index=i,stock=p.stock_id,body_id=assert(p.body_id)}
         end
+      elseif not freight and owned.stock_ids[1]==22 and #owned.stock_ids==2 and owned.stock_ids[2]==27
+          and s.rail_mail_service then
+        -- RC1 AddRearEngineToMultiheadedTrain copies cargo_type and cargo_cap
+        -- to the rear head; both 4-bag holds are physical and keep their
+        -- own cargo identity around the separately bought passenger car.
+        run.body_lengths,run.town_parts,run.express_mail=stats.lengths,{},true
+        assert(#owned.parts==3)
+        for i,p in ipairs(owned.parts) do
+          run.town_parts[i]={index=i,stock=p.stock_id,body_id=assert(p.body_id)}
+        end
       elseif not freight and Roster.mixed_town_consist(owned.stock_ids) then
         run.body_lengths,run.town_parts=stats.lengths,{}
         run.town_engine_body_id=assert(owned.parts[1].body_id)
@@ -1565,7 +1575,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
             local cargo_tiles,visible
             if (Roster and Roster.passenger_dmu(run.stock_engine)) or run.passenger_coaches or run.town_parts or run.freight_parts then
               cargo_tiles,visible={},true
-              local first=(run.passenger_coaches or run.town_parts or run.freight_parts) and 2 or 1
+              local first=(run.passenger_coaches or run.town_parts or run.freight_parts) and not run.express_mail and 2 or 1
               local last=#run.consist.parts-(run.dual_head and run.passenger_coaches and 1 or 0)
               for i=first,last do
                 local n=run.dual_head and run.consist.driving_backwards and #run.consist.parts-i+1 or i
@@ -1825,7 +1835,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   function R.paid_art_ready(s)
     for _,r in ipairs(R.paid_passengers(s)) do
       if r.fleet_id and not R.owned_passenger_engine(r.stock_engine) then return false end
-      if r.town_parts and not (s.rail_mixed_town_engines and s.rail_mixed_town_engines[r.stock_engine]) then return false end
+      if r.town_parts then
+        if r.express_mail and not s.rail_mail_service then return false end
+        if not r.express_mail and not (s.rail_mixed_town_engines and s.rail_mixed_town_engines[r.stock_engine]) then return false end
+      end
       if r.bridge_collectors and not (bridge_collectors_ready and bridge_collectors_ready(r.stock_engine)) then return false end
     end
     return true
@@ -1888,11 +1901,15 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
       if different then
         local parts={run.stock_engine}
+        if run.express_mail then
+          parts={{stock_id=run.stock_engine,cargo_count=assert(counts[1]),rear_cargo_count=assert(counts[3])},
+            {stock_id=27,cargo_count=assert(counts[2])}}
+        end
         local riders,mail=0,0
         for i,part in ipairs(run.town_parts) do
           local units=assert(counts[i])
-          if part.stock==28 then mail=mail+units else riders=riders+units end
-          parts[#parts+1]={stock_id=part.stock,cargo_count=units}
+          if Roster.entry(part.stock).cargo=="mail" then mail=mail+units else riders=riders+units end
+          if not run.express_mail then parts[#parts+1]={stock_id=part.stock,cargo_count=units} end
         end
         local stats=assert(Roster.stats(parts))
         run.town_counts,run.mail_onboard,run.passengers_onboard=counts,mail,riders

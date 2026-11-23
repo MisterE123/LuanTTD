@@ -26,6 +26,12 @@ return {
     flight="bl_stock_darwin_600_flight.obj",
     atlas="bl_stock_darwin_600_atlas.png",scale=1,
   },
+  yate_haugan={
+    id=218,entity="luanttd_core:stock_yate_haugan",
+    mesh="bl_stock_yate_haugan.obj",
+    flight="bl_stock_yate_haugan_flight.obj",
+    atlas="bl_stock_yate_haugan_atlas.png",scale=1,
+  },
   ffp_dart={
     id=217,entity="luanttd_core:stock_ffp_dart",
     mesh="bl_stock_ffp_dart.obj",atlas="bl_stock_ffp_dart_atlas.png",scale=1,

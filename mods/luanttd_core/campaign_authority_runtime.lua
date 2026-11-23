@@ -151,7 +151,7 @@ return function(Sim,mod,s,cap)
             pos=pos,rotation=rotation,reversed=not not p.reversed,flip=flip}
           if train.town_parts or train.freight_parts then
             local bodies=train.town_parts or train.freight_parts
-            local part=bodies[body_index-1]
+            local part=bodies[body_index-(train.express_mail and 0 or 1)]
             body.stock_id=part and part.stock or train.stock_engine
             body.body_id=part and part.body_id or train.town_engine_body_id or train.freight_engine_body_id
           end

@@ -232,8 +232,9 @@ return function(Sim,R)
           local id=row.stock_id
           local dmu=Roster.passenger_dmu(id)
           local capacity=dmu and row.capacity*2 or 40
+          local parcel=id==22 and s.rail_mail_service and 2*row.capacity or nil
           add(row.name or tostring(id),{mode=mode,operation="buy",depot=key,parts=dmu and {id} or {id,27}},
-            Help.describe("rail","passenger",row.name,{speed=row.speed,capacity=capacity},dmu and "dmu" or nil))
+            Help.describe("rail","passenger",row.name,{speed=row.speed,capacity=capacity,mail_capacity=parcel},dmu and "dmu" or nil))
           if dmu then
             add(row.name.." + Passenger Carriage",{mode=mode,operation="buy",depot=key,parts={id,27}},
               Help.describe("rail","passenger",row.name.." + Passenger Carriage",{speed=row.speed,capacity=capacity+40},"dmu"))
@@ -295,7 +296,8 @@ return function(Sim,R)
           copied=unit.order_draft and #unit.order_draft.orders,
           draft_revision=unit.order_draft and "rail-parked:"..unit.order_draft.revision,
           help=Help.describe("rail",mixed and "mixed" or Help.rail_cargo(unit.stock_ids[2]),engine.name,
-            {speed=engine.speed,capacity=wagon_count and car.capacity*wagon_count or seats},part)}
+            {speed=engine.speed,capacity=wagon_count and car.capacity*wagon_count or seats,
+              mail_capacity=unit.stock_ids[1]==22 and #unit.stock_ids==2 and unit.stock_ids[2]==27 and s.rail_mail_service and 8 or nil},part)}
       end
     elseif mode=="ship" and R.water and id(key) then
       local t=s.stock_ship_depots and s.stock_ship_depots[key]

@@ -576,9 +576,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         end
       else
         for _,part in ipairs(p.town_parts) do
-          local kind=part.stock==28 and "mail" or "passenger"
-          local stock=Service.stock_for("rail",nil,nil,kind)
-          capacities[kind]=capacities[kind]+stock.cap
+          local stock=assert(Roster.entry(part.stock))
+          capacities[stock.cargo]=capacities[stock.cargo]+stock.capacity
         end
       end
     end

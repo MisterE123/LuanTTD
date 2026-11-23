@@ -37,17 +37,21 @@ function M.create(Loading,Timing)
     end
     return v.carrying_parts
   end
-  function C.town_wagons(v,parts,Roster)
+  function C.town_wagons(v,parts,Roster,linked_express)
+    if linked_express then assert(#parts==3);v.linked_heads=true end
     local seen={}
     v.carrying_parts={}
     for i,part in ipairs(parts) do
       local stock=assert(Roster.entry(part.stock))
-      assert((stock.stock_id==27 or stock.stock_id==28) and not seen[part.body_id] and part.index==i+1,
+      local expected=linked_express and (i==2 and 27 or 22)
+      local compatible=expected and stock.stock_id==expected or not expected and (stock.stock_id==27 or stock.stock_id==28)
+      assert(compatible and not seen[part.body_id] and part.index==i+(linked_express and 0 or 1),
         "Invalid or duplicated physical town wagon")
       seen[part.body_id]=true
       v.carrying_parts[i]={id=v.id,body_id=part.body_id,stock=stock.stock_id,owner=v.owner,mode=v.mode,
         cargo=stock.cargo,cached_max_speed=v.cached_max_speed,built=v.built,cargo_age_counter=1,
-        batches={},units=0,part=part.index,role=stock.cargo=="mail" and "mail_van" or "carriage",
+        batches={},units=0,part=part.index,role=linked_express and (i==1 and "front_mail" or i==3 and "rear_mail" or "carriage") or
+          (stock.cargo=="mail" and "mail_van" or "carriage"),
         capacity=stock.capacity,slice=stock.load_amount,aging=stock.cargo_age_ticks}
     end
     return v.carrying_parts

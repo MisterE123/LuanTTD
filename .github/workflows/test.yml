@@ -80,6 +80,7 @@ jobs:
           python3 tests/stock_dash_art.py
           python3 tests/stock_tim_art.py
           python3 tests/stock_tim_art.py --variant asiastar
+          python3 tests/yate_haugan_art.py
           lua5.1 tests/rail_owned_service.lua three_stops
           lua5.1 tests/rail_owned_service.lua live_orders
           lua5.1 tests/rail_owned_service.lua live_pbs_orders
@@ -130,9 +131,11 @@ jobs:
           bash tests/stock_rail_valuables_live_native.sh
           bash tests/stock_rail_farm_live_native.sh
           bash tests/stock_rail_mail_live_native.sh
+          bash tests/stock_sh125_mail_worker_native.sh
           bash tests/stock_mixed_town_rail_live_native.sh
           BAYLINE_MIXED_FORM=mail-coach-mail bash tests/stock_mixed_town_rail_live_native.sh
           bash tests/stock_aircraft_mail_live_native.sh
+          LUANTTD_QA_PAID_AIRFRAME=218 bash tests/stock_aircraft_mail_live_native.sh
           bash tests/stock_rail_multi_ore_live_native.sh
           bash tests/stock_dash_worker_native.sh
           bash tests/rail_copy_orders_worker_native.sh
@@ -169,6 +172,7 @@ jobs:
           bash tests/mixed_freight_live_native.sh
           lua5.1 tests/airport_city_paid.lua
           lua5.1 tests/airport_city_paid.lua 217
+          lua5.1 tests/airport_city_paid.lua 218
           lua5.1 tests/airport_city_paid.lua 225
           python3 tests/stock_airliners_e_art.py
           lua5.1 tests/airport_city_paid.lua 220
@@ -226,3 +230,4 @@ jobs:
           python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"
           python3 tests/stock_tim_art.py --upstream-engines "$src/src/table/engines.h"
           python3 tests/stock_tim_art.py --variant asiastar --upstream-engines "$src/src/table/engines.h"
+          python3 tests/yate_haugan_art.py --engines "$src/src/table/engines.h"

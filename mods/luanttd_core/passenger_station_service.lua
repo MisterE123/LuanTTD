@@ -155,10 +155,12 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     if def.mode=="rail" then v.total_length=assert(def.length,"Train total length in 1/16-tile units required") end
     if cargo=="mixed" then
       local parts=def.town_parts
-      assert(#parts>=2 and #parts<=3 and #parts*8+8==v.total_length and not def.engine and not def.dual_head,
+      local express=def.express_heads==true
+      assert(#parts>=2 and #parts<=3 and (#parts+(express and 0 or 1))*8==v.total_length and not def.engine
+        and (express==not not def.dual_head) and (not express or #parts==3),
         "Unsupported mixed town formation")
       v.town_mixed=true
-      Compartments.town_wagons(v,parts,Roster)
+      Compartments.town_wagons(v,parts,Roster,express)
     elseif cargo=="mail" then
       assert(v.total_length==16 and not def.coach and not def.dual_head and not def.passenger_coaches,
         "Only the single stock Mail Van formation is mounted")

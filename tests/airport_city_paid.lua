@@ -10,7 +10,7 @@ local function clone(t)
 end
 local owner="City Air"
 local stock=tonumber(arg and arg[1]) or 226
-local rows={[217]={90,10,43750,1248000},[220]={200,30,49218,2304000},
+local rows={[217]={90,10,43750,1248000},[218]={100,20,205078,2400000},[220]={200,30,49218,2304000},
   [221]={100,15,46484,1440000},[222]={150,30,49218,2352000},
   [223]={220,40,51953,1843200},[224]={230,25,54687,1824000},[225]={95,10,43750,1296000},[226]={170,35,49218,2304000},[227]={110,15,46484,1488000},
   [228]={300,50,82031,2428800},[229]={200,25,49218,2016000},[230]={240,25,51953,2112000},
@@ -68,7 +68,7 @@ do
   print(("PASS stock #%d mixed Country–City service uses each airport's own FTA and pays real fares"):format(airframe))
 end
 local year=({[222]=1986,[224]=1996,[229]=1988,[230]=1988,[231]=2000})[stock] or 1975
-if stock>=221 and stock<=224 or stock==227 or stock>=229 then
+if stock==218 or stock>=221 and stock<=224 or stock==227 or stock>=229 then
   local too_early,net,_,O=fixture(1960,true)
   local hangar=assert(net.build(too_early,owner,Sim.id(9,18),"city"))
   local q,err=O.quote(too_early,owner,hangar.id,stock)
@@ -85,7 +85,7 @@ if stock>=221 and stock<=224 or stock==227 or stock>=229 then
   assert(not q and err=="NATIVE_AIRCRAFT_MODEL_UNAVAILABLE")
 end
 local s,N,R,O,A=fixture(year,true)
-local reserve=stock==228 and 150000 or 125000
+local reserve=stock==218 and 300000 or stock==228 and 150000 or 125000
 Sim.company(s,owner).cash=reserve
 local C=m("campaign_transport_commands")(Sim,{world=s,air={network=N,run=R,owned=O,roster=A}})
 local function build(x,z,layout)

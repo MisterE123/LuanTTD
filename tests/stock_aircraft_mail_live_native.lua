@@ -13,13 +13,17 @@ local name="RC1 Aircraft Mail"
 local road_owner="Road Mail Rival"
 local function cell(x,z) return (z-1)*64+x end
 local first_tile,second_tile=cell(10,17),cell(43,17)
-local stock=216
+local stock=tonumber(core.settings:get("luanttd_qa_paid_airframe")) or 216
+assert(stock==216 or stock==218)
+local city=stock==218
+local layout=city and "city" or "country"
+local airport_tiles=city and 36 or 12
 local spec=assert(Roster.entry(stock))
 local road_depot,road_one,road_two=cell(17,7),cell(10,11),cell(43,11)
-local cap={road={start_year=1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
-  ferry={},air={},oil_tanker=true,durable_actions=true}
+local cap={road={start_year=city and 1975 or 1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
+  ferry={},air={},city_airport=city,oil_tanker=true,durable_actions=true}
 local art=m("airport_manifest")(core,mod)
-assert(art[stock] and art[stock].mesh=="bl_coleman_count.obj")
+assert(art[stock] and art[stock].mesh==(city and "bl_stock_yate_haugan.obj" or "bl_coleman_count.obj"))
 for id in pairs(art) do cap.air[id]=true end
 for _,group in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..group,"air") end
 local balance=300000
@@ -97,7 +101,7 @@ local function build_road()
 end
 local function transport(req)
   local q=ask("transport_quote",{request=req})
-  if req.operation=="build" then assert(#q.tiles==12 and q.cost==7200) end
+  if req.operation=="build" then assert(#q.tiles==airport_tiles and q.cost==airport_tiles*600) end
   return command("transport_commit",{token=q.token})
 end
 local function payload(from,to)
@@ -108,9 +112,9 @@ local function payload(from,to)
   from=from or run.first;to=to or run.second
   local a,b=assert(c.stations[0xC000+from]),assert(c.stations[0xC000+to])
   local p,m=v.carrying_parts[1],v.carrying_parts[2]
-  assert(v.air_mail and v.cargo=="mixed" and p.capacity==65 and m.capacity==8 and p.slice==20 and m.slice==5)
+  assert(v.air_mail and v.cargo=="mixed" and p.capacity==spec.passengers and m.capacity==spec.mail and p.slice==20 and m.slice==5)
   assert(p.units<=p.capacity and m.units<=m.capacity and v.units==p.units+m.units)
-  assert(#a.tiles==12 and #b.tiles==12 and a.mail_enabled and b.mail_enabled and a.mail_acceptance>=8 and b.mail_acceptance>=8)
+  assert(#a.tiles==airport_tiles and #b.tiles==airport_tiles and a.mail_enabled and b.mail_enabled and a.mail_acceptance>=8 and b.mail_acceptance>=8)
   assert(run.engine_id==stock and run.phase~="blocked",run.failure)
   return s,c,run,v,a,b,p,m
 end
@@ -132,12 +136,12 @@ end
 local function work()
   if mode=="start" then
     build_road()
-    local first=transport({mode="air",operation="build",layout="country",tile=first_tile}).id
-    local second=transport({mode="air",operation="build",layout="country",tile=second_tile}).id
+    local first=transport({mode="air",operation="build",layout=layout,tile=first_tile}).id
+    local second=transport({mode="air",operation="build",layout=layout,tile=second_tile}).id
     local panel=ask("depot",{mode="air",depot=first})
     local offer
     for _,r in ipairs(panel.offers) do if r.request.engine==stock then offer=r end end
-    assert(offer and offer.help.model:find("65 seats",1,true) and offer.help.model:find("8 Mail bags",1,true))
+    assert(offer and offer.help.model:find(spec.passengers.." seats",1,true) and offer.help.model:find(spec.mail.." Mail bags",1,true))
     local unit=transport(offer.request)
     command("transport_start",{mode="air",first=first,second=second})
     local function orders() return ask("orders",{mode="air",vehicle=unit.id,page=1}) end
@@ -157,7 +161,7 @@ local function work()
         assert(a.mail_rating_state.last_speed>0 and a.passenger_rating_state.last_speed>0)
         assert(m.batches[1].source_type=="town" and m.batches[1].source==1 and p.batches[1].source==1)
         assert(v.cargo_tile and s.tiles[v.cargo_tile].airfield and s.tiles[v.cargo_tile].airfield.airport==first)
-        goal=("AIR_MAIL_NATIVE_SAVED Coleman #216 with %d passengers and %d Mail bags competing for the same houses"):format(p.units,m.units)
+        goal=("AIR_MAIL_NATIVE_SAVED %s #%d with %d passengers and %d Mail bags competing for the same houses"):format(spec.name,stock,p.units,m.units)
         return {kind="stop"}
       end
     end
@@ -174,7 +178,7 @@ local function work()
       s,c,run,v,a,b,p,m=payload()
       local pending=v.load_state and v.load_state.payment
       if pending and pending.delivered>0 and (p.units>0 or m.units>0) and visual(run,"pending") then
-        assert(pending.by_cargo.mail.delivered==5 and pending.by_cargo.passenger.delivered==20 and pending.route==334)
+        assert(pending.by_cargo.mail.delivered==5 and pending.by_cargo.passenger.delivered==20 and pending.route==(city and 337 or 334))
         assert(pending.delivered==pending.by_cargo.mail.delivered+pending.by_cargo.passenger.delivered)
         assert(s.companies[name].paid_units==0 and s.companies[name].revenue==0)
         goal=("AIR_MAIL_NATIVE_PENDING exact uncredited $%d after unloading %d passengers + %d Mail bags"):format(
@@ -199,19 +203,21 @@ local function work()
   for _=1,140 do
     ask("advance",{days=1});ask("checkpoint")
     s,c,run,v,a,b,p,m=payload()
-    if (v.delivered or 0)>0 and s.companies[road_owner].paid_units>0 then
+    if (v.delivered or 0)>0 and (city or s.companies[road_owner].paid_units>0) then
       local f=assert(v.last_fare)
       local commercial=s.companies[name]
       local pb,mb=assert(f.by_cargo.passenger),assert(f.by_cargo.mail)
-      assert(f.cargo=="mixed" and pb.delivered==65 and mb.delivered==8 and f.units==73 and f.amount==pb.route+mb.route)
-      assert(pb.route==790 and mb.route==145 and f.amount==935)
-      assert(f.amount==v.route_profit and commercial.revenue==f.amount and commercial.paid_units==73)
+      assert(f.cargo=="mixed" and pb.delivered==spec.passengers and mb.delivered==spec.mail and f.units==spec.passengers+spec.mail and f.amount==pb.route+mb.route)
+      assert(pb.route==(city and 1242 or 790) and mb.route==(city and 363 or 145) and f.amount==(city and 1605 or 935))
+      assert(f.amount==v.route_profit and commercial.revenue==f.amount and commercial.paid_units==spec.passengers+spec.mail,
+        ("fare=%d total=%d revenue=%d paid=%d last unit=%d last station=%d, tick=%d"):format(
+          f.amount,v.route_profit,commercial.revenue,commercial.paid_units,f.units,f.station or -1,f.tick))
       assert(commercial.cash==balance-commercial.expense+commercial.revenue and run.finance.expense>0)
-      assert(c.mail_towns[2]==8 and c.towns[2]==65 and s.sites[2].received.passenger==65)
-      assert((s.sites[1].received.mail or 0)+s.sites[2].received.mail==8+s.companies[road_owner].paid_units)
+      assert(c.mail_towns[2]==spec.mail and c.towns[2]==spec.passengers and s.sites[2].received.passenger==spec.passengers)
+      assert((s.sites[1].received.mail or 0)+s.sites[2].received.mail==spec.mail+s.companies[road_owner].paid_units)
       assert(s.stock_load_tick==s.passenger_house_clock.counter)
-      goal=("AIR_MAIL_NATIVE_PASS paid once $%d: 65 passengers/$%d + 8 Mail bags/$%d, one real airframe and shared road Mail provisioning")
-        :format(f.amount,pb.route,mb.route)
+      goal=("AIR_MAIL_NATIVE_PASS paid once $%d: %d passengers/$%d + %d Mail bags/$%d, one real airframe and shared road Mail provisioning")
+        :format(f.amount,spec.passengers,pb.route,spec.mail,mb.route)
       return {kind="stop"}
     end
   end

@@ -38,7 +38,10 @@ local M={models=models,stock_kind=stock_kind}
 function M.wagon(train,Sim,s)
   if train.town_parts then
     local models={}
-    for _,part in ipairs(train.town_parts) do models[part.index]=part.stock==28 and "mail_van" or "wagon" end
+    for _,part in ipairs(train.town_parts) do
+      if part.stock==27 then models[part.index]="wagon"
+      elseif part.stock==28 then models[part.index]="mail_van" end
+    end
     return models
   end
   if train.freight_parts then
