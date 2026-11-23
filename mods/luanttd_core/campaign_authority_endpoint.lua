@@ -572,22 +572,50 @@ return function(Sim,R,max_days)
     end
     return reply(ok,note,value)
   end
-  function A.snapshot(x,z,w,h,fraction,frame)
+  -- Keep an exact, bounded scene cache in the worker. Topology alone
+  -- misses houses, fields, wet corners and signal changes.
+  local scenes,scene_count,scene_clock={},0,0
+  local function scene_key(x,z,w,h) return table.concat({x,z,w,h},":") end
+  local function snapshot(x,z,w,h,fraction,frame,known)
     if not integer(x,1,Sim.W) or not integer(z,1,Sim.H)
       or not integer(w,1,32) or not integer(h,1,32) or x+w-1>Sim.W or z+h-1>Sim.H then
       return reply(false,"INVALID_INTEREST_WINDOW")
     end
+    local projection=R.terrain_projection
+    local corners=projection and projection.corners(R.terrain,s.corner_grid,x,z,w,h)
+    local old=known and scenes[scene_key(x,z,w,h)]
+    local unchanged=old and old.key==known and old.corners==corners and projection and projection.matches_tile
+    if unchanged then
+      for _,row in ipairs(old.tiles) do
+        local t=s.tiles[row.id]
+        if not projection.matches_tile(t,row.surface)
+          or (t.water_class=="river" and R.river_direction and R.river_direction(row.id) or nil)~=row.river_direction then
+          unchanged=false
+          break
+        end
+      end
+    end
+
     local tiles,signals={},{}
-    for dz=0,h-1 do
-      for dx=0,w-1 do
-        local id=Sim.id(x+dx,z+dz)
-        local t=s.tiles[id]
-        if R.rail and R.rail.signals_at then R.rail.signals_at(id,signals) end
-        local slope,level,top=R.terrain.tile(s.corner_grid,x+dx,z+dz)
-        tiles[#tiles+1]={id=id,level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
-          rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station,
-          surface=R.terrain_projection and R.terrain_projection.tile(t) or nil,
-          river_direction=t.water_class=="river" and R.river_direction and R.river_direction(id) or nil}
+    local signals_at=R.rail and R.rail.signals_at
+    if unchanged then
+      -- The acknowledged geometry produces no terrain payload unless an
+      -- independently projected registry record changed. Motion, aspects,
+      -- passenger counts and always-current registry observations continue.
+      tiles=old.tiles
+      if signals_at then for _,row in ipairs(tiles) do signals_at(row.id,signals) end end
+    else
+      for dz=0,h-1 do
+        for dx=0,w-1 do
+          local id=Sim.id(x+dx,z+dz)
+          local t=s.tiles[id]
+          if signals_at then signals_at(id,signals) end
+          local slope,level,top=R.terrain.tile(s.corner_grid,x+dx,z+dz)
+          tiles[#tiles+1]={id=id,level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
+            rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station,
+            surface=projection and projection.tile(t) or nil,
+            river_direction=t.water_class=="river" and R.river_direction and R.river_direction(id) or nil}
+        end
       end
     end
     local vehicles={}
@@ -604,13 +632,13 @@ return function(Sim,R,max_days)
     fraction=type(fraction)=="number" and fraction>=0 and fraction<=1 and fraction or 1
     return reply(true,nil,{x=x,z=z,width=w,height=h,tiles=tiles,vehicles=vehicles,
       signals=signals,passengers=R.passengers and R.passengers.counts(tiles),
-      corners=R.terrain_projection and R.terrain_projection.corners(R.terrain,s.corner_grid,x,z,w,h) or nil,
-      registries=R.terrain_projection and R.terrain_projection.registries(s,tiles) or nil,
+      corners=corners,
+      registries=projection and projection.registries(s,tiles) or nil,
       actors=R.actors and R.actors(x,z,w,h,fraction,frame) or nil})
   end
-  -- Keep an exact, bounded scene cache in the worker. In particular,
-  -- topology alone misses houses, fields, wet corners and signal changes.
-  local scenes,scene_count,scene_clock={},0,0
+  function A.snapshot(x,z,w,h,fraction,frame)
+    return snapshot(x,z,w,h,fraction,frame)
+  end
   local function equal(a,b)
     if a==b then return true end
     if type(a)~="table" or type(b)~="table" then return false end
@@ -619,7 +647,7 @@ return function(Sim,R,max_days)
     return true
   end
   local function scene(packet,known)
-    local key=table.concat({packet.x,packet.z,packet.width,packet.height},":")
+    local key=scene_key(packet.x,packet.z,packet.width,packet.height)
     local old=scenes[key]
     scene_clock=scene_clock+1
     if not old or packet.corners~=old.corners
@@ -651,7 +679,7 @@ return function(Sim,R,max_days)
     local packets,frame={},{road={},rail={},whole_trains=true}
     for _,w in ipairs(windows) do
       if type(w)~="table" then return reply(false,"INVALID_INTEREST_WINDOW") end
-      local r=A.snapshot(w.x,w.z,w.w,w.h,fraction,frame)
+      local r=snapshot(w.x,w.z,w.w,w.h,fraction,frame,w.scene)
       if not r.ok then return r end
       scene(r.value,w.scene)
       if R.passengers then

@@ -24,6 +24,32 @@ function M.tile(real)
   for _,key in ipairs(keys) do out[key]=detached(real[key],2) end
   return out
 end
+-- Compare exactly what tile() would transmit, without allocating detached
+-- tables. Nested mutable records must still be checked even if the source
+-- tile and topology revision both retained their identities.
+local function same(actual,projected,depth)
+  local kind=type(actual)
+  if kind=="table" and depth>0 then
+    if type(projected)~="table" then return false end
+    for k,v in pairs(actual) do
+      if (type(k)=="string" or type(k)=="number") and not same(v,projected[k],depth-1) then
+        return false
+      end
+    end
+    for k in pairs(projected) do if actual[k]==nil then return false end end
+    return true
+  end
+  if kind=="boolean" or kind=="number" or kind=="string" then return actual==projected end
+  return projected==nil
+end
+function M.matches_tile(real,projected)
+  if not projected then return false end
+  for _,key in ipairs(keys) do
+    local a,b=real[key],projected[key]
+    if a~=b and not same(a,b,2) then return false end
+  end
+  return true
+end
 function M.corners(terrain,grid,x,z,w,h)
   local rows={}
   for dz=0,h do
@@ -37,6 +63,9 @@ local span_fields={"start","end","head","tail","middle","middle_by_tile","axis",
 local station_fields={"owner","id","tile","mode","name","tiles","stop_axis","stop_type","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror","oil_role","goods_role","iron_ore_role","steel_role","valuables_role","livestock_role","grain_role","wood_role"}
 local industry_fields={"id","removed","kind","x","z","tiles"}
 local farm_fields={"variant","slope","base","fences"}
+local site_fields={"id","kind","name","tile","closed","population"}
+local port_fields={"owner","id","land","water","neutral","oil_rig","name"}
+local airport_fields={"owner","id","origin","tiles","layout","neutral","oil_rig","name"}
 local function add(out,s,name,id,fields)
   if id==nil then return end
   local source=s[name] and s[name][id]
@@ -70,16 +99,15 @@ function M.registries(s,ids)
     add(out,s,"stock_road_tunnels",t.road_tunnel_id or below,span_fields)
     add(out,s,"stock_rail_spans",t.rail_span_id or rail_above or rail_below,span_fields)
     add(out,s,"stock_aqueducts",aqueduct,span_fields)
-    local site_fields={"id","kind","name","tile","closed","population"}
     add(out,s,"sites",t.site,site_fields)
     add(out,s,"sites",t.road_town,site_fields)
     add(out,s,"stations",t.station,station_fields)
     add(out,s,"stock_rail_stations",t.rail_station_id,station_fields)
     if t.ship and (t.ship.kind=="dock" or t.ship.kind=="oilrig") then
-      add(out,s,"stock_ship_stations",t.ship.station,{"owner","id","land","water","neutral","oil_rig","name"})
+      add(out,s,"stock_ship_stations",t.ship.station,port_fields)
     end
     if t.airfield then
-      add(out,s,"stock_small_airports",t.airfield.airport,{"owner","id","origin","tiles","layout","neutral","oil_rig","name"})
+      add(out,s,"stock_small_airports",t.airfield.airport,airport_fields)
     end
     -- The visual scene changes only when the ground variant or actual
     -- fence geometry changes, not when the worker visits a field.
