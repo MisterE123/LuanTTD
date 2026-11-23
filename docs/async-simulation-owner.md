@@ -130,7 +130,10 @@ The Linux replay opens train orders through the fleet menu after the train
 entities and their viewport have been removed.
 Bridge choices and rail-signal approach/flip choices use their original
 native menus, with stock prices, ownership, and occupancy checked on the
-owner. Hover previews do not consume mutation tickets. Crossings are built
+owner. Construction previews, including the native rail ghost, now use
+bounded read-only observations that cannot consume a mutation ticket or
+outrank a player command. Pointing and teleporting read the painted
+projection, not the frozen simulation. Crossings are built
 through the same source command as the old direct tile action. The owner
 also supports freight loading-stop construction and bounded canal, lock,
 and aqueduct commands.
@@ -143,6 +146,12 @@ command revision on restart. No player-facing switch was introduced.
 Builder guidance uses the owner's live fleet, stations and deliveries. The
 worker indexes depot ownership and updates only changed tiles; the native
 HUD does not scan the full world to show the next suggested action.
+The native rail depot assembly panel now reads the owning worker's engine
+and loose wagon quotes and sends the same purchase or movement operations.
+It keeps individual car order, paid parts, stale quote checks, and depot
+ownership intact. Freight stage designations and native depot dispatch use
+the existing coal, oil and goods adapters rather than a new routing rule.
+
 The next integration step is the full dispatcher, all physical build
 and depot interactions (especially freight dispatch), and making
 this ownership lifecycle standard with no desktop-specific controls.

@@ -50,7 +50,8 @@ return function(api)
     if not shown or shown.ready then
       local q={key=key}
       hover[n]=q
-      local ok=client.query({kind="bridge_picker",player=n,mode=mode,first=a,last=b,peek=true},function(r)
+      local observe=client.observe or client.query
+      local ok=observe({kind="bridge_picker",player=n,mode=mode,first=a,last=b,peek=true},function(r)
         if hover[n]~=q then return end
         q.ready=core.get_us_time()
         q.value,q.why=r.value,r.why

@@ -6,7 +6,8 @@ return function(api,status)
   local panels,orders={},{}
   local form="luanttd_core:rail_fleet"
   local order_form="luanttd_core:rail_order_review"
-  local source=(core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  local moddir=(core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core")
+  local source=moddir.."/openttd/"
   local OrderList=dofile(source.."rail_order_list.lua")
   local serial=0
   local esc=core.formspec_escape
@@ -297,43 +298,44 @@ return function(api,status)
   -- Formspec doesn't expose the stock depot's drag widget. Select a
   -- real car then an insertion point to issue the same MoveRailVehicle
   -- operation (including the Ctrl/whole trailing chain equivalent).
-  function U.assemble(p,id,prior,note)
+  local assemble_fetch={}
+  function U.assemble(p,id,prior,note,remote)
     local n=p:get_player_name()
-    if not owned_depot(n,id) then return false end
     local owned=api.rail_owned
-    local rows,revision=owned.loose_wagons(S,n,id)
-    local units=owned.list(S,n,id)
-    local cat,engines,wagons={}, {}, {}
-    for _,r in ipairs(owned.catalog(S) or {}) do
-      cat[r.stock_id]=r
-      if (r.kind=="wagon" and (r.stock_id==27 or r.stock_id==29 or r.stock_id==30 or r.stock_id==32)) or r.passenger_model_ready then
-        local q=owned.quote_part(S,n,id,r.stock_id)
-        if q then
-          local target=r.kind=="wagon" and wagons or engines
-          target[#target+1]={name=r.name,quote=q,id=r.stock_id}
-        end
+    local data
+    if api.authority_handoff then
+      local client=api.worker_rail_assembly
+      if not client then return false end
+      if not remote then
+        local ticket={}
+        assemble_fetch[n]=ticket
+        panels[n]=nil
+        -- Show a real cancellable loading panel so no stale purchase
+        -- controls can remain visible while the depot is being read.
+        core.show_formspec(n,form,"formspec_version[7]size[8,2.6]label[.5,.7;Reading your rail depot…]"..
+          "button_exit[.5,1.53;7,.58;back;Back to world]")
+        local accepted,why=client.query({kind="rail_assembly",player=n,depot=id},function(r)
+          if assemble_fetch[n]~=ticket then return end
+          assemble_fetch[n]=nil
+          if r.ok then U.assemble(p,id,prior,note,r)
+          else core.close_formspec(n,form);status(p,r.why or "Could not open the rail depot.") end
+        end)
+        if not accepted then assemble_fetch[n]=nil;core.close_formspec(n,form);status(p,why) end
+        return true
       end
+      data=remote.value
+    else
+      if not owned_depot(n,id) then return false end
+      data=dofile(moddir.."/rail_depot_assembly_state.lua")(S,owned).read(n,id)
     end
+    if not data then return false end
+    local engines,wagons,bodies,destinations=data.engines,data.wagons,data.bodies,data.destinations
     local function find(list,field,value)
       for i,row in ipairs(list) do if row[field]==value then return i end end
       return 1
     end
-    local bodies,destinations={},{}
-    local function row(r,label)
-      for i,part in ipairs(r.parts) do
-        if part.role~="rear" then
-          local stock=cat[part.stock_id] or {}
-          local text=label.."  "..i..". "..(stock.name or model_short[part.stock_id] or ("#"..part.stock_id))
-          local x={id=part.body_id,name=text,unit=r.status=="depot" and r.id or nil}
-          destinations[#destinations+1]=x
-          if r.status=="loose" or i>1 then bodies[#bodies+1]=x end
-        end
-      end
-    end
-    for _,r in ipairs(units) do if r.status=="depot" then row(r,"Train "..r.unit_number.." ·") end end
-    for i,r in ipairs(rows) do row(r,"Loose row "..i.." ·") end
-    local a={depot=id,assembly=true,revision=revision,tail=prior and prior.tail or false,
-      engines=engines,wagons=wagons,bodies=bodies,destinations=destinations}
+    local a={depot=id,assembly=true,revision=data.revision,tail=prior and prior.tail or false,
+      engines=engines,wagons=wagons,bodies=bodies,destinations=destinations,remote=remote}
     a.engine=find(engines,"id",prior and prior.engines[prior.engine] and prior.engines[prior.engine].id)
     a.wagon=find(wagons,"id",prior and prior.wagons[prior.wagon] and prior.wagons[prior.wagon].id)
     a.body=find(bodies,"id",prior and prior.bodies[prior.body] and prior.bodies[prior.body].id)
@@ -367,12 +369,20 @@ return function(api,status)
       choose(3.90,"target",destinations,a.target)
       b[#b+1]="label[9.4,4.17;Insert after]"
       local selected=destinations[a.target]
-      local unit=selected and selected.unit and owned.get(S,n,selected.unit)
-      local freight=unit and cargo_of(unit)
-      if unit and (freight and can_order(unit,freight) or #unit.stock_ids==2 and unit.stock_ids[2]==29 and api.rail_coal_tools
-          or owned.passenger_consist(unit)) then
-        a.order_unit=unit.id
-        button(5.84,"order","Set orders for the selected train")
+      local unit=selected and selected.unit
+      if remote then
+        if unit and data.units[unit] then
+          a.order_unit=unit
+          button(5.84,"order","Open orders for the selected train")
+        end
+      else
+        unit=unit and owned.get(S,n,unit)
+        local freight=unit and cargo_of(unit)
+        if unit and (freight and can_order(unit,freight) or #unit.stock_ids==2 and unit.stock_ids[2]==29 and api.rail_coal_tools
+            or owned.passenger_consist(unit)) then
+          a.order_unit=unit.id
+          button(5.84,"order","Set orders for the selected train")
+        end
       end
     end
     if #bodies>0 then
@@ -622,8 +632,8 @@ return function(api,status)
     if key~=form then return false end
     local n=p:get_player_name()
     local a=panels[n]
-    if f.quit or f.back then panels[n]=nil;core.close_formspec(n,form);return true end
-    if not a or not owned_depot(n,a.depot) then return true end
+    if f.quit or f.back then panels[n]=nil;assemble_fetch[n]=nil;core.close_formspec(n,form);return true end
+    if not a or not a.remote and not owned_depot(n,a.depot) then return true end
     if f.depot_vehicle_list and api.vehicle_ui then
       local id=a.depot
       panels[n]=nil;core.close_formspec(n,form)
@@ -645,7 +655,31 @@ return function(api,status)
         if i and a[pair[2]][i] and a[pair[1]]~=i then a[pair[1]]=i;updated=true end
       end
       if field("tail") and a.tail~=(field("tail")=="true") then a.tail=field("tail")=="true";updated=true end
-      if not action then return not updated or U.assemble(p,a.depot,a) end
+      if not action then return not updated or U.assemble(p,a.depot,a,nil,a.remote) end
+      if a.remote then
+        if action=="back" then
+          panels[n]=nil;core.close_formspec(n,form)
+          return api.worker_depot.open(p,"rail",a.depot,nil,function(kind,id) api.vehicle_ui.open(p,kind,id) end)
+        elseif action=="order" and a.order_unit then
+          panels[n]=nil
+          return api.vehicle_ui.open(p,"rail",a.order_unit)
+        end
+        if a.pending then return true end
+        local c={kind="rail_assembly",token=a.remote.value.token,revision=a.remote.revision}
+        local item=action=="buy_wagon" and a.wagons[a.wagon] or action=="buy_engine" and a.engines[a.engine]
+        if item then c.operation=action=="buy_wagon" and "wagon" or "engine";c.stock=item.id
+        elseif action=="move" or action=="loose" then
+          local src,dst=a.bodies[a.body],a.destinations[a.target]
+          if not src or action=="move" and not dst then return true end
+          c.operation,c.from,c.to,c.tail="move",src.id,action=="move" and dst.id or nil,a.tail
+        else return true end
+        a.pending=true
+        local sent,why=api.worker_rail_assembly.query({kind="command",player=n,command=c},function(r)
+          if panels[n]==a then U.assemble(p,a.depot,a,r.why or (r.ok and "Depot updated." or "Depot unchanged.")) end
+        end)
+        if not sent then a.pending=nil;status(p,why) end
+        return true
+      end
       if action=="back" then return U.open(p,a.depot) end
       local item=action=="buy_wagon" and a.wagons[a.wagon] or action=="buy_engine" and a.engines[a.engine]
       if item then

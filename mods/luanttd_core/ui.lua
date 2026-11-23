@@ -1,6 +1,7 @@
 return function(api)
 local Sim,S,R=api.Sim,api.s,api.render
 local U={}
+local moddir=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local worker_action
 local esc=core.formspec_escape
 local session,hud={},{}
@@ -32,9 +33,12 @@ function U.install_worker_controls(client)
   api.worker_layer_client=client
   api.worker_bridge_client=client
   api.worker_signal_client=client
+  api.worker_rail_assembly=client
   api.worker_finance=dofile(mod.."/campaign_worker_finance_ui.lua")(core,client,formatted_date,dollars)
   api.worker_build=api.worker_build or dofile(mod.."/campaign_build_proxy.lua")(client)
-  api.worker_depot=dofile(mod.."/campaign_worker_depot_ui.lua")(core,client,api.worker_build,dollars)
+  api.worker_depot=dofile(mod.."/campaign_worker_depot_ui.lua")(core,client,api.worker_build,dollars,function(p,id)
+    return api.owned_rail_ui and api.owned_rail_ui.assemble(p,id)
+  end)
   if api.vehicle_ui then
     api.vehicle_ui.install_worker(client)
     local proxy=dofile(mod.."/campaign_authority_order_proxy.lua")
@@ -356,7 +360,8 @@ function U.survey(p,id)
   core.close_formspec(n,"luanttd_core:dispatch");core.close_formspec(n,"luanttd_core:context")
 end
 function U.teleport_tile(p,id)
-  local t=id and S.tiles[id]
+  local t
+  if api.authority_handoff and R.host_tile then t=R.host_tile(id) else t=id and S.tiles[id] end
   if not t or t.stock_void then return false end
   local x,z=Sim.xy(id)
   local cx,cz=x*2+.5,z*2+.5
@@ -366,9 +371,13 @@ function U.teleport_tile(p,id)
     local span=index and spans and spans[index[id]]
     if span and span.deck then h=math.max(h,span.deck+1) end
   end
-  higher(S.bridge_above,S.stock_road_bridges)
-  higher(S.rail_bridge_above,S.stock_rail_spans)
-  higher(S.aqueduct_above,S.stock_aqueducts)
+  if api.authority_handoff and R.host_deck then
+    local deck=R.host_deck(id);if deck then h=math.max(h,deck+1) end
+  else
+    higher(S.bridge_above,S.stock_road_bridges)
+    higher(S.rail_bridge_above,S.stock_rail_spans)
+    higher(S.aqueduct_above,S.stock_aqueducts)
+  end
   local V=view(p:get_player_name())
   V.chosen=id
   V.status=("Moved above tile %d,%d."):format(x,z)
@@ -381,6 +390,7 @@ function U.leave(n)
   if Tutorials then Tutorials.leave(n) end
   if U.layer_bulldozer then U.layer_bulldozer.leave(n) end
   if api.worker_fleet then api.worker_fleet.leave(n) end
+  if api.worker_build then api.worker_build.leave(n) end
   if U.signal_ui then U.signal_ui.leave(n) end
 end
 function U.cinematic(p,active)
@@ -1071,7 +1081,7 @@ local crossing_errors={
   CROSSING_ON_ONEWAY_ROAD="Remove the one-way restriction before building a crossing.",
   NOT_ENOUGH_MONEY="Your company cannot afford the crossing.",
 }
-local crossing_gesture=dofile(core.get_modpath("luanttd_core").."/crossing_gesture.lua")
+local crossing_gesture=dofile(moddir.."/crossing_gesture.lua")
 local function crossing_quote(n,id)
   local request,error_=crossing_gesture(Sim,S,id)
   if not request then return nil,crossing_errors[error_] end
@@ -1421,7 +1431,7 @@ end
 -- Use the same ownership/occupancy-aware demolition authority regardless of
 -- the active construction toolbar. Do not clear a span or descriptor by
 -- erasing one tile record; the specialised command owns the entire structure.
-local clear_structure=dofile(core.get_modpath("luanttd_core").."/demolition_structures.lua")(api,aquatic_remove,dollars)
+local clear_structure=dofile(moddir.."/demolition_structures.lua")(api,aquatic_remove,dollars)
 
 U.signal_ui=api.road_first and dofile(core.get_modpath("luanttd_core").."/rail_signal_ui.lua")(api,U.status)
 function U.signal_arrow(p,id,hit)
@@ -1602,7 +1612,86 @@ function U.finish_order_pick(p)
     U.service(p,"vehicle",id)
   end
 end
+local function authority_preview(p,id,hit)
+  local n=p:get_player_name()
+  local V=view(n)
+  local tool=V.tool
+  local client=api.worker_build
+  if not client then return {id},false,"Opening the simulation worker…" end
+  local label=(Sim.tools[tool] and Sim.tools[tool].name) or rail_tool_labels[tool] or tool
+  local kind,request,ids="road",nil,{id}
+  local dock=ship_mode[tool]
+  local bridge=bridge_tool(tool)
+  local land=landscape_tools[tool]
+  if tool=="inspect" then return end
+  if tool=="teleport_tile" then return {id},true,"Teleport above this tile" end
+  if bridge then
+    if not V.anchor then return {id},true,"Click the first bridgehead. Right-click cancels." end
+    local q,why=api.bridge_picker.quote(bridge,n,V.anchor,id)
+    return q and q.ids or {V.anchor,id},q~=nil,
+      q and (bridge_label(bridge).." · From "..dollars(q.minimum).." · Choose a bridge type") or why
+  end
+  if U.signal_ui and U.signal_ui.tool(tool) then
+    local q,hint=U.signal_ui.preview(p,tool,id,hit)
+    return {id},q~=nil,hint
+  end
+  if U.road_gesture(tool) and hit then
+    local press=V.road_press or {id=id,hit=hit}
+    if autoroad_bend(p,V,press.id,id) then request={tool="bend",first=press.id,last=id}
+    else
+      local last,axis,first_half,last_half=Sim.autoroad_selection(press.id,press.hit,id,hit)
+      request={tool=tool=="oneway_drag" and "oneway" or "drag",first=press.id,last=last,
+        axis=axis,start_half=first_half,end_half=last_half}
+    end
+    ids=Sim.line(request.first,request.last)
+  elseif tool=="rail_autotrack" then
+    local point=rail_point(id,hit)
+    kind,request="rail",{tool="autotrack",start=V.rail_press and V.rail_press.point or point,finish=point}
+  elseif rail_tool_code[tool]~=nil then
+    local track=rail_tool_code[tool]
+    if track<2 and not V.anchor then return ids,true,"Mark the first end of the straight railway." end
+    kind,request="rail",{tool="track",first=V.anchor or id,last=id,track=track,remove=V.rail_remove==true}
+  elseif U.station_gesture(tool) then
+    local l=station_layout(V)
+    kind,request="rail",{tool="station",first=V.anchor or id,last=id,axis=l.axis,
+      tracks=l.tracks,length=l.length,separate=l.separate,drag=l.drag}
+  elseif tool=="rail_depot_tool" then
+    kind,request="rail",{tool="depot",first=id,direction=V.rail_dir or 2}
+  elseif tool=="rail_crossing_tool" or tool=="rail_waypoint_place" then
+    kind,request="rail",{tool=tool=="rail_crossing_tool" and "crossing" or "waypoint",first=id}
+  elseif land then
+    if land.area and not V.anchor then return ids,true,"Mark the first terrain corner." end
+    kind,request="terrain",{operation=land.mode,first=V.anchor or id,last=land.area and id or nil,
+      diagonal=p:get_player_control().aux1==true}
+  elseif tool=="clear" then
+    if not V.demolition_anchor or V.demolition_anchor==id then return ids,true,"Bulldoze · Click to review layers or drag an area." end
+    kind,request="terrain",{operation="bulldoze",first=V.demolition_anchor,last=id,diagonal=p:get_player_control().aux1==true}
+  elseif tool=="road_station" or tool=="road_depot" or tool=="road_bay_pair" or tool=="truck_stop_tool" then
+    request={tool=tool=="truck_stop_tool" and "truck_stop" or tool,first=id}
+  elseif dock=="dock" or dock=="depot" or tool=="ship_buoy" then
+    kind,request="transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=V.ship_axis or 0}
+  elseif dock=="lock" or dock=="canal" or dock=="aqueduct" then
+    if dock~="lock" and not V.anchor then return ids,true,"Mark the first waterway tile." end
+    kind,request="transport",{mode="ship",operation="waterwork",kind=dock,tile=V.anchor or id,last=id}
+  elseif tool=="airfield_build" then
+    kind,request="transport",{mode="air",operation="build",tile=id}
+  elseif tool=="structure_tunnel" or tool=="rail_span_tunnel" then
+    kind,request="transport",{mode=tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id}
+  else
+    local tram,cells,direction=tram_request(V,id)
+    if tram then
+      if tool=="tram_track" and not V.anchor then return ids,true,"Mark the first tramway tile." end
+      kind,request="transport",{mode="tram",operation="build",kind=tram,cells=cells,direction=direction}
+    end
+  end
+  if not request then return ids,false,label end
+  local q,why=client.preview(n,kind,request,core.get_us_time())
+  if tool=="rail_autotrack" then V.rail_ghost=q and {id=id,pieces=q.pieces} or nil end
+  if not q then return ids,false,why end
+  return q.tiles or ids,true,("%s  |  %s  ·  %d tiles"):format(label,dollars(q.cost or 0),#(q.tiles or ids))
+end
 function U.preview(p,id,hit)
+  if api.authority_handoff then return authority_preview(p,id,hit) end
   if api.owned_rail_ui and api.owned_rail_ui.active(p) then return api.owned_rail_ui.preview(p,id) end
   local n=p:get_player_name()
   local V=view(n)
@@ -1906,7 +1995,17 @@ function U.world_status(p,tile,show_preview,hit)
     (V.tool=="teleport_tile" and {name="Teleport to tile"}) or
     (bridge_tool(V.tool) and {name=bridge_label(bridge_tool(V.tool))}) or Sim.tools.inspect
   local target="Aim at the ground"
-  if tile then
+  if tile and api.authority_handoff and R.host_tile then
+    local a=R.host_tile(tile)
+    local x,z=Sim.xy(tile)
+    if a then
+      local site=R.host_record and R.host_record("sites",a.site)
+      local st=R.host_record and R.host_record("stations",a.station)
+      local build=Sim.tools[a.build]
+      target=("%d,%d  %s"):format(x,z,st and ("Station #"..st.id) or site and site.name or
+        build and build.name or a.water_class=="river" and "River" or a.terrain or "")
+    end
+  elseif tile then
     local a=S.tiles[tile];local x,z=Sim.xy(tile)
     local st,build=S.stations[a.station],Sim.tools[a.build]
     local mark=a.stock_industry
@@ -1952,6 +2051,7 @@ function U.build_world(p,id,hit)
     return
   end
   if api.authority_handoff then
+    if V.tool=="teleport_tile" then U.teleport_tile(p,id);return end
     if V.tool=="inspect" then U.inspect(p,id);return end
     if U.signal_ui and U.signal_ui.tool(V.tool) then U.signal_ui.open(p,id,V.tool,hit);return end
     if V.tool=="rail_signal_remove" or V.tool=="rail_span_clear" or V.tool=="ship_remove"
@@ -1972,6 +2072,12 @@ function U.build_world(p,id,hit)
     if V.tool=="road_station" or V.tool=="road_depot" or V.tool=="road_bay_pair" then
       worker_build(n,V,"road",{tool=V.tool,first=id});return
     end
+    local stage=coal_stage_tools[V.tool] or oil_stage_tools[V.tool] or goods_stage_tools[V.tool]
+    if stage then
+      local cargo=coal_stage_tools[V.tool] and "coal" or oil_stage_tools[V.tool] and "oil" or "goods"
+      worker_action(n,V,{kind="rail_freight_stage",tile=id,cargo=cargo,role=stage.role,mirror=V.coal_side~=false})
+      return
+    end
     if V.tool=="truck_stop_tool" then
       worker_build(n,V,"road",{tool="truck_stop",first=id});return
     end
@@ -1982,6 +2088,14 @@ function U.build_world(p,id,hit)
       worker_build(n,V,"rail",{tool="waypoint",first=id});return
     elseif V.tool=="rail_waypoint_remove" then
       if U.layer_bulldozer then U.layer_bulldozer.open(p,id) end
+      return
+    end
+    if rail_tool_code[V.tool]~=nil then
+      local track=rail_tool_code[V.tool]
+      if track<2 and not V.anchor then V.anchor=id;V.status="Mark the last tile.";return end
+      local first=V.anchor or id
+      V.anchor=nil
+      worker_build(n,V,"rail",{tool="track",first=first,last=id,track=track,remove=V.rail_remove==true})
       return
     end
     if V.tool=="rail_depot_tool" then

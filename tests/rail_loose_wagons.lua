@@ -145,3 +145,30 @@ assert(saves==3 and #Owned.list(s,"Alice",d)[1].parts==3 and shown:find("Coupled
 submit(key("loose"),{[key("body")]="2",[key("tail")]="false"})
 assert(saves==4 and #Owned.loose_wagons(s,"Alice",d)==1 and #Owned.list(s,"Alice",d)[1].parts==2)
 print("PASS RC1 separate depot purchases, stock autoattachment, individual/chain moves, exact cash and ownership, save restore, and stock depot forms")
+local escrow
+api.authority_handoff=true
+api.worker_rail_assembly={query=function(q,done)
+  assert(not escrow)
+  escrow={q,done}
+  return true
+end}
+local function respond(kind,value)
+  local q,f=unpack(assert(escrow));escrow=nil
+  assert(q.kind==kind and q.player=="Alice")
+  f(value)
+  return q
+end
+local balance=s.companies.Alice.cash
+assert(UI.assemble(p,d) and shown:find("Reading your rail depot",1,true))
+local DTO={token=49,depot=d,revision=11,engines={{id=0,name="Locomotive",quote={price=6120}}},
+  wagons={{id=27,name="Passenger car",quote={price=1421}}},bodies={},destinations={},units={}}
+respond("rail_assembly",{ok=true,value=DTO,revision=22})
+assert(shown:find("Separate purchases and wagon assembly",1,true))
+local click=key("buy_wagon")
+submit(click);submit(click)
+local q=respond("command",{ok=true,why="Worker purchased the coach."})
+assert(q.command.kind=="rail_assembly" and q.command.operation=="wagon"
+  and q.command.stock==27 and q.command.token==49 and q.command.revision==22)
+respond("rail_assembly",{ok=true,value=DTO,revision=23})
+assert(shown:find("Worker purchased the coach.",1,true) and balance==s.companies.Alice.cash and saves==4)
+print("PASS worker-backed depot assembly uses the same native form without changing the host ledger")

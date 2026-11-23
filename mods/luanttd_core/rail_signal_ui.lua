@@ -47,7 +47,8 @@ return function(api,status)
     if not q or q.time then
       local r={key=key}
       hover[n]=r
-      local ok=client.query({kind="signal_panel",player=n,tile=id,hit=hit,signal=options[tool],peek=true},function(receipt)
+      local observe=client.observe or client.query
+      local ok=observe({kind="signal_panel",player=n,tile=id,hit=hit,signal=options[tool],peek=true},function(receipt)
         if hover[n]~=r then return end
         r.time=core.get_us_time()
         r.value,r.why=receipt.value,receipt.why

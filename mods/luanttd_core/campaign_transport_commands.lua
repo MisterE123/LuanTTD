@@ -190,7 +190,9 @@ return function(Sim,R)
         end
       end
       for _,unit in ipairs(R.rail.owned.list(s,owner,key)) do
-        vehicles[#vehicles+1]={id=unit.id,label="Train "..unit.unit_number}
+        local cargo=({[29]="coal",[30]="oil",[32]="goods"})[unit.stock_ids[2]]
+        vehicles[#vehicles+1]={id=unit.id,label="Train "..unit.unit_number..
+          (cargo and " · "..Sim.cargo[cargo].name or ""),cargo=cargo}
       end
     elseif mode=="ship" and R.water and id(key) then
       local t=s.stock_ship_depots and s.stock_ship_depots[key]
@@ -213,11 +215,12 @@ return function(Sim,R)
     local listing=mode=="rail" and s.stock_rail_stations or mode=="air" and s.stock_small_airports
       or mode=="ship" and s.stock_ship_stations
     for key_,r in pairs(listing or {}) do
-      if r.owner==owner and not (r.coal_role or r.oil_role or r.goods_role) then
+      if r.owner==owner then
         local cell=r.origin or r.land or r.tiles and r.tiles[1]
         local x,z
         if cell then x,z=Sim.xy(cell) end
-        targets[#targets+1]={id=key_,label=(mode=="rail" and "Station" or mode=="air" and "Airfield" or "Dock")
+        local cargo=r.coal_role and "coal" or r.oil_role and "oil" or r.goods_role and "goods"
+        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(mode=="rail" and "Station" or mode=="air" and "Airfield" or "Dock")
           .." "..key_..(x and (" (%d, %d)"):format(x,z) or "")}
       end
     end
@@ -237,7 +240,11 @@ return function(Sim,R)
       local run,why=R.tram.run.start(s,owner,req.depot,req.first,req.second)
       return run~=nil,run and "Test streetcar dispatched between the two stops. It does not carry passengers." or why
     elseif req.mode=="rail" and R.rail and R.rail.owned and id(req.vehicle) then
-      return R.rail.owned.start(s,owner,req.vehicle,req.first,req.second)
+      local start=R.rail.owned.start
+      if req.cargo=="coal" or req.cargo=="oil" or req.cargo=="goods" then
+        start=R.rail.owned["start_"..req.cargo]
+      elseif req.cargo~=nil then return false,"Unsupported train cargo." end
+      return start(s,owner,req.vehicle,req.first,req.second)
     elseif req.mode=="ship" and R.water and id(req.depot) and (req.via==nil or tile(req.via)) then
       local run,why=R.water.depot.start(s,owner,req.depot,req.first,req.second,req.via)
       return run~=nil,why

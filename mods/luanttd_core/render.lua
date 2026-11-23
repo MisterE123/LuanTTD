@@ -480,6 +480,21 @@ return function(api)
   function R.host_tile(id)
     return id and S.tiles[id]
   end
+  function R.host_record(registry,id)
+    local i=S[registry]
+    return i and id and i[id]
+  end
+  function R.host_deck(id)
+    local level
+    local function check(index,registry)
+      local deck=R.host_record(registry,R.host_record(index,id))
+      if deck and deck.deck then level=math.max(level or 0,deck.deck) end
+    end
+    check("bridge_above","stock_road_bridges")
+    check("rail_bridge_above","stock_rail_spans")
+    check("aqueduct_above","stock_aqueducts")
+    return level
+  end
   function R.host_signal(id)
     local d=S.stock_rail_dispatch
     return id and d and d.signals and d.signals.records[id]

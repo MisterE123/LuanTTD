@@ -1,14 +1,27 @@
 -- Worker-backed depot read/purchase UI used when the host no longer owns S.
-return function(core,client,build,money)
+return function(core,client,build,money,assembly)
   local D={form="luanttd_core:worker_depot"}
   local panels={}
   local serial=0
+  local function routes(p)
+    local data=p.data or {}
+    local unit=data.vehicles and data.vehicles[p.unit or 1]
+    local cargo=unit and unit.cargo
+    local first,last={},{}
+    for _,r in ipairs(data.targets or {}) do
+      if r.cargo==cargo and (not cargo or r.role=="load") then first[#first+1]=r end
+      if r.cargo==cargo and (not cargo or r.role=="unload") then last[#last+1]=r end
+    end
+    return first,last,cargo
+  end
   local function draw(n,p,note)
     local data=p.data or {}
-    local offers,units,targets={},{},{}
+    local offers,units,from,to={},{},{},{}
     for i,q in ipairs(data.offers or {}) do offers[i]=core.formspec_escape(q.name.."  ·  "..money(q.price)) end
     for i,u in ipairs(data.vehicles or {}) do units[i]=core.formspec_escape(u.label) end
-    for i,t in ipairs(data.targets or {}) do targets[i]=core.formspec_escape(t.label) end
+    local first,last,cargo=routes(p)
+    for i,t in ipairs(first) do from[i]=core.formspec_escape(t.label) end
+    for i,t in ipairs(last) do to[i]=core.formspec_escape(t.label) end
     local stem="d"..p.serial.."_"
     local b={"formspec_version[7]size[10.8,8.35]bgcolor[#152334;false]",
       "label[.45,.42;Company depot]","label[.45,1.05;Purchase offers]","label[5.55,1.05;Owned vehicles]",
@@ -16,12 +29,19 @@ return function(core,client,build,money)
       ("textlist[5.55,1.35;4.8,3.30;%sunit;%s;%d;false]"):format(stem,table.concat(units,","),p.unit or 1)}
     if #offers>0 then b[#b+1]="button[.45,4.84;4.8,.59;"..stem.."buy;Buy selected vehicle]" end
     if #units>0 then b[#b+1]="button[5.55,4.84;4.8,.59;"..stem.."orders;Open selected vehicle]" end
-    if #targets>=2 and #units>0 then
+    local route_ok=cargo and #first>0 and #last>0 or not cargo and #first>=2
+    if route_ok and #units>0 then
       if p.mode~="air" then
-        b[#b+1]=("dropdown[.45,5.62;3.18,.57;%sfrom;%s;%d;true]"):format(stem,table.concat(targets,","),p.from or 1)
+        b[#b+1]=("dropdown[.45,5.62;3.18,.57;%sfrom;%s;%d;true]"):format(stem,table.concat(from,","),p.from or 1)
       end
-      b[#b+1]=("dropdown[3.74,5.62;3.15,.57;%sto;%s;%d;true]"):format(stem,table.concat(targets,","),p.to or 2)
+      b[#b+1]=("dropdown[3.74,5.62;3.15,.57;%sto;%s;%d;true]"):format(stem,table.concat(to,","),p.to or (cargo and 1 or 2))
       b[#b+1]="button[7.06,5.62;3.3,.57;"..stem.."start;Start service]"
+    end
+    if cargo and not route_ok then
+      b[#b+1]="label[.45,5.62;Designate a loading and unloading platform for this cargo.]"
+    end
+    if p.mode=="rail" and assembly and p.data then
+      b[#b+1]="button[.45,7.41;4.8,.58;"..stem.."assemble;Assemble wagons]"
     end
     b[#b+1]="label[.45,6.67;"..core.formspec_escape(note or "").."]"
     b[#b+1]="button_exit[5.55,7.41;4.8,.58;close;Back to world]"
@@ -48,6 +68,7 @@ return function(core,client,build,money)
     if f.quit then panels[n]=nil;return true end
     if not p.data or p.pending then return true end
     local stem="d"..p.serial.."_"
+    local selected_before=p.unit
     for kind,list in pairs({offer=p.data.offers,unit=p.data.vehicles}) do
       local key=stem..kind
       if f[key] then
@@ -55,6 +76,7 @@ return function(core,client,build,money)
         if i and list[i] then p[kind]=i end
       end
     end
+    if p.mode=="rail" and f[stem.."assemble"] and assembly then return assembly(player,p.depot) end
     if f[stem.."orders"] and p.vehicle_handler then
       local u=p.data.vehicles[p.unit or 1]
       if u then p.vehicle_handler(p.mode,u.id) end
@@ -62,20 +84,23 @@ return function(core,client,build,money)
     end
     if f[stem.."start"] then
       local unit=p.data.vehicles[p.unit or 1]
-      local targets=p.data.targets or {}
-      local first=targets[tonumber(f[stem.."from"]) or p.from or 1]
-      local last=targets[tonumber(f[stem.."to"]) or p.to or 2]
+      local sources,sinks,cargo=routes(p)
+      local first=sources[tonumber(f[stem.."from"]) or p.from or 1]
+      local last=sinks[tonumber(f[stem.."to"]) or p.to or (cargo and 1 or 2)]
       if not (unit and first and last) then return true end
       p.pending=true
       local sent,why=client.query({kind="command",player=n,command={kind="transport_start",mode=p.mode,
-        vehicle=unit.id,depot=p.depot,first=p.mode=="air" and p.depot or first.id,second=last.id,
+        vehicle=unit.id,depot=p.depot,first=p.mode=="air" and p.depot or first.id,second=last.id,cargo=cargo,
         revision=p.revision}},
         function(r) if panels[n]==p then D.open(player,p.mode,p.depot,r.why or (r.ok and "Service dispatched." or
           "Service could not start."),p.vehicle_handler) end end)
       if not sent then p.pending=nil;draw(n,p,why) end
       return true
     end
-    if not f[stem.."buy"] then return true end
+    if not f[stem.."buy"] then
+      if selected_before~=p.unit and p.mode=="rail" then p.from,p.to=nil,nil;draw(n,p) end
+      return true
+    end
     local q=p.data.offers[p.offer or 1]
     if not q then return true end
     p.pending=true

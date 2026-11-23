@@ -109,6 +109,7 @@ return function(Sim,mod,s,cap)
       local owned=B.owned_rail(s,network.lab,roster,rail,function() return Sim.rail_oil_active(s) end)
       if s.stock_electrification then owned.mount_electric(dofile(source.."rail_types.lua")) end
       N.rail.owned=owned
+      N.rail.assembly=dofile(mod.."/rail_depot_assembly_state.lua")(s,owned)
     end
     B.rail_media(rail,cap.rail)
     Sim.mount_paid_rail(s,rail)

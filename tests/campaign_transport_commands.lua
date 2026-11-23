@@ -68,6 +68,42 @@ assert(A.orders("Rail","rail",engine).ok and A.orders("Water","ship","ferry").ok
 assert(A.advance(4).tick==296 and runtime.rail.run.current(s).ticks>0)
 assert(runtime.water.run.current(s).vehicle.tick>0 and runtime.air.run.current(s).vehicle.tick>0)
 print("PASS worker builds, buys and dispatches rail, ferry and air using the normal commands")
+local shed=Sim.id(5,23)
+track({tool="depot",first=shed,direction=runtime.network.track.SW})
+local function buy_part(kind,id)
+  local quote=A.rail_assembly("Rail",shed)
+  assert(quote.ok,quote.why)
+  assert(not A.rail_assembly("Air",shed).ok)
+  local match
+  for _,offer in ipairs(quote.value[kind=="engine" and "engines" or "wagons"]) do
+    if offer.id==id then match=offer;break end
+  end
+  assert(match,"eligible stock part missing")
+  local money=A.company("Rail").value.cash
+  command("Rail",{kind="rail_assembly",token=quote.value.token,operation=kind,stock=id})
+  assert(A.company("Rail").value.cash==money-match.quote.price)
+end
+buy_part("wagon",27)
+local loose=A.rail_assembly("Rail",shed).value
+assert(#loose.bodies==1 and not loose.destinations[1].unit)
+buy_part("engine",0)
+local staged=A.rail_assembly("Rail",shed).value
+local position
+for _,p in ipairs(staged.destinations) do if p.unit then position=p;break end end
+assert(position)
+if staged.bodies[1].unit then
+  command("Rail",{kind="rail_assembly",token=staged.token,operation="move",from=staged.bodies[1].id})
+  assert(#runtime.rail.owned.get(s,"Rail",position.unit).stock_ids==1)
+  staged=A.rail_assembly("Rail",shed).value
+end
+assert(staged.bodies[1] and not staged.bodies[1].unit)
+local no_charge=A.company("Rail").value.cash
+command("Rail",{kind="rail_assembly",token=staged.token,operation="move",
+  from=staged.bodies[1].id,to=position.id})
+assert(A.company("Rail").value.cash==no_charge)
+assert(#runtime.rail.owned.get(s,"Rail",position.unit).stock_ids==2)
+assert(not A.command("Rail",{kind="rail_assembly",token=staged.token,operation="wagon",stock=27,revision=revision}).ok)
+print("PASS worker issues priced separate locomotive/wagon offers, validates company, moves loosened cars and rejects replay")
 local t=Sim.new(1751)
 t.corner_grid=Terrain.new(Sim.W,Sim.H,function() return 0 end)
 t.tram_enabled=true

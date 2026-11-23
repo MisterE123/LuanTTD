@@ -49,6 +49,10 @@ return function(engine,mod,callbacks)
     if idle>=2 and client.query({kind="clock"},function() end) then idle=0 end
     return false
   end
+  function H.observe(request,done)
+    if state~="owned" then return nil,"CAMPAIGN_NOT_READY" end
+    return client.query(request,done)
+  end
   function H.query(request,done)
     if state~="owned" then return nil,"CAMPAIGN_NOT_READY" end
     return client.defer(request,done)

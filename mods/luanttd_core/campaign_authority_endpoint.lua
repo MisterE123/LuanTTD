@@ -43,7 +43,7 @@ return function(Sim,R,max_days)
     return reply(true,nil,data)
   end
   local rail_quotes,quote_sequence={},0
-  function A.rail_quote(name,request)
+  function A.rail_quote(name,request,peek)
     local rail=R.rail and R.rail.build
     if not owner(name) or not rail or type(request)~="table" or not s.companies[name] then
       return reply(false,"RAIL_QUOTE_UNAVAILABLE")
@@ -57,6 +57,8 @@ return function(Sim,R,max_days)
         return reply(false,"INVALID_RAIL_DRAG")
       end
       local q,why=rail.quote_autotrack(name,start,last)
+      if peek then return reply(q~=nil,why,q and {tiles=q.ids,cost=q.price,pieces=q.pieces,
+        stopped_at=q.stopped_at,skipped_start=q.skipped_start,tree_count=q.tree_count}) end
       rail_quotes[name]=nil
       if not q then return reply(false,why) end
       quote_sequence=quote_sequence+1
@@ -75,6 +77,7 @@ return function(Sim,R,max_days)
       local c,error_=R.crossing_gesture(Sim,s,first)
       if not c then return reply(false,error_) end
       local plan,msg=n.crossings.quote(s,name,first,c,n.lab.board(s))
+      if peek then return reply(plan~=nil,msg,plan and {tiles={first},cost=plan.price}) end
       rail_quotes[name]=nil
       if not plan then return reply(false,msg) end
       quote_sequence=quote_sequence+1
@@ -99,11 +102,33 @@ return function(Sim,R,max_days)
     elseif request.tool=="signal_remove" and integer(request.track,0,5) then
       q,why=rail.quote_remove_signal(name,first,request.track)
     else return reply(false,"UNSUPPORTED_RAIL_GESTURE") end
+    if peek then return reply(q~=nil,why,q and {tiles=q.ids,cost=q.price,kind=q.kind}) end
     rail_quotes[name]=nil
     if not q then return reply(false,why) end
     quote_sequence=quote_sequence+1
     rail_quotes[name]={token=quote_sequence,plan=q}
     return reply(true,nil,{tiles=q.ids,cost=q.price,token=quote_sequence,kind=q.kind})
+  end
+  local assembly_quotes={}
+  function A.rail_assembly(name,depot)
+    if not owner(name) or not s.companies[name] or not tile_id(depot) or not (R.rail and R.rail.assembly) then
+      return reply(false,"Rail depot unavailable.")
+    end
+    assembly_quotes[name]=nil
+    local a,why=R.rail.assembly.read(name,depot)
+    if not a then return reply(false,why) end
+    quote_sequence=quote_sequence+1
+    local ticket={token=quote_sequence,data=a,topology=s.topology}
+    assembly_quotes[name]=ticket
+    local out={token=ticket.token,depot=a.depot,revision=a.revision,
+      engines={},wagons={},bodies=a.bodies,destinations=a.destinations,units={}}
+    for _,group in ipairs({"engines","wagons"}) do
+      for i,u in ipairs(a[group]) do out[group][i]={id=u.id,name=u.name,quote={price=u.quote.price}} end
+    end
+    for id,unit in pairs(a.staged) do
+      out.units[id]={id=id,stocks=unit.stock_ids,passenger=R.rail.owned.passenger_consist(unit)}
+    end
+    return reply(true,nil,out)
   end
   local signal_quotes={}
   function A.signal_panel(name,id,hit,kind,inspect,peek)
@@ -144,9 +169,10 @@ return function(Sim,R,max_days)
     return reply(true,nil,result)
   end
   local transport_quotes={}
-  function A.transport_quote(name,request)
+  function A.transport_quote(name,request,peek)
     if not owner(name) or not R.transport or not s.companies[name] then return reply(false,"TRANSPORT_QUOTE_UNAVAILABLE") end
     local quote,why=R.transport.quote(name,request)
+    if peek then return reply(quote~=nil,why,quote and {cost=quote.price,tiles=quote.tiles}) end
     transport_quotes[name]=nil
     if not quote then return reply(false,why) end
     quote_sequence=quote_sequence+1
@@ -181,9 +207,10 @@ return function(Sim,R,max_days)
     return reply(data~=nil,why,data)
   end
   local terrain_quotes={}
-  function A.terrain_quote(name,request)
+  function A.terrain_quote(name,request,peek)
     if not owner(name) or not R.landscape or not s.companies[name] then return reply(false,"TERRAIN_QUOTE_UNAVAILABLE") end
     local quote,why=R.landscape.quote(name,request)
+    if peek then return reply(quote~=nil,why,quote and {cost=quote.cost,tiles=quote.tiles,corners=quote.corners}) end
     terrain_quotes[name]=nil
     if not quote then return reply(false,why) end
     quote_sequence=quote_sequence+1
@@ -268,6 +295,30 @@ return function(Sim,R,max_days)
       terrain_quotes[name]=nil
       if not q or q.token~=c.token then return reply(false,"TERRAIN_QUOTE_EXPIRED") end
       ok,note,value=R.landscape.commit(name,q.quote)
+    elseif c.kind=="rail_assembly" then
+      local q=assembly_quotes[name]
+      if not q or q.token~=c.token or q.topology~=s.topology then return reply(false,"The depot changed. Open it again.") end
+      local d=q.data
+      assembly_quotes[name]=nil
+      local owned=R.rail.owned
+      if c.operation=="engine" or c.operation=="wagon" then
+        local offered
+        for _,u in ipairs(c.operation=="engine" and d.engines or d.wagons) do
+          if u.id==c.stock then offered=u;break end
+        end
+        if not offered then return reply(false,"Unavailable stock vehicle part.") end
+        local bought,why=owned.commit(s,name,offered.quote)
+        if not bought then return reply(false,why) end
+        ok=true
+        note=bought.kind=="wagon" and ("Purchased "..offered.name..(bought.coupled_to and ". Coupled to train." or ". Stored loose."))
+          or "Purchased a locomotive."
+      elseif c.operation=="move" then
+        local from,to
+        for _,u in ipairs(d.bodies) do if u.id==c.from then from=u.id;break end end
+        for _,u in ipairs(d.destinations) do if u.id==c.to then to=u.id;break end end
+        if not from or c.to~=nil and not to then return reply(false,"Select a real wagon and insertion point.") end
+        ok,note=owned.move_wagon(s,name,d.depot,from,to,c.tail==true,d.revision)
+      else return reply(false,"Unsupported depot command.") end
     elseif c.kind=="signal_panel" then
       local q=signal_quotes[name]
       if not q or q.token~=c.token or q.topology~=s.topology or q.terrain~=s.corner_grid.revision
@@ -315,6 +366,22 @@ return function(Sim,R,max_days)
       if s.companies[name] then return A.company(name) end
       Sim.company(s,name)
       ok,note=true,"Company opened."
+    elseif c.kind=="rail_freight_stage" and tile_id(c.tile) and (c.role=="load" or c.role=="unload") and
+      (c.cargo=="coal" or c.cargo=="oil" or c.cargo=="goods") then
+      local t=s.tiles[c.tile]
+      local st=s.stock_rail_stations and s.stock_rail_stations[t.rail_station_id]
+      if not st or st.owner~=name then return reply(false,"Choose one of your existing rail platforms.") end
+      for _,cargo in ipairs({"coal","oil","goods"}) do
+        local role=st[cargo.."_role"]
+        if role and (cargo~=c.cargo or role~=c.role) then return reply(false,"This platform already serves another freight stage.") end
+      end
+      if c.cargo=="coal" and st.coal_stage_tile and st.coal_stage_tile~=c.tile then
+        return reply(false,"This platform already has its equipment tile.")
+      end
+      ok,note,value=Sim["rail_"..c.cargo.."_designate"](s,name,st.id,c.role)
+      if ok and c.cargo=="coal" then
+        st.coal_stage_tile,st.coal_stage_mirror=c.tile,c.mirror==true
+      end
     elseif c.kind=="speed" and (c.speed==0 or c.speed==1 or c.speed==2 or c.speed==4) then
       if s.chair~=name and c.admin~=true then return reply(false,"Only the first company or a server admin can change speed.") end
       s.speed=c.speed

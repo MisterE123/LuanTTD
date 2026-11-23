@@ -34,7 +34,7 @@ function M.corners(terrain,grid,x,z,w,h)
   return table.concat(rows)
 end
 local span_fields={"start","end","head","tail","middle","axis","owner","base","deck","bridge_type","railtype","kind"}
-local station_fields={"owner","id","tiles","stop_type","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror"}
+local station_fields={"owner","id","tiles","stop_type","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror","oil_role","goods_role"}
 local industry_fields={"id","removed","kind","x","z","tiles"}
 local function add(out,s,name,id,fields)
   if id==nil then return end
