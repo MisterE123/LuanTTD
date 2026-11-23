@@ -133,7 +133,7 @@ return function(Sim,mod)
   function B.owned_rail(s,lab,roster,pilot,oil_active)
     local depot=dofile(mod.."/rail_depot_fleet.lua")(Sim,lab,roster)
     local owned=dofile(mod.."/rail_owned_service.lua")(depot,roster,pilot,Sim.rail_coal_validate,Sim.rail_oil_validate,
-      oil_active,Sim.rail_goods_validate,Sim.rail_goods_active)
+      oil_active,Sim.rail_goods_validate,Sim.rail_goods_active,{active=Sim.rail_profile_active,validate=Sim.rail_profile_validate})
     lab.owned_depot_occupied=owned.occupies_depot
     s.rail_owned_service=true
     if not s.stock_rail_fleet then

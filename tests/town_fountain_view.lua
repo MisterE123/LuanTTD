@@ -56,3 +56,17 @@ assert(n==6,"disconnect must only clear that viewer")
 viewers={}
 step();assert(not next(live))
 print("PASS fountain spray: completed painted models, height/distance hysteresis, scene removal, per-client cap, no refresh churn")
+-- RC1 shows the basin before population completion; a worker-projected
+-- stage 2 starts the same water effect as 3, but stage 1 cannot.
+state.tiles={}
+local stage_id=place(10,10,false,true)
+local stage=state.tiles[stage_id].source_house
+stage.stage=1;viewers={{name="PhaseQA",x=20.5,y=4.375,z=20.5}}
+local expect=adds
+step();assert(adds==expect)
+stage.stage=2
+step();assert(adds==expect+1 and live[expect+1].playername=="PhaseQA")
+stage.stage=3;stage.completed=true
+step();assert(adds==expect+1,"Completion replaced an already painted basin emitter")
+F.leave("PhaseQA")
+print("PASS stock fountain: intact source phase-2 basin sprays without completing the house")

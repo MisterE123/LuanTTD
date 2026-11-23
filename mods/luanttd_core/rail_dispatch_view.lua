@@ -85,20 +85,9 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
     if dispatch then
       local commercial=dispatch.runs[1] and dispatch.runs[1].paid_clock
       if commercial and V.observe then V.observe(Sim.rail_paid_motion_events(S)) end
-      local coal=Sim.rail_coal_status and Sim.rail_coal_status(S)
       for _,train in ipairs(dispatch.runs) do
         local engine=stock_kind[train.stock_engine] or "locomotive"
-        local wagon="wagon"
-        if train.stock_engine==11 and not train.stock_wagon then wagon="manley"
-        elseif train.stock_wagon==29 then
-          wagon=coal and (coal.onboard or 0)>0 and "coal_loaded" or "coal_empty"
-        elseif train.stock_wagon==32 then
-          wagon="goods_van" -- sealed stock body, original image 38 has no full-adder.
-        elseif train.stock_wagon==30 then
-          -- Stock image 36 has a zero full-adder. The sealed vessel
-          -- never changes mesh when loading or unloading.
-          wagon="oil_tanker"
-        end
+        local wagon=Art.wagon(train,Sim,S)
         local parts=train.consist.parts
         local push_pull=(train.dual_head or train.stock_engine==11) and #parts>1
         local samples={}

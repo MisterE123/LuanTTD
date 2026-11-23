@@ -65,3 +65,51 @@ print("PASS projected rail aspects switch models and cull independently of rolli
 
 -- Run the timestamped playout regression with the existing CI render checks.
 dofile("tests/campaign_actor_buffer.lua")
+
+-- Run a real RC1 road failure through the worker packet boundary and the
+-- regular projected renderer. Recovery/occlusion cannot leave a smoke emitter.
+local K=dofile(mod.."openttd/road_breakdowns.lua")
+local project=dofile(mod.."campaign_actor_projection.lua")
+local fault=K.new(50000,80,5475,0,0)
+fault.breakdown_ctr,fault.breakdown_delay=2,130
+local vehicle={engine="bus",road_fault=fault,running=true,road_speed_state={}}
+local sim={position=function() return 12 end,xy=function()return 2,2 end,
+  road_motion_frame=function()return {0,0,0,0,0} end}
+local world={speed=1,fleet={[7]=vehicle}}
+local under_cover=false
+local view={world=world,road_pose=function()return {x=4,y=1,z=4},0,0,under_cover end}
+local particles={}
+local function player(n,x)
+  return {get_player_name=function()return n end,get_pos=function()return {x=x,y=1,z=4} end}
+end
+engine.get_connected_players=function()return {player("near",4),player("distant",80)} end
+engine.add_particle=function(p)particles[#particles+1]=p end
+local visual=dofile(mod.."campaign_projected_actors.lua")(engine,{},dofile(mod.."road_motion.lua"),{bus="town_flyer"},{})
+local function frame(dt)
+  local r=assert(project(sim,view,1,1,8,8,1)[1])
+  visual.render({[r.key]=r},dt or .05)
+  assert(not r.road_fault and not r.breakdown_delay)
+  return r.breakdown_smoke
+end
+assert(not frame() and #particles==0,"scheduled but not broken down")
+assert(K.tick(fault,{cur_speed=15,front=true}).started)
+assert(frame() and #particles==1 and particles[1].playername=="near")
+assert(frame(.1) and #particles==1,"throttle")
+vehicle.road_speed_state.depot_wait=true
+assert(not frame(.4) and #particles==1)
+vehicle.road_speed_state.depot_wait=nil
+world.speed=0
+assert(not frame(.4) and #particles==1)
+world.speed=1
+under_cover=true
+assert(not frame(.4) and #particles==1,"a visible native tunnel must not change stock smoke guards")
+under_cover=false
+vehicle.crashed=true
+assert(not frame(.4) and #particles==1)
+vehicle.crashed=nil
+assert(frame() and #particles==2)
+visual.render({},.07)
+assert(frame() and #particles==3,"viewport reentry must not inherit old delay")
+while fault.breakdown_ctr~=0 do K.tick(fault,{cur_speed=0,front=true}) end
+assert(not frame(.8) and #particles==3,"no new particles after stock recovery")
+print("PASS real stock road fault projects viewer-local smoke and clears it on recovery, pause, depot and cull")

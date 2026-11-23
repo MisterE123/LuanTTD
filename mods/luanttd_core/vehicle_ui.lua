@@ -13,6 +13,11 @@ return function(api)
   local remote,pickers={},{}
   local path=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local order_target=dofile(path.."/campaign_order_target.lua")
+  local ride=dofile(path.."/vehicle_ride.lua")(core,api,path)
+  local selected={}
+  V.ride_track=ride.track
+  V.riding=ride.active
+  V.ride_controls=ride.controls
   function V.install_worker(client) worker=client end
   function V.use_worker_projection(view)
     projection=view
@@ -69,13 +74,13 @@ return function(api)
     end
     if source then return {kind=kind,id=id,source=source,label=label or ("Vehicle #"..id),depot=depot,depot_key=depot_key or depot} end
   end
-  function V.track(kind,id,pos,ref,primary)
+  function V.track(kind,id,pos,ref,primary,body)
     if not id then return end
     if pos and primary~=false then poses[key(kind,id)]={pos=pos,time=now} end
     if ref and bodies[ref]==nil then
       local obj=ref:get_luaentity()
       if obj then
-        local pick={kind=kind,id=id}
+        local pick={kind=kind,id=id,body=body}
         obj.luanttd_vehicle=pick
         obj.on_rightclick=function(_,player)
           if api.world then api.world.select_vehicle(player,pick) end
@@ -125,8 +130,12 @@ return function(api)
       static_save=false,is_visible=false,visual="sprite",textures={"blank.png"}},
   })
   local function close(p) core.close_formspec(p:get_player_name(),form) end
-  function V.following(p) return following[p:get_player_name()]~=nil end
+  function V.following(p) return following[p:get_player_name()]~=nil or ride.active(p) end
+  function V.remember(p,pick)
+    selected[p:get_player_name()]={kind=pick.kind,id=pick.id,body=pick.body}
+  end
   function V.exit(p)
+    if ride.active(p) then return ride.exit(p) end
     local n=p:get_player_name()
     local f=following[n]
     if not f then return false end
@@ -139,6 +148,29 @@ return function(api)
     if api.world and api.world.follow_hud then api.world.follow_hud(p,false) end
     if api.vehicle_status then api.vehicle_status(p,"Returned to the builder camera.") end
     return true
+  end
+  function V.ride_toggle(p,mode,target)
+    if ride.active(p) then return ride.exit(p) end
+    if V.following(p) then return false,"Leave the follow camera before boarding." end
+    local n=p:get_player_name()
+    if not target then
+      local aimed=V.pick(p,42)
+      target=aimed and ride.capable(aimed.kind,mode) and aimed or selected[n]
+    end
+    local ok,why=ride.enter(p,mode,target)
+    if ok then panels[n]=nil;close(p) end
+    return ok,why
+  end
+  if core.register_chatcommand then
+    for command,mode in pairs({train="cab",ride="ride"}) do
+      core.register_chatcommand(command,{
+        description=mode=="cab" and "Sit in the cab of a selected running train" or "Ride a selected passenger bus or train",
+        func=function(n)
+          local p=core.get_player_by_name(n)
+          if not p then return false,"Join the campaign before boarding." end
+          return V.ride_toggle(p,mode)
+        end})
+    end
   end
   local function follow_at(p,kind,id,v,pos)
     local n=p:get_player_name()
@@ -182,7 +214,9 @@ return function(api)
   end
   function V.step(dt)
     now=now+dt
-    for _,p in ipairs(core.get_connected_players()) do
+    local players=core.get_connected_players()
+    ride.step(dt,players)
+    for _,p in ipairs(players) do
       local n=p:get_player_name()
       local f=following[n]
       if f then
@@ -203,7 +237,7 @@ return function(api)
   end
   function V.leave(p)
     local n=p:get_player_name()
-    V.exit(p);panels[n]=nil;remote[n]=nil;pickers[n]=nil
+    V.exit(p);panels[n]=nil;remote[n]=nil;pickers[n]=nil;selected[n]=nil
   end
   local function title(txt,height)
     return ("formspec_version[7]size[11,%g]bgcolor[#152334;false]"):format(height or 8)..
@@ -228,6 +262,13 @@ return function(api)
     local toggle=adapter and adapter.toggle and data and data.can_toggle
     local extended=cargo or toggle
     local b=title(v.label,extended and 9).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
+    if ride.capable(kind,"ride") and (kind~="road" or v.source.passenger~=false and
+        (v.source.cargo==nil or v.source.cargo=="passenger")) then
+      b=b.."button[5.93,.22;1.80,.62;V_TOKEN_ride;Ride]"
+    end
+    if ride.capable(kind,"cab") then
+      b=b.."button[4.06,.22;1.63,.62;V_TOKEN_cab;Cab view]"
+    end
     if note or data and data.summary then
       b=b..("textarea[.45,%g;10,.63;;;%s]"):format(cargo and 7.56 or 6.35,esc(note or data.summary))
     end
@@ -322,6 +363,8 @@ return function(api)
       if api.vehicle_status then api.vehicle_status(p,"You can manage vehicles from your own company.") end
       return false
     end
+    local old=selected[n]
+    if not old or old.kind~=kind or old.id~=id then V.remember(p,{kind=kind,id=id}) end
     local a=V.orders[kind]
     if a and a.fetch then
       local pending={kind=kind,id=id,back=back,waiting=true}
@@ -438,6 +481,7 @@ return function(api)
     return show(p,{kind=kind,depot=depot,return_=return_,rows=rows,row=1},b)
   end
   core.register_on_player_receive_fields(function(p,name,f)
+    if name=="" and f.luanttd_leave_ride and ride.active(p) then return V.exit(p) end
     if name~=form then return false end
     local n=p:get_player_name()
     local q=panels[n]
@@ -467,6 +511,13 @@ return function(api)
     if field("depot") and q.back then
       if q.back.directory and q.back.return_ then panels[n]=nil;return q.back.return_() end
       return V.depot(p,q.kind,q.back.depot,q.back.return_)
+    end
+    if field("ride") or field("cab") then
+      local saved=selected[n]
+      local ok,why=V.ride_toggle(p,field("cab") and "cab" or "ride",
+        {kind=q.kind,id=q.id,body=saved and saved.kind==q.kind and saved.id==q.id and saved.body or nil})
+      if not ok then V.open(p,q.kind,q.id,q.back,q,why) end
+      return true
     end
     if field("follow") then
       if not V.follow(p,q.kind,q.id) then V.open(p,q.kind,q.id,q.back,q,"Follow is unavailable from the current camera mode.") end

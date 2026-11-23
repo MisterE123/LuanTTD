@@ -189,8 +189,9 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
         elseif ev=="terminal" then
           p.arrivals=p.arrivals+1;p.phase="terminal";p.dwell=paid and 0 or R.DWELL_TICKS
           p.last_airfield=a.id
+          local tile=Sim.id(math.floor(v.x/16),math.floor(v.z/16))
+          if R.news_arrival then R.news_arrival("air",p.owner,a.id,tile) end
           if paid then
-            local tile=Sim.id(math.floor(v.x/16),math.floor(v.z/16))
             local field=tile and s.tiles[tile].airfield
             if not field or field.airport~=a.id then
               p.phase,p.failure="blocked","INVALID_PAID_TERMINAL_TILE";return p

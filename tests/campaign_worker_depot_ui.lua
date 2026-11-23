@@ -1,7 +1,8 @@
 local body,request,done
 local core={formspec_escape=function(x)return x end,
   show_formspec=function(_,_,x) body=x end,
-  explode_textlist_event=function(x)return {index=tonumber(x)} end}
+  explode_textlist_event=function(x)return {index=tonumber(x)} end,
+  explode_scrollbar_event=function(x)return {type="CHG",value=tonumber(x)} end}
 local client={query=function(r,cb) request,done=r,cb;return true end}
 local purchase
 local build={commit=function(name,kind,r,cb) purchase={name,kind,r,cb};return true end}
@@ -39,17 +40,54 @@ end
 assert(D.open(mock,"road",10))
 done({ok=true,revision=9,value=data})
 assert(body:find("tooltip[d4_offer_row3;",1,true) and body:find("tooltip[d4_unit_row2;",1,true))
-assert(body:find("Oil Refinery",1,true) and body:find("Power Station",1,true))
-assert(not body:find("d4_offer_row6",1,true))
-D.fields(mock,{d4_offer_next=true})
+assert(body:gsub("%s+"," "):find("Oil Refinery",1,true) and body:gsub("%s+"," "):find("Power Station",1,true))
+assert(body:find("scroll_container[",1,true) and body:find("scrollbar[",1,true))
+assert(not body:find("d4_offer_next",1,true))
+D.fields(mock,{d4_offer_scroll="25"})
 assert(body:find("tooltip[d4_offer_row6;",1,true) and body:find("tooltip[d4_offer_row9;",1,true))
-assert(body:find("Iron Ore",1,true) and body:find("Steel Mill",1,true))
-D.fields(mock,{d4_offer_row7=true})
+assert(body:gsub("%s+"," "):find("Iron Ore",1,true) and body:gsub("%s+"," "):find("Steel Mill",1,true))
+D.fields(mock,{d4_offer_row7=true,d4_offer_scroll="25"})
+assert(body:find("vertical;d4_offer_scroll;25]",1,true))
 assert(body:match("textarea[^%]]-Road freight truck / Grain"),"touch selection shows proper guide")
 assert(request.kind=="depot","tap/click to read help does not buy")
 D.fields(mock,{d4_buy=true})
 assert(request.command.engine=="Stock vehicle 7" and request.command.cargo=="grain")
-print("PASS native tooltip controls exist for each selectable row; pagination, touch fallback and chosen purchase agree")
+print("PASS native tooltip controls exist for each selectable row; clipped native scrolling, touch fallback and chosen purchase agree")
+
+data.offers[1].name="Balogh Armoured Truck · Valuables"
+data.offers[1].price=7929
+data.offers[1].help=Help.describe("road","valuables","Balogh Armoured Truck",{capacity=20,speed=48})
+D.open(mock,"road",10)
+done({ok=true,revision=10,value=data})
+assert(body:find("Balogh Armoured Truck\nValuables · $7929",1,true)
+  and not body:find("Balogh Armoured Truck · Valuables · $7929",1,true))
+assert(Help.fit(string.rep("É",35),25):match("…$"))
+D.fields(mock,{d5_unit_row2=true})
+D.fields(mock,{d5_copy=true})
+assert(request.kind=="depot_order_sources" and request.vehicle==2 and request.depot==10)
+done({ok=true,revision=11,value={vehicle=2,label="Receiving truck",count=2,revision="dst",sources={
+  {id=8,label="Source A",count=2,revision="src-a",cargo="Coal"},
+  {id=12,label="Source B",count=4,revision="src-b",cargo="Coal"}}}})
+assert(body:find("Copy selected orders",1,true) and body:find("independent list",1,true))
+D.fields(mock,{dc6_source_row2=true})
+D.fields(mock,{dc6_apply=true})
+local command=request.command
+assert(command.kind=="depot_copy_orders" and command.vehicle==2 and command.depot==10 and command.source==12)
+assert(command.source_revision=="src-b" and command.target_revision=="dst" and command.revision==11)
+local armed=done
+D.fields(mock,{dc6_apply=true})
+assert(armed==done,"duplicate native click must not repeat the mutation")
+done({ok=false,why="STALE_COMMAND",revision=12})
+assert(request.kind=="depot_order_sources")
+done({ok=true,revision=12,value={vehicle=2,label="Receiving truck",count=2,revision="dst",sources={
+  {id=8,label="Source A",count=2,revision="src-a",cargo="Coal"},
+  {id=12,label="Source B",count=4,revision="src-c",cargo="Coal"}}}})
+assert(body:find("campaign changed",1,true))
+D.fields(mock,{dc6_apply=true})
+assert(request.command.source==12 and request.command.source_revision=="src-c")
+done({ok=true,revision=13,why="Orders copied."})
+assert(body:find("Orders copied.",1,true) and body:find("d5_unit_row2",1,true))
+print("PASS long-name row separates price and cargo, full width scroll; independent Copy Orders targets the selected owned vehicle")
 
 local receives={}
 _G.core=core
@@ -65,7 +103,7 @@ assert(A.assemble(mock,69,nil,nil,{revision=10,value={token=12,revision=1,engine
 local function assembly(fields) return receives[2](mock,"luanttd_core:rail_fleet",fields) end
 assert(body:find("tooltip[assembly_1_pick_wagon;",1,true))
 assembly({assembly_1_pick_wagon=true})
-assert(body:find("tooltip[assembly_2_pick_row2;",1,true) and body:find("Oil Refinery",1,true))
+assert(body:find("tooltip[assembly_2_pick_row2;",1,true) and body:gsub("%s+"," "):find("Oil Refinery",1,true))
 assembly({assembly_2_pick_row2=true})
 assert(body:match("textarea[^%]]-Freight wagon / Oil"),"tap/click picker selection displays wagon help")
 assembly({assembly_3_buy_wagon=true})

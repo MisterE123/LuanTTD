@@ -19,7 +19,7 @@ cp mods/luanttd_core/{campaign_worker_depot_ui,depot_vehicle_help}.lua "$mod/"
 cp tests/campaign_worker_depot_hover_native.lua "$mod/init.lua"
 printf 'gameid = depottest\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-39193}
-printf 'port = %s\nbind_address = 127.0.0.1\nmg_name = singlenode\n' "$port" >"$out/server.conf"
+printf 'port = %s\nbind_address = 127.0.0.1\nprometheus_listener_address = 127.0.0.1:%s\nmg_name = singlenode\n' "$port" "$port" >"$out/server.conf"
 printf 'screen_w = 1180\nscreen_h = 760\nfullscreen = false\nenable_sound = false\nfps_max = 30\n' >"$out/client.conf"
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
@@ -43,20 +43,10 @@ mark 'NATIVE DEPOT HOVER READY'
 sleep 2
 xdotool mousemove 70 80
 import -window root "$out/before.png"
-python3 - "$out" <<'PY'
-from pathlib import Path
-import csv, subprocess, sys
-out=Path(sys.argv[1])
-raw=subprocess.check_output(["tesseract",str(out/"before.png"),"stdout","--psm","11","tsv"],text=True,stderr=subprocess.DEVNULL)
-r=list(csv.DictReader(raw.splitlines(),delimiter="\t"))
-def word(x):
-    p=next(row for row in r if row["text"]==x and int(row["top"])<500)
-    return int(p["left"])+int(p["width"])//2,int(p["top"])+int(p["height"])//2
-def save(key,name):
-    (out/key).write_text(" ".join(map(str,word(name))))
-save("buy_location","Witcombe")
-save("owned_location","Truck")
-PY
+# Fixture opens a centered 1180×760 depot. Row 2 is at the same
+# inside padding of each of the clipped scroll containers.
+ox=426; oy=241
+ux=714; uy=241
 hover() {
   local x=$1 y=$2 key=$3
   xdotool mousemove "$x" "$y"
@@ -64,10 +54,8 @@ hover() {
   import -window root "$out/$key.png"
   import -window root -crop "390x145+$((x+16))+$((y+16))" "$out/$key-detail.png"
   tesseract "$out/$key-detail.png" "$out/$key" --psm 6 2>/dev/null
-  grep -qi 'Oil Refinery' "$out/$key.txt"
+  tr '\n' ' ' <"$out/$key.txt" | grep -qi 'Oil Refinery'
 }
-read -r ox oy < <(cat "$out/buy_location"; echo)
-read -r ux uy < <(cat "$out/owned_location"; echo)
 hover "$ox" "$oy" purchase-hover
 hover "$ux" "$uy" owned-hover
 ! grep -q 'NATIVE DEPOT ROW' "$out/server.log"

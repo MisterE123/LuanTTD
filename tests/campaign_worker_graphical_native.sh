@@ -4,6 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 root=$PWD
+rail_exhaust=${LUANTTD_NATIVE_RAIL_EXHAUST:-0}
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-worker-scene.XXXXXX")
 echo "$out"
 game="$out/games/luanttd"
@@ -12,8 +13,14 @@ cp game.conf "$game/"
 cp -al mods "$game/"
 cp mods/luanttd_core/init.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
-printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
-cat tests/campaign_ordinary_worker_native.lua >> "$game/mods/luanttd_core/init.lua"
+if [[ $rail_exhaust == 1 ]]; then
+  cat tests/rail_exhaust_native.lua >> "$game/mods/luanttd_core/init.lua"
+  span=128
+else
+  printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
+  cat tests/campaign_ordinary_worker_native.lua >> "$game/mods/luanttd_core/init.lua"
+  span=64
+fi
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-40024}
 display=${BAYLINE_NATIVE_DISPLAY:-199}
@@ -21,8 +28,9 @@ cat >"$out/server.conf" <<CONF
 port = $port
 bind_address = 127.0.0.1
 server_announce = false
-bayline_generated_map_width = 64
-bayline_generated_map_depth = 64
+bayline_generated_map_width = $span
+bayline_generated_map_depth = $span
+bayline_generated_tree_placer = $((rail_exhaust == 1 ? 0 : 2))
 bayline_generated_relief = 0
 bayline_generated_coasts = 0
 luanttd_worker_graphical_qa = true
@@ -53,6 +61,14 @@ mark(){ for _ in {1..360}; do grep -q "$1" "$out/server.log" && return; kill -0 
 mark 'listening on'
 luanti --go --address 127.0.0.1 --port "$port" --name OrdinaryWorker --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
+if [[ $rail_exhaust == 1 ]]; then
+  mark 'PASS NATIVE RAIL EXHAUST'
+  sleep .16
+  import -window root "$out/rail-exhaust.png"
+  grep 'PASS NATIVE RAIL EXHAUST' "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/"{server,client}.log
+  exit
+fi
 mark NATIVE_PROJECTED_CLIENT_READY
 win=$(xdotool search --sync --limit 1 --onlyvisible --pid "$client" | tail -1)
 xdotool windowfocus --sync "$win"

@@ -236,13 +236,15 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     local pos,yaw=Run.pose(p)
     return pos and {pos=pos,yaw=yaw,airborne=not not p.vehicle.airborne} or false
   end
-  local function rail_sample(Run,p)
+  local function rail_sample(s,Run,p)
     local a={}
     if p then
       local count=p.consist.parts and #p.consist.parts or 2
       for i=1,count do
-        local id,td,f,wormhole=Run.sample(p,i)
-        if id then a[i]={tile=id,td=td,progress=f,reversed=not not p.consist.reversed,wormhole=wormhole} end
+        local id,td,f,wormhole,subsurface
+        if Run.presentation_sample then id,td,f,wormhole,subsurface=Run.presentation_sample(s,p,i)
+        else id,td,f,wormhole=Run.sample(p,i) end
+        if id then a[i]={tile=id,td=td,progress=f,reversed=not not p.consist.reversed,wormhole=wormhole,subsurface=subsurface} end
       end
     end
     return a
@@ -280,7 +282,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     frame.ship_samples={Ship and ship_sample(Ship,run and p or nil) or false}
     frame.rail_samples={}
     for _,r in ipairs(rails) do
-      frame.rail_samples[rail_key(r.paid_clock)]={rail_sample(Rail,r)}
+      frame.rail_samples[rail_key(r.paid_clock)]={rail_sample(s,Rail,r)}
     end
     frame.air_samples={}
     for _,a in ipairs(aircraft) do frame.air_samples[air_key(a.paid_clock)]={ship_sample(Air,a)} end
@@ -394,7 +396,7 @@ return function(Sim,Service,Mux,credit,news,RailActors)
       frame.ship_samples[#frame.ship_samples+1]=Ship and ship_sample(Ship,run and p or nil) or false
       for _,r in ipairs(rails) do
         local row=frame.rail_samples[rail_key(r.paid_clock)]
-        row[#row+1]=rail_sample(Rail,r)
+        row[#row+1]=rail_sample(s,Rail,r)
       end
       for _,a in ipairs(aircraft) do
         local row=frame.air_samples[air_key(a.paid_clock)]
@@ -456,20 +458,22 @@ return function(Sim,Service,Mux,credit,news,RailActors)
     local delta=(b.yaw-a.yaw+math.pi)%(2*math.pi)-math.pi
     return {x=u.x+(v.x-u.x)*f,y=u.y+(v.y-u.y)*f,z=u.z+(v.z-u.z)*f},a.yaw+f*delta,a.airborne
   end
-  function F.rail_pose(s,Run,part,fraction,fleet_id)
+  function F.rail_pose(s,Run,part,fraction,fleet_id,native)
     local p=Actors.current(Actors.gather(Run,s),fleet_id)
     if not p then return end
     local frame=views[s]
     local list=enabled(s,"rail") and frame and frame.rail_samples and frame.rail_samples[rail_key(p.paid_clock)]
     if not list or #list<2 then
-      local tile,td,step,wormhole=Run.sample(p,part)
+      local tile,td,step,wormhole
+      if native and Run.presentation_sample then tile,td,step,wormhole=Run.presentation_sample(s,p,part)
+      else tile,td,step,wormhole=Run.sample(p,part) end
       return tile,td,step,p.consist.reversed,wormhole
     end
     local a,b,f=interval(list,fraction)
     a,b=a[part],b[part]
-    if not a then return end
+    if not a or a.subsurface and not native then return end
     local progress=a.progress
-    if b and a.tile==b.tile and a.td==b.td and a.reversed==b.reversed and a.wormhole==b.wormhole then
+    if b and a.tile==b.tile and a.td==b.td and a.reversed==b.reversed and a.wormhole==b.wormhole and (native or not b.subsurface) then
       progress=progress+(b.progress-progress)*f
     end
     return a.tile,a.td,progress,a.reversed,a.wormhole

@@ -6,6 +6,7 @@ return function(api,ui)
   local mod=core.get_modpath("luanttd_core")
   local Pedestrian=dofile(mod.."/pedestrian.lua")
   local pedestrian=Pedestrian.new(api)
+  local sightseeing=dofile(mod.."/survey_sightseeing.lua")
   local hud={}
   local controls={}
   local slots={
@@ -164,6 +165,7 @@ return function(api,ui)
       if s.right_at and now-s.right_at<170000 then return false end
       s.right_at=now
     end
+    if api.vehicle_ui.remember then api.vehicle_ui.remember(p,vehicle) end
     api.vehicle_ui.open(p,vehicle.kind,vehicle.id)
     W.hud(p)
     return true
@@ -256,6 +258,12 @@ return function(api,ui)
           return p:get_wielded_item()
         elseif not action then return item end
         key=value
+        if H.sightseeing[key] then
+          local ok,note=sightseeing.use(key,p,api,W)
+          if not ok and note then ui.status(p,note) end
+          W.hud(p)
+          return item
+        end
         if key=="bend" or key=="cancel" then ui.road_action(p,key);return item end
         if key=="tram_rotate" then ui.rotate_tram(p);return item end
         if key=="tram_clear" then ui.clear_tram_run(p);W.hud(p);return item end
@@ -314,16 +322,17 @@ return function(api,ui)
   end
   local function register_item(key,slot)
     core.register_tool("luanttd_core:menu_"..key,{
-      description=slot[2],inventory_image=slot[3],wield_image=slot[3],range=60,
+      description=slot[2]..(H and H.sightseeing[key] and "\n"..H.sightseeing[key] or ""),
+      inventory_image=slot[3],wield_image=slot[3],range=60,
       on_use=function(item,p) return activate(item,p,false) end,
       on_place=function(item,p) return activate(item,p,true) end,
       on_secondary_use=function(item,p) return activate(item,p,true) end,
       on_drop=function(stack) return stack end,
     })
   end
-  local function mount_menu(feature)
+  local function mount_menu(feature,...)
     if not H then return end
-    H[feature]()
+    H[feature](...)
     for _,menu in pairs(H.menus) do
       for i=1,menu_size do
         local item=menu[i]
@@ -336,6 +345,10 @@ return function(api,ui)
   function W.enable_rail_coal() mount_menu("enable_rail_coal") end
   function W.enable_rail_goods() mount_menu("enable_rail_goods") end
   function W.enable_rail_oil() mount_menu("enable_rail_oil") end
+  function W.enable_rail_wood() mount_menu("enable_rail_wood") end
+  function W.enable_rail_farm(livestock,grain) mount_menu("enable_rail_farm",livestock,grain) end
+  function W.enable_rail_valuables() mount_menu("enable_rail_valuables") end
+  function W.enable_rail_metals(ore,steel) mount_menu("enable_rail_metals",ore,steel) end
   function W.enable_ship_coal() mount_menu("enable_ship_coal") end
   if H then
     for _,tool in ipairs({H.order_pick,H.order_done,H.order_dispatch,H.order_cancel,H.teleport_tile}) do register_item(tool[1],tool) end
@@ -480,11 +493,22 @@ return function(api,ui)
     local state=controls[p:get_player_name()]
     return state and state.avatar
   end
+  function W.may_board(p)
+    local state=controls[p:get_player_name()]
+    if not state then return false,"Join the campaign before boarding." end
+    if state.avatar then return false,"Return to the builder camera before boarding." end
+    if state.order_mode or state.build_drag or state.demolishing then
+      return false,"Finish or cancel construction or orders before boarding."
+    end
+    return true
+  end
   function W.begin_avatar(p,mode)
     local n=p:get_player_name()
     local state=controls[n]
     if not state then return nil,"Join the campaign to enter street view." end
-    if state.avatar then return nil,"Return to the builder camera before switching modes." end
+    if state.avatar or p.get_attach and p:get_attach() or api.vehicle_ui and api.vehicle_ui.following(p) then
+      return nil,"Return to the builder camera before switching modes."
+    end
     if state.order_mode or state.build_drag or state.demolishing then
       return nil,"Finish or right-click to cancel construction or orders first."
     end
@@ -492,7 +516,7 @@ return function(api,ui)
     state.avatar=avatar
     p:hud_set_flags({hotbar=false,crosshair=false})
     p:set_inventory_formspec("formspec_version[7]size[8,2.4]bgcolor[#152334;true]"..
-      "label[.5,.55;Street view active]"..
+      "label[.5,.55;"..(mode=="plane" and "Sightseeing flight active" or "Street view active").."]"..
       "label[.5,1.45;Close this panel, then right-click to return to the builder camera.]")
     for _,id in pairs(hud[n] or {}) do
       if type(id)=="number" then p:hud_remove(id) end
@@ -505,7 +529,7 @@ return function(api,ui)
     -- The hint is the only HUD owned by avatar mode.
     if mode=="walk" then
       avatar.hint=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},z_index=100,
-        text="STREET VIEW  ·  WASD walk  ·  Right-click or /walk to return",number=0xffe8b7})
+        text="STREET VIEW  ·  WASD walk  ·  Right-click to return",number=0xffe8b7})
     end
     return avatar
   end
@@ -542,24 +566,33 @@ return function(api,ui)
     if not avatar or avatar.leaving then return false end
     if avatar.mode=="walk" then return W.end_avatar(p,"walk") end
     if avatar.mode=="car" and api.car then return api.car.toggle(p) end
+    if avatar.mode=="plane" and api.sightseeing_plane then return api.sightseeing_plane.toggle(p) end
     return false
   end
-  function W.toggle_walk(p)
+  local function toggle_walk(p,id,hit,strict)
     local active=W.avatar_state(p)
     if active and active.mode=="walk" then
       return W.end_avatar(p,"walk")
     elseif active then
-      return false,"Leave the car before entering pedestrian mode."
+      return false,"Return to the builder camera before you start walking."
     end
     if not controls[p:get_player_name()] then return false,"Join the campaign to walk." end
-    local id,hit=W.target(p)
-    local land=pedestrian.find(p,id,hit)
-    if not land then return false,"Aim at dry ground or a nearby road, then use /walk again." end
+    local land
+    if strict then
+      land=pedestrian.at(id,hit)
+      if not land then return false,"Choose dry, open ground to start walking." end
+    else
+      id,hit=W.target(p)
+      land=pedestrian.find(p,id,hit)
+      if not land then return false,"Aim at dry ground or a nearby road, then use /walk again." end
+    end
     local avatar,why=W.begin_avatar(p,"walk")
     if not avatar then return false,why end
     pedestrian.enter(p,avatar,land)
     return true
   end
+  function W.toggle_walk(p) return toggle_walk(p) end
+  function W.toggle_walk_at(p,id,hit) return toggle_walk(p,id,hit,true) end
   core.register_chatcommand("walk",{
     description="Drop to street level; use /walk or right-click to return to the builder camera",
     func=function(name)
@@ -599,6 +632,7 @@ return function(api,ui)
   end
   function W.leave(n)
     if api.car and api.car.leave then api.car.leave(n) end
+    if api.sightseeing_plane and api.sightseeing_plane.leave then api.sightseeing_plane.leave(n) end
     hud[n]=nil;controls[n]=nil;api.render.leave(n)
     if api.selector then api.selector.leave(n) end
   end
@@ -785,7 +819,8 @@ return function(api,ui)
       if state and api.vehicle_ui and api.vehicle_ui.following(p) then
         local keys=p:get_player_control()
         local right=keys.place or keys.RMB
-        if right and not state.place then activate(p:get_wielded_item(),p,true) end
+        if api.vehicle_ui.riding and api.vehicle_ui.riding(p) then api.vehicle_ui.ride_controls(p,keys)
+        elseif right and not state.place then activate(p:get_wielded_item(),p,true) end
         state.place=right
         state.dig=keys.dig or keys.LMB
       elseif state and state.avatar then
@@ -794,7 +829,8 @@ return function(api,ui)
         if not state.avatar.leaving then
           if right and not state.place then W.exit_avatar(p)
           elseif state.avatar.mode=="walk" then pedestrian.step(p,state.avatar)
-          elseif state.avatar.mode=="car" and api.car then api.car.step(p,state.avatar,keys,dt) end
+          elseif state.avatar.mode=="car" and api.car then api.car.step(p,state.avatar,keys,dt)
+          elseif state.avatar.mode=="plane" and api.sightseeing_plane then api.sightseeing_plane.step(p,state.avatar,keys,dt) end
         end
         state.place=right
       elseif state then
@@ -847,6 +883,9 @@ return function(api,ui)
       end
     end
   end
-  if core.register_entity then api.car=dofile(mod.."/avatar_car.lua")(api,W) end
+  if core.register_entity then
+    api.car=dofile(mod.."/avatar_car.lua")(api,W)
+    if api.airport_tools then api.sightseeing_plane=dofile(mod.."/avatar_plane.lua")(api,W) end
+  end
   return W
 end

@@ -5,15 +5,53 @@ return function(api)
   local function valid_index(i,n)
     return type(i)=="number" and i%1==0 and i>=1 and i<=n
   end
+  local function signature(v)
+    local items={}
+    for _,o in ipairs(v.orders) do items[#items+1]=o.station..":"..tostring(o.action) end
+    return table.concat(items,"/")
+  end
+  local function depot_receiver(owner,id,depot)
+    local v,t=S.fleet[id],S.tiles[depot]
+    if not v or v.owner~=owner or not Sim.vehicles[v.engine] or Sim.vehicles[v.engine].mode~="road"
+        or (v.home_depot or v.depot)~=depot or not t or t.build~="road_depot" or t.owner~=owner then
+      return nil,"Choose a road vehicle assigned to this depot."
+    end
+    if v.running or v.route or v.road_return_depot then return nil,"Stop the receiving vehicle before copying orders." end
+    return v
+  end
+  function Road.copy_sources(owner,id,depot)
+    local dst,why=depot_receiver(owner,id,depot)
+    if not dst then return nil,why end
+    local sources={}
+    for _,v in pairs(S.fleet) do
+      if v~=dst and v.owner==owner and #v.orders>0 and Sim.can_copy_road_orders(S,owner,id,v.id) then
+        sources[#sources+1]={id=v.id,label=v.name,revision=signature(v),count=#v.orders,
+          cargo=Sim.cargo[v.cargo] and Sim.cargo[v.cargo].name}
+      end
+    end
+    table.sort(sources,function(a,b) return a.id<b.id end)
+    return {vehicle=id,label=dst.name,count=#dst.orders,revision=signature(dst),sources=sources}
+  end
+  function Road.copy(owner,id,depot,source,source_revision,target_revision)
+    local dst,why=depot_receiver(owner,id,depot)
+    if not dst then return false,why end
+    local src=S.fleet[source]
+    if not src or src==dst or src.owner~=owner or #src.orders==0 then
+      return false,"Choose another road vehicle with orders from your company."
+    end
+    if signature(dst)~=target_revision or signature(src)~=source_revision then
+      return false,"Orders changed. Review the source and try again."
+    end
+    return Sim.clone_road_orders(S,owner,id,source,"copy")
+  end
   function Road.read(owner,id)
     local v=S.fleet[id]
     if not v or v.owner~=owner or Sim.vehicles[v.engine].mode~="road" then return end
-    local items,targets,signature={},{},{}
+    local items,targets={},{}
     for _,o in ipairs(v.orders) do
       local st=S.stations[o.station]
       local suffix=({full=" (Full load)",unload=" (Unload only)",transfer=" (Transfer)"})[o.action] or ""
       items[#items+1]={id=o.station,label=(st and st.name or "Missing stop")..suffix}
-      signature[#signature+1]=o.station..":"..tostring(o.action)
     end
     for sid,st in pairs(S.stations) do
       if Sim.road_order_target(S,owner,id,sid) then targets[#targets+1]={id=sid,label=st.name} end
@@ -21,7 +59,7 @@ return function(api)
     table.sort(targets,function(a,b) return a.id<b.id end)
     local active=type(v.road_order_override)=="number" and v.road_order_override
       or v.dest_index or v.road_depot_resume or v.index
-    return {items=items,targets=targets,revision=table.concat(signature,"/"),active=active,
+    return {items=items,targets=targets,revision=signature(v),active=active,
       can_toggle=v.running or #v.orders>=2,running=not not v.running}
   end
   function Road.edit(owner,id,revision,operation,index,target)

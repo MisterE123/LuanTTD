@@ -60,11 +60,15 @@ return function(api)
     if anchor then tex=overlay(tex,"anchor") end
     return tex
   end
+  local Bore=dofile(modpath.."/tunnel_bore.lua")
+  local bore_ground_defs={}
   local function reg(n,tiles,def)
     local full="luanttd_core:"..n
     local d={description=n,tiles=tiles,diggable=false,pointable=not api.road_first,drop="",groups={not_in_creative_inventory=1},is_ground_content=false}
     for k,v in pairs(def or {}) do d[k]=v end
-    core.register_node(full,d);return full
+    core.register_node(full,d)
+    if Bore.cover_candidate(n) then bore_ground_defs[full]=d end
+    return full
   end
   local function water_tile(name,seconds,world)
     return {name=name,animation={type="vertical_frames",aspect_w=64,aspect_h=64,length=seconds},
@@ -592,6 +596,15 @@ return function(api)
             end
           end
         end
+      elseif style.looks then
+        local variants={}
+        stock_house[id]=variants
+        for _,look in ipairs(style.looks) do
+          if not variants[look] then
+            local asset=stock_styles.asset_name(id,look)
+            variants[look]=architecture(asset,asset,"scenery_palette",true,style.solid)
+          end
+        end
       else
         stock_house[id]=architecture(name,name,"scenery_palette",true,style.solid)
       end
@@ -678,11 +691,17 @@ return function(api)
     update_river_directions()
     return river_directions[id] or "north"
   end
-  local house_build={}
+  local house_build,stock_sites={},{}
+  local stock_construction=dofile(modpath.."/stock_town_construction_art.lua")(
+    dofile(modpath.."/openttd/stock_town_draw_rows.lua"),stock_styles)
   if api.town_growth then
     for stage=0,2 do
       local name="house_build_stage_"..stage
       house_build[stage]=architecture(name,name,"house_build_atlas",true)
+    end
+    for name,appearance in pairs(stock_construction.files()) do
+      local shape=appearance.shell and stock_styles[appearance.id].solid or nil
+      stock_sites[name]=architecture(name,name,"scenery_palette",true,shape)
     end
   end
   local basement=reg("bedrock",{rock_side})
@@ -691,7 +710,8 @@ return function(api)
   core.register_alias("mapgen_river_water_source",gnames.water[0])
   local frontage=dofile(modpath.."/house_frontage.lua")
   local fountains=dofile(modpath.."/town_fountain_view.lua")(core,Sim,frontage)
-  function R.step_fountains(dt,viewers)
+  local smoke=S.stock_generated_profile and dofile(modpath.."/industry_smoke_view.lua")(core,Sim,terrain)
+  function R.step_ambient_particles(dt,viewers)
     if not viewers then
       viewers={}
       for _,player in ipairs(core.get_connected_players()) do
@@ -700,8 +720,12 @@ return function(api)
       end
     end
     fountains.step(dt,S,viewers)
+    if smoke then smoke.step(dt,S,viewers) end
   end
-  function R.leave_fountains(name) fountains.leave(name) end
+  function R.leave_ambient_particles(name)
+    fountains.leave(name)
+    if smoke then smoke.leave(name) end
+  end
   local function solid(t,id,x,z)
     if t.site or t.house then
       local record=t.source_house
@@ -717,12 +741,26 @@ return function(api)
         end
         return gnames[t.terrain][t.variant],t.h
       end
-      local stage=record and record.town_growth and not record.completed and house_build[record.stage]
+      local stage,old_orientation
+      local building=record and stock_house[record.id]
+      if record then
+        local tx,tz=Sim.xy(id)
+        if type(building)=="table" then building=building[stock_styles.look(record.id,tx,tz)] end
+        if api.town_growth and record.town_growth and not record.completed then
+          local key=stock_construction.selection(record.id,tx,tz,record.stage)
+          if key and key~="complete" then
+            stage=assert(stock_sites[key],key)
+          elseif not key then
+            stage=house_build[record.stage]
+            old_orientation=stage
+          end
+        end
+      end
       local parcel=record and record.render_parcel or t.parcel
-      local dx,dz,facedir=frontage.placement(Sim,S,id,t,stage,parcel)
+      local dx,dz,facedir=frontage.placement(Sim,S,id,t,old_orientation,parcel)
       if x%2==dx and z%2==dz then
         local variant=record and record.render_variant or t.variant
-        return stage or (record and stock_house[record.id]) or
+        return stage or building or
           (t.site and scenery[S.sites[t.site].kind] or parcels[parcel] or house[variant]),t.h+1,facedir
       end
       return gnames[t.terrain][t.variant],t.h
@@ -1088,8 +1126,11 @@ return function(api)
     if y<top then return gnames[t.terrain][t.variant] end
     return "air"
   end
+  local tunnel_bore=terrain and Bore.mount(reg,bore_ground_defs)
   local function tile_node(id,x,y,z)
     local node,param2=tile_node_base(id,x,y,z)
+    local cut=tunnel_bore and tunnel_bore(S,id,x,y,z,node)
+    if cut then return cut,param2 end
     -- Only an unused cell in a middle tile can host the footings. Preserve
     -- the already-rendered slope/water/foundation in every occupied cell.
     if node=="air" and y>=0 and x%2==1 and z%2==1 then
@@ -1396,6 +1437,8 @@ return function(api)
   end
   local projected_actors=dofile(modpath.."/campaign_projected_actors.lua")(core,api,road_motion,models,
     dofile(modpath.."/airport_manifest.lua")(core,modpath))
+  local exhaust_view=dofile(modpath.."/rail_exhaust_view.lua")(core,
+    dofile(modpath.."/rail_exhaust_model.lua"),vector and vector.rotate)
   local worker_observation
   local actor_buffer=dofile(modpath.."/campaign_actor_buffer.lua")()
   function R.waiting_at(mode,id)
@@ -1406,8 +1449,9 @@ return function(api)
   end
   function R.step_worker_actors(dt)
     if worker_observation then
-      projected_actors.render(actor_buffer.sample(core.get_us_time()),dt,
-        worker_observation.signals and worker_observation.signals())
+      local actors=actor_buffer.sample(core.get_us_time())
+      projected_actors.render(actors,dt,worker_observation.signals and worker_observation.signals())
+      exhaust_view.render(actors,dt)
     end
   end
   function R.draw_worker_actors(projection)

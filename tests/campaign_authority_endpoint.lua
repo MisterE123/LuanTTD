@@ -267,8 +267,10 @@ assert(s.stations[s.tiles[truck_at].station].stop_type=="truck")
 assert(s.stations[s.tiles[truck_at].station].freight_art)
 print("PASS native crossing and freight loading stop use stock construction and retain their paid presentation metadata")
 local chart=A.jump_map(john,false,p)
-assert(chart.ok and chart.value.cols<=64 and chart.value.rows<=64 and #chart.value.pixels==chart.value.cols*chart.value.rows)
-assert(chart.value.targets[p] or #chart.value.towns>=1)
+assert(chart.ok and chart.value.cols<=24 and chart.value.rows<=24 and
+  #chart.value.pixels==chart.value.pixel_cols*chart.value.pixel_rows)
+assert(next(chart.value.targets) and #chart.value.towns>=1)
+assert(not A.jump_map(john,true,p,Sim.W*Sim.H+1).ok)
 local target=A.jump_tile(john,nil,8,24)
 assert(target.ok and target.value.x==16.5 and target.value.z==48.5 and target.value.y>=9.5)
 assert(not A.jump_tile(john,nil,-1,Sim.H).ok)
@@ -280,3 +282,50 @@ assert(not motion.value[1].tiles and not motion.value[1].scene and not motion.va
 assert(not A.actor_frames({{x=0,z=1,w=17,h=5}},.5).ok)
 assert(not A.actor_frames({{x=1,z=1,w=33,h=32}},.5).ok)
 print("PASS worker motion observation stays bounded and does not serialize terrain")
+
+do
+  -- Reconstruct the depot transaction with a running source, a parked
+  -- receiver with existing orders, two flags, and an incompatible truck.
+  local depot=Sim.id(8,8)
+  local copied_bus=s.fleet[purchase.value]
+  local original=s.fleet[id]
+  local incompatible=70
+  local outside=71
+  s.road_economy=true
+  local first,last=s.tiles[p].station,s.tiles[q].station
+  original.orders={{station=last,action="transfer"},{station=first,action="full"}}
+  local before_src=original.orders
+  copied_bus.orders={{station=first,action="normal"},{station=last,action="unload"}}
+  copied_bus.index=2
+  s.fleet[incompatible]={id=incompatible,owner=john,name="Truck",engine="coal_tipper",cargo="coal",
+    home_depot=depot,index=1,orders={{station=s.tiles[truck_at].station,action="full"}}}
+  s.fleet[outside]={id=outside,owner="Another",name="Rival bus",engine="bus",cargo="passenger",
+    home_depot=depot,index=1,orders={{station=first,action="normal"}}}
+  assert(not A.depot_order_sources("Another","road",copied_bus.id,depot).ok)
+  assert(not A.depot_order_sources(john,"road",original.id,depot).ok,"a running receiver cannot copy")
+  local choices=A.depot_order_sources(john,"road",copied_bus.id,depot)
+  assert(choices.ok and #choices.value.sources==1 and choices.value.sources[1].id==id and original.running)
+  local ticket=choices.value.sources[1]
+  local command={kind="depot_copy_orders",mode="road",vehicle=copied_bus.id,source=ticket.id,depot=depot,
+    revision=choices.revision,source_revision=ticket.revision,target_revision=choices.value.revision}
+  original.orders[2].action="unload"
+  assert(not A.command(john,command).ok and copied_bus.orders[1].station==first,"stale source must not change receiver")
+  original.orders[2].action="full"
+  copied_bus.orders[1].action="full"
+  assert(not A.command(john,command).ok and copied_bus.orders[1].station==first,"stale receiver must not be overwritten")
+  copied_bus.orders[1].action="normal"
+  command.source=outside
+  assert(not A.command(john,command).ok and copied_bus.orders[1].station==first)
+  command.source=incompatible
+  command.source_revision=A.orders(john,"road",incompatible).value.revision
+  assert(not A.command(john,command).ok and copied_bus.orders[1].station==first,"incompatible stations must fail atomically")
+  command.source,command.source_revision=ticket.id,ticket.revision
+  assert(A.command(john,command).ok)
+  assert(copied_bus.orders~=before_src and original.orders==before_src and copied_bus.index==2)
+  assert(copied_bus.orders[1].station==last and copied_bus.orders[1].action=="transfer")
+  assert(copied_bus.orders[2].station==first and copied_bus.orders[2].action=="full")
+  copied_bus.orders[1].action="normal"
+  assert(original.orders[1].action=="transfer","copying must not share editable row tables")
+  assert(not A.command(john,command).ok,"outdated native confirmation cannot overwrite newer orders")
+end
+print("PASS worker depot order copy preserves sequence and flags, source identity and receiving cursor; stale, foreign and incompatible copies fail atomically")

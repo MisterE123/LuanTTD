@@ -30,6 +30,8 @@ local v=s.fleet[id]
 assert(S.add_order(s,name,id,a))
 assert(S.add_order(s,name,id,b))
 assert(S.toggle(s,name,id))
+local roads=dofile(root.."road_motion_presentation.lua")(dofile(root.."road_lanes.lua"))
+local native=dofile(root.."road_source_pose.lua")(S,roads)
 local seen={}
 for _=1,65 do
   S.daily(s)
@@ -41,6 +43,8 @@ for _=1,65 do
       local x,z=S.xy(f[4])
       if z==12 and x>=24 and x<=26 then
         assert(not f[10] and f[13] and f[14]==1)
+        local pose,yaw,pitch=native.sample(s,{f},1,1,function()error("projector sampled the hill instead of the tunnel level")end)
+        assert(pose and pose.y==.52 and yaw and pitch==0)
         seen[x]=true
       end
     end
@@ -49,4 +53,4 @@ for _=1,65 do
 end
 assert(seen[24] and seen[25] and seen[26] and v.delivered>0)
 assert(s.stock_road_tunnels[1]["end"]==at(27) and s.stock_road_tunnels[1].middle_length==3)
-print("PASS: bus uses paired tunnel portals, disappears only in the bore and pays a fare")
+print("PASS: bus uses paired tunnel portals, keeps stock hidden state with a real native pose inside the bore and pays a fare")

@@ -2598,10 +2598,12 @@ return function(api,qa_ui)
       local bg=markup:match('bgcolor%[#(%x%x%x%x%x%x)')
       if w and h and bg then panel={tonumber(w),tonumber(h),bg} end
       extended.jump_map_live=nil
-      if key=="luanttd_core:dispatch" and markup:find(";bl_map_clear.png;",1,true) then
+      if (key=="luanttd_core:dispatch" or key=="luanttd_core:worker_jump") and markup:find(";bl_map_clear.png;",1,true) then
         local count=0
         for _ in markup:gmatch(";bl_map_clear%.png;jump_%d+;") do count=count+1 end
-        extended.jump_map_live={count=count,detail=markup:find("LOCAL DETAIL",1,true)~=nil}
+        local labels=0
+        for _ in markup:gmatch(";bl_map_clear%.png;jump_place_%d+;") do labels=labels+1 end
+        extended.jump_map_live={count=count,labels=labels,detail=markup:find("LOCAL DETAIL",1,true)~=nil}
       end
       for x,y,w,h,id in markup:gmatch("button[_a-z]*%[([%d%.]+),([%d%.]+);([%d%.]+),([%d%.]+);([%w_]+);") do
         buttons[id]={tonumber(x),tonumber(y),tonumber(w),tonumber(h)}

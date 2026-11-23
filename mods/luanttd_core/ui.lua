@@ -2,6 +2,7 @@ return function(api)
 local Sim,S,R=api.Sim,api.s,api.render
 local U={}
 local moddir=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Freight=dofile(moddir.."/rail_freight_kinds.lua")
 local worker_action
 local worker_jump_fields
 local worker_jump_form="luanttd_core:worker_jump"
@@ -39,6 +40,7 @@ function U.install_worker_controls(client)
   api.worker_rail_assembly=client
   api.worker_tutorial_client=client
   api.worker_finance=dofile(mod.."/campaign_worker_finance_ui.lua")(core,client,formatted_date,dollars)
+  api.worker_news=dofile(mod.."/campaign_news_ui.lua")(core,mod,client,formatted_date)
   api.worker_build=api.worker_build or dofile(mod.."/campaign_build_proxy.lua")(client)
   api.worker_depot=dofile(mod.."/campaign_worker_depot_ui.lua")(core,client,api.worker_build,dollars,function(p,id)
     return api.owned_rail_ui and api.owned_rail_ui.assemble(p,id)
@@ -65,6 +67,23 @@ local function index_of(a,n)
 end
 local function title_case(s) return s:sub(1,1):upper()..s:sub(2) end
 
+local function jump_nav(V,f)
+  if f.map_zoom then
+    V.map_zoom,V.map_inspect,V.map_center=not V.map_zoom,nil,nil
+    return true
+  elseif f.map_inspect and not V.map_zoom then
+    V.map_inspect=not V.map_inspect
+    return true
+  end
+  for _,dir in ipairs({"map_west","map_east","map_north","map_south"}) do
+    if f[dir] and JumpMap.pan(V,dir) then return true end
+  end
+  local id=JumpMap.pick(V,f)
+  if id and V.map_inspect and not V.map_zoom then
+    V.map_zoom,V.map_inspect,V.map_center=true,nil,id
+    return true
+  end
+end
 local function form()
   local b={"formspec_version[7]size[20.7,14.25]bgcolor[#101C2B;true]"}
   local function push(s) b[#b+1]=s end
@@ -398,11 +417,13 @@ function U.leave(n)
   if Tutorials then Tutorials.leave(n) end
   if U.layer_bulldozer then U.layer_bulldozer.leave(n) end
   if api.worker_fleet then api.worker_fleet.leave(n) end
+  if api.worker_news then api.worker_news.leave(n) end
   if api.worker_build then api.worker_build.leave(n) end
   if U.signal_ui then U.signal_ui.leave(n) end
 end
 function U.cinematic(p,active)
   local name=p:get_player_name()
+  if api.worker_news then api.worker_news.cinematic(p,active) end
   if active and hud[name] then p:hud_remove(hud[name]);hud[name]=nil
   elseif not active then U.hud() end
 end
@@ -421,6 +442,7 @@ function U.hud()
           text=message,number=0xffffff,z_index=100,scale={x=100,y=100}})
       elseif message~=V.hud_line then p:hud_change(hud[n],"text",message) end
       V.hud_line=message
+      if api.worker_news then api.worker_news.observe(p,c) end
       if not company_projection and V.live and V.tab=="map" and S.day-(V.last_live or -10)>=math.max(1,S.speed) then
         V.last_live=S.day;U.open(p)
       end
@@ -436,6 +458,7 @@ function U.fields(p,formname,f)
   if api.authority_handoff and formname==worker_jump_form then return worker_jump_fields(p,f) end
   if api.worker_fleet and formname==api.worker_fleet.form then return api.worker_fleet.fields(p,f) end
   if api.worker_finance and formname==api.worker_finance.form then return api.worker_finance.fields(p,f) end
+  if api.worker_news and formname==api.worker_news.form then return api.worker_news.fields(p,f) end
   if api.worker_depot and formname==api.worker_depot.form then return api.worker_depot.fields(p,f) end
   if api.worker_truck_stop and formname==api.worker_truck_stop.form then return api.worker_truck_stop.fields(p,f) end
   if api.world and api.world.avatar_state and api.world.avatar_state(p) then return false end
@@ -453,6 +476,7 @@ function U.fields(p,formname,f)
     if f.bl_company then U.open_company(p);return true end
     if f.bl_jump then U.open_jump(p);return true end
     if f.bl_finance then U.open_finance(p);return true end
+    if f.bl_newspaper and api.worker_news then return api.worker_news.open(p) end
     if f.bl_tutorials and Tutorials then return Tutorials.open(p) end
     if f.bl_guide then return U.open_workbenches(p) end
     if f.bl_help then U.open_controls(p);return true end
@@ -489,9 +513,11 @@ function U.fields(p,formname,f)
       V.status=("Choose a playable tile: X 1–%d, Z 1–%d."):format(Sim.W,Sim.H)
       U.open(p);return true
     end
-    if f.map_zoom then V.map_zoom=not V.map_zoom;U.open(p);return true end
+    if jump_nav(V,f) then U.open(p);return true end
     local id=JumpMap.pick(V,f)
-    if id then center(V,id);U.survey(p,id);return true end
+    if id and U.teleport_tile(p,id) then
+      V.live=false;core.close_formspec(n,"luanttd_core:dispatch");return true
+    end
   end
   if f.home then center(V,Sim.id(9,9)) end
   if f.west then V.x=math.max(1,V.x-9) end
@@ -576,7 +602,8 @@ function U.inventory(p)
       "button[4.8,1.88;4.18,.62;bl_sections;Reset hotbar to sections]"..
       "button[.4,2.71;4.18,.62;bl_help;Controls]"..
       "button[4.8,2.71;4.18,.62;bl_guide;Transport & World Guide]"..
-      "button[.4,3.54;8.58,.67;bl_tutorials;Tutorials: Road, Train & Boat]")
+      "button[.4,3.54;4.18,.67;bl_tutorials;Tutorials: Road, Train & Boat]"..
+      "button[4.8,3.54;4.18,.67;bl_newspaper;Newspaper]")
     return
   end
   p:set_inventory_formspec("formspec_version[7]size[11,5.8]bgcolor[#101C2B;false]"..
@@ -603,7 +630,7 @@ function U.open_jump(p)
       "button_exit[.48,1.27;8.03,.55;map_return;Return to 3D world]")
     local where=p:get_pos()
     local here=where and Sim.id(math.floor((where.x+.5)/2),math.floor((where.z+.5)/2))
-    local sent,why=client.query({kind="jump_map",player=n,zoom=V.map_zoom==true,here=here},function(r)
+    local sent,why=client.query({kind="jump_map",player=n,zoom=V.map_zoom==true,here=here,focus=V.map_center},function(r)
       if session[n]~=V or V.worker_jump~=ticket then return end
       if not r.ok then core.close_formspec(n,worker_jump_form);V.status=r.why;return end
       local b,push,rect,label,button=form()
@@ -626,7 +653,7 @@ function worker_jump_fields(p,f)
     V.worker_jump=nil;core.close_formspec(n,worker_jump_form);return true
   end
   if not q or not q.hydrated or q.pending then return true end
-  if f.map_zoom then V.map_zoom=not V.map_zoom;return U.open_jump(p) end
+  if jump_nav(V,f) then return U.open_jump(p) end
   local id=JumpMap.pick(V,f)
   local coordinates=f.map_coordinates or f.key_enter and (f.key_enter_field=="map_x" or f.key_enter_field=="map_z")
   if not id and not coordinates then return true end
@@ -726,6 +753,7 @@ function U.guide(p,menu)
   if menu=="railworks" or menu=="railops" then
     return "Connect track, two stations and a depot. Right-click the depot to buy a train and set its orders."
   end
+  if menu=="survey" then return "Choose a sightseeing tool, then aim and click. Right-click exits sightseeing." end
   if menu=="harbor" then return "Place a dock on a straight sloping shore, and a ship depot in open water." end
   if menu=="airfields" then return "Build two airfields. Right-click one to buy an aircraft and start its orders." end
   if menu=="freight" then
@@ -1068,7 +1096,7 @@ local function coal_stage_target(n,tool,id)
   local t=S.tiles[id]
   local st=t and t.rail_station_id and S.stock_rail_stations[t.rail_station_id]
   if not st or st.owner~=n then return nil,"Choose one of your existing rail platforms." end
-  if st.oil_role or st.goods_role then return nil,"Choose a platform without another freight stage." end
+  if Freight.role(st,"coal") then return nil,"Choose a platform without another freight stage." end
   if st.coal_role and st.coal_role~=tool.role then return nil,"Choose a platform without a different coal stage." end
   local details=Sim.rail_coal_stop_status(S,st.id)
   if tool.role=="load" and (not details or #details.sources==0) then
@@ -1086,7 +1114,7 @@ local function oil_stage_target(n,tool,id)
   local t=S.tiles[id]
   local st=t and t.rail_station_id and S.stock_rail_stations and S.stock_rail_stations[t.rail_station_id]
   if not st or st.owner~=n then return nil,"Choose one of your existing rail platforms." end
-  if st.coal_role then return nil,"Choose a platform without a coal stage." end
+  if Freight.role(st,"oil") then return nil,"Choose a platform without another freight stage." end
   if st.oil_role and st.oil_role~=tool.role then
     return nil,"This platform already has the other oil stage."
   end
@@ -1107,7 +1135,7 @@ local function goods_stage_target(n,tool,id)
   local t=S.tiles[id]
   local st=t and t.rail_station_id and S.stock_rail_stations and S.stock_rail_stations[t.rail_station_id]
   if not st or st.owner~=n then return nil,"Choose one of your existing rail platforms." end
-  if st.coal_role or st.oil_role or st.goods_role and st.goods_role~=tool.role then
+  if Freight.role(st,"goods") or st.goods_role and st.goods_role~=tool.role then
     return nil,"This platform already serves another freight stage."
   end
   local details=Sim.rail_goods_stop_status(S,st.id)
@@ -1117,6 +1145,38 @@ local function goods_stage_target(n,tool,id)
     return nil,"This platform must accept Goods from nearby town buildings."
   end
   return st,st.goods_role==tool.role and tool.name.."  |  Already designated" or tool.name.."  |  Click to designate"
+end
+local profile_stage_tools={
+  rail_iron_ore_load={cargo="iron_ore",role="load",name="Iron Ore Mine · loading platform"},
+  rail_iron_ore_unload={cargo="iron_ore",role="unload",name="Steel Mill · ore unloading platform"},
+  rail_steel_load={cargo="steel",role="load",name="Steel Mill · steel loading platform"},
+  rail_steel_unload={cargo="steel",role="unload",name="Factory · steel unloading platform"},
+  rail_valuables_load={cargo="valuables",role="load",name="Bank · Valuables loading platform"},
+  rail_valuables_unload={cargo="valuables",role="unload",name="Different Bank · Valuables delivery platform"},
+  rail_livestock_load={cargo="livestock",role="load",name="Farm · Livestock loading platform"},
+  rail_livestock_unload={cargo="livestock",role="unload",name="Factory · Livestock delivery platform"},
+  rail_grain_load={cargo="grain",role="load",name="Farm · Grain loading platform"},
+  rail_grain_unload={cargo="grain",role="unload",name="Factory · Grain delivery platform"},
+  rail_wood_load={cargo="wood",role="load",name="Forest · Wood loading platform"},
+  rail_wood_unload={cargo="wood",role="unload",name="Sawmill · Wood delivery platform"},
+}
+local function profile_stage_target(n,tool,id,projection)
+  local t=projection and R.host_tile(id) or S.tiles[id]
+  local key=t and t.rail_station_id
+  local st=key and (projection and R.host_record("stock_rail_stations",key) or S.stock_rail_stations and S.stock_rail_stations[key])
+  if not st or st.owner~=n then return nil,"Choose one of your existing rail platforms." end
+  for _,cargo in ipairs(Freight.all) do
+    local role=st[cargo.."_role"]
+    if role and (cargo~=tool.cargo or role~=tool.role) then return nil,"This platform already serves another freight stage." end
+  end
+  if not projection then
+    local get=Sim["rail_"..tool.cargo.."_stop_status"]
+    local details=get and get(S,st.id)
+    if not details or tool.role=="load" and #(details.sources or {})==0 or tool.role=="unload" and not details.accepts then
+      return nil,"This platform is outside the required industry's catchment."
+    end
+  end
+  return st,tool.name.."  |  Click to designate"
 end
 function U.flip_rail_coal(p)
   local V=view(p:get_player_name())
@@ -1727,6 +1787,11 @@ local function authority_preview(p,id,hit)
   local land=landscape_tools[tool]
   if tool=="inspect" then return end
   if tool=="teleport_tile" then return {id},true,"Teleport above this tile" end
+  local freight=profile_stage_tools[tool]
+  if freight then
+    local st,hint=profile_stage_target(n,freight,id,true)
+    return {id},st~=nil,hint
+  end
   if bridge then
     if not V.anchor then return {id},true,"Click the first bridgehead. Right-click cancels." end
     local q,why=api.bridge_picker.quote(bridge,n,V.anchor,id)
@@ -1884,6 +1949,10 @@ function U.preview(p,id,hit)
   if oil_stage_tools[V.tool] and api.rail_oil_tools then
     local st,hint=oil_stage_target(n,oil_stage_tools[V.tool],id)
     return {id},not not st,hint
+  end
+  if profile_stage_tools[V.tool] then
+    local st,hint=profile_stage_target(n,profile_stage_tools[V.tool],id,false)
+    return {id},st~=nil,hint
   end
   if V.tool=="oneway_drag" and api.oneway_tools then
     local q,why=one_way_quote(n,V,id)
@@ -2077,7 +2146,7 @@ end
 function U.is_world_tool(tool)
   if type(tool)~="string" or tool=="company" or tool=="jump" then return false end
   return not not (Sim.tools[tool] or rail_orders[tool] or rail_tool_labels[tool] or waypoint_tools[tool] or rail_spans[tool] or coal_stage_tools[tool] or
-    (api.rail_oil_tools and oil_stage_tools[tool]) or (api.rail_goods_tools and goods_stage_tools[tool]) or airfield_tools[tool] or ship_mode[tool] or buoy_tools[tool] or tram_mode[tool] or
+    (api.rail_oil_tools and oil_stage_tools[tool]) or (api.rail_goods_tools and goods_stage_tools[tool]) or profile_stage_tools[tool] or airfield_tools[tool] or ship_mode[tool] or buoy_tools[tool] or tram_mode[tool] or
     tool=="fund_bank" or tool=="teleport_tile" or tool=="tram_order" or tool=="airfield_order" or tool=="ship_order" or tool=="ship_coal_order" or tool=="truck_stop_tool" or tool=="rail_crossing_tool" or tool=="oneway_drag" or
     landscape_tools[tool] or bridge_tool(tool) or tool:match("^structure_"))
 end
@@ -2092,7 +2161,7 @@ end
 function U.world_status(p,tile,show_preview,hit)
   local V=view(p:get_player_name())
   local tool=Sim.tools[V.tool] or (V.tool=="tram_order" and tram_order) or airfield_tools[V.tool] or rail_orders[V.tool] or rail_spans[V.tool] or coal_stage_tools[V.tool] or
-    oil_stage_tools[V.tool] or goods_stage_tools[V.tool] or landscape_tools[V.tool] or (V.tool=="airfield_order" and airfield_order) or (V.tool=="ship_order" and ship_order) or
+    oil_stage_tools[V.tool] or goods_stage_tools[V.tool] or profile_stage_tools[V.tool] or landscape_tools[V.tool] or (V.tool=="airfield_order" and airfield_order) or (V.tool=="ship_order" and ship_order) or
     (buoy_tools[V.tool] and {name=buoy_tools[V.tool]}) or
     (V.tool=="ship_coal_order" and ship_coal_order) or
     (V.tool=="rail_crossing_tool" and crossing_tool) or (V.tool=="oneway_drag" and one_way_tool) or
@@ -2180,9 +2249,9 @@ function U.build_world(p,id,hit)
     if V.tool=="road_station" or V.tool=="road_depot" or V.tool=="road_bay_pair" then
       worker_build(n,V,"road",{tool=V.tool,first=id});return
     end
-    local stage=coal_stage_tools[V.tool] or oil_stage_tools[V.tool] or goods_stage_tools[V.tool]
+    local stage=coal_stage_tools[V.tool] or oil_stage_tools[V.tool] or goods_stage_tools[V.tool] or profile_stage_tools[V.tool]
     if stage then
-      local cargo=coal_stage_tools[V.tool] and "coal" or oil_stage_tools[V.tool] and "oil" or "goods"
+      local cargo=stage.cargo or (coal_stage_tools[V.tool] and "coal" or oil_stage_tools[V.tool] and "oil" or "goods")
       worker_action(n,V,{kind="rail_freight_stage",tile=id,cargo=cargo,role=stage.role,mirror=V.coal_side~=false})
       return
     end
@@ -2376,6 +2445,15 @@ function U.build_world(p,id,hit)
     if not st then V.status=hint;return end
     if not Sim.rail_oil_designate then V.status="Rail Oil service is not available.";return end
     local ok,note,dirty=Sim.rail_oil_designate(S,n,st.id,tool.role)
+    V.status=note
+    if ok then R.update(dirty or st.tiles);api.save() end
+    return
+  end
+  if profile_stage_tools[V.tool] then
+    local tool=profile_stage_tools[V.tool]
+    local st,hint=profile_stage_target(n,tool,id,false)
+    if not st then V.status=hint;return end
+    local ok,note,dirty=Sim["rail_"..tool.cargo.."_designate"](S,n,st.id,tool.role)
     V.status=note
     if ok then R.update(dirty or st.tiles);api.save() end
     return
@@ -2897,7 +2975,10 @@ function U.service(p,kind,id)
     label(.4,1.22,number(ind.produced.waiting or 0)..(goods and " goods crates on site" or " tons of wood on site"))
     label(.4,1.72,("This month: %s produced  •  %s collected"):format(
       number(ind.produced.current.production or 0),number(ind.produced.current.transported or 0)))
-    if goods then label(.4,2.28,number(ind.wood_received or 0).." tons of wood received in total.") end
+    if goods then
+      local total=(ind.wood_received or 0)+(ind.received and ind.received.wood or 0)
+      label(.4,2.28,number(total).." tons of wood received in total.")
+    end
     if not api.timber_tools then label(.4,2.84,"Timber service is paused in settings.") end
   elseif kind=="industry" then
     local ind=S.stock_coal_industries and S.stock_coal_industries[id]
@@ -2962,10 +3043,16 @@ function U.service(p,kind,id)
         label(.4,2.80,platform.oil_role=="load" and "Loads oil for the refinery." or
           oil.accepts and "Accepts oil. The refinery makes Goods for road freight." or "The refinery no longer accepts oil here.")
       else label(.4,2.23,"Rail Oil workbench paused in settings.") end
+    elseif Freight.role(platform) then
+      local cargo=Freight.role(platform)
+      local stage=profile_stage_tools["rail_"..cargo.."_"..platform[cargo.."_role"]]
+      local q=Sim["rail_"..cargo.."_stop_status"](S,id)
+      label(.4,1.68,stage.name)
+      if q then label(.4,2.23,number(q.waiting or 0)..(" "..(Freight.profiles[cargo].unit or "tons").." waiting")) end
     end
     local paid=Sim.rail_paid_status and Sim.rail_paid_status(S)
     local waiting=paid and paid.waiting and paid.waiting[id]
-    if waiting and not platform.coal_role and not platform.oil_role and not platform.goods_role then
+    if waiting and not Freight.role(platform) then
       label(.4,1.71,number(waiting.waiting or 0).." passengers waiting")
       label(.4,2.28,waiting.accepts and "Accepts passengers." or "Not enough nearby houses to accept passengers.")
       label(.4,2.82,("Shuttle: %d/%d aboard  ·  %s in fares"):format(paid.onboard,paid.capacity,dollars(paid.fare)))

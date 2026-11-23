@@ -3,7 +3,6 @@ return function(core,client,build,money,assembly)
   local mod=core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
   local Help=dofile(mod.."/depot_vehicle_help.lua")
   local esc=core.formspec_escape
-  local page_size=5
   local D={form="luanttd_core:worker_depot"}
   local panels={}
   local serial=0
@@ -33,19 +32,29 @@ return function(core,client,build,money,assembly)
       local req=row.request or {}
       return row.help or Help.describe(p.mode,row.cargo or req.cargo,row.name or row.label)
     end
-    Help.rows(b,esc,{x=.45,y=1.57,w=5.12,items=offers,prefix=stem.."offer_",count=page_size,
-      page=p.offer_page or 1,selected=p.offer or 1,help=info,
-      label=function(q) return q.name.."  ·  "..money(q.price) end})
-    Help.rows(b,esc,{x=5.82,y=1.57,w=5.12,items=units,prefix=stem.."unit_",count=page_size,
-      page=p.unit_page or 1,selected=p.unit or 1,help=info,label=function(u) return u.label end})
+    Help.rows(b,esc,{x=.45,y=1.57,w=5.12,h=3.57,items=offers,prefix=stem.."offer_",
+      scroll=p.offer_scroll,selected=p.offer or 1,help=info,
+      label=function(q)
+        local model,cargo=q.name:match("^(.-) · (.+)$")
+        return model or q.name,(cargo and cargo.." · " or "")..money(q.price)
+      end})
+    Help.rows(b,esc,{x=5.82,y=1.57,w=5.12,h=3.57,items=units,prefix=stem.."unit_",
+      scroll=p.unit_scroll,selected=p.unit or 1,help=info,
+      label=function(u) return u.label,info(u).service end})
     if #offers==0 then b[#b+1]="label[.5,1.89;No vehicles currently on sale.]" end
     if #units==0 then b[#b+1]="label[5.87,1.89;No vehicles assigned here.]" end
     if #offers>0 then
       local chosen=data.offers[p.offer or 1]
-      local action=chosen.request.operation=="refit" and "Apply selected refit" or "Buy selected vehicle"
+      local action=(chosen.request.operation=="refit" and "Refit" or "Buy").." for "..money(chosen.price)
       b[#b+1]="button[.45,5.42;5.12,.59;"..stem.."buy;"..action.."]"
     end
-    if #units>0 then b[#b+1]="button[5.82,5.42;5.12,.59;"..stem.."orders;Open selected vehicle]" end
+    if #units>0 then
+      if p.mode=="road" then
+        b[#b+1]="button[5.82,5.42;2.54,.59;"..stem.."orders;Open vehicle]"
+        b[#b+1]="button[8.47,5.42;2.47,.59;"..stem.."copy;Copy orders…]"
+        b[#b+1]="tooltip["..stem.."copy;Copy an independent order list from another vehicle to the selected vehicle.]"
+      else b[#b+1]="button[5.82,5.42;5.12,.59;"..stem.."orders;Open selected vehicle]" end
+    end
     local route_ok=cargo and #first>0 and #last>0 or not cargo and #first>=2
     if route_ok and #units>0 then
       if p.mode~="air" then
@@ -63,14 +72,14 @@ return function(core,client,build,money,assembly)
     if p.mode=="rail" and assembly and p.data then
       b[#b+1]="button[.45,9.09;5.12,.58;"..stem.."assemble;Assemble wagons]"
     end
-    b[#b+1]="label[.45,8.88;"..esc(note or "").."]"
+    b[#b+1]="label[.45,8.88;"..esc(Help.fit(note,61)).."]"
     b[#b+1]="button_exit[5.82,9.09;5.12,.58;close;Back to world]"
     core.show_formspec(n,D.form,table.concat(b))
   end
   function D.open(player,mode,depot,note,vehicle_handler)
     local name=player:get_player_name()
     serial=serial+1
-    local p={serial=serial,mode=mode,depot=depot,vehicle_handler=vehicle_handler}
+    local p={serial=serial,mode=mode,depot=depot,vehicle_handler=vehicle_handler,focus="offer"}
     panels[name]=p
     draw(name,p,note or "Reading the depot…")
     local sent,why=client.query({kind="depot",player=name,mode=mode,depot=depot},function(reply)
@@ -81,34 +90,111 @@ return function(core,client,build,money,assembly)
     if not sent then draw(name,p,why) end
     return true
   end
+  local function named_vehicle(label,id)
+    label=label or "Vehicle"
+    local number="#"..id
+    return label:sub(-#number)==number and label or label.." "..number
+  end
+  local function draw_copy(n,p,c,note)
+    local stem="dc"..c.token.."_"
+    local data=c.data or {}
+    local b={"formspec_version[7]size[11.4,8.20]bgcolor[#152334;false]",
+      "label[.45,.42;Copy orders]",
+      "label[.45,.92;To: "..esc(Help.fit(named_vehicle(c.label,c.vehicle),59)).."]",
+      "label[.45,1.42;Choose a source vehicle from your company.]",
+      "label[.45,1.85;Copying replaces the destination orders with an independent list.]"}
+    if data.sources and #data.sources>0 then
+      Help.rows(b,esc,{x=.45,y=2.20,w=10.49,h=3.85,items=data.sources,
+        prefix=stem.."source_",scroll=c.scroll,selected=c.selected,
+        help=function(row) return {model=named_vehicle(row.label,row.id),service=row.cargo or "Road vehicle",
+          connections=("Copy all %d orders in their current sequence."):format(row.count)} end,
+        label=function(row) return named_vehicle(row.label,row.id),(row.cargo or "Road vehicle").." · "..row.count.." orders" end})
+    end
+    b[#b+1]="textarea[.48,6.19;10.27,.68;;;"..esc(note or "").."]"
+    b[#b+1]="button[.45,7.08;5.10,.66;"..stem.."back;Back to depot]"
+    if c.selected and data.sources and data.sources[c.selected] and not c.pending then
+      b[#b+1]="button[5.82,7.08;5.12,.66;"..stem.."apply;Copy selected orders]"
+    end
+    core.show_formspec(n,D.form,table.concat(b))
+  end
+  local function read_copy(n,p,c,notice,previous)
+    draw_copy(n,p,c,notice or "Reading compatible vehicles…")
+    local sent,why=client.query({kind="depot_order_sources",player=n,mode=p.mode,
+      vehicle=c.vehicle,depot=p.depot},function(r)
+      if panels[n]~=p or p.copy~=c then return end
+      c.data,c.revision,c.pending,c.selected=nil,nil,nil,nil
+      local note=notice or r.why
+      if r.ok then
+        c.data,c.revision=r.value,r.revision
+        for i,v in ipairs(c.data.sources) do if v.id==previous then c.selected=i;break end end
+        if #c.data.sources<1 then note="No compatible vehicles with orders. Set up another vehicle first."
+        else
+          c.selected=c.selected or 1
+          note=note or (c.data.count>0 and ("This replaces the destination's "..c.data.count.." existing orders.") or nil)
+        end
+      end
+      draw_copy(n,p,c,note)
+    end)
+    if not sent then c.pending=nil;draw_copy(n,p,c,why) end
+  end
+  local function copy_fields(n,p,c,f)
+    local stem="dc"..c.token.."_"
+    if f[stem.."back"] then p.copy=nil;draw(n,p);return true end
+    if not c.data or c.pending then return true end
+    c.scroll=Help.scroll_fields(core,f,stem.."source_scroll",c.scroll)
+    local row=Help.selected(f,stem.."source_row",#c.data.sources)
+    if row then c.selected=row;draw_copy(n,p,c);return true end
+    local source=c.data.sources[c.selected]
+    if not (source and f[stem.."apply"]) then return true end
+    c.pending=true
+    local sent,why=client.query({kind="command",player=n,command={kind="depot_copy_orders",mode=p.mode,
+      vehicle=c.vehicle,depot=p.depot,source=source.id,source_revision=source.revision,
+      target_revision=c.data.revision,revision=c.revision}},function(r)
+      if panels[n]~=p or p.copy~=c then return end
+      if not r.ok then
+        local note=r.why=="STALE_COMMAND" and "The campaign changed. Review the latest orders and try again." or r.why
+        return read_copy(n,p,c,note,source.id)
+      end
+      p.copy=nil;p.revision=r.revision
+      draw(n,p,r.why or "Orders copied.")
+    end)
+    if not sent then c.pending=nil;draw_copy(n,p,c,why)
+    elseif p.copy==c and c.pending then draw_copy(n,p,c,"Copying orders…") end
+    return true
+  end
   function D.fields(player,f)
     local n=player:get_player_name()
     local p=panels[n]
     if not p then return true end
     if f.quit then panels[n]=nil;return true end
+    if p.copy then return copy_fields(n,p,p.copy,f) end
     if not p.data or p.pending then return true end
     local stem="d"..p.serial.."_"
     local update,unit_changed=false,false
     for kind,list in pairs({offer=p.data.offers,unit=p.data.vehicles}) do
       local key=stem..kind.."_"
-      local page_key=kind.."_page"
-      local page=p[page_key] or 1
-      if f[key.."prev"] and page>1 then p[page_key]=page-1;update=true
-      elseif f[key.."next"] and page*page_size<#list then p[page_key]=page+1;update=true
-      else
-        for i=(page-1)*page_size+1,math.min(page*page_size,#list) do
-          if f[key.."row"..i] then
-            unit_changed=kind=="unit" and (p.unit or 1)~=i
-            p[kind],p.focus,update=i,kind,true
-            break
-          end
-        end
+      local field=kind.."_scroll"
+      p[field]=Help.scroll_fields(core,f,key.."scroll",p[field])
+      local i=Help.selected(f,key.."row",#list)
+      if i then
+        unit_changed=kind=="unit" and (p.unit or 1)~=i
+        p[kind],p.focus,update=i,kind,true
       end
     end
     if unit_changed then p.from,p.to=nil,nil
     else
       p.from=tonumber(f[stem.."from"]) or p.from
       p.to=tonumber(f[stem.."to"]) or p.to
+    end
+    if p.mode=="road" and f[stem.."copy"] then
+      local u=p.data.vehicles[p.unit or 1]
+      if u then
+        serial=serial+1
+        local c={vehicle=u.id,label=u.label,token=serial}
+        p.copy=c
+        read_copy(n,p,c)
+      end
+      return true
     end
     if p.mode=="rail" and f[stem.."assemble"] and assembly then return assembly(player,p.depot) end
     if f[stem.."orders"] and p.vehicle_handler then

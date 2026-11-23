@@ -505,7 +505,7 @@ core.register_globalstep(function(dt)
   local online=#players>0
   api.interest.refresh(players)
   if api.farm_view then api.farm_view.step(dt) end
-  render.step_fountains(dt)
+  render.step_ambient_particles(dt)
   render.step_lighthouse_beams(dt)
   if online then render.refresh_interest() else render.remove_vehicle_views() end
   if api.rail_platform_view then api.rail_platform_view.step(dt,online) end
@@ -660,7 +660,7 @@ core.register_on_player_receive_fields(function(p,key,f)
   return true
 end)
 if placement then core.after(0,attempt_placement) elseif worker_boot then core.after(0,start_authority) end
-core.register_on_leaveplayer(function(p) render.leave_fountains(p:get_player_name());api.vehicle_ui.leave(p);ui.leave(p:get_player_name());world.leave(p:get_player_name());if authority then authority.leave(p:get_player_name()) end;if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
+core.register_on_leaveplayer(function(p) render.leave_ambient_particles(p:get_player_name());api.vehicle_ui.leave(p);ui.leave(p:get_player_name());world.leave(p:get_player_name());if authority then authority.leave(p:get_player_name()) end;if api.trackworks_demo then api.trackworks_demo.leave(p:get_player_name()) end;api.save() end)
 core.register_on_player_receive_fields(ui.fields)
 core.register_chatcommand("dispatch",{description="Open LuanTTD dispatcher",func=function(name)
   local p=core.get_player_by_name(name)
@@ -910,6 +910,21 @@ do
         if api.rail_oil_tools then world.enable_rail_oil() end
       end
     end
+    Sim.mount_rail_freight_profiles(S,rail_art.ready)
+    api.rail_iron_ore_tools=Sim.rail_profile_active(S,"iron_ore")
+    api.rail_steel_tools=Sim.rail_profile_active(S,"steel")
+    api.rail_valuables_tools=Sim.rail_profile_active(S,"valuables")
+    if api.rail_valuables_tools then world.enable_rail_valuables() end
+    api.rail_livestock_tools=Sim.rail_profile_active(S,"livestock")
+    api.rail_grain_tools=Sim.rail_profile_active(S,"grain")
+    api.rail_wood_tools=Sim.rail_profile_active(S,"wood")
+    if api.rail_wood_tools then world.enable_rail_wood() end
+    if api.rail_livestock_tools or api.rail_grain_tools then
+      world.enable_rail_farm(api.rail_livestock_tools,api.rail_grain_tools)
+    end
+    if api.rail_iron_ore_tools or api.rail_steel_tools then
+      world.enable_rail_metals(api.rail_iron_ore_tools,api.rail_steel_tools)
+    end
     dofile(mod.."/rail_dispatch_commands.lua")(api,Pilot,Track,Signal)
   end
   core.register_chatcommand("railtrial",{
@@ -1048,7 +1063,7 @@ end
 -- Old debug commands captured the initial Sim table. Keep only engine-
 -- side navigation shortcuts live while this process is not the owner.
 if worker_boot then
-  local native_only={walk=true,car=true,tools=true,dispatch=true,bayline_help=true,world_origin=true}
+  local native_only={walk=true,car=true,plane=true,train=true,ride=true,tools=true,dispatch=true,bayline_help=true,world_origin=true}
   for name,definition in pairs(core.registered_chatcommands) do
     if definition.mod_origin=="luanttd_core" and not native_only[name] then
       local prior=definition.func

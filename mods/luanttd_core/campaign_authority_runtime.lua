@@ -120,25 +120,28 @@ return function(Sim,mod,s,cap)
           if index==0 then return level end
         end)
     end
+    local exhaust=dofile(mod.."/rail_exhaust_model.lua")
+    local function above(index,book,id,y)
+      local span=index and book and book[index[id]]
+      return span and span.deck and span.deck+.612>y+.02
+    end
+    local function covered(id,y)
+      return above(s.rail_bridge_above,s.stock_rail_spans,id,y) or above(s.bridge_above,s.stock_road_bridges,id,y)
+        or above(s.aqueduct_above,s.stock_aqueducts,id,y)
+    end
     function N.rail.poses(train,fraction)
       local parts=train.consist.parts
       local samples={}
       local push_pull=(train.dual_head or train.stock_engine==11) and #parts>1
       for i=1,#parts do
         local id,td,f,reversed,wormhole
-        if train.paid_clock then id,td,f,reversed,wormhole=Sim.rail_paid_pose(s,i,fraction,train.fleet_id)
-        else id,td,f,wormhole=rail.sample(train,i);reversed=train.consist.reversed end
+        if train.paid_clock then id,td,f,reversed,wormhole=Sim.rail_paid_pose(s,i,fraction,train.fleet_id,true)
+        else id,td,f,wormhole=rail.presentation_sample(s,train,i);reversed=train.consist.reversed end
         if id then samples[i]={id=id,td=td,progress=f,reversed=reversed,wormhole=wormhole} end
       end
       samples=fit(samples,parts,push_pull) or samples
       local engine=art.stock_kind[train.stock_engine] or "locomotive"
-      local wagon="wagon"
-      if train.stock_engine==11 and not train.stock_wagon then wagon="manley"
-      elseif train.stock_wagon==29 then
-        local coal=Sim.rail_coal_status(s)
-        wagon=coal and (coal.onboard or 0)>0 and "coal_loaded" or "coal_empty"
-      elseif train.stock_wagon==30 then wagon="oil_tanker"
-      elseif train.stock_wagon==32 then wagon="goods_van" end
+      local wagon=art.wagon(train,Sim,s)
       local out={}
       for i=1,#parts do
         local p=samples[i]
@@ -146,6 +149,13 @@ return function(Sim,mod,s,cap)
           local pos,rotation,kind,body_index,flip=body(train,p,i,engine,wagon)
           local body={tile=p.id,td=p.td,fraction=p.progress,index=i,body_index=body_index,kind=kind,
             pos=pos,rotation=rotation,reversed=not not p.reversed,flip=flip}
+          if exhaust.profiles[kind] then
+            local index=p.wormhole and s.rail_tunnel_below and s.rail_tunnel_below[p.id]
+            local bore=index and (s.stock_rail_spans or {})[index]
+            local underground=bore and math.abs(pos.y-(bore.base+.612))<.12
+            body.exhaust=exhaust.work(train,kind,body_index,s.tiles[p.id],
+              network.spans.by_portal(s,p.id),underground or covered(p.id,pos.y))
+          end
           if i==1 and train.bridge_collectors and cap.rail.split[kind] then
             local rows,axis,side
             if span_wire then rows,axis,side=span_wire(s,p.id,p.td,p.wormhole) end
@@ -186,6 +196,7 @@ return function(Sim,mod,s,cap)
     if s.rail_goods_service then
       Sim.mount_rail_goods(s,function() return cap.rail.ready.goods_van==true end)
     end
+    Sim.mount_rail_freight_profiles(s,cap.rail.ready)
     if not cap.rail.ready.oil_tanker then s.rail_oil_service=false end
     network.crossings.refresh(s,network.lab.board(s))
   end
@@ -224,8 +235,8 @@ return function(Sim,mod,s,cap)
       end
       return s.tiles[id].h+.52
     end
-    local computed,pos,yaw,pitch=positions.timeline(s,v,fraction,surface)
-    if computed then return pos,yaw,pitch end
+    local computed,pos,yaw,pitch,bore=positions.timeline(s,v,fraction,surface)
+    if computed then return pos,yaw,pitch,bore end
     local f=Sim.road_motion_frame(s,v)
     if f then return positions.sample(s,{f},1,1,surface) end
   end
@@ -256,6 +267,17 @@ return function(Sim,mod,s,cap)
   N.company_fleet=dofile(mod.."/campaign_company_fleet.lua")(Sim,N)
   N.demolition=dofile(mod.."/campaign_demolition_runtime.lua")(Sim,mod,N,Slope)
   N.transport=dofile(mod.."/campaign_transport_commands.lua")(Sim,N)
-  function N.day() Sim.daily(s);if Clock then Clock() end end
+  N.news=dofile(mod.."/campaign_news.lua")(Sim,mod,N,cap)
+  Sim.mount_news(s,N.news.arrive)
+  if N.rail then N.rail.run.news_collision=N.news.rail_collision end
+  for _,run in ipairs({N.rail and N.rail.run or false,N.water and N.water.run or false,
+    N.water and N.water.freight or false,N.water and N.water.tanker_run or false,N.air and N.air.run or false}) do
+    if run then run.news_arrival=N.news.arrive end
+  end
+  function N.day()
+    Sim.daily(s)
+    if Clock then Clock() end
+    N.news.day()
+  end
   return N
 end

@@ -1,5 +1,27 @@
 # Changelog
 
+## November 23, 2026 development preview
+
+- Use **Survey** to walk, drive from inside a car, fly from a Country or City
+  Airport, sit in a train driver's cab, or ride in a bus or coach. The seated
+  view is private: other players see the normal vehicle. Exit to recover
+  your builder view and tools.
+- Road and railway tunnels now have native open bores and real running surfaces
+  underneath intact surface terrain. Restored visible repair smoke; working
+  trains and real industrial chimneys have local exhaust. Fixed overlapping
+  farm building roofs, trim and silo surfaces.
+- **Transport Gazette** ports stock RC1 newspaper ordering, category
+  preferences and history. The worker reports real vehicle introductions,
+  first arrivals, rail collisions and installed-industry changes. Not every
+  upstream event producer is connected yet.
+- Depots scroll without cutting off complete model names. Restore an
+  independent Copy Orders action for stopped road vehicles. The Jump Map
+  has finer detail, named towns and simple area targets.
+- Add six native freight wagons for Iron Ore, Steel, Valuables, Livestock,
+  Grain and Wood, four Darwin and four Bakewell Luckett aircraft, a
+  dozen completed town/retail appearances and the source construction stages
+  for all 27 single-tile Temperate town building types.
+
 ## Current preview
 
 - The install folder and game ID are now `luanttd`. The bundled mod is

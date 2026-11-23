@@ -318,6 +318,7 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
       if event=="dock" then
         p.phase,p.dwell,p.arrivals="moored",paid and 0 or 44,p.arrivals+1
         p.last_berth,p.last_dock=v.tile,v.last_station
+        if R.news_arrival then R.news_arrival("ship",p.owner,p.last_dock,v.tile) end
         if paid then
           local ok,why=paid.arrive(p)
           if not ok then p.phase,p.failure="blocked",why or "MISSING_PAID_STATION";break end

@@ -58,7 +58,7 @@ local function transfer_ordinary(viewer)
     return filename
   end
   local paint_started,painted,away,away_tick,reentered,opening_orders,orders_ready
-  local train_id,painter,demolition_depot,signal_rendered,bus_id
+  local train_id,painter,demolition_depot,signal_rendered,bus_id,arrival_news
   local function ask(request,done)
     request.player=owner
     assert(authority_test.query(request,done))
@@ -360,7 +360,19 @@ local function transfer_ordinary(viewer)
     elseif away_tick and not reentered and bodies()>=2 then
       reentered=true
       core.log("action","PASS NATIVE PROJECTED ROLLING STOCK: original steam and coach cull and return while the worker clock runs")
-      ask({kind="stop"},function() end)
+      local function read_news()
+        ask({kind="news",page=1},function(reply)
+          assert(reply.ok,reply.why)
+          for _,row in ipairs(reply.value.items) do
+            if row.kind=="arrival_player" and row.icon=="train" then arrival_news=row;break end
+          end
+          if not arrival_news then core.after(.2,read_news);return end
+          assert(not S.stock_news_journal and not arrival_news.owner and arrival_news.economy>expected.day and arrival_news.tile)
+          core.log("action","PASS NATIVE WORKER NEWSPAPER: real train arrival read through the authority mailbox")
+          ask({kind="stop"},function() end)
+        end)
+      end
+      read_news()
     end
   end
   local function run_plans(i,plans)
@@ -420,6 +432,11 @@ local function transfer_ordinary(viewer)
     local state=disk.read()
     assert(state.day==day and state.passenger_house_clock.counter==day*74 and state.stock_generated_profile.width==64)
     assert(state.tiles[origin].rail_tracks==1 and not S.tiles[origin].rail_tracks)
+    local published=false
+    for _,row in ipairs(assert(state.stock_news_journal).items) do
+      if row.seq==assert(arrival_news).seq then published=true;break end
+    end
+    assert(published,"worker did not checkpoint the newspaper article")
     if viewer then assert(state.stock_rail_dispatch.runs[1].orders[1].station==1 and state.companies[owner].loan==expected.loan+10000
       and S.companies[owner].loan==expected.loan and not state.tiles[demolition_depot].build) end
     assert(state.companies[owner].cash<expected.cash-initial_price and S.companies[owner].cash==expected.cash)

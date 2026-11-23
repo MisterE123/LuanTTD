@@ -25,7 +25,7 @@ return function(api)
   function V.step(dt,online)
     if not online then for id in pairs(reels) do remove(id) end;return end
     local smoke=false
-    if S.speed>0 then smoke_elapsed=smoke_elapsed+dt end
+    if not api.generated_world and S.speed>0 then smoke_elapsed=smoke_elapsed+dt end
     if smoke_elapsed>.62 then smoke=true;smoke_elapsed=0 end
     local active={}
     local players=core.get_connected_players()

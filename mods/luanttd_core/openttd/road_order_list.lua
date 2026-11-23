@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- OpenTTD 14.1 order_cmd.cpp CmdCloneOrder, DeleteVehicleOrders and
+-- OpenTTD 14.1 and 16.0-RC1 order_cmd.cpp CmdCloneOrder, DeleteVehicleOrders and
 -- CmdDeleteOrder: order data can be linked, a vehicle's cursor cannot.
 -- Lua host adapter for ROAD station orders only. The caller defines
 -- CanVehicleUseStation and stops a vehicle before replacing its list.
@@ -104,6 +104,11 @@ local function can_clone(s,owner,id,from,action,road,use)
     end
   end
   return dst,src
+end
+
+function O.can_copy(s,owner,id,from,road,use)
+  local dst,src=can_clone(s,owner,id,from,"copy",road,use)
+  return dst~=nil,not dst and src or nil
 end
 
 function O.clone(s,owner,id,from,action,road,use)

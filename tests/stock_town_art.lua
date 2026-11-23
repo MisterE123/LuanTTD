@@ -20,7 +20,26 @@ for _,v in ipairs(Catalog) do
   count=count+1
 end
 assert(count==31)
-local all={}
+local all,rendered={},{}
+-- Compare the low native bits with the full upstream pixel hash using an
+-- independent width-agnostic XOR implementation (plain Lua 5.1).
+local function xor(a,b)
+  local n,bit=0,1
+  while a>0 or b>0 do
+    if (a%2)~=(b%2) then n=n+bit end
+    a,b,bit=math.floor(a/2),math.floor(b/2),bit*2
+  end
+  return n
+end
+for x=1,512 do
+  for z=1,512,7 do
+    local px,py=(x-1)*16,(z-1)*16
+    local stock=(xor(xor(math.floor(px/16),math.floor(px/64)),math.floor(py/16))-math.floor(py/64))%4
+    assert(Art.tile_hash(x,z)==stock)
+  end
+end
+local appearances={[0x06]={0,2},[0x0E]={0},[0x18]={0,1,2,3},[0x19]={0},[0x1A]={0,1,2,3}}
+local Front=load("house_frontage")
 local first_world,first_root
 for _,year in ipairs({1950,1975,2020}) do
   local cases={}
@@ -30,13 +49,26 @@ for _,year in ipairs({1950,1975,2020}) do
       rng_state=TG.startup_rng(seed)})
     assert(Cam.towns(Sim,Terrain,s,gen,Worldgen,Names,G,Build,
       {difficulty=3,layout="original",larger_towns=2,initial_city_size=3,year=year}))
-    for _,tile in ipairs(s.tiles) do
+    for id,tile in ipairs(s.tiles) do
       local h=tile.source_house
       if h then
         if h.root then
           local expected=assert(stock[h.id])
           assert(year>=expected[3] and year<=expected[4],"House outside its stock construction years")
           cases[h.id],all[h.id]=true,true
+          if h.completed and appearances[h.id] then
+            assert(Art[h.id].asset)
+            local x,z=Sim.xy(id)
+            local name=Art.asset_name(h.id,Art.look(h.id,x,z))
+            assert(io.open(path.."models/bl_"..name..".obj","rb")):close()
+            local dir=Front.road(Sim,s,id,tile)
+            if dir then
+              local dx,dz,f=Front.placement(Sim,s,id,tile,false,h.render_parcel)
+              assert(dx==(f>=2 and 1 or 0) and dz==((f==1 or f==2) and 1 or 0))
+              assert(f==({2,1,0,3})[dir])
+              rendered[name]=true
+            end
+          end
         end
         if h.asset_root then
           local members=assert(Art.footprint(Sim,s,h))
@@ -57,6 +89,13 @@ end
 for _,v in ipairs(Catalog) do
   assert(all[v[1]],("stock root %02X not placed in seed coverage"):format(v[1]))
 end
+for id,looks in pairs(appearances) do
+  for _,look in ipairs(looks) do
+    local name=Art.asset_name(id,look)
+    assert(rendered[name],name.." was not generated, complete and road-facing")
+  end
+end
+print("PASS 12 RC1 stock residential/retail appearances generated complete with native roadside frontage")
 local s,h=assert(first_world),assert(first_root)
 s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading,s.road_economy=true,true,true,true
 Sim.mount_stock_town_growth(s,Runtime,true)

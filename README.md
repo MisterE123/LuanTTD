@@ -39,7 +39,11 @@ Fly with **WASD** and the mouse, rise with **Space**, descend with **Shift**,
 and hold **E** to move faster. The active hotbar shows the available tools.
 Left-click to use one. Right-click to cancel a build, finish order selection,
 or inspect. Escape closes menus. Open **Transport & World Guide** from Inventory for help in-game.
-Jump Map also accepts tile coordinates. Normal play does not require chat commands.
+In **Survey**, the Jump Map displays named towns and lets you jump to an
+area or zoom for a closer look. It still accepts exact tile coordinates.
+Use [the Survey tools](docs/street-view.md) to explore at street level or
+fly from a built airport. Read [the Transport Gazette](docs/newspaper.md)
+under **Inventory → Newspaper**. Normal play does not require chat commands.
 Choose **Inventory → Tutorials** for guided [road, train, and boat businesses](docs/business-tutorials.md).
 
 ## Guides and settings

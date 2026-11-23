@@ -7,15 +7,15 @@ Dated offers use the stock calendar where mounted. See [State of the Port](PORTI
 
 ## Town buildings
 
-31/31 Temperate root house IDs have original native 3D presentation, including the multipart hotel, stadiums and mall.
+31/31 Temperate root house IDs have original native 3D presentation, including the multipart hotel, stadiums and mall. All 27 single-tile roots also use their stock construction stages and visual slots.
 See [building artwork](../art/stock_temperate_towns.md). Other climates are not counted.
 
 | Mode | Playable stock types | Art only | Total Temperate stock types |
 | --- | ---: | ---: | ---: |
-| Rail | 15 | 1 | 53 |
+| Rail | 21 | 1 | 53 |
 | Road | 34 | 0 | 34 |
 | Ship | 7 | 0 | 7 |
-| Aircraft | 8 | 0 | 35 |
+| Aircraft | 16 | 0 | 35 |
 
 ## Rail
 
@@ -39,13 +39,13 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 28 | Mail Van | Art only | Native Mail Van asset and data; no rail Mail service yet. |
 | 29 | Coal Truck | Playable | One mounted coal wagon service. |
 | 30 | Oil Tanker | Playable | One mounted oil wagon service. |
-| 31 | Livestock Van | Not mounted |  |
+| 31 | Livestock Van | Playable | Livestock from a Farm to a Factory. |
 | 32 | Goods Van | Playable | One mounted Goods van service. |
-| 33 | Grain Hopper | Not mounted |  |
-| 34 | Wood Truck | Not mounted |  |
-| 35 | Iron Ore Hopper | Not mounted |  |
-| 36 | Steel Truck | Not mounted |  |
-| 37 | Armoured Van | Not mounted |  |
+| 33 | Grain Hopper | Playable | Grain from a Farm to a Factory; separate empty and loaded models. |
+| 34 | Wood Truck | Playable | Forest to Sawmill; separate empty and loaded models. |
+| 35 | Iron Ore Hopper | Playable | Ore mine to steel mill; native empty/loaded model. |
+| 36 | Steel Truck | Playable | Steel mill to factory; native empty/loaded model. |
+| 37 | Armoured Van | Playable | Runs Valuables between two separate Banks. |
 | 54 | 'X2001' (Electric) | Not mounted |  |
 | 55 | 'Millennium Z1' (Electric) | Not mounted |  |
 | 57 | Passenger Carriage | Not mounted |  |
@@ -136,17 +136,17 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 218 | Yate Haugan | Not mounted |  |
 | 219 | Bakewell Cotswald LB-3 | Playable |  |
 | 220 | Bakewell Luckett LB-8 | Playable | Paid passenger service; City Airport required. |
-| 221 | Bakewell Luckett LB-9 | Not mounted |  |
-| 222 | Bakewell Luckett LB80 | Not mounted |  |
-| 223 | Bakewell Luckett LB-10 | Not mounted |  |
-| 224 | Bakewell Luckett LB-11 | Not mounted |  |
+| 221 | Bakewell Luckett LB-9 | Playable | Country or City Airport; stock conventional class. |
+| 222 | Bakewell Luckett LB80 | Playable | Paid passenger service; City Airport required. |
+| 223 | Bakewell Luckett LB-10 | Playable | Paid passenger service; City Airport required. |
+| 224 | Bakewell Luckett LB-11 | Playable | Paid passenger service; City Airport required. |
 | 225 | Yate Aerospace YAC 1-11 | Playable | Paid passenger service; City Airport required. |
 | 226 | Darwin 100 | Playable | Paid passenger service; City Airport required. |
-| 227 | Darwin 200 | Not mounted |  |
+| 227 | Darwin 200 | Playable | Paid passenger service; City Airport required. |
 | 228 | Darwin 300 | Playable | Paid passenger service; City Airport required. |
-| 229 | Darwin 400 | Not mounted |  |
-| 230 | Darwin 500 | Not mounted |  |
-| 231 | Darwin 600 | Not mounted |  |
+| 229 | Darwin 400 | Playable | Paid passenger service; City Airport required. |
+| 230 | Darwin 500 | Playable | Paid passenger service; City Airport required. |
+| 231 | Darwin 600 | Playable | Paid passenger service; City Airport required. |
 | 232 | Guru Galaxy | Not mounted |  |
 | 233 | Airtaxi A21 | Not mounted |  |
 | 234 | Airtaxi A31 | Not mounted |  |

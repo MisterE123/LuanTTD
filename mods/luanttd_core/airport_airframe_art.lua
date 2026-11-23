@@ -2,6 +2,30 @@
 -- evaluated at its original coordinates and altitude. The same Sampson
 -- scale everywhere clears the real two-aircraft taxi/stand envelope.
 return {
+  darwin_200={
+    id=227,entity="luanttd_core:stock_darwin_200",
+    mesh="bl_stock_darwin_200.obj",
+    flight="bl_stock_darwin_200_flight.obj",
+    atlas="bl_stock_darwin_200_atlas.png",scale=1,
+  },
+  darwin_400={
+    id=229,entity="luanttd_core:stock_darwin_400",
+    mesh="bl_stock_darwin_400.obj",
+    flight="bl_stock_darwin_400_flight.obj",
+    atlas="bl_stock_darwin_400_atlas.png",scale=1,
+  },
+  darwin_500={
+    id=230,entity="luanttd_core:stock_darwin_500",
+    mesh="bl_stock_darwin_500.obj",
+    flight="bl_stock_darwin_500_flight.obj",
+    atlas="bl_stock_darwin_500_atlas.png",scale=1,
+  },
+  darwin_600={
+    id=231,entity="luanttd_core:stock_darwin_600",
+    mesh="bl_stock_darwin_600.obj",
+    flight="bl_stock_darwin_600_flight.obj",
+    atlas="bl_stock_darwin_600_atlas.png",scale=1,
+  },
   ffp_dart={
     id=217,entity="luanttd_core:stock_ffp_dart",
     mesh="bl_stock_ffp_dart.obj",atlas="bl_stock_ffp_dart_atlas.png",scale=1,
@@ -9,6 +33,30 @@ return {
   bakewell_luckett_lb8={
     id=220,entity="luanttd_core:stock_bakewell_luckett_lb8",
     mesh="bl_stock_bakewell_luckett_lb8.obj",atlas="bl_stock_bakewell_luckett_lb8_atlas.png",scale=1,
+  },
+  bakewell_luckett_lb9={
+    id=221,entity="luanttd_core:stock_bakewell_luckett_lb9",
+    mesh="bl_stock_bakewell_luckett_lb9.obj",
+    flight="bl_stock_bakewell_luckett_lb9_flight.obj",
+    atlas="bl_stock_bakewell_luckett_lb9_atlas.png",scale=1,
+  },
+  bakewell_luckett_lb80={
+    id=222,entity="luanttd_core:stock_bakewell_luckett_lb80",
+    mesh="bl_stock_bakewell_luckett_lb80.obj",
+    flight="bl_stock_bakewell_luckett_lb80_flight.obj",
+    atlas="bl_stock_bakewell_luckett_lb80_atlas.png",scale=1,
+  },
+  bakewell_luckett_lb10={
+    id=223,entity="luanttd_core:stock_bakewell_luckett_lb10",
+    mesh="bl_stock_bakewell_luckett_lb10.obj",
+    flight="bl_stock_bakewell_luckett_lb10_flight.obj",
+    atlas="bl_stock_bakewell_luckett_lb10_atlas.png",scale=1,
+  },
+  bakewell_luckett_lb11={
+    id=224,entity="luanttd_core:stock_bakewell_luckett_lb11",
+    mesh="bl_stock_bakewell_luckett_lb11.obj",
+    flight="bl_stock_bakewell_luckett_lb11_flight.obj",
+    atlas="bl_stock_bakewell_luckett_lb11_atlas.png",scale=1,
   },
   darwin_300={
     id=228,entity="luanttd_core:stock_darwin_300",

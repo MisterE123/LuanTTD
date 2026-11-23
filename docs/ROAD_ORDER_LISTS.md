@@ -1,7 +1,13 @@
 # Copying and sharing road vehicle orders
 
-Stop the receiving road vehicle. Inspect it from Fleet or its depot,
-then choose **Copy / share…**. Select a source row in your fleet:
+In a normal worker-owned campaign, stop the receiving bus or truck and
+select it in its road depot. Choose **Copy orders…**, select another
+compatible vehicle from your company (it may still be running), and
+press **Copy selected orders**. The source keeps its route, progress,
+and service state. The depot accepts only current lists and checks every
+destination before changing anything.
+
+In interfaces that expose the separate **Copy / share…** feature:
 
 - **Copy orders** replaces the destination's orders with independent
   duplicates. Future edits affect only that vehicle.
@@ -18,8 +24,10 @@ linked list, stop every member and wait for them to finish their
 current active route. This safety restriction is specific to the
 current host runtime; OpenTTD also supports some edits in motion.
 
-The stock port covers the station-order portions of OpenTTD 14.1
-`order_cmd.cpp` (`CmdCloneOrder`, `DeleteVehicleOrders`, `DeleteOrder`).
+The stock port covers the station-order portions of OpenTTD’s
+[`order_cmd.cpp`](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/order_cmd.cpp)
+(`CmdCloneOrder`, `DeleteVehicleOrders`, `DeleteOrder`). The worker depot
+uses 16.0-RC1’s independent **Copy** behavior, not **Share**.
 A shared group is keyed independently of vehicle IDs, rebinds the
 recorded list after SQLite reload, and preserves each vehicle's cursor.
 An equal-length replacement keeps the receiving cursor, a differing
@@ -29,3 +37,6 @@ non-road vehicles, stock order warning UI or depot unbunching.
 
 Engine-independent assertions: `lua5.1 tests/road_order_list.lua`.
 Graphical Linux: `BAYLINE_NATIVE_SHARED_ORDERS=1 BAYLINE_NATIVE_FRESH=1 tests/native.sh`.
+
+The ordinary worker-backed depot and scrolling are exercised by
+`tests/campaign_worker_depot_copy_native.sh`.

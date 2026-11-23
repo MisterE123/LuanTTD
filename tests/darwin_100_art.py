@@ -46,10 +46,10 @@ def mesh(file):
     return points,faces
 
 
-def bore_test(faces):
+def bore_test(faces,pairs=None):
     # Rays normal to the intake check both an open recess and solid rim.
     # A solid painted cylinder fails the open-recess case.
-    pairs=((-.229,.329,-.497,.066),(0.,.449,-.647,.057),(.229,.329,-.497,.066))
+    pairs=pairs or ((-.229,.329,-.497,.066),(0.,.449,-.647,.057),(.229,.329,-.497,.066))
     def at(x,y,p):
         (a,b,c),(d,e,f),(g,h,i)=p
         ux,uy=d-a,e-b
@@ -142,7 +142,7 @@ def city_source(eq,tires):
     return runway
 
 
-def city_ground_art(eq,runway):
+def city_ground_art(eq,runway,model_path=None):
     # Consumes the independently ported/native motion recorder's rows.
     base=Path(os.getenv("LUANTTD_BASE",str(ROOT)))
     sys.path.insert(0,str(base/"tests"))
@@ -165,7 +165,7 @@ def city_ground_art(eq,runway):
 
     # Height-sliced conservative envelope avoids false collisions between
     # wings and low footings.
-    ac_faces=[poly for poly,_ in mesh(CORE/"models"/f"{STEM}.obj")[1]]
+    ac_faces=[poly for poly,_ in mesh(model_path or CORE/"models"/f"{STEM}.obj")[1]]
     outside=[(name,f) for name,faces in group.items() for f in faces if max(p[1] for p in f)>.028]
     slabs=[]
     split=[.028,.05,.07,.09,.11,.13,.15,.17,.19,.21,.23,.25,.27,.29,.31,.33,.36,.39,.43,.47,.52,.58,.63,.69]

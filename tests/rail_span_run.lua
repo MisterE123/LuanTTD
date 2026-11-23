@@ -144,6 +144,10 @@ for tick=1,4000 do
   if h.wormhole and v.wormhole and h.tile==id(13) and v.tile==id(13) then
     assert(h.hidden and v.hidden and h.z==u.base*8 and v.z==h.z)
     assert(Run.sample(run,1)==nil and Run.sample(run,2)==nil)
+    for i=1,2 do
+      local draw,td,f,interior=Run.bore_sample(run,i)
+      assert(draw and interior and W.presentation(s,draw,td,f,{wormhole=true})==u.base)
+    end
     claims(d,13,18,1)
     tunnel_seen=true
     if not reloaded_tunnel then s=save(s);reloaded_tunnel=true end

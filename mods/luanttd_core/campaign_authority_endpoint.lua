@@ -1,3 +1,5 @@
+local freight_mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Freight=dofile(freight_mod.."/rail_freight_kinds.lua")
 -- A bounded command/snapshot endpoint for a single campaign owner.
 -- A host must supply the authenticated player name, never a form field.
 -- Ordinary gameplay routes simulation commands and snapshots here.
@@ -230,6 +232,14 @@ return function(Sim,R,max_days)
     local data,why=R.transport.depot(name,mode,id)
     return reply(data~=nil,why,data)
   end
+  function A.depot_order_sources(name,mode,id,depot)
+    local handle=adapter(mode,id)
+    if not owner(name) or not handle or not handle.copy_sources or not tile_id(depot) then
+      return reply(false,"No compatible vehicle in this depot.")
+    end
+    local data,why=handle.copy_sources(name,id,depot)
+    return reply(data~=nil,why,data)
+  end
   local terrain_quotes={}
   function A.terrain_quote(name,request,peek)
     if not owner(name) or not R.landscape or not s.companies[name] then return reply(false,"TERRAIN_QUOTE_UNAVAILABLE") end
@@ -266,7 +276,21 @@ return function(Sim,R,max_days)
     local year,month,day=Sim.date(s)
     return reply(true,nil,{cash=c.cash,loan=c.loan,revenue=c.revenue,expense=c.expense,
       month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,
+      news_head=R.news and R.news.head(),
       year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name})
+  end
+  function A.news(name,page,after,req)
+    if not owner(name) or not s.companies[name] or not R.news then return reply(false,"Newspaper unavailable.") end
+    if req and req.action=="last" then
+      local function cursor(v) return integer(v,1,9007199254740991) and v or nil end
+      return reply(true,nil,R.news.last(name,cursor(req.forced),cursor(req.current),req.shown==true,
+        type(req.modes)=="table" and req.modes or nil))
+    end
+    if integer(page,1,129) and after==nil then return reply(true,nil,R.news.history(name,page,8)) end
+    if page==nil and integer(after,0,9007199254740991) then
+      return reply(true,nil,R.news.stream(name,after,32))
+    end
+    return reply(false,"Invalid newspaper request.")
   end
   function A.lesson_progress(name,lesson)
     if not owner(name) or not s.companies[name] or (lesson~="road" and lesson~="rail" and lesson~="boat") then
@@ -275,11 +299,12 @@ return function(Sim,R,max_days)
     local step,fare,warning=R.lesson(name,lesson)
     return reply(true,nil,{step=step,fare=fare,warning=warning})
   end
-  function A.jump_map(name,zoom,here)
-    if not owner(name) or not s.companies[name] or here~=nil and not tile_id(here) then
+  function A.jump_map(name,zoom,here,focus)
+    if not owner(name) or not s.companies[name] or here~=nil and not tile_id(here)
+        or focus~=nil and not tile_id(focus) then
       return reply(false,"Jump map unavailable.")
     end
-    return reply(true,nil,R.jump.snapshot(zoom==true,here))
+    return reply(true,nil,R.jump.snapshot(zoom==true,here,focus))
   end
   function A.jump_tile(name,id,x,z)
     if not owner(name) or not s.companies[name] then return reply(false,"Jump map unavailable.") end
@@ -331,6 +356,7 @@ return function(Sim,R,max_days)
     if not owner(name) or type(c)~="table" then return reply(false,"INVALID_REQUEST") end
     if c.kind~="company_open" and c.revision~=authority_revision then return reply(false,"STALE_COMMAND") end
     local ok,note,value
+    local previous_topology=s.topology
     if c.kind=="demolition" then
       local q=demolition_quotes[name]
       if not q or q.token~=c.token or type(c.layer)~="string" or not q.options[c.layer]
@@ -428,11 +454,11 @@ return function(Sim,R,max_days)
       Sim.company(s,name)
       ok,note=true,"Company opened."
     elseif c.kind=="rail_freight_stage" and tile_id(c.tile) and (c.role=="load" or c.role=="unload") and
-      (c.cargo=="coal" or c.cargo=="oil" or c.cargo=="goods") then
+      Freight.known(c.cargo) then
       local t=s.tiles[c.tile]
       local st=s.stock_rail_stations and s.stock_rail_stations[t.rail_station_id]
       if not st or st.owner~=name then return reply(false,"Choose one of your existing rail platforms.") end
-      for _,cargo in ipairs({"coal","oil","goods"}) do
+      for _,cargo in ipairs(Freight.all) do
         local role=st[cargo.."_role"]
         if role and (cargo~=c.cargo or role~=c.role) then return reply(false,"This platform already serves another freight stage.") end
       end
@@ -465,6 +491,14 @@ return function(Sim,R,max_days)
       if math.abs(x-u)+math.abs(z-v)>=128 then return reply(false,"ROAD_DRAG_TOO_LONG") end
       local cells=Sim.line(c.first,c.last)
       ok,note,value=Sim.build(s,name,"road",cells)
+    elseif c.kind=="depot_copy_orders" then
+      local handle=adapter(c.mode,c.vehicle)
+      if not handle or not handle.copy or not tile_id(c.depot) or not index(c.source)
+          or type(c.source_revision)~="string" or #c.source_revision>8192
+          or type(c.target_revision)~="string" or #c.target_revision>8192 then
+        return reply(false,"INVALID_ORDER_COPY")
+      end
+      ok,note=handle.copy(name,c.vehicle,c.depot,c.source,c.source_revision,c.target_revision)
     elseif c.kind=="vehicle_order" and order_verbs[c.operation] then
       local handle=adapter(c.mode,c.vehicle)
       if not handle or not (type(c.order_revision)=="string" and #c.order_revision<=8192
@@ -516,6 +550,7 @@ return function(Sim,R,max_days)
     else return reply(false,"UNKNOWN_OR_INVALID_COMMAND") end
     if ok then
       if R.guide then R.guide.changed(value) end
+      if R.news and previous_topology~=s.topology then R.news.topology_changed() end
       authority_revision=authority_revision+1
       s.authority_revision=authority_revision
     end

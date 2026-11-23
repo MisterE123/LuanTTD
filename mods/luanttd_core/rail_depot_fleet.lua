@@ -3,6 +3,8 @@
 -- (vehicle_cmd.cpp), and per-company train allocation (vehicle.cpp).
 -- Separate purchases and ordinary depot assembly follow 16.0-RC1
 -- CmdBuildRailWagon, NormalizeTrainVehInDepot and CmdMoveRailVehicle.
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Freight=dofile(mod.."/rail_freight_kinds.lua")
 return function(Sim,Lab,Roster)
   local F={VERSION=1,MAX_POOL=0xFF000}
   local floor,min,max=math.floor,math.min,math.max
@@ -282,6 +284,13 @@ return function(Sim,Lab,Roster)
       hooks.oil_wagon_ready and hooks.oil_wagon_ready(s)==true or false
     opts.mount_goods_wagon=s.rail_goods_service==true and hooks and
       hooks.goods_wagon_ready and hooks.goods_wagon_ready(s)==true or false
+    opts.mount_profile_wagons={}
+    if hooks and hooks.profile_wagon_ready then
+      for cargo,p in pairs(Freight.profiles) do
+        local wagon=p.wagon
+        opts.mount_profile_wagons[wagon]=s["rail_"..cargo.."_service"]==true and hooks.profile_wagon_ready(s,cargo)==true
+      end
+    end
     opts.mount_manley=s.rail_paid_service==true and hooks and
       hooks.manley_ready and hooks.manley_ready(s)==true or false
     opts.mount_sh_125=s.rail_paid_service==true and hooks and

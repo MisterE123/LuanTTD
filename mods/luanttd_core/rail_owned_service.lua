@@ -1,8 +1,10 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Explicit owned train handoff. Procurement is independent of the preview
 -- timetable. Coal is an explicit single delivery, not passenger stock.
-return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,validate_goods,goods_wagon_ready)
+return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,validate_goods,goods_wagon_ready,profile_hooks)
   local O={}
+  local mod=(core and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local Freight=dofile(mod.."/rail_freight_kinds.lua")
   local power_rules
   function O.initialize(s,cfg)
     if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
@@ -43,6 +45,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     for k,v in pairs(hooks or {}) do out[k]=v end
     out.oil_wagon_ready=oil_wagon_ready
     out.goods_wagon_ready=goods_wagon_ready
+    out.profile_wagon_ready=profile_hooks and profile_hooks.active
     out.manley_ready=function() return Run.owned_passenger_engine(11) end
     out.sh_125_ready=function() return Run.owned_passenger_engine(22) end
     out.electric_model_ready=function(id) return Run.owned_passenger_engine(id) end
@@ -51,7 +54,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     end
     return out
   end
-  local function freight_stage(platform) return platform and (platform.coal_role or platform.oil_role or platform.goods_role) end
+  local freight_stage=Freight.role
   function O.quote(s,owner,depot,parts,hooks)
     if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
     local q,why,index=Fleet.quote(s,owner,depot,parts,mounted_hooks(hooks))
@@ -190,6 +193,23 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     assert(Fleet.bind_dispatch(s,owner,id,id))
     return true,note,run
   end
+  for _,key in ipairs(Freight.profile_order) do
+    local cargo,p=key,Freight.profiles[key]
+    O["start_"..cargo]=function(s,owner,id,first,second,hooks)
+      if not (profile_hooks and profile_hooks.active(s,cargo)) then return false,"Rail "..p.name.." service is unavailable." end
+      local unit,why=Fleet.prepare_dispatch(s,owner,id,mounted_hooks(hooks))
+      if not unit then return false,why end
+      if #unit.stock_ids~=2 or not O.freight_engine(unit.stock_ids[1]) or unit.stock_ids[2]~=p.wagon then
+        return false,"Choose a modeled locomotive and one "..Roster.entry(p.wagon).name.."."
+      end
+      local valid,reason=profile_hooks.validate(s,cargo,owner,first,second)
+      if not valid then return false,reason end
+      local ok,note,run=Run.start_owned_profile(s,owner,unit,first,second,cargo)
+      if not ok then return false,note end
+      assert(Fleet.bind_dispatch(s,owner,id,id))
+      return true,note,run
+    end
+  end
   function O.order_state(s,owner,id)
     local unit=Fleet.get(s,owner,id)
     if not unit or unit.status~="dispatched" then return end
@@ -204,6 +224,9 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
       local cargo=run.freight.cargo or "coal"
       local validators={coal=validate_coal,oil=validate_oil,goods=validate_goods}
       local validate=validators[cargo]
+      if not validate and Freight.profiles[cargo] and profile_hooks then
+        validate=function(s,owner,first,second) return profile_hooks.validate(s,cargo,owner,first,second) end
+      end
       if (row~=1 and row~=2) or type(value)~="number" or not validate then
         return false,"Choose an existing freight order and a compatible station."
       end

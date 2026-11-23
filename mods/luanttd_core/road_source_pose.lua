@@ -3,8 +3,17 @@
 return function(Sim,visual)
   local P={}
   function P.sample(s,frames,length,at,surface)
-    local x,z,yaw,bridge,hidden=visual.at(frames,at,length)
-    if hidden then return end
+    local x,z,yaw,bridge,hidden,tunnel=visual.at(frames,at,length)
+    if hidden then
+      -- Keep the upstream hidden flag and vehicle controller semantics.
+      -- Only the native 3D observer gets a pose inside a verified bore.
+      local span=tunnel and s.stock_road_tunnels and s.stock_road_tunnels[tunnel]
+      local id=Sim.id(math.floor((x+.5)/2),math.floor((z+.5)/2))
+      if span and (id==span.start or id==span["end"] or span.middle_by_tile and span.middle_by_tile[id]) then
+        return {x=x,y=span.base+.52,z=z},yaw,0,true
+      end
+      return
+    end
     local function ground(px,pz)
       local id=Sim.id(math.floor((px+.5)/2),math.floor((pz+.5)/2))
       local span=bridge and s.stock_road_bridges[bridge]

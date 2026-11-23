@@ -3,11 +3,9 @@
 return function(profile,Sim,Service,RailStation,Roster,debit,credit)
   local R={}
   local cargo, role, storage = profile.cargo,profile.cargo.."_role","stock_rail_"..profile.cargo
-  local function other_role(st)
-    for _,kind in ipairs({"coal","oil","goods"}) do
-      if kind~=cargo and st[kind.."_role"] then return kind end
-    end
-  end
+  local mod=(core and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local Freight=dofile(mod.."/rail_freight_kinds.lua")
+  local function other_role(st) return Freight.role(st,cargo) end
   local frames=setmetatable({},{__mode="k"})
   local function frame(s)
     local f=frames[s]
@@ -100,6 +98,17 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     st[role]=request
     return true,profile.name..(request=="load" and " loading stage designated." or " unloading stage designated."),st.tiles
   end
+  local function distinct(from,to)
+    if not profile.distinct_industries then return true end
+    local source={}
+    for _,id in ipairs(from.sources) do source[id]=true end
+    -- Refuse overlapping bank catchments; otherwise a still-loaded
+    -- producing bank can see its own packets again at the unloader.
+    if not to.near or #to.near==0 then return false end
+    for _,dest in ipairs(to.near) do if source[dest.id] then return false end end
+    return true
+  end
+  local distinct_error="Choose platforms covering different banks without a shared bank in their catchments."
   function R.validate(s,Run,owner,well,refinery,binding)
     if not R.active(s,Run) then return false,"Enable purchased rail, the stock roads and "..profile.name.." service first." end
     local a,b=raw(s,well),raw(s,refinery)
@@ -112,14 +121,17 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     local q,p=bound.rail.report(well),bound.rail.report(refinery)
     if not q or #q.sources==0 then return false,profile.choose_source end
     if not p or not p.accepts then return false,profile.choose_sink end
+    if not distinct(q,p) then return false,distinct_error end
     return true
   end
-  local function samples(Run,r)
+  local function samples(s,Run,r)
     local out={}
     if r then
       for i=1,2 do
-        local a,b,c,w=Run.sample(r,i)
-        if a then out[i]={a,b,c,not not r.consist.reversed,w} end
+        local a,b,c,w,subsurface
+        if Run.presentation_sample then a,b,c,w,subsurface=Run.presentation_sample(s,r,i)
+        else a,b,c,w=Run.sample(r,i) end
+        if a then out[i]={a,b,c,not not r.consist.reversed,w,subsurface} end
       end
     end
     return out
@@ -144,7 +156,7 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     local f=frame(s)
     local id=r and r.fleet_id
     f.serial=id
-    f.samples={samples(Run,r)}
+    f.samples={samples(s,Run,r)}
     local function motion(list,tick)
       for _,e in ipairs(list or {}) do
         e.world_tick,e.cargo=tick,cargo;push(f.motion,e)
@@ -173,6 +185,8 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
           block("The ordered "..cargo.." unloading platform is unavailable.",first_tick)
         elseif not z.accepts then
           block(profile.sink_lost,first_tick)
+        elseif not distinct(a,z) then
+          block(distinct_error,first_tick)
         end
       end
     end
@@ -198,7 +212,7 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
       end,
       after=function(tick,ready,register)
         local function finish(moved)
-          motion(moved,tick);f.samples[#f.samples+1]=samples(Run,r)
+          motion(moved,tick);f.samples[#f.samples+1]=samples(s,Run,r)
         end
         if not r or blocked or r.failure then return finish() end
         local v=state.vehicle
@@ -233,20 +247,22 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
       parking=not not r.freight.park_after_delivery,failure=r.failure,
       running_ticks=r.running_ticks_total,running_expense=r.freight.running_expense or 0}
   end
-  function R.pose(s,Run,part,fraction)
+  function R.pose(s,Run,part,fraction,native)
     local r=run_of(s,Run)
     if not r then return end
     local f=frames[s]
     if not R.active(s,Run) or not f or f.serial~=r.fleet_id or #f.samples<2 then
-      local a,b,c,w=Run.sample(r,part)
+      local a,b,c,w
+      if native and Run.presentation_sample then a,b,c,w=Run.presentation_sample(s,r,part)
+      else a,b,c,w=Run.sample(r,part) end
       return a,b,c,not not r.consist.reversed,w
     end
     local x=1+math.min(1,math.max(0,fraction or 1))*(#f.samples-1)
     local i=math.floor(x)
     local a,b=f.samples[i][part],f.samples[i+1] and f.samples[i+1][part]
-    if not a then return end
+    if not a or a[6] and not native then return end
     local p=a[3]
-    if b and a[1]==b[1] and a[2]==b[2] and a[4]==b[4] and a[5]==b[5] then p=p+(b[3]-p)*(x-i) end
+    if b and a[1]==b[1] and a[2]==b[2] and a[4]==b[4] and a[5]==b[5] and (native or not b[6]) then p=p+(b[3]-p)*(x-i) end
     return a[1],a[2],p,a[4],a[5]
   end
   function R.take(s,key)

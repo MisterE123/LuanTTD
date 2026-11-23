@@ -8,7 +8,8 @@ local function road(x,z,bits)
   S.tiles[id(x,z)]={build="road",road_bits=bits,h=0}
 end
 road(10,8,4);road(10,9,5);road(10,10,11);road(9,10,2);road(11,10,10);road(12,10,8)
-local cmd,registered,p,model,attached,state,hint,warning
+local cmd,p,model,interior,attached,state,hint,warning,join,leave
+local registered={}
 local removed=0
 local avatar={visual="upright_sprite",textures={"player.png"},visual_size={x=1,y=1,z=1}}
 local player_yaw,lookx,lookz=0,0,1
@@ -21,21 +22,25 @@ p={
   set_look_horizontal=function(_,x)player_yaw=x end,
   set_look_vertical=function()end,get_properties=function()return avatar end,
   set_properties=function(_,change)for k,v in pairs(change) do avatar[k]=v end end,
-  set_physics_override=function()end,
+  set_physics_override=function()end,set_eye_offset=function()end,
   set_attach=function(_,q)attached=q end,set_detach=function()attached=nil end,
   hud_add=function()return 1 end,hud_change=function(_,_,_,s)hint=s end,hud_remove=function()end,
 }
 core={
   get_modpath=function()return mod end,
-  register_entity=function(n,q)assert(n=="luanttd_core:sightseeing_car");registered=q end,
+  register_entity=function(n,q)registered[n]=q end,
+  register_on_joinplayer=function(f)join=f end,
+  register_on_leaveplayer=function(f)leave=f end,
+  get_connected_players=function()return {p,{get_player_name=function()return "observer" end}} end,
   register_chatcommand=function(n,q)assert(n=="car");cmd=q.func end,
   get_player_by_name=function()return p end,
   chat_send_player=function(_,msg)warning=msg end,
-  add_entity=function(pos)
+  add_entity=function(pos,name)
     local ref={pos=pos,get_pos=function(self)return self.pos end,
       move_to=function(self,q)self.pos=q end,set_yaw=function()end,
+      set_observers=function(self,a)self.observers=a end,
       remove=function(self)removed=removed+1;self.pos=nil end}
-    model=ref
+    if name:match("_interior$") then interior=ref else model=ref end
     return ref
   end,
 }
@@ -50,18 +55,28 @@ local C=dofile(mod.."/avatar_car.lua")({s=S,Sim=Sim,render=rendering},W)
 local function tick(keys,n)
   for _=1,n do C.step(p,state,keys,.05) end
 end
-assert(registered.initial_properties.mesh=="bl_sightseeing_car.obj" and registered.initial_properties.static_save==false)
-assert(cmd("driver") and C.active(p) and attached==model and avatar.visual=="sprite" and avatar.visual_size.y<.01)
+local outside=registered["luanttd_core:sightseeing_car"].initial_properties
+local inside=registered["luanttd_core:sightseeing_car_interior"].initial_properties
+assert(outside.mesh=="bl_sightseeing_car.obj" and not outside.static_save)
+assert(inside.mesh=="bl_sightseeing_car_interior.obj" and not inside.static_save)
+assert(not C.toggle_at(p,id(1,1)) and not state)
+assert(C.toggle_at(p,target) and C.active(p) and attached==interior and avatar.visual=="sprite" and avatar.visual_size.y<.01)
+assert(not model.observers.driver and model.observers.observer and interior.observers.driver and not interior.observers.observer)
+local newcomer={get_player_name=function()return "new" end}
+join(newcomer)
+assert(model.observers.new and not interior.observers.new)
+leave(newcomer)
+assert(not model.observers.new)
 local start=model.pos.z
 tick({up=true},16)
-assert(model.pos.z>start+1 and hint:find("W drive",1,true))
+assert(model.pos.z>start+1 and math.abs(interior.pos.z-model.pos.z+.10)<1e-6 and hint:find("W drive",1,true))
 tick({up=true},45)
 assert(math.abs(model.pos.z-20.5)<.001 and hint:find("No open road",1,true),"T junction arbitrarily picked an exit")
 tick({up=true,right=true},45)
 assert(math.abs(model.pos.x-24.5)<.001 and math.abs(model.pos.z-(20.5-.155))<.001,"D did not steer right facing +Z")
 tick({down=true},55)
 assert(model.pos.x<21.7,"reverse did not move backwards")
-assert(cmd("driver") and not C.active(p) and not attached and not state and removed==1 and avatar.visual=="upright_sprite" and avatar.textures[1]=="player.png" and avatar.visual_size.y==1)
+assert(cmd("driver") and not C.active(p) and not attached and not state and removed==2 and avatar.visual=="upright_sprite" and avatar.textures[1]=="player.png" and avatar.visual_size.y==1)
 assert(next(S.companies)==nil,"sightseeing mutated the ledger")
 
 -- Drive exactly up to but not through a closed crossing. When it opens the
@@ -97,7 +112,7 @@ for _=1,70 do tick({up=true},1)
 end
 assert(deck and land,"did not stay on bridge layer and reach linked land")
 C.leave("driver")
-assert(not model.pos and not C.active(p),"disconnect leaked a street vehicle")
+assert(not model.pos and not interior.pos and not C.active(p),"disconnect leaked a street vehicle")
 print("avatar car: command, movement, explicit right turn, reverse, gate, live edit, bridge layer, persistence isolation and cleanup OK")
 local before_move={tiles={},companies={}}
 local live_board={tiles={},companies={}}

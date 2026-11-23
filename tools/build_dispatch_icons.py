@@ -879,6 +879,84 @@ def fund_bank(i):
 ART["fund_bank"] = fund_bank
 
 
+def survey_walk(i):
+    # A pedestrian seen from the side, mid-stride, with a little wayline.
+    i.path([(8,39),(19,38),(28,38),(39,36)],TEAL,1.7)
+    i.path([(16,38),(22,31),(24,25),(22,20)],INK,6.2)
+    i.path([(31,37),(26,32),(24,27),(22,20)],CREAM,4.2)
+    i.path([(15,36),(20,31),(23,27)],CREAM,4.2)
+    i.path([(22,19),(24,24),(31,23)],TEAL,3.9)
+    i.path([(22,20),(18,25),(14,26)],CREAM,2.8)
+    i.round((19,16,23.6,26),2,BRASS)
+    i.path([(22,19),(24,26)],WHITE,3.1)
+    i.oval((22,9,29.7,16.7),CREAM,INK,.85)
+    i.path([(29,15.1),(26.8,15.6)],BRASS,1.0)
+    i.path([(12,37.1),(17,37.1)],BRASS,2.0)
+    i.path([(30,37.4),(35,37.4)],BRASS,2.0)
+
+def survey_drive_car(i):
+    # A low two-door car, not the rectangular road-vehicle/depot icon.
+    i.path([(8,37),(40,37)],SLATE,2.3)
+    i.poly([(8,26),(14,24),(18,16),(29,16),(35,24),(40,26),(41,33),(8,33)],INK)
+    i.poly([(10,26),(15,24),(19,17),(28.6,17),(35,24),(39,26),(39,32),(10,32)],BRICK)
+    i.poly([(17,24),(20,19),(24,19),(24,24)],GLASS)
+    i.poly([(26,19),(28,19),(32.4,24),(26,24)],BLUE)
+    i.path([(11,27.2),(37.6,27.2)],CREAM,1.3)
+    i.rect((36,27.1,40.2,29.2),WHITE)
+    i.rect((8.7,27.1,11.7,29.2),RED)
+    for x in (15,34):
+        i.oval((x-3.6,29.5,x+3.6,36.7),INK,SLATE,.85)
+        i.oval((x-1.45,31.73,x+1.45,34.6),CREAM)
+
+def survey_fly_plane(i):
+    # Climbing monoplane illuminated by the far cloud/sky line.
+    i.path([(8,35),(14,35),(18,34)],TEAL,1.7)
+    i.path([(11,29),(17,29),(19,28)],TEAL,1.6)
+    i.poly([(11,31),(16.4,28.1),(13.9,21.5),(17.2,20.3),(22,24.7),
+            (35.6,13.2),(40.5,13.0),(39.0,17.8),(29.2,26.4),(30,34.7),
+            (27.7,36.4),(25.7,29.3),(19.3,32),(16.4,37.1),(13.8,36.0),
+            (14.7,32.9)],INK)
+    i.poly([(12.9,30.9),(17.8,28.5),(15.6,22.5),(17,21.9),(22,26.0),
+            (35.1,14.8),(39,14.2),(38.0,17.2),(28.0,25.6),(29,34.6),
+            (27.9,35.3),(26.2,28.1),(18.5,31.6),(16.0,35.5),(15.1,35.1),
+            (15.8,32.3)],CREAM)
+    i.path([(31.6,19.5),(35.2,17.0)],BLUE,2.0)
+    i.path([(24.6,26.5),(27.5,24.1)],BRASS,1.6)
+    i.path([(37.8,23.7),(40.0,20.8)],TEAL,1.4)
+
+def survey_train_cab(i):
+    # Looking out of the driver windscreen. The cabin has dash and rails,
+    # unlike the exterior train used by the rail construction tools.
+    i.round((8.9,9.6,39.2,38.5),3.0,TEAL_DARK,CREAM,1.4)
+    i.poly([(12,13),(36,13),(36,29),(12,29)],GLASS)
+    i.path([(12,20),(19,19),(24,21),(34,19)],TEAL,1.55)
+    i.path([(14.8,28.8),(23.4,20.6)],BRASS,1.6)
+    i.path([(33.2,28.8),(25.0,20.6)],BRASS,1.6)
+    for y,w in ((22,1.2),(25,3.8),(28,7.0)):
+        i.path([(24-w,y),(24+w,y)],CREAM,.85)
+    i.path([(24.2,13.1),(24.2,19.0)],CREAM,1.3)
+    i.rect((11.8,29.6,36.5,35.4),INK)
+    for x,c in ((16,BLUE),(23,TEAL),(29,BRASS)):
+        i.oval((x-1.6,30.7,x+1.6,33.9),c)
+    i.path([(33.0,34),(33.0,31)],CREAM,1.1)
+
+def survey_ride_vehicle(i):
+    # Passenger head, window and seat back. No steering/dash affordance.
+    i.round((8,10,40,31.5),3.1,GLASS,BLUE,1.1)
+    i.oval((11.5,13.3,16,17.8),BRASS)
+    i.path([(10,23),(17.5,17.8),(22,21),(28,18.4),(38,21.4)],TEAL,2.15)
+    i.round((24.6,21.3,33,39.7),2.2,TEAL_DARK,CREAM,1.2)
+    i.round((14.8,32.2,32.3,38.3),1.8,TEAL,CREAM,1.05)
+    i.oval((17.1,18,24.5,25.2),CREAM,INK,.9)
+    i.path([(22.0,26.2),(20.7,29.7),(20.4,33)],BRICK,4.3)
+    i.path([(20.8,33.6),(16.3,33.6),(14.7,38.1)],BRASS,2.85)
+    i.path([(21.6,28.5),(18.4,30.5),(16.5,30.5)],CREAM,1.5)
+
+ART.update(survey_walk=survey_walk,survey_drive_car=survey_drive_car,
+           survey_fly_plane=survey_fly_plane,survey_train_cab=survey_train_cab,
+           survey_ride_vehicle=survey_ride_vehicle)
+
+
 def review(icons, target):
     sheet=Image.new("RGB",(712,162*((len(icons)+3)//4)),"#101d26")
     d=ImageDraw.Draw(sheet)

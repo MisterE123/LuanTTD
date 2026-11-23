@@ -53,6 +53,7 @@ local p={
   set_eye_offset=function(_,v) eye=v end,
   hud_set_flags=function(_,v)flags=v end,
 }
+assert(not walk.at(2,{x=4.5,z=2.5}) and not walk.at(4,{x=8.5,z=2.5}))
 local target=assert(walk.find(p,2,{x=4.5,z=2.5}))
 assert(target.x==6.5 and target.y>2.29 and target.y<2.30,"choose a road instead of burrowing into a house")
 local edge=assert(walk.find(p,3,{x=5.51,z=3.49}))

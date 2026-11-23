@@ -1,5 +1,7 @@
 -- Native quote/commit adapter for ordinary Trackworks. Pricing functions
 -- are supplied by the pinned construction kernel, not the menu.
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Freight=dofile(mod.."/rail_freight_kinds.lua")
 return function(api,Lab,Track,Run,prices)
   local R={}
   local Sim,S=api.Sim,api.s
@@ -227,7 +229,7 @@ return function(api,Lab,Track,Run,prices)
       if math.max(combined.w,combined.h)>StationPlacement.spread then
         return nil,"The joined station would exceed the station spread.",group
       end
-      if join.coal_role or join.goods_role or join.oil_role then
+      if Freight.role(join) then
         return nil,"Clear the station's designated freight role before extending it.",group
       end
     end

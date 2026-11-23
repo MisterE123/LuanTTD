@@ -30,8 +30,8 @@ function H.placement(Sim,S,id,t,stage,parcel)
   local direction=H.road(Sim,S,id,t)
   if not direction then return 0,0,0 end
   -- Completed houses and the corner grocer export their entrances on
-  -- +Z. Construction-stage assets use the track-art exporter and put
-  -- their access paths and future front doors on -Z instead.
+  -- +Z, including the stock site meshes. The shared construction kit
+  -- from the track-art exporter has entrances on -Z instead.
   local facedir=(south_front[direction]+(stage and 2 or 0))%4
   -- Luanti rotates around the overlay node, not its 2×2 footprint center.
   -- Offset the anchor so the rotated parcel still occupies the same land.

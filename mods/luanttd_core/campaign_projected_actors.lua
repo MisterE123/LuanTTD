@@ -5,11 +5,13 @@ return function(core,api,motion,models,airframes)
   local active,rail_members={},{}
   local base=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local road_art=dofile(base.."/road_stock_media.lua")
+  local repair_smoke=dofile(base.."/road_fault_view.lua")(core.add_particle)
   local boats={[204]="stock_mps_oil_tanker",[205]="stock_cs_inc_oil_tanker",[206]="stock_harbor_ferry",[207]="stock_ffp_passenger_ferry",[208]="stock_bakewell_300_hovercraft"}
   local function remove(id)
     local a=active[id]
     if a and a.ref:get_pos() then a.ref:remove() end
     active[id]=nil
+    repair_smoke.remove(id)
   end
   local function definition(row)
     if row.mode=="road" and models[row.engine] and row.pos then
@@ -27,8 +29,12 @@ return function(core,api,motion,models,airframes)
     end
   end
   local collector
+  local rail_engines={locomotive=true}
+  for _,kind in pairs(dofile(base.."/rail_dispatch_manifest.lua").stock_kind) do rail_engines[kind]=true end
+  local passenger_bodies={wagon=true,manley=true}
   function A.render(rows,dt,signals)
-    local visible={}
+    local visible,viewers={},nil
+    repair_smoke.step(dt)
     local function present(key,row,name,mesh,pos,target,pitch,part,sync)
       if not name or not pos or core.registered_entities and not core.registered_entities[name] then return end
       local v=active[key]
@@ -57,8 +63,25 @@ return function(core,api,motion,models,airframes)
           v.scale=part.scale
         end
       end
-      if api.vehicle_ui and not (part and part.visual_only) then
-        api.vehicle_ui.track(row.mode,row.id,pos,v.ref,not part or part.index==1)
+      if row.mode=="road" then
+        if row.breakdown_smoke then
+          viewers=viewers or core.get_connected_players()
+          repair_smoke.draw_active(key,true,pos,rotation.y,viewers)
+        else
+          repair_smoke.remove(key)
+        end
+      end
+      if api.vehicle_ui then
+        if not (part and part.visual_only) then
+          api.vehicle_ui.track(row.mode,row.id,pos,v.ref,not part or part.index==1,part and part.body_index or 1)
+        end
+        if api.vehicle_ui.ride_track and (row.mode=="road" or row.mode=="rail") then
+          api.vehicle_ui.ride_track(row.mode,row.id,v.ref,pos,rotation,{running=row.running,
+            passenger=row.passenger or part and passenger_bodies[part.kind],
+            engine=part and rail_engines[part.kind],
+            body=part and part.body_index or 1,travel=part and part.index or 1,
+            auxiliary=part and part.visual_only})
+        end
       end
     end
     local next_rail={}
@@ -89,7 +112,8 @@ return function(core,api,motion,models,airframes)
             local scale=move and move.scale_y or c.rows and .03/collector.nominal_extension or 1
             present(body,row,name.."_body",nil,p.pos,nil,nil,p,snap)
             present(body..":collector",row,name.."_collector",nil,heel,nil,nil,
-              {visual_only=true,rotation=p.rotation,flip=p.flip,scale=scale},snap)
+              {visual_only=true,rotation=p.rotation,flip=p.flip,scale=scale,
+                index=p.index,body_index=p.body_index,kind=p.kind},snap)
           else
             present(body,row,name,nil,p.pos,nil,nil,p,snap)
           end

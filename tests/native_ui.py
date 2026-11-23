@@ -486,8 +486,9 @@ try:
         slot(5);click()
         await_state("Navigation menu",lambda s:s.get("menu")=="navigation")
         slot(5);click()
-        opened=await_state("the native overview has nearly every playable cell",lambda s:
-            s.get("form")=="luanttd_core:dispatch" and (s.get("jump_map") or {}).get("count",0)>=3800)
+        opened=await_state("the detailed native overview has a compact area grid and place labels",lambda s:
+            s.get("form") in ("luanttd_core:dispatch","luanttd_core:worker_jump") and
+            150 <= (s.get("jump_map") or {}).get("count",0) <= 576 and s["jump_map"]["labels"]>=1)
         # The server's form record precedes the client raster/GUI build.
         time.sleep(.75)
         snap=screenshot("dense-native-jump-map")
@@ -513,18 +514,18 @@ try:
             toggle_zoom()
             await_state("returns to full region",lambda s:s.get("jump_map") and not s["jump_map"]["detail"])
             time.sleep(.7)
-        cell_col,cell_row=56,46 # outside the old 20x15 page
-        xdo("mousemove",round(left+(cell_col+.5)*(right-left)/64),
-            round(top+(cell_row+.5)*(bottom-top)/64))
+        stride=(width+23)//24
+        areas=(width+stride-1)//stride
+        cell_col,cell_row=19,15
+        xdo("mousemove",round(left+(cell_col+.5)*(right-left)/areas),
+            round(top+(cell_row+.5)*(bottom-top)/areas))
         click()
-        if width==64:
-            xs,zs=(57,),(47,)
-        else:
-            xs,zs=(113,114),(93,94)
+        xs=range(cell_col*width//areas+1,(cell_col+1)*width//areas+1)
+        zs=range(cell_row*width//areas+1,(cell_row+1)*width//areas+1)
         landed=await_state("clicked far-away dense map cell and returned to the 3D world",lambda s:
             not s.get("form") and
             any(abs(s["camera"]["pos"]["x"]-(2*x+.5))<.08 for x in xs) and
-            any(abs(s["camera"]["pos"]["z"]-(2*z-8))<.08 for z in zs))
+            any(abs(s["camera"]["pos"]["z"]-(2*z+.5))<.08 for z in zs))
         screenshot("dense-native-jump-destination")
         (out/"native-jump-map.json").write_text(json.dumps({"tile_count":opened["jump_map"]["count"],
             "width":width,"destination":landed["camera"]["pos"]},indent=2))

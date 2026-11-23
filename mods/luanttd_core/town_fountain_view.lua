@@ -35,7 +35,7 @@ return function(core,Sim,frontage)
           local id=Sim.id(x,z)
           local tile=s.tiles[id]
           local h=tile and tile.house and tile.source_house
-          if h and h.id==0x0A and h.completed then
+          if h and h.id==0x0A and (h.completed or h.stage==2) then
             -- The stone nozzle is centered on the 2x2 parcel, 0.86
             -- nodes above its floor. Facedir moves the mesh anchor, not
             -- the nozzle: it remains over the center of the same parcel.

@@ -64,7 +64,7 @@ return function(Sim,Service,Roster,debit,credit,receive)
       return false,"Choose an owned rail platform and a coal loading or unloading stage."
     end
     if raw.oil_role then return false,"This platform already has an oil stage." end
-    if raw.goods_role then return false,"This platform already has a Goods stage." end
+    if raw.goods_role or raw.iron_ore_role or raw.steel_role then return false,"This platform already has another freight stage." end
     if raw.coal_role==role then return true,"That platform already has this coal stage.",raw.tiles end
     if raw.coal_role then return false,"This platform already has a different coal stage." end
     local d=Run.current(s)
@@ -123,12 +123,14 @@ return function(Sim,Service,Roster,debit,credit,receive)
     run.freight.charged_running_ticks=total
     run.freight.running_expense=(run.freight.running_expense or 0)+whole
   end
-  local function sample(Run,run)
+  local function sample(s,Run,run)
     local out={}
     if run then
       for i=1,2 do
-        local a,b,c,w=Run.sample(run,i)
-        if a then out[i]={a,b,c,not not run.consist.reversed,w} end
+        local a,b,c,w,subsurface
+        if Run.presentation_sample then a,b,c,w,subsurface=Run.presentation_sample(s,run,i)
+        else a,b,c,w=Run.sample(run,i) end
+        if a then out[i]={a,b,c,not not run.consist.reversed,w,subsurface} end
       end
     end
     return out
@@ -140,7 +142,7 @@ return function(Sim,Service,Roster,debit,credit,receive)
     local run=run_of(s,Run)
     local frame=cache(s)
     frame.serial=run and run.fleet_id
-    frame.samples={sample(Run,run)}
+    frame.samples={sample(s,Run,run)}
     local id=frame.serial
     if id and not state.vehicles[id] then
       assert(b.vehicle({id=id,owner=run.owner,stock_id=run.stock_wagon,length=run.total_length,
@@ -182,7 +184,7 @@ return function(Sim,Service,Roster,debit,credit,receive)
         for _,e in ipairs(moved or {}) do
           e.world_tick,e.cargo=tick,"coal";push(frame.motion,e)
         end
-        frame.samples[#frame.samples+1]=sample(Run,run)
+        frame.samples[#frame.samples+1]=sample(s,Run,run)
       end
       if not id then return finish() end
       local v=state.vehicles[id]
@@ -220,20 +222,22 @@ return function(Sim,Service,Roster,debit,credit,receive)
       parking=not not r.freight.park_after_delivery,failure=r.failure,
       running_ticks=r.running_ticks_total,running_expense=r.freight.running_expense or 0}
   end
-  function R.pose(s,Run,part,fraction)
+  function R.pose(s,Run,part,fraction,native)
     local r=run_of(s,Run)
     if not r then return end
     local frame=frames[s]
     if not R.active(s,Run) or not frame or frame.serial~=r.fleet_id or #frame.samples<2 then
-      local a,b,c,w=Run.sample(r,part)
+      local a,b,c,w
+      if native and Run.presentation_sample then a,b,c,w=Run.presentation_sample(s,r,part)
+      else a,b,c,w=Run.sample(r,part) end
       return a,b,c,not not r.consist.reversed,w
     end
     local x=1+math.min(1,math.max(0,fraction or 1))*(#frame.samples-1)
     local i=math.floor(x)
     local a,b=frame.samples[i][part],frame.samples[i+1] and frame.samples[i+1][part]
-    if not a then return end
+    if not a or a[6] and not native then return end
     local f=a[3]
-    if b and a[1]==b[1] and a[2]==b[2] and a[4]==b[4] and a[5]==b[5] then f=f+(b[3]-f)*(x-i) end
+    if b and a[1]==b[1] and a[2]==b[2] and a[4]==b[4] and a[5]==b[5] and (native or not b[6]) then f=f+(b[3]-f)*(x-i) end
     return a[1],a[2],f,a[4],a[5]
   end
   function R.take(s,kind)

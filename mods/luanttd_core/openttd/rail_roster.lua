@@ -8,7 +8,7 @@
 local R={VEHICLE_LENGTH=8,TILE_SIZE=16,DAY_TICKS=74,DAYS_IN_YEAR=365,CARGO_AGE_TICKS=185,
   GRADUAL_WAIT=40,RETRY_WAIT=20,DEFAULT_MAX_TRAIN_TILES=7}
 local floor,min,max=math.floor,math.min,math.max
-local order={0,1,8,9,10,11,13,14,15,22,27,28,29,30,32}
+local order={0,1,8,9,10,11,13,14,15,22,27,28,29,30,31,32,33,34,35,36,37}
 local rows={
   [0]={name="Kirby Paul Tank",kind="engine",visual="steam",image_index=2,engine_class="steam",
     cost_factor=7,speed=64,power=300,tare=47,running_factor=50,running_class="run_steam",
@@ -63,10 +63,31 @@ local rows={
     cost_factor=200,speed=0,power=0,tare=24,running_factor=0,
     capacity=30,cargo="oil",cargo_id=3,liters_per_unit=1000,
     climates=7,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,purchase_enabled=false},
+  -- OpenTTD 16.0-RC1 conventional livestock and grain rows.
+  [31]={name="Livestock Van",kind="wagon",visual="livestock_van",image_index=37,engine_class="steam",
+    cost_factor=192,speed=0,power=0,tare=20,running_factor=0,capacity=25,cargo="livestock",cargo_id=4,
+    climates=3,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,source_model_life=50,purchase_enabled=false,freight_profile=true},
   [32]={name="Goods Van",kind="wagon",visual="goods_van",image_index=38,engine_class="steam",
     cost_factor=190,speed=0,power=0,tare=21,running_factor=0,
     capacity=25,cargo="goods",cargo_id=5,
     climates=7,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,purchase_enabled=false},
+  [33]={name="Grain Hopper",kind="wagon",visual="grain_hopper",image_index=39,engine_class="steam",
+    cost_factor=182,speed=0,power=0,tare=19,running_factor=0,capacity=30,cargo="grain",cargo_id=6,
+    climates=7,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,source_model_life=50,purchase_enabled=false,freight_profile=true},
+  [34]={name="Wood Truck",kind="wagon",visual="wood_truck",image_index=40,engine_class="steam",
+    cost_factor=181,speed=0,power=0,tare=16,running_factor=0,capacity=30,cargo="wood",cargo_id=7,
+    climates=7,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,source_model_life=50,purchase_enabled=false,freight_profile=true},
+  -- OpenTTD 16.0-RC1 MW and RVI slots. The live depot enables these
+  -- only when the paired meshes and real freight service are mounted.
+  [35]={name="Iron Ore Hopper",kind="wagon",visual="iron_ore_hopper",image_index=41,engine_class="steam",
+    cost_factor=179,speed=0,power=0,tare=19,running_factor=0,capacity=30,cargo="iron_ore",cargo_id=8,
+    climates=1,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,source_model_life=50,purchase_enabled=false,freight_profile=true},
+  [36]={name="Steel Truck",kind="wagon",visual="steel_truck",image_index=42,engine_class="steam",
+    cost_factor=196,speed=0,power=0,tare=18,running_factor=0,capacity=20,cargo="steel",cargo_id=9,
+    climates=1,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,source_model_life=50,purchase_enabled=false,freight_profile=true},
+  [37]={name="Armoured Van",kind="wagon",visual="armoured_van",image_index=43,engine_class="steam",
+    cost_factor=255,speed=0,power=0,tare=30,running_factor=0,capacity=20,cargo="valuables",cargo_id=10,
+    climates=7,base_intro=1827,decay_speed=20,vehicle_life=20,model_life=255,source_model_life=50,purchase_enabled=false,freight_profile=true},
 }
 for id,row in pairs(rows) do
   row.stock_id=id;row.railtype=row.railtype or 0;row.shorten_factor=0
@@ -78,6 +99,8 @@ local cargo={
   coal={weight=16,freight=true},
   oil={weight=16,freight=true},
   goods={weight=8,freight=true},
+  iron_ore={weight=16,freight=true},steel={weight=16,freight=true},valuables={weight=2,freight=true},
+  livestock={weight=3,freight=true},grain={weight=16,freight=true},wood={weight=16,freight=true},
 }
 local base_prices={build_engine=400000,build_wagon=2000,run_steam=5600,run_diesel=5200,run_electric=4800}
 local factors={[0]=6,8,9}
@@ -362,7 +385,7 @@ function R.freight_engine(id)
   return not not (row and row.kind=="engine" and not row.multiheaded and row.capacity==0)
 end
 local function supported_single_wagon(id)
-  return id==27 or id==29 or id==30 or id==32
+  return id==27 or id==29 or id==30 or id==32 or rows[id] and rows[id].freight_profile
 end
 
 -- Combined quote for explicit purchases at an owned depot; opts.available
@@ -381,6 +404,9 @@ function R.quote(depot,owner,parts,opts)
         not (row.stock_id==30 and opts.mount_oil_wagon==true and
             (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id))) and
         not (row.stock_id==32 and opts.mount_goods_wagon==true and
+            (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id))) and
+        not (opts.mount_profile_wagons and opts.mount_profile_wagons[row.stock_id]==true and
+            row.freight_profile and
             (opts.separate_depot_purchase and #parts==1 or #parts==2 and R.freight_engine(stats.parts[1].stock_id))) and
         not (R.electric_engine(row.stock_id) and opts.mounted_electric and opts.mounted_electric[row.stock_id]==true and
             index==1 and (opts.separate_depot_purchase and #parts==1 or

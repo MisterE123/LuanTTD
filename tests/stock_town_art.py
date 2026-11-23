@@ -54,6 +54,12 @@ for id in new_mounts:
             check(mod/"models"/f"bl_town_stock_{id:02x}_{i}.obj",110)
     else:
         check(mod/"models"/f"bl_town_stock_{id:02x}.obj",280)
+alternate={0x06:(2,),0x18:(1,2,3),0x1a:(1,2,3)}
+for id,looks in alternate.items():
+    for look in looks:
+        source=list((root/"art").glob(f"town_stock_{id:02x}v{look}_*.blend"))
+        assert len(source)==1 and source[0].stat().st_size>20000
+        check(mod/"models"/f"bl_town_stock_{id:02x}_{look}.obj",280)
 for size,count in [(12,2),(22,4)]:
     for i in range(count):
         detail=[check(mod/"models"/f"bl_town_stock_stage_{size}_{s}_{i}.obj",70) for s in range(3)]
@@ -83,4 +89,4 @@ football=venue_letter_widths(0x14,1.4272)
 assert len(football)==8 and football[0]<football[-1]==football[-2] and football[1]==football[2],football
 athletics=venue_letter_widths(0x20,1.4292)
 assert len(athletics)==9 and athletics[6]==min(athletics) and athletics[1]==athletics[5],athletics
-print(f"PASS: {len(new_mounts)} distinct editable meshes checked on the native 2×2 anchor, {len(all_mounts)}/{len(source_ids)} RC1 Temperate roots mounted")
+print(f"PASS: {len(new_mounts)} distinct editable roots and {sum(map(len,alternate.values()))} residential alternates checked on the native 2×2 anchor, {len(all_mounts)}/{len(source_ids)} RC1 Temperate roots mounted")

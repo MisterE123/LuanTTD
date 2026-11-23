@@ -23,9 +23,23 @@ return function(api)
     local flags=p:hud_get_flags()
     local graphics=p:get_properties()
     if mode and mode.mode=="car" then
-      assert(car and graphics.visual_size.y<.01 and graphics.textures[1]=="bl_sightseeing_hidden_player.png",
-        "driver billboard visible while attached")
+      assert(car and car:get_luaentity().name=="luanttd_core:sightseeing_car_interior" and
+        math.abs(graphics.eye_height-.225)<.001 and graphics.visual_size.y<.01 and
+        graphics.textures[1]=="bl_sightseeing_hidden_player.png","driver isn't seated inside the cabin")
+      local viewers=car:get_observers()
+      assert(viewers and viewers[owner] and not viewers.Observer,"cabin escapes driver visibility")
+      for _,o in ipairs(core.get_objects_inside_radius(v,.5)) do
+        local e=o:get_luaentity()
+        if e and e.name=="luanttd_core:sightseeing_car" then
+          assert(not o:get_observers()[owner],"opaque exterior is visible to the driver")
+        end
+      end
     else
+      assert(not car,"sightseeing view did not detach")
+      for _,o in ipairs(core.get_objects_inside_radius({x=23,y=1,z=22.67},16)) do
+        local e=o:get_luaentity()
+        assert(not e or not e.name:match("^luanttd_core:sightseeing_car"),"sightseeing car leaked after exit")
+      end
       assert(graphics.eye_height>1 and graphics.mesh=="" and graphics.visual=="sprite",
         "car exit did not restore the builder camera")
       assert(graphics.visual_size.y<.01 and graphics.textures[1]=="bl_sightseeing_hidden_player.png",

@@ -10,6 +10,7 @@ return function(api,status)
   local source=moddir.."/openttd/"
   local OrderList=dofile(source.."rail_order_list.lua")
   local Help=dofile(moddir.."/depot_vehicle_help.lua")
+  local Freight=dofile(moddir.."/rail_freight_kinds.lua")
   local serial=0
   local esc=core.formspec_escape
   local model_short={[0]="Kirby",[8]="Jubilee",[9]="Ginzu A4",[10]="SH 8P",[11]="Manley–Morel",[13]="Hendry 25",[14]="UU 37",[15]="Floss 47",[23]="SH '30'",[24]="SH '40'"}
@@ -28,9 +29,17 @@ return function(api,status)
       name="25-crate Goods Van",short="Goods Van",parked="Parked in town",
       tip="Rail Freight: designate a Sawmill loading platform and a town Goods unloading platform."},
   }
+  for cargo,p in pairs(Freight.profiles) do
+    commercial[cargo]={wagon=p.wagon,title=p.name,noun=p.name,source=p.source,sink=p.sink,name=p.capacity_name,
+      short=p.short,parked="Parked at "..p.sink,
+      unit=function(n) return ("%d %s"):format(n or 0,p.unit or "t") end,
+      tip=cargo=="valuables" and "Rail Freight → Bank trains: designate platforms covering two different Banks without overlapping Bank catchments." or
+        "Rail Freight → "..(p.menu or "Iron and steel trains")..": designate a "..p.source.." loading platform and a "..p.sink.." unloading platform."}
+  end
   local function cargo_of(u)
     local id=u.stock_ids[2]
-    return id==30 and "oil" or id==32 and "goods" or nil
+    local cargo=Freight.wagons[id]
+    return commercial[cargo] and cargo or nil
   end
   local function available(cargo) return api["rail_"..cargo.."_tools"] end
   local function freight_engine(id)
@@ -122,10 +131,14 @@ return function(api,status)
       if row.passenger_model_ready then catalogue[row.stock_id]=row end
     end
     local alternatives={}
-    local has_freight=api.rail_coal_tools or available("oil") or available("goods")
+    local representative=api.rail_coal_tools and 29
+    if not representative then
+      for _,cargo in ipairs(Freight.industry) do
+        if available(cargo) then representative=commercial[cargo].wagon;break end
+      end
+    end
     local freight_ids,freight_names={},{}
-    if has_freight then
-      local representative=api.rail_coal_tools and 29 or available("oil") and 30 or 32
+    if representative then
       -- Quote first: on-sale models and depot traction matter, not just
       -- whether an asset is recognized by the renderer.
       for _,engine in ipairs({0,8,9,10,13,14,15,23,24}) do
@@ -145,7 +158,7 @@ return function(api,status)
     if engine and api.rail_coal_tools then
       alternatives[1]={key="purchase_coal",ids={engine,29},name=label.." + 30-ton coal wagon"}
     end
-    for _,cargo in ipairs({"oil","goods"}) do
+    for _,cargo in ipairs(Freight.industry) do
       local f=commercial[cargo]
       if engine and available(cargo) then
         alternatives[#alternatives+1]={key="purchase_"..cargo,cargo=cargo,ids={engine,f.wagon},name=label.." + "..f.name,tip=f.tip}
@@ -302,7 +315,6 @@ return function(api,status)
   local assemble_fetch={}
   local assembly_lists={engine="engines",wagon="wagons",body="bodies",target="destinations"}
   local assembly_titles={engine="Choose locomotive",wagon="Choose wagon",body="Choose wagon to move",target="Choose insertion point"}
-  local assembly_page_size=6
   local function assembly_help(e)
     return e.help or Help.describe("rail",nil,e.name)
   end
@@ -367,11 +379,11 @@ return function(api,status)
     end
     if a.picker then
       local items=a[assembly_lists[a.picker]]
-      a.page=math.max(1,math.min(a.page or 1,math.ceil(#items/assembly_page_size)))
       lab(.46,assembly_titles[a.picker])
       lab(.91,"Hover over a vehicle for details. Tap or click a row to select it.")
-      Help.rows(b,esc,{x=.42,y=1.31,w=12.16,items=items,count=assembly_page_size,page=a.page,selected=a[a.picker],
-        prefix="assembly_"..a.token.."_pick_",help=assembly_help,label=label})
+      Help.rows(b,esc,{x=.42,y=1.31,w=12.16,h=4.65,items=items,scroll=a.scroll,selected=a[a.picker],
+        prefix="assembly_"..a.token.."_pick_",help=assembly_help,
+        label=function(item) return item.name,item.quote and money(item.quote.price) or nil end})
       local item=items[a[a.picker]]
       Help.card(b,esc,.42,6.26,12.16,1.42,item and assembly_help(item))
       button(8.02,"pick_back","Return to wagon assembly")
@@ -431,17 +443,15 @@ return function(api,status)
       local f=commercial[q.cargo]
       if not available(q.cargo) then return nil,"Rail "..f.title.." service is unavailable in this world." end
       local role=q.first and "unload" or "load"
-      if not raw or raw.owner~=t.owner or raw.coal_role or raw[q.cargo.."_role"]~=role then return end
-      local other=q.cargo=="oil" and "goods_role" or "oil_role"
-      if raw[other] then return end
+      if not raw or raw.owner~=t.owner or Freight.role(raw,q.cargo) or raw[q.cargo.."_role"]~=role then return end
       local get=api.Sim["rail_"..q.cargo.."_stop_status"]
       local r=get and get(S,st)
       if role=="load" and (not r or #(r.sources or {})==0) then return nil,"This platform no longer covers a working "..f.source.." source." end
       if role=="unload" and (not r or not r.accepts) then return nil,"This platform no longer accepts "..f.noun.."." end
     elseif q.sequence and (not raw or raw.owner~=t.owner or raw.coal_role) then
       return nil,"Choose an owned passenger platform."
-    elseif raw and (raw.oil_role or raw.goods_role) then
-      return nil,raw.oil_role and "That platform is dedicated to Rail Oil." or "That platform is dedicated to Rail Goods."
+    elseif Freight.role(raw,"coal") then
+      return nil,"That platform is dedicated to other freight."
     elseif q.coal then
       local r=api.Sim.rail_coal_stop_status and api.Sim.rail_coal_stop_status(S,st)
       if not r or r.role~=(q.first and "unload" or "load") then return end
@@ -467,7 +477,7 @@ return function(api,status)
     end
     local st=t.rail_station_id
     local record=S.stock_rail_stations and S.stock_rail_stations[st]
-    if not record or record.owner~=n or record.coal_role or record.oil_role or record.goods_role then return end
+    if not record or record.owner~=n or Freight.role(record) then return end
     if st==a.first or a.first and q.index==2 and st==q.choices[1].second then
       return nil,"Choose a different final platform; each train parks at its own destination."
     end
@@ -669,24 +679,19 @@ return function(api,status)
       local function field(k) return f[prefix..k] end
       if a.picker then
         local items=a[assembly_lists[a.picker]]
-        local count,page=assembly_page_size,a.page
-        if field("pick_back") then a.picker,a.page=nil,nil
-        elseif field("pick_prev") and page>1 then a.page=page-1
-        elseif field("pick_next") and page*count<#items then a.page=page+1
+        a.scroll=Help.scroll_fields(core,f,prefix.."pick_scroll",a.scroll)
+        if field("pick_back") then a.picker,a.scroll=nil,nil
         else
-          local selected
-          for i=(page-1)*count+1,math.min(page*count,#items) do
-            if field("pick_row"..i) then selected=i;break end
-          end
+          local selected=Help.selected(f,prefix.."pick_row",#items)
           if not selected then return true end
           a[a.picker],a.focus=selected,a.picker
-          a.picker,a.page=nil,nil
+          a.picker,a.scroll=nil,nil
         end
         return U.assemble(p,a.depot,a,nil,a.remote)
       end
       for pick,list in pairs(assembly_lists) do
         if field("pick_"..pick) and #a[list]>0 then
-          a.picker,a.page,a.focus=pick,math.ceil(a[pick]/assembly_page_size),pick
+          a.picker,a.scroll,a.focus=pick,Help.scroll_to(a[pick]),pick
           return U.assemble(p,a.depot,a,nil,a.remote)
         end
       end
@@ -768,8 +773,8 @@ return function(api,status)
     local receipt=f.purchase and a.quote
     if not receipt then
       for key,quote in pairs(a.alternatives or {}) do
-        if f[key] and (key~="purchase_oil" or available("oil")) and
-            (key~="purchase_goods" or available("goods")) then receipt=quote;break end
+        local cargo=key:match("^purchase_(.+)$")
+        if f[key] and (not commercial[cargo] or available(cargo)) then receipt=quote;break end
       end
     end
     if receipt then

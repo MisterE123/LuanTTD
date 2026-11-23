@@ -118,3 +118,20 @@ A native SQLite reopen preserves the route, exact stopped position
 and remaining repair time. The same bus earns fares afterward. The
 test uses `BAYLINE_NATIVE_ROAD_FAULTS=1 BAYLINE_NATIVE_STOCK_FOSTER=1
 BAYLINE_NATIVE_FRESH=1 tests/native.sh`.
+
+## Ordinary worker presentation
+
+The simulated road fault countdown stays in the authority. The scoped actor
+packet carries only whether a visible bus is in repair. No smoke is sent
+before a scheduled fault begins or while the vehicle is hidden, crashed, or
+paused. The native view emits only to nearby players and stops immediately
+on recovery, leaving short-lived puffs to fade.
+
+```sh
+lua5.1 tests/campaign_projected_actors.lua
+bash tests/worker_road_smoke_native.sh
+```
+
+The graphical fixture starts a deterministic stock breakdown and lets the real
+countdown finish. The Linux client shows a plume during the failure and none
+after recovery, without any emitter changing the fault or vehicle orders.

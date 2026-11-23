@@ -21,7 +21,7 @@ trap cleanup EXIT
 game="$out/games/luanttd"
 mkdir -p "$game" "$out/"{world,home,cache}
 # Reuse immutable game media without writing into the working checkout.
-cp -al mods "$game/"
+cp -al mods "$game/" 2>/dev/null || cp -R mods "$game/"
 cp -a game.conf settingtypes.txt "$game/"
 mod="$game/mods/luanttd_core"
 cp "$mod/init.lua" "$mod/init.native.lua"
@@ -99,29 +99,14 @@ say "/car"
 sleep .6
 say "/carprobe entered"
 import -window root -quality 92 "$out/car-entry.jpg"
-# Luanti default C is the real camera cycle: first, rear third-person,
-# then front third-person. Both external views must have only the car.
-xdotool key c
-sleep .42
-import -window root -quality 92 "$out/car-chase.jpg"
+# Free look must reveal side glass rather than an external chase camera.
 xdotool mousemove_relative -- 145 18
 sleep .42
 import -window root -quality 92 "$out/car-side.jpg"
 xdotool mousemove_relative -- -145 -18
 sleep .42
-xdotool key c
-sleep .42
-# Front camera mirrors pitch. Look toward the nose rather than at the sky.
-xdotool mousemove_relative -- 0 92
-sleep .42
-import -window root -quality 92 "$out/car-front.jpg"
-xdotool mousemove_relative -- 0 -92
-sleep .42
-xdotool key c
-sleep .42
-# Guard against taking three accidentally identical first-person shots.
-if cmp -s "$out/car-entry.jpg" "$out/car-chase.jpg" || cmp -s "$out/car-chase.jpg" "$out/car-front.jpg"; then
-  echo "Camera cycle did not produce distinct views." >&2
+if cmp -s "$out/car-entry.jpg" "$out/car-side.jpg"; then
+  echo "Turning your head did not change the seated view." >&2
   exit 1
 fi
 xdotool keydown w

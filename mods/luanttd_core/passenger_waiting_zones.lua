@@ -1,6 +1,8 @@
 -- Model-space waiting areas. Every rectangle has a walkable surface below
 -- it and is outside the moving vehicle envelope. Numbers refer to the
 -- shipped station OBJ geometry, not to an abstract tile center.
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Freight=dofile(mod.."/rail_freight_kinds.lua")
 return function(api)
   local S,Sim=api.s,api.Sim
   local Z={}
@@ -17,7 +19,7 @@ return function(api)
   local dock_axis={[0]=east,[1]={x=0,z=-1},[2]={x=-1,z=0},[3]={x=0,z=1}}
   function Z.rail(id)
     local st=S.stock_rail_stations[id]
-    if not st or st.coal_role or st.goods_role or st.oil_role then return end
+    if not st or Freight.role(st) then return end
     local out={}
     for _,tile in ipairs(st.tiles) do
       local t=S.tiles[tile]

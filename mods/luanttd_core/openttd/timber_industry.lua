@@ -152,7 +152,7 @@ return function(Packets,Catchment,Rating,Income,Commons,Houses)
     local used,seen={},{}
     for _,st in ipairs(stations) do
       local c=covers[st.id]
-      if not seen[st.id] and c and freight(c) and
+      if not seen[st.id] and c and freight(c) and (not st.freight_cargo or st.freight_cargo==cargo) and
           (ind.exclusive_consumer==nil or ind.exclusive_consumer==st.owner) and covered(c,ind) then
         seen[st.id]=true
         local r=st.owner~=opts.neutral_owner and opts.town_rights and opts.town_rights(st.town)

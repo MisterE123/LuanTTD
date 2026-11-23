@@ -154,8 +154,9 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
       return dirty
     end
     function B.step_rail_rating(st)
-      assert(st.freight_cargo=="goods")
-      return rate(Rules.goods(st,"goods"),Rules.queue(st,"goods"),"goods",false)
+      local cargo=st.freight_cargo
+      assert(Rules.cargo[cargo],"Unknown timber rail cargo")
+      return rate(Rules.goods(st,cargo),Rules.queue(st,cargo),cargo,false)
     end
     function B.timing(v)
       local q=assert(Rules.trucks[v.cargo]);return q.load_amount,q.age_ticks

@@ -34,7 +34,8 @@ return function(lanes)
     local i=math.floor(k)
     local a,b=frames[i],frames[math.min(#frames,i+1)]
     local x,z,yaw=M.pose(a,b,k-i)
-    return x,z,yaw,a[10] or b[10],(k-i<.5 and a[13] or (k-i>=.5 and b[13]))
+    local f=k-i<.5 and a or b
+    return x,z,yaw,a[10] or b[10],f[13],f[14]
   end
   return M
 end

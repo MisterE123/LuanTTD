@@ -299,6 +299,8 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
     end
     local middle=W.by_bridge_middle(s,id)
     if middle and part and part.wormhole then return middle.deck,0 end
+    local bore=part and part.wormhole and by_tunnel_middle(s,id)
+    if bore and bore.kind=="tunnel" and bore.middle_by_tile[id] then return bore.base,0 end
   end
   return W
 end

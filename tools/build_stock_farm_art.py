@@ -13,6 +13,7 @@ from mathutils import Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_small_airport_art as A
+from farm_surface_partition import partition
 
 R = A.RAIL
 B, T, F, Q = A.B, A.T, A.face, A.rect
@@ -44,11 +45,15 @@ D = .5
 
 
 def fence(m,pts,gate=(),colour="creamslats",label="Split rail paddock"):
+    installed=set()
     for seg,(a,b) in enumerate(zip(pts,pts[1:])):
         length=hypot(b[0]-a[0],b[1]-a[1]); n=max(1,round(length/.43))
         for i in range(n+1):
             t=i/n; x,z=(a[j]+t*(b[j]-a[j]) for j in (0,1))
-            B(m,label+" capped upright", "woodold",x,z,.063,.063,.019,.227,.008)
+            key=(round(x,6),round(z,6))
+            if key not in installed:
+                B(m,label+" capped upright", "woodold",x,z,.063,.063,.019,.227,.008)
+                installed.add(key)
             if i<n and seg not in gate:
                 t2=(i+1)/n; xx,zz=(a[j]+t2*(b[j]-a[j]) for j in (0,1))
                 for h in (.093,.178):
@@ -92,16 +97,26 @@ def land(m):
 
 def roof(m,n,x,z,w,l,e,r,c):
     # Gable panels leave the chosen south front open below the eave.
-    A.gable(m,n,x,z,w,l,e,r,c,"z")
+    # One roof skin and one ridge. The airport helper also adds cap and
+    # seam meshes, which would collide with this barn's taller battens.
+    a,b=(x-w/2,x+w/2),(z-l/2,z+l/2)
+    p=[(a[0],b[0],e),(x,b[0],r),(a[1],b[0],e),
+       (a[0],b[1],e),(x,b[1],r),(a[1],b[1],e)]
+    q=[(u,v,y-.038) for u,v,y in p]
+    for ids in ((0,3,4,1),(1,4,5,2)):
+        F(m,n,c,[p[i] for i in ids][::-1])
+        F(m,n,"dark_slate",[q[i] for i in ids])
+    for i,j in ((0,1),(1,2),(0,3),(2,5),(3,4),(4,5)):
+        F(m,n+" fascia","slate_rib",[p[i],p[j],q[j],q[i]])
     for side in (-1,1):
         for j in range(1,6):
             frac=j/6
             a=(x+side*w/2*frac,z-l/2-.008,r-frac*(r-e)+.012)
             b=(a[0],z+l/2+.005,a[2])
             T(m,n+" shallow flashing standing seams","slate_rib",a,b,.009,.009,5)
-        for zz in (z-l/2-.003,z+l/2+.003):
+        for zz in (z-l/2-.014,z+l/2+.014):
             T(m,n+" cream rake board","board",(x,zz,r),(x+side*w/2,zz,e),.018,.018,5)
-    T(m,n+" rain cap","slate_rib",(x,z-l/2-.016,r+.008),(x,z+l/2+.016,r+.008),.022,.019,7)
+    T(m,n+" rain cap","slate_rib",(x,z-l/2-.022,r+.016),(x,z+l/2+.022,r+.016),.022,.019,7)
 
 
 def gable_panel(m,n,x,z,w,e,r,c,front=True):
@@ -135,7 +150,7 @@ def shed(m,n,x,z,w,l,h,r,wall="creamslats",open_front=True):
         for s in (-1,1):
             B(m,n+" narrow front pier",wall,x+s*w*.393,z+l/2,w*.216,.062,b,h)
             B(m,n+" loading gate guide","board",x+s*w*.278,z+l/2+.036,.036,.064,b,h-.076,.005)
-        Q(m,n+" open pass-through concrete floor","cement",x-w*.31,x+w*.31,z-l*.42,z+l*.59,.101)
+        Q(m,n+" open pass-through concrete floor","cement",x-w*.31,x+w*.31,z-l*.42,z+l*.59,b)
         B(m,n+" loft ventilation door","barn_shadow",x,z+l/2+.018,.209,.046,h+.054,h+.226,.007)
         for j in range(4):
             B(m,n+" loft grille slat","creamsun",x,z+l/2+.044,.194,.008,h+.081+j*.031,h+.093+j*.031)
@@ -155,7 +170,7 @@ def architecture(m):
     B(m,"Farmhouse capped open chimney iron","dark_slate",2.98,2.02,.192,.167,1.027,1.066,.010)
     # Two connected barns form the stock double-roof silhouette.
     shed(m,"Threshing barn",4.16,.127,.964,.770,.745,1.129,"creamslats")
-    shed(m,"Side-by-side cart shed",4.98,.131,.666,.768,.615,.918,"farmred")
+    shed(m,"Side-by-side cart shed",5.05,.131,.666,.768,.615,.918,"farmred")
     for x,z,w,l in ((.592,4.14,.954,.690),(2.91,4.807,.843,.661)):
         shed(m,"Light slate grain annex",x,z,w,l,.584,.863,"creamslats")
     fence(m,[(2.27,-.34),(2.73,-.34),(3.31,-.34),(3.34,.36),(3.13,.62),(2.83,.62),(2.38,.62)],(4,),
@@ -173,10 +188,22 @@ def storage(m):
         h=1.46 if gx<.4 else 1.29
         n="Corrugated vertical grain silo"
         B(m,n+" octagonal concrete footing","cement",gx,gz,.478,.479,.009,.089,.043)
-        T(m,n+" weathered turned shell","silo_blue",(gx,gz,.084),(gx,gz,h),.202,.205,16)
+        # Zinc bands are built into the corrugated shell, not a second
+        # almost coincident wall. Each forming edge joins the next ring.
+        radius=lambda y:.202+.003*(y-.084)/(h-.084)
+        rows=[(.084,.202,"silo_blue")]
         for i in range(4):
-            a=.280+i*(h-.30)/4
-            T(m,n+" circumferential zinc seam","zinc",(gx,gz,a),(gx,gz,a+.015),.206,.206,16)
+            y=.280+i*(h-.30)/4
+            rows.extend(((y-.005,radius(y-.005),"silo_blue"),(y,.218,"zinc_edge"),
+                         (y+.014,.218,"zinc"),(y+.019,radius(y+.019),"zinc_edge")))
+        rows.append((h,.205,"silo_blue"))
+        for (y0,r0,_),(y1,r1,mat) in zip(rows,rows[1:]):
+            def ring(i,elev,rad):
+                a=2*pi*i/16
+                return (gx+rad*cos(a),gz+rad*sin(a),elev)
+            for i in range(16):
+                F(m,n+" weathered turned shell",mat,
+                  [ring(i,y0,r0),ring(i+1,y0,r0),ring(i+1,y1,r1),ring(i,y1,r1)])
         for i in range(16):
             t=2*pi*i/16
             x,z=gx+.207*cos(t),gz+.207*sin(t)
@@ -308,10 +335,40 @@ def build(name,layout,groups,title,blend,look,cam,scale,pal,render):
     sc["Datum"]="Blender Z up, ground Z=0; runtime grade+1 anchor with cell centered at NW site +(2*x,2*z)"
     mats=R.materials()
     for i,n in enumerate(pal):mats[i].name=n.replace("_"," ").title()
-    for n,f in groups:
-        m=A.mesh();f(m)
-        c=bpy.data.collections.new(n);sc.collection.children.link(c);R.to_blender(m,c,mats)
-    full=A.mesh();place_grp(full,[f for _,f in groups])
+    full=A.mesh()
+    if name==NAME:
+        owner={}
+        ordered=[]
+        for i,(_,f) in enumerate(groups):
+            m=A.mesh();f(m)
+            for part,items in m.parts.items():
+                owner[part]=i
+                for ids,color in items:
+                    poly=[m.vertices[part][j] for j in ids]
+                    height=poly[0][2]
+                    # Yard finishes are discrete inlays, not five
+                    # near-coplanar decals drawn over each other and grass.
+                    flat_layer=(i==0 and height<=.012 or
+                                part in ("Flush receiving weigh plate","Visible inset slot bars"))
+                    if flat_layer and all(p[2]==height for p in poly):
+                        poly=[(x,z,.022) for x,z,_ in poly]
+                        priority=height
+                    else:
+                        priority=1
+                    ordered.append((priority,len(ordered),part,color,poly))
+        faces=[(index,part,color,poly)
+               for index,(_,_,part,color,poly) in enumerate(sorted(ordered))]
+        layers=[A.mesh() for _ in groups]
+        for part,color,poly in partition(faces):
+            full.face(part,color,poly)
+            layers[owner[part]].face(part,color,poly)
+        for (n,_),m in zip(groups,layers):
+            c=bpy.data.collections.new(n);sc.collection.children.link(c);R.to_blender(m,c,mats)
+    else:
+        for n,f in groups:
+            m=A.mesh();f(m)
+            c=bpy.data.collections.new(n);sc.collection.children.link(c);R.to_blender(m,c,mats)
+        place_grp(full,[f for _,f in groups])
     for (x,z),gfx in layout.items():
         p=R.MODELS/f"bl_{name}_{x}_{z}.obj"
         R.export_obj(p,clip(full,x,z,layout))

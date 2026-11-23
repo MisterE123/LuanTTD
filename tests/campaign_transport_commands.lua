@@ -76,6 +76,27 @@ assert(A.orders("Rail","rail",engine).ok and A.orders("Water","ship","ferry").ok
 assert(A.advance(4).tick==296 and runtime.rail.run.current(s).ticks>0)
 assert(runtime.water.run.current(s).vehicle.tick>0 and runtime.air.run.current(s).vehicle.tick>0)
 print("PASS worker builds, buys and dispatches rail, ferry and air using the normal commands")
+local first={}
+for _=1,30 do
+  assert(A.advance(1).ok)
+  local headlines=assert(A.news("Rail",1).value)
+  for _,row in ipairs(headlines.items) do first[row.icon]=first[row.icon] or row end
+  if first.train and first.ship and first.aircraft then break end
+end
+assert(first.train.kind=="arrival_player" and first.ship.kind=="arrival_other" and first.aircraft.kind=="arrival_other")
+local recent=assert(A.news("Water",nil,0).value)
+assert(recent.items[1].seq<recent.items[#recent.items].seq and recent.cursor==recent.head)
+assert(recent.items[1].kind=="arrival_player" and recent.items[1].owner==nil and recent.items[1].tile)
+for _,row in ipairs(recent.items) do assert(not row.owner and not row.ref_station) end
+local latest=A.news("Rail",nil,nil,{action="last"}).value.article
+assert(latest and latest.icon=="aircraft" and latest.year==1950)
+assert(not A.news("Visitor",1).ok and not A.news("Rail",nil,-1).ok)
+local Store=dofile(mod.."/packed_campaign.lua")
+local saved=Store.decode(Store.encode(s))
+local reload=dofile(mod.."/campaign_news.lua")(Sim,mod,{world=saved},{})
+assert(reload.history("Rail",1,8).head==recent.head)
+assert(not reload.arrive("ship","Water",dock1,Sim.id(19,8)),"station first-arrival bit survived checkpoint")
+print("PASS real train, ferry and plane arrivals produce private-safe dated news; history and station one-shot bits persist")
 local shed=Sim.id(5,23)
 track({tool="depot",first=shed,direction=runtime.network.track.SW})
 local function buy_part(kind,id)
@@ -148,4 +169,23 @@ local latest=W.company(name)
 assert(W.command(name,{kind="transport_start",mode="tram",clear=true,revision=latest.revision}).ok)
 assert(not t.tram_pilot and t.tiles[dst].tram)
 print("PASS worker constructs track and stops, dispatches and advances the stock tram, reads orders and clears the run")
+local model=t.stock_bus_market.models[117]
+t.day=model.public_date-t.stock_bus_market.epoch-1
+assert(not Sim.vehicle_available(t,"leopard_bus"))
+assert(W.advance(1).ok and Sim.vehicle_available(t,"leopard_bus"))
+local paper=W.news(name,1).value.items
+local introduced
+for _,row in ipairs(paper) do
+  if row.kind=="new_vehicles" and row.headline:find("Hereford Leopard Bus",1,true) then
+    introduced=row;break
+  end
+end
+assert(introduced and introduced.day==1 and t.day==introduced.economy)
+assert(W.advance(1).ok)
+local count=0
+for _,row in ipairs(W.news(name,1).value.items) do
+  if row.headline==introduced.headline then count=count+1 end
+end
+assert(count==1)
+print("PASS introduction is emitted once on the actual source public-sale date")
 return true

@@ -11,6 +11,17 @@ return function(api,W)
   local Lanes=dofile(path.."/road_lanes.lua")
   local C,players={},{}
   local entity="luanttd_core:sightseeing_car"
+  local cabin=entity.."_interior"
+  local function exterior_observers(q,join,leave)
+    if not q.object:get_pos() or not q.interior:get_pos() then return end
+    local keep={}
+    for _,p in ipairs(core.get_connected_players()) do
+      local n=p:get_player_name()
+      if n~=q.name and n~=leave then keep[n]=true end
+    end
+    if join and join~=q.name then keep[join]=true end
+    q.object:set_observers(keep)
+  end
   -- World nodes per real second, calibrated against the stock MPS bus and
   -- mail truck on a straight road at normal simulation speed. Driving is
   -- local sightseeing, so pausing/fast-forwarding and builder E do not
@@ -154,6 +165,14 @@ return function(api,W)
     x,z=x+shiftx,z+shiftz
     return {x=x,y=height(ground,x,z,layer),z=z}
   end
+  local function seated(at,yaw)
+    -- Luanti's first-person camera follows the attached object's origin,
+    -- independently of its visual attachment offset. Keep the private
+    -- object's origin at the driver's seat; the mesh is exported relative
+    -- to this point, so doors and exterior still occupy the same world pose.
+    local x,z=math.sin(yaw),math.cos(yaw)
+    return {x=at.x-.10*x-.045*z,y=at.y,z=at.z-.10*z+.045*x}
+  end
   local function status(p,q,waiting)
     local speed=math.floor(q.speed*14+.5)
     local msg=("Sightseeing car  ·  %d km/h%s  |  W drive  ·  A/D steer  ·  S brake/reverse  ·  Right-click or /car to exit"):
@@ -164,17 +183,18 @@ return function(api,W)
     end
   end
   local function release(q,p)
-    if p and q.attached and p:get_attach()==q.object then p:set_detach() end
+    if p and q.attached and p:get_attach()==q.interior then p:set_detach() end
     if p and q.avatar_graphics then p:set_properties(q.avatar_graphics) end
     if p and q.hud then p:hud_remove(q.hud) end
-    if q.object then q.object:remove() end
+    if q.interior and q.interior:get_pos() then q.interior:remove() end
+    if q.object and q.object:get_pos() then q.object:remove() end
   end
   function C.active(p) return players[p:get_player_name()]~=nil end
   function C.leave(n)
     local q=players[n]
     if q then release(q,core.get_player_by_name(n));players[n]=nil end
   end
-  function C.toggle(p)
+  local function toggle(p,selected,strict)
     refresh_board()
     local n=p:get_player_name()
     local existing=players[n]
@@ -184,32 +204,44 @@ return function(api,W)
       W.end_avatar(p,"car")
       return true,"Returned to builder view."
     end
-    local id=locate(p)
-    if not id then return false,"Point at a connected road or fly nearer to town before typing /car." end
+    local id
+    if strict then if selected and legal_tile(selected) then id=selected end
+    else id=locate(p) end
+    if not id then return false,"Aim at a connected road before entering the sightseeing car." end
     local state,why=W.begin_avatar(p,"car")
     if not state then return false,why or "Return to builder view before driving." end
     local heading=first_heading(id,p)
-    local q={id=id,heading=heading,look=yaw(heading),progress=0,speed=0}
+    local q={id=id,name=n,heading=heading,look=yaw(heading),progress=0,speed=0}
     local at=pose(q)
     q.object=core.add_entity(at,entity)
-    if not q.object then W.end_avatar(p,"car");return false,"Could not enter a car yet; try a loaded road." end
+    q.interior=q.object and core.add_entity(seated(at,q.look),cabin)
+    if not q.interior or not q.interior.set_observers or not q.object.set_observers then
+      release(q,p);W.end_avatar(p,"car")
+      return false,"Could not create the private car cabin. Try again from a loaded road."
+    end
+    exterior_observers(q)
+    q.interior:set_observers({[n]=true})
     q.object:set_yaw(-q.look)
+    q.interior:set_yaw(-q.look)
     p:set_physics_override({gravity=0,speed=0,jump=0,sneak=false,speed_walk=0,speed_crouch=0})
-    p:set_attach(q.object,"",{x=0,y=0,z=0},{x=0,y=0,z=0})
+    p:set_eye_offset({x=0,y=0,z=0},{x=0,y=0,z=0},{x=0,y=0,z=0})
+    p:set_attach(q.interior,"",{x=0,y=0,z=0},{x=0,y=0,z=0},true)
     q.attached=true
     local graphics=p:get_properties()
     q.avatar_graphics={visual=graphics.visual,textures=graphics.textures,visual_size=graphics.visual_size}
     -- PlayerSAO keeps its own visual enabled for camera/attachment. Give it
     -- no visible pixels while mounted instead of hiding the parent/car.
-    p:set_properties({eye_height=.43,visual="sprite",textures={"bl_sightseeing_hidden_player.png"},
+    p:set_properties({eye_height=.225,visual="sprite",textures={"bl_sightseeing_hidden_player.png"},
       visual_size={x=.001,y=.001,z=.001}})
-    p:set_look_horizontal(-q.look);p:set_look_vertical(.12)
+    p:set_look_horizontal(-q.look);p:set_look_vertical(.07)
     q.hud=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},
       text="",number=0xffe3a3,z_index=105})
     players[n]=q
     status(p,q)
     return true,"You're in a car. W drives, A/D steer, S brakes or reverses; right-click or /car to get out."
   end
+  function C.toggle(p) return toggle(p,nil,false) end
+  function C.toggle_at(p,tile) return toggle(p,tile,true) end
   function C.step(p,_,keys,dt)
     refresh_board()
     local name=p:get_player_name()
@@ -218,7 +250,7 @@ return function(api,W)
     if api.authority_handoff and (not S.tiles[q.id] or q.next_id and not S.tiles[q.next_id]) then
       q.speed=0;status(p,q,true);return
     end
-    if not q.object:get_pos() then
+    if not q.object:get_pos() or not q.interior:get_pos() then
       C.toggle(p)
       core.chat_send_player(name,"The car disappeared; returned to builder view.")
       return
@@ -274,8 +306,11 @@ return function(api,W)
     local delta=wrap(yaw(q.heading)-q.look)
     local change=math.max(-7*dt,math.min(7*dt,delta))
     q.look=wrap(q.look+change)
-    q.object:move_to(pose(q),true)
+    local at=pose(q)
+    q.object:move_to(at,true)
+    q.interior:move_to(seated(at,q.look),true)
     q.object:set_yaw(-q.look)
+    q.interior:set_yaw(-q.look)
     -- Turn the driver's view with the car while retaining mouse look offset.
     if math.abs(change)>.0001 then p:set_look_horizontal((p:get_look_horizontal()-change)%two_pi) end
     status(p,q,waiting)
@@ -284,6 +319,17 @@ return function(api,W)
     physical=false,collide_with_objects=false,pointable=false,visual="mesh",
     mesh="bl_sightseeing_car.obj",textures={"bl_sightseeing_car_palette.png"},
     visual_size={x=1,y=1,z=1},static_save=false}})
+  core.register_entity(cabin,{initial_properties={
+    physical=false,collide_with_objects=false,pointable=false,visual="mesh",
+    mesh="bl_sightseeing_car_interior.obj",textures={"bl_sightseeing_car_interior_atlas.png"},
+    backface_culling=false,visual_size={x=1,y=1,z=1},static_save=false}})
+  core.register_on_joinplayer(function(p)
+    for _,q in pairs(players) do exterior_observers(q,p:get_player_name()) end
+  end)
+  core.register_on_leaveplayer(function(p)
+    local n=p:get_player_name()
+    for other,q in pairs(players) do if other~=n then exterior_observers(q,nil,n) end end
+  end)
   core.register_chatcommand("car",{description="Drive a sightseeing car on the roads; use again to return to building.",
     func=function(name)
       local p=core.get_player_by_name(name)

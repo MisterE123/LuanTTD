@@ -6,12 +6,12 @@ return function(Sim,R,x,z,w,h,fraction,frame)
   local function road(v)
     local p=frame.road[v]
     if not p then
-      local pos,yaw,pitch
-      if R.road_pose then pos,yaw,pitch=R.road_pose(v,fraction) end
-      p={at=Sim.position(s,v),pos=pos,yaw=yaw,pitch=pitch}
+      local pos,yaw,pitch,bore
+      if R.road_pose then pos,yaw,pitch,bore=R.road_pose(v,fraction) end
+      p={at=Sim.position(s,v),pos=pos,yaw=yaw,pitch=pitch,bore=bore}
       frame.road[v]=p
     end
-    return p.at,p.pos,p.yaw,p.pitch
+    return p.at,p.pos,p.yaw,p.pitch,p.bore
   end
   local function train(r)
     local parts=frame.rail[r]
@@ -34,11 +34,18 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     out[#out+1]=data
   end
   for id,v in pairs(s.fleet) do
-    local at,pos,yaw,pitch=road(v)
+    local at,pos,yaw,pitch,bore=road(v)
     if point(pos) or not pos and tile(at) then
       local f=Sim.road_motion_frame(s,v)
       local pose=f and {f[1],f[2],f[3],f[4],f[5]} or nil
-      add("road",id,{tile=at,frame=pose,engine=v.engine,running=not not v.running,
+      local fault=v.road_fault
+      -- The worker is the only owner of the RC1 countdown. Export only the
+      -- visible smoke flag (never the timer, route or RNG).
+      local smoke=pos and not bore and s.speed~=0 and not (v.crashed or v.depot or
+        v.road_speed_state and v.road_speed_state.depot_wait) and
+        fault and fault.breakdown_ctr==1 and fault.breakdown_delay>0
+      add("road",id,{tile=at,frame=pose,engine=v.engine,passenger=v.cargo=="passenger",running=not not v.running,
+        breakdown_smoke=smoke and true or nil,
         pos=pos and xyz(pos),yaw=yaw,pitch=pitch,hidden=not pos,loaded=(v.units or 0),
         owner=v.owner,home_depot=v.home_depot or v.depot,label=v.name,order_count=#(v.orders or {})})
     end
@@ -63,7 +70,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
         if frame.whole_trains then parts=consist end
         local unit=R.rail.owned and r.fleet_id and R.rail.owned.get(s,r.owner,r.fleet_id)
         add("rail",r.fleet_id or r.id,{owner=r.owner,engine=r.stock_engine,wagon=r.stock_wagon,
-          parts=parts,complete_parts=frame.whole_trains,part_count=#r.consist.parts,collectors=not not r.bridge_collectors,
+          parts=parts,running=not (r.stopped or r.failure or r.crashed),complete_parts=frame.whole_trains,part_count=#r.consist.parts,collectors=not not r.bridge_collectors,
           depot=unit and unit.depot,label=unit and "Train "..unit.unit_number})
       end
     end

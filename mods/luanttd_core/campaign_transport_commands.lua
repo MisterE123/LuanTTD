@@ -2,6 +2,7 @@
 -- models. Their quotes are retained on the owner, not trusted from forms.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local Help=dofile(mod.."/depot_vehicle_help.lua")
+local Freight=dofile(mod.."/rail_freight_kinds.lua")
 return function(Sim,R)
   local s=R.world
   local T={}
@@ -231,8 +232,26 @@ return function(Sim,R)
             Help.describe("rail","passenger",row.name,{speed=row.speed,capacity=id==11 and 76 or 40},id==11 and "dmu" or nil))
         end
       end
+      for _,cargo in ipairs(Freight.profile_order) do
+        local p=Freight.profiles[cargo]
+        local car=catalogue[p.wagon]
+        if car then
+          for _,stock in ipairs({0,8,9,10,13,14,15,23,24}) do
+            local engine=catalogue[stock]
+            if engine and engine.passenger_model_ready then
+              local cmd={mode=mode,operation="buy",depot=key,parts={stock,p.wagon}}
+              local q=T.quote(owner,cmd)
+              if q then
+                offers[#offers+1]={name=engine.name.." + "..car.name,price=q.price,request=q.request,
+                  help=Help.describe(mode,cargo,car.name,{capacity=car.capacity,speed=engine.speed})}
+                break
+              end
+            end
+          end
+        end
+      end
       for _,unit in ipairs(R.rail.owned.list(s,owner,key)) do
-        local cargo=({[29]="coal",[30]="oil",[32]="goods"})[unit.stock_ids[2]]
+        local cargo=Freight.wagons[unit.stock_ids[2]]
         local engine=catalogue[unit.stock_ids[1]] or {}
         local part=#unit.stock_ids==1 and (unit.stock_ids[1]==11 and "dmu" or "engine") or nil
         vehicles[#vehicles+1]={id=unit.id,label="Train "..unit.unit_number..
@@ -298,7 +317,7 @@ return function(Sim,R)
         local cell=r.origin or r.land or r.tiles and r.tiles[1]
         local x,z
         if cell then x,z=Sim.xy(cell) end
-        local cargo=r.coal_role and "coal" or r.oil_role and "oil" or r.goods_role and "goods"
+        local cargo=Freight.role(r)
         targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or "Airfield") or "Dock")
           .." "..key_..(x and (" (%d, %d)"):format(x,z) or "")}
         if mode=="ship" and R.water.coal then
@@ -352,7 +371,7 @@ return function(Sim,R)
       return run~=nil,run and "Test streetcar dispatched between the two stops. It does not carry passengers." or why
     elseif req.mode=="rail" and R.rail and R.rail.owned and id(req.vehicle) then
       local start=R.rail.owned.start
-      if req.cargo=="coal" or req.cargo=="oil" or req.cargo=="goods" then
+      if Freight.known(req.cargo) then
         start=R.rail.owned["start_"..req.cargo]
       elseif req.cargo~=nil then return false,"Unsupported train cargo." end
       return start(s,owner,req.vehicle,req.first,req.second)

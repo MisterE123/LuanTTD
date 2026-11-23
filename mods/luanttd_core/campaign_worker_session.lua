@@ -109,7 +109,7 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
     H.step(dt,positions)
     painting.step()
     if api.farm_view then api.farm_view.step(dt,positions) end
-    render.step_fountains(dt,positions)
+    render.step_ambient_particles(dt,positions)
     render.step_worker_actors(dt)
     render.step_lighthouse_beams(dt,positions)
     if H.status()=="owned" and api.crowd then api.crowd.update(core.get_connected_players(),dt) end

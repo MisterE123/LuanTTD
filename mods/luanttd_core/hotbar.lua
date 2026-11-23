@@ -34,6 +34,13 @@ function H.order_overlay(slot,mode,label)
     {[pick]=1,[done]=8}
 end
 local function section(id,label,asset) return item("section_"..id,label,asset) end
+H.sightseeing={
+  survey_walk="Left-click dry ground to walk here",
+  survey_drive_car="Left-click a connected street to drive",
+  survey_fly_plane="Left-click an airport to start flying",
+  survey_train_cab="Left-click a train to ride in its cab",
+  survey_ride_vehicle="Left-click a passenger train or bus to ride",
+}
 H.menus={
   home={title="Transport & construction",
     [1]=section("survey","Survey","survey_map"),
@@ -44,7 +51,10 @@ H.menus={
     [6]=section("options","Controls","settings_menu"),
     [7]=section("terrain","Landscaping","terrain"),
   },
-  survey={title="Survey",[1]=inspect,[2]=jump,[3]=workbenches,[8]=back},
+  survey={title="Survey",[1]=inspect,[2]=jump,[3]=workbenches,
+    [4]=item("survey_walk","Walk"),[5]=item("survey_drive_car","Drive Car"),
+    [6]=item("survey_fly_plane","Fly Plane"),[7]=item("survey_train_cab","Train Cab"),
+    [8]=back,[9]=item("survey_ride_vehicle","Ride Vehicle")},
   roads={title="Road Construction",[1]=inspect,[2]=item("road","AutoRoad: click or drag"),
     [3]=item("road_station","Bus stop","stop"),
     [4]=item("road_depot","Road depot","depot"),
@@ -207,11 +217,51 @@ function H.enable_rail_coal()
   menu[3]=item("rail_coal_unload","Designate coal unloading stage","coal_unload")
   menu[6]=item("rail_coal_flip","Switch platform side","coal_flip")
 end
+local goods_load=item("rail_goods_load","Sawmill: designate Goods loading platform","goods_load")
+local goods_unload=item("rail_goods_unload","Town: designate Goods delivery platform","goods_unload")
+local rail_goods_ready,rail_wood_ready
+local function nest_rail_goods(menu)
+  local title=rail_wood_ready and "Timber & Goods trains" or "Goods trains"
+  local slots={title=title,[1]=inspect,[8]=back,[9]=bulldoze}
+  if rail_goods_ready then slots[2],slots[3]=goods_load,goods_unload end
+  if rail_wood_ready then
+    slots[4]=item("rail_wood_load","Forest: designate Wood loading platform","rail_wood_load")
+    slots[5]=item("rail_wood_unload","Sawmill: designate Wood delivery platform","rail_wood_unload")
+  end
+  H.menus.rail_goods_freight=slots
+  menu[4]=section("rail_goods_freight",title,rail_wood_ready and "rail_timber_freight" or "rail_goods_freight")
+  if menu[5]==goods_unload then menu[5]=nil end
+end
 function H.enable_rail_goods()
   local menu=rail_freight_menu()
-  if not menu or menu[4] or menu[5] then return end
-  menu[4]=item("rail_goods_load","Sawmill: designate Goods loading platform","goods_load")
-  menu[5]=item("rail_goods_unload","Town: designate Goods delivery platform","goods_unload")
+  if not menu then return end
+  rail_goods_ready=true
+  if rail_wood_ready or H.menus.rail_farm_freight then nest_rail_goods(menu)
+  else menu[4],menu[5]=goods_load,goods_unload end
+end
+function H.enable_rail_wood()
+  local menu=rail_freight_menu()
+  if not menu then return end
+  rail_wood_ready=true
+  nest_rail_goods(menu)
+end
+function H.enable_rail_farm(livestock,grain)
+  local menu=rail_freight_menu()
+  if not menu or not (livestock or grain) then return end
+  -- Preserve the Bank/Metals, Coal and Oil positions. The Goods pair
+  -- shares one submenu when Farm trains need the tenth visible slot.
+  if menu[4]==goods_load then nest_rail_goods(menu) end
+  menu[5]=section("rail_farm_freight","Farm trains","rail_farm_freight")
+  local farm={title="Farm & Factory trains",[1]=inspect,[8]=back,[9]=bulldoze}
+  if livestock then
+    farm[2]=item("rail_livestock_load","Farm: designate Livestock loading platform","rail_livestock_load")
+    farm[3]=item("rail_livestock_unload","Factory: designate Livestock delivery platform","rail_livestock_unload")
+  end
+  if grain then
+    farm[4]=item("rail_grain_load","Farm: designate Grain loading platform","rail_grain_load")
+    farm[5]=item("rail_grain_unload","Factory: designate Grain delivery platform","rail_grain_unload")
+  end
+  H.menus.rail_farm_freight=farm
 end
 function H.enable_rail_oil()
   local menu=rail_freight_menu()
@@ -220,6 +270,29 @@ function H.enable_rail_oil()
   H.menus.rail_oil_freight={title="Oil trains",[1]=inspect,
     [2]=item("rail_oil_load","Oil wells: designate loading platform","oil_load"),
     [3]=item("rail_oil_unload","Oil refinery: designate unloading platform","oil_unload"),[8]=back,[9]=bulldoze}
+end
+function H.enable_rail_metals(ore,steel)
+  local menu=rail_freight_menu()
+  if not menu then return end
+  menu[9]=section("rail_metal_freight","Iron and steel trains","rail_metals")
+  local metals={title="Iron & Steel Rail Freight",[1]=inspect,[8]=back,[9]=bulldoze}
+  if ore then
+    metals[2]=item("rail_iron_ore_load","Iron Ore Mine: designate loading platform","rail_iron_ore_load")
+    metals[3]=item("rail_iron_ore_unload","Steel Mill: designate ore unloading platform","rail_iron_ore_unload")
+  end
+  if steel then
+    metals[4]=item("rail_steel_load","Steel Mill: designate steel loading platform","rail_steel_load")
+    metals[5]=item("rail_steel_unload","Factory: designate steel unloading platform","rail_steel_unload")
+  end
+  H.menus.rail_metal_freight=metals
+end
+function H.enable_rail_valuables()
+  local menu=rail_freight_menu()
+  if not menu then return end
+  menu[10]=section("rail_bank_freight","Bank trains","rail_bank_freight")
+  H.menus.rail_bank_freight={title="Bank Valuables by Rail",[1]=inspect,
+    [2]=item("rail_valuables_load","Bank: designate Valuables loading platform","rail_valuables_load"),
+    [3]=item("rail_valuables_unload","Different Bank: designate Valuables delivery platform","rail_valuables_unload"),[8]=back,[9]=bulldoze}
 end
 function H.enable_rail_pair()
   if H.menus.railops then
@@ -334,6 +407,9 @@ function H.legend(stack,slot,is_world_tool,visible)
     elseif id=="teleport_tile" then
       help[1]="Left-click to teleport"
       help[2]="Right-click to inspect"
+    elseif H.sightseeing[id] then
+      help[1]=H.sightseeing[id]
+      help[2]="Right-click for details"
     elseif is_world_tool then
       help[1]=(id=="road" or id=="clear" or id=="oneway_drag")
         and "Click or drag in the world" or "Left-click to use"

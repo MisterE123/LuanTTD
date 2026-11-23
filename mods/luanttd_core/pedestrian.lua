@@ -116,8 +116,11 @@ function P.new(api)
     z=z and clamp(z,v*2-.25,v*2+1.25) or v*2+.5
     return {x=x,y=surface(id,x,z)+.045,z=z}
   end
+  function W.at(tile,hit)
+    return tile and point(tile,hit and hit.x,hit and hit.z)
+  end
   function W.find(p,tile,hit)
-    local direct=tile and point(tile,hit and hit.x,hit and hit.z)
+    local direct=W.at(tile,hit)
     if direct then return direct end
     local focus=hit or p:get_pos()
     if tile and not hit then local x,z=Sim.xy(tile);focus={x=x*2+.5,z=z*2+.5} end

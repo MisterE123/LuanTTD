@@ -8,6 +8,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     wagon={id=27,weight=25,length=8}}
   local settings={forbid_90=true} -- OpenTTD 16.0-RC1 pf.forbid_90_deg default.
   local upstream=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  local Freight=dofile(upstream.."../rail_freight_kinds.lua")
   local Collision=dofile(upstream.."rail_collision.lua")
   local OrderList=dofile(upstream.."rail_order_list.lua")
   local CargoOrder=dofile(upstream.."rail_order_cargo.lua")
@@ -514,9 +515,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         if not (other.local_signals and other.fleet_id and (other.shuttle or other.freight))
             or (not not other.span)~=(not not span_mode) then shared=false;break end
         if freight and other.freight then
-          -- The physical network is shared; individual freight loading
-          -- still has one owned carrier per cargo controller.
-          return false,"This world already has an owned freight train."
+          local other_cargo=other.freight.cargo or "coal"
+          if other_cargo==freight_mode then return false,"This world already has an owned train for this freight cargo." end
+          -- Additional industry cargo controllers can share the existing physical
+          -- Train pool. Leave legacy-only combinations unchanged.
+          if not (Freight.profiles[freight_mode] or Freight.profiles[other_cargo]) then
+            return false,"This world already has an owned freight train."
+          end
         end
       end
     end
@@ -705,13 +710,16 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
       run.shuttle={first=station,second=second,arrivals=0,reversals=0}
     elseif freight then
+      local product=Freight.profiles[cargo]
       local loaded=choose_leg(board,run,departure_probe(run,route),freight)
       if not loaded then return false,cargo=="goods" and "No safe rail route from the sawmill to the town platform." or
         cargo=="oil" and "No safe rail route from the wells to the refinery platform." or
+        product and ("No safe rail route from the "..product.source.." to the "..product.sink..".") or
         "No safe rail route from mine to accepting power platform." end
       local empty=choose_leg(board,run,departure_probe(run,loaded),station)
       if not empty then return false,cargo=="goods" and "No safe rail return from the town platform to the sawmill." or
         cargo=="oil" and "No safe rail return from the refinery platform to the wells." or
+        product and ("No safe rail return from the "..product.sink.." to the "..product.source..".") or
         "No safe rail return from the power platform to the mine." end
       ordered(loaded);ordered(empty)
       run.freight={mine=station,power=freight,cargo=cargo,visits=0,reversals=0,cycles=0,repeat_route=true}
@@ -734,6 +742,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     s.stock_rail_dispatch=d
     return true,pair and "Owned steam coach ordered to board, deliver and park." or
       freight and (cargo=="goods" and "Owned Goods train ordered to repeat: full load at the sawmill, unload in town." or cargo=="oil" and "Owned oil train ordered to repeat: full load at the wells, unload at the refinery." or
+        Freight.profiles[cargo] and ("Owned "..Freight.profiles[cargo].name.." train ordered to repeat: full load at the "..Freight.profiles[cargo].source..", unload at the "..Freight.profiles[cargo].sink..".") or
         "Owned coal train ordered to repeat: full load at the mine, unload at the power station.") or
       orders and ("Passenger train ordered to serve "..#orders.." platforms in sequence.") or
       owned and ("Owned "..stats.parts[1].name..(run.via and " shuttle ordered via the selected waypoint." or
@@ -762,7 +771,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if not Reverse then return false,"The stock reversal module is not loaded." end
     if not first or not second or first==second then return false,"Choose two different owned platforms." end
     local stations=s.stock_rail_stations or {}
-    local function dedicated(st) return st and (st.coal_role or st.oil_role or st.goods_role) end
+    local dedicated=Freight.role
     if s.rail_paid_service and (dedicated(stations[first]) or dedicated(stations[second])) then
       return false,"Choose passenger platforms, not dedicated freight stages."
     end
@@ -801,7 +810,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local orders,cursor={},{real=0,implicit=0}
     for i,id in ipairs(stations) do
       local st=registry[id]
-      if not st or st.owner~=owner or st.coal_role or st.oil_role or st.goods_role then
+      if not st or st.owner~=owner or Freight.role(st) then
         return false,("Order %d: choose an owned passenger station."):format(i)
       end
       if stations[i==1 and #stations or i-1]==id then
@@ -908,6 +917,19 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return start(s,owner,owned.depot,mill,nil,Block and Spans and s.rail_span_enabled or false,owned,town,nil,nil,"goods")
   end
 
+  function R.start_owned_profile(s,owner,owned,first,second,cargo)
+    local p=Freight.profiles[cargo]
+    if not (p and Reverse and Roster and s["rail_"..cargo.."_service"] and s.road_stock_house_supply and s.corner_grid) then
+      return false,"Enable the appropriate stock rail freight service first."
+    end
+    if not first or not second or first==second or not owned or owned.owner~=owner or
+        not owned.stock_ids or #owned.stock_ids~=2 or not Roster.freight_engine(owned.stock_ids[1]) or
+        not R.owned_passenger_engine(owned.stock_ids[1]) or owned.stock_ids[2]~=p.wagon then
+      return false,"Use a modeled owned locomotive and one "..Roster.entry(p.wagon).name.."."
+    end
+    return start(s,owner,owned.depot,first,nil,Block and Spans and s.rail_span_enabled or false,owned,second,nil,nil,cargo)
+  end
+
   -- Explicitly stop at the next completed power order; never delete or
   -- teleport the owned train. Existing town/pilot stops are unchanged.
   function R.park_coal(s,owner,fleet_id,on)
@@ -987,6 +1009,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   function R.block_coal(s,why) return block_freight(s,why,"coal") end
   function R.block_oil(s,why) return block_freight(s,why,"oil") end
   function R.block_goods(s,why) return block_freight(s,why,"goods") end
+  for _,key in ipairs(Freight.profile_order) do
+    local cargo=key
+    R["block_"..cargo]=function(s,why) return block_freight(s,why,cargo) end
+  end
   local function hold(d,run,events,id,why)
     if run.phase~="waiting" then emit(d,run,events,"waiting",{tile=id,reason=why}) end
     run.phase="waiting"
@@ -1240,7 +1266,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       return victims
     end
     local hit,victims=Collision.scan(head,world,crash)
-    if hit then emit(d,run,events,"rail_collision",{tile=head.tile,owner=run.owner,victims=victims}) end
+    if hit then
+      emit(d,run,events,"rail_collision",{tile=head.tile,owner=run.owner,victims=victims})
+      if R.news_collision then R.news_collision(head.tile,victims) end
+    end
     return hit
   end
 
@@ -1454,6 +1483,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         Speed.begin_loading(run,run.station)
         run.phase="arrived"
         run.arrival=emit(d,run,events,"arrived",{tile=new.tile,station=run.station,steps=run.stock_steps})
+        if R.news_arrival then R.news_arrival("rail",run.owner,run.station,new.tile) end
         if run.shuttle or run.freight or run.paired then
           -- Retain real PBS claims throughout each ordered loading dwell.
           run.phase="dwell"
@@ -1533,7 +1563,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         role=t[(r.freight.cargo or "coal").."_role"]
       end
       if t.owner==owner and (r.freight and role or not r.freight and
-          not (t.coal_role or t.oil_role or t.goods_role)) then
+          not Freight.role(t)) then
         local x,z=xy(t.tiles and t.tiles[1] or r.depot)
         out.stops[#out.stops+1]={id=station,role=role,label=("Rail station %d (%d, %d)%s"):format(
           station,x,z,role and (" · "..role) or "")}
@@ -1920,9 +1950,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end)
   end
 
-  function R.sample(run,index)
+  local function sample(run,index,interior)
     local part=run and run.consist.parts[index or 1]
-    if not part or part.hidden then return end
+    if not part or part.hidden and not (interior and part.wormhole and part.draw_tile) then return end
     local p=part.pose
     local entry=Track.reverse_side(Track.entry_side(p.td))
     local f
@@ -1943,6 +1973,23 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       f=(ix and math.abs(p.x%16-ix) or math.abs(p.y%16-iy))/8
     end
     return part.draw_tile or part.tile,p.td,min(1,max(0,f)),part.wormhole~=nil
+  end
+  function R.sample(run,index) return sample(run,index) end
+  function R.bore_sample(run,index)
+    local part=run and run.consist.parts[index or 1]
+    if part and part.hidden and part.wormhole and part.draw_tile then return sample(run,index,true) end
+  end
+  -- Capture the bore pose with its original tick, not the live mutable
+  -- controller (which may already have exited before this tick is shown).
+  -- The optional fifth result keeps overhead views unaware of hidden trains.
+  function R.presentation_sample(s,run,index)
+    local tile,td,f,wormhole=R.sample(run,index)
+    if tile then return tile,td,f,wormhole end
+    local part=run and run.consist.parts[index or 1]
+    local span=Spans and part and part.wormhole and Spans.by_portal(s,part.tile)
+    if not span or span.kind~="tunnel" then return end
+    tile,td,f,wormhole=R.bore_sample(run,index)
+    if tile then return tile,td,f,wormhole,true end
   end
   return R
 end

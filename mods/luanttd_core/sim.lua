@@ -6,6 +6,8 @@ M.dir = {{0,-1},{1,0},{0,1},{-1,0}}
 local town_growth_mount=setmetatable({},{__mode="k"})
 local foster_art_mount=setmetatable({},{__mode="k"})
 local road_faults_mount=setmetatable({},{__mode="k"})
+local news_mount=setmetatable({},{__mode="k"})
+function M.mount_news(s,arrival) news_mount[s]=arrival end
 M.month_days = 30
 M.cargo = {
   mail={name="Mail",rate=11}, passenger={name="Passengers",rate=9},
@@ -1896,6 +1898,10 @@ function M.road_order_members(s,id)
   if not v or not is_road_vehicle(v) then return {} end
   return orders_module().members(s,v)
 end
+function M.can_copy_road_orders(s,owner,id,from)
+  return orders_module().can_copy(s,owner,id,from,is_road_vehicle,
+    function(v,o) return can_use_road_order(s,v,o) end)
+end
 function M.clone_road_orders(s,owner,id,from,action)
   local ok,note=orders_module().clone(s,owner,id,from,action,is_road_vehicle,
     function(v,o) return can_use_road_order(s,v,o) end)
@@ -2061,6 +2067,14 @@ local farm_service,farm_world
 local farm={}
 local oil={reports=setmetatable({},{__mode="k"})}
 local goods={ready=setmetatable({},{__mode="k"})}
+local FreightKinds
+do
+  local source=debug and debug.getinfo(1,"S").source
+  local dir=source and source:match("^@(.*/)sim%.lua$") or
+    (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+  FreightKinds=dofile(dir.."rail_freight_kinds.lua")
+end
+local profiled={ready=setmetatable({},{__mode="k"}),runtime={}}
 local timber_day_bindings=setmetatable({},{__mode="k"})
 local coal_day_bindings=setmetatable({},{__mode="k"})
 local function timber_binding(s,force)
@@ -2073,6 +2087,7 @@ local function timber_binding(s,force)
     return farm_service.bind(s,{credit=credit,field_board=farm_world.field_board(s)})
   end
   if not timber_service or not s.stock_timber_industries or not (force or M.road_timber_active(s)) then return end
+  if M.rail_profile_active(s,"wood") then return profiled.timber_binding(s) end
   return goods.binding(s)
 end
 local function received_coal(world,plant,n)
@@ -2140,8 +2155,51 @@ local function passenger_modules()
   goods.runtime=dofile(base.."rail_goods_runtime.lua")(M,goods_rail,freight,roster,debit,credit,function(s)
     return goods.ready[s] and goods.ready[s]() or false
   end)
+  local load_profile=dofile(base.."rail_profile_runtime.lua")
+  local function new_profile(cargo,Rules)
+    return load_profile(cargo,M,Rules,catchment,roster,freight,passenger_rules,kernel,rating_runtime,
+      loading_factory,timing,debit,credit,function(s,key)
+        local ready=profiled.ready[s]
+        return ready and ready[key]==true
+      end)
+  end
+  local function rail_union(s,order,controllers,for_cargo,probe)
+    return function(roads,open,scan,rating)
+      local rail={}
+      local function attach(i,stations,covers)
+        local cargo=order[i]
+        if not cargo then return open(stations,covers) end
+        local bind=controllers[cargo].union(s,paid_rail_runs[s],for_cargo==cargo and probe or nil)
+        if not bind then return attach(i+1,stations,covers) end
+        local b=bind(stations,function(next_stations,next_covers)
+          return attach(i+1,next_stations,next_covers)
+        end,scan,rating)
+        rail[cargo]=b
+        return b.pipeline
+      end
+      attach(1,roads)
+      function rail.station_at(id)
+        for _,cargo in ipairs(order) do
+          local b=rail[cargo]
+          local st=b and b.station_at(id)
+          if st then return st end
+        end
+      end
+      return rail
+    end
+  end
+  profiled.runtime.wood=new_profile("wood",timber_rules)
+  local timber_order,timber_controllers={"goods","wood"},{goods=goods.runtime,wood=profiled.runtime.wood}
+  function profiled.timber_binding(s,cargo,probe)
+    -- Single-chain Timber keeps its existing queues and receipt ledger.
+    -- Goods and Wood share one station scan there, just as in mixed worlds.
+    local B=timber_service.bind(s,{credit=credit,station_union=rail_union(s,timber_order,timber_controllers,cargo,probe)})
+    B.rail_multi=true
+    return B
+  end
   function goods.binding(s,probe)
     if goods.mixed_enabled and goods.mixed_enabled(s) then return {rail=goods.mixed_binding(s,"goods",probe).rail.goods} end
+    if M.rail_profile_active(s,"wood") then return {rail=profiled.timber_binding(s,"goods",probe).rail.goods} end
     return timber_service.bind(s,{credit=credit,station_union=goods.runtime.union(s,paid_rail_runs[s],probe)})
   end
   oil.mount=function(Terrain)
@@ -2210,9 +2268,18 @@ local function passenger_modules()
        livestock="livestock_van",goods="goods_truck",steel="steel_balogh",iron_ore="iron_mps",valuables="valuables_balogh"},
        cargo={"oil","livestock","goods","grain","wood","iron_ore","steel","valuables"}})
     goods.mixed=union
+    local Freight=FreightKinds
+    for _,cargo in ipairs(Freight.profile_order) do
+      if not profiled.runtime[cargo] then profiled.runtime[cargo]=new_profile(cargo,Rules) end
+    end
+    local rail_controllers={oil=oil.runtime,goods=goods.runtime}
+    for cargo,runtime in pairs(profiled.runtime) do rail_controllers[cargo]=runtime end
     function goods.mixed_enabled(s)
       local n=(M.road_timber_active(s) and 1 or 0)+(M.road_farm_active(s) and 1 or 0)+(M.road_oil_active(s) and 1 or 0)
-      return n>1 or M.road_heavy_active(s) or M.road_bank_active(s)
+      -- Even one local industry chain needs the shared road+rail
+      -- station union when through rail freight is available.
+      return n>1 or M.road_heavy_active(s) or M.road_bank_active(s) or
+        M.rail_profile_active(s,"grain") or M.rail_profile_active(s,"livestock")
     end
     function goods.mixed_binding(s,for_cargo,probe)
       local all,enabled={},{}
@@ -2227,22 +2294,7 @@ local function passenger_modules()
       end
       local animated,tick
       if enabled.oil then animated,tick=oil.animation(s) end
-      local function station_union(roads,open,scan,rating)
-        local rail={}
-        local function goods_or_open(stations,covers)
-          local r=goods.runtime.union(s,paid_rail_runs[s],for_cargo=="goods" and probe or nil)
-          if not r then return open(stations,covers) end
-          rail.goods=r(stations,open,scan,rating)
-          return rail.goods.pipeline
-        end
-        local r=oil.runtime.union(s,paid_rail_runs[s],for_cargo=="oil" and probe or nil)
-        if r then rail.oil=r(roads,goods_or_open,scan,rating)
-        else goods_or_open(roads) end
-        function rail.station_at(id)
-          return rail.goods and rail.goods.station_at(id) or rail.oil and rail.oil.station_at(id)
-        end
-        return rail
-      end
+      local station_union=rail_union(s,Freight.industry,rail_controllers,for_cargo,probe)
       local list,ports=oil.berths(s)
       local B=union.bind(s,{credit=credit,industries=all,ship_stations=list,field_board=enabled.farm and farm_world.field_board(s),
         station_union=station_union,animated=animated,each_tick=tick,forestry_changed=function(t)
@@ -2422,20 +2474,71 @@ end
 function M.rail_goods_loading_events(s)
   return goods.runtime and goods.runtime.take(s,"events") or {}
 end
+function M.mount_rail_freight_profiles(s,assets)
+  passenger_modules()
+  local ready={}
+  local Freight=FreightKinds
+  for _,cargo in ipairs(Freight.profile_order) do
+    local p=Freight.profiles[cargo]
+    local mounted=M["road_"..p.system.."_active"](s) and Freight.art_ready(p,assets)
+    s["rail_"..cargo.."_service"]=not not mounted
+    ready[cargo]=not not mounted
+  end
+  profiled.ready[s]=ready
+end
+function M.rail_profile_active(s,cargo)
+  local r=profiled.runtime[cargo]
+  return r and r.active(s,paid_rail_runs[s]) or false
+end
+local function profile_binding(s,cargo,probe)
+  local b
+  if cargo=="wood" and not (goods.mixed_enabled and goods.mixed_enabled(s)) then
+    b=profiled.timber_binding(s,cargo,probe)
+  else
+    b=goods.mixed_binding(s,cargo,probe)
+  end
+  return {rail=b.rail[cargo]}
+end
+function M.rail_profile_validate(s,cargo,owner,first,second)
+  local r=profiled.runtime[cargo]
+  if not r then return false,"Rail freight is unavailable." end
+  return r.validate(s,paid_rail_runs[s],owner,first,second,function(probe) return profile_binding(s,cargo,probe) end)
+end
+for _,key in ipairs(FreightKinds.profile_order) do
+  local cargo=key
+  M["rail_"..cargo.."_designate"]=function(s,owner,id,role)
+    local r=profiled.runtime[cargo]
+    if not r then return false,"Rail freight is unavailable." end
+    return r.designate(s,paid_rail_runs[s],owner,id,role,function(probe) return profile_binding(s,cargo,probe) end)
+  end
+  M["rail_"..cargo.."_stop_status"]=function(s,id)
+    local r=profiled.runtime[cargo]
+    return r and r.report(s,paid_rail_runs[s],id,function(probe) return profile_binding(s,cargo,probe) end)
+  end
+  M["rail_"..cargo.."_status"]=function(s)
+    local r=profiled.runtime[cargo]
+    return r and r.status(s,paid_rail_runs[s])
+  end
+  M["rail_"..cargo.."_loading_events"]=function(s)
+    local r=profiled.runtime[cargo]
+    return r and r.take(s,"events") or {}
+  end
+end
 function M.rail_paid_status(s,fleet_id)
   local rail=paid_rail_runs[s]
   if not rail then return end
   return paid_ferry.status(s,rail,"rail",fleet_id)
 end
-function M.rail_paid_pose(s,part,fraction,fleet_id)
+function M.rail_paid_pose(s,part,fraction,fleet_id,native)
   local rail=paid_rail_runs[s]
   if not rail then return end
   local carrier=rail.current_paid(s,fleet_id)
   local kind=carrier and carrier.freight and (carrier.freight.cargo or "coal")
-  if kind=="goods" and goods.runtime then return goods.runtime.pose(s,rail,part,fraction) end
-  if kind=="oil" and oil.runtime then return oil.runtime.pose(s,rail,part,fraction) end
-  if kind=="coal" then return rail_coal.pose(s,rail,part,fraction) end
-  return paid_ferry.rail_pose(s,rail,part,fraction,fleet_id)
+  if kind=="goods" and goods.runtime then return goods.runtime.pose(s,rail,part,fraction,native) end
+  if kind=="oil" and oil.runtime then return oil.runtime.pose(s,rail,part,fraction,native) end
+  if profiled.runtime[kind] then return profiled.runtime[kind].pose(s,rail,part,fraction,native) end
+  if kind=="coal" then return rail_coal.pose(s,rail,part,fraction,native) end
+  return paid_ferry.rail_pose(s,rail,part,fraction,fleet_id,native)
 end
 function M.rail_loading_events(s)
   if not paid_rail_runs[s] then return {} end
@@ -2455,6 +2558,10 @@ function M.rail_paid_motion_events(s)
   if goods.runtime and goods.runtime.present(s,rail) then append(goods.runtime.take(s,"motion")) end
   if oil.runtime and oil.runtime.present(s,rail) then append(oil.runtime.take(s,"motion")) end
   if rail_coal.present(s,rail) then append(rail_coal.take(s,"motion")) end
+  for _,cargo in ipairs(FreightKinds.profile_order) do
+    local r=profiled.runtime[cargo]
+    if r and r.present(s,rail) then append(r.take(s,"motion")) end
+  end
   if #out>1 then
     local seq={}
     for i,e in ipairs(out) do seq[e]=i end
@@ -3163,7 +3270,7 @@ local function rail_tick_broker(s)
       local list=by[cargo] or {};by[cargo]=list;list[#list+1]=e
       if e.kind=="rail_collision" and cargo~="passenger" then by.passenger[#by.passenger+1]=e end
     end
-    for _,name in ipairs({"coal","oil","goods"}) do if finishes[name] then finishes[name](by[name]) end end
+    for _,name in ipairs(FreightKinds.all) do if finishes[name] then finishes[name](by[name]) end end
     return by.passenger
   end
   return register,advance,function() return flushed end
@@ -3349,6 +3456,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       v.road_motion_frames=nil;v.road_speed_state=nil;v.road_bay_branch=nil
       v.route=nil;v.dest=nil;v.dest_index=nil;v.progress=0
       local st=s.stations[v.station]
+      if st and news_mount[s] then news_mount[s]("road",v.owner,st.id,frame[4],v.cargo) end
       if st and v.road_order_override~=nil then
         -- A bridge, passing maneuver or depot exit may have prevented an
         -- exact live splice. Finish its physical approach without cargo
@@ -3434,11 +3542,14 @@ function M.daily(s,traverse)
     if timber and timber.rail then
       town_passengers.start(s)
       local first=s.passenger_house_clock.counter+1
-      if timber.mixed then
+      if timber.mixed or timber.rail_multi then
         local rail=timber.rail
         local days={}
         if rail.oil then days[#days+1]=oil.runtime.day(s,paid_rail_runs[s],first,rail.oil) end
         if rail.goods then days[#days+1]=goods.runtime.day(s,paid_rail_runs[s],first,rail.goods) end
+        for _,cargo in ipairs(FreightKinds.profile_order) do
+          if rail[cargo] then days[#days+1]=profiled.runtime[cargo].day(s,paid_rail_runs[s],first,rail[cargo]) end
+        end
         if #days>0 then
           industry_train={
             before=function(tick)
