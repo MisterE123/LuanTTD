@@ -1,9 +1,11 @@
 # OpenTTD 14.1 temperate land oil chain
 
-This port is intentionally isolated: ordinary original land Oil Wells
-→ original Oil Refinery → original town Goods acceptance. No offshore
-rig, oil-ship refit, world funding command, full live scenario, or
-renderer change is implied.
+The ordinary generated temperate campaign now includes land Oil Wells,
+Oil Refineries, Witcombe Oil Tankers and Rail Oil alongside farm, timber
+and coal freight. Oil converts at the refinery into the same Goods cargo
+used by the other industries. The dedicated Oil scenario is still a
+fixed-layout test world, not a prerequisite. Offshore rigs, oil-ship
+refits and player funding/prospecting are not part of this port.
 
 ## Exact source records and graphics handoff
 
@@ -108,3 +110,29 @@ rest of an actual staged packet, leaves seven legitimate crates
 waiting and tests no duplicate processing/settlement. It is a
 ledger proof, not a live drive, authentic graphics QA, or new
 campaign availability.
+
+
+## Ordinary generated campaign verification
+
+The placement catalog and location checks were rechecked against
+[OpenTTD 16.0-RC1's stock industry table](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/table/build_industry.h)
+and [industry commands](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/industry_cmd.cpp).
+The refinery uses the perimeter-scaled generation weight; the wells use
+the area-scaled weight. Their stock directional conflicts and the
+refinery's strictly scaled map-edge limit apply. The native host mounts
+the stock layout 0 art for each and keeps the upstream-recorded town,
+footprint holes, tile random bits, construction stage and production
+history. It still declines unsupported art layouts or sites that would
+need the unported TerraGenesis industry-platform leveling pass.
+
+In the default generated seed 1751, the refinery appears at (26,30)
+and the oil wells at (48,35). Build on the stock landscape; try a truck
+stop near the wells at (47,35), a refinery stop at (25,31), and a
+town stop at (16,17). Check **Accepts Oil** at the refinery and
+**Accepts Goods** at the town before dispatch. A company depot needs
+actual through connections and room for the trucks to turn.
+
+`bash tests/generated_oil_freight_native.sh` is a two-launch SQLite
+proof on the standard generated world (no oil scenario or enable setting).
+A purchased tanker delivered 42,000 L for $588 and a Goods truck
+delivered 13 crates for $221 after restart.

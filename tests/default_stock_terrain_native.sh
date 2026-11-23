@@ -78,6 +78,9 @@ run all_on all_on \
   'bayline_stock_bus_catalog = false' \
   'bayline_road_bay_preview = false' \
   'bayline_road_timber_preview = false' \
+  'bayline_road_farm_preview = false' \
+  'bayline_road_oil_preview = false' \
+  'bayline_rail_oil_preview = false' \
   'bayline_preview_coal_industry = false' \
   'bayline_mail_preview = false' \
   'bayline_generated_mixed_freight = false' \

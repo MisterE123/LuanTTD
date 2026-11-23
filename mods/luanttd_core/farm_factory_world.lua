@@ -1,6 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Exact original Farm and Factory layout-0 placement on seed 1751.
--- Authored empty land only; does not fund, clear, regrade or spawn cargo.
+-- Native bridge for the original Farm and Factory layout-0 footprint.
+-- Ordinary map generation provides the source record; the seed-1751
+-- workbench remains available as a controlled fixture.
 return function(Sim,Terrain,Rules,Fields,Catchment)
   local W={VERSION=1,INDUSTRY_ID_BASE=0x2000,INDUSTRY_ID_LIMIT=0x3000,MIN_SEPARATION=15}
   local styles={
@@ -16,7 +17,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
   local function occupied(s,id,t,allow_tree)
     return t.terrain=="water" or t.owner or t.site or t.house or t.source_house or t.build or
       (t.wood and not allow_tree) or t.rail_tracks or t.rail_station_id or t.rail_depot_dir or t.tram or t.ship or
-      t.airfield or t.stock_industry or t.level_crossing or t.road_bridge_id or t.road_tunnel_id or
+      t.airfield or t.stock_industry or t.stock_landmark or t.level_crossing or t.road_bridge_id or t.road_tunnel_id or
       t.rail_span_id or t.stock_canal or s.bridge_above and s.bridge_above[id] or
       s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
       s.rail_tunnel_below and s.rail_tunnel_below[id] or s.aqueduct_above and s.aqueduct_above[id]
@@ -29,8 +30,8 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     return false
   end
 
-  function W.quote(s,kind,origin)
-    if s.road_timber or next(s.stock_timber_industries or {}) then return nil,"TIMBER_GOODS_WORKBENCH_ACTIVE" end
+  function W.quote(s,kind,origin,generated)
+    if not generated and (s.road_timber or next(s.stock_timber_industries or {})) then return nil,"TIMBER_GOODS_WORKBENCH_ACTIVE" end
     if not (styles[kind] and s.corner_grid and valid_id(origin) and s.tiles[origin]) then
       return nil,"INVALID_INDUSTRY_ORIGIN",origin
     end
@@ -160,7 +161,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     if slope==r.slope and base==r.base then return r end
   end
 
-  local function writes(s,plans,random_u32)
+  local function writes(s,plans,random_u32,generation)
     if type(random_u32)~="function" then return nil,"SHARED_INDUSTRY_RNG_REQUIRED" end
     local start=s.next_stock_farm_industry or W.INDUSTRY_ID_BASE
     if type(start)~="number" or start%1~=0 or start<W.INDUSTRY_ID_BASE or
@@ -177,11 +178,20 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     for k,p in ipairs(plans) do
       local id=start+k-1
       local style=styles[p.kind]
-      local ind=Rules.new(p.kind,id,p.x-1,p.z-1,{completed=true,original=s.stock_original_industry_economy~=false,generating_world=true,
-        random_u32=rnd,economy_year=Sim.date(s)})
+      local ind=generation and generation.record or Rules.new(p.kind,id,p.x-1,p.z-1,{completed=true,
+        original=s.stock_original_industry_economy~=false,generating_world=true,random_u32=rnd,economy_year=Sim.date(s)})
+      if generation then
+        assert(#plans==1 and ind.kind==p.kind and ind.x==p.x-1 and ind.z==p.z-1 and #ind.tiles==#p.cells)
+        for i,cell in ipairs(ind.tiles) do
+          local q=p.cells[i]
+          assert(cell.x==ind.x+q.x and cell.z==ind.z+q.z and cell.gfx==q.gfx,
+            "Generated farm/factory must match the native art footprint")
+        end
+        ind.id=id
+      end
       local sid=site_start+k-1
       ind.site=sid
-      local site={id=sid,tile=p.origin,name=style.name,kind=style.kind,produced={},received={},stock={},
+      local site={id=sid,tile=p.origin,name=generation and generation.name or style.name,kind=style.kind,produced={},received={},stock={},
         service=0,stock_industry=id,industry_chain="farm"}
       records[k]={ind=ind,site=site,p=p,style=style}
       for _,cell in ipairs(p.cells) do dirty[#dirty+1]=cell.id end
@@ -214,6 +224,14 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     if not r then return nil,dirty end
     return r[1].ind,dirty,r[1].site
   end
+  function W.place_generated(s,kind,origin,opts,rng)
+    local q,why,id=W.quote(s,kind,origin,true)
+    if not q then return nil,why,id end
+    assert(opts and opts.record and type(opts.name)=="string")
+    local r,dirty=writes(s,{q},rng or Sim.stock_random_u32,opts)
+    if not r then return nil,dirty end
+    return r[1].ind,q.cells,r[1].site
+  end
   function W.commit_pair(s,p,random_u32)
     if not (same(s,p) and p.kind=="pair" and type(p.farm)=="table" and type(p.factory)=="table") then
       return nil,"STALE_INDUSTRY_QUOTE"
@@ -238,6 +256,27 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     end
   end
   function W.protected(s,id) return W.record(s,id)~=nil end
+  function W.sweep_closed(s)
+    local dirty={}
+    for _,i in pairs(s.stock_farm_industries or {}) do
+      local site=s.sites[i.site]
+      if i.removed and site and not site.closed then
+        site.closed=true
+        for _,p in ipairs(i.tiles) do
+          local id=Sim.id(p.x+1,p.z+1)
+          local t=id and s.tiles[id]
+          if t and t.stock_industry and t.stock_industry.chain=="farm" and t.stock_industry.id==i.id then
+            t.stock_industry=nil
+            if t.site==site.id then t.site=nil end
+            dirty[#dirty+1]=id
+          end
+        end
+      end
+    end
+    table.sort(dirty)
+    if #dirty>0 then s.topology=s.topology+1 end
+    return dirty
+  end
   function W.scenario_1751(s)
     if s.seed~=1751 then return nil,"FARM_SCENARIO_REQUIRES_SEED_1751" end
     local id=Sim.id

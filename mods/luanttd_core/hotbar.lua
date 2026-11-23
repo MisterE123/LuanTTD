@@ -215,8 +215,10 @@ end
 function H.enable_rail_oil()
   local menu=rail_freight_menu()
   if not menu then return end
-  menu[4]=item("rail_oil_load","Oil wells: designate loading platform","oil_load")
-  menu[5]=item("rail_oil_unload","Oil refinery: designate unloading platform","oil_unload")
+  menu[7]=section("rail_oil_freight","Oil trains","oil_freight")
+  H.menus.rail_oil_freight={title="Oil trains",[1]=inspect,
+    [2]=item("rail_oil_load","Oil wells: designate loading platform","oil_load"),
+    [3]=item("rail_oil_unload","Oil refinery: designate unloading platform","oil_unload"),[8]=back,[9]=bulldoze}
 end
 function H.enable_rail_pair()
   if H.menus.railops then

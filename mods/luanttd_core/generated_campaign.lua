@@ -183,7 +183,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   return result
 end
 
-function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_count,Timber)
+function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_count,Timber,Oil,Farm)
   local profile=assert(s.stock_generated_profile)
   assert(profile.town_rng and not profile.industry_rng)
   if density==6 then
@@ -217,16 +217,27 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     local id=Sim.id(plan.x+1,plan.z+1)
     local opts={record=record,name=site.name.." "..plan.name}
     local placed,cells
+    local chain
     if plan.type==2 or plan.type==3 then
+      chain="timber"
       assert(Timber,"Generated Timber needs its native industry world")
       placed,cells=Timber.place_generated(s,plan.kind,id,opts)
+    elseif plan.type==4 or plan.type==11 then
+      chain="oil"
+      assert(Oil,"Generated Oil needs its native industry world")
+      placed,cells=Oil.place_generated(s,plan.kind,id,opts)
+    elseif plan.type==6 or plan.type==9 then
+      chain="farm"
+      assert(Farm,"Generated Farm needs its native industry world")
+      placed,cells=Farm.place_generated(s,plan.kind,id,opts,function() return Generator.next_random(state) end)
     else
+      chain="coal"
       placed,cells=World.place(s,plan.kind,id,opts)
     end
     if not placed then return false end
     for _,c in ipairs(cells) do s.tiles[c.id].stock_clear_ground=nil end
     choices[#choices+1]={industry=placed.id,site=placed.site,kind=plan.kind,tile=id,near=plan.town,
-      chain=(plan.type==2 or plan.type==3) and "timber" or "coal"}
+      chain=chain}
     return true
   end
   local result=Industry.generate(board,{random=function() return Generator.next_random(state) end,

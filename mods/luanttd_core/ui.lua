@@ -616,12 +616,8 @@ function U.guide(p,menu)
         return v.units.." t coal aboard"..(stop and ("   ·   Next: "..U.stop_label(stop)) or "")
       end
     end
-    if api.timber_tools then return "Connect two truck stops. Inspect each stop to see which cargo it supplies or accepts." end
-    if api.oil_tools then
-      return "Connect the oil wells, refinery and town. Buy the Oil Tanker and Goods Truck at a depot."
-    end
-    if api.farm_tools then
-      return "Build freight stops at the farm, factory and town. Buy the three freight vehicles at your depot."
+    if api.farm_tools or api.oil_tools or api.timber_tools then
+      return "Inspect truck stops to see each cargo they supply or accept. Buy the matching vehicle at a road depot."
     end
     return "Build truck stops near the mine and power station, then buy a coal tipper at the depot."
   end
@@ -2277,11 +2273,41 @@ function U.context_fields(p,f)
 end
 -- Small world-context windows. Ordinary operations resume in 3D, without the
 -- company-wide spreadsheet. Server resolves every submitted object and owner.
+-- One cargo readout across all mounted chains. Goods has one shared
+-- station queue; listing it once avoids implying two independent stocks.
+function U.freight_snapshot(st)
+  local rows={}
+  local function add(cargo,n,accepted,sources,rating)
+    if n~=nil then rows[#rows+1]={cargo=cargo,count=n,accepts=accepted,collects=sources,rating=rating} end
+  end
+  local function report(cargo,fn)
+    local n,r=fn(S,st,cargo)
+    add(cargo,n,r and r.accepts,r and r.sources and #r.sources>0,r and r.rating)
+  end
+  if api.farm_tools then
+    report("grain",Sim.farm_stop_status)
+    report("livestock",Sim.farm_stop_status)
+  end
+  if api.timber_tools then report("wood",Sim.timber_stop_status) end
+  if api.oil_tools then report("oil",Sim.oil_stop_status) end
+  if api.farm_tools then report("goods",Sim.farm_stop_status)
+  elseif api.timber_tools then report("goods",Sim.timber_stop_status)
+  elseif api.oil_tools then report("goods",Sim.oil_stop_status) end
+  if Sim.road_coal_active(S) then
+    local n,accepted,rating=Sim.coal_stop_status(S,st)
+    add("coal",n,accepted,n and n>0,rating)
+  end
+  if S.road_mail then
+    local n,a,r,known=Sim.mail_stop_status(S,st)
+    add("mail",n,a,n and n>0,known and r or nil)
+  end
+  return rows
+end
 function U.service(p,kind,id)
   local n=p:get_player_name();local V=view(n)
   local tall=kind=="vehicle"
-  local b={tall and "formspec_version[7]size[9.4,7.08]bgcolor[#152334;false]" or
-      "formspec_version[7]size[9.4,6.6]bgcolor[#152334;false]",
+  local room=kind=="depot" and api.farm_tools and api.oil_tools
+  local b={("formspec_version[7]size[9.4,%g]bgcolor[#152334;false]"):format(room and 8.3 or tall and 7.08 or 6.6),
     "style_type[button;bgimg=bl_button.png;bgimg_middle=6;border=false;textcolor=#E5ECEA]",
     "style_type[label;textcolor=#E5ECEA]"}
   local function label(x,y,t)
@@ -2685,45 +2711,36 @@ function U.service(p,kind,id)
         end
       end
     end
-    local freight=Sim.road_coal_active and Sim.road_coal_active(S)
-    local y=2.72
-    if api.farm_tools and t.owner==n then
-      button(.4,y,2.70,"depot_buy_grain","Grain truck / "..dollars(Sim.vehicles.grain_truck.cost))
-      button(3.30,y,2.70,"depot_buy_livestock","Livestock van / "..dollars(Sim.vehicles.livestock_van.cost))
-      button(6.20,y,2.70,"depot_buy_goods","Goods truck / "..dollars(Sim.vehicles.goods_truck.cost))
-      y=y+.62
+    local y,options=2.72,{}
+    local function offer(enabled,key,engine,short)
+      if not enabled or t.owner~=n or not Sim.vehicle_available(S,engine) then return end
+      local model=Sim.vehicle_offer(S,engine)
+      options[#options+1]={key=key,label=short.." / "..dollars(model.cost)}
     end
-    if api.oil_tools and t.owner==n then
-      button(.4,y,4.10,"depot_buy_oil","Oil tanker / "..dollars(Sim.vehicles.oil_tanker.cost))
-      button(4.75,y,4.10,"depot_buy_goods","Goods truck / "..dollars(Sim.vehicles.goods_truck.cost))
-      y=y+.62
+    offer(api.farm_tools,"grain","grain_truck","Buy grain truck")
+    offer(api.farm_tools,"livestock","livestock_van","Buy livestock van")
+    offer(api.oil_tools,"oil","oil_tanker","Buy oil tanker")
+    offer(api.timber_tools,"wood","wood_truck","Buy wood truck")
+    offer(api.timber_tools or api.farm_tools or api.oil_tools,"goods","goods_truck","Buy goods truck")
+    offer(S.road_mail,"mail","mail_van","Buy post van")
+    offer(Sim.road_coal_active(S),"coal","coal_tipper","Buy coal tipper")
+    offer(true,"craighead","craighead_goods_truck","Buy Craighead Goods Truck")
+    local short=options[#options]
+    if short and short.key=="craighead" then options[#options]=nil end
+    for i,opt in ipairs(options) do
+      button(i%2==1 and .4 or 4.86,y+math.floor((i-1)/2)*.60,4.14,"depot_buy_"..opt.key,opt.label)
     end
-    if api.timber_tools and t.owner==n then
-      button(.4,y,4.10,"depot_buy_wood","Buy wood truck / "..dollars(Sim.vehicles.wood_truck.cost))
-      button(4.75,y,4.10,"depot_buy_goods","Buy goods truck / "..dollars(Sim.vehicles.goods_truck.cost))
-      y=y+.62
-    end
-    if t.owner==n and S.road_mail then
-      button(.4,y,freight and 4.10 or 8.45,"depot_buy_mail",freight and "Buy post van / 22 bags" or "Buy Harbor Post Van   /   22 mail bags")
-    end
-    if freight and t.owner==n then
-      local truck=Sim.vehicles.coal_tipper
-      button(S.road_mail and 4.75 or .4,y,S.road_mail and 4.10 or 8.45,"depot_buy_coal",
-        S.road_mail and ("Buy coal tipper / "..dollars(truck.cost)) or ("Buy "..truck.name.."  /  "..truck.capacity.." tons  /  "..dollars(truck.cost)))
-    end
-    if S.road_mail or freight then y=y+.62 end
-    if t.owner==n and Sim.vehicle_available(S,"craighead_goods_truck") then
-      local truck=Sim.vehicle_offer(S,"craighead_goods_truck")
-      button(.4,y,8.45,"depot_buy_craighead",("Buy Craighead Goods Truck  /  %d crates  /  %s"):format(
-        truck.capacity,dollars(truck.cost)))
-      y=y+.62
+    y=y+math.ceil(#options/2)*.60
+    if short and short.key=="craighead" then
+      button(.4,y,8.6,"depot_buy_craighead",short.label)
+      y=y+.60
     end
     local parked={}
     for _,i in ipairs(sorted(S.fleet)) do
       local v=S.fleet[i]
       if v.depot==id then parked[#parked+1]=i end
     end
-    for j=1,math.min(math.floor((4.45-y)/.57)+1,#parked) do
+    for j=1,math.min(math.floor(((room and 6.50 or 4.45)-y)/.57)+1,#parked) do
       local i=parked[j]
       button(.4,y+.08+(j-1)*.57,8.45,"vehicle_"..i,S.fleet[i].name.."   /   "..S.fleet[i].status)
     end
@@ -2732,39 +2749,13 @@ function U.service(p,kind,id)
     if not st then return end
     label(.4,.45,st.name)
     local waiting=0
-    if api.oil_tools and st.stop_type=="truck" then
-      for i,cargo in ipairs({"oil","goods"}) do
-        local count,r=Sim.oil_stop_status(S,st,cargo)
-        local role=r and r.accepts and "accepts" or r and #r.sources>0 and "collects" or "no nearby supplier or receiver"
-        local unit=cargo=="oil" and " thousand L" or " crates"
-        label(.4,.80+i*.55,("%s: %s%s waiting  ·  %s"):format(Sim.cargo[cargo].name,number(count or 0),unit,role))
+    if st.stop_type=="truck" then
+      for i,row in ipairs(U.freight_snapshot(st)) do
+        local note=row.accepts and "Accepts" or row.collects and "Collects" or "No supplier or receiver"
+        local rating=row.rating and ("  ·  Rating "..math.floor(row.rating*100/255+.5).."%") or ""
+        label(.4,.60+i*.52,("%s: %s waiting   •   %s%s"):format(Sim.cargo[row.cargo].name,
+          number(row.count),note,rating))
       end
-    elseif api.farm_tools and st.stop_type=="truck" then
-      for i,cargo in ipairs({"grain","livestock","goods"}) do
-        local count,report=Sim.farm_stop_status(S,st,cargo)
-        local role=report and report.accepts and "accepts" or report and #report.sources>0 and "collects" or "no supplier or receiver"
-        label(.4,.74+i*.57,("%s: %s waiting  •  %s"):format(Sim.cargo[cargo].name,number(count or 0),role))
-      end
-      local coal,accepts=Sim.coal_stop_status(S,st)
-      if coal then label(.4,2.98,("Coal: %s t waiting  •  %s"):format(number(coal),accepts and "accepts" or "does not accept")) end
-    elseif api.timber_tools and st.stop_type=="truck" then
-      local wood,wa=Sim.timber_stop_status(S,st,"wood")
-      local goods,ga=Sim.timber_stop_status(S,st,"goods")
-      label(.4,1.22,number(wood or 0).." t wood  •  "..number(goods or 0).." goods crates waiting")
-      label(.4,2.20,wa and wa.accepts and "Accepts wood at the sawmill." or "No wood receiver in this catchment.")
-      label(.4,2.70,ga and ga.accepts and "Accepts goods for town businesses." or "Too few businesses to accept goods here.")
-      local coal,accepts=Sim.coal_stop_status(S,st)
-      if coal then label(.4,3.20,("Coal: %s t waiting  •  %s"):format(number(coal),accepts and "accepts" or "does not accept")) end
-    elseif api.freight_tools and st.stop_type=="truck" and st.coal_art and Sim.coal_stop_status then
-      local coal,accepted,rating=Sim.coal_stop_status(S,st)
-      label(.4,1.22,number(coal or 0).." tons of coal waiting")
-      label(.4,2.20,accepted and "Accepts coal." or "Coal supply requires an active mine in catchment.")
-      if rating then label(.4,2.68,("Coal rating: %d%%"):format(math.floor(rating*100/255+.5))) end
-    elseif S.road_mail and st.stop_type=="truck" then
-      local mail,accepted,rating,known=Sim.mail_stop_status(S,st)
-      label(.4,1.22,number(mail).." mail bags waiting")
-      label(.4,2.20,accepted and "Accepts mail." or "Not enough nearby buildings to accept mail.")
-      if known then label(.4,2.68,("Mail rating: %d%%"):format(math.floor(rating*100/255+.5))) end
     elseif S.road_economy and Sim.waiting_passengers then
       waiting=Sim.waiting_passengers(S,st)
       label(.4,1.22,number(waiting).." passengers waiting")
@@ -2783,14 +2774,14 @@ function U.service(p,kind,id)
     end
     local town=S.sites[st.site]
     local acceptance=Sim.road_passenger_acceptance and Sim.road_passenger_acceptance(S,st.tile)
-    if acceptance then
+    if acceptance and st.stop_type~="truck" then
       label(.4,1.7,(town and "Near "..town.name.."  ·  " or "")..
         (acceptance>=8 and "Accepts passengers" or "No passenger acceptance"))
-    elseif town then
+    elseif town and st.stop_type~="truck" then
       label(.4,1.7,"Serves: "..town.name)
     end
     local bay=Sim.road_bay_status and Sim.road_bay_status(S,st.tile)
-    if bay then
+    if bay and st.stop_type~="truck" then
       label(.4,3.26,("Bay 1: %s   /   Bay 2: %s"):format(bay.first and "occupied" or "free",bay.second and "occupied" or "free"))
       label(.4,3.72,bay.entrance and "Shared entrance occupied." or "Shared entrance clear.")
     end
@@ -2851,8 +2842,8 @@ function U.service(p,kind,id)
       end
     end
   end
-  label(.4,tall and 5.49 or 5.02,V.service_note or "")
-  local footer=tall and 6.10 or 5.61
+  label(.4,room and 6.90 or tall and 5.49 or 5.02,V.service_note or "")
+  local footer=room and 7.51 or tall and 6.10 or 5.61
   if V.vehicle_depot_kind then button(.4,footer,4.14,"depot_vehicle_list","Depot vehicles / Follow") end
   local narrow=not not V.vehicle_depot_kind
   button(narrow and 4.86 or .4,footer,narrow and 4.14 or 8.6,"service_back","Back to world")

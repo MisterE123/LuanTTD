@@ -20,8 +20,8 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
   function R.bind(s,options)
     options=options or {}
     local xy=options.xy or Sim.xy
-    local industry_at=s[profile.storage] or {}
-    for _,other in ipairs(profile.conflicts) do
+    local industry_at=options.industries or s[profile.storage] or {}
+    for _,other in ipairs(profile.conflicts or {}) do
       assert(not next(s[other] or {}),"Freight chains need a single Goods authority")
     end
     local width,height=options.width or Sim.W,options.height or Sim.H
@@ -74,7 +74,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       assert(not raw,"The freight chain must have one shared station scan")
       raw=Adapter.bind(s,s[ledger_key],{width=width,height=height,xy=xy,
         stations=scan_stations,coverage=coverage,industries=industry_at,house_at=options.house_at or house_at,
-        field_board=options.field_board,field_attempt=options.field_attempt,
+        field_board=options.field_board,field_attempt=options.field_attempt,forestry_changed=options.forestry_changed,
         random_u32=random,acceptance=function(st,cargo,tick)
           if by_id[st.id] then return refresh(st.st,tick)[cargo] end
           if cargo==st.freight_cargo then return st.acceptance end

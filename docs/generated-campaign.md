@@ -4,9 +4,10 @@ Create a **fresh ordinary LuanTTD world**, with no special settings.
 It starts with a 64×64 temperate landscape made by the OpenTTD 14.1
 TerraGenesis port. Set
 `bayline_generated_map_size = 128` before generation for a larger map.
-Farm, Oil, South Coast Coal, Coastal Landscaping and the Original survey are separate and override the ordinary default. Reopening a
-save always keeps the recorded geography rather than re-running either
-generator when settings change.
+Ordinary maps can generate farms, factories, oil wells and refineries
+alongside coal and timber. You do not need a separate scenario for those
+industries. Reopening a save keeps its recorded geography; create a
+fresh world to generate the expanded roster.
 
 For 128×128 worlds, successful saves atomically replace
 `luanttd-wide-campaign.chk` inside the world folder before refreshing
@@ -19,8 +20,8 @@ load rather than silently selecting an older mirror.
 The profile is not the Original read-only terrain viewer. It uses the
 pinned OpenTTD 14.1 TerraGenesis height and coast pipeline, with no GRF
 needed. It generates rough and rocky ground before running the stock
-town-placement, English-name, initial road/house growth, coal and timber
-industry placement, temperate landmarks, and temperate forest code. A
+town-placement, English-name, initial road/house growth, temperate
+industry placement, landmark placement and forest code. A
 single stock random stream starts with the economy startup draw and
 continues through those phases. Name parts, municipal roads, completed or
 under-construction house records, and the game state persist in SQLite.
@@ -53,15 +54,18 @@ structures; it does not yet implement every stock shore or tree case.
 - `bayline_generated_industries` selects the stock density (0–6; default
   normal, 4). The custom target at 6 reads `bayline_generated_industry_count`
   (1–64 in this small native map).
-  The default places rendered layout-0 coal mines, power stations,
-  managed forests and sawmills. Set `bayline_generated_mixed_freight = false`
-  before world creation for coal and power only. This changes the industry
-  roster and can move later landmarks and trees. Existing campaigns do
-  not regenerate when this setting changes.
-  Placement can reject sites: the generator does not flatten terrain,
-  move a rejected site or invent a missing endpoint. At default seed 1751
-  the mine is at (47,41), power station at (30,28), sawmill at (23,42),
-  and forest at (48,44). Both freight chains are active by default.
+  Normal industry density considers all eight mounted temperate layouts:
+  coal mine, power station, forest, sawmill, farm, factory, oil wells and
+  refinery. The default seed 1751 generates all eight together. Other
+  seeds may not find a suitable site; for instance, the refinery needs an
+  acceptable coastal location. There is no industry feature switch.
+
+For freight, right-click a truck stop to see which cargoes it collects or
+accepts, then buy the matching truck at a road depot. A town Goods stop
+can accept output from a sawmill, factory or refinery on the same map.
+In **Rail Operations → Rail Freight**, the Goods tools remain visible
+alongside **Oil trains**. Not all OpenTTD industries and transport
+combinations are ported yet.
 
 ### First coal route (seed 1751)
 
@@ -72,9 +76,6 @@ at the mine, then unload at the power station. The first 20 tons earn
 $424 in the source-clock test. The return loops give through-stop trucks
 room to turn around.
 
-On the explicit coal-only profile (`bayline_generated_mixed_freight = false`),
-a second mine is at `(24,43)`. Use the alternative southern circuit
-verified by `tests/generated_coal_route.lua`.
 
 ### First wood route (seed 1751)
 
@@ -165,7 +166,7 @@ a low or unsuitable landscape can legitimately have no transmitter.
 
 Use a fresh seed-1751 world with `bayline_generated_map_size = 128`,
 `bayline_generated_relief = 3`, `bayline_generated_rivers = 1`, and
-`bayline_generated_mixed_freight = true`. This fixture creates eight
+the mixed-freight test fixture. It creates eight
 towns, 13 industries, and two rivers. Enter (106,70) in Jump Map to reach the test corridor. Roadworks can lay road `(102,70)–(111,70)` and put bus
 stops at `(103,70)` and `(110,70)`. These cost $2,226 at the start.
 The stock road path test verifies the directed route between the

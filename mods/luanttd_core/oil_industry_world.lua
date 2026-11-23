@@ -1,7 +1,7 @@
--- Seed 1751 adapter: exact source geometry on an authored, undisturbed site.
+-- Oil industry placement in an ordinary generated map or fixed test site.
 -- No enabled game mode, production clock, renderer or fare authority here.
 return function(Sim,Terrain,Rules)
-  local W={VERSION=1,BASE=0x3000,MIN_SEPARATION=15}
+  local W={VERSION=1,BASE=0x3000,LIMIT=0x4000,MIN_SEPARATION=15}
   local layout={wells=Rules.layout.oil_well[0],refinery=Rules.layout.oil_refinery[0]}
   local specs={
     wells={kind="stock_oil_wells",source="oil_well",name="Northfield Oil Wells",art="industry_oil_well",industry=11},
@@ -22,7 +22,7 @@ return function(Sim,Terrain,Rules)
   end
   local overlays={"bridge_above","tunnel_below","rail_bridge_above","rail_tunnel_below","aqueduct_above"}
   local function occupied(s,id,t)
-    if t.terrain=="water" or t.owner or t.site or t.house or t.source_house or t.build or
+    if t.stock_void or t.terrain=="water" or t.owner or t.site or t.house or t.source_house or t.build or
        t.wood or t.stock_industry or t.tram or t.ship or t.airfield or t.rail_tracks or
        t.rail_station_id or t.rail_depot_dir or t.rail_span_id or t.level_crossing or
        t.stock_canal or t.road_bridge_id or t.road_tunnel_id then return true end
@@ -31,7 +31,7 @@ return function(Sim,Terrain,Rules)
   end
   local function quote(s,kind,x,z)
     if not s.corner_grid or not specs[kind] or not point(x,z) then return nil,"INVALID_OIL_SITE" end
-    if kind=="refinery" and not W.refinery_edge(x,z,Sim.W,Sim.H,Rules.EDGE_LIMIT,false,not not s.stock_freeform_edges) then return nil,"REFINERY_NOT_NEAR_EDGE" end
+    if kind=="refinery" and not W.refinery_edge(x,z,Sim.W,Sim.H,Rules.EDGE_LIMIT,false,not not (s.corner_grid.freeform_edges or s.stock_freeform_edges)) then return nil,"REFINERY_NOT_NEAR_EDGE" end
     local cells,level={},nil
     for _,r in ipairs(layout[kind]) do
       local a,b=x+r[1],z+r[2]
@@ -98,6 +98,46 @@ return function(Sim,Terrain,Rules)
     s.stock_oil_placements,s.stock_oil_industries=records,industries
     s.topology=s.topology+1
     return records,dirty
+  end
+  -- The upstream generator owns RNG, selected layout, initial cargo
+  -- history, industry counter, town and tile construction state. Install
+  -- the exact record it produced, rather than rerunning the authored pair
+  -- initializer or rewriting another chain's data.
+  function W.place_generated(s,kind,origin,opts)
+    local key=kind=="oil_well" and "wells" or kind=="oil_refinery" and "refinery" or nil
+    if not key or type(origin)~="number" or origin%1~=0 or not s.tiles[origin] then return nil,"INVALID_OIL_SITE" end
+    local x,z=Sim.xy(origin)
+    local p,why,tile=quote(s,key,x,z)
+    if not p then return nil,why,tile end
+    local ind=opts and opts.record
+    if not ind or type(opts.name)~="string" or ind.kind~=kind or ind.x~=x-1 or ind.z~=z-1 or
+        ind.layout~=0 or #ind.tiles~=#p.cells then return nil,"GENERATED_OIL_FOOTPRINT_MISMATCH" end
+    for i,c in ipairs(p.cells) do
+      local t=ind.tiles[i]
+      if t.x~=c.x-1 or t.z~=c.z-1 or t.gfx~=c.gfx then return nil,"GENERATED_OIL_FOOTPRINT_MISMATCH" end
+      c.id=c.tile -- common generated map host; closure uses c.tile
+    end
+    local id=s.next_stock_oil_industry or W.BASE
+    if type(id)~="number" or id%1~=0 or id<W.BASE or id>=W.LIMIT then return nil,"OIL_INDUSTRY_IDS_EXHAUSTED" end
+    local industries,records=s.stock_oil_industries or {},s.stock_oil_placements or {}
+    for _,map in ipairs({industries,s.stock_coal_industries or {},s.stock_farm_industries or {},s.stock_timber_industries or {}}) do
+      if map[id] then return nil,"INDUSTRY_ID_COLLISION" end
+    end
+    local desc,sid=specs[key],#s.sites+1
+    local site={id=sid,name=opts.name,kind=desc.kind,tile=origin,stock={},produced={},received={},
+      service=0,stock_industry=id,industry_chain="oil",town=ind.town}
+    local record={id=id,kind=key,source_type=desc.industry,site=sid,x=x,z=z,level=p.level,cells=p.cells,style=desc.art}
+    ind.id,ind.site=id,sid
+    records[id],industries[id],s.sites[sid]=record,ind,site
+    for _,c in ipairs(p.cells) do
+      local t=s.tiles[c.tile]
+      t.stock_industry={id=id,chain="oil",kind=key,style=desc.art,x=c.offset_x,z=c.offset_z,gfx=c.gfx,
+        site=sid,origin=origin}
+    end
+    s.tiles[origin].site=sid
+    s.stock_oil_placements,s.stock_oil_industries=records,industries
+    s.next_stock_oil_industry,s.topology=id+1,s.topology+1
+    return ind,p.cells,site
   end
   function W.default_1751(s)
     if s.seed~=1751 then return nil,"OIL_PROFILE_REQUIRES_SEED_1751" end

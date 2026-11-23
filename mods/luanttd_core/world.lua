@@ -734,16 +734,14 @@ return function(api,ui)
       local title=ui.stop_label(st)
       if api.road_first and st.mode=="road" then
         local waiting,units=0," waiting"
-        if api.oil_tools and st.stop_type=="truck" then
-          local oil=Sim.oil_stop_status(S,st,"oil") or 0
-          local goods=Sim.oil_stop_status(S,st,"goods") or 0
-          if oil>0 then title=title.."   ·   "..oil.." kL crude" end
-          if goods>0 then title=title.."   ·   "..goods.." crates" end
-        elseif api.timber_tools and st.stop_type=="truck" then
-          local wood=Sim.timber_stop_status(S,st,"wood") or 0
-          local goods=Sim.timber_stop_status(S,st,"goods") or 0
-          if wood>0 then title=title.."   ·   "..wood.." t wood" end
-          if goods>0 then title=title.."   ·   "..goods.." crates" end
+        if st.stop_type=="truck" and ui.freight_snapshot then
+          local shown=0
+          for _,row in ipairs(ui.freight_snapshot(st)) do
+            if row.count>0 and shown<2 then
+              title=title.."   ·   "..row.count.." "..Sim.cargo[row.cargo].name:lower()
+              shown=shown+1
+            end
+          end
         elseif st.coal_art and Sim.coal_stop_status then
           waiting,units=Sim.coal_stop_status(S,st)," t waiting"
         elseif st.stop_type=="truck" and S.road_mail then

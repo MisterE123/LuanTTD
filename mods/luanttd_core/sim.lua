@@ -1978,12 +1978,14 @@ local passenger_rules,income_rules
 local rating_runtime,town_passengers,mail_runtime,station_service,paid_ferry,coal_service,rail_coal
 local timber_service,timber_rules,ship_coal
 local farm_service,farm_world
+local farm={}
 local oil={reports=setmetatable({},{__mode="k"})}
 local goods={ready=setmetatable({},{__mode="k"})}
 local timber_day_bindings=setmetatable({},{__mode="k"})
 local coal_day_bindings=setmetatable({},{__mode="k"})
 local function timber_binding(s,force)
   if timber_day_bindings[s] then return timber_day_bindings[s] end
+  if goods.mixed_enabled and goods.mixed_enabled(s) then return goods.mixed_binding(s) end
   if oil.service and s.stock_oil_industries and (force or M.road_oil_active(s)) then
     return oil.binding(s)
   end
@@ -2059,6 +2061,7 @@ local function passenger_modules()
     return goods.ready[s] and goods.ready[s]() or false
   end)
   function goods.binding(s,probe)
+    if goods.mixed_enabled and goods.mixed_enabled(s) then return {rail=goods.mixed_binding(s,"goods",probe).rail.goods} end
     return timber_service.bind(s,{credit=credit,station_union=goods.runtime.union(s,paid_rail_runs[s],probe)})
   end
   oil.mount=function(Terrain)
@@ -2074,7 +2077,7 @@ local function passenger_modules()
       kernel,rating_runtime,loading_factory,timing)
     oil.runtime=dofile(base.."rail_oil_runtime.lua")(M,oil_rail,freight,roster,debit,credit)
     for kind,record in pairs(oil.world.facilities) do M.facilities[kind]=record end
-    function oil.binding(s,probe)
+    function oil.animation(s)
       local tiles={}
       local saved=s.stock_oil_animated or {}
       s.stock_oil_animated=saved
@@ -2084,10 +2087,8 @@ local function passenger_modules()
         end
       end
       local function random() return rating_runtime.random_u32(s) end
-      return oil.service.bind(s,{credit=credit,random_u32=random,
-        station_union=oil.runtime.union(s,paid_rail_runs[s],probe),
-        animated=function(_,tile,on) saved[M.id(tile.x+1,tile.z+1)]=on or nil end,
-        each_tick=function(tick)
+      return function(_,tile,on) saved[M.id(tile.x+1,tile.z+1)]=on or nil end,
+        function(tick)
           if tick%8~=0 then return end
           local ids={}
           for id in pairs(saved) do ids[#ids+1]=id end
@@ -2100,7 +2101,62 @@ local function passenger_modules()
               if changed and not keep then saved[id]=nil end
             end
           end
+        end
+    end
+    function oil.binding(s,probe)
+      if goods.mixed_enabled and goods.mixed_enabled(s) then return {rail=goods.mixed_binding(s,"oil",probe).rail.oil} end
+      local animated,each_tick=oil.animation(s)
+      return oil.service.bind(s,{credit=credit,station_union=oil.runtime.union(s,paid_rail_runs[s],probe),
+        animated=animated,each_tick=each_tick})
+    end
+  end
+  goods.mount_mixed=function()
+    if goods.mixed or not farm.rules or not oil.rules then return end
+    local Rules,Adapter=dofile(base.."combined_industry_runtime.lua")(timber_rules,farm.rules,oil.rules,
+      farm.fields,dofile(base.."timber_industry_runtime.lua"),catchment)
+    local union=dofile(base.."road_farm_service.lua")(M,Rules,Adapter,passenger_rules,income_rules,kernel,rating_runtime,
+      {tag="freight",label="Mixed industry",vehicles={wood="wood_truck",oil="oil_tanker",grain="grain_truck",
+       livestock="livestock_van",goods="goods_truck"},cargo={"oil","livestock","goods","grain","wood"}})
+    goods.mixed=union
+    function goods.mixed_enabled(s)
+      local n=(M.road_timber_active(s) and 1 or 0)+(M.road_farm_active(s) and 1 or 0)+(M.road_oil_active(s) and 1 or 0)
+      return n>1
+    end
+    function goods.mixed_binding(s,for_cargo,probe)
+      local all,enabled={},{}
+      for _,kind in ipairs({"timber","farm","oil"}) do
+        if M["road_"..kind.."_active"](s) then
+          enabled[kind]=true
+          for id,ind in pairs(s["stock_"..kind.."_industries"] or {}) do
+            assert(not all[id],"Conflicting stock industry IDs")
+            all[id]=ind
+          end
+        end
+      end
+      local animated,tick
+      if enabled.oil then animated,tick=oil.animation(s) end
+      local function station_union(roads,open,scan,rating)
+        local rail={}
+        local function goods_or_open(stations,covers)
+          local r=goods.runtime.union(s,paid_rail_runs[s],for_cargo=="goods" and probe or nil)
+          if not r then return open(stations,covers) end
+          rail.goods=r(stations,open,scan,rating)
+          return rail.goods.pipeline
+        end
+        local r=oil.runtime.union(s,paid_rail_runs[s],for_cargo=="oil" and probe or nil)
+        if r then rail.oil=r(roads,goods_or_open,scan,rating)
+        else goods_or_open(roads) end
+        function rail.station_at(id)
+          return rail.goods and rail.goods.station_at(id) or rail.oil and rail.oil.station_at(id)
+        end
+        return rail
+      end
+      local B=union.bind(s,{credit=credit,industries=all,field_board=enabled.farm and farm_world.field_board(s),
+        station_union=station_union,animated=animated,each_tick=tick,forestry_changed=function(t)
+          s.changed=s.changed or {};s.changed[#s.changed+1]=M.id(t.x+1,t.z+1)
         end})
+      B.mixed=true
+      return B
     end
   end
   local ships=dofile(base.."openttd/ship_roster.lua")
@@ -2119,20 +2175,20 @@ function M.stock_random_u32(s)
 end
 function M.mount_oil_world(s,Terrain,asset_ready)
   if not asset_ready then return nil,"The native oil well, refinery or tanker assets are missing." end
-  if s.road_farm or s.road_timber or s.stock_farm_industries or s.stock_timber_industries then
-    return nil,"Oil, farm and timber each require a separate freight scenario."
-  end
   passenger_modules()
   oil.mount(Terrain)
+  goods.mount_mixed()
   town_passengers.start(s)
   return oil.world
+end
+function M.oil_rules()
+  return oil.rules
 end
 function M.oil_asset_shapes()
   return oil.world and oil.world.visual_sources()
 end
 function M.mount_farm_world(s,Terrain,asset_ready)
   if not asset_ready then return nil,"The native farm, factory or freight assets are missing." end
-  if s.stock_timber_industries or s.road_timber then return nil,"Farm and timber require separate scenario worlds." end
   passenger_modules()
   if not farm_service then
     local source=debug and debug.getinfo(1,"S").source
@@ -2145,14 +2201,16 @@ function M.mount_farm_world(s,Terrain,asset_ready)
     local rules=dofile(base.."openttd/farm_factory_industry.lua")(passenger_rules,catchment,kernel,
       income_rules,coal,timber_rules)
     local fields=dofile(base.."openttd/farm_factory_fields.lua")(coal)
+    farm.rules,farm.fields=rules,fields
     local adapter=dofile(base.."farm_factory_runtime.lua")(rules,fields,
       dofile(base.."timber_industry_runtime.lua"),catchment)
     farm_service=dofile(base.."road_farm_service.lua")(M,rules,adapter,passenger_rules,income_rules,kernel,rating_runtime)
     farm_world=dofile(base.."farm_factory_world.lua")(M,Terrain,rules,fields,catchment)
   end
+  goods.mount_mixed()
   for k,v in pairs(farm_world.facilities) do M.facilities[k]=v end
   town_passengers.start(s)
-  return farm_world,function() return rating_runtime.random_u32(s) end
+  return farm_world,function() return rating_runtime.random_u32(s) end,farm.rules
 end
 function M.mount_coal_ship(s,Run,Passenger,Network)
   passenger_modules()
@@ -2348,11 +2406,11 @@ function M.road_timber_active(s)
 end
 function M.road_farm_active(s)
   return not not (s.road_farm and s.road_stock_house_supply and s.stock_farm_industries and farm_service and
-    not s.stock_timber_industries and M.road_stock_service_active(s))
+    M.road_stock_service_active(s))
 end
 function M.road_oil_active(s)
   return not not (s.road_oil and s.road_stock_house_supply and s.stock_oil_industries and oil.service and
-    not s.stock_timber_industries and not s.stock_farm_industries and M.road_stock_service_active(s))
+    M.road_stock_service_active(s))
 end
 function M.oil_stop_status(s,st,cargo)
   if not M.road_oil_active(s) or not st or st.mode~="road" or st.stop_type~="truck" or
@@ -2361,7 +2419,7 @@ function M.oil_stop_status(s,st,cargo)
   if not b then
     local saved=oil.reports[s]
     if not saved or saved.topology~=s.topology then
-      saved={topology=s.topology,binding=oil.binding(s)}
+      saved={topology=s.topology,binding=timber_binding(s)}
       oil.reports[s]=saved
     end
     b=saved.binding
@@ -3220,8 +3278,31 @@ function M.daily(s)
     timber_day_bindings[s]=timber
     if timber and timber.rail then
       town_passengers.start(s)
-      local controller=M.rail_goods_active(s) and goods.runtime or oil.runtime
-      industry_train=controller.day(s,paid_rail_runs[s],s.passenger_house_clock.counter+1,timber.rail)
+      local first=s.passenger_house_clock.counter+1
+      if timber.mixed then
+        local rail=timber.rail
+        local days={}
+        if rail.oil then days[#days+1]=oil.runtime.day(s,paid_rail_runs[s],first,rail.oil) end
+        if rail.goods then days[#days+1]=goods.runtime.day(s,paid_rail_runs[s],first,rail.goods) end
+        if #days>0 then
+          industry_train={
+            before=function(tick)
+              local ready={}
+              for i,q in ipairs(days) do ready[i]=q.before(tick) end
+              return ready
+            end,
+            after=function(tick,ready,register)
+              for i,q in ipairs(days) do q.after(tick,ready[i],register) end
+            end,
+            post=function(tick)
+              for _,q in ipairs(days) do q.post(tick) end
+            end,
+          }
+        end
+      else
+        local controller=M.rail_goods_active(s) and goods.runtime or oil.runtime
+        industry_train=controller.day(s,paid_rail_runs[s],first,timber.rail)
+      end
     end
   end
   for _,v in pairs(s.fleet) do
@@ -3404,7 +3485,21 @@ function M.daily(s)
     -- The placed forest/sawmill preview keeps its scenario industries
     -- active. Dynamic site opening/closure is a separate world command.
     if timber then
-      if M.road_oil_active(s) then
+      if timber.mixed then
+        local oil_month={smooth=true,frozen=s.stock_oil_frozen==true}
+        local farm_month={smooth=s.stock_farm_smooth~=false,frozen=s.stock_farm_frozen==true}
+        local timber_month={frozen=true}
+        timber.month(y*12+month,y,{policy={oil_well=oil_month,oil_refinery=oil_month,
+          farm=farm_month,factory=farm_month,forest=timber_month,sawmill=timber_month}})
+        if M.road_oil_active(s) then
+          s.changed=s.changed or {}
+          for _,id in ipairs(oil.world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+        end
+        if M.road_farm_active(s) then
+          s.changed=s.changed or {}
+          for _,id in ipairs(farm_world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+        end
+      elseif M.road_oil_active(s) then
         s.stock_oil_month=(s.stock_oil_month or 0)+1
         timber.month(s.stock_oil_month,y,{smooth=true,frozen=s.stock_oil_frozen==true})
         s.changed=s.changed or {}
@@ -3412,6 +3507,8 @@ function M.daily(s)
       elseif M.road_farm_active(s) then
         s.stock_farm_month=(s.stock_farm_month or 0)+1
         timber.month(s.stock_farm_month,y,{smooth=s.stock_farm_smooth~=false,frozen=s.stock_farm_frozen==true})
+        s.changed=s.changed or {}
+        for _,id in ipairs(farm_world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
       else
         -- Calendar months are not 30 days long when the stock vehicle
         -- market is mounted. One stable ordinal for the actual month.

@@ -183,24 +183,72 @@ do
     dofile(src.."town_passengers.lua"))
   Sim.mount_stock_town_growth(S,api.town_growth,true)
 end
+local farm_rules,oil_rules
+if generated_world or S.road_farm then
+  assert(api.terrain,"The farm world requires corner terrain.")
+  local Terrain=dofile(mod.."/openttd/terrain.lua")
+  local assets=dofile(mod.."/farm_visual_assets.lua")
+  local missing=assets.missing(core,mod)
+  assert(not missing,"The farm workbench is missing the asset "..tostring(missing))
+  local mounted,rng,rules=Sim.mount_farm_world(S,Terrain,true)
+  api.farm_world=assert(mounted,rng)
+  farm_rules=rules
+  api.farm_visual_assets=assets
+  if saved=="" and not generated_world then
+    local seeded,why=api.farm_world.default_1751(S,rng)
+    assert(seeded,"No clean farm/factory corridor: "..tostring(why))
+  end
+  api.farm_view=dofile(mod.."/farm_field_view.lua")(api,Terrain)
+end
+if generated_world or S.road_oil then
+  assert(api.terrain,"Stock oil freight requires corner terrain.")
+  local files={}
+  for _,folder in ipairs({"models","textures"}) do
+    for _,name in ipairs(core.get_dir_list(mod.."/"..folder,false)) do files[name]=true end
+  end
+  local oil,why=Sim.mount_oil_world(S,dofile(mod.."/openttd/terrain.lua"),
+    files["bl_witcombe_oil_tanker.obj"] and files["bl_witcombe_oil_tanker_atlas.png"])
+  assert(oil,why)
+  for style,parts in pairs(oil.visual_sources()) do
+    assert(files["bl_"..style.."_atlas.png"],"Missing oil industry atlas "..style)
+    for _,piece in ipairs(parts) do
+      local file=("bl_%s_%d_%d.obj"):format(style,piece[1],piece[2])
+      assert(files[file],"Missing stock oil site mesh: "..file)
+    end
+  end
+  api.oil_world=oil
+  oil_rules=Sim.oil_rules()
+  if saved=="" and not generated_world then
+    local good,error_=oil.default_1751(S)
+    assert(good,"No untouched oil corridor in this world: "..tostring(error_))
+  end
+end
 if Generated then
   local src=mod.."/openttd/"
   local P,Rating=dofile(src.."passengers.lua"),dofile(src.."station_rating.lua")
   local Cat=dofile(src.."station_catchment.lua")(P,Rating,function()return 0 end,function()return 0 end)
   local Coal=dofile(src.."coal_industry.lua")(P,Rating,Cat,dofile(src.."income.lua"))
   local Timber=Sim.timber_rules()
-  local Industry=dofile(src.."industry_worldgen.lua")(Coal,Timber or nil)
+  local Industry=dofile(src.."industry_worldgen.lua")(Coal,Timber or nil,oil_rules,farm_rules)
   local World=dofile(mod.."/coal_industry_world.lua")(Sim,Terrain,Coal)
   local TimberWorld=Timber and dofile(mod.."/timber_world.lua")(Sim,Terrain,Timber)
   Generated.industries(Sim,Terrain,S,Generator,Industry,World,
     world_options and world_options.industries or tonumber(core.settings:get("bayline_generated_industries")) or 4,
-    tonumber(core.settings:get("bayline_generated_industry_count")),TimberWorld)
+    tonumber(core.settings:get("bayline_generated_industry_count")),TimberWorld,api.oil_world,api.farm_world)
   local calendar=Sim.engine_calendar or dofile(src.."stock_engine_calendar.lua")
   Generated.landmarks(Sim,Terrain,S,Generator,dofile(src.."scenery_object_worldgen.lua"),calendar.date(Sim.date(S)))
   local mode=world_options and world_options.trees or tonumber(core.settings:get("bayline_generated_tree_placer")) or 2
   Generated.forests(Sim,Terrain,S,Generator,dofile(src.."tree_worldgen.lua"),mode)
 end
 if generated_world then
+  -- Industry geography controls available cargo, not a scenario toggle.
+  local function present(registry,kind)
+    for _,row in pairs(registry or {}) do if row.kind==kind and not row.removed then return true end end
+    return false
+  end
+  S.road_farm=not not (present(S.stock_farm_industries,"farm") or present(S.stock_farm_industries,"factory"))
+  S.road_oil=not not (present(S.stock_oil_industries,"oil_well") or present(S.stock_oil_industries,"oil_refinery"))
+  S.rail_oil_service=S.road_oil
   local mine,power
   for _,industry in pairs(S.stock_coal_industries or {}) do
     mine=mine or industry.kind=="coal_mine" and not industry.removed
@@ -290,44 +338,7 @@ if api.terrain and (S.road_timber or S.stock_timber_industries) then
 end
 api.stock_timber_scenery=not not (api.timber_world and S.stock_timber_industries)
 api.timber_tools=api.stock_timber_scenery and Sim.road_timber_active(S)
-if S.road_farm then
-  assert(api.terrain and S.seed==1751,"The farm workbench requires a fresh 1751 scenario and corner terrain.")
-  local Terrain=dofile(mod.."/openttd/terrain.lua")
-  local assets=dofile(mod.."/farm_visual_assets.lua")
-  local missing=assets.missing(core,mod)
-  assert(not missing,"The farm workbench is missing the asset "..tostring(missing))
-  local mounted,rng=Sim.mount_farm_world(S,Terrain,true)
-  api.farm_world=assert(mounted,rng)
-  api.farm_visual_assets=assets
-  if saved=="" then
-    local seeded,why=api.farm_world.default_1751(S,rng)
-    assert(seeded,"No clean farm/factory corridor: "..tostring(why))
-  end
-  api.farm_view=dofile(mod.."/farm_field_view.lua")(api,Terrain)
-end
 api.farm_tools=api.farm_world and Sim.road_farm_active(S)
-if S.road_oil then
-  assert(api.terrain and S.seed==1751,"Stock oil freight requires a fresh seed-1751 corner terrain world.")
-  local files={}
-  for _,folder in ipairs({"models","textures"}) do
-    for _,name in ipairs(core.get_dir_list(mod.."/"..folder,false)) do files[name]=true end
-  end
-  local oil,why=Sim.mount_oil_world(S,dofile(mod.."/openttd/terrain.lua"),
-    files["bl_witcombe_oil_tanker.obj"] and files["bl_witcombe_oil_tanker_atlas.png"])
-  assert(oil,why)
-  for style,parts in pairs(oil.visual_sources()) do
-    assert(files["bl_"..style.."_atlas.png"],"Missing oil industry atlas "..style)
-    for _,piece in ipairs(parts) do
-      local file=("bl_%s_%d_%d.obj"):format(style,piece[1],piece[2])
-      assert(files[file],"Missing stock oil site mesh: "..file)
-    end
-  end
-  api.oil_world=oil
-  if saved=="" then
-    local good,error_=oil.default_1751(S)
-    assert(good,"No untouched oil corridor in this world: "..tostring(error_))
-  end
-end
 api.oil_tools=api.oil_world and Sim.road_oil_active(S)
 api.freight_tools=(api.stock_coal_scenery and S.road_coal) or api.timber_tools or api.farm_tools or api.oil_tools
 local Track=dofile(mod.."/openttd/rail_track.lua")

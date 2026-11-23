@@ -3,9 +3,10 @@
 -- GetScaledIndustryGenerationProbability, GetNumberOfIndustries,
 -- PlaceIndustry, CreateNewIndustry and built-in location checks; map.cpp
 -- TileAddWrap; table/build_industry.h temperate Coal Mine, Power Station,
--- Sawmill and Forest (the latter two require the optional Timber kernel).
+-- Sawmill and Forest. Farm, Factory, Wells and Refinery tables/checks
+-- also verified against OpenTTD 16.0-RC1 (table/build_industry.h).
 -- Native initial manifest excludes industry kinds / art layouts not ported.
-return function(Coal,Timber)
+return function(Coal,Timber,Oil,Farm)
   local W={POOL_MAX=64000,HARD_ATTEMPTS=10000,SOFT_ATTEMPTS=2000}
   local floor,ceil,min,max,abs=math.floor,math.ceil,math.min,math.max,math.abs
   local U32=4294967296
@@ -45,6 +46,27 @@ return function(Coal,Timber)
       conflict={[2]=true,[14]=true},available={[0]=true},picture="forest_0",kernel=Timber,check="forest"}
     last_type=3
   end
+  if Oil then
+    assert(Oil.layout.oil_refinery and Oil.layout.oil_well and Oil.refinery_edge)
+    W.specs[4]={kind="oil_refinery",name="Oil Refinery",layout=Oil.layout.oil_refinery,
+      weight=Oil.spec.oil_refinery.generation[1],conflict={[5]=true},available={[0]=true},
+      picture="industry_oil_refinery",kernel=Oil,check="refinery",coastal=true}
+    W.specs[11]={kind="oil_well",name="Oil Wells",layout=Oil.layout.oil_well,
+      weight=Oil.spec.oil_well.generation[1],conflict={[4]=true},available={[0]=true},
+      picture="industry_oil_well",kernel=Oil}
+    last_type=11
+  end
+  if Farm then
+    assert(Farm.layout.factory and Farm.layout.farm)
+    W.specs[6]={kind="factory",name="Factory",layout=Farm.layout.factory,
+      weight=Farm.spec.factory.generation[1],conflict={[8]=true,[9]=true},available={[0]=true},
+      picture="industry_factory",kernel=Farm}
+    W.specs[9]={kind="farm",name="Farm",layout=Farm.layout.farm,
+      weight=Farm.spec.farm.generation[1],conflict={[6]=true,[13]=true},available={[0]=true},
+      picture="industry_farm",kernel=Farm}
+    last_type=max(last_type,9)
+  end
+  local temperate=Timber or Oil or Farm
   function W.scale_area(n,width,height) return ceil(n*width*height/65536) end
   function W.scale_coast(n,width,height) return ceil(n*(width+height)/512) end
   function W.count(board,opts)
@@ -57,7 +79,7 @@ return function(Coal,Timber)
     opts=opts or {}
     local s=W.specs[id]
     if not s or not s.layout[0] or opts.enabled and opts.enabled[id]~=true or density(opts)==0
-        or Timber and opts.landscape and opts.landscape~="temperate" then
+        or temperate and opts.landscape and opts.landscape~="temperate" then
       return 0,false
     end
     local probability=s.weight*16 -- multiply before scaling, not after
@@ -162,7 +184,7 @@ return function(Coal,Timber)
   -- industries, town affiliation, and exact occupied vs hole cells.
   function W.quote(board,id,x,z,variant,opts,placed)
     opts,placed=opts or {},placed or board.industries or {}
-    if Timber and opts.landscape and opts.landscape~="temperate" then return nil,"INDUSTRY_CLIMATE_UNPORTED" end
+    if temperate and opts.landscape and opts.landscape~="temperate" then return nil,"INDUSTRY_CLIMATE_UNPORTED" end
     local spec=W.specs[id]
     if not spec or opts.enabled and opts.enabled[id]~=true then return nil,"INDUSTRY_TYPE_UNPORTED" end
     local layout=spec.layout[variant]
@@ -183,6 +205,11 @@ return function(Coal,Timber)
     if spec.check=="forest" then
       local ok,why=W.forest_site(opts.landscape or "temperate")
       if not ok then return nil,why end
+    elseif spec.check=="refinery" then
+      if not spec.kernel.refinery_edge(x,z,board.width,board.height,
+          {freeform=board.freeform,editor=opts.editor,limit=opts.oil_refinery_limit}) then
+        return nil,"REFINERY_NOT_NEAR_EDGE"
+      end
     end
     local cells,level,needs_leveling={},nil,false
     for _,q in ipairs(layout) do
@@ -252,7 +279,7 @@ return function(Coal,Timber)
 
   function W.generate(board,opts)
     opts=opts or {}
-    assert(not Timber or opts.landscape==nil or opts.landscape=="temperate","Only temperate stock industry generation is mounted.")
+    assert(not temperate or opts.landscape==nil or opts.landscape=="temperate","Only temperate stock industry generation is mounted.")
     axis(board.width);axis(board.height)
     local random=assert(opts.random,"Industry worldgen requires the shared raw uint32 stream.")
     assert(type(board.tile)=="function" and type(opts.commit)=="function")
