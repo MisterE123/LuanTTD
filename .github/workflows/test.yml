@@ -23,7 +23,7 @@ jobs:
       - name: Install test tools
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git lua5.1 luanti-server python3 zstd
+          apt-get install -y --no-install-recommends ca-certificates git lua5.1 luanti-server python3 python3-pil zstd
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
