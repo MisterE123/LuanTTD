@@ -102,6 +102,11 @@ return function(Sim,R,max_days)
     transport_quotes[name]={quote=quote,token=quote_sequence,topology=s.topology}
     return reply(true,nil,{token=quote_sequence,cost=quote.price,tiles=quote.tiles})
   end
+  function A.depot(name,mode,id)
+    if not owner(name) or not R.transport then return reply(false,"DEPOT_UNAVAILABLE") end
+    local data,why=R.transport.depot(name,mode,id)
+    return reply(data~=nil,why,data)
+  end
   local terrain_quotes={}
   function A.terrain_quote(name,request)
     if not owner(name) or not R.landscape or not s.companies[name] then return reply(false,"TERRAIN_QUOTE_UNAVAILABLE") end
@@ -112,6 +117,24 @@ return function(Sim,R,max_days)
     terrain_quotes[name]={quote=quote,token=quote_sequence}
     return reply(true,nil,{token=quote_sequence,cost=quote.cost,tiles=quote.tiles,corners=quote.corners})
   end
+  local demolition_quotes={}
+  function A.demolition(name,id)
+    if not owner(name) or not s.companies[name] or not tile_id(id) or not R.demolition then
+      return reply(false,"DEMOLITION_UNAVAILABLE")
+    end
+    demolition_quotes[name]=nil
+    local options,accepted={},{}
+    for _,o in ipairs(R.demolition(name,id)) do
+      options[#options+1]={key=o.key,title=o.title,ok=o.ok,detail=o.detail}
+      if o.ok then accepted[o.key]=o.detail end
+    end
+    quote_sequence=quote_sequence+1
+    if next(accepted) then
+      demolition_quotes[name]={token=quote_sequence,options=accepted,id=id,
+        topology=s.topology,terrain=s.corner_grid.revision}
+    end
+    return reply(true,nil,{token=quote_sequence,options=options})
+  end
   function A.company(name)
     if not owner(name) then return reply(false,"INVALID_REQUEST") end
     local c=s.companies[name]
@@ -119,7 +142,7 @@ return function(Sim,R,max_days)
     local year,month,day=Sim.date(s)
     return reply(true,nil,{cash=c.cash,loan=c.loan,revenue=c.revenue,expense=c.expense,
       month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,
-      year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed})
+      year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name})
   end
   function A.road_quote(name,request)
     if not owner(name) or not R.road_construction then return reply(false,"ROAD_QUOTE_UNAVAILABLE") end
@@ -136,7 +159,23 @@ return function(Sim,R,max_days)
     if not owner(name) or type(c)~="table" then return reply(false,"INVALID_REQUEST") end
     if c.revision~=authority_revision then return reply(false,"STALE_COMMAND") end
     local ok,note,value
-    if c.kind=="terrain_commit" then
+    if c.kind=="demolition" then
+      local q=demolition_quotes[name]
+      if not q or q.token~=c.token or type(c.layer)~="string" or not q.options[c.layer]
+        or q.topology~=s.topology or q.terrain~=s.corner_grid.revision then
+        return reply(false,"The tile or quote changed. Select it again.")
+      end
+      demolition_quotes[name]=nil
+      for _,o in ipairs(R.demolition(name,q.id)) do
+        if o.key==c.layer and o.ok and q.options[c.layer]==o.detail then
+          local _,ids,detail=o.apply()
+          if not ids then return reply(false,detail or "Layer removal canceled.") end
+          value,ok,note=ids,true,type(detail)=="string" and detail or "Layer removed."
+          break
+        end
+      end
+      if not ok then return reply(false,"The tile or quote changed. Select it again.") end
+    elseif c.kind=="terrain_commit" then
       local q=terrain_quotes[name]
       terrain_quotes[name]=nil
       if not q or q.token~=c.token then return reply(false,"TERRAIN_QUOTE_EXPIRED") end
@@ -158,6 +197,10 @@ return function(Sim,R,max_days)
       if s.companies[name] then return A.company(name) end
       Sim.company(s,name)
       ok,note=true,"Company opened."
+    elseif c.kind=="speed" and (c.speed==0 or c.speed==1 or c.speed==2 or c.speed==4) then
+      if s.chair~=name and c.admin~=true then return reply(false,"Only the first company or a server admin can change speed.") end
+      s.speed=c.speed
+      ok,note=true,c.speed==0 and "Simulation paused." or ("Simulation at "..c.speed.."×.")
     elseif c.kind=="company_loan" and (c.amount==10000 or c.amount==-10000) then
       if not s.companies[name] then return reply(false,"COMPANY_NOT_OPEN") end
       ok,note=Sim.loan(s,name,c.amount)
@@ -206,7 +249,7 @@ return function(Sim,R,max_days)
     end
     return reply(ok,note,value)
   end
-  function A.snapshot(x,z,w,h,fraction)
+  function A.snapshot(x,z,w,h,fraction,frame)
     if not integer(x,1,Sim.W) or not integer(z,1,Sim.H)
       or not integer(w,1,32) or not integer(h,1,32) or x+w-1>Sim.W or z+h-1>Sim.H then
       return reply(false,"INVALID_INTEREST_WINDOW")
@@ -238,17 +281,54 @@ return function(Sim,R,max_days)
     return reply(true,nil,{x=x,z=z,width=w,height=h,tiles=tiles,vehicles=vehicles,
       corners=R.terrain_projection and R.terrain_projection.corners(R.terrain,s.corner_grid,x,z,w,h) or nil,
       registries=R.terrain_projection and R.terrain_projection.registries(s,tiles) or nil,
-      actors=R.actors and R.actors(x,z,w,h,fraction) or nil})
+      actors=R.actors and R.actors(x,z,w,h,fraction,frame) or nil})
+  end
+  -- Keep an exact, bounded scene cache in the worker. In particular,
+  -- topology alone misses houses, fields, wet corners and signal changes.
+  local scenes,scene_count,scene_clock={},0,0
+  local function equal(a,b)
+    if a==b then return true end
+    if type(a)~="table" or type(b)~="table" then return false end
+    for k,v in pairs(a) do if not equal(v,b[k]) then return false end end
+    for k in pairs(b) do if a[k]==nil then return false end end
+    return true
+  end
+  local function scene(packet,known)
+    local key=table.concat({packet.x,packet.z,packet.width,packet.height},":")
+    local old=scenes[key]
+    scene_clock=scene_clock+1
+    if not old or packet.corners~=old.corners
+      or not equal(packet.tiles,old.tiles) or not equal(packet.registries,old.registries) then
+      if not old then
+        if scene_count==32 then
+          local evict
+          for id,entry in pairs(scenes) do
+            if not evict or entry.access<scenes[evict].access then evict=id end
+          end
+          scenes[evict]=nil
+        else
+          scene_count=scene_count+1
+        end
+      end
+      old={key=scene_clock,tiles=packet.tiles,corners=packet.corners,registries=packet.registries}
+      scenes[key]=old
+    end
+    old.access=scene_clock
+    packet.scene=old.key
+    if known==old.key then
+      packet.tiles,packet.corners,packet.registries=nil,nil,nil
+    end
   end
   function A.snapshots(windows,fraction,players)
     if type(windows)~="table" or #windows<1 or #windows>9 then
       return reply(false,"INVALID_INTEREST_BATCH")
     end
-    local packets={}
+    local packets,frame={},{road={},rail={}}
     for _,w in ipairs(windows) do
       if type(w)~="table" then return reply(false,"INVALID_INTEREST_WINDOW") end
-      local r=A.snapshot(w.x,w.z,w.w,w.h,fraction)
+      local r=A.snapshot(w.x,w.z,w.w,w.h,fraction,frame)
       if not r.ok then return r end
+      scene(r.value,w.scene)
       packets[#packets+1]=r.value
     end
     if #packets~=#windows then return reply(false,"INVALID_INTEREST_BATCH") end

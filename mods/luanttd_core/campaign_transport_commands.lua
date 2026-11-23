@@ -110,6 +110,78 @@ return function(Sim,R)
     if not unit then return false,msg end
     return true,type(msg)=="string" and msg or nil,{id=unit.id or req.mode=="ship" and "ferry",tiles=current.tiles}
   end
+  function T.depot(owner,mode,key)
+    local offers,vehicles,targets={},{},{}
+    local function add(name,cmd)
+      local q=T.quote(owner,cmd)
+      if q then offers[#offers+1]={name=name,price=q.price,request=q.request} end
+    end
+    if mode=="road" and tile(key) then
+      local t=s.tiles[key]
+      if t.build~="road_depot" or t.owner~=owner then return nil,"Choose a road depot you own." end
+      for engine,e in pairs(Sim.vehicles) do
+        if e.mode=="road" and Sim.vehicle_available(s,engine) then
+          local q=Sim.vehicle_offer(s,engine)
+          if q then
+            for _,cargo in ipairs(Sim.cargo_order) do
+              if Sim.allowed(engine,cargo) and (not q.stock_id or cargo=="passenger") then
+                offers[#offers+1]={name=q.name.." · "..Sim.cargo[cargo].name,price=q.cost,
+                  request={kind="road_buy",engine=engine,cargo=cargo,depot=key,cost=q.cost}}
+              end
+            end
+          end
+        end
+      end
+      for _,v in pairs(s.fleet) do if v.owner==owner and (v.home_depot or v.depot)==key then
+        vehicles[#vehicles+1]={id=v.id,label=v.name}
+      end end
+    elseif mode=="rail" and R.rail and R.rail.owned and tile(key) then
+      local t=s.tiles[key]
+      if t.rail_depot_dir==nil or t.owner~=owner then return nil,"Choose a rail depot you own." end
+      for _,row in ipairs(R.rail.owned.catalog(s)) do
+        if row.passenger_model_ready then
+          local id=row.stock_id
+          add(row.name or tostring(id),{mode=mode,operation="buy",depot=key,parts=id==11 and {id} or {id,27}})
+        end
+      end
+      for _,unit in ipairs(R.rail.owned.list(s,owner,key)) do
+        vehicles[#vehicles+1]={id=unit.id,label="Train "..unit.unit_number}
+      end
+    elseif mode=="ship" and R.water and id(key) then
+      local t=s.stock_ship_depots and s.stock_ship_depots[key]
+      if not t or t.owner~=owner then return nil,"Choose a ship depot you own." end
+      for _,engine in ipairs({206,207}) do
+        local model=R.water.roster.model(engine)
+        add(model.name,{mode=mode,operation="buy",depot=key,engine=engine})
+      end
+      local ferry=s.stock_owned_ferry
+      if ferry and ferry.depot==key then vehicles[1]={id="ferry",label="Passenger ferry"} end
+    elseif mode=="air" and R.air and id(key) then
+      local t=s.stock_small_airports and s.stock_small_airports[key]
+      if not t or t.owner~=owner then return nil,"Choose an airfield you own." end
+      for _,engine in ipairs(R.air.roster.catalog()) do
+        add(engine.name,{mode=mode,operation="buy",depot=key,engine=engine.stock_id})
+      end
+      local unit=R.air.owned.status(s,key)
+      if unit then vehicles[1]={id=unit.id,label=unit.name or "Aircraft"} end
+    else return nil,"DEPOT_UNAVAILABLE" end
+    local listing=mode=="rail" and s.stock_rail_stations or mode=="air" and s.stock_small_airports
+      or mode=="ship" and s.stock_ship_stations
+    for key_,r in pairs(listing or {}) do
+      if r.owner==owner and not (r.coal_role or r.oil_role or r.goods_role) then
+        local cell=r.origin or r.land or r.tiles and r.tiles[1]
+        local x,z
+        if cell then x,z=Sim.xy(cell) end
+        targets[#targets+1]={id=key_,label=(mode=="rail" and "Station" or mode=="air" and "Airfield" or "Dock")
+          .." "..key_..(x and (" (%d, %d)"):format(x,z) or "")}
+      end
+    end
+    table.sort(targets,function(a,b) return a.id<b.id end)
+    while #targets>96 do targets[#targets]=nil end
+    table.sort(offers,function(a,b) return a.name<b.name end)
+    table.sort(vehicles,function(a,b) return a.id<b.id end)
+    return {offers=offers,vehicles=vehicles,targets=targets}
+  end
   function T.start(owner,req)
     if not (id(req.first) and id(req.second)) or req.first==req.second then return false,"INVALID_DESTINATIONS" end
     if req.mode=="rail" and R.rail and R.rail.owned and id(req.vehicle) then

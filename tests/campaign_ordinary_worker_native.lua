@@ -29,8 +29,8 @@ local function transfer_ordinary(viewer)
   local function tile(u) return Sim.id(u,z) end
   local depot,origin=tile(x),tile(x+1)
   local clock=S.passenger_house_clock
-  local expected={day=S.day,cash=S.companies[owner].cash,speed=S.speed}
-  local caps={autoplay=true,seconds_per_day=.16}
+  local expected={day=S.day,cash=S.companies[owner].cash,loan=S.companies[owner].loan,speed=S.speed}
+  local caps={autoplay=true,seconds_per_day=.16,durable_actions=true}
   for k,value in pairs(api.capabilities) do if caps[k]==nil then caps[k]=value end end
   assert(caps.air[215] and caps.ferry[206] and #caps.rail.engines>0)
   local filename="ordinary-worker-qa.chk"
@@ -43,10 +43,63 @@ local function transfer_ordinary(viewer)
     return filename
   end
   local paint_started,painted,away,away_tick,reentered,opening_orders,orders_ready
-  local train_id
+  local train_id,painter,demolition_depot
   local function ask(request,done)
     request.player=owner
     assert(authority_test.query(request,done))
+  end
+  local function demolition_graphical(show)
+    local road_end
+    for v=2,60 do
+      if math.abs(v-z)>2 then
+        for u=2,57 do
+          local valid,base=true,nil
+          for x_=u,u+3 do
+            local id=Sim.id(x_,v)
+            local t=S.tiles[id]
+            local mask,h=api.terrain.tile(id)
+            if mask~=0 or base and h~=base or t.terrain=="water" or
+              t.wood or t.house or t.site or t.owner or t.stock_industry then valid=false;break end
+            base=h
+          end
+          if valid then demolition_depot,road_end=Sim.id(u,v),Sim.id(u+3,v);break end
+        end
+      end
+      if demolition_depot then break end
+    end
+    assert(demolition_depot)
+    ask({kind="company"},function(c)
+      ask({kind="command",command={kind="road_build",first=demolition_depot+1,last=road_end,revision=c.revision}},function(road)
+        assert(road.ok,road.why)
+        local req={tool="road_depot",first=demolition_depot}
+        ask({kind="road_quote",request=req},function(offer)
+          assert(offer.ok,offer.why)
+          ask({kind="command",command={kind="road_commit",revision=offer.revision,request=req,quote=offer.value}},function(built)
+            assert(built.ok,built.why)
+            local cp=disk.read()
+            assert(cp.tiles[demolition_depot].build=="road_depot")
+            core.show_formspec=function(player,form,body)
+              assert(player==owner and form=="luanttd_core:demolish_layers")
+              assert(body:find("Remove road depot",1,true))
+              assert(disk.read().tiles[demolition_depot].build=="road_depot","a quote removed the depot")
+              core.show_formspec=show
+              show(player,form,body)
+              core.log("action","NATIVE_PROJECTED_DEMOLITION_READY")
+              local function watch_demolition()
+                if disk.read().tiles[demolition_depot].build=="road_depot" then core.after(.3,watch_demolition);return end
+                assert(S.tiles[demolition_depot].build~="road_depot")
+                core.log("action","PASS NATIVE PROJECTED DEMOLITION: worker confirmation removed the depot")
+                orders_ready=true
+              end
+              core.after(.3,watch_demolition)
+            end
+            ui.select_tool(viewer,"clear")
+            assert(ui.begin_demolition(viewer,demolition_depot))
+            ui.end_demolition(viewer,demolition_depot,false)
+          end)
+        end)
+      end)
+    end)
   end
   local function apply(kind,req,check,done)
     ask({kind=kind.."_quote",request=req},function(offer)
@@ -75,6 +128,7 @@ local function transfer_ordinary(viewer)
     end
     local focus=pos or {x=2*x,z=2*z}
     authority_test.step(.2,(away and not away_tick) and {} or {{x=focus.x,z=focus.z,name=owner}},1)
+    if painter then painter.step() end
     core.after(.08,watch)
   end
   local function bodies()
@@ -85,9 +139,18 @@ local function transfer_ordinary(viewer)
     end
     return count
   end
+  painter=dofile(mod.."/campaign_projection_painter.lua")(render,function(w,ok,why)
+    assert(ok,why)
+    if x+1<w.x or x+1>=w.x+w.width or z<w.z or z>=w.z+w.height or painted then return end
+    local block=core.get_node({x=(x+1)*2,y=level+1,z=z*2})
+    assert(block.name=="luanttd_core:stock_rail_1","wrong projected node: "..block.name)
+    assert(not S.tiles[origin].rail_tracks,"paint mutated the frozen simulation")
+    painted=true
+    core.log("action","PASS NATIVE PROJECTED PAINTER: stock rail mesh rendered at the worker track height")
+  end)
   function qa_hooks.present(projected)
     local cell=projected.terrain(x+1,z)
-    render.use_worker_projection(projected)
+    painter.present(projected)
     render.draw_worker_actors(projected,.2)
     ui.use_worker_projection(projected)
     ui.hud()
@@ -97,14 +160,6 @@ local function transfer_ordinary(viewer)
       assert(ledger.world_day>expected.day and ledger.cash<expected.cash-initial_price and ledger.month>=1)
       core.log("action","PASS NATIVE PROJECTED HUD: worker calendar and exact company ledger reached the player's view")
       assert(cell.rail==1 and cell.surface.rail_tracks==1)
-      render.place_projected(x,z,15,1,function(ok,why)
-        assert(ok,why)
-        local block=core.get_node({x=(x+1)*2,y=cell.level+1,z=z*2})
-        assert(block.name=="luanttd_core:stock_rail_1","wrong projected node: "..block.name)
-        assert(not S.tiles[origin].rail_tracks,"paint mutated the frozen simulation")
-        painted=true
-        core.log("action","PASS NATIVE PROJECTED PAINTER: stock rail mesh rendered at the worker track height")
-      end)
     end
     if painted and not opening_orders and bodies()>=2 and (not viewer or movement) then
       opening_orders=true
@@ -120,8 +175,22 @@ local function transfer_ordinary(viewer)
             orders_ready=true
           elseif body:find("Train orders updated.",1,true) then
             core.show_formspec=show
-            core.after(.45,function() orders_ready=true end)
             core.log("action","PASS NATIVE PROJECTED TRAIN EDIT: graphical order reorder applied by worker")
+            core.after(.55,function()
+              core.show_formspec=function(player,form,body)
+                assert(player==owner and form=="luanttd_core:worker_finance")
+                show(player,form,body)
+                if body:find("Borrow $10,000",1,true) then
+                  core.log("action","NATIVE_PROJECTED_FINANCE_READY "..(body:match("label%[%.45,0%.94;([^%]]*)") or "") )
+                end
+                if body:find("Borrowed ",1,true) then
+                  core.show_formspec=show
+                  core.log("action","PASS NATIVE PROJECTED FINANCE: real graphical loan reached only the worker ledger")
+                  core.after(.55,function() demolition_graphical(show) end)
+                end
+              end
+              assert(ui.open_finance(viewer))
+            end)
           end
           core.log("action","PASS NATIVE PROJECTED TRAIN FORM: selected worker-owned train opens original destination and cargo controls")
         end
@@ -134,7 +203,7 @@ local function transfer_ordinary(viewer)
         authority_test.step(0,{},1)
         assert(bodies()==0,"unsubscribed train was still visible")
         ask({kind="clock"},function(q)
-          core.after(.35,function()
+          core.after(viewer and .35 or 7.3,function()
             ask({kind="clock"},function(later)
               assert(later.tick>q.tick,"worker did not advance without a view")
               away_tick=later.tick
@@ -167,10 +236,13 @@ local function transfer_ordinary(viewer)
     core.after(.65,function()
       ask({kind="company"},function(first)
         assert(first.ok and first.day>expected.day and first.tick==first.day*74 and first.value.cash==expected.cash)
-        api.worker_build=dofile(mod.."/campaign_build_proxy.lua")(authority_test)
+        ui.install_worker_finance(authority_test)
         local builder=viewer or {get_player_name=function() return owner end}
         api.on_worker_build=function(name,tiles,quote)
           assert(name==owner and #tiles==14 and quote.cost==initial_price)
+          local committed=disk.read()
+          assert(committed.tiles[origin].rail_tracks==1 and committed.companies[owner].cash==expected.cash-initial_price)
+          core.log("action","PASS NATIVE WORKER DURABILITY: track and debit are durable before the native success receipt")
           api.on_worker_build=nil
           core.log("action","PASS NATIVE PROJECTED HOTBAR BUILD: stock Autorail release committed on the worker")
           run_plans(1,{
@@ -200,7 +272,8 @@ local function transfer_ordinary(viewer)
     local state=disk.read()
     assert(state.day==day and state.passenger_house_clock.counter==day*74 and state.stock_generated_profile.width==64)
     assert(state.tiles[origin].rail_tracks==1 and not S.tiles[origin].rail_tracks)
-    if viewer then assert(state.stock_rail_dispatch.runs[1].orders[1].station==1) end
+    if viewer then assert(state.stock_rail_dispatch.runs[1].orders[1].station==1 and state.companies[owner].loan==expected.loan+10000
+      and S.companies[owner].loan==expected.loan and not state.tiles[demolition_depot].build) end
     assert(state.companies[owner].cash<expected.cash-initial_price and S.companies[owner].cash==expected.cash)
     core.log("action","PASS NATIVE ORDINARY WORKER BUILD: stock track quote and debit committed only on worker")
     core.log("action",("PASS NATIVE ORDINARY HANDOFF: regular 64-square world advanced from day %d to %d on the worker, host day stayed %d")

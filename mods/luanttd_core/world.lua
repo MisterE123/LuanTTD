@@ -364,6 +364,10 @@ return function(api,ui)
       state.sprinting=boosted
     end
   end
+  local function display_tile(id)
+    if api.render.host_tile then return api.render.host_tile(id) end
+    return id and S.tiles[id]
+  end
   local function vertical_flight(p,state,dt,keys)
     -- The client owns direction, view and horizontal flight. Never send an
     -- absolute player move during continuous flight: in 5.10 that packet
@@ -381,7 +385,8 @@ return function(api,ui)
     state.lift_boost=boosted
     local pos=p:get_pos()
     local tile=Sim.id(math.floor((pos.x+.5)/2),math.floor((pos.z+.5)/2))
-    local ground=tile and S.tiles[tile].h or 0
+    local there=display_tile(tile)
+    local ground=there and there.h or 0
     if api.terrain and tile and api.render.uses_slope(tile) then
       ground=api.render.surface(tile,pos.x,pos.z)-.5
     end
@@ -403,7 +408,9 @@ return function(api,ui)
     -- Tile edges align at half nodes. Test each rendered surface elevation
     -- and take the closest actual intersection, including hill/terminal tops.
     local best,tbest
-    if api.terrain then
+    if api.render.pick_terrain then
+      best,tbest=api.render.pick_terrain({x=x0,y=y0,z=z0},ray,90)
+    elseif api.terrain then
       best,tbest=api.terrain.pick({x=x0,y=y0,z=z0},ray,api.render.uses_slope,90,api.render.surface)
     end
     local ceiling=api.generated_world and api.render.max_target_level and api.render.max_target_level() or 5
@@ -411,7 +418,7 @@ return function(api,ui)
       local t=(level+.5-y0)/ray.y
       if t>=0 and t<=90 and (not tbest or t<tbest) then
         local tile=Sim.id(math.floor((x0+t*ray.x+.5)/2),math.floor((z0+t*ray.z+.5)/2))
-        local a=tile and S.tiles[tile]
+        local a=display_tile(tile)
         if a and not a.stock_void and not api.render.uses_slope(tile) then
           local top=(a.site or a.house or a.station or a.build=="canal" or a.wood) and 1 or a.h
           if a.signal then top=top+1 end

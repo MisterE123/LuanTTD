@@ -51,3 +51,15 @@ clock[session.."reply"]={seq=2,ok=true}
 pump()
 assert(got and got.seq==2)
 print("PASS deliberate forms wait behind one in-flight viewport then outrank the next paint")
+local parked=dofile(mod.."/campaign_authority_host.lua")(core,mod,{
+  freeze_host=function()end,seal_checkpoint=function()return "owned.chk" end,
+  ready=function()end,present=function()end,stopped=function()end,
+})
+callbacks={}
+assert(parked.start({},64,64))
+clock[session.."reply"]={seq=0,ready=true}
+pump()
+parked.step(1.2,{},{})
+parked.step(1.0,{},{})
+assert(clock[session.."request"].kind=="clock","empty world must renew the lease without sending terrain")
+print("PASS host keeps its simulation lease with no viewers and no terrain traffic")

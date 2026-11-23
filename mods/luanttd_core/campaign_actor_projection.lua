@@ -1,7 +1,23 @@
 -- Produce compact, engine-free actor pose samples for one visible region.
 -- No route, vehicle controller, ObjectRef or mutable state leaves the owner.
-return function(Sim,R,x,z,w,h,fraction)
+return function(Sim,R,x,z,w,h,fraction,frame)
   local s=R.world
+  frame=frame or {road={},rail={}}
+  local function road(v)
+    local p=frame.road[v]
+    if not p then
+      local pos,yaw,pitch
+      if R.road_pose then pos,yaw,pitch=R.road_pose(v,fraction) end
+      p={at=Sim.position(s,v),pos=pos,yaw=yaw,pitch=pitch}
+      frame.road[v]=p
+    end
+    return p.at,p.pos,p.yaw,p.pitch
+  end
+  local function train(r)
+    local parts=frame.rail[r]
+    if not parts then parts=R.rail.poses(r,fraction);frame.rail[r]=parts end
+    return parts
+  end
   local out={}
   local function inside(a,b) return a>=x and a<x+w and b>=z and b<z+h end
   local function tile(id)
@@ -18,9 +34,7 @@ return function(Sim,R,x,z,w,h,fraction)
     out[#out+1]=data
   end
   for id,v in pairs(s.fleet) do
-    local at=Sim.position(s,v)
-    local pos,yaw,pitch
-    if R.road_pose then pos,yaw,pitch=R.road_pose(v,fraction) end
+    local at,pos,yaw,pitch=road(v)
     if point(pos) or not pos and tile(at) then
       local f=Sim.road_motion_frame(s,v)
       local pose=f and {f[1],f[2],f[3],f[4],f[5]} or nil
@@ -33,7 +47,7 @@ return function(Sim,R,x,z,w,h,fraction)
     local dispatch=R.rail.run.current(s)
     for _,r in ipairs(dispatch and dispatch.runs or {}) do
       local parts={}
-      for _,body in ipairs(R.rail.poses(r,fraction)) do
+      for _,body in ipairs(train(r)) do
         if point(body.pos) then parts[#parts+1]=body end
       end
       if #parts>0 then

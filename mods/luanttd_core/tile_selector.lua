@@ -53,11 +53,12 @@ return function(api)
   })
 
   local function pose(id)
-    local tile=S.tiles[id]
+    local tile
+    local render=api.render
+    if render and render.host_tile then tile=render.host_tile(id) else tile=S.tiles[id] end
     if not tile then return nil end
     local x,z=Sim.xy(id)
     local h,mask=(tile.h or 0)+.5,0
-    local render=api.render
     if render and render.surface and (not render.uses_slope or render.uses_slope(id)) then
       local xl,xh,zl,zh=2*x-.5,2*x+1.5,2*z-.5,2*z+1.5
       local n,w,e,s=render.surface(id,xl,zl),render.surface(id,xh,zl),

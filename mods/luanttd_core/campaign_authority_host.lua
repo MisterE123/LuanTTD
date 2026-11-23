@@ -8,6 +8,7 @@ return function(engine,mod,callbacks)
   local H={}
   local state="local"
   local view,interest
+  local idle=0
   function H.status() return state end
   function H.start(caps,width,depth)
     if state~="local" then return nil,"HANDOFF_ALREADY_STARTED" end
@@ -41,7 +42,12 @@ return function(engine,mod,callbacks)
   function H.step(dt,positions,fraction)
     if state~="owned" then return false end
     interest.update(positions)
-    return interest.step(dt,fraction)
+    if #positions>0 then idle=0;return interest.step(dt,fraction) end
+    -- An empty viewport never releases the simulation lease. Keep the
+    -- owner alive without asking it to produce unseen terrain or actors.
+    idle=idle+dt
+    if idle>=2 and client.query({kind="clock"},function() end) then idle=0 end
+    return false
   end
   function H.query(request,done)
     if state~="owned" then return nil,"CAMPAIGN_NOT_READY" end

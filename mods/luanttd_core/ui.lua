@@ -26,6 +26,13 @@ end
 local function date() return formatted_date(Sim.date(S)) end
 local company_projection
 function U.use_worker_projection(view) company_projection=view end
+function U.install_worker_finance(client)
+  local mod=core.get_modpath("luanttd_core")
+  api.worker_layer_client=client
+  api.worker_finance=dofile(mod.."/campaign_worker_finance_ui.lua")(core,client,formatted_date,dollars)
+  api.worker_build=api.worker_build or dofile(mod.."/campaign_build_proxy.lua")(client)
+  api.worker_depot=dofile(mod.."/campaign_worker_depot_ui.lua")(core,client,api.worker_build,dollars)
+end
 local mode_label={rail="RAIL",road="ROAD",water="WATER",air="AIR"}
 local orders={"normal","full","transfer","unload"}
 local order_labels={"Load / deliver","Full load","Transfer only","Unload only"}
@@ -398,6 +405,8 @@ local function pick(fields,id,a,prior)
   return prior
 end
 function U.fields(p,formname,f)
+  if api.worker_finance and formname==api.worker_finance.form then return api.worker_finance.fields(p,f) end
+  if api.worker_depot and formname==api.worker_depot.form then return api.worker_depot.fields(p,f) end
   if api.world and api.world.avatar_state and api.world.avatar_state(p) then return false end
   if formname=="luanttd_core:station_layout" then return U.station_layout_fields(p,f) end
   if formname=="luanttd_core:rail_depot_direction" then return U.depot_direction_fields(p,f) end
@@ -556,6 +565,10 @@ function U.select_tool(p,tool)
   end
 end
 function U.open_finance(p)
+  if api.authority_handoff then
+    if api.worker_finance then return api.worker_finance.show(p) end
+    return false
+  end
   view(p:get_player_name()).tab="ledger";U.open(p)
 end
 function U.open_workbenches(p)
@@ -1369,45 +1382,8 @@ end
 -- Use the same ownership/occupancy-aware demolition authority regardless of
 -- the active construction toolbar. Do not clear a span or descriptor by
 -- erasing one tile record; the specialised command owns the entire structure.
-local function clear_structure(n,id,preview)
-  local t=S.tiles[id]
-  local function span_ids(s)
-    local ids={s.start}
-    for _,i in ipairs(s.middle) do ids[#ids+1]=i end
-    ids[#ids+1]=s["end"]
-    return ids
-  end
-  if t.road_bridge_id and api.structure_tools then
-    local ok,msg,changed,level=Sim.remove_wood_bridge(S,n,id,preview)
-    if preview then
-      return true,ok and span_ids(changed) or nil,ok and "Dismantle this entire road bridge." or msg
-    end
-    return true,ok and changed or nil,msg,level
-  elseif t.road_tunnel_id and api.structure_tools then
-    if preview then
-      local span=S.stock_road_tunnels and S.stock_road_tunnels[t.road_tunnel_id]
-      if not span or span.owner~=n then return true,nil,"Select your own road tunnel." end
-      return true,{span.start,span["end"]},"Request demolition of both road tunnel portals."
-    end
-    local ok,msg,changed=Sim.remove_road_tunnel(S,n,id)
-    return true,ok and changed or nil,msg
-  elseif t.rail_span_id and api.rail_spans then
-    if preview then
-      local span=api.rail_spans.by_portal(S,id)
-      if not span or span.owner~=n then return true,nil,"Select your own rail bridge or tunnel." end
-      return true,span_ids(span),"Request demolition of the entire rail "..span.kind.."."
-    end
-    local ok,msg,changed,level=api.rail_spans.clear(S,n,id)
-    return true,ok and changed or nil,msg,level
-  elseif t.airfield and api.airfield then
-    local changed,price,level=airfields(S,n,"airfield_remove",id,preview)
-    return true,changed,changed and ("Dismantle airfield  |  "..dollars(price)) or api.airfield.reason(price),level
-  elseif t.ship and api.shipyard then
-    if t.ship.kind~="buoy" and api.shipyard.busy() then return true,nil,"An active vessel protects these harbor facilities." end
-    local changed,price=aquatic_remove(n,id,preview)
-    return true,changed,changed and ("Dismantle water structure  |  "..dollars(price)) or api.shipyard.reason(price)
-  end
-end
+local clear_structure=dofile(core.get_modpath("luanttd_core").."/demolition_structures.lua")(api,aquatic_remove,dollars)
+
 U.signal_ui=api.road_first and dofile(core.get_modpath("luanttd_core").."/rail_signal_ui.lua")(api,U.status)
 function U.signal_arrow(p,id,hit)
   if not U.signal_ui or not api.rail_build or not id then return end
@@ -1447,6 +1423,18 @@ function U.end_demolition(p,id,diagonal)
   local start=V.demolition_anchor
   V.demolition_anchor=nil
   if not start or V.tool~="clear" then return end
+  if api.authority_handoff and start~=id then
+    worker_build(n,V,"terrain",{operation="bulldoze",first=start,last=id,diagonal=diagonal==true})
+    return
+  end
+  if api.authority_handoff then
+    if U.layer_bulldozer then
+      U.layer_bulldozer.open(p,id,function()
+        worker_build(n,V,"terrain",{operation="bulldoze",first=id})
+      end)
+    end
+    return
+  end
   if start==id then
     if U.layer_bulldozer and U.layer_bulldozer.open(p,id) then return end
   end
@@ -1507,9 +1495,8 @@ function U.end_autoroad(p,id,hit)
   V.road_press=nil
   local bend=autoroad_bend(p,V,first,id)
   if api.authority_handoff then
-    if V.tool=="oneway_drag" then V.status="One-way placement is not connected to the worker.";return end
     worker_build(n,V,"road",bend and {tool="bend",first=first,last=id} or
-      {tool="drag",first=first,last=last,axis=axis,start_half=start_half,end_half=end_half})
+      {tool=V.tool=="oneway_drag" and "oneway" or "drag",first=first,last=last,axis=axis,start_half=start_half,end_half=end_half})
     return
   end
   if bend then
@@ -1914,6 +1901,43 @@ end
 function U.build_world(p,id,hit)
   local n=p:get_player_name();local V=view(n)
   V.chosen=id
+  if api.authority_handoff then
+    if V.tool=="inspect" then U.inspect(p,id);return end
+    if V.tool=="rail_signal_remove" or V.tool=="rail_span_clear" or V.tool=="ship_remove" then
+      if U.layer_bulldozer then U.layer_bulldozer.open(p,id) end
+      return
+    end
+    if U.rail_gesture(V.tool) or U.road_gesture(V.tool) then return end
+    local land=landscape_tools[V.tool]
+    if land then
+      if land.area and not V.anchor then V.anchor=id;V.status="Choose the opposite terrain corner.";return end
+      local first,last=V.anchor or id,land.area and id or nil
+      V.anchor=nil
+      worker_build(n,V,"terrain",{operation=land.mode,first=first,last=last,
+        diagonal=land.area and p:get_player_control().aux1 or false})
+      return
+    end
+    if V.tool=="road_station" or V.tool=="road_depot" or V.tool=="road_bay_pair" then
+      worker_build(n,V,"road",{tool=V.tool,first=id});return
+    end
+    if V.tool=="rail_depot_tool" then
+      worker_build(n,V,"rail",{tool="depot",first=id,direction=V.rail_dir or 2});return
+    end
+    local dock=ship_mode[V.tool]
+    if dock=="dock" or dock=="depot" or V.tool=="ship_buoy" then
+      worker_build(n,V,"transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=V.ship_axis or 0})
+      return
+    end
+    if V.tool=="airfield_build" then
+      worker_build(n,V,"transport",{mode="air",operation="build",tile=id});return
+    end
+    if V.tool=="structure_tunnel" or V.tool=="rail_span_tunnel" then
+      worker_build(n,V,"transport",{mode=V.tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id})
+      return
+    end
+    V.status="That tool is not connected to the campaign worker yet."
+    return
+  end
   if V.pick_order then U.choose_order_stop(p,id);return end
   if V.tool=="inspect" then U.inspect(p,id);return end
   if V.tool=="clear" and U.layer_bulldozer and U.layer_bulldozer.open(p,id) then return end
@@ -2214,6 +2238,21 @@ end
 function U.context(p,tile,hit)
   local n=p:get_player_name();local V=view(n)
   if V.pick_order then U.finish_order_pick(p);return end
+  if api.authority_handoff and company_projection and api.worker_depot and tile then
+    local x,z=Sim.xy(tile)
+    local row=company_projection.terrain(x,z)
+    local t=row and row.surface
+    if t then
+      local mode,key
+      if t.rail_depot_dir~=nil then mode,key="rail",tile
+      elseif t.build=="road_depot" then mode,key="road",tile
+      elseif t.ship and t.ship.kind=="ship_depot" then mode,key="ship",t.ship.depot
+      elseif t.airfield then mode,key="air",t.airfield.airport end
+      if mode then
+        return api.worker_depot.open(p,mode,key,nil,function(kind,id) api.vehicle_ui.open(p,kind,id) end)
+      end
+    end
+  end
   V.context_tile=tile
   if api.road_first then
     local t=tile and S.tiles[tile]

@@ -44,3 +44,14 @@ assert(data.id==12 and nw==4 and select(2,P.terrain(7,9))==5)
 P.unsubscribe("corners")
 assert(not P.terrain(6,8))
 print("PASS bounded terrain cache reads the inclusive shared corners and forgets them on leaving")
+P.unsubscribe("left")
+local token=P.subscribe("delta")
+local batch={{key="delta",token=token}}
+local full={scene=31,x=8,z=8,width=1,height=1,tiles={{id=42}},corners=string.char(3,3,3,3),actors={bus}}
+assert(P.accept_batch(batch,{ok=true,seq=20,tick=740,value={full}}))
+local delta={scene=31,x=8,z=8,width=1,height=1,actors={}}
+assert(P.accept_batch(batch,{ok=true,seq=21,tick=814,value={delta}}))
+assert(P.scene("delta")==31 and not next(P.actors()) and P.terrain(8,8).id==42)
+P.unsubscribe("delta");batch[1].token=P.subscribe("delta")
+assert(not P.accept_batch(batch,{ok=true,seq=22,tick=888,value={delta}}) and not P.terrain(8,8))
+print("PASS actor-only deltas require an existing matching scene but never revive stale actors")

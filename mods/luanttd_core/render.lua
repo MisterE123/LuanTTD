@@ -477,6 +477,12 @@ return function(api)
     if layout=="corner" then x=x+.65 end
     return {x=x,y=y,z=z+.61-.185,side={x=0,z=-1},along={x=1,z=0},width=.22,length=layout=="corner" and .646 or 1.70}
   end
+  function R.host_tile(id)
+    return id and S.tiles[id]
+  end
+  function R.pick_terrain(pos,ray,limit)
+    if terrain then return terrain.pick(pos,ray,R.uses_slope,limit,R.surface) end
+  end
   function R.uses_slope(id)
     if not terrain then return false end
     local t=S.tiles[id]

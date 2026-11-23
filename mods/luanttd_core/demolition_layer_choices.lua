@@ -1,0 +1,100 @@
+-- Shared ownership/occupancy-aware layer options for native and worker UI.
+return function(api,clear_structure)
+  local S,Sim=api.s,api.Sim
+  local function money(n) return (n<0 and "-$" or "$")..math.abs(n) end
+  local function choices(n,id)
+    local t=S.tiles[id]
+    local opts,seen={},{}
+    if not t then return opts end
+    local function add(key,title,ok,detail,apply)
+      if seen[key] then return end
+      seen[key]=true
+      opts[#opts+1]={key=key,title=title,ok=not not ok,detail=detail or "",apply=apply}
+    end
+    local function structure(key,title,at)
+      if not at then return end
+      local handled,tiles,note=clear_structure(n,at,true)
+      if handled then add(key,title,tiles,note,function() return clear_structure(n,at,false) end) end
+    end
+    local function span(index,records,title,key)
+      local q=index and records and records[index[id]]
+      if q then structure(key,title,q.start) end
+    end
+    span(S.bridge_above,S.stock_road_bridges,"Remove overhead road bridge, keep surface","road_bridge")
+    span(S.rail_bridge_above,S.stock_rail_spans,"Remove overhead rail bridge, keep surface","rail_bridge")
+    span(S.aqueduct_above,S.stock_aqueducts,"Remove overhead aqueduct, keep surface","aqueduct")
+    span(S.tunnel_below,S.stock_road_tunnels,"Remove road tunnel below, keep surface","road_tunnel")
+    span(S.rail_tunnel_below,S.stock_rail_spans,"Remove rail tunnel below, keep surface","rail_tunnel")
+    if t.tram then add("tramway","Tramway or tram facility",false,"This version does not support removing the tram layer separately.") end
+    if t.level_crossing then
+      add("crossing","Level crossing",false,"Separate road and rail removal is not available on a level crossing.")
+    end
+    if t.rail_station_id or t.rail_depot_dir~=nil then
+      local title=t.rail_station_id and "Remove entire station platform, keep rails" or "Remove railway depot, keep rails"
+      local free=t.owner==n and api.rail_build and not api.rail_build.busy() and api.trackworks
+        and (not api.trackworks.span_protected or not api.trackworks.span_protected(S,id))
+      local occupied=t.rail_depot_dir~=nil and api.trackworks and api.trackworks.owned_depot_occupied
+        and api.trackworks.owned_depot_occupied(S,id)
+      add("rail_facility",title,free and not occupied,occupied and "The depot contains a purchased train."
+        or not free and "Only clear, owned facilities can be changed while no train is using this railway."
+        or "Underlying track stays in place. You can bulldoze it separately afterward.",function()
+        local ok,note,tiles=api.trackworks.remove_facility(S,n,id)
+        return true,ok and tiles or nil,note
+      end)
+    end
+    local d=S.stock_rail_dispatch
+    local function rail_action(key,title,plan,why)
+      add(key,title,plan,plan and ("Cost: "..money(plan.price)) or why,function()
+        local ok,note=api.rail_build.build(n,plan)
+        return true,ok and {} or nil,note
+      end)
+    end
+    if api.rail_build and t.rail_waypoint_id then
+      rail_action("waypoint","Remove waypoint, keep rails",api.rail_build.quote_waypoint(n,id,true))
+    end
+    if api.rail_build and d and d.signals and d.signals.records[id] then
+      if api.rail_build.signal_details then
+        local track_name={[2]="upper curve",[3]="lower curve",[4]="left curve",[5]="right curve"}
+        for track=0,5 do
+          if api.rail_build.signal_details(id,track) then
+            local title=track_name[track] and ("Remove signal on "..track_name[track]..", keep rails") or "Remove signal, keep rails"
+            rail_action("signal_"..track,title,api.rail_build.quote_remove_signal(n,id,track))
+          end
+        end
+      else rail_action("signal","Remove signal, keep rails",api.rail_build.quote_remove_signal(n,id)) end
+    end
+    if t.build=="road_station" and t.stop_axis and not t.road_stop_pair and Sim.remove_through_road_stop then
+      local can,cost=Sim.remove_through_road_stop(S,n,id,true)
+      add("through_stop","Remove stop, keep road",can,can and ("Cost: "..money(cost)) or cost,function()
+        local ok,note,tiles=Sim.remove_through_road_stop(S,n,id)
+        return true,ok and tiles or nil,note
+      end)
+    end
+    if t.station or t.build=="road_depot" then
+      if not t.road_town then
+        local plan,cost=Sim.plan(S,n,"clear",{id},true)
+        local balance=S.companies[n] and S.companies[n].cash or 100000
+        local title=t.build=="road_depot" and "Remove road depot" or "Remove stop and its road"
+        add("ground_facility",title,plan and balance>=cost,plan and ("Cost: "..money(cost)) or cost,function()
+          local ok,note,tiles=Sim.build(S,n,"clear",{id})
+          return true,ok and tiles or nil,note
+        end)
+      end
+    end
+    if t.road_bridge_id then structure("road_bridge","Remove the full road bridge",id)
+    elseif t.road_tunnel_id then structure("road_tunnel","Remove both road tunnel portals",id)
+    elseif t.rail_span_id then structure("rail_span","Remove the full rail bridge or tunnel",id)
+    elseif t.airfield then structure("airfield","Remove the entire airfield",id)
+    elseif t.ship then structure("harbor","Remove the full harbor structure",id) end
+    if t.rail_type==1 and not t.rail_station_id and not t.rail_depot_dir and not t.rail_span_id and
+        not t.level_crossing and api.electric_quote and api.electric_commit then
+      local q,why=api.electric_quote(n,{id},0)
+      add("wire","Remove electrification, keep rails",q,q and ("Cost: "..money(q.cost)) or why,function()
+        local ok,note=api.electric_commit(n,q)
+        return true,ok and {} or nil,note
+      end)
+    end
+    return opts
+  end
+  return choices
+end

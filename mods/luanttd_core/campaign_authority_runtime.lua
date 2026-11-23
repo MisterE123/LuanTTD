@@ -25,13 +25,13 @@ return function(Sim,mod,s,cap)
   end
   local network=B.networks(s,Slope,tile)
   local N={world=s,network=network,farm=farm,oil=oil,terrain=Terrain}
-  N.road_construction=dofile(mod.."/campaign_road_construction.lua")(Sim,s)
+  N.road_construction=dofile(mod.."/campaign_road_construction.lua")(Sim,s,network.oneway)
   N.terrain_projection=dofile(mod.."/campaign_terrain_projection.lua")
   N.landscape=dofile(mod.."/campaign_landscape_commands.lua")(Sim,s)
   local source=mod.."/openttd/"
   if s.ship_paid_service then
-    local _,_,net,roster,run,depot,freight,coal=B.water(s,network.track,function(id) return cap.ferry[id]==true end)
-    N.water={network=net,roster=roster,run=run,depot=depot,freight=freight,coal=coal}
+    local _,follow,net,roster,run,depot,freight,coal=B.water(s,network.track,function(id) return cap.ferry[id]==true end)
+    N.water={network=net,follow=follow,roster=roster,run=run,depot=depot,freight=freight,coal=coal}
   end
   if s.air_paid_service then
     local net,run,owned,roster=B.air(s,Slope,function(id) return cap.air[id]==true end)
@@ -142,7 +142,7 @@ return function(Sim,mod,s,cap)
     if f then return positions.sample(s,{f},1,1,surface) end
   end
   local project=dofile(mod.."/campaign_actor_projection.lua")
-  function N.actors(x,z,w,h,fraction) return project(Sim,N,x,z,w,h,fraction) end
+  function N.actors(x,z,w,h,fraction,frame) return project(Sim,N,x,z,w,h,fraction,frame) end
   if s.stock_generated_profile and s.stock_generated_profile.river_stats then
     local rivers=dofile(mod.."/river_presentation.lua")(Sim)
     local cached,revision,topology
@@ -159,6 +159,7 @@ return function(Sim,mod,s,cap)
   local water_air=dofile(mod.."/water_air_orders.lua")(s,Sim,dofile(source.."rail_order_list.lua"),
     N.water and N.water.run,N.water and N.water.freight,N.water and N.water.coal,N.air and N.air.run)
   N.orders.ship,N.orders.air=water_air.ship,water_air.air
+  N.demolition=dofile(mod.."/campaign_demolition_runtime.lua")(Sim,mod,N,Slope)
   N.transport=dofile(mod.."/campaign_transport_commands.lua")(Sim,N)
   function N.day() Sim.daily(s);if Clock then Clock() end end
   return N

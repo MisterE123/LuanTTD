@@ -121,3 +121,55 @@ local support_id=support.bridge_above[Sim.id(8,24)]
 assert(support.stock_road_bridges[support_id].axis==0 and #support.stock_road_bridges[support_id].middle==3)
 assert(not support.stations and not support.fleet and not support.companies)
 print("PASS bridge support sectors include the linked span without exposing unrelated simulation registries")
+local interest={x=3,z=6,w=17,h=5}
+local a=assert(A.snapshots({interest},.5).value)[1]
+interest.scene=a.scene
+assert(a.tiles and a.corners)
+local b=assert(A.snapshots({interest},.6).value)[1]
+assert(b.scene==a.scene and not b.tiles and not b.corners and b.actors)
+-- A tile can change through the landscape loop without a user command.
+local topology=s.topology
+s.tiles[Sim.id(3,6)].variant=19
+local c=assert(A.snapshots({interest},.7).value)[1]
+assert(topology==s.topology and c.scene~=a.scene and c.tiles[1].surface.variant==19)
+print("PASS clean scene sends actor-only deltas; non-command scene edits invalidate the exact bounded cache")
+s.road_economy,s.road_stock_clock=true,true
+local sign={tool="oneway",first=Sim.id(8,19),last=Sim.id(13,19),axis=0,start_half=false,end_half=true}
+local company=assert(A.company(john).value)
+local offer=A.road_quote(john,sign)
+assert(offer.ok,offer.why)
+assert(not s.tiles[Sim.id(9,19)].road_disallowed)
+local r=A.command(john,{kind="road_commit",revision=offer.revision,request=sign,quote=offer.value})
+assert(r.ok,r.why)
+assert(s.tiles[Sim.id(9,19)].road_disallowed==1)
+assert(s.companies[john].cash==company.cash-offer.value.cost)
+assert(not A.command(john,{kind="road_commit",revision=r.revision,request=sign,quote=offer.value}).ok)
+print("PASS one-way road gestures keep stock directional restrictions, price, and stale-quote safety on the worker")
+local pose=runtime.road_pose
+local counted={}
+runtime.road_pose=function(v,f)
+  counted[v]=(counted[v] or 0)+1
+  return pose(v,f)
+end
+assert(A.snapshots({{x=3,z=6,w=24,h=12},{x=35,z=22,w=4,h=3}},.4).ok)
+for _,v in pairs(s.fleet) do assert(counted[v]==1) end
+print("PASS one authoritative road pose per vehicle per multi-sector observation")
+local support_tile=Sim.id(8,24)
+local support_ground=s.tiles[support_tile].terrain
+local owned=A.demolition(john,support_tile)
+assert(owned.ok and owned.value.options[1].key=="road_bridge" and owned.value.options[1].ok)
+local unauthorized=A.demolition("Another",support_tile)
+assert(unauthorized.ok and not unauthorized.value.options[1].ok)
+local function dismantle(q)
+  return {kind="demolition",revision=q.revision,token=q.value.token,layer="road_bridge"}
+end
+assert(not A.command("Another",dismantle(owned)).ok)
+assert(s.bridge_above[support_tile])
+s.corner_grid.revision=s.corner_grid.revision+1
+assert(not A.command(john,dismantle(owned)).ok and s.bridge_above[support_tile])
+local refreshed=A.demolition(john,support_tile)
+local removed=A.command(john,dismantle(refreshed))
+assert(removed.ok and #removed.value>=5,removed.why)
+assert(not s.bridge_above[support_tile] and s.tiles[support_tile].terrain==support_ground)
+assert(not A.command(john,{kind="demolition",revision=removed.revision,token=refreshed.value.token,layer="road_bridge"}).ok)
+print("PASS layer confirmation is owner-bound, stale selections fail, and bridge removal preserves ground")

@@ -24,17 +24,35 @@ return function()
     r.result=result
     return true
   end
+  function P.scene(key)
+    local region=regions[key]
+    return region and region.result and region.result.value.scene
+  end
   function P.accept_batch(subscriptions,reply)
     if not reply or not reply.ok or type(reply.seq)~="number" or not reply.value or #subscriptions~=#reply.value then return false end
-    for _,request in ipairs(subscriptions) do
+    for i,request in ipairs(subscriptions) do
       local r=regions[request.key]
       if not r or r.token~=request.token or r.result and r.result.seq>=reply.seq then return false end
+      local w=reply.value[i]
+      if w.scene and not w.tiles then
+        local old=r.result and r.result.value
+        if not old or old.scene~=w.scene or old.x~=w.x or old.z~=w.z
+          or old.width~=w.width or old.height~=w.height then return false end
+      end
     end
     if reply.companies and reply.seq>company_seq then
       companies,company_seq=reply.companies,reply.seq
     end
     for i,request in ipairs(subscriptions) do
-      P.accept(request.key,request.token,{ok=true,seq=reply.seq,tick=reply.tick,revision=reply.revision,value=reply.value[i]})
+      local w=reply.value[i]
+      if w.scene and not w.tiles then
+        local materialized={}
+        for k,v in pairs(w) do materialized[k]=v end
+        local old=regions[request.key].result.value
+        materialized.tiles,materialized.corners,materialized.registries=old.tiles,old.corners,old.registries
+        w=materialized
+      end
+      P.accept(request.key,request.token,{ok=true,seq=reply.seq,tick=reply.tick,revision=reply.revision,value=w})
     end
     return true
   end

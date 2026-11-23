@@ -94,7 +94,37 @@ to the owner and gets the priced construction receipt. A Linux graphical
 test exercises real client movement and clicks the existing train order
 panel; the new order list reopens from the worker checkpoint. Deliberate
 inputs are queued behind at most one in-flight viewport operation and
-outrank the next render request.
+outrank the next render request. The authority host also renews its lease
+with only a clock receipt when there are no observers. Its native test
+waits longer than the old idle timeout and confirms service can still
+resume in view. Verified confirmed construction can save before replying
+and durable autosaves occur on the worker.
+
+The worker-facing control desk can fetch live company finance and issue
+loan or authorized speed changes. The native Linux graphical replay changes
+the train's orders and takes out a loan; the loan increases by the exact
+amount on the durable worker ledger while the host balance and loan remain
+unchanged. Nearby depots can request actual stock purchase offers and issue
+basic service orders through the same worker.
+
+Sector updates now separate static terrain from actor, clock, and company
+refresh. The worker compares bounded scene contents, not only topology:
+landscape or town changes can invalidate a scene without a player action.
+The host retains a static scene only while it remains subscribed. The
+native engine paints one hydrated or changed sector at a time and does not
+repaint an unchanged sector on an actor tick. One-way road drag now uses
+the ordinary directional road quote and commit on the worker, including
+its occupancy and ownership checks. Single-tile demolition shares the
+same layer choices as the existing Bulldozer. The owner offers a
+company-specific confirmation ticket and rechecks the terrain, options,
+ownership and occupancy before taking anything away. Removing an overhead
+bridge leaves the surface intact; the graphical replay uses the native
+confirmation modal to remove a depot, with no effect before confirmation.
+Road and train poses are computed once per batch and sampled from the
+owning worker's actual clock fraction.
+The next integration step is the full dispatcher, all physical build
+and depot interactions (especially freight dispatch), and making
+this ownership lifecycle standard with no desktop-specific controls.
 
 The regular application's ownership switch remains unshipped: remaining
 tools, the rest of the company UI and normal session lifecycle still need

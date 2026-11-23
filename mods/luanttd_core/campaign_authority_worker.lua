@@ -36,12 +36,17 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   local seq=0
   core.ipc_set(outbox,{seq=seq,ready=true,day=s.day,revision=s.authority_revision or 0})
   local prior=core.get_us_time()
-  local heartbeat=prior
+  local heartbeat,last_saved=prior,prior
+  local function checkpoint()
+    storage.write_state(s)
+    last_saved=core.get_us_time()
+  end
   while prior-heartbeat<6500000 and not core.ipc_get(channel..":cancel") do
     local available=core.ipc_poll(inbox,auto and 35 or 650)
     local now=core.get_us_time()
     if core.ipc_get(channel..":cancel") then break end
-    if auto then auto.step((now-prior)/1000000,true,true) end
+    local fraction
+    if auto then fraction=auto.step((now-prior)/1000000,true,true) end
     prior=now
     if available then
       heartbeat=now
@@ -52,29 +57,34 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         r={ok=false,why="UNEXPECTED_SEQUENCE"}
       else
         seq=q.seq
-        if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,q.fraction)
-        elseif q.kind=="snapshots" then r=A.snapshots(q.windows,q.fraction,q.players)
+        if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction)
+        elseif q.kind=="snapshots" then r=A.snapshots(q.windows,fraction or q.fraction,q.players)
         elseif q.kind=="orders" then r=A.orders(q.player,q.mode,q.vehicle,q.page)
         elseif q.kind=="road_quote" then r=A.road_quote(q.player,q.request)
         elseif q.kind=="rail_quote" then r=A.rail_quote(q.player,q.request)
         elseif q.kind=="transport_quote" then r=A.transport_quote(q.player,q.request)
         elseif q.kind=="terrain_quote" then r=A.terrain_quote(q.player,q.request)
         elseif q.kind=="company" then r=A.company(q.player)
+        elseif q.kind=="demolition" then r=A.demolition(q.player,q.tile)
+        elseif q.kind=="depot" then r=A.depot(q.player,q.mode,q.depot)
         elseif q.kind=="advance" and not auto then r=A.advance(q.days)
         elseif q.kind=="clock" then r={ok=true,day=s.day,tick=s.passenger_house_clock and
           s.passenger_house_clock.counter or 0,revision=s.authority_revision or 0}
-        elseif q.kind=="command" then r=A.command(q.player,q.command)
+        elseif q.kind=="command" then
+          r=A.command(q.player,q.command)
+          if r.ok and cap.durable_actions then checkpoint() end
         elseif q.kind=="checkpoint" then
-          storage.write_state(s)
+          checkpoint()
           r={ok=true,day=s.day,revision=s.authority_revision or 0}
         elseif q.kind=="stop" then
-          storage.write_state(s)
+          checkpoint()
           return "stopped",seq,s.day
         else r={ok=false,why="UNKNOWN_OPERATION"} end
       end
       r.seq=q.seq
       core.ipc_set(outbox,r)
     end
+    if auto and now-last_saved>=8000000 then checkpoint() end
   end
   storage.write_state(s)
   return prior-heartbeat>=6500000 and "idle" or "cancelled",seq,s.day
