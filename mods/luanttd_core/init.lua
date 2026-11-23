@@ -336,6 +336,32 @@ local ui=dofile(mod.."/ui.lua")(api)
 api.vehicle_status=ui.status
 local world=dofile(mod.."/world.lua")(api,ui)
 api.world=world
+local wildlife_media={}
+for _,folder in ipairs({"models","textures"}) do
+  for _,file in ipairs(core.get_dir_list(mod.."/"..folder,false)) do
+    if file:match("^bl_wildlife_") then wildlife_media[file]=true end
+  end
+end
+api.wildlife=dofile(mod.."/ambient_wildlife.lua")(core,Sim,render,wildlife_media)
+api.shop_scenery=dofile(mod.."/ambient_shop_traffic.lua")(core,Sim,render,dofile(mod.."/road_lanes.lua"),
+  dofile(mod.."/road_motion.lua"),api.wildlife.enabled)
+local function scenic_step(dt,players)
+  api.wildlife.step(dt,players);api.shop_scenery.step(dt,players)
+end
+api.cinematic=dofile(mod.."/cinematic_view.lua")(core,function(p)
+  world.cinematic_hide(p);ui.cinematic(p,true)
+end,function(p)
+  ui.cinematic(p,world.avatar_state(p)~=nil)
+  world.hud(p,0)
+end)
+core.register_on_player_receive_fields(function(p,form,fields)
+  if fields.luanttd_cine_toggle and (form=="luanttd_core:worker_controls" or form=="" and api.cinematic.active(p)) then
+    return api.cinematic.toggle(p)
+  elseif fields.luanttd_candy_toggle and form=="luanttd_core:worker_controls" then
+    api.wildlife.toggle(p);api.shop_scenery.step(.21,core.get_connected_players());ui.open_controls(p);return true
+  end
+end)
+
 local interval=qa.interval or 1.25
 interval=math.max(0.05,math.min(15,interval))
 api.capabilities.seconds_per_day=interval
@@ -498,11 +524,15 @@ core.register_globalstep(function(dt)
     -- but prevent its former stepper, pilots and autosave from running.
     if api.authority_frame then api.authority_frame(dt) end
     api.vehicle_ui.step(dt)
+    api.cinematic.step(dt)
+    scenic_step(dt,core.get_connected_players())
     return
   end
   if api.trackworks_demo then api.trackworks_demo.step(dt) end
   local players=core.get_connected_players()
   local online=#players>0
+  scenic_step(dt,players)
+  api.cinematic.step(dt)
   api.interest.refresh(players)
   if api.farm_view then api.farm_view.step(dt) end
   render.step_ambient_particles(dt)
@@ -674,6 +704,7 @@ core.register_on_leaveplayer(function(p)
   save_return_view(p)
   local name=p:get_player_name()
   render.leave_ambient_particles(name)
+  api.cinematic.leave(name)
   api.vehicle_ui.leave(p)
   ui.leave(name)
   world.leave(name)

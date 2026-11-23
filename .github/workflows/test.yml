@@ -32,7 +32,7 @@ jobs:
       - name: Check Lua syntax and run focused tests
         run: |
           find mods/luanttd_core -type f -name '*.lua' -print0 | xargs -0 -r -n 1 luac5.1 -p
-          for t in sim pedestrian avatar_car survey_sightseeing campaign_landscape_async campaign_simulation_bindings campaign_company_guide campaign_authority_endpoint campaign_authority_projection campaign_authority_interest campaign_projection_painter campaign_authority_host campaign_build_proxy campaign_projected_actors campaign_passenger_projection campaign_worker_finance_ui campaign_news_road campaign_worker_depot_ui campaign_worker_fleet_ui authority_terrain_view campaign_transport_commands presentation_interest world_setup generated_world_dimensions packed_campaign workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere industry_smoke_view hotbar vehicle_ui road_live_order_edit tram_live_order_edit water_air_orders ordinary_level_crossing \
+          for t in sim pedestrian avatar_car player_return cinematic_view ambient_wildlife ambient_shop_traffic survey_sightseeing campaign_landscape_async campaign_simulation_bindings campaign_company_guide campaign_authority_endpoint campaign_authority_projection campaign_authority_interest campaign_projection_painter campaign_authority_host campaign_build_proxy campaign_projected_actors campaign_passenger_projection campaign_worker_finance_ui campaign_news_road campaign_worker_depot_ui campaign_worker_fleet_ui authority_terrain_view campaign_transport_commands presentation_interest world_setup generated_world_dimensions packed_campaign workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere industry_smoke_view hotbar vehicle_ui road_live_order_edit tram_live_order_edit water_air_orders ordinary_level_crossing \
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight generated_oil_placement mixed_freight_live farm_field_view rail_owned_default \
             rail_depot_fleet rail_depot_construction rail_loose_wagons rail_order_cargo rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
@@ -61,6 +61,7 @@ jobs:
           lua5.1 tests/sightseeing_flight.lua
           lua5.1 tests/sightseeing_plane_effects.lua
           python3 tests/ride_interior_art.py
+          python3 tests/wildlife_art.py
           lua5.1 tests/farm_rc1_native_board.lua
           lua5.1 tests/coastal_corridor_freight.lua --async-tape
           lua5.1 tests/road_timber_live.lua craighead
@@ -269,6 +270,7 @@ jobs:
           BAYLINE_NATIVE_DISPLAY=309 BAYLINE_FOCUS_DEAD_END=1 timeout 220 bash tests/campaign_worker_focus_native.sh
           BAYLINE_NATIVE_DISPLAY=306 BAYLINE_FOCUS_DEAD_END=depot timeout 220 bash tests/campaign_worker_focus_native.sh
           BAYLINE_NATIVE_DISPLAY=308 BAYLINE_NATIVE_PORT=46708 timeout 220 bash tests/campaign_worker_ride_native.sh
+          BAYLINE_NATIVE_DISPLAY=311 BAYLINE_NATIVE_PORT=46711 timeout 140 bash tests/wildlife_native.sh
 
   rc1-parity:
     name: Compiled OpenTTD 16.0-RC1 comparisons

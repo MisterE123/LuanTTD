@@ -25,5 +25,6 @@ tests/stock_oil_ship_native.sh. For the latter set
 LUANTTD_QA_OIL_SHIP=205 and LUANTTD_QA_OIL_SHIP_YEAR=1980 for the later vessel.
 
 This slice covers one oil tanker per world with separate berths from other
-services. Oil rigs, full multiple-tanker dispatch and ship refit facilities
-are tracked separately.
+services. [Offshore rigs](OFFSHORE_PORT.md) can supply the tanker when a
+rig opens in a generated Temperate world from 1960 onward. Full
+multiple-tanker dispatch and ship refit facilities are tracked separately.

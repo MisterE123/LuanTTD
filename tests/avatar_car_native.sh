@@ -95,6 +95,20 @@ sleep 3
 say() {
   xdotool key t; sleep .24; xdotool type "$1"; xdotool key Return; sleep .52
 }
+if [[ ${LUANTTD_NATIVE_SCENERY:-0} == 1 ]]; then
+  say "/carprobe cine-before"
+  say "/cine"
+  import -window root "$out/cine-hidden.png"
+  say "/carprobe cine-hidden"
+  say "/cine"
+  say "/carprobe cine-restored"
+  say "/candy"
+  say "/carprobe candy-off"
+  say "/candy"
+  say "/carprobe candy-on"
+  grep "CINE_NATIVE_" "$out/server.log"
+  grep "CANDY_NATIVE_" "$out/server.log"
+fi
 say "/carprobe before"
 say "/car"
 sleep .6

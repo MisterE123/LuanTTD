@@ -435,7 +435,8 @@ function U.hud()
     local c
     if company_projection then c=company_projection.company(n)
     else c=S.companies[n] end
-    if c and not (api.world and api.world.avatar_state and api.world.avatar_state(p)) then
+    if c and not (api.cinematic and api.cinematic.active(p)) and
+        not (api.world and api.world.avatar_state and api.world.avatar_state(p)) then
       local stamp=company_projection and formatted_date(c.year,c.month,c.day_of_month) or date()
       local message="LuanTTD   •   "..stamp.."   •   "..dollars(c.cash).."   •   Inventory: Control desk"
       local V=view(n)
@@ -727,11 +728,14 @@ end
 function U.open_controls(p)
   if api.authority_handoff then
     core.show_formspec(p:get_player_name(),"luanttd_core:worker_controls",
-      "formspec_version[7]size[10.5,5.05]bgcolor[#152334;false]label[.45,.48;Controls]"..
-      [[textarea[.45,1.07;9.6,2.65;;;WASD moves. Space and Shift adjust altitude. Hold E to fly faster.
+      "formspec_version[7]size[10.5,5.45]bgcolor[#152334;false]label[.45,.48;Controls]"..
+      [[textarea[.45,1.07;9.6,2.15;;;WASD moves. Space and Shift adjust altitude. Hold E to fly faster.
 Use the hotbar to build. Right-click depots to buy a vehicle and set its orders.
 ]]..      "Inventory opens Fleet, Finances, and the Jump map.]"..
-      "button_exit[.45,4.02;9.6,.55;close;Back to world]")
+      "button[.45,3.33;4.65,.55;luanttd_candy_toggle;"..
+      (api.wildlife and api.wildlife.enabled(p) and "Hide decorative scenery" or "Show decorative scenery").."]"..
+      "button_exit[5.40,3.33;4.65,.55;luanttd_cine_toggle;Cinematic view]"..
+      "button_exit[.45,4.33;9.60,.55;close;Back to world]")
     return true
   end
   if api.road_first then U.service(p,"controls");return end

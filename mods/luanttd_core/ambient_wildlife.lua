@@ -1,0 +1,237 @@
+-- SPDX-License-Identifier: GPL-2.0-only
+-- Native, ephemeral scenery. Reads only already-projected nearby tiles;
+-- doesn't own a terrain subscription, touch the clock, or draw sim RNG.
+return function(core,Sim,view,media)
+  local V={}
+  local pi,sin,cos=math.pi,math.sin,math.cos
+  local tau=2*pi
+  local defs={
+    whale={max=1,radius=6.5,velocity=.83,lifetime=84,view=56,min=11},
+    porpoise={max=4,radius=3.4,velocity=1.35,lifetime=52,view=52,min=8},
+    seagull={max=5,radius=4.8,velocity=2.9,lifetime=58,view=53,min=8,variants={"wing_up","wing_down"}},
+    eagle={max=1,radius=7.5,velocity=3.8,lifetime=72,view=62,min=12,variants={"wing_up","wing_down"}},
+    fox={max=2,radius=.69,velocity=.55,lifetime=52,view=36,min=5,variants={"stride"}},
+  }
+  local ordered={"whale","porpoise","seagull","eagle","fox"}
+  local texture="bl_wildlife_atlas.png"
+  local name=function(kind) return "luanttd_core:wildlife_"..kind end
+  local mesh=function(kind,variant) return "bl_wildlife_"..kind..(variant and "_"..variant or "")..".obj" end
+  for _,kind in ipairs(ordered) do
+    local d=defs[kind]
+    d.ready=media[mesh(kind)] and media[texture]
+    if d.ready then
+      core.register_entity(name(kind),{initial_properties={
+        physical=false,collide_with_objects=false,pointable=false,static_save=false,
+        visual="mesh",mesh=mesh(kind),textures={texture},shaded=true,backface_culling=true,
+        visual_size={x=1,y=1,z=1},
+      }})
+    end
+  end
+  local animals,cursors,observers={},{},{}
+  local age,update,scans=0,0,1
+  local sector_cursor=0
+  local function tile(x,z)
+    local id=Sim.id(math.floor((x+.5)/2),math.floor((z+.5)/2))
+    return id and view.host_tile(id),id
+  end
+  local function distance(p,x,z)
+    return (p.x-x)^2+(p.z-z)^2
+  end
+  local function sea(t,offshore)
+    return t and not t.stock_void and not t.ship and not t.road_bridge_id and not t.rail_span_id and
+      t.terrain=="water" and (not t.water_class or t.water_class=="sea") and not t.stock_canal and
+      not t.build and (not offshore or not t.coastal_water)
+  end
+  local function field(t,id)
+    return t and t.terrain~="water" and not t.build and not t.house and not t.wood and
+      not t.stock_industry and view.host_record("stock_farm_fields",id)
+  end
+  local function habitat(kind,x,z)
+    local t,id=tile(x,z)
+    if not t or t.stock_void then return false end
+    if kind=="whale" or kind=="porpoise" then
+      if not sea(t,true) then return false end
+      local clear=defs[kind].radius+(kind=="whale" and 2.15 or .65)
+      for i=0,7 do
+        local a=tau*i/8
+        if not sea(tile(x+clear*cos(a),z+clear*sin(a)),true) then return false end
+      end
+      return true
+    elseif kind=="fox" then
+      return not not field(t,id)
+    elseif kind=="seagull" then
+      if (t.coastal_water or sea(t,false)) then return true end
+      return sea(tile(x+4,z),false) or sea(tile(x-4,z),false) or
+        sea(tile(x,z+4),false) or sea(tile(x,z-4),false)
+    end
+    return t.terrain~="water" and not t.house and not t.build and
+      (t.wood or (t.h or 0)>=2)
+  end
+  function V.habitat(kind,x,z) return not not (defs[kind] and habitat(kind,x,z)) end
+  local function remove(i)
+    local a=animals[i]
+    if a.ref:get_pos() then a.ref:remove() end
+    table.remove(animals,i)
+  end
+  local function height_at(x,z,fallback)
+    local t,id=tile(x,z)
+    return t and not t.stock_void and ((view.uses_slope and view.uses_slope(id) and view.surface(id,x,z)) or
+      (t.h or 0)+.5) or fallback
+  end
+  local function render(a,dt)
+    local d=defs[a.kind]
+    local elapsed=age-a.created
+    local t=a.phase+elapsed*d.velocity/d.radius
+    local radius=d.radius
+    local yaw=math.atan2(-sin(t),cos(t))
+    local x,z=a.x+radius*cos(t),a.z+radius*sin(t)
+    local y,pitch,roll,variant=a.y,0,0,nil
+    if a.kind=="whale" or a.kind=="porpoise" then
+      if not sea(tile(x,z),true) then return false end
+      local whale=a.kind=="whale"
+      local f=elapsed*(whale and .31 or 1.26)+a.phase
+      y=y+(whale and -.17+.31*cos(f) or -.09+.20*cos(f))
+      pitch=(whale and .20 or .50)*sin(f)
+      local surfaced=cos(f)>.92
+      if whale and surfaced and not a.surfaced and core.add_particlespawner then
+        for watcher in pairs(observers) do
+          local p=core.get_player_by_name(watcher)
+          local viewer=p and p:get_pos()
+          if viewer and distance(viewer,x,z)<d.view^2 then
+          core.add_particlespawner({playername=watcher,amount=9,time=.17,collisiondetection=false,
+          pos={min={x=x-.12,y=y+.27,z=z-.12},max={x=x+.12,y=y+.32,z=z+.12}},
+          vel={min={x=-.2,y=.56,z=-.2},max={x=.2,y=1.1,z=.2}},
+          acc={min={x=0,y=-1.8,z=0},max={x=0,y=-1.4,z=0}},
+          exptime={min=.35,max=.65},size={min=.8,max=1.5},
+          texture={name="bl_fountain_droplet.png",alpha_tween={.8,0}}})
+          end
+        end
+      end
+      a.surfaced=surfaced
+    elseif a.kind=="fox" then
+      local ground,id=tile(x,z)
+      if not field(ground,id) then return false end
+      y=view.surface(id,x,z)+.012
+      if math.floor(elapsed*4)%2==1 then variant="stride" end
+    else
+      local floor=height_at(x,z,a.y-5)
+      local altitude=a.kind=="eagle" and 8.2 or 3.3
+      local want=floor+altitude+(a.kind=="eagle" and 1.2 or .54)*sin(t*1.6)
+      if a.previous_y then y=a.previous_y+math.max(-dt*.95,math.min(dt*.95,want-a.previous_y)) else y=want end
+      y=math.max(y,floor+2.4)
+      a.previous_y=y
+      roll=a.kind=="eagle" and -.14 or -.23
+      local cycle=elapsed% (a.kind=="eagle" and 4.4 or 2.4)
+      if cycle<(a.kind=="eagle" and .92 or 1.25) then
+        variant=math.floor(cycle*5)%2==0 and "wing_up" or "wing_down"
+      end
+    end
+    if variant and not media[mesh(a.kind,variant)] then variant=nil end
+    if variant~=a.variant then a.ref:set_properties({mesh=mesh(a.kind,variant)});a.variant=variant end
+    a.ref:set_rotation({x=pitch,y=-yaw,z=roll})
+    a.ref:move_to({x=x,y=y,z=z},true)
+    return true
+  end
+  local function spawn(kind,x,z,phase)
+    if kind=="fox" then
+      local tx,tz=Sim.xy(select(2,tile(x,z)))
+      x,z=2*tx+.5,2*tz+.5
+    end
+    local base=height_at(x,z,.5)
+    if kind=="whale" or kind=="porpoise" then
+      local t=tile(x,z)
+      base=(t.h or 0)+.5
+    elseif kind=="fox" then
+      base=view.surface(select(2,tile(x,z)),x,z)
+    else base=base+(kind=="eagle" and 8.2 or 3.3) end
+    local ref=core.add_entity({x=x,y=base,z=z},name(kind))
+    if not ref then return end
+    if ref.set_observers then ref:set_observers(observers) end
+    local a={ref=ref,x=x,z=z,y=base,kind=kind,created=age,phase=phase}
+    if render(a,.2) then animals[#animals+1]=a else ref:remove() end
+  end
+  local function find(player,at)
+    local n=player:get_player_name()
+    local cursor=cursors[n] or 0
+    local local_counts={}
+    for _,a in ipairs(animals) do
+      if distance(at,a.x,a.z)<defs[a.kind].view^2 then
+        local_counts[a.kind]=(local_counts[a.kind] or 0)+1
+      end
+    end
+    -- Sample a deterministic local ring. No map scans or network sector
+    -- requests, and the next phase changes the tested offsets.
+    for i=1,15 do
+      local k=cursor+i
+      local kind=ordered[(k-1)%#ordered+1]
+      local d=defs[kind]
+      local r=d.min+(d.view-d.min-9)*(((k*131)%89)/89)
+      local theta=k*2.3999632297
+      local x,z=at.x+r*cos(theta),at.z+r*sin(theta)
+      local gap=(kind=="whale" and 24 or kind=="eagle" and 23 or kind=="fox" and 3 or 6)^2
+      if d.ready and #animals<28 and (local_counts[kind] or 0)<d.max and
+          habitat(kind,x,z) then
+        local near=false
+        for _,a in ipairs(animals) do
+          if a.kind==kind and distance(a,x,z)<gap then near=true;break end
+        end
+        if not near then spawn(kind,x,z,theta%tau);local_counts[kind]=(local_counts[kind] or 0)+1 end
+      end
+    end
+    cursors[n]=(cursor+15)%445
+  end
+  function V.step(dt,players)
+    age=age+math.min(.5,math.max(0,dt));update=update+dt;scans=scans+dt
+    if update<.16 then return end
+    local step=math.min(.4,update)
+    update=0
+    local viewers,active={},{}
+    for _,p in ipairs(players) do
+      local at=p:get_pos()
+      if at and V.enabled(p) then viewers[#viewers+1]={player=p,at=at};active[p:get_player_name()]=true end
+    end
+    local changed=false
+    for n in pairs(active) do if not observers[n] then changed=true;break end end
+    if not changed then
+      for n in pairs(observers) do if not active[n] then changed=true;break end end
+    end
+    if changed then
+      observers=active
+      for _,a in ipairs(animals) do if a.ref:get_pos() and a.ref.set_observers then a.ref:set_observers(observers) end end
+    end
+    for n in pairs(cursors) do if not active[n] then cursors[n]=nil end end
+    for i=#animals,1,-1 do
+      local a=animals[i];local seen=false
+      local d=defs[a.kind]
+      for _,p in ipairs(viewers) do
+        if distance(p.at,a.x,a.z)<(d.view+9)^2 and math.abs(p.at.y-a.y)<60 then seen=true;break end
+      end
+      if not seen or not a.ref:get_pos() or age-a.created>d.lifetime or not render(a,step) then remove(i) end
+    end
+    if scans<1.15 or #viewers==0 then return end
+    scans=0
+    for i=1,math.min(6,#viewers) do
+      local p=viewers[(sector_cursor+i-1)%#viewers+1]
+      find(p.player,p.at)
+    end
+    sector_cursor=(sector_cursor+6)%#viewers
+  end
+  local key="wildlife_hidden"
+  function V.enabled(p) return p:get_meta():get_int(key)==0 end
+  function V.toggle(p)
+    local off=V.enabled(p)
+    p:get_meta():set_int(key,off and 1 or 0)
+    V.step(.16,core.get_connected_players())
+    return true,off and "Decorative wildlife and shop cars hidden." or "Decorative wildlife and shop cars shown."
+  end
+  if core.register_chatcommand then core.register_chatcommand("candy",{
+    description="Show or hide decorative wildlife and shop cars for yourself",
+    func=function(n)
+      local p=core.get_player_by_name(n)
+      if p then return V.toggle(p) end
+      return false,"Join the world first."
+    end,
+  }) end
+  function V.count() return #animals end
+  return V
+end

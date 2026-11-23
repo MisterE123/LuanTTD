@@ -1,0 +1,116 @@
+-- Real engine mesh/observer check with a small water, farm and woodland
+-- scene. The production ambient module decides where to place each animal.
+local mod=core.get_modpath(core.get_current_modname())
+local Vfile=dofile(mod.."/ambient_wildlife.lua")
+local media={}
+for _,folder in ipairs({"models","textures"}) do
+  for _,f in ipairs(core.get_dir_list(mod.."/"..folder,false)) do media[f]=true end
+end
+local Sim={}
+function Sim.id(x,z)
+  if x>0 and x<96 and z>0 and z<96 then return (z-1)*96+x end
+end
+function Sim.xy(id) return (id-1)%96+1,math.floor((id-1)/96)+1 end
+local shore,farm,woods=40,46,59
+local view={}
+function view.host_tile(id)
+  local x=Sim.xy(id)
+  if x<shore then return {terrain="water",h=0,water_class="sea"} end
+  if x<farm then return {terrain="water",h=0,water_class="sea",coastal_water=true} end
+  if x<woods then return {terrain="grass",h=0} end
+  return {terrain="grass",h=1,wood=true}
+end
+function view.host_record(name,id)
+  local x=Sim.xy(id)
+  if name=="stock_farm_fields" and x>=farm and x<woods then return {} end
+end
+function view.surface(id) return view.host_tile(id).h+.5 end
+local V=Vfile(core,Sim,view,media)
+for _,entry in ipairs({{"sea","bl_water0.png"},{"grass","bl_grass1.png"},{"soil","bl_grass3.png"}}) do
+  core.register_node(":".."wqa:"..entry[1],{description=entry[1],tiles={entry[2]},pointable=false,walkable=false})
+end
+for _,name in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..name,"air") end
+core.set_mapgen_setting("mg_name","singlenode",true)
+local origins={
+  {x=62,y=11,z=86},{x=91,y=10,z=103},{x=112,y=10,z=77},
+}
+local species={"whale","porpoise","seagull","eagle","fox"}
+local joining=false
+local function place()
+  local vm=core.get_voxel_manip()
+  local aa,bb=vm:read_from_map({x=28,y=-1,z=35},{x=167,y=2,z=158})
+  local area=VoxelArea:new({MinEdge=aa,MaxEdge=bb})
+  local buffer=vm:get_data()
+  local sea,field,land=core.get_content_id("wqa:sea"),core.get_content_id("wqa:soil"),core.get_content_id("wqa:grass")
+  for x=28,167 do
+    local i=math.floor((x+.5)/2)
+    local h=i>=woods and 1 or 0
+    local node=i<farm and sea or i<woods and field or land
+    for z=35,158 do buffer[area:index(x,h,z)]=node end
+  end
+  vm:set_data(buffer);vm:write_to_map()
+end
+local function actors()
+  local found={}
+  for _,o in ipairs(core.get_objects_inside_radius({x=97,y=5,z=90},100)) do
+    local e=o:get_luaentity()
+    local kind=e and e.name:match("^luanttd_core:wildlife_(.+)$")
+    if kind then
+      assert(o:get_properties().mesh:find("bl_wildlife_"..kind,1,true))
+      found[kind]=o
+    end
+  end
+  return found
+end
+core.register_on_joinplayer(function(p)
+  if joining then return end
+  joining=true
+  local n=p:get_player_name()
+  p:set_physics_override({gravity=0,speed=0,jump=0})
+  p:set_sky({type="plain",base_color="#a7cfed",clouds=false})
+  for _,k in ipairs({"hotbar","healthbar","crosshair","wielditem","breathbar","minimap","minimap_radar"}) do
+    p:hud_set_flags({[k]=false})
+  end
+  p:override_day_night_ratio(1)
+  p:set_pos(origins[1])
+  core.emerge_area({x=28,y=-1,z=35},{x=167,y=20,z=158},function(_,_,remaining)
+    if remaining~=0 then return end
+    place()
+    -- Sample all three habitats deterministically, with the real viewer
+    -- identity, then pause the scene for five separate camera elevations.
+    local found={}
+    for _=1,28 do
+      for _,origin in ipairs(origins) do
+        local viewer={get_pos=function()return origin end,get_player_name=function()return n end,
+          get_meta=function()return p:get_meta() end}
+        V.step(1.20,{viewer})
+        for kind,ref in pairs(actors()) do found[kind]=ref end
+      end
+      local complete=true
+      for _,kind in ipairs(species) do if not (found[kind] and found[kind]:get_pos()) then complete=false end end
+      if complete then break end
+    end
+    for _,kind in ipairs(species) do assert(found[kind] and found[kind]:get_pos(),"missing native "..kind) end
+    local function aim(i)
+      local kind=species[i]
+      if not kind or not core.get_player_by_name(n) then return end
+      local at=found[kind]:get_pos()
+      if kind=="whale" or kind=="porpoise" then at.y=.51;found[kind]:set_pos(at) end
+      local d=kind=="whale" and 5 or kind=="porpoise" and 2.1 or 1.8
+      local dx,dz=d,-.8*d
+      local up=kind=="whale" and 2.8 or kind=="porpoise" and .8 or -.15
+      local pos={x=at.x+dx,y=at.y+up,z=at.z+dz}
+      local dy=at.y-pos.y-(p:get_properties().eye_height or 1.625)
+      p:set_look_horizontal(math.atan2(dx,-dz))
+      p:set_look_vertical(math.atan2(-dy,math.sqrt(dx^2+dz^2)))
+      p:set_pos(pos)
+      core.log("action","WILDLIFE_NATIVE_FRAME "..kind)
+    end
+    for i=1,#species do core.after(4.2*(i-1),aim,i) end
+    core.after(4.2*#species,function()
+      assert(core.registered_chatcommands.candy.func(n) and not V.enabled(p))
+      assert(V.count()==0)
+      core.log("action","WILDLIFE_NATIVE_PASS five real meshes; /candy removed scenic actors for the only viewer")
+    end)
+  end)
+end)

@@ -35,6 +35,10 @@ or the facility and stops for production, receipts and acceptance.
 The original pumping state and production are independent; the 3D
 pumpjacks currently use the rig's fixed exported pose.
 
-This is an authored land-oil scenario using stock machinery underneath.
-No offshore oil rigs, water refits, player-funded processing layouts,
-or general OpenTTD save interchange. See [source rules](OIL_INDUSTRY_PORT.md).
+This preset is an authored land-oil scenario. It does not generate offshore
+rigs. Choose **Generate a world** for [offshore rigs](OFFSHORE_PORT.md):
+they never appear during map generation, and can open in Temperate play
+from 1960 onward when random industry openings are enabled. A bigger map
+with more sea near the edges offers more viable sites. Water refits,
+player-funded processing layouts and general save interchange are separate
+from this land-oil preset. See [source rules](OIL_INDUSTRY_PORT.md).

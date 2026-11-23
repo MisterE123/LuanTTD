@@ -183,6 +183,7 @@ return function(api,ui)
       if menu then W.exit_avatar(p) end
       return item
     end
+    if api.cinematic and api.cinematic.active(p) then return item end
     if state.order_mode then
       local now=core.get_us_time()
       -- A tool click and global click telemetry can describe the same press.
@@ -453,6 +454,7 @@ return function(api,ui)
     return best
   end
   function W.click(p,menu)
+    if api.cinematic and api.cinematic.active(p) then return end
     local n=p:get_player_name()
     local tile,hit=W.target(p)
     local state=controls[n]
@@ -695,7 +697,20 @@ return function(api,ui)
       W.hud(p,0)
     end
   end
+  function W.cinematic_hide(p)
+    local n=p:get_player_name()
+    local state=controls[n]
+    if not state then return end
+    if state.build_drag then cancel_drag(p,state) end
+    if state.demolishing then state.demolishing=nil;ui.cancel_demolition(p) end
+    for _,id in pairs(hud[n] or {}) do if type(id)=="number" then p:hud_remove(id) end end
+    hud[n]=nil
+    for _,id in pairs(state.labels or {}) do p:hud_remove(id) end
+    state.labels,state.label_names=nil,nil
+    if api.selector then api.selector.leave(n) end
+  end
   function W.hud(p)
+    if api.cinematic and api.cinematic.active(p) then return end
     local n=p:get_player_name()
     local state=controls[n]
     if not state or state.avatar or api.vehicle_ui and api.vehicle_ui.following(p) then return end
@@ -789,6 +804,7 @@ return function(api,ui)
     hud[n]=entry
   end
   local function labels(p,state)
+    if api.cinematic and api.cinematic.active(p) then return end
     local pos=p:get_pos()
     local ids=state.labels or {}
     local keep={}

@@ -54,7 +54,20 @@ return function(api)
   end
   core.register_chatcommand("carprobe",{func=function(name,tag)
     local p=assert(core.get_player_by_name(name))
-    if tag=="leave-spot" then
+    if tag=="cine-before" or tag=="cine-hidden" or tag=="cine-restored" then
+      local hidden=tag=="cine-hidden"
+      assert(api.cinematic.active(p)==hidden and p:hud_get_flags().hotbar==not hidden)
+      local selector=false
+      for _,o in ipairs(core.get_objects_inside_radius(p:get_pos(),22)) do
+        local e=o:get_luaentity()
+        if e and e.name=="luanttd_core:tile_selector" then selector=true;break end
+      end
+      assert(selector==not hidden,"the actual private tile outline failed to follow /cine")
+      core.log("action","CINE_NATIVE_"..tag)
+    elseif tag=="candy-off" or tag=="candy-on" then
+      assert(api.wildlife.enabled(p)==(tag=="candy-on"))
+      core.log("action","CANDY_NATIVE_"..tag)
+    elseif tag=="leave-spot" then
       p:set_look_horizontal(2.1);p:set_look_vertical(.36)
       p:set_pos({x=29.75,y=8.25,z=19.50})
       core.after(.45,function() core.log("action","RETURN_BOOKMARK_SET") end)

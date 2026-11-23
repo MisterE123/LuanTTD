@@ -57,3 +57,20 @@ and exits Walk with actual keyboard and mouse controls.
 `tests/survey_sightseeing_backends_native.sh` clicks a real connected road
 and a built Country Airport; it drives, takes off and restores the exact
 builder pose without entering a chat command.
+
+
+## A clean sightseeing view
+
+**Inventory → Controls → Cinematic view**, or `/cine`, hides the hotbar,
+hover and selection outlines, labels, and game overlays for your screen
+only. Movement and sightseeing controls still work. Type `/cine` again
+or open Inventory and choose **Restore interface**. Construction clicks
+are ignored until the interface is restored. Luanti's own chat overlay
+can be hidden separately with its chat key (**F2** by default).
+
+**Hide decorative scenery** in the same panel, or `/candy`, toggles the
+non-simulation animals and occasional shop cars just for you. Whales and
+porpoises swim in open sea; gulls wheel over the coast, eagles circle hills
+and woods, and foxes roam working fields. Decorative cars use connected town
+streets between shops and disappear before they can crowd a working road
+vehicle. None of these actors has orders, moves cargo, or is saved.
