@@ -364,10 +364,15 @@ function U.leave(n)
   if U.layer_bulldozer then U.layer_bulldozer.leave(n) end
   if U.signal_ui then U.signal_ui.leave(n) end
 end
+function U.cinematic(p,active)
+  local name=p:get_player_name()
+  if active and hud[name] then p:hud_remove(hud[name]);hud[name]=nil
+  elseif not active then U.hud() end
+end
 function U.hud()
   for _,p in ipairs(core.get_connected_players()) do
     local n=p:get_player_name();local c=S.companies[n]
-    if c then
+    if c and not (api.world and api.world.avatar_state and api.world.avatar_state(p)) then
       local message="LuanTTD   •   "..date().."   •   "..dollars(c.cash).."   •   Inventory: Control desk"
       local V=view(n)
       if not hud[n] then
@@ -387,6 +392,7 @@ local function pick(fields,id,a,prior)
   return prior
 end
 function U.fields(p,formname,f)
+  if api.world and api.world.avatar_state and api.world.avatar_state(p) then return false end
   if formname=="luanttd_core:station_layout" then return U.station_layout_fields(p,f) end
   if U.signal_ui and formname==U.signal_ui.form then
     return U.signal_ui.fields(p,f,U.layer_bulldozer.open)
@@ -2261,7 +2267,9 @@ function U.service(p,kind,id)
     label(.4,1.18,"WASD fly  ·  Space / Shift altitude  ·  Hold E to fly faster")
     label(.4,1.66,"Select a section and left-click to open it.")
     label(.4,2.14,"Inside a section: select a tool, then left-click to use it.")
-    label(.4,2.62,"Back returns to the previous hotbar.")
+    label(.4,2.62,kind=="controls" and
+      "/walk: street view  ·  /car: drive  ·  Right-click: return to building" or
+      "Back returns to the previous hotbar.")
     if kind=="controls" and Workbenches then
       button(.4,3.35,8.6,"service_workbenches","Transport & World Guide")
     end

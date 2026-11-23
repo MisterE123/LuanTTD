@@ -102,7 +102,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if not Track.valid_trackdir(td) then return end
     return Signal.aspect(R.board(s).tile(tile),td)
   end
-  function R.place_signal(s,owner,id,td,kind)
+  function R.place_signal(s,owner,id,td,kind,both)
     if Lab.span_protected and Lab.span_protected(s,id) then return false,"That tile is part of a protected rail span." end
     local is_block=kind==Signal.BLOCK
     if is_block and not (Block and s.rail_block_preview) then
@@ -117,13 +117,15 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end
     local base=Lab.board(s)
     local name=is_block and "Block signal" or "Path signal"
-    if not compatible_signals(base,d,is_block) then
+    if not (Block and s.rail_owned_service) and not compatible_signals(base,d,is_block) then
       return false,"Remove the other dispatch signal type before placing this signal."
     end
     local ok,why=Signal.place(base,d.signals,owner,id,Track.track(td),
-      {kind=kind or Signal.PBS,copy_mask=Track.signal_along(td)},0,false)
+      {kind=kind or Signal.PBS,copy_mask=not (is_block and both) and Track.signal_along(td) or nil},0,false)
     if not ok then return false,name..": "..why end
-    if is_block then Block.update_track(base,d.signals,owner,block_occupancy(d),id,Track.track(td)) end
+    if Block and (is_block or s.rail_owned_service) then
+      Block.update_track(Life.view(base,d.life),d.signals,owner,block_occupancy(d),id,Track.track(td))
+    end
     s.stock_rail_dispatch=d
     return true,name.." placed."
   end
@@ -156,7 +158,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   -- The quote checks the reachability of each physical segment; the
   -- live train independently chooses from its actual approach.
   local function follows_plan(run,entry,td)
-    return entry.trackdirs==2^td or (run.paired or run.branch_pbs or run.ordinary_unreserved)
+    return entry.trackdirs==2^td or (run.paired or run.branch_pbs or run.ordinary_unreserved or run.local_signals)
       and has(entry.trackdirs,td)
   end
   local function vehicle(run,tile)
@@ -296,7 +298,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         if i~=1 or tile.dir~=Track.exit_side(r.td) then return false end
       elseif tile.kind=="signals" then
         if Signal.oneway_blocking(tile,r.td) or
-            (not run.block and Signal.on_track(tile,Track.track(r.td)) and
+            (not run.block and not run.local_signals and Signal.on_track(tile,Track.track(r.td)) and
               not Signal.pbs(Signal.signal_type(tile,r.td))) then return false,"Check the type and facing of the signal at "..where(r.tile).."." end
       elseif portal(tile) then
         if not run.span or not board.span_enabled or not board.stock_height then return false end
@@ -314,7 +316,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         end
         if run.span and not jump and board.span_seam and not board.span_seam(r.tile,r.td,n.tile,n.td) then return false end
       elseif tile.kind~="station" or tile.station~=run.station then return false,"The route does not reach the selected platform."
-      elseif not run.ordinary_unreserved and not run.platform_lookahead and not Costs.safe_waiting(board,vehicle(run,r.tile),r.tile,r.td,true,settings) then
+      elseif not run.ordinary_unreserved and not run.local_signals and not run.platform_lookahead and not Costs.safe_waiting(board,vehicle(run,r.tile),r.tile,r.td,true,settings) then
         return false,unsafe_platform(board,r)
       end
     end
@@ -343,6 +345,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local view={owner=run.owner,station=station,order=order,total_length=run.total_length,
       max_track_speed=run.max_track_speed,span=run.span,shuttle=true,fleet_id=run.fleet_id,paired=run.paired,
       branch_pbs=run.branch_pbs,platform_lookahead=run.platform_lookahead,ordinary_unreserved=run.ordinary_unreserved,
+      local_signals=run.local_signals,
       engine_railtype=run.engine_railtype,traction_railtypes=run.traction_railtypes}
     local best,v=search(board,view,origin.tile,td)
     view.route=best and dense_route(board,v,best,run.span)
@@ -434,18 +437,31 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if d.runs[1] and (not not d.runs[1].block)~=(not not is_block) then
       return false,"Clear the active pilot before changing its signal system."
     end
-    if not compatible_signals(Lab.board(s),d,is_block) then
+    local all_path_signals=compatible_signals(Lab.board(s),d,is_block)
+    local local_signals=Block and owned and not pair and not is_block and not all_path_signals
+    if not all_path_signals and not local_signals then
       return false,"Remove the other dispatch signal type before starting this pilot."
     end
-    if (span_mode and #d.runs~=0) or (d.runs[1] and d.runs[1].span) then
+    -- Native owned passenger runs can share one live signal graph and
+    -- commercial clock. Legacy pilot pairs and freight controllers retain
+    -- their specific actor contracts until ported onto the same dispatcher.
+    local shared=local_signals and second and not freight
+    if shared then
+      for _,other in ipairs(d.runs) do
+        if not (other.local_signals and other.fleet_id and other.shuttle and not other.freight)
+            or (not not other.span)~=(not not span_mode) then shared=false;break end
+      end
+    end
+    if not shared and ((span_mode and #d.runs~=0) or (d.runs[1] and d.runs[1].span)) then
       return false,"Clear the dispatch pilot before changing span services."
     end
-    if (not pair and ((second or freight) and #d.runs~=0 or
+    if not shared and ((not pair and ((second or freight) and #d.runs~=0 or
         d.runs[1] and (d.runs[1].shuttle or d.runs[1].freight or d.runs[1].paired))) or
-        pair and d.runs[1] and not d.runs[1].paired then
+        pair and d.runs[1] and not d.runs[1].paired) then
       return false,"Clear the dispatch pilot before switching between one-way and shuttle routes."
     end
-    if #d.runs>=2 then return false,"The dispatch pilot supports two consists." end
+    if not shared and #d.runs>=2 then return false,"The dispatch pilot supports two consists." end
+    if shared and (s.next_paid_rail_run or 1)>=0x3FFF then return false,"No paid railway slot available." end
     for _,other in ipairs(d.runs) do
       if (not pair and other.station==station) or other.depot==depot then
         return false,"Choose a different depot and destination platform for each train."
@@ -463,6 +479,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if not consist then return false,"Cannot seed the stock consist in this depot." end
     local run={id=#d.runs+1,owner=owner,depot=depot,station=station,consist=consist,span=span_mode,block=is_block,
       branch_pbs=owned and second and not pair and not freight and not is_block and true or nil,
+      local_signals=local_signals and true or nil,
       visual=R.engine.visual,phase="depot",index=1,speed=0,subspeed=0,progress=0,
       direction=consist.parts[1].pose.direction,z=0,ticks=0,stock_steps=0,wait_counter=0,
       max_track_speed=R.engine.speed,front_length=8,total_length=8+R.wagon.length,
@@ -505,7 +522,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       run.ordinary_unreserved=true
       run.branch_pbs=nil
     end
-    if not run.via and run.branch_pbs and #consist.parts==2 and run.front_length==8 and run.total_length==16 then
+    if not run.local_signals and not run.via and run.branch_pbs and #consist.parts==2 and run.front_length==8 and run.total_length==16 then
       run.platform_lookahead=true
     end
     local query=board
@@ -1004,15 +1021,19 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       local next_=run.route[2]
       local id,dir,entry=next_tracks(signed(base,d),head.tile,head.pose.td)
       if id~=next_.tile then return end
-      if run.block or run.ordinary_unreserved and Block then
-        local segment,_,overflow=Block.update_segment(base,d.signals,run.owner,block_occupancy(d),head.tile,Block.INVALID_SIDE)
-        if overflow or segment==Block.PBS then halt(d,run,events,"Unsupported block at the depot mouth.");return end
+      if run.block or run.local_signals or run.ordinary_unreserved and Block then
+        local segment,_,overflow=Block.update_segment(Life.view(base,d.life),d.signals,run.owner,
+          block_occupancy(d),head.tile,Block.INVALID_SIDE)
+        if overflow or (segment==Block.PBS and not run.local_signals) then
+          halt(d,run,events,"Unsupported block at the depot mouth.");return
+        end
         if segment==Block.FULL then return end
+        if segment==Block.PBS and not acquire(base,d,run,id,dir,entry,next_.td) then return end
       elseif not run.ordinary_unreserved and not acquire(base,d,run,id,dir,entry,next_.td) then return end
       assert(ConsistMotion.release_front(run.consist))
-      if run.block then
+      if run.block or run.local_signals then
         -- CheckTrainStayInDepot updates again with the now exposed engine.
-        local _,_,overflow=Block.update_segment(base,d.signals,run.owner,block_occupancy(d),head.tile,Block.INVALID_SIDE)
+        local _,_,overflow=Block.update_segment(Life.view(base,d.life),d.signals,run.owner,block_occupancy(d),head.tile,Block.INVALID_SIDE)
         if overflow then halt(d,run,events,"Conventional block search overflow.");return end
       end
       run.phase="running";run.speed=0;run.stuck=false
@@ -1020,7 +1041,16 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     elseif run.phase=="turnaround" then
       local next_=run.route[2]
       local id,dir,entry=next_tracks(signed(base,d),head.tile,head.pose.td)
-      if id~=next_.tile or not run.ordinary_unreserved and not acquire(base,d,run,id,dir,entry,next_.td) then return end
+      if id~=next_.tile then return end
+      if run.local_signals then
+        -- ReverseTrainDirection classifies the block at the *new* front.
+        -- Only a Path segment needs a fresh route out of the station.
+        local tile=base.tile(head.tile)
+        local side=(tile.kind=="depot" or portal(tile)) and Block.INVALID_SIDE or dir
+        local segment,_,overflow=Block.update_segment(Life.view(base,d.life),d.signals,run.owner,
+          block_occupancy(d),head.tile,side)
+        if overflow or segment==Block.PBS and not acquire(base,d,run,id,dir,entry,next_.td) then return end
+      elseif not run.ordinary_unreserved and not acquire(base,d,run,id,dir,entry,next_.td) then return end
       run.phase="running"
       emit(d,run,events,"shuttle_departed",{tile=head.tile,station=run.station,cab_reversed=run.consist.reversed or false})
     elseif run.stuck then
@@ -1056,7 +1086,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       local withheld
       local function choose(_,into,travel,dirs)
         if not (next_ and id==into and into==next_.tile and travel==dir) then return end
-        if run.ordinary_unreserved then
+        if run.ordinary_unreserved or run.local_signals then
           local td,best=choose_ordinary(board,d,run,old,into,travel,entry)
           if td~=next_.td then
             -- The ordinary board cannot be edited while this service
@@ -1078,12 +1108,14 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           local track=Track.track(t.td)
           -- The consist journal still follows real front/tail occupancy.
           -- No ahead-of-train reservation is created on the unreserved branch.
-          if not run.ordinary_unreserved and Life.claim_owner(d.life,t.tile,track)~=run.id then
+          local pbs_entry=Signal.pbs_along(board.tile(t.tile),t.td)
+          local needs_claim=not run.ordinary_unreserved and not run.local_signals or run.local_signals and pbs_entry
+          if needs_claim and Life.claim_owner(d.life,t.tile,track)~=run.id then
             withheld=t
             return false,"unreserved"
           end
           local gate=Signal.entry_wait(board.tile(t.tile),entry,track,run,
-            {pbs_segment=not run.ordinary_unreserved,execute_reverse=false})
+            {pbs_segment=not run.ordinary_unreserved and (not run.local_signals or pbs_entry),execute_reverse=false})
           if gate~="enter" then withheld=t;return false,gate=="reverse" and "unsupported_reverse" or "red_signal" end
           return true
         end,Crossings and function(transitions,commit)
@@ -1132,6 +1164,29 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       for _,e in ipairs(r.events) do
         if not run.block then Signal.apply_consist_event(base,d.signals,e) end
         emit(d,run,events,e.kind,e)
+        if run.local_signals and (e.kind=="front_entered" or e.kind=="tail_left") then
+          local needs,changes,overflow=Block.train_moved_change_signals(Life.view(base,d.life),
+            d.signals,block_occupancy(d),e.tile,e.enterdir)
+          for _,change in ipairs(changes) do
+            change.aspect=change.green and "green" or "red"
+            emit(d,run,events,"block_aspect",change)
+          end
+          if overflow then halt(d,run,events,"Mixed signal segment buffer overflow.");return "crashed" end
+          if needs and e.kind=="front_entered" then
+            -- 16.0-RC1 TrainController after position commit. The occupied
+            -- tile is already journalled; TryPathReserve starts there.
+            local following=run.route[run.index+1]
+            if following then
+              local forward,side,gate=next_tracks(signed(base,d),new.tile,new.pose.td)
+              if forward~=following.tile or not acquire(base,d,run,forward,side,gate,following.td) then
+                mark_stuck(run)
+                hold(d,run,events,e.tile,"mixed_path_blocked")
+                return "crashed"
+              end
+              emit(d,run,events,"path_after_block",{tile=e.tile})
+            end
+          end
+        end
       end
       if new.span_speed then run.speed=min(run.speed,new.span_speed) end
       local stop=Speed.station_step(board,new.tile,new.pose,run,old.pose.direction)

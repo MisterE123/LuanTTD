@@ -1,7 +1,7 @@
 -- Fixed vehicle art mapping at actual paid dispatcher presentation layer.
 local View=dofile("mods/luanttd_core/rail_dispatch_view.lua")
 local WAGON="luanttd_core:dispatch_oil_tanker"
-local function fixture(missing_file,electric,eased)
+local function fixture(missing_file,electric,eased,reversal)
   local d={runs={},signals={records={}}}
   local s={tiles={[1]={h=0},[2]={h=0}},speed=1,coal=0,oil=0,stock_electrification=electric}
   local registered,actors,mounted,motions={},{},{},{}
@@ -16,9 +16,10 @@ local function fixture(missing_file,electric,eased)
       local v={name=name,pos=pos}
       function v:get_pos() return self.pos end
       function v:move_to(next_pos,continuous)
-        assert(continuous)
+        self.continuous=continuous
         self.pos=next_pos
       end
+      function v:set_pos(next_pos) self.pos=next_pos;self.continuous=false end
       function v:set_rotation(r)self.rot=r end
       function v:remove()self.pos=nil end
       actors[#actors+1]=v
@@ -29,7 +30,9 @@ local function fixture(missing_file,electric,eased)
     xy=function(id)return id,3 end,
     rail_paid_pose=function(state,i,fraction,fleet)
       assert(state==s and fraction==.5 and fleet==91)
-      return i,1,.25,false,eased and i==2 and {} or nil
+      local turns=reversal and s.reversed
+      return turns and #d.runs[1].consist.parts-i+1 or i,turns and 9 or 1,.25,turns or false,
+        eased and i==2 and {} or nil
     end,
     rail_paid_motion_events=function(state)
       assert(state==s)
@@ -44,8 +47,14 @@ local function fixture(missing_file,electric,eased)
     mounted[id]=true
     return true
   end}
+  function Run.sample(run,i)
+    assert(reversal)
+    local turns=run.consist.reversed
+    return turns and #run.consist.parts-i+1 or i,turns and 9 or 1,.25
+  end
+  function Run.tick() return {} end
   local SignalArt={mesh=function()return "unrelated_signal.obj"end,atlas="unrelated_signal.png"}
-  local Pose={sample=function(...)return .125,.45,0,1 end}
+  local Pose={sample=function(td)return .125,.45,0,td==9 and -1 or 1 end}
   local orig=io.open
   if missing_file then
     io.open=function(name,...)
@@ -59,8 +68,8 @@ local function fixture(missing_file,electric,eased)
   end}
   local ok,V=pcall(View.create,{s=s,Sim=Sim,render=render},Run,{},Pose,SignalArt,2,
     function(id,td,progress)
-      assert(td==1 and progress==.25)
-      return id==2 and .82 or 0,.125
+      assert((td==1 or reversal and td==9) and progress==.25)
+      return id==2 and .82 or 0,td==9 and -.125 or .125
     end)
   io.open=orig
   assert(ok,V)
@@ -137,4 +146,46 @@ for _,file in ipairs({"bl_rail_oil_tanker.obj","bl_rail_oil_tanker.png"}) do
   step(U)
   assert(#fleet==2 and fleet[2].name=="luanttd_core:dispatch_wagon")
 end
+local function angle(a,b) return math.abs(math.cos(a-b)-1)<1e-8 end
+for _,clock in ipairs({true,false}) do
+  local X,D,S,_,A=fixture(nil,nil,nil,true)
+  local t={id="Kirby and coach",stock_engine=0,stock_wagon=27,fleet_id=91,
+    paid_clock=clock,consist={parts={{},{}}}}
+  D.runs[1]=t
+  step(X)
+  local a,b=A[1],A[2]
+  local out_a,out_b=a.pos.x,b.pos.x
+  assert(a.name=="luanttd_core:dispatch_steam" and b.name=="luanttd_core:dispatch_wagon")
+  assert(angle(a.rot.y,math.pi) and angle(b.rot.y,math.pi))
+  S.reversed,t.consist.reversed=true,true
+  step(X)
+  assert(a.pos.x==out_b and b.pos.x==out_a, "ordinary train must swap engine and coach")
+  assert(angle(a.rot.y,0) and angle(b.rot.y,0), "both ordinary vehicles must face return travel")
+  assert(not a.continuous and not b.continuous, "train must not visibly interpolate through itself during the swap")
+  assert(a.rot.x==.125 and b.rot.x==.125, "slope pitch reverses with the body")
+  step(X)
+  assert(a.continuous and b.continuous, "ordinary travel remains interpolated")
+  S.reversed,t.consist.reversed=false,false
+  step(X)
+  assert(a.pos.x==out_a and b.pos.x==out_b and angle(a.rot.y,math.pi) and angle(b.rot.y,math.pi))
+end
+for _,coach in ipairs({true,false}) do
+  local X,D,S,_,A=fixture(nil,nil,nil,true)
+  local parts={{},{}}
+  if coach then parts[3]={} end
+  D.runs[1]={id="Manley with rear driving cab",stock_engine=11,stock_wagon=coach and 27 or nil,
+    fleet_id=91,paid_clock=true,consist={parts=parts}}
+  step(X)
+  assert(#A==#parts and A[1].name=="luanttd_core:dispatch_manley" and A[#A].name==A[1].name)
+  local saved={}
+  for i,a in ipairs(A) do saved[i]={x=a.pos.x,yaw=a.rot.y,pitch=a.rot.x} end
+  assert(angle(saved[1].yaw,math.pi) and angle(saved[#A].yaw,0), "both cabs face out")
+  S.reversed=true;step(X)
+  assert(#A==#parts, "no vehicle respawns on push-pull change")
+  for i,a in ipairs(A) do
+    assert(a.pos.x==saved[i].x and angle(a.rot.y,saved[i].yaw) and a.rot.x==saved[i].pitch,
+      "push-pull must preserve each body position and facing")
+  end
+end
+print("RAIL_REVERSAL_VIEW_PASS: steam and coach change leading position and face travel; Manley changes cabs without flipping vehicles.")
 print("RAIL_DISPATCH_VIEW_PASS: paid Oil #30 uses the sealed original at all cargo, missing mesh/atlas detected, unchanged Coal #29 and Passenger #27.")

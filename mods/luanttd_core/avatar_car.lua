@@ -1,0 +1,271 @@
+-- A local, reversible sightseeing car. It consumes the live road topology
+-- but never buys a vehicle, changes a route, or writes to the company ledger.
+return function(api,W)
+  local Sim,S=api.Sim,api.s
+  local path=core.get_modpath("luanttd_core")
+  local Follow=dofile(path.."/openttd/yapf_road_follow.lua")
+  local Lanes=dofile(path.."/road_lanes.lua")
+  local C,players={},{}
+  local entity="luanttd_core:sightseeing_car"
+  local max_speed,reverse_speed=6.4,2.4
+  local two_pi=2*math.pi
+  local function wrap(y) return (y+math.pi)%two_pi-math.pi end
+  local function opposite(d) return (d+1)%4+1 end
+  local function yaw(d) local v=Sim.dir[d];return math.atan2(v[1],v[2]) end
+  local function center(id) local x,z=Sim.xy(id);return 2*x+.5,2*z+.5 end
+  local function tile(x,z) return Sim.id(math.floor((x+.5)/2),math.floor((z+.5)/2)) end
+  local function span(id)
+    local t=S.tiles[id]
+    local b=t and t.road_bridge_id
+    local u=t and t.road_tunnel_id
+    if b then return S.stock_road_bridges[b],b,"bridge" end
+    if u then return S.stock_road_tunnels[u],u,"tunnel" end
+  end
+  local function ordinary(id)
+    local t=id and S.tiles[id]
+    if not t then return false end
+    return t.build=="road" or t.level_crossing
+      or (t.build=="road_station" and t.stop_axis and not t.road_stop_pair)
+  end
+  local function access(id,d)
+    local t=S.tiles[id]
+    local restriction=t.road_disallowed or t.disallowed or 0
+    if restriction==0 then return true end
+    local td=Follow.direction_trackdir((4-d)%4)
+    return Follow.has_trackdir(Follow.status({kind="road",roadtype=0,
+      road_bits=Sim.road_bits(S,id),disallowed=restriction},false),td)
+  end
+  local function edge(id,d,active_span,check_gate)
+    local t=S.tiles[id]
+    if not t then return end
+    local j=Sim.adjacent(id,d)
+    if not j then return end
+    if active_span then
+      local book=active_span.kind=="bridge" and S.stock_road_bridges or S.stock_road_tunnels
+      local p=book and book[active_span.key]
+      if p==active_span.record and (j==p.start or j==p["end"] or p.middle_by_tile[j]) then
+        return j,active_span
+      end
+      return
+    end
+    local p,key,kind=span(id)
+    if p then
+      local head=id==p.start and p.head or p.tail
+      if d==4-head.inside_direction then return j,{record=p,key=key,kind=kind} end
+    end
+    local n=S.tiles[j]
+    if not (ordinary(j) or span(j)) or not (ordinary(id) or p)
+      or not Sim.road_geometry_connected(S,id,d,j) or not access(id,d) or not access(j,d) then return end
+    if check_gate and n.level_crossing and n.level_crossing.barred then return end
+    return j
+  end
+  local function legal_tile(id)
+    if not ordinary(id) or (S.tiles[id].level_crossing and S.tiles[id].level_crossing.barred) then return false end
+    for d=1,4 do if edge(id,d) then return true end end
+    return false
+  end
+  local function locate(p)
+    local at=p:get_pos()
+    local gaze=W.target(p)
+    if gaze and legal_tile(gaze) then return gaze end
+    local nearby=tile(at.x,at.z)
+    if not nearby then return end
+    local px,pz=Sim.xy(nearby)
+    local found,best
+    -- Bound the fallback to the nearby streets instead of teleporting
+    -- across a huge map, and never spawn into an isolated road half-piece.
+    for dz=-10,10 do
+      for dx=-10,10 do
+        local d=dx*dx+dz*dz
+        if d<=100 and (not best or d<best) then
+          local id=Sim.id(px+dx,pz+dz)
+          if id and legal_tile(id) then found,best=id,d end
+        end
+      end
+    end
+    return found
+  end
+  local function first_heading(id,p)
+    local look=p:get_look_dir()
+    local forward,score
+    for d,v in ipairs(Sim.dir) do
+      local dot=v[1]*look.x+v[2]*look.z
+      if (not score or dot>score) and edge(id,d) then forward,score=d,dot end
+    end
+    return forward
+  end
+  local function choose(q,keys,back)
+    if q.span then
+      local d=back and opposite(q.heading) or q.heading
+      local next_id,next_span=edge(q.id,d,q.span,true)
+      return d,next_id,next_span
+    end
+    local left=q.heading%4+1
+    local right=(q.heading+2)%4+1
+    local preferred=back and opposite(q.heading) or keys.left and left or keys.right and right or q.heading
+    local id,structure=edge(q.id,preferred,nil,true)
+    if id then return preferred,id,structure end
+    if back then return end
+    if preferred~=q.heading then
+      id,structure=edge(q.id,q.heading,nil,true)
+      if id then return q.heading,id,structure end
+      return
+    end
+    -- Automatically follow a single bend, never choose an arbitrary exit
+    -- at a junction. A driver can queue A or D before reaching its center.
+    local l,ls=edge(q.id,left,nil,true)
+    local r,rs=edge(q.id,right,nil,true)
+    if l and not r then return left,l,ls end
+    if r and not l then return right,r,rs end
+  end
+  local function height(id,x,z,layer)
+    if layer then
+      local s=layer.record
+      if layer.kind=="tunnel" then return s.base+.52 end
+      if s.middle_by_tile[id] then return s.deck+.52 end
+    end
+    return api.render.surface(id,x,z)+.02
+  end
+  local function pose(q)
+    local x,z=center(q.id)
+    local dx,dz=0,0
+    local ground,layer=q.id,q.span
+    if q.next_id then
+      local bx,bz=center(q.next_id)
+      dx,dz=bx-x,bz-z
+      x,z=x+dx*q.progress,z+dz*q.progress
+      ground=q.progress<.5 and q.id or q.next_id
+      layer=q.next_span
+    end
+    local y=q.look
+    local shiftx,shiftz=Lanes.offset(math.sin(y),math.cos(y))
+    x,z=x+shiftx,z+shiftz
+    return {x=x,y=height(ground,x,z,layer),z=z}
+  end
+  local function status(p,q,waiting)
+    local speed=math.floor(q.speed*14+.5)
+    local msg=("Sightseeing car  ·  %d km/h%s  |  W drive  ·  A/D steer  ·  S brake/reverse  ·  Right-click or /car to exit"):
+      format(speed,waiting and "  ·  No open road in that direction" or "")
+    if msg~=q.message then
+      q.message=msg
+      if q.hud then p:hud_change(q.hud,"text",msg) end
+    end
+  end
+  local function release(q,p)
+    if p and q.attached and p:get_attach()==q.object then p:set_detach() end
+    if p and q.hud then p:hud_remove(q.hud) end
+    if q.object then q.object:remove() end
+  end
+  function C.active(p) return players[p:get_player_name()]~=nil end
+  function C.leave(n)
+    local q=players[n]
+    if q then release(q,core.get_player_by_name(n));players[n]=nil end
+  end
+  function C.toggle(p)
+    local n=p:get_player_name()
+    local existing=players[n]
+    if existing then
+      release(existing,p)
+      players[n]=nil
+      W.end_avatar(p,"car")
+      return true,"Returned to builder view."
+    end
+    local id=locate(p)
+    if not id then return false,"Point at a connected road or fly nearer to town before typing /car." end
+    local state,why=W.begin_avatar(p,"car")
+    if not state then return false,why or "Return to builder view before driving." end
+    local heading=first_heading(id,p)
+    local q={id=id,heading=heading,look=yaw(heading),progress=0,speed=0}
+    local at=pose(q)
+    q.object=core.add_entity(at,entity)
+    if not q.object then W.end_avatar(p,"car");return false,"Could not enter a car yet; try a loaded road." end
+    q.object:set_yaw(-q.look)
+    p:set_physics_override({gravity=0,speed=0,jump=0,sneak=false,speed_walk=0,speed_crouch=0})
+    p:set_attach(q.object,"",{x=0,y=0,z=0},{x=0,y=0,z=0})
+    q.attached=true
+    p:set_properties({eye_height=.43})
+    p:set_look_horizontal(-q.look);p:set_look_vertical(.12)
+    q.hud=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},
+      text="",number=0xffe3a3,z_index=105})
+    players[n]=q
+    status(p,q)
+    return true,"You're in a car. W drives, A/D steer, S brakes or reverses; right-click or /car to get out."
+  end
+  function C.step(p,_,keys,dt)
+    local name=p:get_player_name()
+    local q=players[name]
+    if not q then return end
+    if not q.object:get_pos() then
+      C.toggle(p)
+      core.chat_send_player(name,"The car disappeared; returned to builder view.")
+      return
+    end
+    local drive=keys.up and not keys.down
+    local brake=keys.down and not keys.up
+    local waiting=false
+    if not drive and not brake then
+      q.speed=math.max(0,q.speed-5*dt)
+    elseif brake and not q.reversing and q.speed>0 then
+      q.speed=math.max(0,q.speed-15*dt)
+    elseif drive and q.reversing and q.next_id then
+      -- Break out of reverse without cutting across a corner or teleporting.
+      q.speed=math.max(.95,q.speed-15*dt)
+    else
+      q.speed=math.min(brake and reverse_speed or max_speed,q.speed+(brake and 4 or 6)*dt)
+    end
+    local distance=q.speed*dt
+    while distance>0 do
+      if not q.next_id then
+        if not drive and not brake then break end
+        local reverse=not not brake
+        local d,id,layer=choose(q,keys,reverse)
+        if not id then q.speed=0;waiting=true;break end
+        q.next_id,q.next_span,q.progress=id,layer,0
+        q.reversing=reverse
+        if not reverse then q.heading=d end
+        q.direction=d
+      else
+        -- A pedestrian can edit this world while driving. If a segment is
+        -- removed mid-drive, return to builder, not onto dirt or into water.
+        local expect=edge(q.id,q.direction,q.span,false)
+        if expect~=q.next_id then
+          C.toggle(p)
+          core.chat_send_player(name,"Road changed under the car; returned to builder view.")
+          return
+        end
+        if q.progress<.5 and not q.next_span and not edge(q.id,q.direction,q.span,true) then
+          q.speed=0;waiting=true;break
+        end
+      end
+      local remaining=2*(1-q.progress)
+      local amount=math.min(distance,remaining)
+      q.progress=q.progress+amount/2
+      if q.progress>=1-1e-8 then
+        q.id=q.next_id
+        q.span=q.next_span
+        if q.span and (q.id==q.span.record.start or q.id==q.span.record["end"]) then q.span=nil end
+        q.next_id,q.next_span,q.progress=nil,nil,0
+      end
+      distance=distance-amount
+    end
+    local delta=wrap(yaw(q.heading)-q.look)
+    local change=math.max(-7*dt,math.min(7*dt,delta))
+    q.look=wrap(q.look+change)
+    q.object:move_to(pose(q),true)
+    q.object:set_yaw(-q.look)
+    -- Turn the driver's view with the car while retaining mouse look offset.
+    if math.abs(change)>.0001 then p:set_look_horizontal((p:get_look_horizontal()-change)%two_pi) end
+    status(p,q,waiting)
+  end
+  core.register_entity(entity,{initial_properties={
+    physical=false,collide_with_objects=false,pointable=false,visual="mesh",
+    mesh="bl_sightseeing_car.obj",textures={"bl_sightseeing_car_palette.png"},
+    visual_size={x=1,y=1,z=1},static_save=false},static_save=false})
+  core.register_chatcommand("car",{description="Drive a sightseeing car on the roads; use again to return to building.",
+    func=function(name)
+      local p=core.get_player_by_name(name)
+      if not p then return false,"Join the world before driving." end
+      return C.toggle(p)
+    end})
+  return C
+end

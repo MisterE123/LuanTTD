@@ -9,7 +9,7 @@ return function(api,status)
   local explanation={
     [4]="Recommended for most layouts. A train approaching the head waits for a safe path ahead. A train coming from the other side can pass.",
     [5]="Reserves a path like a normal path signal, but trains cannot pass from the other side. Do not use one for a single-track shuttle that returns the same way.",
-    [0]="Controls a whole section of track. A train waits for the next block to clear. Use a separate block-signalled line, not mixed with path signals.",
+    [0]="Controls a whole section of track. A train waits for the next block to clear. Use both directions for track that trains travel in both directions.",
   }
   local direction={[0]="West",[1]="South",[2]="East",[3]="North"}
   local function opposite(dir) return (dir+2)%4 end
@@ -25,8 +25,8 @@ return function(api,status)
     return ax==0 and (here.x<2*x+.5 and 2 or 0)
       or (here.z<2*z+.5 and 1 or 3)
   end
-  local function quote(n,id,dir,kind)
-    return api.rail_build.quote_signal(n,id,dir,kind==5,kind==0)
+  local function quote(n,id,dir,kind,both)
+    return api.rail_build.quote_signal(n,id,dir,kind==5,kind==0,both)
   end
   function W.preview(p,tool,id)
     local ax=axis(id)
@@ -73,6 +73,10 @@ return function(api,status)
         if q then button(x_,3.04,5.62,"dir"..dir,travel.."    $"..q.price)
         else label(x_,3.31,travel);b[#b+1]=("textarea[%g,3.64;5.58,1.03;;;%s]"):format(x_,esc(why or "Not available.")) end
       end
+      if kind==0 then
+        local q=quote(n,id,ax,kind,true)
+        if q then button(.4,4.05,11.47,"both","Both directions    $"..q.price) end
+      end
       label(.4,5.01,"Start with one train on a connected route: signals are optional there.")
       label(.4,5.49,"Add signals when trains need to share track. Place them on plain rail, not a station.")
     end
@@ -105,9 +109,10 @@ return function(api,status)
     local plan,why
     if q.inspect and action=="flip" then plan,why=api.rail_build.quote_flip_signal(n,q.id)
     elseif not q.inspect then
-      local dir=tonumber(action:match("^dir([0-3])$"))
+      local both=action=="both" and q.kind==0
+      local dir=both and axis(q.id) or tonumber(action:match("^dir([0-3])$"))
       if not dir or dir%2~=axis(q.id) then return true end
-      plan,why=quote(n,q.id,dir,q.kind)
+      plan,why=quote(n,q.id,dir,q.kind,both)
     end
     if not plan then status(p,why or "No change made.");return true end
     local ok,note=api.rail_build.build(n,plan)

@@ -30,16 +30,17 @@ jobs:
       - name: Check Lua syntax and run focused tests
         run: |
           find mods/luanttd_core -type f -name '*.lua' -print0 | xargs -0 -r -n 1 luac5.1 -p
-          for t in sim world_setup workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere hotbar ordinary_level_crossing \
+          for t in sim pedestrian avatar_car world_setup workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere hotbar ordinary_level_crossing \
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight rail_owned_default \
             rail_depot_fleet rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
-            road_bay_live road_terminus_town_limits rail_owned_service rail_paid_runtime rail_signal_ui rail_station_placement rail_preview rail_diagonal rail_dispatch_view ship_preview_view; do
+            road_bay_live road_terminus_town_limits rail_owned_service rail_owned_multi rail_paid_runtime rail_signal_ui rail_block_signals rail_block_dispatch rail_station_placement rail_preview rail_diagonal rail_dispatch_view ship_preview_view; do
             lua5.1 "tests/$t.lua"
           done
           lua5.1 tests/road_timber_live.lua craighead
           lua5.1 tests/rail_owned_service.lua signal_free
           lua5.1 tests/rail_owned_service.lua depot_turnout
+          lua5.1 tests/rail_owned_service.lua mixed_signals
           python3 tests/rail_diagonal_art.py
           for ship in 206 207; do lua5.1 tests/rail_paid_runtime.lua "$ship"; done
       - name: Run native startup, feature availability and SQLite checks
@@ -56,3 +57,4 @@ jobs:
           for year in 1950 1980; do LUANTTD_NATIVE_FERRY_YEAR="$year" bash tests/ship_coal_live_native.sh; done
           LUANTTD_NATIVE_SIGNAL_FREE=true bash tests/rail_owned_live_native.sh
           LUANTTD_NATIVE_DEPOT_TURNOUT=true bash tests/rail_owned_live_native.sh
+          LUANTTD_NATIVE_MIXED_FLEET=true bash tests/rail_owned_live_native.sh

@@ -147,4 +147,26 @@ local end_state,list,overflow=update(648,T.NE)
 assert(end_state==B.FULL and #list==0 and overflow)
 assert(next(state.records)==nil)
 
+-- RC1 updates unreserved PBS from the block's real topology; it does not
+-- force all path heads red (nor touch a reserved head's aspect).
+reset()
+signal(518,1,4,R.PBS,0)
+rail(519);rail(520)
+assert(B.classify(board,state,1,parts,518,T.SW)==B.PBS)
+assert(aspect(518,8)=="red" and next(state.records)==nil)
+assert(update(518,T.SW)==B.PBS)
+assert(aspect(518,8)=="green")
+physical[519]={1}
+assert(update(518,T.SW)==B.PBS and aspect(518,8)=="red")
+physical[519]=nil
+rail(519,1+16) -- a split in the protected segment
+assert(update(518,T.SW)==B.PBS and aspect(518,8)=="red")
+rail(519)
+signal(521,1,8,R.BLOCK)
+assert(update(518,T.SW)==B.PBS and aspect(518,8)=="red") -- multiple entrances, including conventional
+assert(R.set_aspect(board,state,518,8,true))
+tiles[518].reserved_bits=1
+physical[519]={1}
+assert(update(518,T.SW)==B.PBS and aspect(518,8)=="green")
+
 print("rail block signal integration fixture: directional head/tail, wait/reload, junction, parallel lanes and pre-signals passed")

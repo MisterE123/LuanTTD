@@ -3,6 +3,9 @@
 return function(api,ui)
   local Sim,S=api.Sim,api.s
   local W={}
+  local mod=core.get_modpath("luanttd_core")
+  local Pedestrian=dofile(mod.."/pedestrian.lua")
+  local pedestrian=Pedestrian.new(api)
   local hud={}
   local controls={}
   local slots={
@@ -154,6 +157,10 @@ return function(api,ui)
     local n=p:get_player_name()
     local state=controls[n]
     if not state then return item end
+    if state.avatar then
+      if menu then W.exit_avatar(p) end
+      return item
+    end
     if state.order_mode then
       local now=core.get_us_time()
       -- A tool click and global click telemetry can describe the same press.
@@ -429,6 +436,97 @@ return function(api,ui)
     else ui.inspect(p,nil) end
     W.hud(p,0)
   end
+  function W.avatar_state(p)
+    local state=controls[p:get_player_name()]
+    return state and state.avatar
+  end
+  function W.begin_avatar(p,mode)
+    local n=p:get_player_name()
+    local state=controls[n]
+    if not state then return nil,"Join the campaign to enter street view." end
+    if state.avatar then return nil,"Return to the builder camera before switching modes." end
+    if state.order_mode or state.build_drag or state.demolishing then
+      return nil,"Finish or right-click to cancel construction or orders first."
+    end
+    local avatar={mode=mode,saved=Pedestrian.capture(p)}
+    state.avatar=avatar
+    p:hud_set_flags({hotbar=false,crosshair=false})
+    p:set_inventory_formspec("formspec_version[7]size[8,2.4]bgcolor[#152334;true]"..
+      "label[.5,.55;Street view active]"..
+      "label[.5,1.45;Close this panel, then right-click to return to the builder camera.]")
+    for _,id in pairs(hud[n] or {}) do
+      if type(id)=="number" then p:hud_remove(id) end
+    end
+    hud[n]=nil
+    for _,id in pairs(state.labels or {}) do p:hud_remove(id) end
+    state.labels,state.label_names=nil,nil
+    if api.selector then api.selector.leave(n) end
+    if ui.cinematic then ui.cinematic(p,true) end
+    -- The hint is the only HUD owned by avatar mode.
+    if mode=="walk" then
+      avatar.hint=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},z_index=100,
+        text="STREET VIEW  ·  WASD walk  ·  Right-click or /walk to return",number=0xffe8b7})
+    end
+    return avatar
+  end
+  function W.end_avatar(p,mode)
+    local state=controls[p:get_player_name()]
+    if not state or not state.avatar or state.avatar.mode~=mode then return false end
+    local avatar=state.avatar
+    if avatar.leaving then return true end
+    avatar.leaving=true
+    if avatar.hint then p:hud_remove(avatar.hint) end
+    Pedestrian.restore_controls(p,avatar.saved)
+    local name=p:get_player_name()
+    -- Physics control packets arrive separately from the position packet.
+    -- Restore the exact high aerial pose once local gravity is off; an
+    -- immediate teleport still falls for the intervening client frames.
+    core.after(.21,function()
+      local who=core.get_player_by_name(name)
+      if not who or controls[name]~=state or state.avatar~=avatar then return end
+      state.avatar=nil
+      Pedestrian.restore_pose(who,avatar.saved)
+      ui.inventory(who)
+      if ui.cinematic then ui.cinematic(who,false) end
+      local now=core.get_us_time()
+      local keys=who:get_player_control()
+      state.clicked,state.right_at=now,now
+      state.dig,state.place=keys.dig or keys.LMB,keys.place or keys.RMB
+      state.lift_input,state.lift_boost,state.lift_elapsed=nil,nil,0
+      W.hud(who)
+    end)
+    return true
+  end
+  function W.exit_avatar(p)
+    local avatar=W.avatar_state(p)
+    if not avatar or avatar.leaving then return false end
+    if avatar.mode=="walk" then return W.end_avatar(p,"walk") end
+    if avatar.mode=="car" and api.car then return api.car.toggle(p) end
+    return false
+  end
+  function W.toggle_walk(p)
+    local active=W.avatar_state(p)
+    if active and active.mode=="walk" then
+      return W.end_avatar(p,"walk")
+    elseif active then
+      return false,"Leave the car before entering pedestrian mode."
+    end
+    if not controls[p:get_player_name()] then return false,"Join the campaign to walk." end
+    local id,hit=W.target(p)
+    local land=pedestrian.find(p,id,hit)
+    if not land then return false,"Aim at dry ground or a nearby road, then use /walk again." end
+    local avatar,why=W.begin_avatar(p,"walk")
+    if not avatar then return false,why end
+    pedestrian.enter(p,avatar,land)
+    return true
+  end
+  core.register_chatcommand("walk",{
+    description="Drop to street level; use /walk or right-click to return to the builder camera",
+    func=function(name)
+      local p=core.get_player_by_name(name)
+      if not p then return false,"Join the campaign to walk." end
+      return W.toggle_walk(p)
+    end})
   function W.spawn(p)
     local n=p:get_player_name()
     controls[n]={elapsed=0,menus={"home"},sprinting=false}
@@ -457,14 +555,15 @@ return function(api,ui)
     W.hud(p,0)
   end
   function W.leave(n)
+    if api.car and api.car.leave then api.car.leave(n) end
     hud[n]=nil;controls[n]=nil;api.render.leave(n)
     if api.selector then api.selector.leave(n) end
   end
   function W.hud(p)
     local n=p:get_player_name()
-    local t,hit=W.target(p)
     local state=controls[n]
-    if not state then return end
+    if not state or state.avatar then return end
+    local t,hit=W.target(p)
     local menu=entries(state)
     local slot=menu[p:get_wield_index()]
     local key=slot and slot[1]
@@ -617,7 +716,16 @@ return function(api,ui)
     dt=math.min(dt,.10)
     for _,p in ipairs(core.get_connected_players()) do
       local state=controls[p:get_player_name()]
-      if state then
+      if state and state.avatar then
+        local keys=p:get_player_control()
+        local right=keys.place or keys.RMB
+        if not state.avatar.leaving then
+          if right and not state.place then W.exit_avatar(p)
+          elseif state.avatar.mode=="walk" then pedestrian.step(p,state.avatar)
+          elseif state.avatar.mode=="car" and api.car then api.car.step(p,state.avatar,keys,dt) end
+        end
+        state.place=right
+      elseif state then
         local keys=p:get_player_control()
         local click=keys.dig or keys.LMB
         if not click then state.clear_arming_press=nil end
@@ -667,5 +775,6 @@ return function(api,ui)
       end
     end
   end
+  if core.register_entity then api.car=dofile(mod.."/avatar_car.lua")(api,W) end
   return W
 end

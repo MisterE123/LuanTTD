@@ -1,11 +1,11 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Copyright OpenTTD contributors. Port of OpenTTD 14.1 src/signal.cpp
+-- Copyright OpenTTD contributors. Port of OpenTTD 16.0-RC1 src/signal.cpp
 -- SmallSet, ExploreSegment, UpdateSignalsAroundSegment and buffer drivers.
 -- Map and physical train parts are provided by the host; no vehicle movement.
 return function(T,Signal)
   local B={FREE="free",FULL="full",PBS="pbs",INVALID_SIDE=255,DEPOT=128,WORMHOLE=64}
   local U,D,G,FLUSH=64,256,128,64 -- SIG_TBU/TBD/GLOB_SIZE and SIG_GLOB_UPDATE
-  local TRAIN,EXIT,EXIT2,GREEN,GREEN2,FULL,PBS=0,1,2,3,4,5,6
+  local TRAIN,EXIT,EXIT2,GREEN,GREEN2,FULL,PBS,SPLIT,ENTER,MULTI_ENTER=0,1,2,3,4,5,6,7,8,9
   local has,band,bor,reverse=T.has,T.intersect,T.union,T.reverse_side
   local first_side={[0]=0,1,0,1,2,1}
   local second_side={[0]=2,3,3,2,3,0}
@@ -100,14 +100,17 @@ return function(T,Signal)
             detect(tile)
           end
           if connected then
+            if tracks~=0 and tracks~=2^first(tracks,5) then mark(SPLIT) end
             local track=first(masked,5)
             if Signal.on_track(t,track) then
               local td=first(band(T.trackdirs(tracks),incoming[enter]),13)
               local rev=T.reverse_trackdir(td)
               local sig=Signal.signal_type(t,td)
               if Signal.along(t,rev) then
-                if Signal.pbs(sig) then mark(PBS)
-                elseif not add(update,U,tile,rev) then return bor(flags,2^FULL) end
+                if Signal.pbs(sig) then mark(PBS) end
+                if has(flags,ENTER) then mark(MULTI_ENTER) end
+                mark(ENTER)
+                if not add(update,U,tile,rev) then return bor(flags,2^FULL) end
               end
               if Signal.along(t,td) and sig==Signal.PBS then mark(PBS) end
               if not has(flags,GREEN2) and presignal_exit(sig) and Signal.along(t,td) then
@@ -155,20 +158,24 @@ return function(T,Signal)
       local t=view.tile(id)
       local rev=T.reverse_trackdir(td)
       local kind=Signal.signal_type(t,td)
-      local green=true
-      if has(flags,TRAIN) then
-        green=false
-      elseif kind==Signal.COMBO and Signal.along(t,rev) then
-        if has(flags,EXIT2) and (not has(flags,GREEN) or not has(flags,GREEN2) and Signal.aspect(t,rev)=="green") then
+      local pbs=Signal.pbs(kind)
+      -- Reserved PBS aspects are written by reserve/unreserve instead.
+      if not (pbs and has(t.reserved_bits or 0,T.track(td))) then
+        local green=true
+        if has(flags,TRAIN) or pbs and (has(flags,SPLIT) or has(flags,MULTI_ENTER)) then
+          green=false
+        elseif kind==Signal.COMBO and Signal.along(t,rev) then
+          if has(flags,EXIT2) and (not has(flags,GREEN) or not has(flags,GREEN2) and Signal.aspect(t,rev)=="green") then
+            green=false
+          end
+        elseif presignal_entry(kind) and has(flags,EXIT) and not has(flags,GREEN) then
           green=false
         end
-      elseif presignal_entry(kind) and has(flags,EXIT) and not has(flags,GREEN) then
-        green=false
-      end
-      if green~=(Signal.aspect(t,td)=="green") then
-        if presignal_exit(kind) then add(glob,G,id,T.exit_side(rev)) end
-        Signal.set_aspect(board,state,id,td,green)
-        changes[#changes+1]={tile=id,td=td,green=green}
+        if green~=(Signal.aspect(t,td)=="green") then
+          if presignal_exit(kind) then add(glob,G,id,T.exit_side(rev)) end
+          Signal.set_aspect(board,state,id,td,green)
+          changes[#changes+1]={tile=id,td=td,green=green}
+        end
       end
     end
   end
@@ -226,6 +233,15 @@ return function(T,Signal)
   -- not read a stale green as success if the host sees an overflow.
   function B.update_segment(board,state,owner,train_tracks,tile,side)
     return update_all(board,state,owner,train_tracks,{{tile,side}})
+  end
+
+  -- Test the same RC1 traversal at an order quote without publishing
+  -- any aspect changes. Signal.set_aspect replaces a record, so a
+  -- copy-on-write records overlay suffices.
+  function B.classify(board,state,owner,train_tracks,tile,side)
+    local scratch={records=setmetatable({},{__index=state.records})}
+    local segment,_,overflow=B.update_segment(board,scratch,owner,train_tracks,tile,side)
+    return segment,overflow
   end
 
   -- TrainMovedChangeSignals: call after the first vehicle moves onto the

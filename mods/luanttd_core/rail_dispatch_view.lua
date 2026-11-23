@@ -78,7 +78,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
     if saved and saved.ref and saved.ref:get_pos() then saved.ref:remove() end
     collection[key]=nil
   end
-  local function pose(collection,key,name,pos,rotation,extension)
+  local function pose(collection,key,name,pos,rotation,extension,flip_epoch)
     local saved=collection[key]
     if saved and saved.name~=name then forget(collection,key);saved=nil end
     if not saved or not saved.ref or not saved.ref:get_pos() then
@@ -86,7 +86,12 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
       collection[key]=saved
     end
     if saved.ref then
-      saved.ref:move_to(pos,true);saved.ref:set_rotation(rotation)
+      -- The stock flip changes ends immediately; interpolating those old
+      -- and new slots makes the locomotive and coach slide through one another.
+      if saved.flip_epoch~=nil and saved.flip_epoch~=flip_epoch then saved.ref:set_pos(pos)
+      else saved.ref:move_to(pos,true) end
+      saved.flip_epoch=flip_epoch
+      saved.ref:set_rotation(rotation)
       if extension and (not saved.extension or math.abs(extension-saved.extension)>.002) then
         saved.ref:set_properties({visual_size={x=1,y=extension,z=1}})
         saved.extension=extension
@@ -132,14 +137,25 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
           -- never changes mesh when loading or unloading.
           wagon="oil_tanker"
         end
-        for i,_ in ipairs(train.consist.parts) do
+        local parts=train.consist.parts
+        local push_pull=train.stock_engine==11 and #parts>1
+        for i,_ in ipairs(parts) do
           local id,td,progress,reversed,wormhole
           if train.paid_clock then id,td,progress,reversed,wormhole=Sim.rail_paid_pose(S,i,fraction,train.fleet_id)
           else id,td,progress,wormhole=Run.sample(train,i);reversed=train.consist.reversed end
           if id and ready[engine] and ready[wagon] then
-            local tail_cab=train.stock_engine==11 and i==#train.consist.parts
-            local kind=(i==1 or tail_cab) and engine or wagon
-            local key=train.id..":"..i
+            -- OpenTTD 16.0-RC1 ReverseTrainDirection:
+            -- default single-ended trains swap positions *and* turn.
+            -- A rear driving cab leads in the opposite direction without
+            -- reorienting the bodies. Keep those cab identities on their
+            -- physical ends when consuming the travel-ordered samples.
+            local backing=push_pull and reversed==true
+            local body_index=backing and #parts-i+1 or i
+            local rear_cab=push_pull and body_index==#parts
+            local kind=(body_index==1 or rear_cab) and engine or wagon
+            local key=train.id..":"..body_index
+            local flip_epoch
+            if not push_pull then flip_epoch=reversed==true end
             local tx,tz=Sim.xy(id)
             local x,z,dx,dz
             if not wormhole and api.render and api.render.rail_diagonal_pose then
@@ -148,7 +164,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
             if x==nil then x,z,dx,dz=Pose.sample(td,progress) end
             local level,tilt
             if surface then level,tilt=surface(id,td,progress,{wormhole=wormhole}) end
-            local flipped=i==1 and reversed or tail_cab and not reversed
+            local flipped=rear_cab~=backing
             local body={x=2*tx+.5+x,y=(level or board_base(id))+models[kind].offset,z=2*tz+.5+z}
             local rotation={x=(tilt or 0)*(flipped and 1 or -1),
               y=math.pi-math.atan2(dx,dz)+(flipped and math.pi or 0),z=0}
@@ -159,12 +175,12 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
               -- If an optional visual contact is missing, don't hover
               -- above the rail or move the authoritative vehicle.
               local scale=move and move.scale_y or (rows and .03/collector.nominal_extension or 1)
-              pose(refs,key,"dispatch_"..kind.."_body",body,rotation)
-              pose(refs,key..":collector","dispatch_"..kind.."_collector",heel,rotation,scale)
+              pose(refs,key,"dispatch_"..kind.."_body",body,rotation,nil,flip_epoch)
+              pose(refs,key..":collector","dispatch_"..kind.."_collector",heel,rotation,scale,flip_epoch)
               show_parts[key..":collector"]=true
               if V.observe_collector then V.observe_collector(train,id,move,rows,scale,td) end
             else
-              pose(refs,key,"dispatch_"..kind,body,rotation)
+              pose(refs,key,"dispatch_"..kind,body,rotation,nil,flip_epoch)
             end
             show_parts[key]=true
           end

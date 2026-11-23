@@ -59,3 +59,26 @@ The straight 3D diagonal is a rendering adapter. It preserves the logical
 half-tile rail pieces, track directions, pathfinder, train length, station
 axes and signal rules. Visual train poses follow the new meshes, and
 diagonals ease back to the ordinary rail at ends and junctions.
+
+## Mixed signals and more than one train
+
+Use the **Both directions** choice for a conventional block signal when
+both directions are allowed. Protect every approach to a shared junction
+with signals. In the depot, buy and order each passenger train separately;
+no joint preview dispatcher is required. These ordinary mixed-signal
+services use the same physical track and loading clock for all of the
+company's trains.
+
+[OpenTTD 16.0-RC1 signal.cpp](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/signal.cpp)
+sets unreserved path aspects from real occupancy, splits and multiple
+entrances. A reserved head is left to the path reservation code.
+[train_cmd.cpp](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/train_cmd.cpp)
+classifies the depot segment and updates both the moving front and tail.
+A conventional head into a Path block triggers reservation *after* the
+front crosses it. The native regression saves while a train is held on
+one approach to a four-way diamond, restarts, and follows both separately
+bought trains through reciprocal trips with independent passenger fares.
+
+This pass does not enable unsignalled multiple-train operation, shared
+depot occupancy or dispatching freight and passengers together. Avoid
+single-track head-to-head routes without a passing loop.

@@ -1,0 +1,133 @@
+-- Street-level camera uses Luanti's local walking and collision prediction.
+-- Authoritative simulation remains separate: pedestrians don't buy/build
+-- or affect any route, vehicle reservation, or cargo.
+local P={}
+local function copy(value)
+  if type(value)~="table" then return value end
+  local t={}
+  for k,v in pairs(value) do t[k]=copy(v) end
+  return t
+end
+
+local function position(p,pos,yaw,pitch)
+  -- Keep the pose consistent when sending the transition's absolute packet.
+  p:set_look_horizontal(yaw)
+  p:set_look_vertical(pitch)
+  p:set_pos(pos)
+  local v=p:get_velocity()
+  if math.abs(v.x)+math.abs(v.y)+math.abs(v.z)>.05 then
+    p:add_velocity({x=-v.x,y=-v.y,z=-v.z})
+  end
+end
+
+function P.capture(p)
+  local props=p:get_properties()
+  return {pos=copy(p:get_pos()),yaw=p:get_look_horizontal(),pitch=p:get_look_vertical(),
+    props={eye_height=props.eye_height,collisionbox=copy(props.collisionbox),
+      stepheight=props.stepheight},physics=copy(p:get_physics_override()),
+    flags=copy(p:hud_get_flags()),eye=copy({p:get_eye_offset()})}
+end
+
+function P.restore_controls(p,saved)
+  p:set_properties(saved.props)
+  p:set_physics_override(saved.physics)
+  p:set_eye_offset(saved.eye[1],saved.eye[2],saved.eye[3])
+  local v=p:get_velocity()
+  if math.abs(v.x)+math.abs(v.y)+math.abs(v.z)>.05 then
+    p:add_velocity({x=-v.x,y=-v.y,z=-v.z})
+  end
+end
+
+function P.restore_pose(p,saved)
+  p:hud_set_flags(saved.flags)
+  position(p,saved.pos,saved.yaw,saved.pitch)
+end
+
+-- Luanti meshes don't have arbitrary polygon collision. Closely spaced
+-- thin steps use the same OpenTTD height field as the visible mesh.
+-- Sample the low edge to avoid an invisible hurdle at the foot of a grade.
+function P.slope_box(sample,shape)
+  local fixed={}
+  -- Simple ramps have one axis with constant height; eight strips are
+  -- identical to 64 squares and cheaper for native collision scanning.
+  local nx=(shape==6 or shape==9) and 1 or 8
+  local nz=(shape==3 or shape==12) and 1 or 8
+  for z=0,nz-1 do for x=0,nx-1 do
+    local u,v=x/nx,z/nz
+    local w,q=(x+1)/nx,(z+1)/nz
+    local y=math.min(sample(u,v,shape),sample(u,q,shape),
+      sample(w,v,shape),sample(w,q,shape))-.50
+    if y>-.50 then
+      fixed[#fixed+1]={u*2-.5,-.51,v*2-.5,w*2-.5,y,q*2-.5}
+    end
+  end end
+  return {type="fixed",fixed=fixed}
+end
+
+function P.new(api)
+  local Sim,S=api.Sim,api.s
+  local W={}
+  local function tile_at(x,z) return Sim.id(math.floor((x+.5)/2),math.floor((z+.5)/2)) end
+  local function wet(t)
+    return not t or t.stock_void or t.terrain=="water" or t.coastal_water or
+      t.stock_canal or t.water_class=="river" or (t.ship and t.ship.water_ground)
+  end
+  local function blocked(t)
+    return wet(t) or t.site or t.house or t.stock_landmark or t.stock_industry
+      or t.build=="road_depot" or t.rail_depot_dir or t.road_bridge_id or
+      t.road_tunnel_id or t.rail_span_id or t.airfield
+  end
+  local function surface(id,x,z)
+    local t=S.tiles[id]
+    if api.render.uses_slope(id) then return api.render.surface(id,x,z) end
+    return t.h+.5
+  end
+  local function clamp(a,lo,hi) return math.min(hi,math.max(lo,a)) end
+  local function point(id,x,z)
+    if not id or blocked(S.tiles[id]) then return end
+    local u,v=Sim.xy(id)
+    x=x and clamp(x,u*2-.25,u*2+1.25) or u*2+.5
+    z=z and clamp(z,v*2-.25,v*2+1.25) or v*2+.5
+    return {x=x,y=surface(id,x,z)+.045,z=z}
+  end
+  function W.find(p,tile,hit)
+    local direct=tile and point(tile,hit and hit.x,hit and hit.z)
+    if direct then return direct end
+    local focus=hit or p:get_pos()
+    if tile and not hit then local x,z=Sim.xy(tile);focus={x=x*2+.5,z=z*2+.5} end
+    local x,z=math.floor((focus.x+.5)/2),math.floor((focus.z+.5)/2)
+    local best,score
+    for dz=-7,7 do for dx=-7,7 do
+      local id=Sim.id(x+dx,z+dz)
+      local land=point(id)
+      if land then
+        local t=S.tiles[id]
+        local road=t.build=="road" or t.road_town or t.town_road
+        local distance=(land.x-focus.x)^2+(land.z-focus.z)^2+(road and 0 or 12)
+        if not score or distance<score then best,score=land,distance end
+      end
+    end end
+    return best
+  end
+  function W.enter(p,state,land)
+    state.last_dry=land
+    p:set_eye_offset()
+    p:set_properties({eye_height=.74,collisionbox={-.13,0,-.13,.13,.95,.13},stepheight=.40})
+    p:set_physics_override({gravity=1,jump=.42,sneak=true,speed=1,speed_walk=.38,
+      speed_crouch=.67,acceleration_default=1,acceleration_air=1})
+    position(p,land,state.saved.yaw,0)
+  end
+  function W.step(p,state)
+    local at=p:get_pos()
+    local id=tile_at(at.x,at.z)
+    local t=id and S.tiles[id]
+    if not wet(t) and math.abs(at.y-surface(id,at.x,at.z))<.32 then
+      state.last_dry=at
+    elseif (wet(t) and at.y<.30 and p:get_velocity().y<-.2) or at.y<-.8 then
+      -- A single recovery when falling into water, not per-tick movement.
+      position(p,state.last_dry,p:get_look_horizontal(),p:get_look_vertical())
+    end
+  end
+  return W
+end
+return P

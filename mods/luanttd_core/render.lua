@@ -136,9 +136,10 @@ return function(api)
     props[n]=reg(n,{{name=face,align_style="world",scale=2},png(base),side},
       raised and {drawtype="nodebox",node_box={type="fixed",fixed=fixed}} or nil)
   end
-  local function architecture(name,asset,palette,rotates)
+  local function architecture(name,asset,palette,rotates,solid)
     return reg(name,{png(palette or "road_architecture")},{drawtype="mesh",mesh="bl_"..asset..".obj",
-      paramtype="light",paramtype2=rotates and "facedir" or nil,sunlight_propagates=true,walkable=false,pointable=false,
+      paramtype="light",paramtype2=rotates and "facedir" or nil,sunlight_propagates=true,walkable=not not solid,pointable=false,
+      collision_box=solid and {type="fixed",fixed=solid} or nil,
       selection_box={type="fixed",fixed={-.5,-.50,-.5,1.5,.60,1.5}}})
   end
   local crossing_mesh={}
@@ -388,6 +389,14 @@ return function(api)
   local depot={}
   for i=0,3 do depot[i+1]=architecture("depot_"..i,"road_depot_"..i) end
   local ground_mesh={}
+  local pedestrian=dofile(modpath.."/pedestrian.lua")
+  local slope_colliders={}
+  local function slope_collision(mask)
+    if not slope_colliders[mask] then
+      slope_colliders[mask]=pedestrian.slope_box(api.slope.surface,mask)
+    end
+    return slope_colliders[mask]
+  end
   local terrain=api.terrain
   local road_feet=terrain and dofile(modpath.."/bridge_pier_render.lua")(architecture,terrain,bridge_styles)
   -- The slope owns the exposed surface, including any flat lower
@@ -403,7 +412,7 @@ return function(api)
         for variant=0,3 do
           ground_mesh[mask][variant]=reg("slope_"..mask.."_"..variant,{png("grass"..variant)},
             {drawtype="mesh",mesh="bl_land_"..mask..".obj",paramtype="light",
-             sunlight_propagates=true,walkable=false,pointable=false})
+             sunlight_propagates=true,collision_box=slope_collision(mask),pointable=false})
         end
       end
     end
@@ -414,11 +423,11 @@ return function(api)
     for shape,mask in pairs({[3]=10,[6]=5,[9]=5,[12]=10}) do
       road_slope_mesh[shape]=reg("road_grade_"..shape,{png("road_surface_"..mask)},
         {drawtype="mesh",mesh="bl_land_"..shape..".obj",paramtype="light",
-         sunlight_propagates=true,walkable=false,pointable=false})
+         sunlight_propagates=true,collision_box=slope_collision(shape),pointable=false})
       road_foundation_mesh[shape]=reg("road_grade_"..shape.."_foundation",
         {png("road_grade_foundation_"..mask)},
         {drawtype="mesh",mesh="bl_road_grade_foundation_"..shape..".obj",paramtype="light",
-         sunlight_propagates=true,walkable=false,pointable=false})
+         sunlight_propagates=true,collision_box=slope_collision(shape),pointable=false})
     end
   end
   local function shelter_layout(id)
@@ -491,10 +500,12 @@ return function(api)
   end
   local parcels={}
   for _,kind in ipairs({"market","shop","green"}) do
-    parcels[kind]=architecture("town_"..kind,"town_"..kind,"scenery_palette",kind=="shop")
+    parcels[kind]=architecture("town_"..kind,"town_"..kind,"scenery_palette",kind=="shop",
+      kind=="shop" and {-.17,-.5,-.20,1.18,.65,1.10} or nil)
   end
   for v=0,3 do
-    house[v]=architecture("scenery_house_"..v,"scenery_house_"..v,"scenery_palette",true)
+    house[v]=architecture("scenery_house_"..v,"scenery_house_"..v,"scenery_palette",true,
+      {-.15,-.5,.12,1.17,.48,1.22})
     forest[v]=architecture("scenery_tree_"..v,"scenery_tree_"..v,"scenery_palette")
   end
   local stock_scenery={forest={},quarters={[0]=0,2,3,1}}
@@ -620,7 +631,7 @@ return function(api)
       for mask in pairs(ground_mesh) do
         family[mask]=reg("stock_clear_ground_"..class.."_slope_"..mask,{texture},
           {drawtype="mesh",mesh="bl_land_"..mask..".obj",
-            paramtype="light",sunlight_propagates=true,walkable=false,pointable=false})
+            paramtype="light",sunlight_propagates=true,collision_box=slope_collision(mask),pointable=false})
       end
       generated_ground[class]=family
     end

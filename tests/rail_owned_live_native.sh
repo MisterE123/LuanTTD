@@ -24,7 +24,12 @@ else
 fi
 cp "${BAYLINE_NATIVE_EXACT_GAME:-.}/mods/luanttd_core/init.lua" "$out/fixture-init.lua"
 mv "$out/fixture-init.lua" "$game/mods/luanttd_core/init.lua"
-cat tests/rail_owned_live_native.lua >> "$game/mods/luanttd_core/init.lua"
+if [[ ${LUANTTD_NATIVE_MIXED_FLEET:-false} == true ]]; then
+  cat tests/rail_owned_multi_native.lua >> "$game/mods/luanttd_core/init.lua"
+  cp tests/rail_owned_multi_fixture.lua "$game/mods/luanttd_core/qa_rail_multi.lua"
+else
+  cat tests/rail_owned_live_native.lua >> "$game/mods/luanttd_core/init.lua"
+fi
 cp tests/qa_layout.lua "$game/mods/luanttd_core/qa_layout.lua"
 cp tests/coastal_corridor_fixture.lua "$game/mods/luanttd_core/qa_coastal_corridor.lua"
 cat > "$out/world/world.mt" <<'CONF'
@@ -41,6 +46,7 @@ luanttd_qa_depot_turnout = ${LUANTTD_NATIVE_DEPOT_TURNOUT:-false}
 luanttd_qa_signal_free = ${LUANTTD_NATIVE_SIGNAL_FREE:-false}
 luanttd_qa_coastal_layout = true
 bayline_offline_economy = false
+bayline_seconds_per_day = 15
 bayline_rail_owned_preview = true
 bayline_native_jubilee_probe = ${BAYLINE_NATIVE_JUBILEE:-false}
 bayline_native_sh_8p_probe = ${BAYLINE_NATIVE_SH_8P:-false}
@@ -66,15 +72,25 @@ export LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/server.log" 2>&1 || {
   cat "$out/server.log"; exit 1;
 }
-grep -q OWNED_RAIL_SAVE_LOADING "$out/server.log" || { cat "$out/server.log"; exit 1; }
+save_mark=OWNED_RAIL_SAVE_LOADING
+pass_mark=OWNED_RAIL_LIVE_NATIVE_PASS
+if [[ ${LUANTTD_NATIVE_MIXED_FLEET:-false} == true ]]; then
+  save_mark=MIXED_RAIL_NATIVE_SAVED_WAIT
+  pass_mark=MIXED_RAIL_NATIVE_PASS
+fi
+grep -q "$save_mark" "$out/server.log" || { cat "$out/server.log"; exit 1; }
 timeout 30s luantiserver --world "$out/world" --config "$out/native.conf" --gameid luanttd --logfile "" >"$out/reload.log" 2>&1 || {
   cat "$out/reload.log"; exit 1;
 }
-grep -q OWNED_RAIL_LIVE_NATIVE_PASS "$out/reload.log" || { cat "$out/reload.log"; exit 1; }
+grep -q "$pass_mark" "$out/reload.log" || { cat "$out/reload.log"; exit 1; }
 if [[ ${BAYLINE_NATIVE_PLATFORM_LOOKAHEAD:-false} == true ]]; then
   grep -q OWNED_RAIL_THROUGH_NATIVE_PASS "$out/reload.log" || { cat "$out/reload.log"; exit 1; }
 fi
-echo 'PASS: native owned rail purchase, exact mesh mounting, saved loading and paid after restart'
+if [[ ${LUANTTD_NATIVE_MIXED_FLEET:-false} == true ]]; then
+  grep MIXED_RAIL_NATIVE_PASS "$out/reload.log"
+else
+  echo 'PASS: native owned rail purchase, exact mesh mounting, saved loading and paid after restart'
+fi
 if [[ ${LUANTTD_NATIVE_DEPOT_TURNOUT:-false} == true ]]; then
   grep OWNED_RAIL_DEPOT_TURNOUT_NATIVE_PASS "$out/reload.log"
 fi

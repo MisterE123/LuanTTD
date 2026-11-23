@@ -24,7 +24,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
   end
   function Lab.station_bounds(s,st)
     if st.area then return st.area end
-    local lo_x,lo_z,hi_x,hi_z=Sim.W,Sim.H,1,1
+    local lo_x,lo_z,hi_x,hi_z=math.huge,math.huge,-math.huge,-math.huge
     for _,id in ipairs(st.tiles) do
       local x,z=Sim.xy(id)
       lo_x,lo_z,hi_x,hi_z=math.min(lo_x,x),math.min(lo_z,z),math.max(hi_x,x),math.max(hi_z,z)

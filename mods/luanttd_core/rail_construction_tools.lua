@@ -252,7 +252,7 @@ return function(api,Lab,Track,Run,prices)
     end
     return budget(owner,{kind=remove and "waypoint_remove" or "waypoint",id=id,axis=unit.axis,ids={id},price=unit.price})
   end
-  function R.quote_signal(owner,id,dir,oneway,block)
+  function R.quote_signal(owner,id,dir,oneway,block,both)
     if R.busy() then return nil,blocked() end
     if protected(id) then return nil,span_msg end
     if block and not api.rail_block_tools then return nil,"Enable conventional block signals first." end
@@ -267,7 +267,7 @@ return function(api,Lab,Track,Run,prices)
     local value,why=prices.signal(t,dir,oneway,opts(owner))
     if value==nil then return nil,why end
     return budget(owner,{kind="signal",id=id,td=Track.diagonal_trackdir(dir),
-      one_way=oneway,block=not not block,ids={id},price=value})
+      one_way=oneway,block=not not block,both=block and not not both,ids={id},price=value})
   end
   function R.quote_remove_signal(owner,id)
     if R.busy() then return nil,blocked() end
@@ -392,7 +392,7 @@ return function(api,Lab,Track,Run,prices)
       plan=fresh
       ok,note=Lab.commit_waypoint(S,owner,plan.id,plan.axis,removal)
     elseif plan.kind=="signal" then
-      ok,note=Run.place_signal(S,owner,plan.id,plan.td,plan.block and 0 or plan.one_way and 5 or 4)
+      ok,note=Run.place_signal(S,owner,plan.id,plan.td,plan.block and 0 or plan.one_way and 5 or 4,plan.both)
     elseif plan.kind=="signal_flip" then
       local fresh,why=R.quote_flip_signal(owner,plan.id)
       if not fresh then return false,why end

@@ -25,6 +25,8 @@ local physical_count=coach and 3 or 2
 local capacity=coach and 116 or 76
 local roles=coach and {"front","carriage","rear"} or {"front","rear"}
 local owner="Owned Rail QA"
+local mod_path=core.get_modpath("luanttd_core")
+local render_pose=dofile(mod_path.."/rail_pose.lua")(dofile(mod_path.."/openttd/rail_track.lua"))
 local function id(x,z) return Sim.id(x,z or 10) end
 local depot=turnout and id(16,9) or id(2)
 local function stamp()
@@ -78,7 +80,7 @@ local function stamp()
     end
   end
   local function entity_at(run,i,fraction)
-    local tile,td,f,_,wormhole=Sim.rail_paid_pose(S,i,fraction)
+    local tile,td,f,reversed,wormhole=Sim.rail_paid_pose(S,i,fraction)
     assert(tile and td and f and not wormhole)
     api.rail_dispatch_view.step(.1,true,fraction)
     local tx,tz=Sim.xy(tile)
@@ -86,7 +88,10 @@ local function stamp()
     local expected=powered and ("luanttd_core:dispatch_"..kind..(bridge and "_body" or "")) or "luanttd_core:dispatch_wagon"
     local mesh=powered and (art..(bridge and "_body" or "")..".obj") or "bl_rail_passenger_wagon.obj"
     local _,level=api.terrain.tile(tile)
-    for _,obj in ipairs(core.get_objects_inside_radius({x=2*tx+.5,y=level+.614,z=2*tz+.5},1.7)) do
+    local x,z,dx,dz=api.render.rail_diagonal_pose(tile,td,f)
+    if x==nil then x,z,dx,dz=render_pose.sample(td,f) end
+    local at={x=2*tx+.5+x,y=level+.614,z=2*tz+.5+z}
+    for _,obj in ipairs(core.get_objects_inside_radius(at,.05)) do
       local info=obj:get_luaentity()
       if info and info.name==expected then
         local prop=obj:get_properties()
@@ -94,6 +99,10 @@ local function stamp()
         if powered then assert(prop.textures[1]==art..".png") end
         assert(math.abs(obj:get_pos().y-(level+.614))<.002)
         assert(prop.visual_size.z==1)
+        local own_direction=manley and (i==physical_count or (not powered and reversed))
+        local wanted=math.pi-math.atan2(dx,dz)+(own_direction and math.pi or 0)
+        assert(math.abs(math.cos(obj:get_rotation().y-wanted)-1)<.001,
+          "Native locomotive must lead facing travel; the reciprocal tail cab must face out")
         return
       end
     end
@@ -156,9 +165,26 @@ local function stamp()
     for i=2,physical_count do entity_at(current(),i,1) end
     local fare=0
     local delivered,F,part_visits=0,{},{}
-    local saw_extension_tail
+    local saw_extension_tail,saw_return_heading
     for _=1,120 do
       day()
+      if not lookahead and not saw_return_heading and current().shuttle.reversals>0 then
+        -- A day can cross the turn or even a second departure; examine
+        -- the historical paid-clock frames, as the live client does.
+        for frame=0,74 do
+          local f=frame/74
+          local tile,_,_,reversed,span=Sim.rail_paid_pose(S,1,f)
+          if tile and reversed and not span then
+            local tail,_,_,_,between=Sim.rail_paid_pose(S,physical_count,f)
+            if tail and not between then
+              for i=1,physical_count do entity_at(current(),i,f) end
+              saw_return_heading=true
+              core.log("action","OWNED_RAIL_RETURN_HEADING_NATIVE_PASS")
+              break
+            end
+          end
+        end
+      end
       if lookahead then
         for _,event in ipairs(Sim.rail_paid_motion_events(S)) do
           if event.kind=="tail_released" and event.tile==id(25) then saw_extension_tail=true end
@@ -180,7 +206,7 @@ local function stamp()
     if lookahead then
       assert(saw_extension_tail and current().shuttle.arrivals>=3 and current().shuttle.reversals==0)
       core.log("action","OWNED_RAIL_THROUGH_NATIVE_PASS first platform claims survive SQLite reload; released tail, paid second station and repeated")
-    else assert(current().shuttle.reversals>=2) end
+    else assert(current().shuttle.reversals>=2 and saw_return_heading) end
     if manley then
       for i=1,physical_count do
         assert(part_visits[i] and part_visits[i]>0,"Missing a native body delivery")

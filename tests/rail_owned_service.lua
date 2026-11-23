@@ -32,6 +32,8 @@ local Roster=dofile(src.."rail_roster.lua")
 local s=Sim.new(1751)
 local mode=arg and arg[1]
 local turnout=mode=="depot_turnout"
+local mixed=mode=="mixed_signals"
+local Block=mixed and port("rail_block_signals",T,Signal) or nil
 local turnout_decisions={}
 local turnout_id
 local via_tile,via_id,via_passes,via_reloaded
@@ -63,7 +65,7 @@ local Fleet=dofile(root.."rail_depot_fleet.lua")(Sim,Lab,Roster)
 local Run,Owned
 local function mount(new,art)
   if new then
-    Run=dofile(root.."rail_dispatch_run.lua")(T,F,C,Search,PBS,L,Signal,Motion,Dispatch,Speed,Lab,nil,Reverse,W,Cross,Roster)
+    Run=dofile(root.."rail_dispatch_run.lua")(T,F,C,Search,PBS,L,Signal,Motion,Dispatch,Speed,Lab,nil,Reverse,W,Cross,Roster,Block)
     Owned=dofile(root.."rail_owned_service.lua")(Fleet,Roster,Run)
     if art then assert(Run.mount_owned_model(8)) end
   end
@@ -111,7 +113,7 @@ else
 end
 assert(Lab.station(s,owner,id(11),id(12)))
 assert(Lab.station(s,owner,id(22),id(24)))
-if mode~="signal_free" and not turnout then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
+if mode~="signal_free" and not turnout and not mixed then assert(Run.place_signal(s,owner,id(10),0,Signal.PBS)) end
 local west,east=s.tiles[id(11)].rail_station_id,s.tiles[id(22)].rail_station_id
 s.sites[1].tile=id(10,13);s.sites[2].tile=id(24,13)
 for _,z in ipairs({7,8,12,13}) do
@@ -122,6 +124,11 @@ for _,z in ipairs({7,8,12,13}) do
 end
 assert(not Owned.initialize(s,{starting_year=1950,generation_seed=s.seed,startup_random=9001}))
 s.rail_owned_service=true
+if mixed then
+  s.rail_block_preview=true
+  assert(Run.place_signal(s,owner,id(14),8,Signal.BLOCK,true))
+  assert(Run.place_signal(s,owner,id(18),8,Signal.PBS))
+end
 assert(Owned.initialize(s,{starting_year=1950,generation_seed=s.seed,startup_random=9001}))
 local base=company.cash
 local coal=assert(Owned.commit(s,owner,assert(Owned.quote(s,owner,start_depot,{0,29}))))
@@ -212,6 +219,7 @@ if mode=="waypoint" then
 end
 local ok,msg,run=Owned.start(s,owner,unit.id,east,west,nil,via_tile)
 assert(ok,msg)
+if mixed then assert(run.local_signals and not run.ordinary_unreserved) end
 assert(run.fleet_id==unit.id and run.stock_engine==engine and run.stock_wagon==27 and run.visual==(jubilee and "jubilee" or "steam"))
 if via_tile then
   assert(run.order.kind=="station") -- no waypoint on depot to first station
@@ -232,6 +240,7 @@ assert(Owned.get(s,owner,coal.id).parts[1].stock_id==0)
 assert(Owned.get(s,owner,unit.id).status=="dispatched" and Owned.occupies_depot(s,start_depot))
 assert(not Owned.start(s,owner,unit.id,east,west))
 assert(not Run.clear(s,owner) and #Run.tick(s,100)==0)
+local mixed_path,mixed_closed,mixed_reopened
 local function clone(t)
   if type(t)~="table" then return t end
   assert(not getmetatable(t))
@@ -380,6 +389,16 @@ for _=1,130 do
   if run.consist_mass>mass then had_mass=true end
   assert(Motion.check_spacing(Run.board(s),run.consist) and L.valid_state(Run.board(s),d.life))
   for _,e in ipairs(Sim.rail_paid_motion_events(s)) do
+    if mixed then
+      if e.kind=="path_after_block" then
+        assert(e.tile==id(14))
+        mixed_path=true
+      end
+      if e.kind=="block_aspect" and e.tile==id(14) and e.td==8 then
+        if e.green and mixed_closed then mixed_reopened=true
+        elseif not e.green then mixed_closed=true end
+      end
+    end
     if e.kind=="span_released" and (e.tile==id(5) or e.tile==id(9)) then at_bridge=true end
     if e.kind=="tunnel_hidden" then at_tunnel=true end
     if e.kind=="front_entered" and e.tile==id(20) then
@@ -431,6 +450,10 @@ if lookahead then
   assert(saw_through_claim and run.shuttle.reversals==0)
   if mode=="platform_fallback" then assert(fallback_calls>0) end
   print("PASS: reserve beyond an unsafe through platform without skipping the actual stop, take next order and repeat")
+end
+if mixed then
+  assert(mixed_path and mixed_closed and mixed_reopened,"mixed entrance must reserve after entry, and occupancy must close and reopen it")
+  print("PASS 16.0-RC1 live mixed entrance reserves after crossing its conventional signal, reopens behind its last wagon")
 end
 if mode=="signal_free" or turnout then
   assert(run.ordinary_unreserved and not run.platform_lookahead and run.shuttle.reversals>=2)

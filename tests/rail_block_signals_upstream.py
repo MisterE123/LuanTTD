@@ -1,4 +1,8 @@
-"""Compare Lua block signal propagation with all pinned 14.1 signal.cpp functions.
+"""Compare unchanged conventional-only block propagation with pinned 14.1.
+
+RC1 changed how PBS heads participate in blocks, so mixed/PBS fixtures
+are no longer compared to the 14.1 reference. See rail_block_signals.lua
+for RC1 signals and rail_owned_multi_native.lua for native mixed service.
 
 python tests/rail_block_signals_upstream.py SOURCE_TREE [lua5.1]
 Only the map and vehicle enumeration are synthetic. The reference compiles
@@ -311,7 +315,8 @@ def cases():
 def main():
     src_dir=Path(sys.argv[1])
     lua=sys.argv[2] if len(sys.argv)>2 else "lua5.1"
-    all_cases=list(cases())
+    all_cases=[(mode,owner,rows,entries) for mode,owner,rows,entries in cases()
+               if all(r[1] != 2 or r[10] < 4 and r[11] < 4 for r in rows)]
     payload="".join(f"{len(rows)} {len(entries)} {mode} {owner}\n"+"\n".join(
         " ".join(map(str,r)) for r in [*rows,*entries])+"\n" for mode,owner,rows,entries in all_cases)
     with tempfile.TemporaryDirectory(prefix="luanttd-signal-oracle-") as work:
@@ -324,7 +329,7 @@ def main():
     assert len(expected)==len(actual)==len(all_cases)
     for i,(want,got) in enumerate(zip(expected,actual)):
         assert want==got,(i,want,got,all_cases[i])
-    print(f"OpenTTD 14.1 block signals: {len(actual)} full compiled graph/update cases agree")
+    print(f"OpenTTD 14.1 block signals: {len(actual)} conventional compiled graph/update cases agree")
 
 
 if __name__=="__main__":
