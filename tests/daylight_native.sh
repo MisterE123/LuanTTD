@@ -12,7 +12,7 @@ out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-daylight.XXXXXX")
 echo "Native daylight evidence: $out"
 game="$out/games/luanttd"
 mkdir -p "$game" "$out/"{home,world}
-cp -al mods "$game/"
+cp -a --reflink=auto mods "$game/"
 cp game.conf settingtypes.txt "$game/"
 mod="$game/mods/luanttd_core"
 # Replace the test checkout's init with a private copy before appending.
