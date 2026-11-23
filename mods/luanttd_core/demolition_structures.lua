@@ -12,7 +12,7 @@ return function(n,id,preview)
   if t.road_bridge_id and api.structure_tools then
     local ok,msg,changed,level=Sim.remove_wood_bridge(S,n,id,preview)
     if preview then
-      return true,ok and span_ids(changed) or nil,ok and "Dismantle this entire road bridge." or msg
+      return true,ok and span_ids(changed) or nil,ok and ("Dismantle this entire road bridge  |  "..dollars(msg)) or msg
     end
     return true,ok and changed or nil,msg,level
   elseif t.road_tunnel_id and api.structure_tools then

@@ -90,6 +90,31 @@ rejection("MUST_DEMOLISH_BRIDGE_FIRST",B.plan(b,h,t,2,{owner="Alice"}))
 local allowed=assert(B.plan(b,h,t,0,{owner="Alice",railtype=1,can_build_railtype=function(r)return r==1 end}))
 assert(allowed.rail_cost==750)
 
+-- RC1 calls each tile-specific quote even on replacement. A new bridge
+-- must still fail its height test before calling the obstructed tile.
+map[h].railtype=0
+map[h].bridge_type=0;map[t].bridge_type=0
+local passes={}
+b.check_build_above=function(i,record,axis,deck)
+  assert(record==map[i] and axis==T.X and deck==3)
+  passes[#passes+1]=i
+  if i==rail then return 33,nil,true end
+  return 0
+end
+q=assert(B.plan(b,h,t,2,{owner="Alice"}))
+assert(#passes==3 and passes[1]==w and passes[2]==rail and passes[3]==sub)
+assert(q.site_cost==-67 and q.clears[1]==rail and q.preserve_reservation)
+b.check_build_above=function(i)
+  if i==rail then return nil,"BRIDGE_TOO_LOW_FOR_TRAIN_DEPOT" end
+  return 0
+end
+assert(rejection("BRIDGE_TOO_LOW_FOR_TRAIN_DEPOT",B.plan(b,h,t,2,{owner="Alice"}))==rail)
+for _,i in ipairs({h,t}) do map[i].kind="clear";map[i].owner=nil end
+assert(rejection("BRIDGE_TOO_LOW_FOR_TERRAIN",B.plan(b,h,t,2,{owner="Alice"}))==rail)
+map[rail].max_z=1
+assert(rejection("BRIDGE_TOO_LOW_FOR_TRAIN_DEPOT",B.plan(b,h,t,2,{owner="Alice"}))==rail)
+b.check_build_above=nil
+
 -- Shared-corner terrain: first same-base tunnel exit needs one actual
 -- TerraformLand corner lowering, no change to the original grid.
 local grid=Terrain.new(12,12,function(x,z)

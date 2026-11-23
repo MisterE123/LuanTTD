@@ -8,6 +8,7 @@ return function(Sim,R,max_days)
   local A={}
   local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local order_target=dofile(mod.."/campaign_order_target.lua")
+  local styles=dofile(mod.."/bridge_style_assets.lua")
   local function facility_record(registry,id)
     return id~=nil and s[registry] and s[registry][id]
   end
@@ -208,13 +209,12 @@ return function(Sim,R,max_days)
   function A.bridge_picker(name,mode,a,b,peek,gauge)
     if not owner(name) or not s.companies[name] or not tile_id(a) or not tile_id(b) or a==b
       or (mode~="rail" and mode~="road") or gauge~=nil and (mode~="rail" or not integer(gauge,0,3)) or not R.transport then return reply(false,"Choose two distinct bridgeheads.") end
-    local styles={[0]="Timber",[1]="Concrete",[2]="Steel girder"}
     local offers,by_type,ids,minimum,why={},{}
     if not peek then bridge_quotes[name]=nil end
-    for style=0,mode=="road" and 2 or 0 do
+    for _,style in ipairs(styles.list(mode,gauge)) do
       local q,error_=R.transport.quote(name,{mode=mode,operation="bridge",tile=a,last=b,style=style,railtype=gauge})
       if q then
-        offers[#offers+1]={style=style,name=styles[style],price=q.price,speed=q.speed}
+        offers[#offers+1]={style=style,name=styles.names[style],price=q.price,speed=q.speed}
         ids=ids or q.tiles
         minimum=math.min(minimum or q.price,q.price)
         by_type[style]=q
@@ -437,7 +437,7 @@ return function(Sim,R,max_days)
       local q=bridge_quotes[name]
       bridge_quotes[name]=nil
       if not q or q.token~=c.token or q.topology~=s.topology or q.terrain~=s.corner_grid.revision
-        or not integer(c.style,0,2) or not q.quotes[c.style] then
+        or not integer(c.style,0,12) or not q.quotes[c.style] then
         return reply(false,"The span changed. Select both bridgeheads again.")
       end
       ok,note,value=R.transport.commit(name,q.quotes[c.style])

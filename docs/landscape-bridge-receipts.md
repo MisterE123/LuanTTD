@@ -16,13 +16,12 @@ tile has neither of those meanings on its own.
   become part of the bridge and remain untouched.
 - Removal now has an optional **third command argument** after company
   and head: `Sim.remove_wood_bridge(state, company, head, true)` (fourth
-  Lua parameter). It returns `true, 0, projected_span` only *after* the
-  exact existing native owner and active `v.route` guard. The projected
-  span is copied and cannot rewrite the registry. Legacy calls still
-  return native message/dirty IDs/deck and preserve the current native
-  free-removal behavior. This is **not** a claim that OpenTTD's own
-  demolition is free or that its vehicle-presence test is the same as
-  the current Luanti host's reserved-route guard.
+  Lua parameter). It returns `true, price, projected_span` only *after* the
+  native ownership, affordability and active `v.route` guards. The fee
+  includes the structure and both road bits on each tile, including both
+  ramps, as in RC1. The projected span cannot rewrite the registry. The
+  host's route guard is still more conservative than OpenTTD's
+  vehicle-presence test.
 - The narrow wrapper refuses overlapping overhead or protected lower
   layers (including any pre-existing `bridge_above` entry on a ramp or
   interior); otherwise the host could need more than one record per

@@ -16,8 +16,9 @@ COLUMNS = {
 }
 
 
-def write_feet(family, group, axis, depth):
-    source = MODELS / f"bl_{family}_pier_{axis}.obj"
+def write_feet(family, group, axis, depth, *, variant=None):
+    suffix = f"_{variant}" if variant else ""
+    source = MODELS / f"bl_{family}_pier_{axis}{suffix}.obj"
     positions, uv, sides = [], [], []
     inside = False
     for line in source.read_text().splitlines():
@@ -56,7 +57,7 @@ def write_feet(family, group, axis, depth):
                 result.append(f"v {x + 1:.6f} {y:.6f} {z - 1:.6f}")
     for side in sides:
         result.append("f " + " ".join(f"{remap[i]}/{t}" for i, t in side))
-    output = MODELS / f"bl_{family}_foot_{axis}_{depth}.obj"
+    output = MODELS / f"bl_{family}_foot_{axis}{suffix}_{depth}.obj"
     output.write_text("\n".join(result) + "\n")
 
 

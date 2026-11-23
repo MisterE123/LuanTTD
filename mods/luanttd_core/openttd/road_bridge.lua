@@ -31,6 +31,48 @@ return function(Slope)
     local row=built_in[id]
     B.catalog[id]={id=id,name=row[1],year=row[2],min_length=row[3],max_length=row[4],multiplier=row[5],speed=row[6]}
   end
+  -- OpenTTD 16.0-RC1: CalcBridgePiece in src/tunnelbridge_cmd.cpp.
+  -- Distances count from the canonical north/south bridge portals, never
+  -- from the player's drag direction. Heads have a separate sprite table.
+  function B.middle_piece(north,south)
+    if north==1 then return 0 end -- BRIDGE_PIECE_NORTH
+    if south==1 then return 1 end -- BRIDGE_PIECE_SOUTH
+    if north<south then return north%2==1 and 3 or 2 end
+    if north>south then return south%2==1 and 2 or 3 end
+    return north%2==1 and 5 or 4
+  end
+
+  -- src/bridge_type.h + src/table/bridge_land.h, stock _orig_bridge.
+  -- Masks use OpenTTD's corner order W,S,E,N (bits 0..3). Axis keys
+  -- follow AXIS_X, AXIS_Y within each row (pieces 0..5).
+  local function two_axis(x,y) return {[0]=x,y} end
+  local all=two_axis(15,15)
+  local ne_nw=two_axis(12,9)
+  local sw_se=two_axis(3,6)
+  local none=two_axis(0,0)
+  local solid={[0]=all,all,all,all,all,all}
+  local suspension={[0]=sw_se,ne_nw,ne_nw,sw_se,all,none}
+  local cantilever={[0]=none,ne_nw,ne_nw,ne_nw,ne_nw,ne_nw}
+  local stock_pillars={[0]=solid,solid,solid,suspension,suspension,suspension,
+    cantilever,cantilever,cantilever,solid,cantilever,cantilever,cantilever}
+  function B.pillar_mask(style,piece,axis)
+    local spec=stock_pillars[style]
+    return spec and spec[piece] and spec[piece][axis]
+  end
+
+  -- Wrapped separately from the serialized plan. Rendering and tile
+  -- clearance use the same live position; no second tile index to persist.
+  function B.middle_layout(plan,id,xy)
+    if not plan.middle_by_tile[id] or plan.kind=="aqueduct" or plan.transport=="water" then return end
+    local nx,nz=xy(plan.start)
+    local x,z=xy(id)
+    local north=plan.axis==B.AXIS_X and x-nx or z-nz
+    local south=(plan.middle_length or #plan.middle)+1-north
+    if north<1 or south<1 then return end
+    local piece=B.middle_piece(north,south)
+    return piece,B.pillar_mask(plan.bridge_type,piece,plan.axis)
+  end
+
   B.road_flags={catenary=1,no_level_crossing=2,no_houses=4,hidden=8,town_build=16}
   B.roadtypes={
     [0]={id=0,type="road",label="ROAD",flags=16,cost_multiplier=8,
@@ -148,6 +190,16 @@ return function(Slope)
     return p-(refund>=0 and floor(refund) or math.ceil(refund))
   end
 
+  -- TunnelBridgeClearCost / DoClearBridge (RC1). Stock counts both
+  -- ramp tiles and charges two road bits per installed transport.
+  function B.clear_cost(total_length,roadtype,tramtype,opts)
+    local p=(opts and opts.prices or B.base_prices)
+    local per_tile=p.clear_bridge or B.base_prices.clear_bridge
+    if roadtype~=nil then per_tile=per_tile+2*B.road_clear_cost(roadtype,opts) end
+    if tramtype~=nil then per_tile=per_tile+2*B.road_clear_cost(tramtype,opts) end
+    return total_length*per_tile
+  end
+
   -- Pure command adapter:
   -- board.xy(id) -> x,z, board.id(x,z) -> tile id (or nil at edge),
   -- board.tile(id) -> {base,slope,max_z,kind,...} or nil at map border.
@@ -157,6 +209,8 @@ return function(Slope)
   --   transport="road",owner (nil unowned, opts.town_owner for municipal),
   --   roadtype/tramtype and separate road_owner/tram_owner for replacements.
   -- board.clear_quote(id,tile,role,owner) -> cost or nil,error. No mutation.
+  -- Optional board.check_build_above(id,tile,axis,deck) -> cost, error,
+  -- clear_ground (true if the adapter's mutator must clear this tile).
   -- opts.year, owner, town_owner, budget, build_on_slopes, max_length,
   -- max_height, catalog, roadtypes, roadtype, prices and per-type costs.
   -- query=true offers a geometry-only cost without style availability,
@@ -247,14 +301,11 @@ return function(Slope)
           end
           if ta.bridge_type==bridge_type and (road==roadtype or tram==roadtype) then return nil,"ALREADY_BUILT" end
         end
-        per_tile=prices.clear_bridge or B.base_prices.clear_bridge
-        if road~=nil then per_tile=per_tile+2*B.road_clear_cost(road,opts) end
-        if tram~=nil then per_tile=per_tile+2*B.road_clear_cost(tram,opts) end
       end
       if ta.owner~=nil and ta.owner~=opts.owner and ta.owner~=town_owner then
         return nil,"AREA_IS_OWNED_BY_ANOTHER"
       end
-      plan.site_cost=plan.total_length*per_tile
+      plan.site_cost=water and plan.total_length*per_tile or B.clear_cost(plan.total_length,road,tram,opts)
       plan.owner=ta.owner or opts.owner
       if ta.owner==nil then
         road_owner=road_owner or opts.owner;tram_owner=tram_owner or opts.owner
@@ -286,6 +337,16 @@ return function(Slope)
         if t.max_z>h then return nil,"BRIDGE_TOO_LOW_FOR_TERRAIN",id end
         if h>=t.base+max_height then return nil,"BRIDGE_TOO_HIGH_FOR_TERRAIN",id end
         if t.overhead then return nil,"MUST_DEMOLISH_BRIDGE_FIRST",id end
+      end
+      if board.check_build_above then
+        -- RC1 CmdBuildBridge dispatches the tile's CheckBuildAbove for
+        -- both initial placement and a replacement. Only a new bridge
+        -- checks the terrain and writes the overhead bits.
+        local cost,reason,clear_ground=board.check_build_above(id,t,axis,plan.deck)
+        if cost==nil then return nil,reason or "BRIDGE_MIDDLE_OBSTRUCTED",id end
+        plan.site_cost=plan.site_cost+cost
+        if clear_ground then plan.clears[#plan.clears+1]=id end
+      elseif not replacement then
         if not compatible_middle(t,h,axis) then
           local cleared,reason=clear(id,t,"middle")
           if not cleared then return nil,reason,id end

@@ -4,7 +4,8 @@
 return function(api)
   local W,S,Sim={form="luanttd_core:bridge_picker"},api.s,api.Sim
   local pending,latest,serial={},{},0
-  local styles={[0]="Timber",[1]="Concrete",[2]="Steel girder"}
+  local mod=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local styles=dofile(mod.."/bridge_style_assets.lua")
   local function valid(id)
     return type(id)=="number" and id%1==0 and id>=1 and id<=Sim.W*Sim.H and S.tiles[id]
   end
@@ -12,16 +13,16 @@ return function(api)
     if not valid(a) or not valid(b) or a==b then return nil,"Choose two distinct bridgeheads." end
     if not S.companies[n] then return nil,"Create your company first." end
     local offers,why={}
-    for style=0,mode=="road" and 2 or 0 do
+    for _,style in ipairs(styles.list(mode)) do
       local plan,reason
       if mode=="road" and api.structure_tools then
         local ok,cost,p=Sim.road_bridge(S,n,a,b,style,true)
         if ok then plan=p else reason=cost end
       elseif mode=="rail" and api.rail_spans then
-        plan,reason=api.rail_spans.quote_bridge(S,n,a,b)
+        plan,reason=api.rail_spans.quote_bridge(S,n,a,b,nil,nil,style)
       else return nil,"Bridge construction is not available in this world." end
       if plan then
-        offers[#offers+1]={style=style,name=styles[style],price=plan.price,
+        offers[#offers+1]={style=style,name=styles.names[style],price=plan.price,
           speed=plan.spec and plan.spec.speed or nil,plan=plan}
       else why=why or reason end
     end
@@ -118,15 +119,29 @@ return function(api)
     end
     pending[n]=ticket
     local esc=core.formspec_escape
-    local size=2.8+#proposal.offers*.8
+    local rows=#proposal.offers
+    local visible=math.min(rows,6)
+    local size=2.8+visible*.8
+    local scrolling=rows>visible
     local bspec={("formspec_version[7]size[10,%g]bgcolor[#152334;false]"):format(size),
       "style_type[button;bgimg=bl_button.png;bgimg_middle=6;border=false;textcolor=#E5ECEA]",
       "style_type[label;textcolor=#E5ECEA]",
       ("label[.45,.47;Choose a %s bridge]"):format(mode=="road" and "road" or proposal.railtype==3 and "maglev" or proposal.railtype==2 and "monorail" or "railway"),
       ("label[.45,.95;%d tiles including both ramps]"):format(#proposal.ids)}
+    if scrolling then
+      bspec[#bspec+1]=("scroll_container[.45,1.24;8.66,%g;bridge_scroll;vertical;0.1]"):format(visible*.8)
+    end
     for i,o in ipairs(proposal.offers) do
       local label=o.name..(o.speed and ("  ·  %d km/h"):format(o.speed) or "").."  ·  "..money(o.price)
-      bspec[#bspec+1]=("button_exit[.45,%g;9.1,.66;bridge_%d_%d;%s]"):format(1.24+(i-1)*.8,serial,o.style,esc(label))
+      local sx,sy,sw=.45,1.24+(i-1)*.8,9.1
+      if scrolling then sx,sy,sw=.02,(i-1)*.8,8.58 end
+      bspec[#bspec+1]=("button_exit[%g,%g;%g,.66;bridge_%d_%d;%s]"):format(sx,sy,sw,serial,o.style,esc(label))
+    end
+    if scrolling then
+      bspec[#bspec+1]="scroll_container_end[]"
+      bspec[#bspec+1]=("scrollbaroptions[min=0;max=%d;smallstep=8;largestep=40;thumbsize=%d;arrows=hide]"):
+        format((rows-visible)*8,visible*8)
+      bspec[#bspec+1]=("scrollbar[9.2,1.24;.34,%g;vertical;bridge_scroll;0]"):format(visible*.8)
     end
     bspec[#bspec+1]=("button_exit[.45,%g;9.1,.65;cancel;Cancel]"):format(size-.85)
     core.show_formspec(n,W.form,table.concat(bspec))

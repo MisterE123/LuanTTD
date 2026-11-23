@@ -18,6 +18,17 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     local f=c and not c.depot_wait and pose(c,frames)
     return f and not f[16] and f or nil
   end
+  -- The route keeps the span ID, not the authoritative speed limit.
+  -- RC1 reads the current GetBridgeSpec on the portal and in the
+  -- wormhole. A rebuild must not regenerate or scan traveling routes.
+  local function bridge_limit(s,f)
+    if f[10] then
+      local live=s.stock_road_bridges and s.stock_road_bridges[f[10]]
+      local spec=live and live.spec
+      return spec and spec.speed*2
+    end
+  end
+  R.bridge_limit=bridge_limit
   local limit=dofile(base.."road_stock_speeds.lua")
   local floor=math.floor
   local function init(s,v,frames)
@@ -135,7 +146,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         frames,a.frames,old=fresh,fresh,fresh[c.index]
       end
     end
-    local roof=math.min(limit[v.engine],old[11] or math.huge)
+    local roof=math.min(limit[v.engine],bridge_limit(s,old) or math.huge)
     Speed.tick(c,roof,Pass and Pass.active(c),function(state)
       local nominal=frames[state.index+1]
       if not nominal then return false end
@@ -196,7 +207,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
           local speed=leader_speed(s,leader)
           if Pass and not entering then
             Pass.control(v,state,board,frames,old,roof,leader,speed,
-              math.min(leader.max_speed,leader.frame[11] or math.huge))
+              math.min(leader.max_speed,bridge_limit(s,leader.frame) or math.huge))
           else
             state.speed=speed
           end
@@ -207,8 +218,9 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         if bay_commit then Bay.commit(s,v,old,b,bay_commit,frames,state.index+1) end
         state.waiting,state.oneway_reason,state.oneway_tile=nil,nil,nil
         if v.status=="Waiting at one-way road" or v.status=="Waiting for junction clearance" then v.status="En route" end
-        local permitted=math.min(limit[v.engine],b[11] or math.huge)
-        if b[11] then state.speed=math.min(state.speed,permitted) end
+        local span_limit=bridge_limit(s,b)
+        local permitted=math.min(limit[v.engine],span_limit or math.huge)
+        if span_limit then state.speed=math.min(state.speed,permitted) end
         if state.heading~=b[3] then state.heading=b[3];Speed.turn(state) end
         if old[1]~=b[1] or old[2]~=b[2] then
           actual_z=actual_z or road_z(s,b)

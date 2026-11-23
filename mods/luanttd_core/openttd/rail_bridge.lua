@@ -56,11 +56,20 @@ return function(Bridge,Quote,Site)
         middle_length=total-2,total_length=total,middle={},middle_by_tile={},head=north,tail=south,
         site_cost=total*per_tile,clears={},owner=a.owner or opts.owner,
         preserve_reservation=not not (a.reserved or (a.reserved_bits or 0)~=0)}
-      -- Stock leaves its bridge-middle flags alone on upgrade; tracing
-      -- the indices for the planner doesn't re-check clearance/terrain.
+      -- RC1 leaves the existing bridge-middle flags alone on upgrade.
+      -- It still calls the underlying tile handler before changing the
+      -- bridge type, without repeating the new-span height checks.
       for i=1,total-2 do
         local id=Site.id(board,ax+(axis==Bridge.AXIS_X and i or 0),az+(axis==Bridge.AXIS_Y and i or 0))
         if id==nil then return nil,"BRIDGE_THROUGH_MAP_BORDER" end
+        if board.check_build_above then
+          local tile=board.tile(id)
+          if not tile then return nil,"BRIDGE_THROUGH_MAP_BORDER" end
+          local cost,reason,clear_ground=board.check_build_above(id,tile,axis,plan.deck)
+          if cost==nil then return nil,reason or "BRIDGE_MIDDLE_OBSTRUCTED",id end
+          plan.site_cost=plan.site_cost+cost
+          if clear_ground then plan.clears[#plan.clears+1]=id end
+        end
         plan.middle[#plan.middle+1]=id;plan.middle_by_tile[id]=true
       end
     else
@@ -86,6 +95,11 @@ return function(Bridge,Quote,Site)
       end
       local geometry={tile=tile,xy=board.xy,id=board.id or board.tile_at,
         clear_quote=function(id,_,role) return Site.clear(board,id,board.tile(id),role,opts) end}
+      if board.check_build_above then
+        geometry.check_build_above=function(id,_,dir,deck)
+          return board.check_build_above(id,board.tile(id),dir,deck)
+        end
+      end
       local geo_opts={query=true,owner=opts.owner,build_on_slopes=opts.build_on_slopes,
         max_length=opts.max_length,max_height=opts.max_height,prices=opts.prices,catalog=styles}
       local bad

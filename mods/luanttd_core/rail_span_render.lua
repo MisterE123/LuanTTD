@@ -2,20 +2,37 @@
 -- of whichever water, road or ground happens to be below that tile.
 return function(World,s,architecture,terrain,bridge_wire,xy)
   local R={}
-  local wood="rail_bridge_wood"
-  local clear_span=dofile(core.get_modpath("luanttd_core").."/bridge_clearance_render.lua")(architecture,wood)
-  local foot=dofile(core.get_modpath("luanttd_core").."/bridge_pier_render.lua")(architecture,terrain,{wood})
-  function R.foot(id,x,y,z)
-    if clear_span.under(s.tiles[id]) then return end
-    return foot(id,x,y,z,World.by_bridge_middle(s,id),1,s.tiles[id].terrain=="water")
-  end
-  local parts={span={},head_flat={},head_ramp={},pier={}}
-  for part,list in pairs(parts) do
-    local limit=(part=="span" or part=="pier") and 1 or 3
-    for dir=0,limit do
-      local asset=wood.."_"..part.."_"..dir
-      list[dir]=architecture("stock_"..asset,asset,wood)
+  local modpath=core.get_modpath("luanttd_core")
+  local styles=dofile(modpath.."/bridge_style_assets.lua")
+  local rules=dofile(modpath.."/openttd/road_bridge.lua")(dofile(modpath.."/openttd/slope.lua"))
+  local piece=dofile(modpath.."/bridge_piece_art.lua")(architecture,rules,xy)
+  local clearance=dofile(modpath.."/bridge_clearance_render.lua")
+  local parts={}
+  for style,stem in pairs(styles.rail) do
+    local manifest=styles.pieces[style]
+    local defs={head_flat={},head_ramp={}}
+    if not manifest then defs.span={};defs.pier={} end
+    for part,list in pairs(defs) do
+      local limit=(part=="span" or part=="pier") and 1 or 3
+      for dir=0,limit do
+        local asset=stem.."_"..part.."_"..dir
+        list[dir]=architecture("stock_"..asset,asset,stem)
+      end
     end
+    if manifest then defs.piece=piece.mount(stem,manifest) end
+    defs.clear=clearance(architecture,stem,manifest~=nil)
+    parts[style]=defs
+  end
+  local foot=dofile(modpath.."/bridge_pier_render.lua")(architecture,terrain,styles.static("rail"))
+  function R.foot(id,x,y,z)
+    local span=World.by_bridge_middle(s,id)
+    if not span then return end
+    local style=span.bridge_type or 0
+    local part=parts[style]
+    if part.clear.under(s.tiles[id]) then return end
+    local feet
+    if part.piece then local _,_,_,f=part.piece.models(span,id);feet=f end
+    return foot(id,x,y,z,span,style,s.tiles[id].terrain=="water",feet)
   end
   local tunnels={}
   for dir=0,3 do
@@ -23,7 +40,6 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
     tunnels[dir]=architecture("stock_"..asset,asset,"rail_tunnel_portal")
   end
   local advanced={}
-  local modpath=core.get_modpath("luanttd_core")
   local Guide=dofile(modpath.."/rail_guideway_profiles.lua")
   for _,g in ipairs(Guide.gauges) do
     local stem="guideway_"..Guide.by_gauge[g].slug.."_span"
@@ -79,7 +95,7 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
         end
         if anchor and y==span.deck then
           local shape=head.flat_ramp and "head_flat" or "head_ramp"
-          return advanced[span.railtype] and advanced[span.railtype][shape][head.inside_direction] or parts[shape][head.inside_direction]
+          return advanced[span.railtype] and advanced[span.railtype][shape][head.inside_direction] or parts[span.bridge_type or 0][shape][head.inside_direction]
         end
         if y<=head.base then return head.foundation~="none" and retaining or ground end
       end
@@ -94,16 +110,24 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
         local cable=bridge_wire.overlay("span",elevated.axis,i,#elevated.middle)
         if cable then return wire_nodes[cable.name] end
       end
-      local clear=clear_span.under(s.tiles[id])
+      local style=parts[elevated.bridge_type or 0]
+      local clear=style.clear.under(s.tiles[id])
       if y==elevated.deck then
         local axis=elevated.axis
         local a=advanced[elevated.railtype]
         if a then return (clear and a.clear or a.span)[axis] end
-        return (clear and clear_span or parts.span)[axis]
+        if style.piece then
+          local deck,under=style.piece.models(elevated,id)
+          return clear and under or deck
+        end
+        return (clear and style.clear or style.span)[axis]
       end
       if not clear and y<elevated.deck then
         local _,_,top=terrain.tile(id)
-        if y>top then return parts.pier[elevated.axis] end
+        if y>top then
+          if style.piece then local _,_,pier=style.piece.models(elevated,id);return pier end
+          return style.pier[elevated.axis]
+        end
       end
     end
   end

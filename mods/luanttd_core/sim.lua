@@ -214,7 +214,7 @@ local function wet(s,id)
 end
 -- The shared-corner branch is opt-in. Version 1 saves without a grid keep
 -- the original adjacency-only construction and route behavior.
-local terrain_rules, slope_rules, road_rules, landscape_rules, bridge_rules, tunnel_rules, coastal_world, clear_area_rules, long_road_rules
+local terrain_rules, slope_rules, road_rules, landscape_rules, bridge_rules, bridge_underlay, bridge_assets, tunnel_rules, coastal_world, clear_area_rules, long_road_rules
 local function load_road_rules()
   if terrain_rules then return end
   local source=debug and debug.getinfo(1,"S").source
@@ -228,6 +228,8 @@ local function load_road_rules()
   clear_area_rules=dofile(base.."openttd/clear_area.lua")
   coastal_world=dofile(base.."water_flood_world.lua")(M,terrain_rules,dofile(base.."openttd/water_flood.lua"))
   bridge_rules=dofile(base.."openttd/road_bridge.lua")(slope_rules)
+  bridge_underlay=dofile(base.."openttd/bridge_underlay.lua")
+  bridge_assets=dofile(base.."bridge_style_assets.lua")
   tunnel_rules=dofile(base.."openttd/road_tunnel.lua")
 end
 local crossing_bindings=setmetatable({},{__mode="k"})
@@ -476,11 +478,10 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
   return true,("Landscaped for $%d; %d corners changed%s."):format(plan.cost,#plan.changes,
     (extra>0 or plan.halted) and " (partial selection)" or ""),changed,peak
 end
-local bridge_names={[0]="Timber",[1]="Concrete",[2]="Steel girder"}
 function M.road_bridge(s,owner,first,last,style,quote_only)
-  if not bridge_names[style] then return false,"Choose timber, concrete, or steel girder." end
   if not s.corner_grid or not first or not last then return false,"Select two bridgeheads on shared-corner terrain." end
   load_road_rules()
+  if not bridge_assets.mounts("road",style) then return false,"This bridge style is not available for this road." end
   local c=M.company(s,owner)
   local board={xy=M.xy,id=M.id}
   board.tile=function(id)
@@ -491,14 +492,41 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
     local bridge=s.bridge_above and s.bridge_above[id]
     local raised=s.aqueduct_above and s.aqueduct_above[id]
     local existing=(bridge and s.stock_road_bridges[bridge]) or (raised and s.stock_aqueducts[raised])
-    local kind=(t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or M.rail_span_protected(s,id)) and "obstruction" or t.terrain=="water" and "water" or t.build=="road" and "road" or
-      (t.site or t.wood or t.house or t.build) and "obstruction" or "clear"
+    local portal=t.road_bridge_id and s.stock_road_bridges and s.stock_road_bridges[t.road_bridge_id]
+    if portal and (portal.start==id or portal["end"]==id) then
+      return {slope=slope,base=base,max_z=top,kind="bridge",transport="road",
+        owner=portal.owner,axis=portal.axis,deck=portal.deck,bridge_type=portal.bridge_type,
+        roadtype=portal.roadtype or 0,tramtype=portal.tramtype,
+        road_owner=portal.road_owner or portal.owner,tram_owner=portal.tram_owner,
+        other=portal.start==id and portal["end"] or portal.start,
+        overhead=existing and {axis=existing.axis,deck=existing.deck}}
+    end
+    local kind
+    if t.stock_void or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or M.rail_span_protected(s,id) then
+      kind="obstruction"
+    elseif t.rail_tracks and not t.rail_station_id and t.rail_depot_dir==nil then
+      -- CheckBuildAbove_Rail admits stock plain rail, including signals.
+      -- The ordinary rail and its dispatch state remain independent.
+      kind="plain_rail"
+    elseif t.terrain=="water" then kind="water"
+    elseif t.build=="road" then kind="road"
+    elseif t.site or t.wood or t.house or t.build then kind="obstruction"
+    else kind="clear" end
     return {slope=slope,base=base,max_z=top,kind=kind,owner=t.owner,
       overhead=existing and {axis=existing.axis,deck=existing.deck}}
   end
   board.clear_quote=function(_,t,role)
     if t.kind=="clear" and (not t.owner or t.owner==owner) then return 0 end
     return nil,role=="head" and "BRIDGEHEAD_NEEDS_CLEAR_LAND" or "BRIDGE_MIDDLE_OBSTRUCTED"
+  end
+  local road_clear={clear=function(t)
+    -- This native adapter still lacks stock barren/rough ground mutation;
+    -- only existing clean ground is admitted by its limited quote.
+    if t.kind=="clear" then return 0 end
+    return nil,"BRIDGE_MIDDLE_OBSTRUCTED"
+  end}
+  function board.check_build_above(_,t,axis,deck)
+    return bridge_underlay.quote(t,axis,deck,road_clear)
   end
   local plan,why,id=bridge_rules.plan(board,first,last,style,{owner=owner,budget=c.cash,year=M.date(s)})
   if not plan then
@@ -513,21 +541,30 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
     if M.crossing_protected(s,id) then return false,"The bridge would overlap a protected level crossing." end
   end
   if quote_only then return true,plan.price,plan end
-  local bridge=s.next_stock_road_bridge or 1
-  s.next_stock_road_bridge=bridge+1
+  local bridge
+  if plan.replacement then
+    bridge=s.tiles[plan.start].road_bridge_id
+    if not (bridge and s.tiles[plan["end"]].road_bridge_id==bridge) then
+      return false,"The bridge changed. Select its two ramps again."
+    end
+  else
+    bridge=s.next_stock_road_bridge or 1
+    s.next_stock_road_bridge=bridge+1
+  end
   s.stock_road_bridges=s.stock_road_bridges or {}
   s.bridge_above=s.bridge_above or {}
   s.stock_road_bridges[bridge]=plan
   local dirty={plan.start,plan["end"]}
   for _,head in ipairs(dirty) do
     local t=s.tiles[head]
-    t.build="stock_road_bridge";t.owner=owner;t.road_bridge_id=bridge
+    t.build="stock_road_bridge";t.owner=plan.owner;t.road_bridge_id=bridge
   end
   for _,tile in ipairs(plan.middle) do s.bridge_above[tile]=bridge;dirty[#dirty+1]=tile end
   s.topology=s.topology+1
   debit(c,plan.price)
-  return true,("%s bridge #%d built for $%d. Connect a road to the outside of each ramp."):format(
-    bridge_names[style],bridge,plan.price),
+  local summary=plan.replacement and "%s bridge #%d upgraded for $%d. Its road connections are unchanged."
+    or "%s bridge #%d built for $%d. Connect a road to the outside of each ramp."
+  return true,summary:format(bridge_assets.names[style],bridge,plan.price),
     dirty,plan.deck
 end
 function M.wood_bridge(s,owner,first,last) return M.road_bridge(s,owner,first,last,0) end
@@ -543,11 +580,14 @@ function M.remove_wood_bridge(s,owner,id,quote_only)
       end
     end
   end
+  load_road_rules()
+  local c=s.companies[owner]
+  local price=bridge_rules.clear_cost(span.total_length,span.roadtype or 0,span.tramtype)
+  if not c or c.cash<price then return false,"Not enough funds to dismantle this bridge." end
   if quote_only then
     local middle={}
     for i,tile in ipairs(span.middle) do middle[i]=tile end
-    -- Native removal is free. Do not expose the live registry as a quote.
-    return true,0,{start=span.start,["end"]=span["end"],middle=middle,
+    return true,price,{start=span.start,["end"]=span["end"],middle=middle,
       deck=span.deck,owner=span.owner,bridge_type=span.bridge_type,replacement=span.replacement}
   end
   local dirty={span.start,span["end"]}
@@ -558,7 +598,8 @@ function M.remove_wood_bridge(s,owner,id,quote_only)
   for _,tile in ipairs(span.middle) do s.bridge_above[tile]=nil;dirty[#dirty+1]=tile end
   s.stock_road_bridges[bridge]=nil
   s.topology=s.topology+1
-  return true,"Road bridge removed; land underneath retained.",dirty,span.deck
+  debit(c,price)
+  return true,("Road bridge removed for $%d; land underneath retained."):format(price),dirty,span.deck
 end
 function M.road_tunnel(s,owner,start,quote_only)
   if not s.corner_grid or not start then return false,"Select an uphill tile for the portal." end

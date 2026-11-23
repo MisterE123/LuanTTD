@@ -19,7 +19,7 @@ local picker=load("bridge_picker")({s=s,Sim=Sim,structure_tools=true,
 local seen=nil
 local function capture(yes,msg) seen={yes,msg} end
 local q=assert(picker.quote("road","Bridge Builder",a,b))
-assert(q.minimum==2447 and #q.ids==7 and #q.offers==2) -- Concrete is too short.
+assert(q.minimum==2447 and #q.ids==7 and #q.offers==3) -- Ordinary concrete and the fast girder are too short.
 assert(q.offers[2].name=="Steel girder" and q.offers[2].speed==64)
 assert(picker.open(p,"road",a,b,capture) and form.s:find("Timber",1,true) and form.s:find("$2,447",1,true))
 assert(c.cash==funds and not s.stock_road_bridges and applied==0 and saves==0)
@@ -62,3 +62,20 @@ assert(req.kind=="command" and req.command.kind=="bridge_picker" and req.command
 sent[2]({ok=true,why="Bridge complete on the worker."})
 assert(seen[1] and c.cash==prevcash and applied==1 and saves==1)
 print("PASS the same native bridge list submits the owner's price and protected ticket without mutating the host")
+
+sent=nil
+assert(remote.open(p,"rail",other_a,other_b,capture))
+answer=sent[2];sent=nil
+local offers={}
+for i=0,9 do offers[i+1]={style=i,name="RC1 style "..i,price=1200+i,speed=48+i} end
+answer({ok=true,revision=34,value={token=98,ids={other_a,other_b},offers=offers}})
+local large=form.s
+assert(large:find("scroll_container[",1,true) and large:find("scroll_container_end[]",1,true))
+assert(large:find("max=32",1,true) and not large:find("size[10,10.8]",1,true))
+assert(large:find("RC1 style 9",1,true))
+remote.fields(p,form.f,{bridge_scroll="CHG:30"})
+assert(not sent,"Scrolling must not commit or consume a bridge ticket")
+button=assert(large:match("(bridge_%d+_9)"))
+remote.fields(p,form.f,{[button]=true})
+assert(sent[1].command.token==98 and sent[1].command.style==9)
+print("PASS ten stock bridge offers scroll inside a bounded popup and a lower choice preserves its exact ticket")

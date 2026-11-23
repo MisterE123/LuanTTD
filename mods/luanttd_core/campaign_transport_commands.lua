@@ -5,6 +5,7 @@ local Guide=dofile(mod.."/rail_guideway_profiles.lua")
 local Roster=dofile(mod.."/openttd/rail_roster.lua")
 local Help=dofile(mod.."/depot_vehicle_help.lua")
 local Freight=dofile(mod.."/rail_freight_kinds.lua")
+local BridgeAssets=dofile(mod.."/bridge_style_assets.lua")
 return function(Sim,R)
   local s=R.world
   local T={}
@@ -32,13 +33,16 @@ return function(Sim,R)
     local op,mode=cmd.operation,cmd.mode
     if not tile(cmd.tile) or op=="bridge" and not tile(cmd.last) then return false,"INVALID_SPAN" end
     if mode=="road" then
-      if op=="bridge" and not integer(cmd.style,0,2) then return false,"INVALID_BRIDGE_STYLE" end
+      if op=="bridge" and not BridgeAssets.mounts("road",cmd.style) then return false,"INVALID_BRIDGE_STYLE" end
       if op=="bridge" then return Sim.road_bridge(s,owner,cmd.tile,cmd.last,cmd.style,quote) end
       return Sim.road_tunnel(s,owner,cmd.tile,quote)
     elseif mode=="rail" and R.rail then
       local n=R.network.spans
       local p,e
-      if op=="bridge" then p,e=n.quote_bridge(s,owner,cmd.tile,cmd.last,cmd.railtype,R.rail.span_available)
+      if op=="bridge" and cmd.style~=nil and not BridgeAssets.mounts("rail",cmd.style,cmd.railtype) then
+        return false,"INVALID_BRIDGE_STYLE"
+      end
+      if op=="bridge" then p,e=n.quote_bridge(s,owner,cmd.tile,cmd.last,cmd.railtype,R.rail.span_available,cmd.style)
       else p,e=n.quote_tunnel(s,owner,cmd.tile,cmd.railtype,R.rail.span_available) end
       if not p then return false,e end
       if quote then return true,p.price,p end

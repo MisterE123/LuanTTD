@@ -1,0 +1,99 @@
+{
+  "version": "16.0-RC1",
+  "year": 1950,
+  "climate": "temperate",
+  "seed": 1751,
+  "engine": [
+    "0 37 10 Armoured Van",
+    "0 36 9 Steel Truck",
+    "0 35 8 Iron Ore Hopper",
+    "0 34 7 Wood Truck",
+    "0 33 6 Grain Hopper",
+    "0 32 5 Goods Van",
+    "0 31 4 Livestock Van",
+    "0 30 3 Oil Tanker",
+    "0 29 1 Coal Truck",
+    "0 28 2 Mail Van",
+    "0 27 0 Passenger Carriage",
+    "0 9 255 Ginzu 'A4' (Steam)",
+    "0 8 255 Chaney 'Jubilee' (Steam)",
+    "0 0 255 Kirby Paul Tank (Steam)",
+    "1 153 10 Balogh Armoured Truck",
+    "1 150 9 Balogh Steel Truck",
+    "1 147 8 MPS Iron Ore Truck",
+    "1 144 7 Witcombe Wood Truck",
+    "1 141 6 Hereford Grain Truck",
+    "1 138 5 Balogh Goods Truck",
+    "1 135 4 Talbott Livestock Van",
+    "1 132 3 Witcombe Oil Tanker",
+    "1 126 2 MPS Mail Truck",
+    "1 123 1 Balogh Coal Truck",
+    "1 116 0 MPS Regal Bus",
+    "2 211 5 Yate Cargo Ship",
+    "2 206 0 MPS Passenger Ferry",
+    "2 204 3 MPS Oil Tanker",
+    "3 219 0 Bakewell Cotswald LB-3",
+    "3 216 0 Coleman Count",
+    "3 215 0 Sampson U52"
+  ],
+  "cargo": [
+    "0 PASS Passengers",
+    "1 COAL Coal",
+    "2 MAIL Mail",
+    "3 OIL_ Oil",
+    "4 LVST Livestock",
+    "5 GOOD Goods",
+    "6 GRAI Grain",
+    "7 WOOD Wood",
+    "8 IORE Iron Ore",
+    "9 STEL Steel",
+    "10 VALU Valuables"
+  ],
+  "industry": [
+    "0 Coal Mine",
+    "1 Power Station",
+    "2 Sawmill",
+    "3 Forest",
+    "4 Oil Refinery",
+    "5 Oil Rig",
+    "6 Factory",
+    "8 Steel Mill",
+    "9 Farm",
+    "11 Oil Wells",
+    "12 Bank",
+    "18 Iron Ore Mine"
+  ],
+  "initial_site": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "6",
+    "8",
+    "9",
+    "11",
+    "18"
+  ],
+  "railtype": [
+    "0 Railway construction"
+  ],
+  "roadtype": [
+    "0 Road"
+  ],
+  "bridge": [
+    "0 Wooden road bridge",
+    "1 Concrete road bridge",
+    "2 Steel girder road bridge",
+    "3 Reinforced concrete suspension road bridge",
+    "4 Steel suspension road bridge",
+    "5 Steel suspension road bridge",
+    "6 Steel cantilever road bridge",
+    "7 Steel cantilever road bridge",
+    "8 Steel cantilever road bridge",
+    "9 Steel girder road bridge"
+  ],
+  "airport": [
+    "0 4 3"
+  ]
+}

@@ -11,19 +11,21 @@ return function(architecture,terrain,prefixes)
       feet[style][axis][depth]=architecture("stock_"..asset,asset,prefix)
     end end
   end
-  return function(id,x,y,z,span,style,on_water)
+  return function(id,x,y,z,span,style,on_water,piece)
     -- Use a spare terrain slot, never replacing a ground or road mesh.
     -- OBJ coordinates include the opposite offset to share the pier axis.
     if not span or x%2~=1 or z%2~=1 then return end
+    local modes=piece or feet[style] and feet[style][span.axis]
+    if not modes then return end
     local slope,base,top=terrain.tile(id)
     -- Stock water has no independent terrain depth. Art can extend the
     -- bearing below the animated surface without consuming the water node.
     -- Use the even anchor's lowest pier/cap as before; this spare slot
     -- remains usable even when there is only the deck cap above water.
     if on_water and slope==0 and y==base+1 and y<=span.deck then
-      return feet[style][span.axis].water
+      return modes.water
     end
     if y>=span.deck then return end
-    if y==top and base<top then return feet[style][span.axis][top-base] end
+    if y==top and base<top then return modes[top-base] end
   end
 end

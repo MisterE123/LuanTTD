@@ -152,7 +152,7 @@ local raw,reason=Sim.road_bridge(s,name,perpendicular_start,perpendicular_end,0,
 assert(not raw and reason:match("MUST_DEMOLISH_BRIDGE_FIRST"))
 pr1.wood,pr2.wood=true,true
 local qok,qfee,foot=Sim.remove_wood_bridge(s,name,end_,true)
-assert(qok);eq(qfee,0);eq(foot.middle[2],target)
+assert(qok);eq(qfee,5*(50+2*40));eq(foot.middle[2],target)
 foot.middle[2]=1 -- no live registry reference escapes the quote
 eq(s.stock_road_bridges[put.bridge].middle[2],target)
 s.fleet[71]={route={end_}}
@@ -200,7 +200,7 @@ eq(s.tiles[target].terrain,"grass")
 
 local removed,rec=assert(native.run("remove",end_))
 local ok,rmsg,rdirty,rdeck=Sim.remove_wood_bridge(control,name,end_)
-assert(ok,rmsg);same(rec.dirty,rdirty);eq(rec.deck,rdeck);eq(rec.price,0)
+assert(ok,rmsg);same(rec.dirty,rdirty);eq(rec.deck,rdeck);eq(rec.price,qfee)
 same(rec.changes,put.changes);same(s,control);verify(false)
 eq(rec.membership_updates,1);eq(authority.revision(),2)
 assert(index.contains(source-1))
@@ -209,7 +209,7 @@ same(s.tiles[foreign],original.tiles[foreign]);same(s.corner_grid,original.corne
 dense_step();sparse_step();same(slow,fast);same(s,control);verify(false)
 same(run_events,{{256,target,1},{256,bank,ds+1}})
 eq(authority.revision(),4)
-print(("128² actual bridge: $%d build, $%d free native removal, heads %d/%d, bridge_above %d/%d/%d; foreign road preserved")
+print(("128² actual bridge: $%d build, $%d native removal, heads %d/%d, bridge_above %d/%d/%d; foreign road preserved")
   :format(fee,rec.price,begin_,end_,foreign,target,land))
 print(("dense/sparse tick differential: protection keeps %d dry at tick 255; removal admits %d then %d in tick 256 (slots 1/%d)")
   :format(target,target,bank,ds+1))

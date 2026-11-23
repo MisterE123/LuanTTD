@@ -1,8 +1,13 @@
 -- Opt-in native board adapter and write transaction for the stock rail
 -- span planner. Initial visual envelope: wooden bridges, and existing,
 -- complementary tunnel portals which do not require excavation.
-return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
+return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
   local W={}
+  mounted_bridge_styles=mounted_bridge_styles or {[0]=true}
+  local function has_style(style,gauge)
+    if type(mounted_bridge_styles)=="function" then return mounted_bridge_styles(style,gauge) end
+    return mounted_bridge_styles[style]~=nil
+  end
   local function copy(t)
     local q={}
     for k,v in pairs(t) do q[k]=v end
@@ -156,9 +161,9 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
     end
     return q
   end
-  local function precheck(s)
+  local function precheck(s,allow_running)
     if not s.rail_span_enabled then return nil,"Enable the rail spans preview first." end
-    if busy(s) then return nil,"Clear the running train before editing spans." end
+    if not allow_running and busy(s) then return nil,"Clear the running train before editing spans." end
     if not s.corner_grid then return nil,"Rail spans need shared-corner terrain." end
     return true
   end
@@ -176,14 +181,41 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
     return {owner=owner,budget=authority(s,owner),railtype=gauge,
       can_build_railtype=function(r) return r==gauge end}
   end
-  function W.quote_bridge(s,owner,a,b,gauge,available)
-    local ok,err=precheck(s)
+  function W.quote_bridge(s,owner,a,b,gauge,available,style)
+    style=style or 0
+    if not has_style(style,gauge) or not Bridge.catalog[style] then
+      return nil,"This bridge style is not available for this railway."
+    end
+    local old=a and W.by_portal(s,a)
+    local replacing=old and old.kind=="bridge" and b and W.by_portal(s,b)==old and a~=b
+      and (old.start==a and old["end"]==b or old.start==b and old["end"]==a)
+    local ok,err=precheck(s,replacing)
     if not ok then return nil,err end
     local options,e=spec(s,owner,gauge,available)
     if not options then return nil,e end
     local terrain_board=raw_board(s)
-    local p,why,id=Bridge.plan(terrain_board,a,b,0,options)
-    if p then
+    if Sim.date then options.year=Sim.date(s) end
+    if replacing then
+      -- All ground classes this adapter could legally mount on a
+      -- native rail span. Other stock tile handlers are still unmounted.
+      function terrain_board.check_build_above(_,t)
+        if t.kind=="clear" or t.kind=="water" or t.kind=="road" or t.kind=="rail"
+          or t.kind=="signals" or t.kind=="tunnel" then return 0 end
+        return nil,"BRIDGE_MIDDLE_OBSTRUCTED"
+      end
+    end
+    local p,why,id=Bridge.plan(terrain_board,a,b,style,options)
+    if p and p.replacement then
+      if not replacing or p.axis~=old.axis or p.deck~=old.deck or #p.middle~=#old.middle then
+        return nil,"The existing bridge geometry changed."
+      end
+      local key=s.tiles[a].rail_span_id
+      for i,id in ipairs(p.middle) do
+        if id~=old.middle[i] or not s.rail_bridge_above or s.rail_bridge_above[id]~=key then
+          return nil,"The existing bridge layer changed.",id
+        end
+      end
+    elseif p then
       -- First renderer doesn't stack rail infrastructure over other
       -- portals, roads with worn metadata, or another span layer.
       for _,tile in ipairs({p.start,p["end"]}) do
@@ -223,12 +255,29 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track)
   function W.commit(s,owner,p,available)
     if not p or p.topology~=s.topology or p.owner~=owner then return false,"The railway changed. Quote it again." end
     local checked,why,at
-    if p.kind=="bridge" then checked,why,at=W.quote_bridge(s,owner,p.start,p["end"],p.railtype,available)
+    if p.kind=="bridge" then checked,why,at=W.quote_bridge(s,owner,p.start,p["end"],p.railtype,available,p.bridge_type)
     elseif p.kind=="tunnel" then checked,why,at=W.quote_tunnel(s,owner,p.start,p.railtype,available)
     else return false,"No rail span selected." end
     if not checked then return false,why,at end
     if checked.price~=p.price or checked["end"]~=p["end"] then return false,"The span price or geometry changed. Quote it again." end
     p=checked
+    if p.replacement then
+      -- CmdBuildBridge keeps both physical ramp tiles and the PBS path.
+      -- Claim ownership is held separately by the dispatch ledger, so
+      -- leave it, the active consist and the indices entirely untouched.
+      local old=assert(W.by_portal(s,p.start))
+      old.bridge_type,old.spec=p.bridge_type,p.spec
+      for _,head in ipairs({old.head,old.tail}) do
+        head.bridge_type,head.bridge_speed=p.bridge_type,p.spec.speed
+      end
+      local c=Sim.company(s,owner)
+      c.cash,c.expense,c.month_exp=c.cash-p.price,c.expense+p.price,c.month_exp+p.price
+      s.topology=s.topology+1
+      local dirty={p.start,p["end"]}
+      for _,id in ipairs(p.middle) do dirty[#dirty+1]=id end
+      return true,("Rail bridge upgraded for $%d. Its track and reservations are unchanged."):format(p.price),
+        dirty,p.deck,old
+    end
     local key=s.next_stock_rail_span or 1
     s.next_stock_rail_span=key+1
     s.stock_rail_spans=s.stock_rail_spans or {}

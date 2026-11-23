@@ -391,20 +391,27 @@ return function(api)
         shaded=true,backface_culling=true,visual_size={x=.4,y=.4,z=.4}},
     })
   end
-  local bridge_styles={[0]="road_bridge_wood",[1]="road_bridge_concrete",[2]="road_bridge_girder"}
+  local bridge_styles=dofile(modpath.."/bridge_style_assets.lua")
   local bridges={}
-  local clear_span=dofile(modpath.."/bridge_clearance_render.lua")
-  for style,prefix in pairs(bridge_styles) do
-    local parts={span={},head_flat={},head_ramp={},pier={}}
-    for part,list in pairs(parts) do
-      local limit=(part=="span" or part=="pier") and 1 or 3
-      for d=0,limit do
-        local asset=prefix.."_"..part.."_"..d
-        list[d]=architecture("stock_"..asset,asset,prefix)
+  do
+    local clear_span=dofile(modpath.."/bridge_clearance_render.lua")
+    local rules=dofile(modpath.."/openttd/road_bridge.lua")(api.slope)
+    local piece=dofile(modpath.."/bridge_piece_art.lua")(architecture,rules,Sim.xy)
+    for style,prefix in pairs(bridge_styles.road) do
+      local manifest=bridge_styles.pieces[style]
+      local parts={head_flat={},head_ramp={}}
+      if not manifest then parts.span={};parts.pier={} end
+      for part,list in pairs(parts) do
+        local limit=(part=="span" or part=="pier") and 1 or 3
+        for d=0,limit do
+          local asset=prefix.."_"..part.."_"..d
+          list[d]=architecture("stock_"..asset,asset,prefix)
+        end
       end
+      if manifest then parts.piece=piece.mount(prefix,manifest) end
+      parts.clear_span=clear_span(architecture,prefix,manifest~=nil)
+      bridges[style]=parts
     end
-    parts.clear_span=clear_span(architecture,prefix)
-    bridges[style]=parts
   end
   local rail_spans=api.rail_spans and dofile(modpath.."/rail_span_render.lua")(
     api.rail_spans,visual.state,architecture,terrain_view,api.rail_bridge_wire_art,Sim.xy)
@@ -452,7 +459,7 @@ return function(api)
     end
     return slope_colliders[mask]
   end
-  local road_feet=terrain and dofile(modpath.."/bridge_pier_render.lua")(architecture,terrain_view,bridge_styles)
+  local road_feet=terrain and dofile(modpath.."/bridge_pier_render.lua")(architecture,terrain_view,bridge_styles.static("road"))
   -- The slope owns the exposed surface, including any flat lower
   -- triangle of a single-corner ramp. A full cube beneath it would
   -- draw a second top at exactly the same depth.
@@ -917,11 +924,20 @@ return function(api)
       local clear=not head and wood_bridge.clear_span.under(t)
       if y==span.deck and native_anchor then
         if head then return wood_bridge[head.flat_ramp and "head_flat" or "head_ramp"][head.inside_direction] end
+        if wood_bridge.piece then
+          local deck,under=wood_bridge.piece.models(span,id)
+          return clear and under or deck
+        end
         return (clear and wood_bridge.clear_span or wood_bridge.span)[span.axis]
       end
       if not head and not clear and native_anchor and y<span.deck then
-        local _,land_base,land_top=terrain.tile(id)
-        if y>land_top and y<span.deck then return wood_bridge.pier[span.axis] end
+        local _,_,land_top=terrain.tile(id)
+        if y>land_top then
+          local pier
+          if wood_bridge.piece then local _,_,node=wood_bridge.piece.models(span,id);pier=node
+          else pier=wood_bridge.pier[span.axis] end
+          if pier then return pier end
+        end
       end
       if head then
         if y<=head.base then
@@ -1174,8 +1190,11 @@ return function(api)
       local key=S.bridge_above and S.bridge_above[id]
       local span=key and S.stock_road_bridges[key]
       if span and road_feet then
-        if bridges[span.bridge_type or 0].clear_span.under(S.tiles[id]) then return node,param2 end
-        return road_feet(id,x,y,z,span,span.bridge_type or 0,S.tiles[id].terrain=="water") or node
+        local style=bridges[span.bridge_type or 0]
+        if style.clear_span.under(S.tiles[id]) then return node,param2 end
+        local piece
+        if style.piece then local _,_,_,feet=style.piece.models(span,id);piece=feet end
+        return road_feet(id,x,y,z,span,span.bridge_type or 0,S.tiles[id].terrain=="water",piece) or node
       end
       if rail_spans then return rail_spans.foot(id,x,y,z) or node end
     end

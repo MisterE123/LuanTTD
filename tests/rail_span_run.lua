@@ -50,7 +50,7 @@ for x=1,32 do
 end
 local function id(x)return Sim.id(x,10)end
 local Lab=dofile(root.."trackworks.lua")(Sim,T,F,Slope,C,Search,terrain)
-local W=dofile(root.."rail_span_world.lua")(Sim,Terrain,H,B,U,T,Slope)
+local W=dofile(root.."rail_span_world.lua")(Sim,Terrain,H,B,U,T,{[0]=true,[2]=true})
 local Run=dofile(root.."rail_dispatch_run.lua")(T,F,C,Search,P,L,Signal,Motion,Dispatch,Speed,Lab,nil,nil,W)
 local function rail(x)
   local t=s.tiles[id(x)];t.owner="Alice";t.rail_tracks=1;t.build="stock_rail"
@@ -136,7 +136,22 @@ for tick=1,4000 do
     local draw,td,f=Run.sample(run,1)
     assert(draw==id(7) and W.presentation(s,draw,td,f,h)==b.deck)
     bridge_seen=true
-    if not reloaded_bridge then s=save(s);reloaded_bridge=true end
+    if not reloaded_bridge then
+      claims(d,5,9,1)
+      local span_key=s.tiles[id(5)].rail_span_id
+      local old_span=W.by_portal(s,id(5))
+      local next_span=s.next_stock_rail_span
+      local money=s.companies.Alice.cash
+      local q=assert(W.quote_bridge(s,"Alice",id(9),id(5),0,nil,2))
+      local good,note,changed,_,live=W.commit(s,"Alice",q)
+      assert(good,note)
+      assert(#changed==5 and live==old_span and s.tiles[id(5)].rail_span_id==span_key)
+      assert(s.rail_bridge_above[id(7)]==span_key and s.next_stock_rail_span==next_span)
+      assert(s.companies.Alice.cash==money-q.price and live.bridge_type==2)
+      assert(Motion.max_bridge_speed(Run.board(s),run.consist)==64)
+      claims(d,5,9,1)
+      s=save(s);reloaded_bridge=true
+    end
   end
   if h.tile==id(10) and v.tile==id(9) then
     claims(d,5,9,1);wagon_hold=true
@@ -163,4 +178,4 @@ for frame=0,15 do assert(ladder[frame],"Missing stock bridge frame "..frame) end
 assert(Run.clear(s,"Alice"))
 assert(W.clear(s,"Alice",id(13)) and W.clear(s,"Alice",id(5)))
 assert(not W.protected(s,id(7)) and s.tiles[id(13)].h==4)
-print("PASS: built native-board rail spans via quotes, coupled wooden grade and tunnel movement held both claims until actual tail, stock frames/speed and two reloads")
+print("PASS: built native-board rail spans via quotes, live grade upgrade and tunnel movement held both claims until actual tail, stock frames/speed and two reloads")
