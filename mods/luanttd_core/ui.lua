@@ -2543,7 +2543,7 @@ function U.service(p,kind,id)
       end
     elseif r.kind=="lock" then
       local lock=S.stock_ship_locks and S.stock_ship_locks[r.lock_middle]
-      local frame=lock and lock.presentation
+      local frame=lock and api.ship_lock_view and api.ship_lock_view.frame(r.lock_middle)
       if frame then
         label(.4,1.18,("Chamber level %d%%  ·  %s"):format(math.floor(frame.phase*100+.5),
           frame.lower and "lower gates open" or frame.upper and "upper gates open" or "both gates closed"))

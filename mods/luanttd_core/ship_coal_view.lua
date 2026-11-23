@@ -13,7 +13,7 @@ return function(api,RoadVisual)
     ref,yaw=nil,nil
   end
   function V.step(dt,online,fraction)
-    if not online then return end
+    if not online then clear();return end
     for _,event in ipairs(api.ship_coal.take_events() or {}) do
       if event.tile and event.owner then
         if event.kind=="fare" and event.amount then
@@ -26,10 +26,11 @@ return function(api,RoadVisual)
     local pos,dir=api.ship_coal.pose(fraction)
     if not pos or not dir then clear();return end
     if api.vehicle_ui then api.vehicle_ui.track("ship","coal",pos) end
-    local nearby=false
-    for _,p in ipairs(core.get_connected_players()) do
+    local nearby=api.interest and api.interest.near(pos,ref~=nil) or false
+    if not api.interest then for _,p in ipairs(core.get_connected_players()) do
       local a=p:get_pos()
       if a and (a.x-pos.x)^2+(a.z-pos.z)^2<112^2 then nearby=true;break end
+    end
     end
     if not nearby then clear();return end
     if not ref or not ref:get_pos() then ref=core.add_entity(pos,name);yaw=nil end

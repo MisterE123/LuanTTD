@@ -8,7 +8,7 @@ return function(api,Run,Pose,RoadVisual,seconds_per_day)
     ref,last_yaw=nil,nil
   end
   function V.step(dt,online)
-    if not online then acc=0;return end
+    if not online then acc=0;remove();return end
     local pilot=Run.current(S)
     if not pilot then remove();acc=0;return end
     if S.speed>0 then
@@ -22,6 +22,8 @@ return function(api,Run,Pose,RoadVisual,seconds_per_day)
     local _,level=api.terrain.tile(f[4])
     local target=RoadVisual.nose_yaw(Pose.yaw(f[3]))
     local p={x=x,y=level+.512,z=z}
+    if api.vehicle_ui then api.vehicle_ui.track("tram",1,p) end
+    if api.interest and not api.interest.near(p,ref~=nil) then remove();return end
     if not ref or not ref:get_pos() then
       ref=core.add_entity(p,"luanttd_core:tram_preview_vehicle")
       last_yaw=nil

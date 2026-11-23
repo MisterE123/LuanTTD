@@ -572,7 +572,9 @@ return function(api,ui)
       p:set_look_horizontal(0);p:set_look_vertical(1.05)
     end
     p:set_physics_override({
-      gravity=0,jump=0,sneak=false,
+      -- Placement freezes the global speed multiplier. Luanti merges
+      -- overrides, so restoring only speed_walk leaves horizontal input locked.
+      speed=1,gravity=0,jump=0,sneak=false,
       speed_walk=walk_speed,speed_crouch=crouch_speed,
       acceleration_air=6,acceleration_default=3,
     })

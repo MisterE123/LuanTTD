@@ -46,12 +46,24 @@ render.place_world=function(done,notify)
   end
   return raw_place(done,notify)
 end
-local complete
+local complete,movement_origin,moved
 core.register_globalstep(function()
   local p=core.get_player_by_name("singleplayer")
   if p and not complete and not placement and #api.world.hotbar_layout(p)>0 then
     complete=true
     core.log("action","WORLD_CREATION_PLAYABLE "..S.stock_generated_profile.width)
+  end
+  if not p or not complete then return end
+  local pos=p:get_pos()
+  if not movement_origin and p:get_player_control().right then
+    movement_origin=pos
+    core.log("action","WORLD_CREATION_STRAFE_INPUT")
+  elseif movement_origin and not moved then
+    local dx,dz=pos.x-movement_origin.x,pos.z-movement_origin.z
+    if dx*dx+dz*dz>=1 then
+      moved=true
+      core.log("action",string.format("WORLD_CREATION_STRAFE_PASS %.2f",math.sqrt(dx*dx+dz*dz)))
+    end
   end
 end)
 LUA
@@ -110,7 +122,14 @@ fi
 waitmark WORLD_CREATION_PLAYABLE
 sleep .45
 snap playable
-grep -E 'WORLD_CREATION_(PROGRESS|PLAYABLE)' "$out/client.log"
+win=$(xdotool search --sync --limit 1 --onlyvisible --pid "$client" | tail -1)
+xdotool windowfocus --sync "$win"
+xdotool keydown d
+sleep 1.6
+xdotool keyup d
+grep -q WORLD_CREATION_STRAFE_INPUT "$out/client.log"
+grep -q WORLD_CREATION_STRAFE_PASS "$out/client.log"
+grep -E 'WORLD_CREATION_(PROGRESS|PLAYABLE|STRAFE_PASS)' "$out/client.log"
 grep -q 'placing_terrain 100' "$out/client.log"
 grep -q 'disposable test failure' "$out/client.log"
 ! grep -E 'ERROR\[' "$out/client.log"

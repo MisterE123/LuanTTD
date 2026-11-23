@@ -23,7 +23,7 @@ return function(api)
   end
   local chimneys={{2.48,3.38,2.1},{4.34,3.52,2.1}}
   function V.step(dt,online)
-    if not online then return end
+    if not online then for id in pairs(reels) do remove(id) end;return end
     local smoke=false
     if S.speed>0 then smoke_elapsed=smoke_elapsed+dt end
     if smoke_elapsed>.62 then smoke=true;smoke_elapsed=0 end

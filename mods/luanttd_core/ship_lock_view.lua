@@ -29,8 +29,16 @@ return function(api,Art)
       if not a.rot or a.rot~=rotation then a.ref:set_yaw(rotation);a.rot=rotation end
     end
   end
+  local frames={}
+  function V.frame(id) return frames[id] end
   function V.step(online,fraction)
-    if not online then return end
+    if not online then
+      for id,row in pairs(pieces) do
+        for i=1,3 do remove(row,i) end
+        pieces[id],frames[id]=nil,nil
+      end
+      return
+    end
     local show={}
     local p=S.ship_pilot
     local v=p and p.vehicle
@@ -45,16 +53,18 @@ return function(api,Art)
     local part=v and S.tiles[v.tile] and S.tiles[v.tile].ship
     for id,lock in pairs(S.stock_ship_locks or {}) do
       local x,z=Sim.xy(id)
-      local _,base=api.terrain.tile(id)
-      local frame=Art.frame(lock,part,v,x,z,base)
-      if frame~=lock.presentation then lock.presentation=frame end
-      for _,p in ipairs(core.get_connected_players()) do
+      if api.interest then show[id]=api.interest.near({x=2*x+.5,z=2*z+.5},pieces[id]~=nil,86,96)
+      else for _,p in ipairs(core.get_connected_players()) do
         local pos=p:get_pos()
         if pos and (pos.x-(2*x+.5))^2+(pos.z-(2*z+.5))^2<86^2 then
           show[id]=true;break
         end
       end
+      end
       if show[id] then
+        local _,base=api.terrain.tile(id)
+        local frame=Art.frame(lock,part,v,x,z,base)
+        frames[id]=frame
         local water,lower,upper,turn=Art.pose(lock.dir,x,z,base,frame.phase)
         local row=pieces[id] or {};pieces[id]=row
         draw(row,1,"chamber_water",water,turn)
@@ -65,7 +75,7 @@ return function(api,Art)
     for id,row in pairs(pieces) do
       if not show[id] then
         for i=1,3 do remove(row,i) end
-        pieces[id]=nil
+        pieces[id],frames[id]=nil,nil
       end
     end
   end

@@ -30,7 +30,7 @@ jobs:
       - name: Check Lua syntax and run focused tests
         run: |
           find mods/luanttd_core -type f -name '*.lua' -print0 | xargs -0 -r -n 1 luac5.1 -p
-          for t in sim pedestrian avatar_car world_setup generated_world_dimensions packed_campaign workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere hotbar vehicle_ui road_live_order_edit tram_live_order_edit water_air_orders ordinary_level_crossing \
+          for t in sim pedestrian avatar_car presentation_interest world_setup generated_world_dimensions packed_campaign workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere hotbar vehicle_ui road_live_order_edit tram_live_order_edit water_air_orders ordinary_level_crossing \
             bridge_picker rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight generated_oil_placement mixed_freight_live farm_field_view rail_owned_default \
             rail_depot_fleet rail_depot_construction rail_loose_wagons rail_order_cargo rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \

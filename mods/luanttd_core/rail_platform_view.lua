@@ -8,7 +8,7 @@ return function(api,Run,Pose,seconds_per_day)
     ref=nil
   end
   function V.step(dt,online)
-    if not online then acc=0;return end
+    if not online then acc=0;remove();return end
     local run=Run.current(S)
     if not run then remove();acc=0;return end
     if S.speed>0 then
@@ -28,6 +28,7 @@ return function(api,Run,Pose,seconds_per_day)
     local base=S.tiles[id].h
     if api.terrain then local _,level=api.terrain.tile(id);base=level end
     local p={x=2*tx+.5+x,y=base+.612,z=2*tz+.5+z}
+    if api.interest and not api.interest.near(p,ref~=nil) then remove();return end
     if not ref or not ref:get_pos() then ref=core.add_entity(p,"luanttd_core:vehicle_"..run.visual) end
     if ref then
       ref:move_to(p,true)

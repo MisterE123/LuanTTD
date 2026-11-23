@@ -28,14 +28,16 @@ return function(api,Terrain)
   local function wanted()
     local players=core.get_connected_players()
     local active={}
-    for id in pairs(S.stock_farm_fields or {}) do
-      local field=api.farm_world.field(S,id)
+    local fields=S.stock_farm_fields or {}
+    local function visit(id)
+      local field=fields[id] and api.farm_world.field(S,id)
       if field then
         local x,z=Sim.xy(id)
-        local nearby=false
-        for _,p in ipairs(players) do
+        local nearby=api.interest and api.interest.near({x=2*x+.5,z=2*z+.5},false,64) or false
+        if not api.interest then for _,p in ipairs(players) do
           local at=p:get_pos()
           if (at.x-(2*x+.5))^2+(at.z-(2*z+.5))^2<64^2 then nearby=true;break end
+        end
         end
         if nearby and field.slope==0 and detail[field.variant] then
           active["field:"..id]={id=id,name=detail[field.variant],x=2*x+.5,y=field.base+.504,z=2*z+.5,yaw=0}
@@ -61,6 +63,8 @@ return function(api,Terrain)
         end end
       end
     end
+    if api.interest then api.interest.each_tile(Sim,64,visit)
+    else for id in pairs(fields) do visit(id) end end
     return active
   end
   function F.step(dt)

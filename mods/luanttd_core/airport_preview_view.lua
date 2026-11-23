@@ -27,7 +27,7 @@ return function(api,Run,RoadVisual,seconds_per_day)
     end
   end
   function V.step(dt,online,fraction)
-    if not online then acc=0;return end
+    if not online then acc=0;for id in pairs(views) do remove(id) end;return end
     local p=Run.current(S)
     if not p then
       for id in pairs(views) do remove(id) end
@@ -46,7 +46,9 @@ return function(api,Run,RoadVisual,seconds_per_day)
       else pos,dir=Run.pose(run) end
       if airborne==nil then airborne=run.vehicle.airborne end
       local art=assets[run.engine_id or 215]
-      if pos and art then
+      local identity=id~=0 and id or 1
+      if api.vehicle_ui then api.vehicle_ui.track("air",identity,pos) end
+      if pos and art and (not api.interest or api.interest.near(pos,views[id]~=nil,144,164)) then
         active[id]=true
         local x=views[id]
         if not x or not x.ref or not x.ref:get_pos() then
@@ -56,7 +58,7 @@ return function(api,Run,RoadVisual,seconds_per_day)
           if entity then entity.paid_clock=id end
           views[id]=x
         end
-        if api.vehicle_ui then api.vehicle_ui.track("air",id~=0 and id or 1,pos,x.ref) end
+        if api.vehicle_ui then api.vehicle_ui.track("air",identity,pos,x.ref) end
         if x.ref then
           local mesh=airborne and art.flight or art.mesh
           if mesh~=x.shown then x.ref:set_properties({mesh=mesh});x.shown=mesh end

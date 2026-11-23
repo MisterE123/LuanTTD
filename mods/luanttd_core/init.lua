@@ -72,7 +72,8 @@ if S.stock_generated_profile then
   generated_world=true
 end
 Sim.restore_road_orders(S)
-local api={Sim=Sim,s=S,generated_world=generated_world,road_first=true}
+local api={Sim=Sim,s=S,generated_world=generated_world,road_first=true,
+  interest=dofile(mod.."/presentation_interest.lua").new()}
 local farm_profile=not generated_world and (S.stock_farm_industries~=nil or fresh and request_farm)
 local oil_profile=not generated_world and (S.stock_oil_industries~=nil or fresh and not farm_profile and request_oil)
 local coast_profile=not generated_world and (S.stock_coastal_profile and not S.qa_coastal or
@@ -528,7 +529,7 @@ local save_elapsed,hud_elapsed=0,0
 local headless=true
 api.offline_economy=headless
 local campaign=dofile(mod.."/campaign_step.lua").new(S,interval,{
-  advance=Sim.daily,capture=render.capture,refresh=render.update,
+  advance=Sim.daily,capture=render.capture,refresh=render.update_near,
   discard_effects=function()
     Sim.road_loading_events(S)
     Sim.rail_loading_events(S);Sim.rail_paid_motion_events(S);Sim.rail_coal_loading_events(S)
@@ -540,9 +541,12 @@ local campaign=dofile(mod.."/campaign_step.lua").new(S,interval,{
 core.register_globalstep(function(dt)
   if placement then return end
   world.step(dt)
-  if api.farm_view then api.farm_view.step(dt) end
   if api.trackworks_demo then api.trackworks_demo.step(dt) end
-  local online=#core.get_connected_players()>0
+  local players=core.get_connected_players()
+  local online=#players>0
+  api.interest.refresh(players)
+  if api.farm_view then api.farm_view.step(dt) end
+  if online then render.refresh_interest() else render.remove_vehicle_views() end
   if api.rail_platform_view then api.rail_platform_view.step(dt,online) end
 
   if api.tram_view then api.tram_view.step(dt,online) end
@@ -550,6 +554,9 @@ core.register_globalstep(function(dt)
     campaign.step(dt,false,headless)
     if api.airport_view then api.airport_view.step(dt,false,1) end
     if api.ship_view then api.ship_view.step(dt,false,1) end
+    if api.ship_coal_view then api.ship_coal_view.step(dt,false,1) end
+    if api.ship_lock_view then api.ship_lock_view.step(false,1) end
+    if api.coal_view then api.coal_view.step(dt,false) end
     if api.rail_dispatch_view then api.rail_dispatch_view.step(dt,false,1) end
     if headless then
       save_elapsed=save_elapsed+dt

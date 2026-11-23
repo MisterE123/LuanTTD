@@ -1123,6 +1123,34 @@ return function(api)
       if node and node==ocean(p.x,p.z) then core.swap_node(p,{name=node}) end
     end,
   })
+  local pending={}
+  local function queue_near(id)
+    if not api.interest then update_tile(id);return end
+    local x,z=Sim.xy(id)
+    local pos={x=x*2+.5,z=z*2+.5}
+    if api.interest.near(pos,false,128) then update_tile(id);return end
+    local k=api.interest.sector(pos.x,pos.z)
+    local bucket=pending[k] or {};pending[k]=bucket
+    bucket[id]=true
+  end
+  local interest_frame=0
+  function R.refresh_interest()
+    if not api.interest then return end
+    interest_frame=interest_frame+1
+    if interest_frame%4~=0 then return end
+    local quota=64
+    for key in pairs(api.interest.sectors(128)) do
+      local bucket=pending[key]
+      if bucket then
+        for id in pairs(bucket) do
+          update_tile(id);bucket[id]=nil
+          quota=quota-1
+          if quota==0 then return end
+        end
+        pending[key]=nil
+      end
+    end
+  end
   local observed_gates={}
   function R.crossing_gates()
     for id in pairs(S.level_crossing_tiles or {}) do
@@ -1131,20 +1159,22 @@ return function(api)
         local value=t.barred or t.phase=="unobserved" or t.phase=="mixed_occupancy"
         if observed_gates[id]~=value then
           observed_gates[id]=value
-          update_tile(id)
+          queue_near(id)
         end
       end
     end
   end
-  function R.update(changed)
+  local function update_set(changed,paint)
     local set={}
     update_river_directions(set)
     for _,id in ipairs(changed or {}) do
       set[id]=true
       for d=1,4 do local j=Sim.adjacent(id,d);if j then set[j]=true end end
     end
-    for id in pairs(set) do update_tile(id) end
+    for id in pairs(set) do paint(id) end
   end
+  function R.update(changed) update_set(changed,update_tile) end
+  function R.update_near(changed) update_set(changed,queue_near) end
   local models={bus="town_flyer",leopard_bus="leopard_bus",mail_van="mail_van",coal_tipper="coal_tipper",truck="truck",coach="coach",
     wood_truck="witcombe_wood_truck",goods_truck="balogh_goods_truck",craighead_goods_truck="craighead_goods_truck",
     steam="steam",diesel="diesel",electric="electric",ferry="ferry",freighter="freighter",prop="prop",jet="jet"}
@@ -1208,6 +1238,12 @@ return function(api)
     end
   end
   local refs,last,poses={},{},{}
+  function R.remove_vehicle_views()
+    for id,ref in pairs(refs) do
+      if ref:get_pos() then ref:remove() end
+      refs[id]=nil;last[id]=nil
+    end
+  end
   local function lerp(a,b,t) return a+(b-a)*t end
   local function tile_pose(id,mode,air)
     local x,z=Sim.xy(id)
@@ -1456,8 +1492,8 @@ return function(api)
         board_seen[id]=v.last_board
         board_effect(v.owner,v.cargo,v.last_board)
       end
-      local nearby=false
-      if pos then
+      local nearby=api.interest and api.interest.near(pos,ref~=nil) or false
+      if pos and not api.interest then
         for _,p in ipairs(players) do
           local a=p:get_pos()
           if (a.x-pos.x)^2+(a.y-pos.y)^2+(a.z-pos.z)^2<84^2 then nearby=true;break end

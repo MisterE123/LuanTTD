@@ -113,7 +113,7 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
     for k in pairs(collection) do if not keep[k] then forget(collection,k) end end
   end
   function V.step(dt,online,fraction)
-    if not online then acc=0;return end
+    if not online then acc=0;vacuum(refs,{});vacuum(signs,{});return end
     local dispatch=Run.current(S)
     local show_parts,show_signs={},{}
     if dispatch then
@@ -180,8 +180,9 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
             local body={x=2*tx+.5+x,y=(level or board_base(id))+models[kind].offset,z=2*tz+.5+z}
             local rotation={x=(tilt or 0)*(flipped and 1 or -1),
               y=math.pi-math.atan2(dx,dz)+(flipped and math.pi or 0),z=0}
+            local visible=not api.interest or api.interest.near(body,refs[key]~=nil)
             local ref
-            if i==1 and train.bridge_collectors and split_ready[kind] then
+            if visible and i==1 and train.bridge_collectors and split_ready[kind] then
               local rows,axis,side=span_wire(S,id,td,wormhole)
               local move=rows and collector.mount(rows,axis,side,body,rotation,vector.rotate,.03,.45)
               local heel=move and move.heel or vector.add(body,vector.rotate(collector.heel,rotation))
@@ -192,11 +193,11 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
               pose(refs,key..":collector","dispatch_"..kind.."_collector",heel,rotation,scale,flip_epoch)
               show_parts[key..":collector"]=true
               if V.observe_collector then V.observe_collector(train,id,move,rows,scale,td) end
-            else
+            elseif visible then
               ref=pose(refs,key,"dispatch_"..kind,body,rotation,nil,flip_epoch)
             end
             if api.vehicle_ui and train.fleet_id then api.vehicle_ui.track("rail",train.fleet_id,body,ref,i==1) end
-            show_parts[key]=true
+            if visible then show_parts[key]=true end
           end
         end
       end

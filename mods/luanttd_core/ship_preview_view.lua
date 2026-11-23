@@ -31,10 +31,11 @@ return function(api,Run,RoadVisual,seconds_per_day)
     else pos,dir=Run.pose(p) end
     if not pos then stop();return end
     if api.vehicle_ui then api.vehicle_ui.track("ship","ferry",pos) end
-    local nearby=false
-    for _,player in ipairs(core.get_connected_players()) do
+    local nearby=api.interest and api.interest.near(pos,ref~=nil) or false
+    if not api.interest then for _,player in ipairs(core.get_connected_players()) do
       local a=player:get_pos()
       if a and (a.x-pos.x)^2+(a.z-pos.z)^2<112^2 then nearby=true;break end
+    end
     end
     if not nearby then stop();return end
     if ref then
