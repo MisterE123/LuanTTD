@@ -5,6 +5,7 @@ return function(api)
   local Sim,S=api.Sim,api.s
   local Zones=Sim.commercial_passengers_waiting and
     dofile(core.get_modpath("luanttd_core").."/passenger_waiting_zones.lua")(api)
+  local worker_projection
   local state_by_player={}
   local clock,scan_due=0,0
   local platforms={}
@@ -57,6 +58,7 @@ return function(api)
   end
 
   local function waiting(mode,id)
+    if worker_projection then return worker_projection.waiting(mode,id) end
     if mode=="road" then
       local st=S.stations[id]
       local tile=st and S.tiles[st.tile]
@@ -252,6 +254,17 @@ return function(api)
   end
   function Crowd.board(station,units) Crowd.board_terminal("road",station.id,units) end
 
+  function Crowd.use_worker_projection(projection,scene,terrain)
+    if not worker_projection and Zones then
+      Zones=dofile(core.get_modpath("luanttd_core").."/passenger_waiting_zones.lua")({
+        s=scene,Sim=Sim,terrain=terrain,trackworks=api.trackworks,
+      })
+    end
+    worker_projection=projection
+    S=scene
+    for _,e in ipairs(projection.take_boardings()) do Crowd.board_terminal(e.mode,e.id,e.units) end
+    scan_due=clock
+  end
   function Crowd.update(players,dt)
     clock=clock+dt
     -- Gradual loading can emit many pulses in one render frame. They

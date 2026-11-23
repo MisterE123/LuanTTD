@@ -44,6 +44,11 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     end
   end
   if R.rail then
+    local platform=R.rail.platforms and R.rail.platforms.current(s)
+    if platform then
+      local p,yaw,id=R.rail.platform_pose(platform)
+      if point(p) then add("rail_pilot",1,{owner=platform.owner,pos=p,yaw=yaw,model=platform.visual,tile=id}) end
+    end
     local dispatch=R.rail.run.current(s)
     for _,r in ipairs(dispatch and dispatch.runs or {}) do
       local parts={}

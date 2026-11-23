@@ -99,3 +99,19 @@ assert(deck and land,"did not stay on bridge layer and reach linked land")
 C.leave("driver")
 assert(not model.pos and not C.active(p),"disconnect leaked a street vehicle")
 print("avatar car: command, movement, explicit right turn, reverse, gate, live edit, bridge layer, persistence isolation and cleanup OK")
+local before_move={tiles={},companies={}}
+local live_board={tiles={},companies={}}
+live_board.tiles[id(10,8)]={build="road",road_bits=4,h=0}
+live_board.tiles[id(10,9)]={build="road",road_bits=1,h=0,level_crossing={barred=true}}
+rendering.host_state=function() return live_board end
+C=dofile(mod.."/avatar_car.lua")({s=before_move,Sim=Sim,render=rendering,authority_handoff=true},W)
+target=id(10,8)
+assert(cmd("driver"))
+local old=model.pos.z
+tick({up=true},30)
+assert(model.pos.z==old,"projected crossing closed")
+live_board.tiles[id(10,9)].level_crossing.barred=false
+tick({up=true},22)
+assert(model.pos.z>old+1 and not next(before_move.tiles))
+C.leave("driver")
+print("PASS sightseeing car sees a live worker's new road and changing crossing, never the frozen host board")

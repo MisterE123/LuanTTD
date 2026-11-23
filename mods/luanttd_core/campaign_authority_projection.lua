@@ -5,6 +5,7 @@ return function()
   local regions={}
   local epoch=0
   local companies,company_seq={},-1
+  local pulses,seen,max_boarding={},{},0
   local function newer_than(a,b)
     return a.tick>b.tick or a.tick==b.tick and a.seq>b.seq
   end
@@ -52,9 +53,33 @@ return function()
         materialized.tiles,materialized.corners,materialized.registries=old.tiles,old.corners,old.registries
         w=materialized
       end
+      for _,event in ipairs(w.boardings or {}) do
+        local n=event.seq
+        if n>max_boarding-256 and not seen[n] then
+          seen[n]=true;pulses[#pulses+1]=event
+          max_boarding=math.max(max_boarding,n)
+        end
+      end
+      for n in pairs(seen) do if n<=max_boarding-256 then seen[n]=nil end end
       P.accept(request.key,request.token,{ok=true,seq=reply.seq,tick=reply.tick,revision=reply.revision,value=w})
     end
     return true
+  end
+  function P.boarding_cursor(key)
+    local r=regions[key]
+    return r and r.result and r.result.value.boarding_cursor
+  end
+  function P.take_boardings()
+    local list=pulses;pulses={};return list
+  end
+  function P.waiting(mode,id)
+    local result,seq=0,-1
+    for _,r in pairs(regions) do
+      local q=r.result
+      local n=q and q.value.passengers and q.value.passengers[mode..":"..id]
+      if n~=nil and q.seq>seq then result,seq=n,q.seq end
+    end
+    return result
   end
   function P.company(name) return companies[name] end
   function P.windows()
@@ -84,6 +109,15 @@ return function()
       end
     end
     return cell,corner and corner.height
+  end
+  function P.signals()
+    local result={}
+    for _,r in pairs(regions) do
+      if r.result then
+        for _,row in ipairs(r.result.value.signals or {}) do result[row.key]=row end
+      end
+    end
+    return result
   end
   function P.actors()
     local merged={}

@@ -12,7 +12,6 @@ cp -al mods "$game/"
 cp mods/luanttd_core/init.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 cat tests/campaign_worker_session_probe.lua >> "$game/mods/luanttd_core/init.lua"
-printf 'return function() return {authoritative_boot=true,interval=.17} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-40024}
 display=${BAYLINE_NATIVE_DISPLAY:-199}

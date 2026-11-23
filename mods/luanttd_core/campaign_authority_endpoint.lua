@@ -71,7 +71,20 @@ return function(Sim,R,max_days)
     local u,v=Sim.xy(last)
     if math.abs(x-u)+math.abs(z-v)>=128 then return reply(false,"RAIL_DRAG_TOO_LONG") end
     local q,why
-    if request.tool=="crossing" then
+    if request.tool=="wire" and (request.target==0 or request.target==1) and R.rail.wire then
+      if (math.abs(x-u)+1)*(math.abs(z-v)+1)>256 then return reply(false,"Select up to 256 tiles at a time.") end
+      local ids={}
+      for row=math.min(z,v),math.max(z,v) do
+        for column=math.min(x,u),math.max(x,u) do ids[#ids+1]=Sim.id(column,row) end
+      end
+      local plan,error_=R.rail.wire.quote(name,ids,request.target)
+      if peek then return reply(plan~=nil,error_,plan and {tiles=plan.ids,cost=plan.cost}) end
+      rail_quotes[name]=nil
+      if not plan then return reply(false,error_) end
+      quote_sequence=quote_sequence+1
+      rail_quotes[name]={token=quote_sequence,wire=true,plan=plan}
+      return reply(true,nil,{tiles=plan.ids,cost=plan.cost,token=quote_sequence,kind="wire"})
+    elseif request.tool=="crossing" then
       if s.tiles[first].rail_type==1 then return reply(false,"Electric level crossing is not available.") end
       local n=R.network
       local c,error_=R.crossing_gesture(Sim,s,first)
@@ -244,6 +257,39 @@ return function(Sim,R,max_days)
       month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,
       year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name})
   end
+  function A.lesson_progress(name,lesson)
+    if not owner(name) or not s.companies[name] or (lesson~="road" and lesson~="rail" and lesson~="boat") then
+      return reply(false,"Lesson unavailable.")
+    end
+    local step,fare,warning=R.lesson(name,lesson)
+    return reply(true,nil,{step=step,fare=fare,warning=warning})
+  end
+  function A.jump_map(name,zoom,here)
+    if not owner(name) or not s.companies[name] or here~=nil and not tile_id(here) then
+      return reply(false,"Jump map unavailable.")
+    end
+    return reply(true,nil,R.jump.snapshot(zoom==true,here))
+  end
+  function A.jump_tile(name,id,x,z)
+    if not owner(name) or not s.companies[name] then return reply(false,"Jump map unavailable.") end
+    if not tile_id(id) then
+      if not integer(x,1,Sim.W) or not integer(z,1,Sim.H) then return reply(false,"Choose a valid tile.") end
+      id=Sim.id(x,z)
+    end
+    local t=s.tiles[id]
+    if not t or t.stock_void then return reply(false,"Choose a playable tile.") end
+    x,z=Sim.xy(id)
+    local _,h,top=R.terrain.tile(s.corner_grid,x,z)
+    h=math.max(t.h or 0,h,top)+.5
+    local function height(index,book)
+      local value=index and book and book[index[id]]
+      if value and value.deck then h=math.max(h,value.deck+1) end
+    end
+    height(s.bridge_above,s.stock_road_bridges)
+    height(s.rail_bridge_above,s.stock_rail_spans)
+    height(s.aqueduct_above,s.stock_aqueducts)
+    return reply(true,nil,{tile=id,x=2*x+.5,z=2*z+.5,y=h+8})
+  end
   function A.company_fleet(name,page)
     if not owner(name) or not s.companies[name] or not integer(page,1,1000000) then
       return reply(false,"COMPANY_FLEET_UNAVAILABLE")
@@ -353,7 +399,11 @@ return function(Sim,R,max_days)
       local quote=rail_quotes[name]
       rail_quotes[name]=nil
       if not quote or quote.token~=c.token then return reply(false,"RAIL_QUOTE_EXPIRED") end
-      if quote.crossing then
+      if quote.wire then
+        local cost
+        ok,cost,value=R.rail.wire.commit(name,quote.plan)
+        note=ok and ("Converted %d rail tile(s) for $%d."):format(#value,cost) or cost
+      elseif quote.crossing then
         local n=R.network
         local cost
         ok,cost,value=n.crossings.commit(s,name,quote.plan,n.lab.board(s))
@@ -440,11 +490,12 @@ return function(Sim,R,max_days)
       or not integer(w,1,32) or not integer(h,1,32) or x+w-1>Sim.W or z+h-1>Sim.H then
       return reply(false,"INVALID_INTEREST_WINDOW")
     end
-    local tiles={}
+    local tiles,signals={},{}
     for dz=0,h-1 do
       for dx=0,w-1 do
         local id=Sim.id(x+dx,z+dz)
         local t=s.tiles[id]
+        if R.rail and R.rail.signals_at then R.rail.signals_at(id,signals) end
         local slope,level,top=R.terrain.tile(s.corner_grid,x+dx,z+dz)
         tiles[#tiles+1]={id=id,level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
           rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station,
@@ -465,6 +516,7 @@ return function(Sim,R,max_days)
     table.sort(vehicles,function(a,b) return a.id<b.id end)
     fraction=type(fraction)=="number" and fraction>=0 and fraction<=1 and fraction or 1
     return reply(true,nil,{x=x,z=z,width=w,height=h,tiles=tiles,vehicles=vehicles,
+      signals=signals,passengers=R.passengers and R.passengers.counts(tiles),
       corners=R.terrain_projection and R.terrain_projection.corners(R.terrain,s.corner_grid,x,z,w,h) or nil,
       registries=R.terrain_projection and R.terrain_projection.registries(s,tiles) or nil,
       actors=R.actors and R.actors(x,z,w,h,fraction,frame) or nil})
@@ -515,6 +567,9 @@ return function(Sim,R,max_days)
       local r=A.snapshot(w.x,w.z,w.w,w.h,fraction,frame)
       if not r.ok then return r end
       scene(r.value,w.scene)
+      if R.passengers then
+        r.value.boardings,r.value.boarding_cursor=R.passengers.events({w},w.after_boarding)
+      end
       packets[#packets+1]=r.value
     end
     if #packets~=#windows then return reply(false,"INVALID_INTEREST_BATCH") end

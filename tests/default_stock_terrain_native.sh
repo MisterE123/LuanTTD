@@ -33,6 +33,7 @@ end
 """+s[k:])
 PROBE
 printf '\n' >> "$game/mods/luanttd_core/init.lua"
+printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 cat tests/default_stock_terrain_append.lua >> "$game/mods/luanttd_core/init.lua"
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 port=${BAYLINE_NATIVE_PORT:-42109}

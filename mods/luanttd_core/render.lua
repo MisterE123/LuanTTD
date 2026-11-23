@@ -450,7 +450,8 @@ return function(api)
     end
   end
   function R.platform(st)
-    if not st or st.stop_type=="truck" or S.tiles[st.tile].build~="road_station" then return end
+    local t=st and st.tile and S.tiles[st.tile]
+    if not t or st.stop_type=="truck" or t.build~="road_station" then return end
     local tx,tz=Sim.xy(st.tile)
     local x,z=tx*2+.5,tz*2+.5
     local _,base=road_surface(st.tile)
@@ -477,6 +478,7 @@ return function(api)
     if layout=="corner" then x=x+.65 end
     return {x=x,y=y,z=z+.61-.185,side={x=0,z=-1},along={x=1,z=0},width=.22,length=layout=="corner" and .646 or 1.70}
   end
+  function R.host_state() return S end
   function R.host_tile(id)
     return id and S.tiles[id]
   end
@@ -1296,9 +1298,17 @@ return function(api)
   end
   local projected_actors=dofile(modpath.."/campaign_projected_actors.lua")(core,api,road_motion,models,
     dofile(modpath.."/airport_manifest.lua")(core,modpath))
+  local worker_observation
+  function R.waiting_at(mode,id)
+    if worker_observation then return worker_observation.waiting(mode,id) end
+  end
   function R.draw_worker_actors(projection,dt)
+    worker_observation=projection
     if api.vehicle_ui then api.vehicle_ui.use_worker_projection(projection) end
-    projected_actors.render(projection.actors(),dt)
+    projected_actors.render(projection.actors(),dt,projection.signals and projection.signals())
+    if api.crowd and projection.take_boardings then
+      api.crowd.use_worker_projection(projection,visual.state,terrain)
+    end
   end
   local refs,last,poses={},{},{}
   function R.remove_vehicle_views()

@@ -222,7 +222,10 @@ return function(api)
   end
   local function draw_orders(p,v,kind,id,back,prior,note,data,why)
     local cargo=data and data.cargo_rules
-    local b=title(v.label,cargo and 9).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
+    local adapter=V.orders[kind]
+    local toggle=adapter and adapter.toggle and data and data.can_toggle
+    local extended=cargo or toggle
+    local b=title(v.label,extended and 9).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
     if note or data and data.summary then
       b=b..("textarea[.45,%g;10,.63;;;%s]"):format(cargo and 7.56 or 6.35,esc(note or data.summary))
     end
@@ -265,7 +268,11 @@ return function(api)
       b=b.."textarea[.45,1.22;10,1.35;;;"..esc(why or "Set initial orders from the depot. No editable orders are available for this vehicle yet.").."]"
       prior={}
     end
-    local footer=cargo and 8.15 or 7.11
+    if toggle then
+      b=b.."button[.45,6.68;10.10,.57;V_TOKEN_toggle;"..(data.running and "Stop service" or "Start service").."]"
+    end
+    prior.can_toggle=not not toggle
+    local footer=extended and 8.15 or 7.11
     if back then b=b..("button[.45,%g;4.98,.57;V_TOKEN_depot;%s]"):format(footer,
       back.directory and "Company fleet" or "Depot vehicles") end
     b=b..("button_exit[5.55,%g;5,.57;V_TOKEN_close;Back to world]"):format(footer)
@@ -378,6 +385,16 @@ return function(api)
     end
     local a=V.orders[q.kind]
     if q.waiting or not a or not get(n,q.kind,q.id) then return true end
+    if field("toggle") and q.can_toggle and a.toggle then
+      if q.pending then return true end
+      q.pending=true
+      local sent,why=a.toggle(n,q.id,function(ok,msg)
+        if panels[n]~=q then return end
+        V.open(p,q.kind,q.id,q.back,q,msg or (ok and "Service updated." or "Service not changed."))
+      end)
+      if not sent then q.pending=nil;V.open(p,q.kind,q.id,q.back,q,why) end
+      return true
+    end
     local function change(op,value,is_cargo)
       if q.pending then return true end
       local function completed(ok,message)

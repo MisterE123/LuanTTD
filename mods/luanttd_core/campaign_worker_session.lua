@@ -51,6 +51,7 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
       return filename
     end,
     ready=function(_,projection)
+      core.log("action","LuanTTD campaign worker ready")
       ui.install_worker_controls(H)
       present(projection)
       for _,p in ipairs(core.get_connected_players()) do admit(p) end
@@ -85,6 +86,7 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
     end
     H.step(dt,positions)
     painting.step()
+    if H.status()=="owned" and api.crowd then api.crowd.update(core.get_connected_players(),dt) end
   end
   function Session.speed() return speed end
   function Session.status() return H.status() end

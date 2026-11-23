@@ -2,7 +2,8 @@
 -- builds infrastructure, buys a vehicle, pays a fare, or alters orders.
 return function(api)
   local S,Sim=api.s,api.Sim
-  local Track=dofile(core.get_modpath("luanttd_core").."/openttd/rail_track.lua")
+  local mod=core.get_modpath("luanttd_core")
+  local Track=dofile(mod.."/openttd/rail_track.lua")
   local T={form="luanttd_core:business_tutorials"}
   local sessions={}
   local courses={
@@ -30,97 +31,7 @@ return function(api)
     }},
   }
   local keys={"road","rail","boat"}
-  local function own_count(records,n,predicate)
-    local count=0
-    for _,r in pairs(records or {}) do
-      if r.owner==n and (not predicate or predicate(r)) then count=count+1 end
-    end
-    return count
-  end
-  local function depots(n,rail)
-    local out={}
-    for id,t in ipairs(S.tiles or {}) do
-      if t.owner==n and (rail and t.rail_depot_dir~=nil or not rail and t.build=="road_depot") then
-        out[#out+1]={id=id,dir=t.rail_depot_dir}
-      end
-    end
-    return out
-  end
-  local function rail_signal(n,dep)
-    local d=S.stock_rail_dispatch
-    if not d or d.owner~=n then return false end
-    local delta=({[0]={-1,0},[1]={0,1},[2]={1,0},[3]={0,-1}})[dep.dir]
-    if not delta then return false end
-    local x,z=Sim.xy(dep.id)
-    local mask=Track.signal_along(Track.diagonal_trackdir(Track.reverse_side(dep.dir)))
-    local saw_return,problem=false,nil
-    local heading=({[0]="west",[1]="south",[2]="east",[3]="north"})[Track.reverse_side(dep.dir)]
-    for i=1,math.max(Sim.W,Sim.H) do
-      local id=Sim.id(x+i*delta[1],z+i*delta[2])
-      local t=id and S.tiles[id]
-      if not t or t.owner~=n or t.rail_tracks~=2^(dep.dir%2) or t.rail_depot_dir~=nil then return false end
-      if t.rail_station_id then return saw_return,problem end
-      local records=d.signals and d.signals.records
-      local rec=records and records[id]
-      -- Normal PBS type 4, with a head for the direction toward the depot.
-      if rec and rec.upper_signal_type==4 and math.floor((rec.present_signals or 0)/mask)%2==1 then
-        saw_return=true
-      elseif rec then
-        problem=rec.upper_signal_type~=4
-          and "There is a different signal type between the station and depot. Use Remove rail signal, then place a normal Path signal."
-          or ("The signal between the station and depot faces the wrong way. Remove it and place a normal Path signal facing "..heading..".")
-      end
-    end
-    return false
-  end
-  function T.progress(n,key)
-    if key=="road" then
-      local bought,started=false,false
-      for _,v in pairs(S.fleet or {}) do
-        local e=Sim.vehicles[v.engine]
-        if v.owner==n and v.cargo=="passenger" and e and e.mode=="road" then
-          if (v.delivered or 0)>0 and (v.revenue or 0)>0 then return 6,v.revenue end
-          bought=true;started=started or v.running or v.route~=nil
-        end
-      end
-      if started then return 5 end
-      if own_count(S.stations,n,function(r) return r.mode=="road" and r.stop_type~="truck" end)<2 then return 1 end
-      if #depots(n,false)==0 then return 2 end
-      return bought and 4 or 3
-    elseif key=="rail" then
-      local bought,started=false,false
-      for _,u in ipairs(api.rail_owned and api.rail_owned.list(S,n) or {}) do
-        local paid=Sim.rail_paid_status and Sim.rail_paid_status(S,u.id)
-        if paid and paid.owner==n then
-          if paid.delivered>0 and paid.fare>0 then return 7,paid.fare end
-          started=true
-        end
-        for _,stock in ipairs(u.stock_ids or {}) do if stock==27 then bought=true end end
-        if u.stock_ids and u.stock_ids[1]==11 then bought=true end -- Manley Morel carries passengers without a coach
-      end
-      if started then return 6 end
-      if own_count(S.stock_rail_stations,n)<2 then return 1 end
-      local dep=depots(n,true)
-      if #dep==0 then return 2 end
-      local sign,problem=false,nil
-      for _,d in ipairs(dep) do
-        local valid,reason=rail_signal(n,d)
-        if valid then sign=true;break end
-        problem=problem or reason
-      end
-      if not sign and problem then return 3,nil,problem end
-      return bought and 5 or 4
-    else
-      local paid=Sim.ferry_paid_status and Sim.ferry_paid_status(S)
-      if paid and paid.owner==n then
-        if paid.delivered>0 and paid.fare>0 then return 6,paid.fare end
-        return 5
-      end
-      if own_count(S.stock_ship_stations,n)<2 then return 1 end
-      if own_count(S.stock_ship_depots,n)==0 then return 2 end
-      return S.stock_owned_ferry and S.stock_owned_ferry.owner==n and 4 or 3
-    end
-  end
+  T.progress=dofile(mod.."/business_tutorial_progress.lua")(api,Track)
   local function player(p)
     local n=p:get_player_name()
     local q=sessions[n]
@@ -135,6 +46,23 @@ return function(api)
   local function refresh(n,q,force)
     if not q.key then return end
     local now=core.get_us_time()
+    if api.authority_handoff then
+      local client=api.worker_tutorial_client
+      if client and not q.loading and (not q.updated or now-q.updated>=1400000) then
+        local request={lesson=q.key}
+        q.loading=request
+        local query=force and client.query or client.observe or client.query
+        local sent=query({kind="lesson_progress",player=n,lesson=q.key},function(r)
+          if sessions[n]~=q or q.loading~=request or q.key~=request.lesson then return end
+          q.loading=nil;q.updated=core.get_us_time()
+          if r.ok then q.step,q.fare,q.warning=r.value.step,r.value.fare,r.value.warning end
+          local p=core.get_player_by_name(n)
+          if p and q.open then T.open(p) end
+        end)
+        if not sent then q.loading=nil end
+      end
+      return q.step or 1,q.fare
+    end
     if force or not q.updated or now-q.updated>=1400000 then
       q.step,q.fare,q.warning=T.progress(n,q.key)
       q.updated=now
@@ -196,6 +124,7 @@ return function(api)
     if f.quit or f.lesson_world then return close() end
     local function choose(k)
       q.key,q.page,q.updated,q.notice=k,nil,nil,nil
+      q.loading,q.step,q.fare,q.warning=nil,nil,nil,nil
       if p.get_meta then p:get_meta():set_string("luanttd_tutorial",k or "") end
       return T.open(p)
     end

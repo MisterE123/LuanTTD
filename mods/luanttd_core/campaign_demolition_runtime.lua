@@ -2,7 +2,6 @@
 -- formspec, renderer, engine object or secondary persistence.
 return function(Sim,mod,R)
   local s,net=R.world,R.network
-  local source=mod.."/openttd/"
   local api={s=s,Sim=Sim,structure_tools=true,trackworks=net.lab,rail_spans=net.spans,
     rail_build=R.rail and R.rail.build}
   local aquatic_remove
@@ -26,12 +25,9 @@ return function(Sim,mod,R)
       return false
     end}
   end
-  if s.stock_electrification and R.rail and R.rail.owned then
-    local Types=dofile(source.."rail_types.lua")
-    local Wire=dofile(mod.."/rail_electrification_world.lua")(Sim,R.terrain,net.track,Types,net.spans)
-    local ctx={availability=function(_,owner) return R.rail.owned.railtype_mask(s,owner,Types) end}
-    api.electric_quote=function(owner,ids,target) return Wire.quote(s,owner,ids,target,ctx) end
-    api.electric_commit=function(owner,ticket) return Wire.commit(s,owner,ticket,ctx) end
+  if R.rail and R.rail.wire then
+    api.electric_quote=R.rail.wire.quote
+    api.electric_commit=R.rail.wire.commit
   end
   local function dollars(amount)
     local n=math.abs(math.floor(amount))

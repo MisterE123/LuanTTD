@@ -28,6 +28,21 @@ local function transfer_ordinary(viewer)
   assert(x,"ordinary map had no flat railway segment to build")
   local function tile(u) return Sim.id(u,z) end
   local depot,origin=tile(x),tile(x+1)
+  local signal_tile,signal_level
+  for v=math.max(2,z-5),math.min(60,z+5) do
+    if v~=z then
+      for u=x,math.min(60,x+14) do
+        local id=Sim.id(u,v)
+        local t=S.tiles[id]
+        local mask,h=api.terrain.tile(id)
+        if mask==0 and t.terrain~="water" and not (t.wood or t.house or t.site or t.owner or t.stock_industry) then
+          signal_tile,signal_level=id,h;break
+        end
+      end
+    end
+    if signal_tile then break end
+  end
+  assert(signal_tile)
   local clock=S.passenger_house_clock
   local expected={day=S.day,cash=S.companies[owner].cash,loan=S.companies[owner].loan,speed=S.speed}
   local caps={autoplay=true,seconds_per_day=.16,durable_actions=true}
@@ -43,10 +58,85 @@ local function transfer_ordinary(viewer)
     return filename
   end
   local paint_started,painted,away,away_tick,reentered,opening_orders,orders_ready
-  local train_id,painter,demolition_depot
+  local train_id,painter,demolition_depot,signal_rendered,bus_id
   local function ask(request,done)
     request.player=owner
     assert(authority_test.query(request,done))
+  end
+  local function start_bus_graphically(show)
+    local tip,stops,tail
+    for v=4,60 do
+      if math.abs(v-z)>3 then
+        for u=2,51 do
+          local h0,clear=nil,true
+          for x_=u,u+8 do
+            local cell=Sim.id(x_,v)
+            local t=S.tiles[cell]
+            local mask,h=api.terrain.tile(cell)
+            if mask~=0 or h0 and h~=h0 or t.house or t.wood or t.site or t.owner or t.stock_industry
+              or t.terrain=="water" or cell==demolition_depot or cell==signal_tile then clear=false;break end
+            h0=h
+          end
+          if clear then
+            tip,tail=Sim.id(u,v),Sim.id(u+8,v)
+            stops={Sim.id(u+2,v),Sim.id(u+7,v)}
+            break
+          end
+        end
+      end
+      if tip then break end
+    end
+    assert(tip)
+    local function command(c,done)
+      ask({kind="company"},function(company)
+        c.revision=company.revision
+        ask({kind="command",command=c},function(r) assert(r.ok,r.why);done(r) end)
+      end)
+    end
+    command({kind="road_build",first=tip+1,last=tail},function()
+      local actions={{tool="road_depot",first=tip},{tool="road_station",first=stops[1]},
+        {tool="road_station",first=stops[2]}}
+      local function construct(index)
+        if not actions[index] then
+          ask({kind="depot",mode="road",depot=tip},function(d)
+            assert(d.ok,d.why)
+            local ticket
+            for _,o in ipairs(d.value.offers) do if o.request.cargo=="passenger" then ticket=o.request;break end end
+            assert(ticket)
+            command(ticket,function(r)
+              bus_id=r.value
+              local cp=disk.read()
+              command({kind="road_order_add",vehicle=bus_id,station=cp.tiles[stops[1]].station},function()
+                command({kind="road_order_add",vehicle=bus_id,station=cp.tiles[stops[2]].station},function()
+                  core.show_formspec=function(player,form,body)
+                    assert(player==owner and form=="luanttd_core:vehicle_details")
+                    show(player,form,body)
+                    if body:find("Start service",1,true) then core.log("action","NATIVE_PROJECTED_BUS_READY") end
+                    if body:find("Stop service",1,true) then
+                      assert(disk.read().fleet[bus_id].running and not S.fleet[bus_id])
+                      core.show_formspec=show
+                      core.log("action","PASS NATIVE PROJECTED BUS: existing native orders panel starts an ordinary paid bus on the worker")
+                      orders_ready=true
+                    end
+                  end
+                  assert(api.vehicle_ui.open(viewer,"road",bus_id))
+                end)
+              end)
+            end)
+          end)
+          return
+        end
+        local req=actions[index]
+        ask({kind="road_quote",request=req},function(q)
+          assert(q.ok,q.why)
+          ask({kind="command",command={kind="road_commit",revision=q.revision,request=req,quote=q.value}},function(r)
+            assert(r.ok,r.why)
+            construct(index+1)
+          end)
+        end)
+      end
+      construct(1)
+    end)
   end
   local function demolition_graphical(show)
     local road_end
@@ -89,7 +179,7 @@ local function transfer_ordinary(viewer)
                 if disk.read().tiles[demolition_depot].build=="road_depot" then core.after(.3,watch_demolition);return end
                 assert(S.tiles[demolition_depot].build~="road_depot")
                 core.log("action","PASS NATIVE PROJECTED DEMOLITION: worker confirmation removed the depot")
-                orders_ready=true
+                start_bus_graphically(show)
               end
               core.after(.3,watch_demolition)
             end
@@ -161,7 +251,18 @@ local function transfer_ordinary(viewer)
       core.log("action","PASS NATIVE PROJECTED HUD: worker calendar and exact company ledger reached the player's view")
       assert(cell.rail==1 and cell.surface.rail_tracks==1)
     end
-    if painted and not opening_orders and bodies()>=2 and (not viewer or movement) then
+    if painted and not signal_rendered then
+      local xx,zz=Sim.xy(signal_tile)
+      for _,object in ipairs(core.get_objects_inside_radius({x=2*xx+.5,y=signal_level+1,z=2*zz+.5},3)) do
+        local data=object:get_luaentity()
+        if data and data.name:match("^luanttd_core:dispatch_signal_") then
+          signal_rendered=true
+          core.log("action","PASS NATIVE PROJECTED SIGNAL: authoritative stock mast is present in the viewport")
+          break
+        end
+      end
+    end
+    if painted and signal_rendered and not opening_orders and bodies()>=2 and (not viewer or movement) then
       opening_orders=true
       api.vehicle_ui.orders.rail=dofile(mod.."/campaign_authority_order_proxy.lua")(authority_test,"rail")
       local show=core.show_formspec
@@ -266,6 +367,8 @@ local function transfer_ordinary(viewer)
           {"rail",{tool="depot",first=depot,direction=2}},
           {"rail",{tool="station",first=tile(x+3),last=tile(x+5),axis=0,length=3,tracks=1}},
           {"rail",{tool="station",first=tile(x+10),last=tile(x+12),axis=0,length=3,tracks=1}},
+          {"rail",{tool="track",first=signal_tile,track=0}},
+          {"rail",{tool="signal",first=signal_tile,trackdir=0,kind=4}},
           {"transport",{mode="rail",operation="buy",depot=depot,parts={0,27}},nil,function(bought)
             train_id=bought.value.id
             ask({kind="command",command={kind="transport_start",mode="rail",vehicle=train_id,

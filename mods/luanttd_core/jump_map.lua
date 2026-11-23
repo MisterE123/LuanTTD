@@ -96,10 +96,23 @@ return function(api)
     return t and not t.stock_void and id or nil
   end
 
-  function M.draw(V,p,form)
+  function M.snapshot(zoom,here)
+    local pixels,targets,cols,rows,stride,wide,marker=M.cells({map_zoom=zoom},here)
+    local towns={}
+    for _,site in ipairs(S.sites) do
+      if site.kind=="town" and not site.closed and #towns<10 then
+        towns[#towns+1]={kind="town",name=site.name,tile=site.tile}
+      end
+    end
+    return {pixels=pixels,targets=targets,cols=cols,rows=rows,stride=stride,wide=wide,marker=marker,towns=towns}
+  end
+  function M.draw(V,p,form,packet)
     local push,rect,label,button=form.push,form.rect,form.label,form.button
     local here=player_tile(p)
-    local pixels,targets,cols,rows,stride,wide,marker=M.cells(V,here)
+    local pixels,targets,cols,rows,stride,wide,marker
+    if packet then
+      pixels,targets,cols,rows,stride,wide,marker=packet.pixels,packet.targets,packet.cols,packet.rows,packet.stride,packet.wide,packet.marker
+    else pixels,targets,cols,rows,stride,wide,marker=M.cells(V,here) end
     V.map_targets,V.map_sites=targets,{}
     local step=math.min(13.24/cols,10.38/rows)
     local mw,mh=step*cols,step*rows
@@ -140,7 +153,7 @@ return function(api)
     end
     label(14.93,5.55,"QUICK JUMPS","#FFE1A0")
     local y=5.82
-    for i,site in ipairs(S.sites) do
+    for i,site in ipairs(packet and packet.towns or S.sites) do
       if site.kind=="town" and not site.closed and y<10.24 then
         V.map_sites[i]=site.tile
         button(14.93,y,5.10,.43,"jump_site_"..i,site.name)

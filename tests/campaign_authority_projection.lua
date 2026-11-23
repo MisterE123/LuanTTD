@@ -55,3 +55,17 @@ assert(P.scene("delta")==31 and not next(P.actors()) and P.terrain(8,8).id==42)
 P.unsubscribe("delta");batch[1].token=P.subscribe("delta")
 assert(not P.accept_batch(batch,{ok=true,seq=22,tick=888,value={delta}}) and not P.terrain(8,8))
 print("PASS actor-only deltas require an existing matching scene but never revive stale actors")
+local bay=P.subscribe("waiting")
+local area={{key="waiting",token=bay}}
+local full={scene=33,x=8,z=8,width=1,height=1,tiles={{id=42}},corners=string.char(3,3,3,3),
+  passengers={["road:7"]=113},boarding_cursor=9,boardings={{seq=9,mode="road",id=7,units=8}}}
+assert(P.accept_batch(area,{ok=true,seq=30,tick=888,value={full}}))
+assert(P.waiting("road",7)==113 and P.boarding_cursor("waiting")==9)
+assert(#P.take_boardings()==1 and #P.take_boardings()==0)
+local again={scene=33,x=8,z=8,width=1,height=1,passengers={["road:7"]=109},
+  boarding_cursor=10,boardings={{seq=9,mode="road",id=7,units=8},{seq=10,mode="road",id=7,units=4}}}
+assert(P.accept_batch(area,{ok=true,seq=31,tick=962,value={again}}))
+local pulses=P.take_boardings()
+assert(#pulses==1 and pulses[1].units==4 and P.waiting("road",7)==109)
+P.unsubscribe("waiting");assert(P.waiting("road",7)==0)
+print("PASS visible boarding receipts never replay on actor/scene refresh")

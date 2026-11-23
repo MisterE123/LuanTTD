@@ -39,3 +39,12 @@ rows["rail:5"].parts[1].flip=true
 A.render(rows,.5)
 assert(ref.snapped and ref.name=="luanttd_core:dispatch_steam")
 print("PASS projected train keeps the original locomotive and wagon identity at a reversal")
+local lamps={["8:0"]={model="light_red",pos={x=8,y=3,z=4},rotation={x=0,y=1,z=0}}}
+A.render(rows,.5,lamps)
+local mast=live[n]
+assert(mast.name=="luanttd_core:dispatch_signal_light_red")
+lamps["8:0"].model="light_green";A.render(rows,.5,lamps)
+assert(not mast.pos and live[n].name=="luanttd_core:dispatch_signal_light_green" and ref.pos)
+A.render({},.5)
+assert(not live[n].pos)
+print("PASS projected rail aspects switch models and cull independently of rolling stock")

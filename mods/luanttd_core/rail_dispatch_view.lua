@@ -73,6 +73,8 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
   end
   local body_pose=dofile((path or "mods/luanttd_core").."/rail_visual_body.lua")(
     Sim,models,diagonal,Pose.sample,surface,board_base)
+  local signal_rows=dofile((path or "mods/luanttd_core").."/rail_signal_poses.lua")(
+    Sim,Track,SignalArt,signal_pixel,board_base)
   local function vacuum(collection,keep)
     for k in pairs(collection) do if not keep[k] then forget(collection,k) end end
   end
@@ -143,26 +145,9 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
       end
       for id,r in pairs(dispatch.signals.records) do
         if visible(id) then
-          local tx,tz=Sim.xy(id)
-          for _,td in ipairs({0,1,2,3,4,5,8,9,10,11,12,13}) do
-            local signal=Track.signal_along(td)
-            local mask=S.tiles[id].rail_tracks or 0
-            if Track.has(mask,Track.track(td)) and Track.intersect(r.present_signals,signal)~=0 then
-              local secondary=Track.track(td)==3 or Track.track(td)==5
-              local variant=secondary and r.lower_variant or r.upper_variant
-              local model=variant==1 and "semaphore" or "light"
-              local green=Track.intersect(r.green_signals,signal)~=0
-              -- Sample the exact rendered rail foundation at the mast.
-              local u,v=SignalArt.world_anchor(td,false,mask)
-              if u~=nil then
-                local pixel=signal_pixel and signal_pixel(id,u,v)
-                local y=(pixel and pixel/8 or board_base(id))+.5
-                local position,rotation=SignalArt.pose(tx,tz,y,td,false,mask)
-                local key=id..":"..td
-                pose(signs,key,"dispatch_signal_"..model.."_"..(green and "green" or "red"),position,rotation)
-                show_signs[key]=true
-              end
-            end
+          for _,lamp in ipairs(signal_rows(id,r,S.tiles[id].rail_tracks or 0)) do
+            pose(signs,lamp.key,"dispatch_signal_"..lamp.model,lamp.pos,lamp.rotation)
+            show_signs[lamp.key]=true
           end
         end
       end

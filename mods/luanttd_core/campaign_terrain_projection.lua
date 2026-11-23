@@ -2,7 +2,7 @@
 -- VM handles, station queues, finance, and unrelated tiles are not copied.
 local keys={
   "terrain","variant","h","build","owner","wood","house","parcel","site",
-  "road_bits","road_town","road_disallowed","disallowed","road_stop_pair","depot_dir",
+  "road_bits","road_town","road_disallowed","disallowed","road_stop_pair","stop_axis","depot_dir",
   "rail_tracks","rail_type","rail_depot_dir","rail_station_id","rail_station_axis","rail_waypoint_id",
   "rail_span_id","road_bridge_id","road_tunnel_id","station","signal","closed","level_crossing",
   "coastal_water","stock_void","stock_clear_ground","water_class","stock_canal","stock_river_bits",
@@ -33,8 +33,8 @@ function M.corners(terrain,grid,x,z,w,h)
   end
   return table.concat(rows)
 end
-local span_fields={"start","end","head","tail","middle","axis","owner","base","deck","bridge_type","railtype","kind"}
-local station_fields={"owner","id","tiles","stop_type","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror","oil_role","goods_role"}
+local span_fields={"start","end","head","tail","middle","middle_by_tile","axis","owner","base","deck","bridge_type","railtype","kind"}
+local station_fields={"owner","id","tile","mode","name","tiles","stop_axis","stop_type","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror","oil_role","goods_role"}
 local industry_fields={"id","removed","kind","x","z","tiles"}
 local function add(out,s,name,id,fields)
   if id==nil then return end
@@ -69,9 +69,17 @@ function M.registries(s,ids)
     add(out,s,"stock_road_tunnels",t.road_tunnel_id or below,span_fields)
     add(out,s,"stock_rail_spans",t.rail_span_id or rail_above or rail_below,span_fields)
     add(out,s,"stock_aqueducts",aqueduct,span_fields)
-    add(out,s,"sites",t.site,{"id","kind","name","tile"})
+    local site_fields={"id","kind","name","tile","closed","population"}
+    add(out,s,"sites",t.site,site_fields)
+    add(out,s,"sites",t.road_town,site_fields)
     add(out,s,"stations",t.station,station_fields)
     add(out,s,"stock_rail_stations",t.rail_station_id,station_fields)
+    if t.ship and t.ship.kind=="dock" then
+      add(out,s,"stock_ship_stations",t.ship.station,{"owner","id","land","water"})
+    end
+    if t.airfield then
+      add(out,s,"stock_small_airports",t.airfield.airport,{"owner","id","origin","tiles"})
+    end
     add(out,s,"stock_farm_fields",id)
     if t.stock_industry then
       local chain=t.stock_industry.chain or "coal"
@@ -80,7 +88,9 @@ function M.registries(s,ids)
     local d=s.stock_rail_dispatch
     if d and d.signals.records[id] then
       local signals=out.signals or {};out.signals=signals
-      signals[id]=detached(d.signals.records[id],2)
+      local proto=detached(d.signals.records[id],2)
+      proto.green_signals=nil -- aspect changes are sent as actor data, not terrain repaint
+      signals[id]=proto
     end
   end
   return out

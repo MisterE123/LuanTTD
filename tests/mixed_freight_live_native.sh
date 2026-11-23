@@ -16,6 +16,7 @@ cp -al mods "$game/" || cp -R mods "$game/"
 { cat mods/luanttd_core/init.lua; printf '\n'; cat tests/mixed_freight_live_native.lua; } > "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 cp tests/mixed_freight_live.lua "$game/mods/luanttd_core/qa_mixed_freight.lua"
+printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 cat > "$out/world/world.mt" <<'CONF'
 gameid = luanttd
 backend = sqlite3

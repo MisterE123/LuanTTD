@@ -55,7 +55,7 @@ return function(client,projection,width,depth,changed)
     local last=math.min(#sectors,cursor+limit-1)
     for i=cursor,last do
       local r=sectors[i]
-      windows[#windows+1]={x=r.x,z=r.z,w=r.w,h=r.h,scene=projection.scene(r.key)}
+      windows[#windows+1]={x=r.x,z=r.z,w=r.w,h=r.h,scene=projection.scene(r.key),after_boarding=projection.boarding_cursor(r.key)}
       subscriptions[#subscriptions+1]={key=r.key,token=r.token}
     end
     local request={frame=frame,last=last}

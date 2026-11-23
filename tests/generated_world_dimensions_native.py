@@ -61,7 +61,7 @@ def native_session(world, config, out, env):
         try:
             while time.monotonic() - began < 75 and p.poll() is None:
                 max_rss = read_max_rss(p.pid, max_rss)
-                if b"listening on" in out.read_bytes():
+                if b"LuanTTD campaign worker ready" in out.read_bytes():
                     break
                 time.sleep(.10)
             else:
@@ -82,7 +82,7 @@ def native_session(world, config, out, env):
 
 
 def checkpoint(world, env, w, h):
-    path = world / "luanttd-wide-campaign.chk"
+    path = world / "luanttd-campaign-owner.chk"
     signature, digest, payload = path.read_bytes().split(b"\n", 2)
     assert signature == b"LUANTTD-WIDE-CAMPAIGN-3-STATE"
     assert hashlib.sha256(payload).hexdigest().encode() == digest

@@ -33,7 +33,7 @@ that leave the window without touching their simulation actors. The native
 client test observed the same active bus move offscreen with no graphical
 entity and regain a new entity when the camera came back.
 
-## Qualified ownership path
+## Live ownership in ordinary generated worlds
 
 Luanti's `handle_async` delegates to a pool with no worker affinity. Repeated
 separate jobs must not assume the previous job's globals. Using one **running**
@@ -60,7 +60,7 @@ paid buses, trains, ferries and aircraft with the real shared clock and
 checkpoint rebinds inside a worker. State-only road/rail geometry and passenger
 fleet bindings are shared with the game. The engine discovers the model
 capabilities once; the paid controllers do not mount via a view. These are
-verified fixtures, not yet the everyday game-ownership path. The ordinary
+replay fixtures for the now-default ordinary generated-world owner. The ordinary
 streetcar uses a view-independent clock and continues with no players
 connected. Noncommercial rail, ferry and air pilots also no longer depend
 on a rendering callback to advance.
@@ -138,8 +138,8 @@ through the same source command as the old direct tile action. The owner
 also supports freight loading-stop construction and bounded canal, lock,
 and aqueduct commands.
 
-An internal integration replay now starts the owner from the actual server
-lifecycle, including after generated terrain placement. A real Linux client
+Ordinary generated worlds now start the owner from the actual server
+lifecycle with no feature flag, including after generated terrain placement. A real Linux client
 can join and move horizontally while its company is created only on the
 worker, and the same server world restores the exact company, tick and
 command revision on restart. No player-facing switch was introduced.
@@ -152,15 +152,24 @@ It keeps individual car order, paid parts, stale quote checks, and depot
 ownership intact. Freight stage designations and native depot dispatch use
 the existing coal, oil and goods adapters rather than a new routing rule.
 
-The next integration step is the full dispatcher, all physical build
-and depot interactions (especially freight dispatch), and making
-this ownership lifecycle standard with no desktop-specific controls.
+The company navigation map uses bounded snapshots of the authoritative
+world. Jump destinations are checked against the up-to-date height and
+overlying bridge deck before the camera moves, without changing its look
+angle. The existing lessons query their real milestone and depot index
+from the worker. Older economy forms and diagnostic commands cannot
+change the frozen host state. Optional walking and sightseeing control
+remain local but use the current hydrated ground and roads.
 
-The regular application's ownership switch remains unshipped: remaining
-tools, the rest of the company UI and normal session lifecycle still need
-to use these paths by default. Projected rail bodies share the real
-coupling and reversal poses; multipart powered-bridge collectors and
-other specialized effects are not yet delivered by projected snapshots. Use a sequenced command
+The remaining integration work is parity for some specialized scenarios,
+full two-train dispatch controls, and the remaining depot presentations.
+
+Generated worlds use this owner by default. Explicit hand-authored
+scenario presets and internal old-model fixtures still use their existing
+owner rather than changing those experimental play paths implicitly. Projected rail bodies share the real coupling and reversal poses.
+Nearby rail aspects and powered-bridge collector contact geometry are
+sent by the worker. The main engine renders those models and the existing
+station sprites. The projection includes exact waiting counts and bounded
+transient boarding receipts; the host never owns the queues. Use a sequenced command
 stream for **every** mutation, including player build/route/order requests
 and fixture actions; run authoritative quotes against the worker's topology
 revision and settle company debits there. Do not mirror writable tile or
@@ -173,4 +182,4 @@ acknowledge accepted commands only once recoverable and never have main
 spin on an IPC lock. Stop/idle exit must checkpoint or relinquish ownership
 with an explicit saved revision so a replacement cannot replay commands or
 silently reset an active world. Measure CPU/memory and worker-pool contention
-alongside replay parity before enabling that owner for ordinary games.
+alongside replay parity as larger campaigns and specialized scenarios are qualified.

@@ -54,6 +54,7 @@ local complete,movement_origin,moved
 core.register_globalstep(function()
   local p=core.get_player_by_name("singleplayer")
   if p and not complete and not placement and #api.world.hotbar_layout(p)>0 then
+    assert(worker_boot)
     if worker_boot then
       assert(authority.status()=="owned" and api.authority_handoff and not S.companies["singleplayer"])
       local disk=assert(OwnerCheckpoint.read())
@@ -141,6 +142,6 @@ grep -q WORLD_CREATION_STRAFE_INPUT "$out/client.log"
 grep -q WORLD_CREATION_STRAFE_PASS "$out/client.log"
 grep -E 'WORLD_CREATION_(PROGRESS|PLAYABLE|STRAFE_PASS)' "$out/client.log"
 grep -q 'placing_terrain 100' "$out/client.log"
-if [[ ${BAYLINE_QA_OWNER:-0} == 1 ]]; then grep -q WORLD_CREATION_WORKER_READY "$out/client.log"; fi
+grep -q WORLD_CREATION_WORKER_READY "$out/client.log"
 grep -q 'disposable test failure' "$out/client.log"
 ! grep -E 'ERROR\[' "$out/client.log"

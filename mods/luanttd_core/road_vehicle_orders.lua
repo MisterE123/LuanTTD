@@ -21,7 +21,8 @@ return function(api)
     table.sort(targets,function(a,b) return a.id<b.id end)
     local active=type(v.road_order_override)=="number" and v.road_order_override
       or v.dest_index or v.road_depot_resume or v.index
-    return {items=items,targets=targets,revision=table.concat(signature,"/"),active=active}
+    return {items=items,targets=targets,revision=table.concat(signature,"/"),active=active,
+      can_toggle=v.running or #v.orders>=2,running=not not v.running}
   end
   function Road.edit(owner,id,revision,operation,index,target)
     local actual=Road.read(owner,id)

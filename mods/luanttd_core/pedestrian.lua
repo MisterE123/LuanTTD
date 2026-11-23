@@ -88,6 +88,10 @@ end
 
 function P.new(api)
   local Sim,S=api.Sim,api.s
+  local function cell(id)
+    if api.authority_handoff and api.render.host_tile then return api.render.host_tile(id) end
+    return S.tiles[id]
+  end
   local W={}
   local function tile_at(x,z) return Sim.id(math.floor((x+.5)/2),math.floor((z+.5)/2)) end
   local function wet(t)
@@ -100,13 +104,13 @@ function P.new(api)
       t.road_tunnel_id or t.rail_span_id or t.airfield
   end
   local function surface(id,x,z)
-    local t=S.tiles[id]
+    local t=cell(id)
     if api.render.uses_slope(id) then return api.render.surface(id,x,z) end
     return t.h+.5
   end
   local function clamp(a,lo,hi) return math.min(hi,math.max(lo,a)) end
   local function point(id,x,z)
-    if not id or blocked(S.tiles[id]) then return end
+    if not id or blocked(cell(id)) then return end
     local u,v=Sim.xy(id)
     x=x and clamp(x,u*2-.25,u*2+1.25) or u*2+.5
     z=z and clamp(z,v*2-.25,v*2+1.25) or v*2+.5
@@ -123,7 +127,7 @@ function P.new(api)
       local id=Sim.id(x+dx,z+dz)
       local land=point(id)
       if land then
-        local t=S.tiles[id]
+        local t=cell(id)
         local road=t.build=="road" or t.road_town or t.town_road
         local distance=(land.x-focus.x)^2+(land.z-focus.z)^2+(road and 0 or 12)
         if not score or distance<score then best,score=land,distance end
@@ -153,7 +157,7 @@ function P.new(api)
       state.walking=moving
     end
     local id=tile_at(at.x,at.z)
-    local t=id and S.tiles[id]
+    local t=id and cell(id)
     if not wet(t) and math.abs(at.y-surface(id,at.x,at.z))<.32 then
       state.last_dry=at
     elseif (wet(t) and at.y<.30 and p:get_velocity().y<-.2) or at.y<-.8 then

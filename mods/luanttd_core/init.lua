@@ -7,33 +7,31 @@ local Codec=dofile(mod.."/packed_campaign.lua")
 local Checkpoints=dofile(mod.."/campaign_checkpoint.lua")
 local Checkpoint=Checkpoints(core,Codec)
 local Prepared=Checkpoints(core,Codec,"luanttd-prepared-campaign.chk")
-local checkpoint=Checkpoint.read()
-local saved=checkpoint or storage:get_string("campaign")
 local settings=core.settings
-local fresh=saved==""
--- Native QA can inject fixtures into its disposable installation.
+-- Native tests can inject explicit fixtures into disposable game copies.
 local qa={}
 local qa_path=mod.."/qa_layout.lua"
 local qa_file=io.open(qa_path,"r")
 if qa_file then qa_file:close();qa=dofile(qa_path)(settings,mod) end
--- Internal integration replay only. No player-facing setting switches
--- between owners. Ordinary startup cannot flip until all controls are wired.
-local worker_boot=qa.authoritative_boot==true
-local owner_filename="luanttd-campaign-owner.chk"
-local OwnerCheckpoint=worker_boot and Checkpoints(core,Codec,owner_filename) or nil
-local resumed_owner=OwnerCheckpoint and OwnerCheckpoint.read()
-if resumed_owner then
-  saved=resumed_owner;fresh=false
-end
 local fixture=qa.enabled
 local WorldSetup=dofile(mod.."/world_setup.lua")
 local world_options=WorldSetup.read(core,storage)
+local scenario=qa.scenario or (world_options and world_options.scenario) or "generated"
+-- Normal generated worlds always use a separate owner. Fixed historical
+-- replay fixtures can still exercise the legacy code in their private
+-- game copy, not by a setting exposed to players.
+local worker_boot=qa.authoritative_boot==true or not fixture and not qa.local_replay and scenario=="generated"
+local owner_filename="luanttd-campaign-owner.chk"
+local OwnerCheckpoint=worker_boot and Checkpoints(core,Codec,owner_filename) or nil
+local resumed_owner=OwnerCheckpoint and OwnerCheckpoint.read()
+local checkpoint=not resumed_owner and Checkpoint.read()
+local saved=resumed_owner or checkpoint or storage:get_string("campaign")
+local fresh=saved==""
 if fresh and not fixture and not world_options and core.is_singleplayer() then
   local prepare=dofile(mod.."/campaign_generation_async.lua")(core,mod)
   WorldSetup.mount(core,storage,prepare)
   return
 end
-local scenario=qa.scenario or (world_options and world_options.scenario) or "generated"
 if scenario=="original" or qa.explorer then
   dofile(mod.."/original_terrain_explorer.lua").start(core,mod,storage,
     scenario=="original" and world_options or nil)
@@ -847,6 +845,7 @@ do
         if slope_index==0 then return level end
       end)
     local rail_art=dofile(mod.."/rail_dispatch_manifest.lua").scan(mod,S.stock_electrification,bridge_profile~=nil)
+    rail_art.bridge_wire=bridge_profile~=nil
     api.capabilities.rail=rail_art
     simulation_bindings.rail_media(Pilot,rail_art)
     api.rail_dispatch_view=dofile(mod.."/rail_dispatch_view.lua").create(api,Pilot,Track,Pose,
@@ -1006,4 +1005,19 @@ do
     end,
   })
 
+end
+
+-- Old debug commands captured the initial Sim table. Keep only engine-
+-- side navigation shortcuts live while this process is not the owner.
+if worker_boot then
+  local native_only={walk=true,car=true,tools=true,dispatch=true,bayline_help=true,world_origin=true}
+  for name,definition in pairs(core.registered_chatcommands) do
+    if definition.mod_origin=="luanttd_core" and not native_only[name] then
+      local prior=definition.func
+      core.override_chatcommand(name,{func=function(player,args)
+        if api.authority_handoff then return false,"Use the native construction or company controls in this world." end
+        return prior(player,args)
+      end})
+    end
+  end
 end

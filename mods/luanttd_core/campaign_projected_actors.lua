@@ -27,7 +27,8 @@ return function(core,api,motion,models,airframes)
       if art then return art.entity,(row.airborne and art.flight or art.mesh),row.dir,row.pitch end
     end
   end
-  function A.render(rows,dt)
+  local collector
+  function A.render(rows,dt,signals)
     local visible={}
     local function present(key,row,name,mesh,pos,target,pitch,part)
       if not name or not pos or core.registered_entities and not core.registered_entities[name] then return end
@@ -45,22 +46,48 @@ return function(core,api,motion,models,airframes)
         else v.ref:move_to(pos,true) end
         v.flip=part.flip
         v.ref:set_rotation(part.rotation)
+        if part.scale and (not v.scale or math.abs(v.scale-part.scale)>.002) then
+          v.ref:set_properties({visual_size={x=1,y=part.scale,z=1}})
+          v.scale=part.scale
+        end
       else
         v.ref:move_to(pos,true)
         v.yaw=motion.turn(v.yaw,motion.nose_yaw(target),math.min(.8,dt*7.2))
         v.ref:set_rotation({x=pitch or 0,y=v.yaw,z=0})
       end
-      if api.vehicle_ui then api.vehicle_ui.track(row.mode,row.id,pos,v.ref,not part or part.index==1) end
+      if api.vehicle_ui and not (part and part.visual_only) then
+        api.vehicle_ui.track(row.mode,row.id,pos,v.ref,not part or part.index==1)
+      end
     end
     for key,row in pairs(rows) do
       if row.mode=="rail" then
         for _,p in ipairs(row.parts) do
-          present(key..":"..p.body_index,row,"luanttd_core:dispatch_"..p.kind,nil,p.pos,nil,nil,p)
+          local body=key..":"..p.body_index
+          local name="luanttd_core:dispatch_"..p.kind
+          local c=p.collector
+          if c and vector then
+            collector=collector or dofile(core.get_modpath("luanttd_core").."/rail_pantograph.lua")
+            local move=c.rows and collector.mount(c.rows,c.axis,c.side,p.pos,p.rotation,vector.rotate,.03,.45)
+            local heel=move and move.heel or vector.add(p.pos,vector.rotate(collector.heel,p.rotation))
+            local scale=move and move.scale_y or c.rows and .03/collector.nominal_extension or 1
+            present(body,row,name.."_body",nil,p.pos,nil,nil,p)
+            present(body..":collector",row,name.."_collector",nil,heel,nil,nil,
+              {visual_only=true,rotation=p.rotation,flip=p.flip,scale=scale})
+          else
+            present(body,row,name,nil,p.pos,nil,nil,p)
+          end
         end
+      elseif row.mode=="rail_pilot" then
+        present(key,row,"luanttd_core:vehicle_"..row.model,nil,row.pos,nil,nil,
+          {visual_only=true,rotation={x=0,y=row.yaw,z=0}})
       else
         local name,mesh,target,pitch=definition(row)
         if type(target)=="number" then present(key,row,name,mesh,row.pos,target,pitch) end
       end
+    end
+    for key,lamp in pairs(signals or {}) do
+      present("signal:"..key,{},"luanttd_core:dispatch_signal_"..lamp.model,nil,lamp.pos,nil,nil,
+        {visual_only=true,rotation=lamp.rotation})
     end
     for key in pairs(active) do if not visible[key] then remove(key) end end
   end

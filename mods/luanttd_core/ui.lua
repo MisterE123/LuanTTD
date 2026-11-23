@@ -3,6 +3,8 @@ local Sim,S,R=api.Sim,api.s,api.render
 local U={}
 local moddir=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local worker_action
+local worker_jump_fields
+local worker_jump_form="luanttd_core:worker_jump"
 local esc=core.formspec_escape
 local session,hud={},{}
 local Workbenches=api.road_first and dofile(core.get_modpath("luanttd_core").."/workbench_index.lua")(api)
@@ -34,6 +36,7 @@ function U.install_worker_controls(client)
   api.worker_bridge_client=client
   api.worker_signal_client=client
   api.worker_rail_assembly=client
+  api.worker_tutorial_client=client
   api.worker_finance=dofile(mod.."/campaign_worker_finance_ui.lua")(core,client,formatted_date,dollars)
   api.worker_build=api.worker_build or dofile(mod.."/campaign_build_proxy.lua")(client)
   api.worker_depot=dofile(mod.."/campaign_worker_depot_ui.lua")(core,client,api.worker_build,dollars,function(p,id)
@@ -95,6 +98,10 @@ local function form()
 end
 
 function U.open(p)
+  if api.authority_handoff then
+    if view(p:get_player_name()).tab=="map" then return U.open_jump(p) end
+    return U.open_company(p)
+  end
   local n=p:get_player_name();local V=view(n);local c=Sim.company(S,n)
   local b,push,rect,label,button,words,drop,list=form()
   rect(0,0,20.7,1,"#172C3B")
@@ -425,6 +432,7 @@ local function pick(fields,id,a,prior)
   return prior
 end
 function U.fields(p,formname,f)
+  if api.authority_handoff and formname==worker_jump_form then return worker_jump_fields(p,f) end
   if api.worker_fleet and formname==api.worker_fleet.form then return api.worker_fleet.fields(p,f) end
   if api.worker_finance and formname==api.worker_finance.form then return api.worker_finance.fields(p,f) end
   if api.worker_depot and formname==api.worker_depot.form then return api.worker_depot.fields(p,f) end
@@ -446,6 +454,12 @@ function U.fields(p,formname,f)
     if f.bl_tutorials and Tutorials then return Tutorials.open(p) end
     if f.bl_guide then return U.open_workbenches(p) end
     if f.bl_help then U.open_controls(p);return true end
+    return false
+  end
+  if api.authority_handoff then
+    -- All old economy forms are invalid after authority moves away.
+    -- Independent engine-owned panels have their own handlers.
+    if formname=="luanttd_core:service" or formname=="luanttd_core:dispatch" or formname=="luanttd_core:context" then return true end
     return false
   end
   if formname=="luanttd_core:context" then return U.context_fields(p,f) end
@@ -576,8 +590,59 @@ function U.inventory(p)
 end
 function U.tutorial_hint(p) return Tutorials and Tutorials.hint(p) or "" end
 function U.open_jump(p)
-  view(p:get_player_name()).tab="map"
+  local n=p:get_player_name()
+  local V=view(n)
+  if api.authority_handoff then
+    local client=api.worker_bridge_client
+    if not client or not JumpMap then return false end
+    local ticket={}
+    V.worker_jump=ticket
+    core.show_formspec(n,worker_jump_form,"formspec_version[7]size[9,2.2]label[.48,.67;Reading the map…]"..
+      "button_exit[.48,1.27;8.03,.55;map_return;Return to 3D world]")
+    local where=p:get_pos()
+    local here=where and Sim.id(math.floor((where.x+.5)/2),math.floor((where.z+.5)/2))
+    local sent,why=client.query({kind="jump_map",player=n,zoom=V.map_zoom==true,here=here},function(r)
+      if session[n]~=V or V.worker_jump~=ticket then return end
+      if not r.ok then core.close_formspec(n,worker_jump_form);V.status=r.why;return end
+      local b,push,rect,label,button=form()
+      label(.45,.58,"LuanTTD / Jump map","#FFE3A3")
+      JumpMap.draw(V,p,{push=push,rect=rect,label=label,button=button},r.value)
+      ticket.hydrated=true
+      core.show_formspec(n,worker_jump_form,table.concat(b))
+    end)
+    if not sent then V.worker_jump=nil;V.status=why;core.close_formspec(n,worker_jump_form) end
+    return true
+  end
+  V.tab="map"
   U.open(p)
+end
+function worker_jump_fields(p,f)
+  local n=p:get_player_name()
+  local V=view(n)
+  local q=V.worker_jump
+  if f.quit or f.map_return then
+    V.worker_jump=nil;core.close_formspec(n,worker_jump_form);return true
+  end
+  if not q or not q.hydrated or q.pending then return true end
+  if f.map_zoom then V.map_zoom=not V.map_zoom;return U.open_jump(p) end
+  local id=JumpMap.pick(V,f)
+  local coordinates=f.map_coordinates or f.key_enter and (f.key_enter_field=="map_x" or f.key_enter_field=="map_z")
+  if not id and not coordinates then return true end
+  local client=api.worker_bridge_client
+  q.pending=true
+  local sent,why=client.query({kind="jump_tile",player=n,tile=id,x=tonumber(f.map_x),z=tonumber(f.map_z)},function(r)
+    if session[n]~=V or V.worker_jump~=q then return end
+    V.worker_jump=nil
+    core.close_formspec(n,worker_jump_form)
+    if r.ok then
+      local point=r.value
+      V.chosen=point.tile
+      p:set_pos({x=point.x,y=point.y,z=point.z})
+      V.status="Moved above the selected tile."
+    else V.status=r.why end
+  end)
+  if not sent then q.pending=nil;V.status=why end
+  return true
 end
 function U.select_tool(p,tool)
   local V=view(p:get_player_name())
@@ -597,11 +662,20 @@ function U.open_workbenches(p)
   return false
 end
 function U.open_controls(p)
+  if api.authority_handoff then
+    core.show_formspec(p:get_player_name(),"luanttd_core:worker_controls",
+      "formspec_version[7]size[10.5,5.05]bgcolor[#152334;false]label[.45,.48;Controls]"..
+      [[textarea[.45,1.07;9.6,2.65;;;WASD moves. Space and Shift adjust altitude. Hold E to fly faster.
+Use the hotbar to build. Right-click depots to buy a vehicle and set its orders.
+]]..      "Inventory opens Fleet, Finances, and the Jump map.]"..
+      "button_exit[.45,4.02;9.6,.55;close;Back to world]")
+    return true
+  end
   if api.road_first then U.service(p,"controls");return end
   view(p:get_player_name()).tab="help";U.open(p)
 end
 function U.open_company(p)
-  if api.authority_handoff and api.worker_fleet then return api.worker_fleet.open(p) end
+  if api.authority_handoff then return api.worker_fleet and api.worker_fleet.open(p) end
   if api.road_first then U.service(p,"fleet");return end
   view(p:get_player_name()).tab="fleet"
   U.open(p)
@@ -737,6 +811,13 @@ function U.road_action(p,key)
 end
 function U.speed(p,key)
   local n=p:get_player_name()
+  if api.authority_handoff then
+    local speed=({pause=0,normal_speed=1,fast=4})[key]
+    if speed then
+      worker_action(n,view(n),{kind="speed",speed=speed,admin=core.check_player_privs(n,{server=true})})
+    end
+    return
+  end
   if S.chair~=n and not core.check_player_privs(n,{server=true}) then
     U.status(p,"Only the first company or server admin can change time.");return
   end
@@ -1127,6 +1208,12 @@ function U.clear_rail_run(p)
   local n=p:get_player_name()
   local V=view(n)
   if not api.rail_build then return end
+  if api.authority_handoff then
+    worker_action(n,V,{kind="transport_start",mode="rail_pilot",clear=true},function(ok)
+      if ok then V.anchor,V.rail_first=nil,nil end
+    end)
+    return
+  end
   local ok,msg=api.rail_build.clear_order(n)
   V.status=msg
   if ok then V.anchor=nil;V.rail_first=nil end
@@ -1346,6 +1433,12 @@ function U.clear_ship_run(p)
   if not api.shipyard then return end
   local n=p:get_player_name()
   local V=view(n)
+  if api.authority_handoff then
+    worker_action(n,V,{kind="transport_start",mode="ship",clear=true},function(ok)
+      if ok then V.ferry_depot,V.ferry_first,V.ferry_via=nil,nil,nil end
+    end)
+    return
+  end
   local ok,msg=api.shipyard.clear(n)
   if ok then V.ferry_depot,V.ferry_first,V.ferry_via=nil,nil,nil end
   V.status=msg
@@ -1371,6 +1464,12 @@ function U.clear_airfield_run(p)
   if not api.airfield then return end
   local n=p:get_player_name()
   local V=view(n)
+  if api.authority_handoff then
+    worker_action(n,V,{kind="transport_start",mode="air",clear=true},function(ok)
+      if ok then V.airport_first=nil end
+    end)
+    return
+  end
   local ok,msg=api.airfield.clear(n)
   if ok then V.airport_first=nil end
   V.status=msg
@@ -1651,6 +1750,9 @@ local function authority_preview(p,id,hit)
     local track=rail_tool_code[tool]
     if track<2 and not V.anchor then return ids,true,"Mark the first end of the straight railway." end
     kind,request="rail",{tool="track",first=V.anchor or id,last=id,track=track,remove=V.rail_remove==true}
+  elseif electric_tools[tool]~=nil then
+    if not V.anchor then return ids,true,"Click the first corner. Right-click cancels." end
+    kind,request="rail",{tool="wire",first=V.anchor,last=id,target=electric_tools[tool]}
   elseif U.station_gesture(tool) then
     local l=station_layout(V)
     kind,request="rail",{tool="station",first=V.anchor or id,last=id,axis=l.axis,
@@ -2098,8 +2200,68 @@ function U.build_world(p,id,hit)
       worker_build(n,V,"rail",{tool="track",first=first,last=id,track=track,remove=V.rail_remove==true})
       return
     end
+    if electric_tools[V.tool]~=nil then
+      if not V.anchor then V.anchor=id;V.status="Click the opposite corner, or click this tile again.";return end
+      local first=V.anchor
+      V.anchor=nil
+      worker_build(n,V,"rail",{tool="wire",first=first,last=id,target=electric_tools[V.tool]})
+      return
+    end
     if V.tool=="rail_depot_tool" then
       worker_build(n,V,"rail",{tool="depot",first=id,direction=V.rail_dir or 2});return
+    end
+    local surface=R.host_tile and R.host_tile(id)
+    if rail_orders[V.tool] then
+      if not surface or surface.owner~=n then V.status="Choose one of your railway facilities.";return end
+      if not V.anchor then
+        if surface.rail_depot_dir==nil then V.status="Choose your rail depot first.";return end
+        V.anchor=id;V.status="Depot selected. Click the first platform.";return
+      end
+      local platform=surface.rail_station_id
+      if not platform then V.status="Choose an owned rail platform.";return end
+      if V.tool=="rail_order_shuttle" and not V.rail_first then
+        V.rail_first=platform;V.status="First platform selected. Choose the second platform.";return
+      end
+      if platform==V.rail_first then V.status="Choose a different rail platform.";return end
+      if stage_fixed_destination(V,id) then return end
+      local operation=({rail_order_one="station",rail_order_block="block",rail_order_span="span",rail_order_shuttle="shuttle"})[V.tool]
+      worker_action(n,V,{kind="transport_start",mode="rail_pilot",operation=operation,depot=V.anchor,
+        first=V.rail_first or platform,second=V.rail_first and platform or nil},function(ok)
+        if ok then V.anchor,V.rail_first,V.fixed_route=nil,nil,nil end
+      end)
+      return
+    end
+    if V.tool=="ship_order" then
+      local part=surface and surface.ship
+      if not V.ferry_depot then
+        if not part or part.owner~=n or not part.depot then V.status="Choose your ship depot first.";return end
+        V.ferry_depot=part.depot;V.status="Depot selected. Click the first dock.";return
+      end
+      if V.ferry_first and part and part.kind=="buoy" then
+        V.ferry_via=id;V.status="Buoy selected. Click the second dock.";return
+      end
+      if not part or part.owner~=n or part.kind~="dock" then V.status="Choose an owned dock.";return end
+      if not V.ferry_first then
+        V.ferry_first=part.station;V.status="First dock selected. Click a buoy or the second dock.";return
+      end
+      if V.ferry_first==part.station then V.status="Choose a different dock.";return end
+      if stage_fixed_destination(V,id) then return end
+      worker_action(n,V,{kind="transport_start",mode="ship",depot=V.ferry_depot,first=V.ferry_first,
+        second=part.station,via=V.ferry_via},function(ok)
+        if ok then V.ferry_depot,V.ferry_first,V.ferry_via,V.fixed_route=nil,nil,nil,nil end
+      end)
+      return
+    end
+    if V.tool=="airfield_order" then
+      local field=surface and surface.owner==n and surface.airfield and surface.airfield.airport
+      if not field then V.status="Choose one of your country airfields.";return end
+      if not V.airport_first then V.airport_first=field;V.status="Departure selected. Pick a destination.";return end
+      if field==V.airport_first then V.status="Choose a different airfield.";return end
+      if stage_fixed_destination(V,id) then return end
+      worker_action(n,V,{kind="transport_start",mode="air",first=V.airport_first,second=field},function(ok)
+        if ok then V.airport_first,V.fixed_route=nil,nil end
+      end)
+      return
     end
     if V.tool=="tram_order" then
       local t=R.host_tile and R.host_tile(id)
@@ -2452,6 +2614,25 @@ function U.context(p,tile,hit)
       end
     end
   end
+  if api.authority_handoff then
+    local t=tile and R.host_tile and R.host_tile(tile)
+    local label="LuanTTD / 3D survey"
+    if t then
+      local x,z=Sim.xy(tile)
+      local site=R.host_record and R.host_record("sites",t.site)
+      local st=R.host_record and R.host_record("stations",t.station)
+      local name=st and st.name or site and site.name or t.terrain or "Tile"
+      label=("%s · %d,%d"):format(name,x,z)
+      if st and st.mode=="road" and st.stop_type~="truck" and R.waiting_at then
+        label=label..(" · %d waiting"):format(R.waiting_at("road",st.id) or 0)
+      end
+    end
+    core.show_formspec(n,"luanttd_core:worker_inspect",
+      "formspec_version[7]size[10.5,3.1]bgcolor[#152334;false]label[.45,.55;"..esc(label).."]"..
+      "label[.45,1.3;Open Inventory for your fleet and construction tools.]"..
+      "button_exit[.45,2.2;9.6,.55;close;Back to world]")
+    return true
+  end
   V.context_tile=tile
   if api.road_first then
     local t=tile and S.tiles[tile]
@@ -2571,6 +2752,13 @@ function U.freight_snapshot(st)
   return rows
 end
 function U.service(p,kind,id)
+  if api.authority_handoff then
+    if kind=="vehicle" then return api.vehicle_ui.open(p,"road",id) end
+    if kind=="fleet" then return U.open_company(p) end
+    if kind=="controls" then return U.open_controls(p) end
+    if kind=="depot" or kind=="context" then return U.context(p,id) end
+    return U.context(p)
+  end
   local n=p:get_player_name();local V=view(n)
   local tall=kind=="vehicle"
   local room=kind=="depot" and api.farm_tools and api.oil_tools

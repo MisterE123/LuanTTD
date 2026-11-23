@@ -718,15 +718,17 @@ return function(api,ui)
       end
       names[k]=name
     end
-    for _,site in ipairs(S.sites) do
-      if not site.closed then
+    local worker=api.authority_handoff and api.render.host_state
+    local board=worker and api.render.host_state() or S
+    for _,site in pairs(board.sites) do
+      if not site.closed and board.tiles[site.tile] then
         if api.road_first and site.kind=="town" then
-          visit("f"..site.id,site.tile,site.name.."  ("..site.population..")",0xffebaf,
-            api.generated_world and S.tiles[site.tile].h+3 or 3)
+          visit("f"..site.id,site.tile,site.name.."  ("..(site.population or 0)..")",0xffebaf,
+            api.generated_world and board.tiles[site.tile].h+3 or 3)
         else visit("f"..site.id,site.tile,site.name,0xffebaf) end
       end
     end
-    if api.road_first and not api.generated_world then
+    if api.road_first and not api.generated_world and not worker then
       local phase=ui.phase(p)
       local menu=W.menu(p)
       local starter=menu=="home" or menu=="roads" or menu=="road_stops"
@@ -739,11 +741,14 @@ return function(api,ui)
         visit("guide_depot",Sim.id(10,13),"Suggested depot",0xffcf76,.66)
       end
     end
-    for _,st in pairs(S.stations) do
-      local title=ui.stop_label(st)
+    for _,st in pairs(board.stations) do
+      if st.tile and board.tiles[st.tile] then
+      local title=worker and (st.name or ("Stop #"..st.id)) or ui.stop_label(st)
       if api.road_first and st.mode=="road" then
         local waiting,units=0," waiting"
-        if st.stop_type=="truck" and ui.freight_snapshot then
+        if worker then
+          if st.stop_type~="truck" then waiting=api.render.waiting_at("road",st.id) end
+        elseif st.stop_type=="truck" and ui.freight_snapshot then
           local shown=0
           for _,row in ipairs(ui.freight_snapshot(st)) do
             if row.count>0 and shown<2 then
@@ -759,6 +764,7 @@ return function(api,ui)
         if (waiting or 0)>0 then title=title.."   ·   "..waiting..units end
       end
       visit("s"..st.id,st.tile,title,0xaddbe5)
+      end
     end
     for k,id in pairs(ids) do if not keep[k] then p:hud_remove(id);ids[k]=nil;names[k]=nil end end
     state.labels=ids;state.label_names=names

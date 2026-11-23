@@ -2,6 +2,10 @@
 -- but never buys a vehicle, changes a route, or writes to the company ledger.
 return function(api,W)
   local Sim,S=api.Sim,api.s
+  local function refresh_board()
+    if api.authority_handoff and api.render.host_state then S=api.render.host_state()
+    else S=api.s end
+  end
   local path=core.get_modpath("luanttd_core")
   local Follow=dofile(path.."/openttd/yapf_road_follow.lua")
   local Lanes=dofile(path.."/road_lanes.lua")
@@ -43,8 +47,11 @@ return function(api,W)
     if active_span then
       local book=active_span.kind=="bridge" and S.stock_road_bridges or S.stock_road_tunnels
       local p=book and book[active_span.key]
-      if p==active_span.record and (j==p.start or j==p["end"] or p.middle_by_tile[j]) then
-        return j,active_span
+      local old=active_span.record
+      if p and (p==old or api.authority_handoff and p.start==old.start and p["end"]==old["end"] and
+        p.base==old.base and p.deck==old.deck and p.axis==old.axis)
+        and (j==p.start or j==p["end"] or p.middle_by_tile and p.middle_by_tile[j]) then
+        return j,{record=p,key=active_span.key,kind=active_span.kind}
       end
       return
     end
@@ -163,6 +170,7 @@ return function(api,W)
     if q then release(q,core.get_player_by_name(n));players[n]=nil end
   end
   function C.toggle(p)
+    refresh_board()
     local n=p:get_player_name()
     local existing=players[n]
     if existing then
@@ -198,9 +206,13 @@ return function(api,W)
     return true,"You're in a car. W drives, A/D steer, S brakes or reverses; right-click or /car to get out."
   end
   function C.step(p,_,keys,dt)
+    refresh_board()
     local name=p:get_player_name()
     local q=players[name]
     if not q then return end
+    if api.authority_handoff and (not S.tiles[q.id] or q.next_id and not S.tiles[q.next_id]) then
+      q.speed=0;status(p,q,true);return
+    end
     if not q.object:get_pos() then
       C.toggle(p)
       core.chat_send_player(name,"The car disappeared; returned to builder view.")

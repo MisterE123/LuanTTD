@@ -12,6 +12,7 @@ cp game.conf "$game/"
 cp -al mods "$game/"
 cp mods/luanttd_core/init.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
+printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 cat tests/campaign_ordinary_worker_native.lua >> "$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-40024}
@@ -56,6 +57,7 @@ mark NATIVE_PROJECTED_CLIENT_READY
 win=$(xdotool search --sync --limit 1 --onlyvisible --pid "$client" | tail -1)
 xdotool windowfocus --sync "$win"
 mark 'PASS NATIVE PROJECTED PAINTER'
+mark 'PASS NATIVE PROJECTED SIGNAL'
 xdotool keydown d
 sleep 1.5
 xdotool keyup d
@@ -78,6 +80,11 @@ sleep .55
 import -window root -resize 960x600 -quality 88 "$out/worker-demolition.jpg"
 xdotool mousemove 720 440 click 1
 mark 'PASS NATIVE PROJECTED DEMOLITION'
+mark 'NATIVE_PROJECTED_BUS_READY'
+sleep .55
+import -window root -resize 960x600 -quality 88 "$out/worker-bus.jpg"
+xdotool mousemove 720 585 click 1
+mark 'PASS NATIVE PROJECTED BUS'
 mark 'NATIVE_PROJECTED_FLEET_READY'
 sleep .5
 import -window root -resize 960x600 -quality 88 "$out/worker-fleet.jpg"

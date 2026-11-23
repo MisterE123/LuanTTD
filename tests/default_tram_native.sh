@@ -28,6 +28,7 @@ fi
 cp mods/luanttd_core/init.lua "$out/init.lua"
 mv -f "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >> "$game/mods/luanttd_core/init.lua"
+printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 cat tests/default_tram_native.lua >> "$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\n' "${BAYLINE_NATIVE_PORT:-39759}" > "$out/default.conf"

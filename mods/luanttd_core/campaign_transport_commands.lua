@@ -231,6 +231,24 @@ return function(Sim,R)
     return {offers=offers,vehicles=vehicles,targets=targets}
   end
   function T.start(owner,req)
+    if req.mode=="rail_pilot" and R.rail then
+      local r=R.rail
+      if req.clear==true then return r.build.clear_order(owner) end
+      if not tile(req.depot) or not id(req.first) then return false,"Select your depot and rail destinations." end
+      if req.operation=="block" then return r.build.order_block(owner,req.depot,req.first)
+      elseif req.operation=="span" then return r.run.start_span(s,owner,req.depot,req.first)
+      elseif req.operation=="shuttle" and id(req.second) and req.first~=req.second then
+        return r.build.order(owner,req.depot,req.first,req.second)
+      elseif req.operation=="station" then return r.build.order(owner,req.depot,req.first) end
+      return false,"Select valid rail destinations."
+    end
+    if req.clear==true and req.mode=="ship" and R.water then
+      local ok,why=R.water.run.clear(s,owner)
+      return ok,ok and "Ferry pilot cleared." or why
+    elseif req.clear==true and req.mode=="air" and R.air then
+      local ok,why=R.air.run.clear(s,owner)
+      return ok,ok and "Flight pilot cleared." or why
+    end
     if req.mode=="tram" and R.tram and req.clear==true then
       local ok,why=R.tram.run.clear(s,owner)
       return ok,ok and "Test streetcar removed. Your tramway and stops remain." or why

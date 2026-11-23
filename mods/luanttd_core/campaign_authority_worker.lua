@@ -24,9 +24,9 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         runtime.day()
         -- Until the UI subscribes to notifications, do not retain
         -- transient loads, arrivals or effects for an invisible world.
-        Sim.road_loading_events(s)
-        Sim.rail_loading_events(s);Sim.rail_paid_motion_events(s);Sim.rail_coal_loading_events(s)
-        Sim.ferry_loading_events(s);Sim.air_loading_events(s);Sim.air_paid_motion_events(s)
+        runtime.passengers.collect()
+        Sim.rail_paid_motion_events(s);Sim.rail_coal_loading_events(s)
+        Sim.air_paid_motion_events(s)
         if runtime.water and runtime.water.coal then runtime.water.coal.take(s) end
       end,
       refresh=function() end,
@@ -46,7 +46,12 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     local now=core.get_us_time()
     if core.ipc_get(channel..":cancel") then break end
     local fraction
-    if auto then fraction=auto.step((now-prior)/1000000,true,true) end
+    if auto then
+      local dt=(now-prior)/1000000
+      runtime.frame(dt)
+      runtime.passengers.frame(dt)
+      fraction=auto.step(dt,true,true)
+    end
     prior=now
     if available then
       heartbeat=now
@@ -65,6 +70,9 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         elseif q.kind=="transport_quote" then r=A.transport_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="terrain_quote" then r=A.terrain_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="company" then r=A.company(q.player)
+        elseif q.kind=="lesson_progress" then r=A.lesson_progress(q.player,q.lesson)
+        elseif q.kind=="jump_map" then r=A.jump_map(q.player,q.zoom,q.here)
+        elseif q.kind=="jump_tile" then r=A.jump_tile(q.player,q.tile,q.x,q.z)
         elseif q.kind=="rail_assembly" then r=A.rail_assembly(q.player,q.depot)
         elseif q.kind=="signal_panel" then r=A.signal_panel(q.player,q.tile,q.hit,q.signal,q.inspect==true,q.peek==true)
         elseif q.kind=="bridge_picker" then r=A.bridge_picker(q.player,q.mode,q.first,q.last,q.peek==true)
