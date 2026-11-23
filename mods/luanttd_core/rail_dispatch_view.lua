@@ -71,6 +71,8 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
     if api.terrain then local _,height=api.terrain.tile(id);b=height end
     return b
   end
+  local body_pose=dofile((path or "mods/luanttd_core").."/rail_visual_body.lua")(
+    Sim,models,diagonal,Pose.sample,surface,board_base)
   local function vacuum(collection,keep)
     for k in pairs(collection) do if not keep[k] then forget(collection,k) end end
   end
@@ -109,29 +111,8 @@ function M.create(api,Run,Track,Pose,SignalArt,seconds_per_day,surface,span_wire
           local sample=samples[i]
           if sample and ready[engine] and ready[wagon] then
             local id,td,progress,reversed,wormhole=sample.id,sample.td,sample.progress,sample.reversed,sample.wormhole
-            -- OpenTTD 16.0-RC1 ReverseTrainDirection:
-            -- default single-ended trains swap positions *and* turn.
-            -- A rear driving cab leads in the opposite direction without
-            -- reorienting the bodies. Keep those cab identities on their
-            -- physical ends when consuming the travel-ordered samples.
-            local backing=push_pull and reversed==true
-            local body_index=backing and #parts-i+1 or i
-            local rear_cab=push_pull and body_index==#parts
-            local kind=(body_index==1 or rear_cab) and engine or wagon
+            local body,rotation,kind,body_index,flip_epoch=body_pose(train,sample,i,engine,wagon)
             local key=train.id..":"..body_index
-            local flip_epoch
-            if not push_pull then flip_epoch=reversed==true end
-            local tx,tz=Sim.xy(id)
-            local x,z,dx,dz
-            if sample.x then x,z,dx,dz=sample.x-2*tx,sample.z-2*tz,sample.dx,sample.dz
-            elseif not wormhole then x,z,dx,dz=diagonal(id,td,progress) end
-            if x==nil then x,z,dx,dz=Pose.sample(td,progress) end
-            local level,tilt
-            if surface then level,tilt=surface(id,td,progress,{wormhole=wormhole}) end
-            local flipped=rear_cab~=backing
-            local body={x=2*tx+.5+x,y=(level or board_base(id))+models[kind].offset,z=2*tz+.5+z}
-            local rotation={x=(tilt or 0)*(flipped and 1 or -1),
-              y=math.pi-math.atan2(dx,dz)+(flipped and math.pi or 0),z=0}
             local visible=not api.interest or api.interest.near(body,refs[key]~=nil)
             local ref
             if visible and i==1 and train.bridge_collectors and split_ready[kind] then

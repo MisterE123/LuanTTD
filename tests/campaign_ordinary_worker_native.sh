@@ -30,7 +30,7 @@ mv -f "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >> "$game/mods/luanttd_core/init.lua"
 cat tests/campaign_ordinary_worker_native.lua >> "$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
-printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\nbayline_generated_map_width = 64\nbayline_generated_map_depth = 64\n' "${BAYLINE_NATIVE_PORT:-39890}" > "$out/default.conf"
+printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\nbayline_generated_map_width = 64\nbayline_generated_map_depth = 64\nbayline_generated_relief = 0\nbayline_generated_coasts = 0\n' "${BAYLINE_NATIVE_PORT:-39890}" > "$out/default.conf"
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache"
 export LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 
@@ -38,4 +38,9 @@ if ! timeout 35 luantiserver --world "$out/world" --config "$out/default.conf" -
   cat "$out/server.log";exit 1
 fi
 grep 'PASS NATIVE ORDINARY HANDOFF' "$out/server.log" || { cat "$out/server.log"; exit 1; }
+grep 'PASS NATIVE ORDINARY WORKER BUILD' "$out/server.log"
+grep 'PASS NATIVE PROJECTED PAINTER' "$out/server.log"
+grep 'PASS NATIVE PROJECTED ROLLING STOCK' "$out/server.log"
+grep 'PASS NATIVE PROJECTED TRAIN FORM' "$out/server.log"
+grep 'PASS NATIVE PROJECTED HOTBAR BUILD' "$out/server.log"
 ! grep 'ERROR\[' "$out/server.log"

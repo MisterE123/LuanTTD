@@ -137,6 +137,29 @@ return function(Sim,mod)
     end
     return owned
   end
+  function B.rail_build(api,network,pilot,signal)
+    local track=network.track
+    local Height=dofile(source.."rail_height.lua")(track,network.slope)
+    local Q=dofile(source.."rail_construction.lua")(track,signal,Height)
+    local function value(plan,why)
+      if plan then return plan.cost end
+      return nil,why
+    end
+    local prices={
+      track=function(tile,p,o)
+        if p.remove then return Q.rail_clear_price(0,o) end
+        return value(Q.piece(tile,p.track,o))
+      end,
+      station_area=function(tiles,axis,tracks,length,o) return value(Q.station(tiles,axis,tracks,length,o)) end,
+      depot=function(tile,d,o) return value(Q.depot(tile,d,o)) end,
+      signal=function(tile,d,oneway,o)
+        return value(Q.signal(tile,d%2,{kind=oneway and signal.PBS_ONEWAY or signal.PBS},o))
+      end,
+      signal_track=function(tile,t,kind,o) return value(Q.signal(tile,t,{kind=kind},o)) end,
+      clear_signal=function() return Q.base_prices().clear_signal end,
+    }
+    return dofile(mod.."/rail_construction_tools.lua")(api,network.lab,track,pilot,prices)
+  end
   function B.rail_media(pilot,art)
     for _,id in ipairs(art.engines) do assert(pilot.mount_owned_model(id)) end
     pilot.mount_bridge_collectors(function() return art.split.sh_30==true and art.split.sh_40==true end)

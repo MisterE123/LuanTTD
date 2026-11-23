@@ -4,6 +4,7 @@ local channel="luanttd_core:real_tick_probe"
 if not core.get_player_by_name then
   function core.luanttd_probe_campaign(phase,path)
     if phase==3 then
+      assert(dofile(mod.."/campaign_transport_commands_fixture.lua"))
       return assert(loadfile(mod.."/rail_paid_runtime_fixture.lua"))({"authority"})
     end
     local Sim=dofile(mod.."/sim.lua")

@@ -71,6 +71,7 @@ end
 Sim.restore_road_orders(S)
 local simulation_bindings=dofile(mod.."/campaign_simulation_bindings.lua")(Sim,mod)
 local api={Sim=Sim,s=S,generated_world=generated_world,road_first=true,
+  capabilities={air={},ferry={},rail={engines={},ready={},split={}}},
   interest=dofile(mod.."/presentation_interest.lua").new()}
 local farm_profile=not generated_world and (S.stock_farm_industries~=nil or fresh and request_farm)
 local oil_profile=not generated_world and (S.stock_oil_industries~=nil or fresh and not farm_profile and request_oil)
@@ -108,13 +109,15 @@ do
   end
   api.bus_breakdowns=tonumber(settings:get("bayline_stock_bus_breakdowns")) or 2
   api.bus_service_interval=tonumber(settings:get("bayline_stock_bus_service_interval")) or 150
-  simulation_bindings.road(S,{
+  local capabilities={
     start_year=world_options and world_options.year or tonumber(settings:get("bayline_stock_bus_start_year")) or 1950,
     foster=files["bl_foster_bus.obj"] and files["bl_foster_bus_atlas.png"],
     craighead=files["bl_craighead_goods_truck.obj"] and files["bl_craighead_goods_truck_atlas.png"],
     breakdowns=api.bus_breakdowns,service_interval=api.bus_service_interval,
     service_percent=settings:get_bool("bayline_stock_bus_service_percent",false),
-  })
+  }
+  api.capabilities.road=capabilities
+  simulation_bindings.road(S,capabilities)
   if saved=="" then
     if not generated_world then dofile(mod.."/town_layout.lua")(Sim,S) end
     S.road_economy=true
@@ -167,8 +170,8 @@ if generated_world or S.road_oil then
   for _,folder in ipairs({"models","textures"}) do
     for _,name in ipairs(core.get_dir_list(mod.."/"..folder,false)) do files[name]=true end
   end
-  local oil,why=Sim.mount_oil_world(S,dofile(mod.."/openttd/terrain.lua"),
-    files["bl_witcombe_oil_tanker.obj"] and files["bl_witcombe_oil_tanker_atlas.png"])
+  api.capabilities.oil_tanker=files["bl_witcombe_oil_tanker.obj"] and files["bl_witcombe_oil_tanker_atlas.png"]
+  local oil,why=Sim.mount_oil_world(S,dofile(mod.."/openttd/terrain.lua"),api.capabilities.oil_tanker)
   assert(oil,why)
   for style,parts in pairs(oil.visual_sources()) do
     assert(files["bl_"..style.."_atlas.png"],"Missing oil industry atlas "..style)
@@ -245,6 +248,7 @@ end
 api.rail_owned_pair_tools,S.rail_owned_pair_enabled=true,true
 S.rail_block_preview,api.rail_block_tools,api.rail_build_tools=true,true,true
 function api.save()
+  if api.authority_handoff then return false end -- the handoff owns durable state
   if compact_checkpoint then
     Checkpoint.write_state(S)
     return
@@ -310,6 +314,7 @@ local world=dofile(mod.."/world.lua")(api,ui)
 api.world=world
 local interval=qa.interval or 1.25
 interval=math.max(0.05,math.min(15,interval))
+api.capabilities.seconds_per_day=interval
 local auxiliary={}
 local function pilot_clock(active,tick)
   auxiliary[#auxiliary+1]=dofile(mod.."/aux_transport_clock.lua")(S,interval,active,tick)
@@ -330,6 +335,7 @@ if api.ship_tools then
   for _,key in ipairs(core.get_dir_list(mod.."/textures",false)) do missing[key]=true end
   art[206]=missing["bl_harbor_ferry_palette.png"] and missing["bl_harbor_ferry.obj"]
   art[207]=missing["bl_harbor_ferry_palette.png"] and missing["bl_ffp_passenger_ferry.obj"]
+  api.capabilities.ferry=art
   local Terrain,Water,Network,Roster,Run,Depot,cargo_run,C=simulation_bindings.water(S,Track,
     function(id) return art[id] end)
   water_order_run=Run
@@ -411,6 +417,7 @@ if api.ship_tools then
 end
 if api.airport_tools then
   local art=dofile(mod.."/airport_manifest.lua")(core,mod)
+  for id in pairs(art) do api.capabilities.air[id]=true end
   local Network,Run,Owned,Roster=simulation_bindings.air(S,api.slope,function(id) return art[id]~=nil end)
   air_order_run=Run
   api.airport_view=dofile(mod.."/airport_preview_view.lua")(api,Run,dofile(mod.."/road_motion.lua"),art)
@@ -447,6 +454,12 @@ local campaign=dofile(mod.."/campaign_step.lua").new(S,interval,{
 core.register_globalstep(function(dt)
   if placement then return end
   world.step(dt)
+  if api.authority_handoff then
+    -- Leave flight, targeting and engine presentation on the host,
+    -- but prevent its former stepper, pilots and autosave from running.
+    if api.authority_frame then api.authority_frame(dt) end
+    return
+  end
   if api.trackworks_demo then api.trackworks_demo.step(dt) end
   local players=core.get_connected_players()
   local online=#players>0
@@ -788,28 +801,7 @@ do
     if api.rail_coal_tools then world.enable_rail_coal() end
     api.rail_dispatch_controller=Pilot
     networks.dispatch=Pilot
-    if rail_build_enabled then
-      local Height=dofile(source.."rail_height.lua")(Track,api.slope)
-      local Q=dofile(source.."rail_construction.lua")(Track,Signal,Height)
-      local function value(plan,why)
-        if plan then return plan.cost end
-        return nil,why
-      end
-      local prices={
-        track=function(tile,p,o)
-          if p.remove then return Q.rail_clear_price(0,o) end
-          return value(Q.piece(tile,p.track,o))
-        end,
-        station_area=function(tiles,axis,tracks,length,o) return value(Q.station(tiles,axis,tracks,length,o)) end,
-        depot=function(tile,d,o) return value(Q.depot(tile,d,o)) end,
-        signal=function(tile,d,oneway,o)
-          return value(Q.signal(tile,d%2,{kind=oneway and Signal.PBS_ONEWAY or Signal.PBS},o))
-        end,
-        signal_track=function(tile,track,kind,o) return value(Q.signal(tile,track,{kind=kind},o)) end,
-        clear_signal=function()return Q.base_prices().clear_signal end,
-      }
-      api.rail_build=dofile(mod.."/rail_construction_tools.lua")(api,Lab,Track,Pilot,prices)
-    end
+    if rail_build_enabled then api.rail_build=simulation_bindings.rail_build(api,networks,Pilot,Signal) end
     local bridge_profile=api.rail_bridge_wire_art and api.rail_spans and dofile(mod.."/rail_bridge_wire_profile.lua")(
       Sim,api.rail_spans,api.rail_bridge_wire_art,Track,function(id,mask)
         local slope,height=api.terrain.tile(id)
@@ -817,6 +809,7 @@ do
         if slope_index==0 then return level end
       end)
     local rail_art=dofile(mod.."/rail_dispatch_manifest.lua").scan(mod,S.stock_electrification,bridge_profile~=nil)
+    api.capabilities.rail=rail_art
     simulation_bindings.rail_media(Pilot,rail_art)
     api.rail_dispatch_view=dofile(mod.."/rail_dispatch_view.lua").create(api,Pilot,Track,Pose,
       dofile(mod.."/rail_signal_art.lua"),interval,presentation,bridge_profile,height,rail_art)

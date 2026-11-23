@@ -14,10 +14,23 @@ return function(engine,mod)
     if running then engine.ipc_set(running.session..":cancel",true) end
   end)
   local C={}
+  local function send(t,req,receive)
+    t.next_seq=t.next_seq+1
+    local message={}
+    for k,v in pairs(req) do message[k]=v end
+    message.seq=t.next_seq
+    t.reply=receive
+    engine.ipc_set(t.session..":request",message)
+  end
+  local function flush(t)
+    if running~=t or closed or t.reply or #t.deferred==0 then return end
+    local next_=table.remove(t.deferred,1)
+    send(t,next_.req,next_.receive)
+  end
   function C.start(cap,on_ready,on_stop,filename)
     if closed or running then return nil,"AUTHORITY_ALREADY_RUNNING" end
     sequence=sequence+1
-    local t={session="luanttd_core:authority:"..sequence,next_seq=0,reply=on_ready}
+    local t={session="luanttd_core:authority:"..sequence,next_seq=0,reply=on_ready,deferred={}}
     running=t
     local function done(why,seq,day,detail)
       if running~=t then return end
@@ -38,6 +51,7 @@ return function(engine,mod)
           local receiver=t.reply
           t.reply=nil
           receiver(r)
+          flush(t)
         end
       end
       engine.after(.035,poll)
@@ -46,15 +60,20 @@ return function(engine,mod)
     return true
   end
   function C.query(req,receive)
-    if closed or not running or running.reply then return nil,"AUTHORITY_BUSY" end
+    if closed or not running or running.reply or #running.deferred>0 then return nil,"AUTHORITY_BUSY" end
+    assert(type(req)=="table" and type(receive)=="function")
+    send(running,req,receive)
+    return true
+  end
+  -- Observations are disposable; deliberate inputs must not vanish when
+  -- a viewport request is already using the mailbox.
+  function C.defer(req,receive)
+    if closed or not running then return nil,"CAMPAIGN_NOT_READY" end
     assert(type(req)=="table" and type(receive)=="function")
     local t=running
-    t.next_seq=t.next_seq+1
-    local message={}
-    for k,v in pairs(req) do message[k]=v end
-    message.seq=t.next_seq
-    t.reply=receive
-    engine.ipc_set(t.session..":request",message)
+    if #t.deferred>=24 then return nil,"Too many pending campaign actions. Try again in a moment." end
+    t.deferred[#t.deferred+1]={req=req,receive=receive}
+    flush(t)
     return true
   end
   return C

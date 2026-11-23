@@ -67,3 +67,57 @@ assert(not A.command(john,{kind="road_buy",revision=7,engine="bus",cargo="passen
 local purchase=A.command(john,{kind="road_buy",revision=7,engine="bus",cargo="passenger",depot=d,cost=vehicle.cost})
 assert(purchase.ok and purchase.revision==8 and s.fleet[purchase.value].owner==john)
 print("PASS typed company and depot actions charge only the owning company at the quoted price")
+local paint=A.snapshot(3,6,17,5)
+assert(#paint.value.corners==18*6)
+local source=paint.value.tiles[19].surface
+assert(source.build==s.tiles[p].build and source.road_bits==s.tiles[p].road_bits)
+source.build="visual only"
+assert(s.tiles[p].build=="road_station")
+print("PASS projected ground, road geometry and shared corners are detached from authoritative tiles")
+local s2=Sim.new(1751)
+s2.corner_grid=T.new(Sim.W,Sim.H,function() return 0 end)
+s2.rail_paid_service,s2.rail_owned_service,s2.rail_block_preview=true,true,true
+for _,t in ipairs(s2.tiles) do
+  t.terrain,t.h="grass",0
+  t.wood,t.house,t.site,t.build,t.owner=nil,nil,nil,nil,nil
+end
+local rails=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,s2,{
+  road={start_year=1950,breakdowns=0,service_interval=150},rail={ready={},engines={},split={}},
+})
+local station_worker=dofile(mod.."/campaign_authority_endpoint.lua")(Sim,rails)
+assert(station_worker.command(john,{kind="company_open",revision=0}).ok)
+local t0,t1=Sim.id(12,15),Sim.id(21,15)
+local rails_offer=station_worker.rail_quote(john,{tool="track",first=t0,last=t1,track=0})
+assert(rails_offer.ok and #rails_offer.value.tiles==10 and rails_offer.value.cost>0)
+local money=s2.companies[john].cash
+assert(not station_worker.command("Stranger",{kind="rail_commit",revision=1,token=rails_offer.value.token}).ok)
+assert(station_worker.command(john,{kind="rail_commit",revision=1,token=rails_offer.value.token}).ok)
+assert(s2.tiles[t0].rail_tracks==1 and s2.companies[john].cash==money-rails_offer.value.cost)
+assert(not station_worker.command(john,{kind="rail_commit",revision=2,token=rails_offer.value.token}).ok)
+local depot=station_worker.rail_quote(john,{tool="depot",first=Sim.id(11,15),direction=2})
+assert(depot.ok,depot.why)
+assert(station_worker.command(john,{kind="rail_commit",revision=2,token=depot.value.token}).ok)
+print("PASS worker owns pinned railway track and auto-connecting depot quote, debit and commit")
+local plot=Sim.id(36,26)
+local land=A.terrain_quote(john,{operation="raise",first=plot})
+assert(land.ok and #land.value.corners==1 and land.value.cost>0)
+local cost=A.company(john).value.cash
+local applied=A.command(john,{kind="terrain_commit",revision=8,token=land.value.token})
+assert(applied.ok and T.corner(s.corner_grid,36,26)==1)
+assert(A.company(john).value.cash==cost-land.value.cost)
+local clear=A.terrain_quote(john,{operation="bulldoze",first=Sim.id(21,10)})
+assert(clear.ok and A.command(john,{kind="terrain_commit",revision=9,token=clear.value.token}).ok)
+print("PASS worker reshapes shared terrain and bulldozes through the existing paid commands")
+local bridge=A.transport_quote(john,{operation="bridge",mode="road",tile=Sim.id(6,24),last=Sim.id(10,24),style=0})
+assert(bridge.ok,bridge.why)
+local before_bridge=A.company(john).value.cash
+local committed=A.command(john,{kind="transport_commit",revision=10,token=bridge.value.token})
+assert(committed.ok and #committed.value.tiles==5 and A.company(john).value.cash==before_bridge-bridge.value.cost)
+assert(s.bridge_above[Sim.id(8,24)])
+print("PASS worker commits a real timber bridge at the stock price and preserves ground below")
+local support=A.snapshot(8,24,1,1).value.registries
+assert(support.bridge_above and support.stock_road_bridges)
+local support_id=support.bridge_above[Sim.id(8,24)]
+assert(support.stock_road_bridges[support_id].axis==0 and #support.stock_road_bridges[support_id].middle==3)
+assert(not support.stations and not support.fleet and not support.companies)
+print("PASS bridge support sectors include the linked span without exposing unrelated simulation registries")

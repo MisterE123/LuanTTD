@@ -20,10 +20,12 @@ local function number(n)
   return (n<0 and "-" or "")..s
 end
 local function dollars(n) return n<0 and "-$"..number(-n) or "$"..number(n) end
-local function date()
-  local y,m,d=Sim.date(S)
+local function formatted_date(y,m,d)
   return ("%02d %s %d"):format(d,({"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"})[m],y)
 end
+local function date() return formatted_date(Sim.date(S)) end
+local company_projection
+function U.use_worker_projection(view) company_projection=view end
 local mode_label={rail="RAIL",road="ROAD",water="WATER",air="AIR"}
 local orders={"normal","full","transfer","unload"}
 local order_labels={"Load / deliver","Full load","Transfer only","Unload only"}
@@ -371,16 +373,20 @@ function U.cinematic(p,active)
 end
 function U.hud()
   for _,p in ipairs(core.get_connected_players()) do
-    local n=p:get_player_name();local c=S.companies[n]
+    local n=p:get_player_name()
+    local c
+    if company_projection then c=company_projection.company(n)
+    else c=S.companies[n] end
     if c and not (api.world and api.world.avatar_state and api.world.avatar_state(p)) then
-      local message="LuanTTD   •   "..date().."   •   "..dollars(c.cash).."   •   Inventory: Control desk"
+      local stamp=company_projection and formatted_date(c.year,c.month,c.day_of_month) or date()
+      local message="LuanTTD   •   "..stamp.."   •   "..dollars(c.cash).."   •   Inventory: Control desk"
       local V=view(n)
       if not hud[n] then
         hud[n]=p:hud_add({type="text",position={x=.5,y=.05},alignment={x=0,y=0},offset={x=0,y=0},
           text=message,number=0xffffff,z_index=100,scale={x=100,y=100}})
       elseif message~=V.hud_line then p:hud_change(hud[n],"text",message) end
       V.hud_line=message
-      if V.live and V.tab=="map" and S.day-(V.last_live or -10)>=math.max(1,S.speed) then
+      if not company_projection and V.live and V.tab=="map" and S.day-(V.last_live or -10)>=math.max(1,S.speed) then
         V.last_live=S.day;U.open(p)
       end
     end
@@ -1122,6 +1128,17 @@ function U.cancel_autorail(p)
   V.rail_press,V.rail_ghost=nil,nil
   V.status="Rail drag canceled."
 end
+local function worker_build(n,V,kind,request)
+  if not api.authority_handoff then return false end
+  if not api.worker_build then V.status="The campaign worker is not ready.";return true end
+  V.status="Checking construction…"
+  local ok,why=api.worker_build.commit(n,kind,request,function(built,note,quote,tiles)
+    V.status=note or (built and "Construction complete." or "That construction was not accepted.")
+    if built and api.on_worker_build then api.on_worker_build(n,tiles,quote) end
+  end)
+  if not ok then V.status=why end
+  return true
+end
 function U.end_autorail(p,id,hit)
   local n=p:get_player_name()
   local V=view(n)
@@ -1129,7 +1146,9 @@ function U.end_autorail(p,id,hit)
   if not hit then U.cancel_autorail(p);return end
   local start=V.rail_press.point
   V.rail_press,V.rail_ghost=nil,nil
-  local plan,why=api.rail_build.quote_autotrack(n,start,rail_point(id,hit))
+  local finish=rail_point(id,hit)
+  if worker_build(n,V,"rail",{tool="autotrack",start=start,finish=finish}) then return end
+  local plan,why=api.rail_build.quote_autotrack(n,start,finish)
   if not plan then V.status=why;return end
   local ok,msg=api.rail_build.build(n,plan)
   V.status=msg
@@ -1194,7 +1213,10 @@ function U.end_station(p,id)
   local first=V.anchor
   V.anchor=nil
   if not first or not U.station_gesture(V.tool) then return end
-  local plan,why=api.rail_build.quote_station(n,first,id,station_layout(V))
+  local layout=station_layout(V)
+  if worker_build(n,V,"rail",{tool="station",first=first,last=id,axis=layout.axis,
+    length=layout.length,tracks=layout.tracks,separate=layout.separate,drag=layout.drag}) then return end
+  local plan,why=api.rail_build.quote_station(n,first,id,layout)
   if not plan then V.status=why;return end
   local ok,msg=api.rail_build.build(n,plan)
   V.status=msg
@@ -1483,7 +1505,14 @@ function U.end_autoroad(p,id,hit)
   local first=V.road_press.id
   local last,axis,start_half,end_half=autoroad_args(V,id,hit)
   V.road_press=nil
-  if autoroad_bend(p,V,first,id) then
+  local bend=autoroad_bend(p,V,first,id)
+  if api.authority_handoff then
+    if V.tool=="oneway_drag" then V.status="One-way placement is not connected to the worker.";return end
+    worker_build(n,V,"road",bend and {tool="bend",first=first,last=id} or
+      {tool="drag",first=first,last=last,axis=axis,start_half=start_half,end_half=end_half})
+    return
+  end
+  if bend then
     local ok,note,ids=Sim.autoroad_bend_build(S,n,first,id)
     V.status=note
     if ok and #ids>0 then R.update(ids);api.save() end

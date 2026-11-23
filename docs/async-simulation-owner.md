@@ -74,13 +74,33 @@ adds a destination, refuses duplicate submission, and reopens from worker
 state without saving the host view. Paid road, rail, ferry and air use the
 same order adapters on either side. Projections can batch up to nine
 nearby sectors at one committed tick and combine a train's bodies without
-mixing old and new samples. Stock road build quotes and depot purchases
-also have worker endpoints. A disposable native test now mounts a regular
-generated campaign and advances its calendar automatically inside a worker
-while the old host stays paused; no player or viewport is required. It
-saves and reopens the worker's day. The ordinary game still uses local
-simulation and command dispatch: the next integration must replace direct
-reads and mutations in the rest of the native gameplay loop. Use a sequenced command
+mixing old and new samples. The projected terrain contains exact shared
+corners and linked station, bridge and other render records for the current
+sector, not the full map. The existing terrain ray picker produces the
+same hit on a hydrated slope and no hit on an unhydrated sector.
+
+Worker endpoints now cover ordinary road, railway, dock and airport
+construction, paid purchases and route dispatch across the four modes,
+terrain and bulldozing, and bridge/tunnel construction within the existing
+port. The disposable native test mounts a regular generated campaign on the
+worker and leaves the host paused. It advances days with no player or
+viewport, quotes and builds a real track segment, and saves the changed tile
+and company debit only on the worker. Its ordinary native node painter
+then consumes projected terrain, and the same stock steam locomotive and
+coach spawn, run, despawn, and reappear as subscriptions change. The
+ordinary order panel reads the worker's selected train; the HUD reads the
+worker's calendar and balance. The stock Autorail release path can submit
+to the owner and gets the priced construction receipt. A Linux graphical
+test exercises real client movement and clicks the existing train order
+panel; the new order list reopens from the worker checkpoint. Deliberate
+inputs are queued behind at most one in-flight viewport operation and
+outrank the next render request.
+
+The regular application's ownership switch remains unshipped: remaining
+tools, the rest of the company UI and normal session lifecycle still need
+to use these paths by default. Projected rail bodies share the real
+coupling and reversal poses; multipart powered-bridge collectors and
+other specialized effects are not yet delivered by projected snapshots. Use a sequenced command
 stream for **every** mutation, including player build/route/order requests
 and fixture actions; run authoritative quotes against the worker's topology
 revision and settle company debits there. Do not mirror writable tile or

@@ -4,10 +4,15 @@ return function(api)
   local road_motion=dofile(modpath.."/road_motion.lua")
   local road_lanes=dofile(modpath.."/road_lanes.lua")
   local source_motion=dofile(modpath.."/road_motion_presentation.lua")(road_lanes)
+  local source_pose_model=dofile(modpath.."/road_source_pose.lua")(Sim,source_motion)
   local road_fault_view=dofile(modpath.."/road_fault_view.lua")(function(p) return core.add_particle(p) end)
   local R={}
+  local visual=dofile(modpath.."/campaign_visual_state.lua")(Sim,S)
+  local terrain=api.terrain
+  local terrain_view=terrain and setmetatable({},{__index=function(_,k) return terrain[k] end})
+  local projected=false
   local rail_track=dofile(modpath.."/openttd/rail_track.lua")
-  local diagonal=dofile(modpath.."/rail_diagonal.lua")(Sim,rail_track,api.terrain,api.trackworks and api.trackworks.surface)
+  local diagonal=dofile(modpath.."/rail_diagonal.lua")(Sim,rail_track,terrain_view,api.trackworks and api.trackworks.surface)
   function R.rail_diagonal_pose(id,td,f)
     local mode=diagonal.mode(S,id)
     if mode~=0 then return diagonal.sample(td,f,mode) end
@@ -352,7 +357,7 @@ return function(api)
     bridges[style]=parts
   end
   local rail_spans=api.rail_spans and dofile(modpath.."/rail_span_render.lua")(
-    api.rail_spans,S,architecture,api.terrain,api.rail_bridge_wire_art,Sim.xy)
+    api.rail_spans,visual.state,architecture,terrain_view,api.rail_bridge_wire_art,Sim.xy)
   local tunnel_portal={}
   for d=0,3 do
     local asset="road_tunnel_portal_"..d
@@ -397,8 +402,7 @@ return function(api)
     end
     return slope_colliders[mask]
   end
-  local terrain=api.terrain
-  local road_feet=terrain and dofile(modpath.."/bridge_pier_render.lua")(architecture,terrain,bridge_styles)
+  local road_feet=terrain and dofile(modpath.."/bridge_pier_render.lua")(architecture,terrain_view,bridge_styles)
   -- The slope owns the exposed surface, including any flat lower
   -- triangle of a single-corner ramp. A full cube beneath it would
   -- draw a second top at exactly the same depth.
@@ -439,7 +443,8 @@ return function(api)
     return "straight"
   end
   local function road_surface(id)
-    local name=S.tiles[id].build
+    local t=S.tiles[id]
+    local name=t and t.build
     if S.corner_grid and (name=="road" or name=="road_station" or name=="road_depot" or name=="stock_road_bridge" or name=="stock_road_tunnel") and Sim.road_surface then
       return Sim.road_surface(S,id)
     end
@@ -497,7 +502,7 @@ return function(api)
     if t.depot_dir then return t.depot_dir end
     for d=1,4 do
       local j=Sim.adjacent(id,d)
-      if j and S.tiles[j].build~="road_depot" and Sim.mode_on(S,j,"road",t.owner) then return d end
+      if j and S.tiles[j] and S.tiles[j].build~="road_depot" and Sim.mode_on(S,j,"road",t.owner) then return d end
     end
     return 1
   end
@@ -568,7 +573,7 @@ return function(api)
     for mask in pairs(ground_mesh) do register_surface(mask) end
   end
   local function update_river_directions(changed)
-    if not river_view then return end
+    if not river_view or projected then return end
     local revision=S.corner_grid.revision
     if river_directions and river_revision==revision and river_topology==S.topology then return end
     local old=river_directions
@@ -580,6 +585,7 @@ return function(api)
     end
   end
   local function river_direction(id)
+    if projected then return S.river_directions[id] or "north" end
     update_river_directions()
     return river_directions[id] or "north"
   end
@@ -993,10 +999,12 @@ return function(api)
       for x=math.max(minp.x,2-backdrop),math.min(maxp.x,xmax+backdrop) do
         if x>=2 and x<=xmax and z>=2 and z<=zmax then
           local id=Sim.id(math.floor(x/2),math.floor(z/2))
-          for y=math.max(minp.y,-1),math.min(maxp.y,top_bound) do
-            local i=a:index(x,y,z)
-            local name,facedir=tile_node(id,x,y,z)
-            d[i],param2[i]=content(name),facedir or 0
+          if S.tiles[id] then
+            for y=math.max(minp.y,-1),math.min(maxp.y,top_bound) do
+              local i=a:index(x,y,z)
+              local name,facedir=tile_node(id,x,y,z)
+              d[i],param2[i]=content(name),facedir or 0
+            end
           end
         elseif minp.y<=0 and maxp.y>=0 then
           -- The water backdrop is only scenery: no tile, no route, no target.
@@ -1057,6 +1065,29 @@ return function(api)
       core.after(0,batch)
     end)
   end
+  -- Draw exactly the same stock nodes from a sparse worker projection.
+  -- Loading order stays asynchronous; unhydrated cells are never painted.
+  function R.use_worker_projection(projection)
+    assert(api.terrain,"worker projection requires canonical slopes")
+    visual.accept(projection)
+    S=visual.state
+    projected=true
+    terrain=dofile(modpath.."/terrain_view.lua")(Sim,dofile(modpath.."/openttd/terrain.lua"),nil,projection)
+    for _,receipt in ipairs(projection.windows()) do
+      local w=receipt.value
+      for _,t in ipairs(w.tiles) do R.raise_bound(t.top) end
+      for _,name in ipairs({"stock_road_bridges","stock_rail_spans","stock_aqueducts"}) do
+        for _,span in pairs(w.registries and w.registries[name] or {}) do
+          if span.deck then R.raise_bound(span.deck) end
+        end
+      end
+    end
+  end
+  function R.place_projected(x,z,w,h,done)
+    assert(projected and w>=1 and w<=32 and h>=1 and h<=32)
+    return place_region({x=2*x,y=-1,z=2*z},
+      {x=2*(x+w-1)+1,y=top_bound,z=2*(z+h-1)+1},done)
+  end
   function R.place_world(done,notify)
     local low={x=2-backdrop,y=-1,z=2-backdrop}
     local high={x=Sim.W*2+1+backdrop,y=top_bound,z=Sim.H*2+1+backdrop}
@@ -1087,6 +1118,7 @@ return function(api)
     end,fraction(0,.8))
   end
   local function update_tile(id)
+    if not S.tiles[id] then return end
     local x,z=Sim.xy(id)
     for dz=0,1 do for dx=0,1 do for y=-1,top_bound do
       local p={x=x*2+dx,y=y,z=z*2+dz}
@@ -1117,7 +1149,7 @@ return function(api)
     action=function(p)
       if p.y~=0 then return end
       local id=Sim.id(math.floor(p.x/2),math.floor(p.z/2))
-      local node=id and tile_node(id,p.x,p.y,p.z)
+      local node=id and S.tiles[id] and tile_node(id,p.x,p.y,p.z)
       if not id and p.x>=2-backdrop and p.x<=Sim.W*2+1+backdrop and
           p.z>=2-backdrop and p.z<=Sim.H*2+1+backdrop then node=ocean(p.x,p.z) end
       if node and node==ocean(p.x,p.z) then core.swap_node(p,{name=node}) end
@@ -1237,6 +1269,12 @@ return function(api)
       end
     end
   end
+  local projected_actors=dofile(modpath.."/campaign_projected_actors.lua")(core,api,road_motion,models,
+    dofile(modpath.."/airport_manifest.lua")(core,modpath))
+  function R.draw_worker_actors(projection,dt)
+    if api.vehicle_ui then api.vehicle_ui.use_worker_projection(projection) end
+    projected_actors.render(projection.actors(),dt)
+  end
   local refs,last,poses={},{},{}
   function R.remove_vehicle_views()
     for id,ref in pairs(refs) do
@@ -1254,32 +1292,16 @@ return function(api)
     if air then h=h+6.0 end
     return x*2+.5,h,z*2+.5
   end
+  local function road_ground(id,x,z)
+    if road_surface(id) then return R.surface(id,x,z)+.02 end
+    return S.tiles[id].h+.52
+  end
   local function source_pose(frames,length,at)
-    local x,z,yaw,bridge,hidden=source_motion.at(frames,at,length)
-    if hidden then return end
-    local function ground(px,pz)
-      local id=Sim.id(math.floor((px+.5)/2),math.floor((pz+.5)/2))
-      local span=bridge and S.stock_road_bridges[bridge]
-      if span and span.middle_by_tile[id] then return span.deck+.52 end
-      if id and road_surface(id) then return R.surface(id,px,pz)+.02 end
-      return id and S.tiles[id].h+.52 or .52
-    end
-    local sy,cy=math.sin(yaw),math.cos(yaw)
-    local d=.10
-    local rise=ground(x+d*sy,z+d*cy)-ground(x-d*sy,z-d*cy)
-    return {x=x,y=ground(x,z),z=z},yaw,-math.atan(rise/(2*d))
+    return source_pose_model.sample(S,frames,length,at,road_ground)
   end
   local function position(v,t)
-    local timeline=Sim.road_motion_timeline(S,v.id)
-    if timeline then
-      local c=timeline.cursors
-      local sample=1+t*(#c-1)
-      local k=math.floor(sample)
-      local a,b=c[k],c[math.min(k+1,#c)]
-      if a==0 then return end -- stock depot vehicles aren't drawn until released
-      local index=b==0 and a or lerp(a,b,sample-k)
-      return source_pose(timeline.frames,#timeline.frames,index)
-    end
+    local projected,pos,yaw,pitch=source_pose_model.timeline(S,v,t,road_ground)
+    if projected then return pos,yaw,pitch end
     if v.route and v.road_speed_state and v.road_speed_state.depot_wait then return end
     if Sim.road_motion_frame and v.road_speed_state and v.road_speed_state.lane_pose then
       -- The saved authoritative shifted frame is available one day before

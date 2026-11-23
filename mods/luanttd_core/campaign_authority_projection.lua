@@ -4,6 +4,10 @@ return function()
   local P={}
   local regions={}
   local epoch=0
+  local companies,company_seq={},-1
+  local function newer_than(a,b)
+    return a.tick>b.tick or a.tick==b.tick and a.seq>b.seq
+  end
   function P.subscribe(key)
     if regions[key] then return regions[key].token end
     epoch=epoch+1
@@ -26,10 +30,42 @@ return function()
       local r=regions[request.key]
       if not r or r.token~=request.token or r.result and r.result.seq>=reply.seq then return false end
     end
+    if reply.companies and reply.seq>company_seq then
+      companies,company_seq=reply.companies,reply.seq
+    end
     for i,request in ipairs(subscriptions) do
-      P.accept(request.key,request.token,{ok=true,seq=reply.seq,tick=reply.tick,value=reply.value[i]})
+      P.accept(request.key,request.token,{ok=true,seq=reply.seq,tick=reply.tick,revision=reply.revision,value=reply.value[i]})
     end
     return true
+  end
+  function P.company(name) return companies[name] end
+  function P.windows()
+    local list={}
+    for _,r in pairs(regions) do if r.result then list[#list+1]=r.result end end
+    table.sort(list,function(a,b)
+      return a.tick<b.tick or a.tick==b.tick and a.seq<b.seq
+    end)
+    return list
+  end
+  function P.terrain(x,z)
+    local newest,cell,corner
+    for _,r in pairs(regions) do
+      local receipt=r.result
+      local window=receipt and receipt.value
+      if window and window.x then
+        local dx,dz=x-window.x,z-window.z
+        if dx>=0 and dz>=0 and dx<=window.width and dz<=window.height then
+          if (not newest or newer_than(receipt,newest)) and dx<window.width and dz<window.height then
+            cell=window.tiles and window.tiles[1+dz*window.width+dx]
+            newest=receipt
+          end
+          if window.corners and (not corner or newer_than(receipt,corner.receipt)) then
+            corner={receipt=receipt,height=window.corners:byte(1+dz*(window.width+1)+dx)}
+          end
+        end
+      end
+    end
+    return cell,corner and corner.height
   end
   function P.actors()
     local merged={}

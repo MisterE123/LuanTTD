@@ -53,9 +53,12 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       else
         seq=q.seq
         if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,q.fraction)
-        elseif q.kind=="snapshots" then r=A.snapshots(q.windows,q.fraction)
+        elseif q.kind=="snapshots" then r=A.snapshots(q.windows,q.fraction,q.players)
         elseif q.kind=="orders" then r=A.orders(q.player,q.mode,q.vehicle,q.page)
         elseif q.kind=="road_quote" then r=A.road_quote(q.player,q.request)
+        elseif q.kind=="rail_quote" then r=A.rail_quote(q.player,q.request)
+        elseif q.kind=="transport_quote" then r=A.transport_quote(q.player,q.request)
+        elseif q.kind=="terrain_quote" then r=A.terrain_quote(q.player,q.request)
         elseif q.kind=="company" then r=A.company(q.player)
         elseif q.kind=="advance" and not auto then r=A.advance(q.days)
         elseif q.kind=="clock" then r={ok=true,day=s.day,tick=s.passenger_house_clock and

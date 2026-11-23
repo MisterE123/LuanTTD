@@ -1,15 +1,26 @@
 -- 3D view over a canonical OpenTTD corner grid. Rendering and ray
 -- intersection use the same continuous slope field, with model units
 -- supplied by the restore/scene adapter.
-return function(Sim,Terrain,grid)
+return function(Sim,Terrain,grid,projection)
   local V={}
   function V.tile(id)
     local x,z=Sim.xy(id)
+    if projection then
+      local row=projection.terrain(x,z)
+      if row then return row.slope,row.level,row.top end
+      return nil
+    end
     return Terrain.tile(grid,x,z)
   end
   function V.sample(id,x,z)
     local a,b=Sim.xy(id)
-    return .5+Terrain.height(grid,a,b,(x-a*2+.5)/2,(z-b*2+.5)/2)
+    local u,v=(x-a*2+.5)/2,(z-b*2+.5)/2
+    if projection then
+      local row=projection.terrain(a,b)
+      if row then return .5+Terrain.normalized_height(row.slope,row.level,u,v) end
+      return nil
+    end
+    return .5+Terrain.height(grid,a,b,u,v)
   end
   function V.pick(origin,direction,allowed,max_dist,surface)
     -- Horizontal DDA gives exact entry and exit parameters for each tile.
@@ -43,12 +54,13 @@ return function(Sim,Terrain,grid)
         crossing(v-u,du-dv)
         table.sort(params)
         local function offset(t)
-          return origin.y+direction.y*t-sample(id,origin.x+dx*t,origin.z+dz*t)
+          local level=sample(id,origin.x+dx*t,origin.z+dz*t)
+          return level and origin.y+direction.y*t-level
         end
         local last=offset(params[1])
         for i=2,#params do
           local cur=offset(params[i])
-          if last>=0 and cur<=0 then
+          if last and cur and last>=0 and cur<=0 then
             local a,b=params[i-1],params[i]
             local hit=(last==cur) and a or a+(b-a)*last/(last-cur)
             return id,hit,{x=origin.x+dx*hit,y=origin.y+direction.y*hit,z=origin.z+dz*hit}

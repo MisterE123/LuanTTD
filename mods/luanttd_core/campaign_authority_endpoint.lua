@@ -42,13 +42,84 @@ return function(Sim,R,max_days)
     data.targets,data.target_page,data.target_count=visible,page,#targets
     return reply(true,nil,data)
   end
+  local rail_quotes,quote_sequence={},0
+  function A.rail_quote(name,request)
+    local rail=R.rail and R.rail.build
+    if not owner(name) or not rail or type(request)~="table" or not s.companies[name] then
+      return reply(false,"RAIL_QUOTE_UNAVAILABLE")
+    end
+    if request.tool=="autotrack" then
+      local start,last=request.start,request.finish
+      if type(start)~="table" or type(last)~="table" or
+        not (integer(start.x,16,Sim.W*16+15) and integer(start.z,16,Sim.H*16+15)
+          and integer(last.x,16,Sim.W*16+15) and integer(last.z,16,Sim.H*16+15))
+        or math.abs(start.x-last.x)+math.abs(start.z-last.z)>=128*16 then
+        return reply(false,"INVALID_RAIL_DRAG")
+      end
+      local q,why=rail.quote_autotrack(name,start,last)
+      rail_quotes[name]=nil
+      if not q then return reply(false,why) end
+      quote_sequence=quote_sequence+1
+      rail_quotes[name]={token=quote_sequence,plan=q}
+      return reply(true,nil,{tiles=q.ids,cost=q.price,token=quote_sequence,kind=q.kind})
+    end
+    local first,last=request.first,request.last or request.first
+    if not tile_id(first) or not tile_id(last) then return reply(false,"INVALID_TILE") end
+    local x,z=Sim.xy(first)
+    local u,v=Sim.xy(last)
+    if math.abs(x-u)+math.abs(z-v)>=128 then return reply(false,"RAIL_DRAG_TOO_LONG") end
+    local q,why
+    if request.tool=="track" and integer(request.track,0,5) then
+      q,why=rail.quote_track(name,first,last,request.track,request.remove==true)
+    elseif request.tool=="depot" and integer(request.direction,0,3) then
+      q,why=rail.quote_depot(name,first,request.direction)
+    elseif request.tool=="station" and integer(request.axis,0,1) and
+      integer(request.length,1,16) and integer(request.tracks,1,16) then
+      if (math.abs(x-u)+1)*(math.abs(z-v)+1)>256 then return reply(false,"RAIL_STATION_TOO_LARGE") end
+      q,why=rail.quote_station(name,first,last,{axis=request.axis,length=request.length,
+        tracks=request.tracks,separate=request.separate==true,drag=request.drag==true})
+    elseif request.tool=="signal" and integer(request.trackdir,0,13) and
+      (request.kind==0 or request.kind==4 or request.kind==5) then
+      q,why=rail.quote_signal_track(name,first,request.trackdir,request.kind,request.both==true)
+    elseif request.tool=="signal_flip" and integer(request.track,0,5) then
+      q,why=rail.quote_flip_signal(name,first,request.track)
+    elseif request.tool=="signal_remove" and integer(request.track,0,5) then
+      q,why=rail.quote_remove_signal(name,first,request.track)
+    else return reply(false,"UNSUPPORTED_RAIL_GESTURE") end
+    rail_quotes[name]=nil
+    if not q then return reply(false,why) end
+    quote_sequence=quote_sequence+1
+    rail_quotes[name]={token=quote_sequence,plan=q}
+    return reply(true,nil,{tiles=q.ids,cost=q.price,token=quote_sequence,kind=q.kind})
+  end
+  local transport_quotes={}
+  function A.transport_quote(name,request)
+    if not owner(name) or not R.transport or not s.companies[name] then return reply(false,"TRANSPORT_QUOTE_UNAVAILABLE") end
+    local quote,why=R.transport.quote(name,request)
+    transport_quotes[name]=nil
+    if not quote then return reply(false,why) end
+    quote_sequence=quote_sequence+1
+    transport_quotes[name]={quote=quote,token=quote_sequence,topology=s.topology}
+    return reply(true,nil,{token=quote_sequence,cost=quote.price,tiles=quote.tiles})
+  end
+  local terrain_quotes={}
+  function A.terrain_quote(name,request)
+    if not owner(name) or not R.landscape or not s.companies[name] then return reply(false,"TERRAIN_QUOTE_UNAVAILABLE") end
+    local quote,why=R.landscape.quote(name,request)
+    terrain_quotes[name]=nil
+    if not quote then return reply(false,why) end
+    quote_sequence=quote_sequence+1
+    terrain_quotes[name]={quote=quote,token=quote_sequence}
+    return reply(true,nil,{token=quote_sequence,cost=quote.cost,tiles=quote.tiles,corners=quote.corners})
+  end
   function A.company(name)
     if not owner(name) then return reply(false,"INVALID_REQUEST") end
     local c=s.companies[name]
     if not c then return reply(false,"COMPANY_NOT_OPEN") end
+    local year,month,day=Sim.date(s)
     return reply(true,nil,{cash=c.cash,loan=c.loan,revenue=c.revenue,expense=c.expense,
       month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,
-      date=Sim.date(s),speed=s.speed})
+      year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed})
   end
   function A.road_quote(name,request)
     if not owner(name) or not R.road_construction then return reply(false,"ROAD_QUOTE_UNAVAILABLE") end
@@ -65,7 +136,25 @@ return function(Sim,R,max_days)
     if not owner(name) or type(c)~="table" then return reply(false,"INVALID_REQUEST") end
     if c.revision~=authority_revision then return reply(false,"STALE_COMMAND") end
     local ok,note,value
-    if c.kind=="company_open" then
+    if c.kind=="terrain_commit" then
+      local q=terrain_quotes[name]
+      terrain_quotes[name]=nil
+      if not q or q.token~=c.token then return reply(false,"TERRAIN_QUOTE_EXPIRED") end
+      ok,note,value=R.landscape.commit(name,q.quote)
+    elseif c.kind=="transport_commit" then
+      local q=transport_quotes[name]
+      transport_quotes[name]=nil
+      if not q or q.token~=c.token or q.topology~=s.topology then return reply(false,"TRANSPORT_QUOTE_EXPIRED") end
+      ok,note,value=R.transport.commit(name,q.quote)
+    elseif c.kind=="transport_start" and R.transport then
+      ok,note=R.transport.start(name,c)
+    elseif c.kind=="rail_commit" then
+      local quote=rail_quotes[name]
+      rail_quotes[name]=nil
+      if not quote or quote.token~=c.token then return reply(false,"RAIL_QUOTE_EXPIRED") end
+      ok,note=R.rail.build.build(name,quote.plan)
+      if ok then value=quote.plan.ids end
+    elseif c.kind=="company_open" then
       if s.companies[name] then return A.company(name) end
       Sim.company(s,name)
       ok,note=true,"Company opened."
@@ -127,9 +216,11 @@ return function(Sim,R,max_days)
       for dx=0,w-1 do
         local id=Sim.id(x+dx,z+dz)
         local t=s.tiles[id]
-        local slope,level=R.terrain.tile(s.corner_grid,x+dx,z+dz)
-        tiles[#tiles+1]={id=id,level=level,slope=slope,ground=t.terrain,build=t.build,
-          rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station}
+        local slope,level,top=R.terrain.tile(s.corner_grid,x+dx,z+dz)
+        tiles[#tiles+1]={id=id,level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
+          rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station,
+          surface=R.terrain_projection and R.terrain_projection.tile(t) or nil,
+          river_direction=t.water_class=="river" and R.river_direction and R.river_direction(id) or nil}
       end
     end
     local vehicles={}
@@ -145,9 +236,11 @@ return function(Sim,R,max_days)
     table.sort(vehicles,function(a,b) return a.id<b.id end)
     fraction=type(fraction)=="number" and fraction>=0 and fraction<=1 and fraction or 1
     return reply(true,nil,{x=x,z=z,width=w,height=h,tiles=tiles,vehicles=vehicles,
+      corners=R.terrain_projection and R.terrain_projection.corners(R.terrain,s.corner_grid,x,z,w,h) or nil,
+      registries=R.terrain_projection and R.terrain_projection.registries(s,tiles) or nil,
       actors=R.actors and R.actors(x,z,w,h,fraction) or nil})
   end
-  function A.snapshots(windows,fraction)
+  function A.snapshots(windows,fraction,players)
     if type(windows)~="table" or #windows<1 or #windows>9 then
       return reply(false,"INVALID_INTEREST_BATCH")
     end
@@ -159,7 +252,15 @@ return function(Sim,R,max_days)
       packets[#packets+1]=r.value
     end
     if #packets~=#windows then return reply(false,"INVALID_INTEREST_BATCH") end
-    return reply(true,nil,packets)
+    local r=reply(true,nil,packets)
+    r.companies={}
+    if type(players)=="table" and #players<=32 then
+      for _,name in ipairs(players) do
+        local company=A.company(name)
+        if company.ok then r.companies[name]=company.value end
+      end
+    end
+    return r
   end
   return A
 end

@@ -1,0 +1,88 @@
+-- Geometry and static presentation data for a bounded region. Built routes,
+-- VM handles, station queues, finance, and unrelated tiles are not copied.
+local keys={
+  "terrain","variant","h","build","owner","wood","house","parcel","site",
+  "road_bits","road_town","road_disallowed","disallowed","road_stop_pair","depot_dir",
+  "rail_tracks","rail_type","rail_depot_dir","rail_station_id","rail_station_axis","rail_waypoint_id",
+  "rail_span_id","road_bridge_id","road_tunnel_id","station","signal","closed","level_crossing",
+  "coastal_water","stock_void","stock_clear_ground","water_class","stock_canal","stock_river_bits",
+  "stock_industry","stock_landmark","ship","airfield","tram","source_house",
+}
+local function detached(value,depth)
+  if type(value)=="table" and depth>0 then
+    local out={}
+    for k,v in pairs(value) do
+      if type(k)=="string" or type(k)=="number" then out[k]=detached(v,depth-1) end
+    end
+    return out
+  end
+  if type(value)=="boolean" or type(value)=="number" or type(value)=="string" then return value end
+end
+local M={}
+function M.tile(real)
+  local out={}
+  for _,key in ipairs(keys) do out[key]=detached(real[key],2) end
+  return out
+end
+function M.corners(terrain,grid,x,z,w,h)
+  local rows={}
+  for dz=0,h do
+    local row={}
+    for dx=0,w do row[dx+1]=string.char(assert(terrain.corner(grid,x+dx,z+dz))) end
+    rows[dz+1]=table.concat(row)
+  end
+  return table.concat(rows)
+end
+local span_fields={"start","end","head","tail","middle","axis","owner","base","deck","bridge_type","railtype","kind"}
+local station_fields={"owner","id","tiles","stop_type","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror"}
+local industry_fields={"id","removed","kind","x","z","tiles"}
+local function add(out,s,name,id,fields)
+  if id==nil then return end
+  local source=s[name] and s[name][id]
+  if not source then return end
+  local dst=out[name] or {};out[name]=dst
+  if dst[id] then return end
+  if fields then
+    local record={}
+    for _,k in ipairs(fields) do record[k]=detached(source[k],3) end
+    dst[id]=record
+  else dst[id]=detached(source,2) end
+end
+local function reference(out,s,name,id)
+  local v=s[name] and s[name][id]
+  if v==nil then return end
+  local dst=out[name] or {};out[name]=dst
+  dst[id]=v
+  return v
+end
+function M.registries(s,ids)
+  local out={}
+  for _,row in ipairs(ids) do
+    local id=row.id
+    local t=s.tiles[id]
+    local above=reference(out,s,"bridge_above",id)
+    local below=reference(out,s,"tunnel_below",id)
+    local rail_above=reference(out,s,"rail_bridge_above",id)
+    local rail_below=reference(out,s,"rail_tunnel_below",id)
+    local aqueduct=reference(out,s,"aqueduct_above",id)
+    add(out,s,"stock_road_bridges",t.road_bridge_id or above,span_fields)
+    add(out,s,"stock_road_tunnels",t.road_tunnel_id or below,span_fields)
+    add(out,s,"stock_rail_spans",t.rail_span_id or rail_above or rail_below,span_fields)
+    add(out,s,"stock_aqueducts",aqueduct,span_fields)
+    add(out,s,"sites",t.site,{"id","kind","name","tile"})
+    add(out,s,"stations",t.station,station_fields)
+    add(out,s,"stock_rail_stations",t.rail_station_id,station_fields)
+    add(out,s,"stock_farm_fields",id)
+    if t.stock_industry then
+      local chain=t.stock_industry.chain or "coal"
+      add(out,s,"stock_"..chain.."_industries",t.stock_industry.id,industry_fields)
+    end
+    local d=s.stock_rail_dispatch
+    if d and d.signals.records[id] then
+      local signals=out.signals or {};out.signals=signals
+      signals[id]=detached(d.signals.records[id],2)
+    end
+  end
+  return out
+end
+return M

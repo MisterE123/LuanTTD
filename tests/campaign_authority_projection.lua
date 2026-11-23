@@ -35,3 +35,12 @@ assert(not P.accept_batch(subscriptions,{ok=true,seq=11,tick=296,value={
 }}))
 assert(not P.actors()["road:1"])
 print("PASS one committed tick for a visible sector batch; stale batch cannot revive an unsubscribed actor")
+local region=P.subscribe("corners")
+assert(P.accept("corners",region,{ok=true,seq=12,tick=370,value={
+  x=6,z=8,width=1,height=1,tiles={{id=12}},corners=string.char(4,4,5,5),
+}}))
+local data,nw=P.terrain(6,8)
+assert(data.id==12 and nw==4 and select(2,P.terrain(7,9))==5)
+P.unsubscribe("corners")
+assert(not P.terrain(6,8))
+print("PASS bounded terrain cache reads the inclusive shared corners and forgets them on leaving")

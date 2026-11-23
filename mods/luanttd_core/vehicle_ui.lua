@@ -7,6 +7,12 @@ return function(api)
   local poses,panels,following={},{},{}
   local seq=0
   local now=0
+  local projection
+  local projected={}
+  function V.use_worker_projection(view)
+    projection=view
+    projected=view and view.actors() or {}
+  end
   local form="luanttd_core:vehicle_details"
   local anchor="luanttd_core:vehicle_camera"
   local esc=core.formspec_escape
@@ -18,6 +24,13 @@ return function(api)
     return record and record.owner==name and record
   end
   local function get(n,kind,id)
+    if projection then
+      local row=projected[key(kind,id)]
+      if not row or row.owner~=n then return end
+      local depot=row.home_depot or row.depot
+      return {kind=kind,id=id,label=row.label or ("Vehicle #"..id),source=row,
+        depot=kind~="ship" and depot or nil,depot_key=depot}
+    end
     local source,depot,depot_key,label
     if kind=="road" then
       source=own(S.fleet[id],n)
@@ -82,10 +95,14 @@ return function(api)
   end
   local function depotpos(v)
     local id=v.depot
-    if not id or not S.tiles[id] then return end
+    if not id then return end
     local x,z=Sim.xy(id)
     if not x then return end
-    return {x=2*x+.5,y=(S.tiles[id].h or 0)+.75,z=2*z+.5}
+    local row=projection and projection.terrain(x,z)
+    local tile=not projection and S.tiles[id]
+    local h=row and row.level or tile and tile.h
+    if not h then return end
+    return {x=2*x+.5,y=h+.75,z=2*z+.5}
   end
   local function position(v,last)
     local a=poses[key(v.kind,v.id)]
@@ -256,7 +273,9 @@ return function(api)
   function V.depot(p,kind,depot,return_)
     local n=p:get_player_name()
     local ids={}
-    if kind=="road" then for id in pairs(S.fleet) do ids[#ids+1]=id end
+    if projection then
+      for _,row in pairs(projected) do if row.mode==kind and row.owner==n then ids[#ids+1]=row.id end end
+    elseif kind=="road" then for id in pairs(S.fleet) do ids[#ids+1]=id end
     elseif kind=="rail" and api.rail_owned then for _,u in ipairs(api.rail_owned.list(S,n,depot)) do ids[#ids+1]=u.id end
     elseif kind=="ship" then ids={"ferry","coal"}
     elseif kind=="tram" then ids={1}

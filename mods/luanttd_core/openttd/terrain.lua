@@ -63,10 +63,13 @@ function T.tile(g,x,z,plan)
   return mask,base,math.max(hn,hw,he,hs)
 end
 
-function T.height(g,x,z,u,v,plan)
-  local mask,base=T.tile(g,x,z,plan)
+function T.normalized_height(mask,base,u,v)
   if not mask then return nil end
   return base+slope.surface(u,v,mask)
+end
+function T.height(g,x,z,u,v,plan)
+  local mask,base=T.tile(g,x,z,plan)
+  return T.normalized_height(mask,base,u,v)
 end
 
 -- opts (all optional):
