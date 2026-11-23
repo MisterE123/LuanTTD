@@ -105,23 +105,50 @@ local function transfer_ordinary(viewer)
             assert(ticket)
             command(ticket,function(r)
               bus_id=r.value
-              local cp=disk.read()
-              command({kind="road_order_add",vehicle=bus_id,station=cp.tiles[stops[1]].station},function()
-                command({kind="road_order_add",vehicle=bus_id,station=cp.tiles[stops[2]].station},function()
-                  core.show_formspec=function(player,form,body)
-                    assert(player==owner and form=="luanttd_core:vehicle_details")
-                    show(player,form,body)
-                    if body:find("Start service",1,true) then core.log("action","NATIVE_PROJECTED_BUS_READY") end
-                    if body:find("Stop service",1,true) then
-                      assert(disk.read().fleet[bus_id].running and not S.fleet[bus_id])
-                      core.show_formspec=show
-                      core.log("action","PASS NATIVE PROJECTED BUS: existing native orders panel starts an ordinary paid bus on the worker")
-                      orders_ready=true
-                    end
+              local shown_button
+              core.show_formspec=function(player,form,body)
+                assert(player==owner and form=="luanttd_core:vehicle_details")
+                show(player,form,body)
+                if body:find("Pick in world",1,true) and not shown_button then
+                  shown_button=true
+                  assert(body:find("Add selected destination",1,true),"destination list should remain available")
+                  core.log("action","NATIVE_PICK_BUS_PANEL")
+                end
+                if body:find("Start service",1,true) then core.log("action","NATIVE_PROJECTED_BUS_READY") end
+                if body:find("Stop service",1,true) then
+                  assert(disk.read().fleet[bus_id].running and not S.fleet[bus_id])
+                  core.show_formspec=show
+                  core.log("action","PASS NATIVE PROJECTED BUS: existing native orders panel starts an ordinary paid bus on the worker")
+                  orders_ready=true
+                end
+              end
+              assert(api.vehicle_ui.open(viewer,"road",bus_id))
+              local function aim(i)
+                assert(world.menu(viewer)=="vehicle_orders","picker modal unexpectedly closed")
+                local tx,tz=Sim.xy(stops[i])
+                viewer:set_pos({x=2*tx+.45,y=S.tiles[stops[i]].h+9,z=2*tz+.45})
+                viewer:set_look_vertical(1.52)
+                core.after(.75,function()
+                  assert(world.target(viewer)==stops[i],"pointer did not intersect the real stop")
+                  core.log("action","NATIVE_PICK_BUS_STOP_"..i)
+                  local function watch_pick()
+                    local current=disk.read()
+                    local orders=current.fleet[bus_id].orders
+                    if #orders<i then core.after(.12,watch_pick);return end
+                    assert(#orders==i and orders[i].station==current.tiles[stops[i]].station)
+                    if i==#stops then
+                      assert(not S.fleet[bus_id])
+                      core.log("action","PASS NATIVE WORLD STATION PICKER: two aimed clicks recorded authoritative bus orders")
+                    else core.after(.20,aim,i+1) end
                   end
-                  assert(api.vehicle_ui.open(viewer,"road",bus_id))
+                  watch_pick()
                 end)
-              end)
+              end
+              local function wait_modal()
+                if world.menu(viewer)~="vehicle_orders" then core.after(.12,wait_modal);return end
+                aim(1)
+              end
+              core.after(.1,wait_modal)
             end)
           end)
           return
@@ -241,7 +268,8 @@ local function transfer_ordinary(viewer)
   function qa_hooks.present(projected)
     local cell=projected.terrain(x+1,z)
     painter.present(projected)
-    render.draw_worker_actors(projected,.2)
+    render.draw_worker_actors(projected)
+    render.step_worker_actors(0)
     ui.use_worker_projection(projected)
     ui.hud()
     if cell and not paint_started then

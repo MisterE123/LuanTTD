@@ -52,13 +52,18 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     local dispatch=R.rail.run.current(s)
     for _,r in ipairs(dispatch and dispatch.runs or {}) do
       local parts={}
-      for _,body in ipairs(train(r)) do
+      local consist=train(r)
+      for _,body in ipairs(consist) do
         if point(body.pos) then parts[#parts+1]=body end
       end
       if #parts>0 then
+        -- A fast sighting carries every exposed body from one sample.
+        -- Two sectors at different fractions of one simulation day must
+        -- not splice their locomotive and wagons into a stretched train.
+        if frame.whole_trains then parts=consist end
         local unit=R.rail.owned and r.fleet_id and R.rail.owned.get(s,r.owner,r.fleet_id)
         add("rail",r.fleet_id or r.id,{owner=r.owner,engine=r.stock_engine,wagon=r.stock_wagon,
-          parts=parts,part_count=#r.consist.parts,collectors=not not r.bridge_collectors,
+          parts=parts,complete_parts=frame.whole_trains,part_count=#r.consist.parts,collectors=not not r.bridge_collectors,
           depot=unit and unit.depot,label=unit and "Train "..unit.unit_number})
       end
     end

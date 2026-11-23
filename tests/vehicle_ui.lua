@@ -174,6 +174,36 @@ assert(req.command.revision==9 and req.command.order_revision=="2:normal" and re
 assert(open.b:find("Loading vehicle orders",1,true))
 answer("orders",{ok=true,revision=10,value={items={{id=2,label="West"},{id=5,label="Central"}},targets={},revision="2:normal/5:normal"}})
 assert(open.b:find("Added Central on worker.",1,true) and visited==old_saves)
+local active,finished
+api.world={
+  begin_order_selection=function(who,mode) assert(who==p and mode=="vehicle");active=true;return true end,
+  end_order_selection=function(who) assert(who==p and active);active=nil;finished=true end,
+}
+api.render={
+  host_tile=function(id) if id==44 then return {station=5} end end,
+  host_record=function(reg,id)
+    assert(reg=="stations" and id==5);return {owner="E",mode="road",name="Central"}
+  end,
+}
+assert(V.open(p,"road",1))
+receipt.value.target_count=1
+answer("orders",receipt)
+assert(open.b:find("Pick in world",1,true) and open.b:find("Add selected destination",1,true))
+fn(p,open.key,{[field(open,"pick_world")]=true})
+assert(active and not open)
+assert(V.world_order_preview(p,44)=="Add stop: Central")
+V.pick_world_order(p,44)
+V.pick_world_order(p,44) -- double input while the first is in flight
+local picked=answer("command",{ok=true,revision=10,value={order_revision="2:normal/5:normal",count=2}})
+assert(picked.command.destination==nil and picked.command.tile==44 and picked.command.order_revision=="2:normal")
+V.pick_world_order(p,45)
+V.finish_world_orders(p) -- End only after the pending order reports back
+assert(active and not open)
+picked=answer("command",{ok=true,revision=11,value={order_revision="2:normal/5:normal/6:normal",count=3}})
+assert(picked.command.tile==45 and picked.command.order_revision=="2:normal/5:normal" and picked.command.revision==10)
+assert(not active and finished and open.b:find("Loading vehicle orders",1,true))
+answer("orders",receipt)
+print("PASS graphical order modal submits real tiles and serializes picks; Done preserves the current list and last committed order")
 V.open(p,"road",1)
 fn(p,open.key,{quit=true})
 local closed_panel=open

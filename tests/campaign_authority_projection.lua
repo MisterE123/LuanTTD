@@ -69,3 +69,20 @@ local pulses=P.take_boardings()
 assert(#pulses==1 and pulses[1].units==4 and P.waiting("road",7)==109)
 P.unsubscribe("waiting");assert(P.waiting("road",7)==0)
 print("PASS visible boarding receipts never replay on actor/scene refresh")
+
+local aa,bb=P.subscribe("motion-left"),P.subscribe("motion-right")
+local function world(x,actors) return {scene=x,x=x,z=1,width=1,height=1,actors=actors,tiles={{id=x}}} end
+local function whole(a,b) return {key="rail:1",complete_parts=true,parts={{index=1,tile=a},{index=2,tile=b}}} end
+local both={{key="motion-left",token=aa},{key="motion-right",token=bb}}
+assert(P.accept_batch(both,{ok=true,seq=40,tick=999,actor_us=500000,value={
+  world(5,{whole(20,10)}),world(6,{whole(20,10)}),
+}}))
+assert(P.accept_motion({both[1]},{ok=true,seq=41,tick=999,actor_us=610000,value={world(5,{whole(24,14)})}}))
+assert(P.accept_motion({both[2]},{ok=true,seq=42,tick=999,actor_us=735000,value={world(6,{whole(27,17)})}}))
+local together=P.actors()["rail:1"].parts
+assert(together[1].tile==27 and together[2].tile==17 and P.actor_clock()==735000)
+assert(P.terrain(5,1).id==5 and P.terrain(6,1).id==6)
+P.unsubscribe("motion-right")
+assert(not P.accept_motion({both[2]},{ok=true,seq=43,tick=1000,actor_us=800000,value={world(6,{whole(100,100)})}}))
+assert(P.actor_clock()==735000 and P.actors()["rail:1"].parts[1].tile==24)
+print("PASS different fractions of one tick cannot splice consist poses; a cull never accepts late motion")

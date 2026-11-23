@@ -10,7 +10,9 @@ return function(api)
   local projection
   local projected={}
   local worker
-  local remote={}
+  local remote,pickers={},{}
+  local path=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local order_target=dofile(path.."/campaign_order_target.lua")
   function V.install_worker(client) worker=client end
   function V.use_worker_projection(view)
     projection=view
@@ -201,7 +203,7 @@ return function(api)
   end
   function V.leave(p)
     local n=p:get_player_name()
-    V.exit(p);panels[n]=nil;remote[n]=nil
+    V.exit(p);panels[n]=nil;remote[n]=nil;pickers[n]=nil
   end
   local function title(txt,height)
     return ("formspec_version[7]size[11,%g]bgcolor[#152334;false]"):format(height or 8)..
@@ -234,10 +236,20 @@ return function(api)
       local row=math.max(1,math.min(#items,prior and prior.row or 1))
       local target=math.max(1,math.min(#targets,prior and prior.target or 1))
       local labels={}
+      local pick_append=not not (adapter and adapter.submit_tile and data.can_insert~=false)
+      local pick_replace=not not (adapter and adapter.submit_tile and data.can_replace and items[row])
       for i,o in ipairs(items) do labels[i]={label=(data.active==i and "▶ " or "   ")..i..". "..(o.label or tostring(o.id))} end
       b=b.."label[.45,1.05;Orders]label[5.65,1.05;Available destinations]"..
         ("textlist[.45,1.30;4.98,3.72;V_TOKEN_row;%s;%d;false]"):format(texts(labels,"(No orders)"),row)..
-        ("textlist[5.55,1.30;5,3.72;V_TOKEN_target;%s;%d;false]"):format(texts(targets,"(No destinations)"),target)
+        ("textlist[5.55,1.30;5,%g;V_TOKEN_target;%s;%d;false]"):format(
+          (pick_append or pick_replace) and 3.08 or 3.72,texts(targets,"(No destinations)"),target)
+      if pick_append then
+        b=b..("button[5.55,4.43;%g,.57;V_TOKEN_pick_world;Pick in world]"):format(pick_replace and 2.37 or 5)
+      end
+      if pick_replace then
+        b=b..(pick_append and "button[8.0,4.43;2.55,.57;V_TOKEN_replace_world;Pick replacement]" or
+          "button[5.55,4.43;5,.57;V_TOKEN_replace_world;Pick replacement in world]")
+      end
       if data.can_reorder~=false then
         b=b.."button[.45,5.16;1.53,.57;V_TOKEN_up;Move up]button[2.07,5.16;1.64,.57;V_TOKEN_down;Move down]"
       end
@@ -263,7 +275,13 @@ return function(api)
             ..("button[%g,6.86;1.53,.53;V_TOKEN_apply_%s;Apply]"):format(x+3.43,k)
         end
       end
-      prior={row=row,target=target,revision=data.revision,targets=targets,item_count=#items,cargo=cargo}
+      local eligible
+      if (pick_append or pick_replace) and data.target_count==#targets then
+        eligible={}
+        for _,o in ipairs(targets) do eligible[o.id]=o.label end
+      end
+      prior={row=row,target=target,revision=data.revision,targets=targets,item_count=#items,cargo=cargo,
+        pick_append=pick_append,pick_replace=pick_replace,eligible=eligible}
     else
       b=b.."textarea[.45,1.22;10,1.35;;;"..esc(why or "Set initial orders from the depot. No editable orders are available for this vehicle yet.").."]"
       prior={}
@@ -320,6 +338,77 @@ return function(api)
     local data,why
     if a then data,why=a.read(n,id) end
     return draw_orders(p,v,kind,id,back,prior,note,data,why)
+  end
+  -- The modal keeps only the selected vehicle and current order revision.
+  -- Each click is sent as a tile, not as a guessed or projected station ID.
+  function V.world_order_preview(p,tile)
+    local n=p:get_player_name()
+    local q=pickers[n]
+    if not q then return end
+    if q.pending then return "Saving selection…",q.note end
+    local render=api.render
+    local t=tile and render and render.host_tile and render.host_tile(tile)
+    local id,label=order_target(q.kind,q.id,n,tile,t,function(registry,id)
+      return render.host_record and render.host_record(registry,id)
+    end)
+    local phrase=q.replace and "Choose a replacement on the map" or "Aim at a stop and click to add it"
+    if not id then return phrase,q.note,tile and {tile},false end
+    if q.panel.eligible then
+      if not q.panel.eligible[id] then return "This stop is not in the vehicle's destination list",q.note,{tile},false end
+      label=q.panel.eligible[id]
+    end
+    return (q.replace and "Replace with: " or "Add stop: ")..label,q.note,{tile},true
+  end
+  function V.finish_world_orders(p)
+    local n=p:get_player_name()
+    local q=pickers[n]
+    if not q then return end
+    if q.pending then q.finish=true;return end
+    pickers[n]=nil
+    api.world.end_order_selection(p)
+    V.open(p,q.kind,q.id,q.panel.back,q.panel,q.note)
+  end
+  function V.pick_world_order(p,tile)
+    local n=p:get_player_name()
+    local q=pickers[n]
+    if not q or q.pending then return end
+    if not tile then q.note="Aim at a station tile before picking.";return end
+    q.pending=true
+    local function completed(ok,why,result)
+      if pickers[n]~=q then return end
+      q.pending=nil
+      q.note=why or (ok and "Destination saved." or "This destination could not be added.")
+      if ok then
+        q.revision=result and result.order_revision or q.revision
+        if result and result.count then q.panel.item_count=result.count end
+      end
+      if why=="STALE_COMMAND" then
+        q.note="The campaign changed. Click the stop again to retry."
+      end
+      if q.finish or (ok and (q.replace or not result or result.order_revision==nil)) or
+          (why and why:lower():find("order",1,true) and why:lower():find("changed",1,true)) then
+        return V.finish_world_orders(p)
+      end
+      if api.world.hud then api.world.hud(p) end
+    end
+    local sent,why=V.orders[q.kind].submit_tile(n,q.id,q.revision,q.replace and "replace" or "append",
+      q.panel.row,tile,completed)
+    if not sent then completed(false,why) end
+  end
+  local function begin_world_orders(p,q,replace)
+    local n=p:get_player_name()
+    if q.pending or pickers[n] or not api.world or not api.world.begin_order_selection or
+        not (replace and q.pick_replace or not replace and q.pick_append) then return true end
+    local state={kind=q.kind,id=q.id,revision=q.revision,panel=q,replace=replace}
+    pickers[n]=state
+    if not api.world.begin_order_selection(p,"vehicle",replace and "Replace an order" or "Pick destinations") then
+      pickers[n]=nil
+      return true
+    end
+    panels[n]=nil
+    close(p)
+    if api.world.hud then api.world.hud(p) end
+    return true
   end
   function V.depot(p,kind,depot,return_)
     local n=p:get_player_name()
@@ -385,6 +474,9 @@ return function(api)
     end
     local a=V.orders[q.kind]
     if q.waiting or not a or not get(n,q.kind,q.id) then return true end
+    if field("pick_world") or field("replace_world") then
+      return begin_world_orders(p,q,not not field("replace_world"))
+    end
     if field("toggle") and q.can_toggle and a.toggle then
       if q.pending then return true end
       q.pending=true

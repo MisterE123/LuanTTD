@@ -1,0 +1,31 @@
+-- Convert the pointer's real tile into the station ID expected by the
+-- existing order adapters. The worker resolves against current tiles;
+-- a projected tile is useful for a hint, never for the actual mutation.
+local function owned(st,owner) return st and st.owner==owner end
+return function(mode,vehicle,owner,id,t,record)
+  if not t then return end
+  if mode=="road" then
+    local st=record("stations",t.station)
+    if owned(st,owner) and st.mode=="road" then return t.station,st.name or "Road stop" end
+  elseif mode=="rail" then
+    local st=record("stock_rail_stations",t.rail_station_id)
+    if owned(st,owner) then return t.rail_station_id,st.name or ("Rail station #"..t.rail_station_id) end
+  elseif mode=="ship" then
+    local f=t.ship
+    if not f then return end
+    if f.kind=="dock" and owned(record("stock_ship_stations",f.station),owner) then
+      return f.station,"Dock #"..f.station
+    elseif vehicle=="ferry" and f.kind=="buoy" and type(f.station)=="number" then
+      -- Both local/published world tiles carry the buoy ID, but the
+      -- adapter checks that it is still in the real buoy registry.
+      return "buoy:"..f.station,"Buoy #"..f.station
+    end
+  elseif mode=="air" then
+    local f=t.airfield
+    local st=f and record("stock_small_airports",f.airport)
+    if owned(st,owner) then return f.airport,st.layout=="city" and "City Airport" or "Airfield" end
+  elseif mode=="tram" then
+    local f=t.tram
+    if f and f.kind=="drive_stop" and f.owner==owner then return id,"Tram stop" end
+  end
+end

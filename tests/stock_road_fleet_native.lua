@@ -9,6 +9,8 @@ local function road_native_scene(viewer)
     {engine="livestock_foster",stem="stock_foster_livestock_van",cargo="livestock",price=7656},
   }
   local profile=core.settings:get("luanttd_qa_fleet_wave")
+  local motion_test=profile=="worker_motion" or profile=="worker_motion_baseline"
+  local end_tile=motion_test and 22 or 10
   if profile=="mid_industry" then models={
     {engine="coal_uhl",stem="stock_uhl_coal_truck",cargo="coal",price=7000},
     {engine="mail_reynard",stem="stock_reynard_mail_truck",cargo="mail",price=7382},
@@ -20,16 +22,18 @@ local function road_native_scene(viewer)
     {engine="mail_perry",stem="stock_perry_mail_truck",cargo="mail",price=7929},
   } elseif profile=="early_mail" then models={
     {engine="mail_mps",stem="stock_mps_mail_truck",cargo="mail",price=6289},
-  } end
+  } elseif motion_test then
+    models={models[1]}
+  end
   local sites={}
   for j=4,Sim.H-4 do
-    for i=4,Sim.W-12 do
+    for i=4,Sim.W-end_tile-2 do
       local ready,level=true,nil
       for _,site in ipairs(sites) do
         if math.abs(site.x-i)+math.abs(site.z-j)<20 then ready=false;break end
       end
       if ready then
-        for dz=0,1 do for dx=0,10 do
+        for dz=0,1 do for dx=0,end_tile do
           local id=Sim.id(i+dx,j+dz)
           local t=S.tiles[id]
           local slope,height=api.terrain.tile(id)
@@ -59,6 +63,12 @@ local function road_native_scene(viewer)
     c.revision=revision
     ask({kind="command",command=c},function(r) revision=r.revision;cb(r) end)
   end
+  local motion_probe
+  if motion_test then
+    core.register_globalstep(function()
+      if motion_probe then motion_probe() end
+    end)
+  end
   local function run(i)
     local m,site=models[i],sites[i]
     if not m then
@@ -67,23 +77,56 @@ local function road_native_scene(viewer)
     end
     local x,z,h=site.x,site.z,site.h
     local function tile(u,v) return assert(Sim.id(x+u,z+v)) end
-    viewer:set_pos({x=2*x+10,y=h+10,z=2*z-8})
+    viewer:set_pos({x=2*x+end_tile,y=h+10,z=2*z-8})
     viewer:set_look_horizontal(0);viewer:set_look_vertical(.61)
-    local depot,a,b=tile(5,1),tile(2,0),tile(8,0)
+    local depot,a,b=tile(5,1),tile(2,0),tile(end_tile-2,0)
     local stop=m.cargo=="passenger" and "road_station" or "truck_stop"
     local tasks={
-      {tool="drag",first=tile(0,0),last=tile(10,0),axis=0,start_half=false,end_half=true},
+      {tool="drag",first=tile(0,0),last=tile(end_tile,0),axis=0,start_half=false,end_half=true},
       {tool="road_depot",first=depot},
       {tool=stop,first=a},{tool=stop,first=b},
     }
     local function observe()
-      for _,ref in ipairs(core.get_objects_inside_radius({x=2*x+10,y=h+1,z=2*z},16)) do
+      for _,ref in ipairs(core.get_objects_inside_radius({x=2*x+end_tile,y=h+1,z=2*z},end_tile+6)) do
         local actor,p=ref:get_luaentity(),ref:get_pos()
         local mesh=ref:get_properties().mesh
         if actor and p and math.abs(p.z-2*z)<1 and actor.name=="luanttd_core:vehicle_"..m.engine and
             (mesh=="bl_"..m.stem..".obj" or mesh=="bl_"..m.stem.."_loaded.obj") then
           core.log("action",("Verified stock road actor %s on the running line at %.2f, %.2f"):format(m.engine,p.x,p.z))
-          core.after(.35,run,i+1);return
+          if motion_test then
+            local positions={}
+            local attempts=0
+            motion_probe=function()
+              attempts=attempts+1
+              local v=ref:get_pos()
+              assert(v and attempts<350,"No sustained worker road movement was observed")
+              -- A single direction of travel on the through lane,
+              -- excluding stationary schedules and reverse shunts.
+              if math.abs(v.z-2*z)>=1 or v.x<=2*x+1 or v.x>=2*x+2*end_tile-1 then
+                positions={};return
+              end
+              positions[#positions+1]=v.x
+              if #positions<12 then return end
+              if #positions>12 then table.remove(positions,1) end
+              local same,largest,travel=0,0,0
+              for k=2,#positions do
+                local dx=math.abs(positions[k]-positions[k-1])
+                if dx<.002 then same=same+1 end
+                largest=math.max(largest,dx);travel=travel+dx
+              end
+              local span=math.abs(positions[#positions]-positions[1])
+              if span<2 or travel>span+.015 then return end
+              local ratio=same/(#positions-1)
+              core.log("action",("WORKER_ROAD_MOTION native frames=%d repeat_ratio=%.3f max_sample_jump=%.3f traverse=%.3f"):format(
+                #positions,ratio,largest,span))
+              if profile=="worker_motion" then
+                assert(ratio<.30,"Road actor still pauses during a moving straight run")
+              end
+              motion_probe=nil
+              core.after(.35,run,i+1)
+            end
+          else core.after(.35,run,i+1) end
+          return
         end
       end
       core.after(.1,observe)

@@ -14,18 +14,18 @@ return function(engine,mod)
     if running then engine.ipc_set(running.session..":cancel",true) end
   end)
   local C={}
-  local function send(t,req,receive)
+  local function send(t,req,receive,deliberate)
     t.next_seq=t.next_seq+1
     local message={}
     for k,v in pairs(req) do message[k]=v end
     message.seq=t.next_seq
-    t.reply=receive
+    t.reply,t.deliberate=receive,deliberate
     engine.ipc_set(t.session..":request",message)
   end
   local function flush(t)
     if running~=t or closed or t.reply or #t.deferred==0 then return end
     local next_=table.remove(t.deferred,1)
-    send(t,next_.req,next_.receive)
+    send(t,next_.req,next_.receive,true)
   end
   function C.start(cap,on_ready,on_stop,filename)
     if closed or running then return nil,"AUTHORITY_ALREADY_RUNNING" end
@@ -36,7 +36,18 @@ return function(engine,mod)
       if running~=t then return end
       running=nil
       for _,suffix in ipairs({":cancel",":request",":reply"}) do engine.ipc_set(t.session..suffix,nil) end
-      if not closed then on_stop(why,seq,day,detail) end
+      if closed then return end
+      on_stop(why,seq,day,detail)
+      -- Never replay an interrupted mutation. A commit might already
+      -- be in the checkpoint even if its old mailbox receipt is lost.
+      local function interrupted(receive)
+        if not receive then return end
+        local ok,problem=pcall(receive,{ok=false,interrupted=true,
+          why="Simulation reconnecting. Check the result before trying again."})
+        if not ok and engine.log then engine.log("warning","LuanTTD interrupted action: "..tostring(problem)) end
+      end
+      if t.deliberate then interrupted(t.reply) end
+      for _,q in ipairs(t.deferred) do interrupted(q.receive) end
     end
     local ok,accepted=pcall(engine.handle_async,run,done,engine.get_worldpath(),t.session,cap,filename)
     if not ok or not accepted then running=nil;return nil,"AUTHORITY_JOB_REJECTED" end
@@ -49,7 +60,7 @@ return function(engine,mod)
           engine.ipc_set(t.session..":cancel",true)
         else
           local receiver=t.reply
-          t.reply=nil
+          t.reply,t.deliberate=nil,nil
           receiver(r)
           flush(t)
         end

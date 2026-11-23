@@ -1,6 +1,6 @@
 -- One long-lived job owns the campaign, never one VM per command.
 -- Only the worker opens the mounted checkpoint; IPC carries bounded
--- queries, commands and receipts. This is not yet the ordinary game mount.
+-- queries, commands and receipts. Ordinary ownership is tied to the engine session.
 local mod=assert(core.get_modpath(core.get_current_modname() or "luanttd_core"))
 local mounts=dofile(mod.."/campaign_authority_runtime.lua")
 local endpoint=dofile(mod.."/campaign_authority_endpoint.lua")
@@ -41,7 +41,12 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     storage.write_state(s)
     last_saved=core.get_us_time()
   end
-  while prior-heartbeat<6500000 and not core.ipc_get(channel..":cancel") do
+  -- A paused or unfocused native singleplayer host can stop asking for
+  -- view updates completely, even while Luanti's async job stays alive.
+  -- The ordinary simulation is a session-lifetime owner, not a view
+  -- subscription. Only the explicit shutdown/cancel ends that ownership.
+  -- Keep the short fail-safe solely for finite, manual test jobs.
+  while (auto or prior-heartbeat<6500000) and not core.ipc_get(channel..":cancel") do
     local available=core.ipc_poll(inbox,auto and 35 or 650)
     local now=core.get_us_time()
     if core.ipc_get(channel..":cancel") then break end
@@ -64,6 +69,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         seq=q.seq
         if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction)
         elseif q.kind=="snapshots" then r=A.snapshots(q.windows,fraction or q.fraction,q.players)
+        elseif q.kind=="actor_frames" then r=A.actor_frames(q.windows,fraction or q.fraction)
         elseif q.kind=="orders" then r=A.orders(q.player,q.mode,q.vehicle,q.page)
         elseif q.kind=="road_quote" then r=A.road_quote(q.player,q.request)
         elseif q.kind=="rail_quote" then r=A.rail_quote(q.player,q.request,q.peek==true)
@@ -95,11 +101,12 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
           return "stopped",seq,s.day
         else r={ok=false,why="UNKNOWN_OPERATION"} end
       end
+      if q.kind=="snapshots" or q.kind=="actor_frames" then r.actor_us=now end
       r.seq=q.seq
       core.ipc_set(outbox,r)
     end
     if auto and now-last_saved>=8000000 then checkpoint() end
   end
   storage.write_state(s)
-  return prior-heartbeat>=6500000 and "idle" or "cancelled",seq,s.day
+  return not auto and prior-heartbeat>=6500000 and "idle" or "cancelled",seq,s.day
 end

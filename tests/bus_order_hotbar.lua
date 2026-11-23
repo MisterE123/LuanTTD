@@ -14,6 +14,11 @@ for _,item in ipairs({H.order_pick,H.order_done}) do
   assert(f:read(8)=="\137PNG\r\n\026\n");f:close()
 end
 assert(H.order_done[3]~=H.order_pick[3])
+for slot=1,H.size do
+  local menu,done,map=H.order_overlay(slot,"vehicle","Pick destinations")
+  assert(menu.title=="Pick destinations" and menu[math.min(slot,2)]==H.order_pick and menu[done]==H.order_done)
+  assert(map[done]==8)
+end
 print("PASS: modal picks are safe from all ten old slots; distinct Pick and Done icons")
 
 -- All fixed-length mode adapters use the same slots/legend contract.

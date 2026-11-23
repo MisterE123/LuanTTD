@@ -36,6 +36,7 @@ end
 local span_fields={"start","end","head","tail","middle","middle_by_tile","axis","owner","base","deck","bridge_type","railtype","kind"}
 local station_fields={"owner","id","tile","mode","name","tiles","stop_axis","stop_type","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror","oil_role","goods_role"}
 local industry_fields={"id","removed","kind","x","z","tiles"}
+local farm_fields={"variant","slope","base","fences"}
 local function add(out,s,name,id,fields)
   if id==nil then return end
   local source=s[name] and s[name][id]
@@ -80,7 +81,9 @@ function M.registries(s,ids)
     if t.airfield then
       add(out,s,"stock_small_airports",t.airfield.airport,{"owner","id","origin","tiles","layout"})
     end
-    add(out,s,"stock_farm_fields",id)
+    -- The visual scene changes only when the ground variant or actual
+    -- fence geometry changes, not when the worker visits a field.
+    add(out,s,"stock_farm_fields",id,farm_fields)
     if t.stock_industry then
       local chain=t.stock_industry.chain or "coal"
       add(out,s,"stock_"..chain.."_industries",t.stock_industry.id,industry_fields)

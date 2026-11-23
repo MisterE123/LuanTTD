@@ -81,7 +81,7 @@ return function(api,ui)
   end
   function W.begin_order_selection(p,mode,label)
     local state=controls[p:get_player_name()]
-    if not state then return end
+    if not state or state.order_mode or state.avatar then return end
     state.clicked=core.get_us_time() -- do not reuse the button press that closed the form
     state.demolishing,state.build_drag=nil,nil
     state.order_mode=mode or "road"
@@ -89,6 +89,7 @@ return function(api,ui)
       state.order_menu,state.order_done,state.order_layout,state.order_cancel=H.order_overlay(p:get_wield_index(),state.order_mode,label)
       populate(p,state)
     end
+    return true
   end
   function W.end_order_selection(p)
     local state=controls[p:get_player_name()]
@@ -441,6 +442,9 @@ return function(api,ui)
       if state.order_mode=="road" then
         if menu or key=="order_done" then ui.finish_order_pick(p)
         else ui.choose_order_stop(p,tile) end
+      elseif state.order_mode=="vehicle" then
+        if menu or key=="order_done" then api.vehicle_ui.finish_world_orders(p)
+        else api.vehicle_ui.pick_world_order(p,tile) end
       elseif state.order_mode=="rail" or state.order_mode=="rail_sequence" then
         local rail=api.owned_rail_ui
         if menu or key=="order_cancel" then rail.cancel(p)
@@ -622,10 +626,14 @@ return function(api,ui)
     local key=slot and slot[1]
     local tool=key=="custom" and state and state.custom or key
     local picking=state.order_mode~=nil
-    local road_picking=state.order_mode=="road"
+    local road_picking=state.order_mode=="road" or state.order_mode=="vehicle"
     local world_tool=not picking and ui.is_world_tool(tool)
     if world_tool then ui.select_tool(p,tool) end
-    local desc,status,ids,valid=ui.world_status(p,t,not H or world_tool or picking,hit)
+    local desc,status,ids,valid
+    if state.order_mode=="vehicle" then
+      desc,status,ids,valid=api.vehicle_ui.world_order_preview(p,t)
+      status=status or ""
+    else desc,status,ids,valid=ui.world_status(p,t,not H or world_tool or picking,hit) end
     if api.road_first and state then
       local now=core.get_us_time()
       if state.last_status~=status then state.last_status=status;state.last_status_at=now end

@@ -3,6 +3,10 @@
 return function(api,Terrain)
   local F={}
   local S,Sim=api.s,api.Sim
+  local projected=false
+  function F.use_worker_projection(state)
+    S,projected=state,true
+  end
   local refs,elapsed={},0
   local spec={
     [0]={0,0,0,1,"v"},[1]={0,1,1,1,"h"},
@@ -25,19 +29,26 @@ return function(api,Terrain)
       static_save=false,pointable=false,shaded=true,backface_culling=true,visual_size={x=1,y=1,z=1}
     }})
   end end
-  local function wanted()
-    local players=core.get_connected_players()
+  local function wanted(positions)
+    local local_interest=not projected and api.interest
+    if not positions and not local_interest then
+      positions={}
+      for _,p in ipairs(core.get_connected_players()) do
+        local pos=p:get_pos()
+        if pos then positions[#positions+1]=pos end
+      end
+    end
     local active={}
     local fields=S.stock_farm_fields or {}
     local function visit(id)
       local field=fields[id] and api.farm_world.field(S,id)
       if field then
         local x,z=Sim.xy(id)
-        local nearby=api.interest and api.interest.near({x=2*x+.5,z=2*z+.5},false,64) or false
-        if not api.interest then for _,p in ipairs(players) do
-          local at=p:get_pos()
-          if (at.x-(2*x+.5))^2+(at.z-(2*z+.5))^2<64^2 then nearby=true;break end
-        end
+        local nearby=local_interest and local_interest.near({x=2*x+.5,z=2*z+.5},false,64) or false
+        if not local_interest then
+          for _,at in ipairs(positions) do
+            if (at.x-(2*x+.5))^2+(at.z-(2*z+.5))^2<64^2 then nearby=true;break end
+          end
         end
         if nearby and field.slope==0 and detail[field.variant] then
           active["field:"..id]={id=id,name=detail[field.variant],x=2*x+.5,y=field.base+.504,z=2*z+.5,yaw=0}
@@ -63,15 +74,15 @@ return function(api,Terrain)
         end end
       end
     end
-    if api.interest then api.interest.each_tile(Sim,64,visit)
+    if local_interest then local_interest.each_tile(Sim,64,visit)
     else for id in pairs(fields) do visit(id) end end
     return active
   end
-  function F.step(dt)
+  function F.step(dt,positions)
     elapsed=elapsed+dt
     if elapsed<.35 then return end
     elapsed=0
-    local keep=wanted()
+    local keep=wanted(positions)
     for k,v in pairs(refs) do
       local w=keep[k]
       if not w or w.name~=v.name or w.y~=v.y or w.yaw~=v.yaw or not v.ref:get_pos() then

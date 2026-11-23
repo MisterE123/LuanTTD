@@ -20,12 +20,18 @@ if not core.get_player_by_name then
       Bind.flood(s);Bind.towns(s)
     end
     local s,qa
-    if phase==1 then
+    if phase==1 or phase==4 then
       s=Sim.new(1751)
       dofile(mod.."/town_layout.lua")(Sim,s)
       s.corner_grid=dofile(mod.."/terrain_preview.lua")(Sim,T,s)
       bind(s)
       qa=F.first(Sim,s)
+      if phase==4 then
+        -- Verify the reopened async result against the same fixture run
+        -- continuously, rather than a pre-town-art absolute tick number.
+        local h=F.second(Sim,s,qa,H.specs)
+        return qa.tick,h.completed_tick,h.first_cargo_tick,s.fleet[qa.id].revenue
+      end
       local endpoint=dofile(mod.."/campaign_authority_endpoint.lua")(Sim,
         {world=s,terrain=T,day=function() Sim.daily(s) end})
       core.ipc_set(channel..":status",{tick=qa.tick,day=s.day,fare=s.fleet[qa.id].revenue})
@@ -171,14 +177,19 @@ core.register_on_mods_loaded(function()
   assert(core.handle_async(job,function(tick)
     assert(observed and tick==observed.tick and observed.fare>0)
     assert(core.handle_async(job,function(saved,complete,production,fare)
-      assert(tick==saved and complete==5115 and production>complete and fare>=observed.fare)
-      core.log("action",("PASS NATIVE WORKER CAMPAIGN: bus $%d; live checkpoint tick %d; house completed %d, produced cargo %d; no world returned"):format(fare,tick,complete,production))
-      assert(core.handle_async(job,function(fares)
-        assert(fares.Coach>0 and fares.Rail>0 and fares.Ferry>0 and fares.Air>0)
-        core.log("action",("PASS NATIVE FOUR-MODE ECONOMY: road $%d, rail $%d, ferry $%d, air $%d; one clock through reload")
-          :format(fares.Coach,fares.Rail,fares.Ferry,fares.Air))
-        owner_run(observed.day)
-      end,3,path))
+      assert(core.handle_async(job,function(ref,ref_complete,ref_production,ref_fare)
+        assert(tick==saved and saved==ref and complete==ref_complete and production==ref_production
+          and fare==ref_fare and production>complete and fare>=observed.fare,
+          ("Checkpoint diverged from continuous simulation: saved %s / %s / %s / %s, native %s / %s / %s / %s")
+            :format(saved,complete,production,fare,ref,ref_complete,ref_production,ref_fare))
+        core.log("action",("PASS NATIVE WORKER CAMPAIGN: bus $%d; checkpoint tick %d; house completed %d, produced cargo %d, identical across reload"):format(fare,tick,complete,production))
+        assert(core.handle_async(job,function(fares)
+          assert(fares.Coach>0 and fares.Rail>0 and fares.Ferry>0 and fares.Air>0)
+          core.log("action",("PASS NATIVE FOUR-MODE ECONOMY: road $%d, rail $%d, ferry $%d, air $%d; one clock through reload")
+            :format(fares.Coach,fares.Rail,fares.Ferry,fares.Air))
+          owner_run(observed.day)
+        end,3,path))
+      end,4,path))
     end,2,path))
   end,1,path))
   local limit=core.get_us_time()+5000000

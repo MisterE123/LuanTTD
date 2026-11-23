@@ -23,16 +23,22 @@ return function(client,mode)
       else done(nil,r.why) end
     end)
   end
-  function M.submit(player,vehicle,order_revision,operation,row,destination,done)
+  local function submit(player,vehicle,order_revision,operation,row,destination,tile,done)
     local revision=revision_by_player[player]
     if revision==nil then return nil,"Open the current orders first." end
     return client.query({kind="command",player=player,command={
       kind="vehicle_order",mode=mode,vehicle=vehicle,revision=revision,order_revision=order_revision,
-      operation=operation,row=row,destination=destination,
+      operation=operation,row=row,destination=destination,tile=tile,
     }},function(r)
       if r.revision~=nil then revision_by_player[player]=r.revision end
-      done(r.ok,r.why)
+      done(r.ok,r.why,r.value)
     end)
+  end
+  function M.submit(player,vehicle,order_revision,operation,row,destination,done)
+    return submit(player,vehicle,order_revision,operation,row,destination,nil,done)
+  end
+  function M.submit_tile(player,vehicle,order_revision,operation,row,tile,done)
+    return submit(player,vehicle,order_revision,operation,row,nil,tile,done)
   end
   return M
 end

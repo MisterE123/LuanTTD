@@ -553,7 +553,7 @@ end
 -- actual job starts only after the opening terrain is ready.
 if worker_boot then
   authority=dofile(mod.."/campaign_worker_session.lua")(core,mod,api,ui,render,OwnerCheckpoint,owner_filename,
-    not resumed_owner,{open=open_campaign_player,wait=function(p,note)
+    not resumed_owner,{open=open_campaign_player,connection=function(p,note) ui.status(p,note) end,wait=function(p,note)
       local message=core.formspec_escape(note)
       core.show_formspec(p:get_player_name(),"luanttd_core:opening_worker",
         "formspec_version[7]size[10,2.2]textarea[.5,.6;9,1.3;;;"..message.."]")

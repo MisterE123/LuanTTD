@@ -4,6 +4,7 @@ return function()
   local P={}
   local regions={}
   local epoch=0
+  local actor_us
   local companies,company_seq={},-1
   local pulses,seen,max_boarding={},{},0
   local function newer_than(a,b)
@@ -23,6 +24,7 @@ return function()
     if not r or r.token~=token or not result or not result.ok or type(result.seq)~="number" then return false end
     if r.result and r.result.seq>=result.seq then return false end
     r.result=result
+    if not r.motion or result.seq>r.motion.seq then r.motion=result end
     return true
   end
   function P.scene(key)
@@ -41,6 +43,7 @@ return function()
           or old.width~=w.width or old.height~=w.height then return false end
       end
     end
+    if reply.actor_us then actor_us=math.max(actor_us or 0,reply.actor_us) end
     if reply.companies and reply.seq>company_seq then
       companies,company_seq=reply.companies,reply.seq
     end
@@ -65,6 +68,22 @@ return function()
     end
     return true
   end
+  function P.accept_motion(subscriptions,reply)
+    if not reply or not reply.ok or type(reply.seq)~="number" or not reply.value or #subscriptions~=#reply.value then return false end
+    for i,request in ipairs(subscriptions) do
+      local r=regions[request.key]
+      local old=r and r.result and r.result.value
+      local w=reply.value[i]
+      if not old or r.token~=request.token or r.motion and r.motion.seq>=reply.seq
+        or old.x~=w.x or old.z~=w.z or old.width~=w.width or old.height~=w.height then return false end
+    end
+    if reply.actor_us then actor_us=math.max(actor_us or 0,reply.actor_us) end
+    for i,request in ipairs(subscriptions) do
+      regions[request.key].motion={seq=reply.seq,tick=reply.tick,value=reply.value[i]}
+    end
+    return true
+  end
+  function P.actor_clock() return actor_us end
   function P.boarding_cursor(key)
     local r=regions[key]
     return r and r.result and r.result.value.boarding_cursor
@@ -122,21 +141,22 @@ return function()
   function P.actors()
     local merged={}
     for _,region in pairs(regions) do
-      if region.result then
-        local receipt=region.result
+      if region.motion then
+        local receipt=region.motion
         for _,row in ipairs(receipt.value.actors or {}) do
           local current=merged[row.key]
           if not current or current.tick<receipt.tick or
-            current.tick==receipt.tick and not row.parts and current.seq<receipt.seq then
+            current.tick==receipt.tick and (not row.parts or row.complete_parts or current.complete) and current.seq<receipt.seq then
             local desc={}
             for k,v in pairs(row) do if k~="parts" then desc[k]=v end end
-            current={tick=receipt.tick,seq=receipt.seq,value=desc}
+            current={tick=receipt.tick,seq=receipt.seq,value=desc,complete=row.complete_parts}
             if row.parts then current.parts={} end
             merged[row.key]=current
           end
           -- A consist can cross a sector boundary. Combine bodies only
           -- for the same committed simulation tick, never older motion.
-          if current.tick==receipt.tick and row.parts and current.parts then
+          if current.tick==receipt.tick and row.parts and current.parts and
+            (current.seq==receipt.seq or not current.complete and not row.complete_parts) then
             for _,p in ipairs(row.parts) do
               local previous=current.parts[p.index]
               if not previous or previous.seq<receipt.seq then current.parts[p.index]={seq=receipt.seq,part=p} end

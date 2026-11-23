@@ -7,6 +7,16 @@ game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
 cp game.conf "$game/"
 cp -al mods "$game/" 2>/dev/null || cp -a mods/. "$game/mods/"
+# The same native probe may be run against an untouched release tree
+# for quantitative before/after performance comparisons.
+if [[ -n ${LUANTTD_QA_MOTION_BASE:-} ]]; then
+  for file in $(git diff --name-only "$LUANTTD_QA_MOTION_BASE" -- mods/luanttd_core); do
+    if git cat-file -e "$LUANTTD_QA_MOTION_BASE:$file" 2>/dev/null; then
+      git show "$LUANTTD_QA_MOTION_BASE:$file" >"$out/core-original"
+      mv -f "$out/core-original" "$game/$file"
+    fi
+  done
+fi
 cp mods/luanttd_core/init.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"

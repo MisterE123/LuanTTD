@@ -94,11 +94,20 @@ to the owner and gets the priced construction receipt. A Linux graphical
 test exercises real client movement and clicks the existing train order
 panel; the new order list reopens from the worker checkpoint. Deliberate
 inputs are queued behind at most one in-flight viewport operation and
-outrank the next render request. The authority host also renews its lease
-with only a clock receipt when there are no observers. Its native test
-waits longer than the old idle timeout and confirms service can still
-resume in view. Verified confirmed construction can save before replying
-and durable autosaves occur on the worker.
+outrank the next render request. An ordinary owner now stays alive for
+the engine session, even while Luanti pauses when another window takes
+focus. Viewport requests are not a lease. If the worker itself exits
+unexpectedly, a bounded retry opens the last durable checkpoint in a
+new worker without asking players to reopen the world. Interrupted
+commands are not silently replayed. Confirmed construction can save
+before replying, and durable autosaves occur on the worker.
+
+The [quiet host and injected crash replay](../tests/campaign_worker_recovery_native.sh)
+lets the native host go silent past the former cutoff, then verifies
+in-place recovery and exact company funds. The [graphical focus and
+reopen replay](../tests/campaign_worker_focus_native.sh) moves focus to
+another window for nine seconds and verifies the same company and
+sideways movement after both refocus and a later ordinary reopen.
 
 The worker-facing control desk can fetch live company finance and issue
 loan or authorized speed changes. The native Linux graphical replay changes
@@ -121,7 +130,12 @@ ownership and occupancy before taking anything away. Removing an overhead
 bridge leaves the surface intact; the graphical replay uses the native
 confirmation modal to remove a depot, with no effect before confirmation.
 Road and train poses are computed once per batch and sampled from the
-owning worker's actual clock fraction.
+owning worker's actual clock fraction. Lightweight actor snapshots no
+longer wait for a terrain refresh. A small timestamped rendering buffer
+blends authoritative movement and shortest-arc heading between updates;
+it never guesses new simulation positions. Train bodies share one sample.
+On a rendered bus route, repeated engine-frame positions fell from six
+of eleven intervals to one of eleven in the native before/after probe.
 
 A company fleet query pages the owned roster independently of terrain or
 visibility. It opens the same vehicle order form for parked or offscreen

@@ -7,6 +7,8 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
   local H
   local queue,admitted={},{}
   local speed=0
+  local closing,retry_scheduled,first_ready,attempts=false,false,false,0
+  core.register_on_shutdown(function() closing=true end)
   local painting=dofile(mod.."/campaign_projection_painter.lua")(render,function(_,ok,why)
     if not ok then core.log("warning","LuanTTD viewport placement: "..tostring(why)) end
   end)
@@ -34,9 +36,13 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
       end
     end
   end
-  local function present(projection)
+  local function present(projection,motion_only)
+    if motion_only then
+      render.sample_worker_actors(projection)
+      return
+    end
     painting.present(projection)
-    render.draw_worker_actors(projection,.2)
+    render.draw_worker_actors(projection)
     ui.use_worker_projection(projection)
     ui.hud()
     for n in pairs(admitted) do
@@ -51,18 +57,40 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
       return filename
     end,
     ready=function(_,projection)
-      core.log("action","LuanTTD campaign worker ready")
-      ui.install_worker_controls(H)
-      present(projection)
-      for _,p in ipairs(core.get_connected_players()) do admit(p) end
+      local recovered=attempts>0
+      attempts=0
+      core.log("action",recovered and "LuanTTD campaign worker recovered from its checkpoint" or "LuanTTD campaign worker ready")
+      if not first_ready then
+        first_ready=true
+        ui.install_worker_controls(H)
+        present(projection)
+      end
+      for _,p in ipairs(core.get_connected_players()) do
+        local n=p:get_player_name()
+        if not admitted[n] and not queue[n] then admit(p)
+        elseif recovered and callbacks.connection then callbacks.connection(p,"Simulation resumed.") end
+      end
     end,
     present=present,
     stopped=function(why,_,_,detail)
+      if closing or why=="stopped" then return end
       speed=0
-      core.log("error","LuanTTD simulation owner stopped: "..tostring(detail or why))
-      for _,p in ipairs(core.get_connected_players()) do
-        callbacks.wait(p,"The simulation worker stopped. Reopen the world to resume from its checkpoint.")
+      core.log("warning","LuanTTD campaign worker interrupted; attempting checkpoint recovery: "..tostring(detail or why))
+      if retry_scheduled then return end
+      if attempts==0 then
+        for _,p in ipairs(core.get_connected_players()) do
+          if admitted[p:get_player_name()] then
+            if callbacks.connection then callbacks.connection(p,"Simulation reconnecting…") end
+          else callbacks.wait(p,"Reconnecting to your saved campaign…") end
+        end
       end
+      local delay=math.min(8,.25*2^math.min(attempts,5))
+      attempts=attempts+1
+      retry_scheduled=true
+      core.after(delay,function()
+        retry_scheduled=false
+        if not closing and H.status()=="failed" then H.recover() end
+      end)
     end,
   })
   function Session.start(cap,width,depth)
@@ -86,6 +114,8 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
     end
     H.step(dt,positions)
     painting.step()
+    if api.farm_view then api.farm_view.step(dt,positions) end
+    render.step_worker_actors(dt)
     if H.status()=="owned" and api.crowd then api.crowd.update(core.get_connected_players(),dt) end
   end
   function Session.speed() return speed end

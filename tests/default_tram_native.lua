@@ -1,5 +1,10 @@
 -- Appended only in isolated native QA. No LuanTTD settings, true generated
 -- terrain, and normal placement/order callbacks (no development commands).
+-- Advance this one test's real tram clock explicitly. A headless
+-- server globalstep before the emergence callback is otherwise enough
+-- to move it off the persisted stop on some runners.
+local step_tram=assert(api.tram_clock)
+api.tram_clock=function() end
 local owner="Default Tram QA"
 local player={get_player_name=function() return owner end}
 local function id(x,z) return assert(Sim.id(x,z)) end
@@ -73,7 +78,7 @@ local function main(x,z,level)
   local function advance(arrival)
     api.interest.refresh({{get_pos=function() return {x=2*x,z=2*z} end}})
     for _=1,400 do
-      api.tram_clock(.25)
+      step_tram(.25)
       api.tram_view.step(.25,true)
       if S.tram_pilot.arrivals>=arrival then return end
     end

@@ -28,10 +28,25 @@ assert(s.tiles[p].build=="road")
 assert(Sim.build(s,john,"road_station",{p,q}))
 assert(Sim.build(s,john,"road_depot",{d}))
 local id=assert(Sim.purchase(s,john,"bus","passenger",nil,d))
-local first={kind="road_order_add",vehicle=id,station=s.tiles[p].station,revision=1}
-assert(A.command("Not owner",first).why=="NOT_YOUR_ROAD_VEHICLE")
-assert(A.command(john,first).revision==2)
-assert(A.command(john,{kind="road_order_add",vehicle=id,station=s.tiles[q].station,revision=2}).revision==3)
+local first={kind="vehicle_order",mode="road",vehicle=id,tile=p,operation="append",
+  order_revision=A.orders(john,"road",id).value.revision,revision=1}
+assert(not A.command("Not owner",first).ok)
+assert(not A.command(john,{kind="vehicle_order",mode="road",vehicle=id,tile=d,operation="append",
+  order_revision=first.order_revision,revision=1}).ok,"a depot is not a passenger stop")
+local raw_owner=s.stations[s.tiles[p].station].owner
+s.stations[s.tiles[p].station].owner="Rival"
+assert(not A.command(john,first).ok,"a rival's stop cannot be picked")
+s.stations[s.tiles[p].station].owner=raw_owner
+local added=A.command(john,first)
+assert(added.ok and added.revision==2 and added.value.count==1)
+assert(not A.command(john,first).ok,"an obsolete command must not append twice")
+local second={kind="vehicle_order",mode="road",vehicle=id,tile=q,operation="append",
+  order_revision=added.value.order_revision,revision=2}
+assert(not A.command(john,{kind=second.kind,mode=second.mode,vehicle=id,tile=q,destination=s.tiles[p].station,
+  operation=second.operation,order_revision=second.order_revision,revision=2}).ok,"mixed tile and station ID")
+local assembled=A.command(john,second)
+assert(assembled.ok and assembled.revision==3 and assembled.value.count==2)
+assert(s.fleet[id].orders[1].station==s.tiles[p].station and s.fleet[id].orders[2].station==s.tiles[q].station)
 assert(A.command(john,{kind="road_toggle",vehicle=id,revision=3}).revision==4)
 assert(not A.advance(5).ok and A.advance(1).tick==74)
 local close=A.snapshot(3,6,24,12)
@@ -40,6 +55,25 @@ assert(close.ok and #close.value.vehicles==1 and close.value.vehicles[1].id==id)
 assert(far.ok and #far.value.vehicles==0)
 assert(s.fleet[id].running)
 print("PASS single-owner construction/road orders; stale and foreign edits rejected; scoped projection does not own actors")
+do
+  local resolve=dofile(mod.."/campaign_order_target.lua")
+  local registry={
+    stock_rail_stations={[2]={owner=john},[3]={owner="Rival"}},
+    stock_ship_stations={[4]={owner=john}},stock_small_airports={[5]={owner=john,layout="city"}}}
+  local function record(kind,key) return registry[kind] and registry[kind][key] end
+  assert(resolve("rail",1,john,12,{rail_station_id=2},record)==2)
+  assert(resolve("rail",1,john,13,{rail_station_id=2},record)==2) -- platform is multi-tile
+  assert(not resolve("rail",1,john,13,{rail_station_id=3},record))
+  assert(resolve("ship","oil",john,21,{ship={kind="dock",station=4}},record)==4)
+  assert(resolve("ship","ferry",john,22,{ship={kind="dock",station=4}},record)==4)
+  assert(resolve("ship","ferry",john,23,{ship={kind="buoy",station=7}},record)=="buoy:7")
+  assert(not resolve("ship","oil",john,23,{ship={kind="buoy",station=7}},record))
+  assert(not resolve("ship","ferry",john,23,{ship={kind="buoy"}},record))
+  assert(resolve("air",1,john,31,{airfield={airport=5}},record)==5)
+  assert(resolve("tram",1,john,41,{tram={kind="drive_stop",owner=john}},record)==41)
+  assert(not resolve("tram",1,john,42,{tram={kind="drive_stop",owner="Rival"}},record))
+  print("PASS world target resolves rail platforms, docks, ferry buoys, airports, and owned tram stops")
+end
 local sectors=A.snapshots({{x=3,z=6,w=24,h=12},{x=35,z=22,w=4,h=3}},.5)
 assert(sectors.ok and sectors.tick==74 and #sectors.value==2 and #sectors.value[1].actors==1 and #sectors.value[2].actors==0)
 assert(not A.snapshots({{x=1,z=1,w=1,h=1},{x=2,z=2,w=100,h=100}}).ok)
@@ -239,3 +273,10 @@ local target=A.jump_tile(john,nil,8,24)
 assert(target.ok and target.value.x==16.5 and target.value.z==48.5 and target.value.y>=9.5)
 assert(not A.jump_tile(john,nil,-1,Sim.H).ok)
 print("PASS the worker sends bounded map samples and a live safe altitude above a remote bridge")
+
+local motion=A.actor_frames({{x=3,z=6,w=17,h=5}},.5)
+assert(motion.ok and #motion.value==1 and #motion.value[1].actors>=0)
+assert(not motion.value[1].tiles and not motion.value[1].scene and not motion.value[1].corners)
+assert(not A.actor_frames({{x=0,z=1,w=17,h=5}},.5).ok)
+assert(not A.actor_frames({{x=1,z=1,w=33,h=32}},.5).ok)
+print("PASS worker motion observation stays bounded and does not serialize terrain")

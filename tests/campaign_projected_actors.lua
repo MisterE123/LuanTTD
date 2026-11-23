@@ -62,3 +62,6 @@ assert(not mast.pos and live[n].name=="luanttd_core:dispatch_signal_light_green"
 A.render({},.5)
 assert(not live[n].pos)
 print("PASS projected rail aspects switch models and cull independently of rolling stock")
+
+-- Run the timestamped playout regression with the existing CI render checks.
+dofile("tests/campaign_actor_buffer.lua")

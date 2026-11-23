@@ -17,7 +17,7 @@ H.order_cancel=item("order_cancel","Cancel orders","back")
 H.order_dispatch=item("order_dispatch","Dispatch","order_done")
 H.order_review=item("order_review","Review orders","rail_order_review")
 function H.order_overlay(slot,mode,label)
-  if mode and mode~="road" then
+  if mode and mode~="road" and mode~="vehicle" then
     local pick=math.min(slot,3)
     local done=pick==1 and 2 or 1
     local cancel=6-pick-done
@@ -30,7 +30,7 @@ function H.order_overlay(slot,mode,label)
   -- slot on a shrink. Put Pick where it will land, never Done.
   local pick=slot>1 and 2 or 1
   local done=3-pick
-  return {title="Vehicle orders",[pick]=H.order_pick,[done]=H.order_done},done,
+  return {title=label or "Vehicle orders",[pick]=H.order_pick,[done]=H.order_done},done,
     {[pick]=1,[done]=8}
 end
 local function section(id,label,asset) return item("section_"..id,label,asset) end

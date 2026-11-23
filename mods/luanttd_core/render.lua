@@ -1151,6 +1151,7 @@ return function(api)
     S=visual.state
     projected=true
     terrain=dofile(modpath.."/terrain_view.lua")(Sim,dofile(modpath.."/openttd/terrain.lua"),nil,projection)
+    if api.farm_view then api.farm_view.use_worker_projection(S) end
     for _,receipt in ipairs(projection.windows()) do
       local w=receipt.value
       for _,t in ipairs(w.tiles) do R.raise_bound(t.top) end
@@ -1356,13 +1357,23 @@ return function(api)
   local projected_actors=dofile(modpath.."/campaign_projected_actors.lua")(core,api,road_motion,models,
     dofile(modpath.."/airport_manifest.lua")(core,modpath))
   local worker_observation
+  local actor_buffer=dofile(modpath.."/campaign_actor_buffer.lua")()
   function R.waiting_at(mode,id)
     if worker_observation then return worker_observation.waiting(mode,id) end
   end
-  function R.draw_worker_actors(projection,dt)
+  function R.sample_worker_actors(projection)
+    actor_buffer.observe(projection.actors(),projection.actor_clock())
+  end
+  function R.step_worker_actors(dt)
+    if worker_observation then
+      projected_actors.render(actor_buffer.sample(core.get_us_time()),dt,
+        worker_observation.signals and worker_observation.signals())
+    end
+  end
+  function R.draw_worker_actors(projection)
     worker_observation=projection
     if api.vehicle_ui then api.vehicle_ui.use_worker_projection(projection) end
-    projected_actors.render(projection.actors(),dt,projection.signals and projection.signals())
+    R.sample_worker_actors(projection)
     if api.crowd and projection.take_boardings then
       api.crowd.use_worker_projection(projection,visual.state,terrain)
     end

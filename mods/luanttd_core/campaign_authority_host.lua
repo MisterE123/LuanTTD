@@ -9,21 +9,24 @@ return function(engine,mod,callbacks)
   local state="local"
   local view,interest
   local idle=0
+  local config,filename
   function H.status() return state end
-  function H.start(caps,width,depth)
-    if state~="local" then return nil,"HANDOFF_ALREADY_STARTED" end
-    state="sealing"
-    callbacks.freeze_host()
-    local sealed,filename=pcall(callbacks.seal_checkpoint)
-    if not sealed or not filename then
-      state="failed"
-      callbacks.stopped("checkpoint_failed",nil,nil,filename)
-      return nil,"HANDOFF_CHECKPOINT_FAILED"
+  local function open()
+    if not filename then
+      state="sealing"
+      local sealed,path=pcall(callbacks.seal_checkpoint)
+      if not sealed or not path then
+        state="failed"
+        callbacks.stopped("checkpoint_failed",nil,nil,path)
+        return nil,"HANDOFF_CHECKPOINT_FAILED"
+      end
+      filename=path
     end
     view=ReadView()
-    interest=Interest(client,view,width,depth,callbacks.present)
+    idle=0
+    interest=Interest(client,view,config.width,config.depth,callbacks.present)
     state="opening"
-    local started,reason=client.start(caps,function(receipt)
+    local started,reason=client.start(config.caps,function(receipt)
       if not receipt.ready or state~="opening" then return end
       state="owned"
       callbacks.ready(receipt,view)
@@ -39,14 +42,27 @@ return function(engine,mod,callbacks)
     end
     return true
   end
+  function H.start(caps,width,depth)
+    if state~="local" then return nil,"HANDOFF_ALREADY_STARTED" end
+    config={caps=caps,width=width,depth=depth}
+    callbacks.freeze_host()
+    return open()
+  end
+  function H.recover()
+    -- Only the old async completion callback can set "failed". A lease
+    -- still owned by a live worker never starts a competing writer.
+    if state~="failed" or not config then return nil,"CAMPAIGN_NOT_RECOVERABLE_YET" end
+    return open()
+  end
   function H.step(dt,positions,fraction)
     if state~="owned" then return false end
     interest.update(positions)
     if #positions>0 then idle=0;return interest.step(dt,fraction) end
-    -- An empty viewport never releases the simulation lease. Keep the
-    -- owner alive without asking it to produce unseen terrain or actors.
-    idle=idle+dt
-    if idle>=2 and client.query({kind="clock"},function() end) then idle=0 end
+    -- Only finite manual harnesses retain the keepalive watchdog.
+    if not config.caps.autoplay then
+      idle=idle+dt
+      if idle>=2 and client.query({kind="clock"},function() end) then idle=0 end
+    end
     return false
   end
   function H.observe(request,done)

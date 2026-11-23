@@ -6,6 +6,15 @@ Right-click the vehicle in the world, or click it with **Inspect** selected. Cli
 
 On the vehicle sheet, select an order to move, remove or skip to it, or select a destination to add it. The arrow marks the active order when the sheet opens. An edit does not teleport the vehicle; it respects its current path, signals, approach and equipment. Passenger railway orders can also replace the selected stop. On supported freight trains, choose a compatible replacement for the load or unload stage, without mixing the two cargo roles. The preview tram applies edits at a safe through-stop boundary. Initial orders for trains, ships, trams and aircraft still start through their depot's setup controls.
 
+To pick a station directly in 3D, open **Orders** and choose **Pick in
+world**. Aim at a compatible station and use **Pick stop**. Repeat for
+as many stops as you need, then use **Done** or right-click to return to
+the orders sheet. The destination list is still available. Where order
+replacement is supported, **Replace in world** changes the selected
+row instead of appending. The worker validates the actual tile, vehicle,
+company, order list and cargo rules, regardless of whether you pick in
+3D or use the list.
+
 The order controls cover the shipped vehicle systems, not all OpenTTD order options. Some scenario-specific and inactive rail consists are read-only, and operations such as a plane already committed to landing or a freight train loading can defer or reject a change. Vehicle orders are saved with the world; follow camera is per player and not saved.
 
 ## Verification

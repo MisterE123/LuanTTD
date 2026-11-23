@@ -40,19 +40,22 @@ return function(core,api,motion,models,airframes)
       if not v then return end
       visible[key]=true
       if mesh and v.mesh~=mesh then v.ref:set_properties({mesh=mesh});v.mesh=mesh end
+      local function differs(a,b)
+        return not a or math.abs(a.x-b.x)+math.abs(a.y-b.y)+math.abs(a.z-b.z)>.0001
+      end
+      local snap=part and (sync or v.flip~=nil and part.flip~=v.flip)
+      if snap and v.ref.set_pos then v.ref:set_pos(pos)
+      elseif differs(v.pos,pos) then v.ref:move_to(pos,true) end
+      v.pos=pos
+      local rotation=part and part.rotation or {x=pitch or 0,y=motion.nose_yaw(target),z=0}
+      if differs(v.rotation,rotation) then v.ref:set_rotation(rotation) end
+      v.rotation=rotation
       if part then
-        if (sync or v.flip~=nil and part.flip~=v.flip) and v.ref.set_pos then v.ref:set_pos(pos)
-        else v.ref:move_to(pos,true) end
         v.flip=part.flip
-        v.ref:set_rotation(part.rotation)
         if part.scale and (not v.scale or math.abs(v.scale-part.scale)>.002) then
           v.ref:set_properties({visual_size={x=1,y=part.scale,z=1}})
           v.scale=part.scale
         end
-      else
-        v.ref:move_to(pos,true)
-        v.yaw=motion.turn(v.yaw,motion.nose_yaw(target),math.min(.8,dt*7.2))
-        v.ref:set_rotation({x=pitch or 0,y=v.yaw,z=0})
       end
       if api.vehicle_ui and not (part and part.visual_only) then
         api.vehicle_ui.track(row.mode,row.id,pos,v.ref,not part or part.index==1)

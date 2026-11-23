@@ -4,6 +4,11 @@
 return function(Sim,R,max_days)
   local s=R.world
   local A={}
+  local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local order_target=dofile(mod.."/campaign_order_target.lua")
+  local function facility_record(registry,id)
+    return id~=nil and s[registry] and s[registry][id]
+  end
   local authority_revision=s.authority_revision or 0
   local function integer(x,lo,hi)
     return type(x)=="number" and x>=lo and x<=hi and x%1==0
@@ -18,7 +23,7 @@ return function(Sim,R,max_days)
   local order_verbs={append=true,up=true,down=true,remove=true,skip=true,replace=true,load=true,unload=true}
   local function adapter(mode,id)
     if mode=="ship" then
-      if id~="ferry" and id~="coal" then return end
+      if id~="ferry" and id~="coal" and id~="oil" then return end
     elseif mode=="road" or mode=="rail" or mode=="air" or mode=="tram" then
       if not index(id) then return end
     else return end
@@ -458,13 +463,25 @@ return function(Sim,R,max_days)
       local handle=adapter(c.mode,c.vehicle)
       if not handle or not (type(c.order_revision)=="string" and #c.order_revision<=8192
         or integer(c.order_revision,0,2147483647)) then return reply(false,"INVALID_VEHICLE_ORDER") end
+      local target=c.destination
+      if c.tile~=nil then
+        if target~=nil or not tile_id(c.tile) or (c.operation~="append" and c.operation~="replace") then
+          return reply(false,"INVALID_ORDER_TILE")
+        end
+        target=order_target(c.mode,c.vehicle,name,c.tile,s.tiles[c.tile],facility_record)
+        if not target then return reply(false,"Choose a compatible stop owned by your company.") end
+      end
       if c.operation=="append" or c.operation=="replace" then
-        if not destination(c.destination) then return reply(false,"INVALID_DESTINATION") end
+        if not destination(target) then return reply(false,"INVALID_DESTINATION") end
       elseif c.operation=="load" or c.operation=="unload" then
-        if not integer(c.destination,0,15) then return reply(false,"INVALID_CARGO_RULE") end
+        if not integer(target,0,15) then return reply(false,"INVALID_CARGO_RULE") end
       end
       if c.operation~="append" and not integer(c.row,1,254) then return reply(false,"INVALID_ORDER_ROW") end
-      ok,note=handle.edit(name,c.vehicle,c.order_revision,c.operation,c.row,c.destination)
+      ok,note=handle.edit(name,c.vehicle,c.order_revision,c.operation,c.row,target)
+      if ok and c.tile~=nil then
+        local orders=handle.read(name,c.vehicle)
+        if orders then value={order_revision=orders.revision,count=#(orders.items or {})} end
+      end
     elseif c.kind=="road_order_add" and index(c.vehicle) and index(c.station) then
       local v=s.fleet[c.vehicle]
       if not v or v.owner~=name or not Sim.vehicles[v.engine] or Sim.vehicles[v.engine].mode~="road" then
@@ -574,7 +591,7 @@ return function(Sim,R,max_days)
     if type(windows)~="table" or #windows<1 or #windows>9 then
       return reply(false,"INVALID_INTEREST_BATCH")
     end
-    local packets,frame={},{road={},rail={}}
+    local packets,frame={},{road={},rail={},whole_trains=true}
     for _,w in ipairs(windows) do
       if type(w)~="table" then return reply(false,"INVALID_INTEREST_WINDOW") end
       local r=A.snapshot(w.x,w.z,w.w,w.h,fraction,frame)
@@ -599,6 +616,24 @@ return function(Sim,R,max_days)
       end
     end
     return r
+  end
+  -- Cheap pose-only observations. A static 32² sector still needs its
+  -- complete terrain comparison eventually, but not at the vehicle rate.
+  function A.actor_frames(windows,fraction)
+    if type(windows)~="table" or #windows<1 or #windows>9 then
+      return reply(false,"INVALID_INTEREST_BATCH")
+    end
+    fraction=type(fraction)=="number" and fraction>=0 and fraction<=1 and fraction or 1
+    local packets,frame={},{road={},rail={},whole_trains=true}
+    for i,w in ipairs(windows) do
+      if type(w)~="table" or not integer(w.x,1,Sim.W) or not integer(w.z,1,Sim.H)
+        or not integer(w.w,1,32) or not integer(w.h,1,32) or w.x+w.w-1>Sim.W or w.z+w.h-1>Sim.H then
+        return reply(false,"INVALID_INTEREST_WINDOW")
+      end
+      packets[i]={x=w.x,z=w.z,width=w.w,height=w.h,
+        actors=R.actors and R.actors(w.x,w.z,w.w,w.h,fraction,frame) or {}}
+    end
+    return reply(true,nil,packets)
   end
   return A
 end

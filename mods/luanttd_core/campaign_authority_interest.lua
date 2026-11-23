@@ -7,7 +7,8 @@ return function(client,projection,width,depth,changed)
   local pending
   local cursor=1
   local players={}
-  local elapsed=.2
+  local elapsed,motion_elapsed=.2,.09
+  local motion_cursor=1
   local size=32
   local limit=9
   local function collect(positions)
@@ -44,18 +45,25 @@ return function(client,projection,width,depth,changed)
     for _,r in ipairs(list) do r.token=projection.subscribe(r.key) end
     sectors,by_key=list,next_
     frame=frame+1
-    cursor=1
+    cursor,motion_cursor=1,1
     elapsed=.2
     changed(projection)
   end
   function I.step(dt,fraction)
     elapsed=math.min(.2,elapsed+dt)
-    if pending or elapsed<.2 or #sectors==0 then return false end
+    motion_elapsed=math.min(.09,motion_elapsed+dt)
+    if pending or #sectors==0 then return false end
+    local motion_only=elapsed<.2
+    if motion_only and motion_elapsed<.09 then return false end
     local windows,subscriptions={},{}
-    local last=math.min(#sectors,cursor+limit-1)
-    for i=cursor,last do
+    local first=motion_only and motion_cursor or cursor
+    local last=math.min(#sectors,first+limit-1)
+    for i=first,last do
       local r=sectors[i]
-      windows[#windows+1]={x=r.x,z=r.z,w=r.w,h=r.h,scene=projection.scene(r.key),after_boarding=projection.boarding_cursor(r.key)}
+      local scene=projection.scene(r.key)
+      if motion_only and not scene then return false end
+      windows[#windows+1]={x=r.x,z=r.z,w=r.w,h=r.h,scene=scene,
+        after_boarding=not motion_only and projection.boarding_cursor(r.key) or nil}
       subscriptions[#subscriptions+1]={key=r.key,token=r.token}
     end
     local request={frame=frame,last=last}
@@ -63,14 +71,23 @@ return function(client,projection,width,depth,changed)
     local function applied(reply)
       if pending~=request then return end
       pending=nil
-      if request.frame==frame and projection.accept_batch(subscriptions,reply) then
-        cursor=last==#sectors and 1 or last+1
+      if request.frame~=frame then return end
+      local next_=last==#sectors and 1 or last+1
+      if motion_only then
+        if projection.accept_motion(subscriptions,reply) then
+          motion_cursor=next_
+          changed(projection,true)
+        end
+      elseif projection.accept_batch(subscriptions,reply) then
+        cursor=next_
         changed(projection)
       end
     end
-    local queued=client.query({kind="snapshots",windows=windows,fraction=fraction,players=players},applied)
+    local queued=client.query({kind=motion_only and "actor_frames" or "snapshots",
+      windows=windows,fraction=fraction,players=not motion_only and players or nil},applied)
     if not queued then pending=nil;return false end
-    elapsed=0
+    motion_elapsed=0
+    if not motion_only then elapsed=0 end
     return true
   end
   return I

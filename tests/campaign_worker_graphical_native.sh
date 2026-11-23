@@ -80,6 +80,19 @@ sleep .55
 import -window root -resize 960x600 -quality 88 "$out/worker-demolition.jpg"
 xdotool mousemove 720 440 click 1
 mark 'PASS NATIVE PROJECTED DEMOLITION'
+mark 'NATIVE_PICK_BUS_PANEL'
+sleep .55
+import -window root "$out/worker-pick-form.png"
+xdotool mousemove 862 488 click 1
+mark 'NATIVE_PICK_BUS_STOP_1'
+sleep .3
+import -window root "$out/worker-pick-stop.png"
+xdotool mousedown 1; sleep .30; xdotool mouseup 1
+mark 'NATIVE_PICK_BUS_STOP_2'
+sleep .3
+xdotool mousedown 1; sleep .30; xdotool mouseup 1
+mark 'PASS NATIVE WORLD STATION PICKER'
+xdotool mousedown 3; sleep .30; xdotool mouseup 3
 mark 'NATIVE_PROJECTED_BUS_READY'
 sleep .55
 import -window root -resize 960x600 -quality 88 "$out/worker-bus.jpg"
