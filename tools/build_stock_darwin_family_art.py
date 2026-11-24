@@ -286,7 +286,7 @@ def write_native(q,scene,objects,mode,colors):
     art.compact_obj(obj)
     bpy.data.objects.remove(mesh,do_unlink=True)
 
-def make(q):
+def make(q, *, title=None, sprite_family=4, engine_title="Twin open fan nacelles", engine_mesh=engines):
     colors=art.PAL | dict(zip(("Crown ivory","Panel ivory","Lit blue","Dark coastal cobalt","Blue taper","Copper pinstripe"),q.color))
     base.PALETTE=colors
     base.KEYS=list(colors)
@@ -294,8 +294,8 @@ def make(q):
     bpy.context.preferences.filepaths.save_version=0
     e.export_atlas(q.stem,colors)
     scene=bpy.context.scene
-    scene.name=f"LuanTTD | Darwin {q.series} · #{q.id}"
-    scene["metadata"]=f"OpenTTD 16.0-RC1 src/table/engines.h #{q.id}: J / fast CTOL; sprite family image 4"
+    scene.name=f"LuanTTD | {title or f'Darwin {q.series}'} · #{q.id}"
+    scene["metadata"]=f"OpenTTD 16.0-RC1 src/table/engines.h #{q.id}: J / fast CTOL; sprite family image {sprite_family}"
     scene["original_art"]=q.description+"; original LuanTTD mesh and invented livery, no third-party image assets"
     scene["native"]= "Nose −Z; deployed gear contacts Luanti Y=0. Flight variant differs only in gear and bay doors."
     def group(title,fn):
@@ -305,7 +305,7 @@ def make(q):
     common=[]
     for title,fn in (("01 · Sectioned pressure shell and cabin glazing",pressure),
                      ("02 · Cambered wings, tail, and control surfaces",control_surfaces),
-                     ("03 · Twin open fan nacelles",engines)):
+                     (f"03 · {engine_title}",engine_mesh)):
         common.extend(group(title,lambda:fn(q)).objects)
     taxi=group("04 · Deployed struts, bogies and open bays",lambda:gear(q,True))
     flight=group("05 · Closed in-flight gear bays",lambda:gear(q,False))

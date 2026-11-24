@@ -66,7 +66,7 @@ capture(){
   fi
 }
 case "$airframe" in
-  218|221|222|223|224|227|229|230|231)
+  218|221|222|223|224|227|229|230|231|232|233)
     mark 'NATIVE AIR TAXI'
     capture taxi.jpg
     mark 'NATIVE AIR AIRBORNE'

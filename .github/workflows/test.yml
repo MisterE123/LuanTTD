@@ -272,3 +272,5 @@ jobs:
           python3 tests/stock_tim_art.py --upstream-engines "$src/src/table/engines.h"
           python3 tests/stock_tim_art.py --variant asiastar --upstream-engines "$src/src/table/engines.h"
           python3 tests/yate_haugan_art.py --engines "$src/src/table/engines.h"
+          python3 tests/airport_city_airframes_rc1.py "$src/src/table/engines.h"
+          python3 tools/build_stock_temperate_inventory.py "$src/src/table/engines.h"

@@ -12,10 +12,10 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 
 | Mode | Playable stock types | Art only | Total Temperate stock types |
 | --- | ---: | ---: | ---: |
-| Rail | 25 | 0 | 53 |
+| Rail | 34 | 0 | 53 |
 | Road | 34 | 0 | 34 |
 | Ship | 7 | 0 | 7 |
-| Aircraft | 17 | 0 | 35 |
+| Aircraft | 20 | 0 | 35 |
 
 ## Rail
 
@@ -46,12 +46,12 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 35 | Iron Ore Hopper | Playable | Ore mine to steel mill; native empty/loaded model. |
 | 36 | Steel Truck | Playable | Steel mill to factory; native empty/loaded model. |
 | 37 | Armoured Van | Playable | Runs Valuables between two separate Banks. |
-| 54 | 'X2001' (Electric) | Not mounted |  |
-| 55 | 'Millennium Z1' (Electric) | Not mounted |  |
-| 57 | Passenger Carriage | Not mounted |  |
-| 58 | Mail Van | Not mounted |  |
+| 54 | 'X2001' (Electric) | Playable | Mounted X2001 monorail with independent passenger, Mail or Oil service. |
+| 55 | 'Millennium Z1' (Electric) | Playable | Twin-ended original monorail; each powered head carries a separate 25-seat cabin. |
+| 57 | Passenger Carriage | Playable | OpenTTD monorail passenger carriage; independent purchase and real fares. |
+| 58 | Mail Van | Playable | OpenTTD monorail Mail van; independently loaded and paid. |
 | 59 | Coal Truck | Not mounted |  |
-| 60 | Oil Tanker | Not mounted |  |
+| 60 | Oil Tanker | Playable | Monorail 35 kL Oil Tanker; mixed fleets keep the exact gauge restriction. |
 | 61 | Livestock Van | Not mounted |  |
 | 62 | Goods Van | Not mounted |  |
 | 63 | Grain Hopper | Not mounted |  |
@@ -59,14 +59,14 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 65 | Iron Ore Hopper | Not mounted |  |
 | 66 | Steel Truck | Not mounted |  |
 | 67 | Armoured Van | Not mounted |  |
-| 84 | Lev1 'Leviathan' (Electric) | Not mounted |  |
+| 84 | Lev1 'Leviathan' (Electric) | Playable | First Maglev group: original Lev1 Leviathan, matched depot, guideway and wagons. |
 | 85 | Lev2 'Cyclops' (Electric) | Not mounted |  |
 | 86 | Lev3 'Pegasus' (Electric) | Not mounted |  |
 | 87 | Lev4 'Chimaera' (Electric) | Not mounted |  |
-| 89 | Passenger Carriage | Not mounted |  |
-| 90 | Mail Van | Not mounted |  |
+| 89 | Passenger Carriage | Playable | Maglev Passenger Carriage: original 47-seat stock. |
+| 90 | Mail Van | Playable | Maglev Mail Van: original 37-bag stock. |
 | 91 | Coal Truck | Not mounted |  |
-| 92 | Oil Tanker | Not mounted |  |
+| 92 | Oil Tanker | Playable | Maglev 37 kL Oil Tanker; refinery delivery on true Maglev spans. |
 | 93 | Livestock Van | Not mounted |  |
 | 94 | Goods Van | Not mounted |  |
 | 95 | Grain Hopper | Not mounted |  |
@@ -147,8 +147,8 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 229 | Darwin 400 | Playable | Paid passenger service; City Airport required. |
 | 230 | Darwin 500 | Playable | Paid passenger service; City Airport required. |
 | 231 | Darwin 600 | Playable | Paid passenger service; City Airport required. |
-| 232 | Guru Galaxy | Not mounted |  |
-| 233 | Airtaxi A21 | Not mounted |  |
+| 232 | Guru Galaxy | Playable | 240 passengers + 35 Mail. City Airport, original three-engine mesh with retracting gear. |
+| 233 | Airtaxi A21 | Playable | 260 passengers + 30 Mail. City Airport, original wide-body twinjet with retracting gear. |
 | 234 | Airtaxi A31 | Not mounted |  |
 | 235 | Airtaxi A32 | Not mounted |  |
 | 236 | Airtaxi A33 | Not mounted |  |

@@ -65,6 +65,13 @@ local rows={
   [231]={stock_id=231,name="Darwin 600",image=4,passengers=260,mail=40,acceleration=40,
     source_speed=74,intro_after_1920=27209,life=25,model_life=30,buy_factor=27,running_factor=230,
     small=false,jet=true,visual="darwin_600"},
+  -- Exact 16.0-RC1 table/engines.h MA #232/#233 and AVI #17/#18.
+  [232]={stock_id=232,name="Guru Galaxy",image=3,passengers=240,mail=35,acceleration=40,
+    source_speed=74,intro_after_1920=17988,life=20,model_life=30,buy_factor=25,running_factor=225,
+    small=false,jet=true,visual="guru_galaxy"},
+  [233]={stock_id=233,name="Airtaxi A21",image=4,passengers=260,mail=30,acceleration=40,
+    source_speed=74,intro_after_1920=18993,life=24,model_life=35,buy_factor=20,running_factor=235,
+    small=false,jet=true,visual="airtaxi_a21"},
 }
 A.BUY_BASE,A.RUN_BASE=700000,9600
 A.DAY_TICKS,A.DAYS_IN_YEAR=74,365
@@ -79,7 +86,7 @@ function A.entry(id)
 end
 function A.catalog(include_rotary)
   local out={}
-  for _,id in ipairs({215,219,216,217,220,225,226,221,227,228,218,223,222,230,229,224,231}) do
+  for _,id in ipairs({215,219,216,217,220,225,226,221,227,228,218,232,223,233,222,230,229,224,231}) do
     out[#out+1]=A.entry(id)
   end
   if include_rotary then out[#out+1]=A.entry(253) end
@@ -93,7 +100,7 @@ function A.available(Sim,s,id)
   local market=s.stock_bus_market
   if not market then
     return Sim.date(s)>=({[217]=1955,[218]=1969,[220]=1958,[221]=1964,[222]=1978,[223]=1970,[224]=1989,[225]=1962,[226]=1963,[227]=1967,[228]=1968,
-      [229]=1982,[230]=1981,[231]=1995,[253]=1957})[id]
+      [229]=1982,[230]=1981,[231]=1995,[232]=1969,[233]=1972,[253]=1957})[id]
   end
   local cached=calendar_cache[market]
   if not cached then cached={};calendar_cache[market]=cached end

@@ -11,6 +11,7 @@ local models={
   [224]={visual="bakewell_luckett_lb11",price=54687,flight=true},
   [227]={visual="darwin_200",price=46484,flight=true},[229]={visual="darwin_400",price=49218,flight=true},
   [230]={visual="darwin_500",price=51953,flight=true},[231]={visual="darwin_600",price=73828,flight=true},
+  [232]={visual="guru_galaxy",price=68359,flight=true},[233]={visual="airtaxi_a21",price=54687,flight=true},
 }
 local model=assert(models[stock])
 local layout=core.settings:get("luanttd_qa_air_layout") or "city"

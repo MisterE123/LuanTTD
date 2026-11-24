@@ -42,8 +42,6 @@ case "${1:-}" in
     BAYLINE_MIXED_FORM=maglev-spans bash tests/stock_mixed_town_rail_live_native.sh
     BAYLINE_OIL_GAUGE=2 bash tests/guideway_oil_worker_native.sh
     BAYLINE_OIL_GAUGE=3 bash tests/guideway_oil_worker_native.sh
-    bash tests/stock_aircraft_mail_live_native.sh
-    LUANTTD_QA_PAID_AIRFRAME=218 bash tests/stock_aircraft_mail_live_native.sh
     bash tests/stock_rail_multi_ore_live_native.sh
     bash tests/stock_dash_worker_native.sh
     BAYLINE_DMU_PROFILE=millennium bash tests/stock_dash_worker_native.sh
@@ -98,6 +96,7 @@ case "${1:-}" in
     python3 tests/stock_oil_ships_art.py
     bash tests/generated_oil_freight_native.sh
     bash tests/mixed_freight_live_native.sh
+    for engine in 216 218 232 233; do LUANTTD_QA_PAID_AIRFRAME="$engine" bash tests/stock_aircraft_mail_live_native.sh; done
     lua5.1 tests/airport_city_paid.lua
     lua5.1 tests/airport_city_paid.lua 217
     lua5.1 tests/airport_city_paid.lua 218
@@ -107,6 +106,8 @@ case "${1:-}" in
     lua5.1 tests/airport_city_paid.lua 228
     for engine in 227 229 230 231; do lua5.1 tests/airport_city_paid.lua "$engine"; done
     python3 tests/darwin_family_art.py
+    for engine in 232 233; do lua5.1 tests/airport_city_paid.lua "$engine"; done
+    python3 tests/guru_airtaxi_art.py
     for engine in 221 222 223 224; do lua5.1 tests/airport_city_paid.lua "$engine"; done
     python3 tests/bakewell_luckett_art.py
     python3 tests/stock_airliners_g_art.py

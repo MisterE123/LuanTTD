@@ -7,6 +7,16 @@ return {
     rotor="bl_stock_tricario_heli_rotor.obj",tail_rotor="bl_stock_tricario_heli_tail.obj",
     rotor_offset={x=0,y=4.07,z=-.16},tail_offset={x=-.37,y=2.56,z=6.05}},
 
+  guru_galaxy={
+    id=232,entity="luanttd_core:stock_guru_galaxy",
+    mesh="bl_stock_guru_galaxy.obj",flight="bl_stock_guru_galaxy_flight.obj",
+    atlas="bl_stock_guru_galaxy_atlas.png",scale=1,
+  },
+  airtaxi_a21={
+    id=233,entity="luanttd_core:stock_airtaxi_a21",
+    mesh="bl_stock_airtaxi_a21.obj",flight="bl_stock_airtaxi_a21_flight.obj",
+    atlas="bl_stock_airtaxi_a21_atlas.png",scale=1,
+  },
   darwin_200={
     id=227,entity="luanttd_core:stock_darwin_200",
     mesh="bl_stock_darwin_200.obj",

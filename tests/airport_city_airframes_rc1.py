@@ -17,7 +17,8 @@ lua=['local A=dofile("mods/luanttd_core/openttd/airport_roster.lua")']
 for id_,name in ((217,"FFP Dart"),(220,"Bakewell Luckett LB-8"),
                  (221,"Bakewell Luckett LB-9"),(222,"Bakewell Luckett LB80"),
                  (223,"Bakewell Luckett LB-10"),(224,"Bakewell Luckett LB-11"),(225,"Yate Aerospace YAC 1-11"),(226,"Darwin 100"),(227,"Darwin 200"),(228,"Darwin 300"),
-                 (229,"Darwin 400"),(230,"Darwin 500"),(231,"Darwin 600")):
+                 (229,"Darwin 400"),(230,"Darwin 500"),(231,"Darwin 600"),
+                 (232,"Guru Galaxy"),(233,"Airtaxi A21")):
     ma=re.search(rf"^\s*MA\(\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+).+//\s*{id_} {name}\s*$",text,re.M)
     raw=re.search(rf"^\s*AVI\(([^\n]+)\), //\s*{id_-215} {name}\s*$",text,re.M)[1]
     fields=dict(zip(("intro_after_1920","decay_speed","life","model_life"),map(int,ma.groups())))
@@ -30,4 +31,4 @@ for id_,name in ((217,"FFP Dart"),(220,"Bakewell Luckett LB-8"),
     lua += [f'local r=assert(A.entry({id_}));assert(r.name=="{name}" and {design})']
     lua += [f'assert(r.{k}=={v},{id_})' for k,v in fields.items()]
 subprocess.run([a.lua,"-"],cwd=Path(__file__).resolve().parents[1],input="\n".join(lua),text=True,check=True)
-print("PASS: 13 exact RC1 jet aircraft rows, including the Country-capable LB-9")
+print("PASS: 15 exact RC1 jet aircraft rows, including the Country-capable LB-9")

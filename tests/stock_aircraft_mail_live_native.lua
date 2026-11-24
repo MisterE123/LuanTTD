@@ -14,8 +14,12 @@ local road_owner="Road Mail Rival"
 local function cell(x,z) return (z-1)*64+x end
 local first_tile,second_tile=cell(10,17),cell(43,17)
 local stock=tonumber(core.settings:get("luanttd_qa_paid_airframe")) or 216
-assert(stock==216 or stock==218)
-local city=stock==218
+local expected_mesh={
+  [216]="bl_coleman_count.obj",[218]="bl_stock_yate_haugan.obj",
+  [232]="bl_stock_guru_galaxy.obj",[233]="bl_stock_airtaxi_a21.obj",
+}
+assert(expected_mesh[stock])
+local city=stock~=216
 local layout=city and "city" or "country"
 local airport_tiles=city and 36 or 12
 local spec=assert(Roster.entry(stock))
@@ -23,7 +27,7 @@ local road_depot,road_one,road_two=cell(17,7),cell(10,11),cell(43,11)
 local cap={road={start_year=city and 1975 or 1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
   ferry={},air={},city_airport=city,oil_tanker=true,durable_actions=true}
 local art=m("airport_manifest")(core,mod)
-assert(art[stock] and art[stock].mesh==(city and "bl_stock_yate_haugan.obj" or "bl_coleman_count.obj"))
+assert(art[stock] and art[stock].mesh==expected_mesh[stock])
 for id in pairs(art) do cap.air[id]=true end
 for _,group in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..group,"air") end
 local balance=300000
@@ -178,7 +182,16 @@ local function work()
       s,c,run,v,a,b,p,m=payload()
       local pending=v.load_state and v.load_state.payment
       if pending and pending.delivered>0 and (p.units>0 or m.units>0) and visual(run,"pending") then
-        assert(pending.by_cargo.mail.delivered==5 and pending.by_cargo.passenger.delivered==20 and pending.route==(city and 337 or 334))
+        local md,pd=pending.by_cargo.mail.delivered,pending.by_cargo.passenger.delivered
+        assert(pending.route>0 and md>0 and pd>0)
+        if stock<=218 then
+          assert(md==5 and pd==20 and pending.route==(city and 337 or 334))
+        else
+          -- A daily checkpoint may occur after several short unload
+          -- slices. Each hold must still advance in its stock increments.
+          assert(md%5==0 and pd%20==0 and md<=spec.mail and pd<=spec.passengers,
+            ("unload slices %d Mail / %d passengers"):format(md,pd))
+        end
         assert(pending.delivered==pending.by_cargo.mail.delivered+pending.by_cargo.passenger.delivered)
         assert(s.companies[name].paid_units==0 and s.companies[name].revenue==0)
         goal=("AIR_MAIL_NATIVE_PENDING exact uncredited $%d after unloading %d passengers + %d Mail bags"):format(
@@ -208,7 +221,10 @@ local function work()
       local commercial=s.companies[name]
       local pb,mb=assert(f.by_cargo.passenger),assert(f.by_cargo.mail)
       assert(f.cargo=="mixed" and pb.delivered==spec.passengers and mb.delivered==spec.mail and f.units==spec.passengers+spec.mail and f.amount==pb.route+mb.route)
-      assert(pb.route==(city and 1242 or 790) and mb.route==(city and 363 or 145) and f.amount==(city and 1605 or 935))
+      assert(pb.route>0 and mb.route>0)
+      if stock<=218 then
+        assert(pb.route==(city and 1242 or 790) and mb.route==(city and 363 or 145) and f.amount==(city and 1605 or 935))
+      end
       assert(f.amount==v.route_profit and commercial.revenue==f.amount and commercial.paid_units==spec.passengers+spec.mail,
         ("fare=%d total=%d revenue=%d paid=%d last unit=%d last station=%d, tick=%d"):format(
           f.amount,v.route_profit,commercial.revenue,commercial.paid_units,f.units,f.station or -1,f.tick))
