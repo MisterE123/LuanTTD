@@ -1781,6 +1781,7 @@ function U.clear_ship_run(p)
   V.status=msg
 end
 local airfield_tools={airfield_build={name="Build country airfield"},city_airport_build={name="Build City Airport",layout="city"},
+  metropolitan_airport_build={name="Build Metropolitan Airport",layout="metropolitan"},
   heliport_build={name="Build Heliport",layout="heliport"},helidepot_build={name="Build Helidepot",layout="helidepot"},
   helistation_build={name="Build Helistation",layout="helistation"},airfield_remove={name="Dismantle airfield"}}
 local airfield_order={name=S.air_owned_preview and "Order aircraft" or "Order trimotor"}
@@ -3820,7 +3821,7 @@ function U.service(p,kind,id)
     local field=S.stock_small_airports and S.stock_small_airports[id]
     if not field then return end
     local heliport=field.layout=="heliport"
-    local title=({city="City Airport",heliport="Heliport",helidepot="Helidepot",helistation="Helistation"})[field.layout] or "Country airfield"
+    local title=({city="City Airport",metropolitan="Metropolitan Airport",heliport="Heliport",helidepot="Helidepot",helistation="Helistation"})[field.layout] or "Country airfield"
     label(.4,.45,("%s #%d  ·  %s"):format(title,id,field.owner))
     if heliport or field.layout=="helidepot" or field.layout=="helistation" then label(.4,1.20,field.flags~=0 and "Helicopter facilities reserved." or "Helicopter facilities clear.")
     else label(.4,1.20,math.floor(field.flags/256)%2==1 and "Runway reserved." or "Runway clear.") end

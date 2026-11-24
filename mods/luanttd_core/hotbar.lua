@@ -143,7 +143,7 @@ function H.enable_ships()
     [7]=item("ship_buoy_remove","Remove buoy, keep water","ship_buoy_remove"),[8]=back}
   sync_sections()
 end
-function H.enable_airfields(owned,city,heliport,ground)
+function H.enable_airfields(owned,city,heliport,ground,expansion)
   local rooftop=heliport and item("heliport_build","Build Heliport","heliport") or nil
   H.menus.rotary_airfields=ground and (ground.helidepot or ground.helistation) and {
     title="Helicopter Facilities",[1]=inspect,[2]=rooftop,
@@ -156,7 +156,9 @@ function H.enable_airfields(owned,city,heliport,ground)
     [4]=city and item("city_airport_build","Build City Airport","city_airport") or nil,
     [5]=item("airfield_remove","Dismantle airfield","airfield_remove"),
     [6]=H.menus.rotary_airfields and section("rotary_airfields","Helicopter Facilities","rotary_airfields") or rooftop,
-    [7]=not owned and item("airfield_clear","Clear flight pilot","airfield_clear") or nil,[8]=back}
+    [7]=not owned and item("airfield_clear","Clear flight pilot","airfield_clear") or nil,[8]=back,
+    [10]=expansion and expansion.metropolitan and
+      item("metropolitan_airport_build","Build Metropolitan Airport","metropolitan_airport") or nil}
   sync_sections()
 end
 function H.enable_ship_coal()

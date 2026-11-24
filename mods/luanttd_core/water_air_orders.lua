@@ -28,7 +28,7 @@ return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
     local rig=(mode=="oil" or mode=="air") and Rig.neutral_ref(s,st)
     if not st or st.owner~=owner and not rig then return end
     local title=rig and rig.name or mode=="air" and (st.layout=="city" and "City Airport" or st.layout=="heliport" and "Heliport"
-      or st.layout=="helidepot" and "Helidepot" or st.layout=="helistation" and "Helistation" or "Airfield") or "Dock"
+      or st.layout=="metropolitan" and "Metropolitan Airport" or st.layout=="helidepot" and "Helidepot" or st.layout=="helistation" and "Helistation" or "Airfield") or "Dock"
     local o={kind="station",id=id}
     if mode=="coal" or mode=="oil" then
       local report=not saved_policy and (mode=="coal" and C.order_report(s,id) or mode=="oil" and Tanker.report(s,id))

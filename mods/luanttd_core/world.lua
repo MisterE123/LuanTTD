@@ -27,7 +27,7 @@ return function(api,ui)
   if H and api.ship_tools then H.enable_ships() end
   if H and api.airport_tools then
     local caps=api.capabilities or {}
-    H.enable_airfields(S.air_owned_preview,caps.city_airport,caps.heliport,caps.ground_rotary)
+    H.enable_airfields(S.air_owned_preview,caps.city_airport,caps.heliport,caps.ground_rotary,caps.expansion_airports)
   end
   if H and api.rail_build_tools then H.enable_railworks(api.rail_span_tools,api.crossing_tools,api.bridge_picker ~= nil) end
   if H and api.rail_build_tools then H.enable_rail_waypoints() end

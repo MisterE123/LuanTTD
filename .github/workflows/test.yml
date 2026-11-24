@@ -75,6 +75,11 @@ jobs:
           lua5.1 tests/terrain_tile_lookup.lua
           lua5.1 tests/tunnel_bore.lua
           lua5.1 tests/vehicle_ride.lua
+          lua5.1 tests/airport_expansion_rc1.lua
+          lua5.1 tests/airport_metropolitan_fta.lua
+          lua5.1 tests/airport_metropolitan_paid.lua
+          lua5.1 tests/airport_metropolitan_art.lua
+          lua5.1 tests/airport_noise_rc1.lua
           lua5.1 tests/sightseeing_flight.lua
           lua5.1 tests/sightseeing_plane_effects.lua
           python3 tests/ride_interior_art.py

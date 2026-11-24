@@ -30,14 +30,15 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary)
     local field=N.layout(name)
     if not field or name=="oilrig" then return nil,"AIRPORT_TYPE_NOT_AVAILABLE" end
     if field.intro_year and Sim.date(s)<field.intro_year then
-      local reasons={heliport="HELIPORT_NOT_INTRODUCED",helidepot="HELIDEPOT_NOT_INTRODUCED",helistation="HELISTATION_NOT_INTRODUCED"}
+      local reasons={heliport="HELIPORT_NOT_INTRODUCED",helidepot="HELIDEPOT_NOT_INTRODUCED",helistation="HELISTATION_NOT_INTRODUCED",
+        metropolitan="METROPOLITAN_AIRPORT_NOT_INTRODUCED"}
       return nil,reasons[name] or "CITY_AIRPORT_NOT_INTRODUCED"
     end
     if not (s.corner_grid and origin and s.tiles[origin]) then return nil,"SELECT_AIRFIELD_ORIGIN" end
     local x,z=Sim.xy(origin)
     local airport={owner=owner,origin=origin,x=x*16,z=z*16,rotation=0,
       width=field.W,height=field.H,flags=0,tiles={},layout=name~="country" and name or nil,
-      delta_z=field.delta_z}
+      delta_z=field.delta_z,catchment_radius=field.catchment_radius}
     local h
     for dz=0,field.H-1 do for dx=0,field.W-1 do
       local a=Sim.id(x+dx,z+dz)

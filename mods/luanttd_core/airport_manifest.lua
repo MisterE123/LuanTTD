@@ -24,5 +24,8 @@ return function(core,mod)
       ground[name]=not not ready
     end
   end
-  return assets,not not city,not not heliport,ground
+  local metro=dofile(mod.."/airport_metropolitan_art.lua")(
+    dofile(mod.."/openttd/airport_expansion_data.lua").metropolitan)
+  local expansion={metropolitan=not not files["bl_dispatch_metropolitan_airport.png"] and not metro.missing(files)}
+  return assets,not not city,not not heliport,ground,expansion
 end

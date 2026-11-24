@@ -383,7 +383,7 @@ return function(Sim,R)
         local x,z
         if cell then x,z=Sim.xy(cell) end
         local cargo=Freight.role(r)
-        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(rig and rig.name or mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or r.layout=="heliport" and "Heliport" or r.layout=="helidepot" and "Helidepot" or r.layout=="helistation" and "Helistation" or "Airfield") or "Dock")
+        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(rig and rig.name or mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or r.layout=="metropolitan" and "Metropolitan Airport" or r.layout=="heliport" and "Heliport" or r.layout=="helidepot" and "Helidepot" or r.layout=="helistation" and "Helistation" or "Airfield") or "Dock")
           .." "..key_..(x and (" (%d, %d)"):format(x,z) or "")}
         if mode=="ship" and R.water.coal then
           local report=R.water.coal.order_report(s,key_)

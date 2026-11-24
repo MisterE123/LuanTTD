@@ -76,6 +76,8 @@ return function(A)
   end
 
   function A.free_terminal(a,v)
+    if v.helicopter and A.reserve_helipad then return A.reserve_helipad(a,v) end
+    if A.reserve_terminal then return A.reserve_terminal(a,v) end
     for i,bit in ipairs(A.terminal_bits) do
       if not has(a.flags,bit) then
         a.flags=union(a.flags,bit)

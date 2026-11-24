@@ -6,7 +6,7 @@
 return function(Packets,Rating,passenger_acceptance,mail_acceptance)
   local C={default_spread=12,unmodified_radius=4}
   -- "airport" covers the stock radius-four Country airfield and Heliport.
-  local radii={bus=3,truck=3,rail=4,dock=5,airport=4,airport_city=5,buoy=0,waypoint=0}
+  local radii={bus=3,truck=3,rail=4,dock=5,airport=4,airport_city=5,airport_metropolitan=6,buoy=0,waypoint=0}
   local houses={passenger=passenger_acceptance,mail=mail_acceptance}
   local min,max=math.min,math.max
   local function in_map(w,h,x,y) return x>=0 and y>=0 and x<w and y<h end
@@ -30,7 +30,7 @@ return function(Packets,Rating,passenger_acceptance,mail_acceptance)
         local r=C.radius(tile.kind,modified)
         if r>0 then
           c.radius=max(c.radius,r)
-          c.facilities[tile.kind=="airport_city" and "airport" or tile.kind]=true
+          c.facilities[tile.kind:match("^airport_") and "airport" or tile.kind]=true
           if not rect then
             rect={left=x,right=x,top=y,bottom=y}
           else

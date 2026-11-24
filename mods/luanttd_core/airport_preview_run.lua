@@ -46,7 +46,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     if profile.airplanes==false then
       return design and design.helicopter==true or false
     end
-    return not (design and design.small==false) or field.layout=="city"
+    return not (design and design.small==false) or field.layout=="city" or profile.short_strip==false
   end
   local function layout(field)
     return Network.layout and assert(Network.layout(field.layout),"Unrecognized saved airport") or Small

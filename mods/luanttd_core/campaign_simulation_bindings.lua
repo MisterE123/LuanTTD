@@ -27,7 +27,7 @@ return function(Sim,mod)
     Sim.mount_stock_town_growth(s,runtime,true)
     return runtime
   end
-  function B.air(s,slope,ready,city_ready,heliport_ready,ground_ready)
+  function B.air(s,slope,ready,city_ready,heliport_ready,ground_ready,expansion_ready)
     local terrain=dofile(source.."terrain.lua")
     local small=dofile(source.."airport_small.lua")
     local motion=dofile(source.."airport_motion.lua")(small)
@@ -38,6 +38,9 @@ return function(Sim,mod)
     if ground_ready and (ground_ready.helidepot or ground_ready.helistation) then
       local profiles=dofile(source.."airport_rotary_ground_profiles.lua")
       for name,r in pairs(profiles) do if ground_ready[name] then ground[name]=r end end
+    end
+    if expansion_ready and expansion_ready.metropolitan then
+      ground.metropolitan=dofile(source.."airport_metropolitan.lua")
     end
     local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small,city or nil,rig,heliport or nil,ground)
     local roster=dofile(source.."airport_roster.lua")
