@@ -42,6 +42,9 @@ if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   ready_mark=TRAM_GRADE_NATIVE_READY
   view_mark=TRAM_GRADE_NATIVE_VIEW
   views=(tram depot platform overlay)
+  if [[ ${LUANTTD_NATIVE_TRAM_FACILITY_REMOVE:-0} == 1 ]]; then
+    views+=(tram_facility_modal tram_facility_removed)
+  fi
 fi
 if [[ ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then
   fixture=tram_crossing_render_native
@@ -128,7 +131,18 @@ for view in "${views[@]}"; do
     grep -q TRAM_CROSSING_NATIVE_MODAL "$out/server.log"
     sleep .4
   fi
+  if [[ "$view" == tram_facility_modal ]]; then
+    slot=$(sed -n 's/.*TRAM_FACILITY_SLOT //p' "$out/server.log" | tail -1)
+    xdotool key "$slot"; sleep .45; xdotool mousedown 1; sleep .45; xdotool mouseup 1
+    for _ in {1..30}; do grep -q TRAM_FACILITY_MODAL "$out/server.log" && break; sleep .2; done
+    grep -q TRAM_FACILITY_MODAL "$out/server.log"
+    sleep .4
+  fi
   import -window root "$out/$view.png"
+  if [[ "$view" == tram_facility_modal ]]; then
+    xdotool mousemove 650 421 click 1
+    sleep .9
+  fi
   if [[ "$view" == tram_modal ]]; then
     xdotool mousemove 650 451 click 1
     sleep .9

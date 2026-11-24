@@ -107,7 +107,29 @@ core.register_globalstep(function()
   seen=view
   local p=core.get_player_by_name(owner)
   if p then
-    if view=="tram" then place_camera(p)
+    if view=="tram_facility_modal" then
+      assert(run.clear(S,owner) and world.go_menu(p,"roads"))
+      local slot
+      for i,j in ipairs(world.hotbar_layout(p)) do if j==9 then slot=i end end
+      assert(slot)
+      p:set_pos({x=48.5,y=9.5,z=42.5})
+      p:set_look_horizontal(0);p:set_look_vertical(math.pi/2-.002)
+      local show=core.show_formspec
+      core.show_formspec=function(n,name,form)
+        if n==owner and form:find("Remove tram platform",1,true) then
+          assert(S.tiles[last].tram.kind=="drive_stop")
+          core.log("action","TRAM_FACILITY_MODAL grade and tram platform untouched before confirmation")
+          core.show_formspec=show
+        end
+        return show(n,name,form)
+      end
+      core.log("action","TRAM_FACILITY_SLOT "..(slot==10 and 0 or slot))
+    elseif view=="tram_facility_removed" then
+      assert(S.tiles[last].tram.kind=="road" and S.tiles[last].tram.tram_bits==5)
+      assert(core.get_node({x=48,y=3,z=42}).name=="luanttd_core:tramway_5")
+      assert(net.surface(S,last).grade==0 and net.surface(S,last).base==2)
+      core.log("action","TRAM_FACILITY_REMOVED physical platform removed while the raised driveway and tracks remain")
+    elseif view=="tram" then place_camera(p)
     else
       local x,z,y=2*route_x+.5,42.5,2.7
       if view=="depot" then x,z,y=42.5,30.5,1.8 end

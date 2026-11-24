@@ -182,3 +182,32 @@ assert(s.tiles[signed].road_disallowed~=nil and s.tiles[signed].road_bits==5 and
 local _,busy=W.quote(s,paving,ramp,ramp,1,{start_half=false,end_half=true,toggle=1})
 assert(busy=="VEHICLE_IN_THE_WAY" and not s.tiles[ramp].build)
 print("PASS signed road matches the installed tram foundation, charges only its own pavement and leaves the tram owner and track unchanged")
+
+do
+  local function probe() return dofile(root.."tram_occupancy.lua")(S,Run,s) end
+  local _,why=Network.facility_removal_plan(s,owner,upper,probe())
+  assert(why=="VEHICLE_IN_THE_WAY")
+  assert(not Network.facility_removal_plan(s,paving,upper,probe()))
+  assert(Run.clear(s,owner))
+  local edit=assert(Network.facility_removal_plan(s,owner,upper,probe()))
+  assert(edit.cost==50 and edit.terminal_level==2)
+  local old=s.tiles[upper].tram.dir
+  s.tiles[upper].tram.dir=0
+  local ok,denial=Network.apply_facility_removal(s,owner,edit,probe())
+  assert(not ok and denial=="STALE_QUOTE")
+  s.tiles[upper].tram.dir=old
+  local company=s.companies[owner]
+  local before=company.cash
+  assert(Network.apply_facility_removal(s,owner,edit,probe()))
+  local built=s.tiles[upper].tram
+  assert(company.cash==before-50 and built.kind=="road" and built.tram_bits==5 and not built.station)
+  assert(Network.surface(s,upper).base==2 and Network.surface(s,upper).grade==0)
+  edit=assert(Network.facility_removal_plan(s,owner,r,probe()))
+  assert(Network.apply_facility_removal(s,owner,edit,probe()))
+  assert(rt.build=="road" and rt.road_bits==5 and rt.tram.tram_bits==5 and rt.tram.kind=="road")
+  local buyoff=assert(Network.facility_removal_plan(s,owner,depot,probe()))
+  assert(buyoff.cost==80 and Network.apply_facility_removal(s,owner,buyoff,probe()))
+  assert(not s.tiles[depot].tram and s.tiles[at(6,10)].tram)
+  assert(company.cash==before-50-50-80)
+  print("PASS selective depot/platform demolition charges stock cost, revalidates orders and preserves adjacent track or shared street")
+end

@@ -173,7 +173,7 @@ return function(Sim,T,Terrain)
     local dirty={}
     local crossing
     for i,p in ipairs(items) do
-      if p.record.crossing_quote then
+      if p.record and p.record.crossing_quote then
         Sim.apply_crossing_construction(s,p.record.crossing_quote)
         crossing=true
       else
@@ -260,6 +260,37 @@ return function(Sim,T,Terrain)
   function N.apply_remove(s,owner,plan)
     return assert(removal).apply(s,owner,plan)
   end
+  -- RC1 RemoveRoadDepot and RemoveRoadStop (keep driveway).
+  -- Both are facility removals, never whole-tile landscape clearing.
+  function N.facility_removal_plan(s,owner,id,busy)
+    local tile=s.tiles[id]
+    local part=tile and tile.tram
+    local company=s.companies[owner]
+    if not company or not part or part.tramtype~=ELRL or
+        (part.kind~="depot" and part.kind~="drive_stop") then return nil,"NO_TRAM_FACILITY" end
+    if part.owner~=owner then return nil,"OWNED_BY_ANOTHER" end
+    if not busy or busy(id) then return nil,"VEHICLE_IN_THE_WAY" end
+    local price=part.kind=="depot" and 80 or 50
+    if price>company.cash then return nil,"NOT_ENOUGH_MONEY" end
+    return {id=id,cost=price,kind=part.kind,dir=part.dir,terminal_level=part.terminal_level,
+      bits=part.tram_bits,tram_owner=part.tram_owner,tramtype=part.tramtype}
+  end
+  function N.apply_facility_removal(s,owner,prior,busy)
+    local q,why=N.facility_removal_plan(s,owner,prior.id,busy)
+    if not q then return false,why end
+    for _,field in ipairs{"cost","kind","dir","terminal_level","bits","tram_owner","tramtype"} do
+      if q[field]~=prior[field] then return false,"STALE_QUOTE" end
+    end
+    local items={{id=q.id}}
+    if q.kind=="drive_stop" then
+      items[1].record={kind="road",tram_bits=q.bits,tramtype=q.tramtype,tram_owner=q.tram_owner}
+    end
+    local dirty,price=apply(s,owner,items,q.cost)
+    if not dirty then return false,price end
+    local label=q.kind=="drive_stop" and "Removed tram platform, kept the tracks" or "Removed tram depot"
+    return true,("%s for $%d."):format(label,price),dirty
+  end
+
   function N.move(s,from,to,commit)
     if Sim.tram_crossing_step then return Sim.tram_crossing_step(s,from,to,commit) end
     return commit()

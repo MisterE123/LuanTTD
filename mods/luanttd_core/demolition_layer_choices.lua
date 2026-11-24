@@ -25,7 +25,26 @@ return function(api,clear_structure)
     span(S.aqueduct_above,S.stock_aqueducts,"Remove overhead aqueduct, keep surface","aqueduct")
     span(S.tunnel_below,S.stock_road_tunnels,"Remove road tunnel below, keep surface","road_tunnel")
     span(S.rail_tunnel_below,S.stock_rail_spans,"Remove rail tunnel below, keep surface","rail_tunnel")
-    if t.tram then add("tramway","Tramway or tram facility",false,"This version does not support removing the tram layer separately.") end
+    if t.tram then
+      local tr=api.tram
+      if (t.tram.kind=="depot" or t.tram.kind=="drive_stop") and tr and tr.network and tr.network.facility_removal_plan then
+        local function busy()
+          return tr.busy_probe and tr.busy_probe() or tr.busy
+        end
+        local q,why=tr.network.facility_removal_plan(S,n,id,busy())
+        local label=t.tram.kind=="depot" and "Remove tram depot" or "Remove tram platform, keep tracks and pavement"
+        local detail=q and ("Cost: "..money(q.cost)) or
+          why=="VEHICLE_IN_THE_WAY" and "Stop the tram service using this facility before removing it." or
+          why=="OWNED_BY_ANOTHER" and "This facility belongs to another company." or
+          why=="NOT_ENOUGH_MONEY" and "Not enough cash." or tostring(why)
+        add("tram_facility",label,q,detail,function()
+          local ok,note,tiles=tr.network.apply_facility_removal(S,n,q,busy())
+          return true,ok and tiles or nil,note
+        end)
+      else
+        add("tramway","Tram tracks",false,"Use Remove Tram Track to remove the selected tramway without affecting roads.")
+      end
+    end
     local crossing=t.level_crossing
     if crossing then
       local axis=crossing.road_axis

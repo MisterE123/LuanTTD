@@ -178,3 +178,5 @@ The reconstruction rules are ported from 16.0-RC1 `TownActionRoadRebuild`, `Tile
 ### Tram level crossings
 
 Lay tramway across straight, perpendicular ordinary rail, or lay ordinary rail across existing straight tramway. The tram sees the same physical gate and rail reservation. A crossing can also carry separately priced standard road pavement. Use Remove Road, Remove Tram Track, or choose the surface layer in Bulldozer; removing the final surface layer preserves the railway and any outstanding reservation. Bulldozer can also remove the ordinary railway and leave both surface layers in place; if there is an outstanding rail reservation, release it first. The single dedicated streetcar pilot does not operate on crossings that also carry regular road traffic.
+
+To remove a tram depot or platform, click it with **Bulldozer** and select the facility layer. Removing a drive-through platform keeps its tram track and any ordinary pavement; removing a depot leaves the approach tracks outside its door in place. Stop any tram service using the site first.
