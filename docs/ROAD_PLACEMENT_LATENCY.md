@@ -2,6 +2,8 @@
 
 Road preview and placement use the async campaign owner. A moving cursor
 shows a neutral outline while the current candidate is being checked.
+Road-stop drags show their clamped strip or rectangle immediately;
+the worker supplies the price and validates the terrain and occupancy.
 A confirmed obstruction is still red. When the player places a road,
 one authoritative request plans and applies it, checking the displayed
 price and footprint if a completed preview was shown. The host never

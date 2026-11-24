@@ -4,6 +4,19 @@
 -- road_gui.cpp PlaceRoad_BusStation / PlaceRoad_TruckStation.
 return function(Stop)
   local A={}
+  -- viewport.cpp VPM_X/Y_LIMITED and VPM_X_AND_Y_LIMITED constrain
+  -- the user's drag at its starting corner before giving it to the
+  -- construction command. The command's separate strict check remains.
+  function A.drag_end(board,first,last,dir,through,spread)
+    local x,z=board.xy(first)
+    local u,v=board.xy(last)
+    local function clamp(d) return math.max(1-spread,math.min(spread-1,d)) end
+    u,v=x+clamp(u-x),z+clamp(v-z)
+    if not through then
+      if dir%2==0 then u=x else v=z end
+    end
+    return board.id(u,v)
+  end
   function A.footprint(board,first,last,dir,through,spread)
     if type(dir)~="number" or dir%1~=0 or dir<0 or dir>3 then return nil,"PARAMETERS" end
     local x,z=board.xy(first)

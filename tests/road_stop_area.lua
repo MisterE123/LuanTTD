@@ -37,6 +37,11 @@ assert(select(2,A.quote(B,req,opts))=="MUST_REMOVE_ROAD_STOP_FIRST")
 req.adjacent=false
 q=assert(A.quote(B,req,opts))
 assert(q.join==1 and q.cost==390*5)
+local synt={id=id,xy=B.xy}
+assert(A.drag_end(synt,id(20,20),id(16,4),0,false,12)==id(20,9))
+assert(A.drag_end(synt,id(20,20),id(50,4),1,false,12)==id(31,20))
+assert(A.drag_end(synt,id(20,20),id(55,4),0,true,12)==id(31,9))
+assert(select(2,A.footprint(synt,id(20,20),id(55,4),0,true,12))=="STATION_SPREAD")
 local allow=false
 B.authority=function()return allow,"LOCAL_AUTHORITY_REFUSES" end
 assert(select(2,A.quote(B,req,opts))=="LOCAL_AUTHORITY_REFUSES")

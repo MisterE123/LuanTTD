@@ -1123,12 +1123,18 @@ function U.depot_direction_fields(p,f)
   return true
 end
 local road_terminal_kind={road_station="bus",truck_stop_tool="truck",road_depot="depot"}
+U.stop_area_geometry=dofile(moddir.."/openttd/road_stop_area.lua")()
 local road_terminal_title={bus="Bus stop",truck="Truck stop",depot="Road depot"}
 function U.road_terminal_tool(tool) return road_terminal_kind[tool]~=nil end
 local function road_terminal_request(V,id)
   local kind=road_terminal_kind[V.tool]
   local spec=kind and V.road_terminal_layout and V.road_terminal_layout[kind]
   if spec then return {tool="stock_terminal",first=id,kind=kind,direction=spec.dir,through=spec.through} end
+end
+function U.road_auto_terminal(p,tool,id)
+  local kind=road_terminal_kind[tool]
+  if kind then return {tool="stock_terminal_auto",kind=kind,first=id,
+    adjacent=kind~="depot" and p:get_player_control().aux1==true} end
 end
 function U.road_stop_gesture(p,tool)
   if not api.authority_handoff then return false end
@@ -1140,7 +1146,8 @@ end
 function U.road_stop_request(p,V,first,last)
   if V.tool=="road_stop_remove" then return {tool="stock_stop_remove",first=first,last=last} end
   local r=road_terminal_request(V,first)
-  r.tool,r.last,r.adjacent="stock_stop_area",last,p:get_player_control().aux1==true
+  r.tool,r.last,r.adjacent="stock_stop_area",
+    U.stop_area_geometry.drag_end(Sim,first,last,r.direction,r.through,12),p:get_player_control().aux1==true
   return r
 end
 local function road_terminal_label(req)
@@ -2019,6 +2026,15 @@ local function authority_preview(p,id,hit)
     request=U.road_stop_request(p,V,first,id)
     label=request.kind and road_terminal_label(request) or fixed_road_labels[tool]
     ids=first==id and {id} or {first,id}
+    if request.kind and first~=request.last then
+      local outline=V.road_stop_outline
+      if not outline or outline.first~=first or outline.last~=request.last then
+        local _,footprint=U.stop_area_geometry.footprint(Sim,first,request.last,request.direction,request.through,12)
+        outline={first=first,last=request.last,ids=footprint}
+        V.road_stop_outline=outline
+      end
+      ids=outline.ids
+    elseif request.kind then ids={first} end
   elseif U.waypoint_tool(tool) and hit then
     local first=V.road_press and V.road_press.id or id
     label=fixed_road_labels[tool]
@@ -2062,8 +2078,9 @@ local function authority_preview(p,id,hit)
   elseif tool=="fund_bank" then
     label="Fund Bank";request={tool=tool,first=id}
   elseif road_terminal_kind[tool] or tool=="road_bay_pair" then
-    request=road_terminal_request(V,id) or {tool=tool=="truck_stop_tool" and "truck_stop" or tool,first=id}
-    if request.tool=="stock_terminal" then label=road_terminal_label(request) end
+    request=road_terminal_request(V,id) or U.road_auto_terminal(p,tool,id) or {tool=tool,first=id}
+    if request.tool=="stock_terminal" then label=road_terminal_label(request)
+    elseif request.tool=="stock_terminal_auto" then label=road_terminal_title[request.kind].." · Auto orientation" end
   elseif dock=="dock" or dock=="depot" or tool=="ship_buoy" then
     kind,request="transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=V.ship_axis or 0}
   elseif dock=="lock" or dock=="canal" or dock=="aqueduct" then
@@ -2497,6 +2514,12 @@ function U.build_world(p,id,hit)
     return
   end
   if api.authority_handoff then
+    local auto=U.road_auto_terminal(p,V.tool,id)
+    if auto then
+      if auto.adjacent then U.open_road_join_picker(p,V,auto)
+      else worker_build(n,V,"road",auto) end
+      return
+    end
     if V.tool=="teleport_tile" then U.teleport_tile(p,id);return end
     if V.tool=="inspect" then U.inspect(p,id);return end
     if U.signal_ui and U.signal_ui.tool(V.tool) then U.signal_ui.open(p,id,V.tool,hit);return end

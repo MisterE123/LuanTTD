@@ -276,21 +276,27 @@ core.register_on_joinplayer(function(p)
       for i,j in ipairs(world.hotbar_layout(player)) do if j==3 then slot=i end end
       assert(slot and slot<=9)
       aim(q.x+5,q.z,.25)
-      local show=core.show_formspec
-      core.show_formspec=function(user,form,body)
-        if user==name and form=="luanttd_core:road_terminal_layout" then
-          assert(body:find("Truck stop layout",1,true))
-          core.log("action","NATIVE_ROAD_GESTURE_STOP_MIX_OPEN")
-          core.show_formspec=show
+      if not core.settings:get_bool("luanttd_native_road_stop_auto",false) then
+        local show=core.show_formspec
+        core.show_formspec=function(user,form,body)
+          if user==name and form=="luanttd_core:road_terminal_layout" then
+            assert(body:find("Truck stop layout",1,true))
+            core.log("action","NATIVE_ROAD_GESTURE_STOP_MIX_OPEN")
+            core.show_formspec=show
+          end
+          return show(user,form,body)
         end
-        return show(user,form,body)
       end
       core.log("action","NATIVE_ROAD_GESTURE_STOP_MIX slot="..slot)
     elseif label=="stop-mix-done" then
       local snapshot=assert(OwnerCheckpoint.read())
       local bus,truck=Sim.id(q.x+4,q.z),Sim.id(q.x+5,q.z)
       local st=assert(snapshot.stations[snapshot.tiles[bus].station])
-      assert(snapshot.tiles[truck].station==st.id and st.road_members[truck]=="truck" and st.road_members[bus]=="bus")
+      local target,hit=world.target(player)
+      local desc,status=ui.world_status(player,target,true,hit)
+      assert(snapshot.tiles[truck].station==st.id and st.road_members[truck]=="truck" and st.road_members[bus]=="bus",
+        ("target=%s expected=%d station=%s wanted=%d | %s | %s"):format(tostring(target),truck,
+          tostring(snapshot.tiles[truck].station),st.id,tostring(desc),tostring(status)))
       assert(st.truck_tile==truck and st.road_stop_areas.bus and st.road_stop_areas.truck)
       local function model(i)
         local x,z=Sim.xy(i)

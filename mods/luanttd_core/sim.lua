@@ -1308,7 +1308,7 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
     end end
     return found
   end
-  local ground=default_oneway().ground_occupancy(s)
+  local ground=req.ground or default_oneway().ground_occupancy(s)
   local changes,parts,cost,over,z={},{},0,nil,nil
   for _,id in ipairs(ids) do
     local q,why=M.stock_road_terminal_plan(s,owner,id,{kind=req.kind,dir=req.dir,through=req.through,ground=ground,area=true})
@@ -1341,6 +1341,50 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
   end
   for _,edit in ipairs(fronts) do changes[#changes+1]=edit end
   return {cost=cost,changes=changes,stop_members=result,join_stop=sid,picker_area=area}
+end
+-- Luanti's Auto tool chooses a stock orientation. It must still go
+-- through the same RC1 station command, rather than the early one-tile
+-- prototype. Infer geometry from the authoritative ground only.
+function M.auto_road_terminal_plan(s,owner,id,request)
+  local t=s.tiles[id]
+  local kind=request.kind
+  if not t or not s.companies[owner] or kind~="bus" and kind~="truck" and kind~="depot" then return nil,"PARAMETERS" end
+  local ground=default_oneway().ground_occupancy(s)
+  local function propose(dir,through)
+    local params={kind=kind,dir=dir,through=through,adjacent=request.adjacent,join=request.join,ground=ground}
+    if kind=="depot" then return M.stock_road_terminal_plan(s,owner,id,params) end
+    return M.stock_road_stop_area_plan(s,owner,id,id,params)
+  end
+  if t.build=="road" and kind~="depot" then
+    local bits=M.road_bits(s,id)
+    local axis=road_axis(bits)
+    if not axis then
+      local _,count=new_pieces(bits,0)
+      return nil,count==2 and "DRIVE_THROUGH_CORNER" or "DRIVE_THROUGH_JUNCTION"
+    end
+    return propose(axis==10 and 0 or 1,true)
+  end
+  if t.build=="road_station" or t.build=="road_depot" then return nil,"ALREADY_BUILT" end
+  local prefs={}
+  for d=1,4 do
+    local near=adjacent(id,d)
+    local other=near and s.tiles[near]
+    local score=0
+    if other and road_kind(other) and road_access(other,owner) then
+      local bits=M.road_bits(s,near)
+      if has_edge(bits,opposite(d)) then score=2
+      elseif other.build=="road" and not other.level_crossing and bits~=0 then score=1 end
+    end
+    prefs[#prefs+1]={dir=4-d,score=score}
+  end
+  table.sort(prefs,function(a,b) return a.score>b.score or a.score==b.score and a.dir<b.dir end)
+  local reason
+  for _,choice in ipairs(prefs) do
+    local q,why=propose(choice.dir,false)
+    if q then return q end
+    reason=reason or why
+  end
+  return nil,reason
 end
 function M.stock_road_stop_remove_plan(s,owner,first,last)
   local company=s.companies[owner]

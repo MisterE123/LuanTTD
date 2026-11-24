@@ -58,6 +58,13 @@ return function(Sim,s,oneway,Bank)
         through=request.through==true,join=request.join,adjacent=request.adjacent==true})
       if not q then return nil,Sim.stock_road_terminal_error(why) end
       return q
+    elseif op=="stock_terminal_auto" and first==last then
+      if request.join~=nil and (type(request.join)~="number" or request.join<1 or request.join%1~=0) then
+        return nil,"INVALID_ROAD_GESTURE"
+      end
+      local q,why=Sim.auto_road_terminal_plan(s,player,first,request)
+      if not q then return nil,Sim.stock_road_terminal_error(why) end
+      return q
     elseif op=="stock_terminal" and first==last then
       if request.kind~="depot" and request.kind~="truck" and request.kind~="bus" then
         return nil,"INVALID_ROAD_GESTURE"
@@ -114,7 +121,8 @@ return function(Sim,s,oneway,Bank)
   function M.join_choices(player,request)
     if type(request)~="table" then return nil,"INVALID_ROAD_GESTURE" end
     local waypoint=request.tool=="road_waypoint" and not request.remove
-    if not waypoint and request.tool~="stock_stop_area" then return nil,"INVALID_ROAD_GESTURE" end
+    if not waypoint and request.tool~="stock_stop_area" and
+        (request.tool~="stock_terminal_auto" or request.kind=="depot") then return nil,"INVALID_ROAD_GESTURE" end
     local separate={tool=request.tool,first=request.first,last=request.last,kind=request.kind,
       direction=request.direction,axis=request.axis,through=request.through,adjacent=true,separate=true}
     local q,why=plan(player,separate)

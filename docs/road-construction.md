@@ -40,7 +40,10 @@ passenger platforms, while mail vans and freight trucks use their
 loading platforms. Each cargo keeps its own queue. Hold **E** while releasing to choose **New station**
 or join an eligible owned station across a gap. The original spread
 limit applies to the combined footprint.
-**Auto orientation** retains the default quick-placement behavior.
+**Auto orientation** is a quick click: an existing straight road sets
+a through stop's axis, otherwise an entrance favors a neighboring
+connection and checks the slope. It uses the same prices and adjacent
+joining as a selected layout. Hold **E** for join choices in Auto too.
 Explicitly oriented depots can be placed
 before the connecting road; they also try to complete the missing
 half of an existing street directly at the selected door. An empty
