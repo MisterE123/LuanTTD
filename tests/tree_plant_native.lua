@@ -1,11 +1,25 @@
 -- Ordinary generated campaign, real Luanti client keyboard and mouse.
 local patch,start_y,starting_cash,ready,moved,slot,home_slot,selected
-local pause_requested,paused,aim_end,settled_end
+local pause_requested,paused,aim_end,settled_end,palette_closed
 core.register_on_player_receive_fields(function(p,form,fields)
   if form=="luanttd_core:plant_tree_palette" and fields.quit and p:get_player_name()=="SteelReview" then
+    palette_closed=true
     core.log("action","NATIVE TREE QA PALETTE CLOSED")
   end
 end)
+-- Use the same UI handler as the player, but do not treat unrelated
+-- stale client dig/input state during the palette as a tree gesture.
+local actual_begin=ui.begin_tree
+ui.begin_tree=function(p,id)
+  local accepted=actual_begin(p,id)
+  if accepted and p:get_player_name()=="SteelReview" and palette_closed and not moved then
+    assert(patch and id==patch[1],"Tree drag did not start on the selected clear tile")
+    moved=true
+    core.log("action","NATIVE TREE QA DRAG START")
+    core.after(.25,function() aim_end=true end)
+  end
+  return accepted
+end
 local function native_tree_qa()
   local p=core.get_player_by_name("SteelReview")
   if not (p and authority and authority.status()=="owned") then core.after(.2,native_tree_qa);return end
@@ -77,12 +91,6 @@ local function native_tree_qa()
   local wield=p:get_wielded_item():get_name()
   if not selected and wield=="luanttd_core:menu_landscape_plant_tree" then
     selected=true;core.log("action","NATIVE TREE QA SELECTED")
-  end
-  local keys=p:get_player_control()
-  if not moved and wield=="luanttd_core:menu_landscape_plant_tree" and (keys.dig or keys.LMB) then
-    assert(api.world.target(p)==patch[1],"Tree drag did not start on the selected clear tile")
-    moved=true
-    core.after(.4,function() aim_end=true end)
   end
   if aim_end and not settled_end then
     if api.world.target(p)==patch[3] then
