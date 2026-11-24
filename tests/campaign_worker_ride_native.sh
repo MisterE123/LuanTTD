@@ -33,12 +33,13 @@ bayline_generated_town_layout = grid2
 bayline_seed = 1751
 singleplayer_mode = false
 CONF
-printf 'screen_w = 1440\nscreen_h = 900\nenable_sound = false\nkeymap_camera_mode = KEY_F7\n' >"$out/client.conf"
+printf 'screen_w = 1440\nscreen_h = 900\nfps_max = 24\nviewing_range = 48\nenable_sound = false\nenable_shaders = false\nenable_dynamic_shadows = false\nkeymap_camera_mode = KEY_F7\n' >"$out/client.conf"
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   t=$(realpath "$BAYLINE_NATIVE_TOOLS")
   export PATH="$t/run/bin:$t/usr/bin:$PATH" LD_LIBRARY_PATH="$t/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 export DISPLAY="127.0.0.1:$display" HOME="$out/home" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1
+export LP_NUM_THREADS="${LP_NUM_THREADS:-2}"
 export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 # Match an ordinary returning client. Test focus/rider behavior, not two
 # cold media downloads competing for the same local server's quota.
@@ -55,7 +56,17 @@ luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" -
 server=$!
 mark(){ for _ in {1..360}; do grep -q "$1" "$out/server.log" && return; kill -0 "$server" 2>/dev/null || break; sleep .25; done; tail -70 "$out/server.log"; return 1; }
 mark 'listening on'
-cp "$out/client.conf" "$out/observer.conf"
+# The witness is a real independent client, but only the rider provides
+# screenshots. Reduce the observer's viewport/graphics load.
+cat > "$out/observer.conf" <<'CONF'
+screen_w = 640
+screen_h = 400
+fps_max = 8
+viewing_range = 32
+enable_sound = false
+enable_shaders = false
+enable_dynamic_shadows = false
+CONF
 mkdir "$out/observer-home"
 env HOME="$out/observer-home" luanti --go --address 127.0.0.1 --port "$port" --name RideWitness --password '' --config "$out/observer.conf" --logfile '' >"$out/observer.log" 2>&1 &
 observer=$!
@@ -63,37 +74,49 @@ luanti --go --address 127.0.0.1 --port "$port" --name RideQA --password '' --con
 client=$!
 win=$(xdotool search --sync --onlyvisible --pid "$client" | tail -n 1)
 xdotool windowraise "$win" windowfocus --sync "$win"
+capture_seat() {
+  local phase=$1 view=$2 shot="$out/$1-$2.png"
+  # RIDE_VISIBLE confirms server attachment, not client delivery/paint.
+  # A bright builder view is not a cabin. Wait for both image predicates
+  # without reducing either of the final assertions.
+  for _ in {1..28}; do
+    sleep .30
+    import -window root "$shot"
+    if python3 tests/private_ride_pixels.py "$shot" "$phase" "$view"; then return 0; fi
+  done
+  python3 tests/private_ride_pixels.py "$shot" "$phase" "$view" --explain || true
+  tail -40 "$out/server.log"
+  return 1
+}
 for phase in bus cab coach; do
   mark "RIDE_READY $phase"
   xdotool windowraise "$win" windowfocus --sync "$win"
   sleep .30
-  import -window root "$out/$phase-builder.png"
+  import -window root -resize 960x600 -quality 91 "$out/$phase-builder.jpg"
   if [[ "$phase" == cab ]]; then xdotool mousemove 682 232 click 1
   else xdotool mousemove 794 232 click 1
   fi
   mark "RIDE_VISIBLE $phase"
-  # The tested vehicle can be a sector away from the builder camera.
-  # A sent seat update is not the same as the client's painted first frame.
-  for _ in {1..14}; do
-    sleep .26
-    import -window root "$out/$phase-forward.png"
-    mean=$(convert "$out/$phase-forward.png" -crop 920x390+260+190 -colorspace gray -format '%[fx:mean]' info:)
-    if awk -v n="$mean" 'BEGIN{exit !(n > 0.065)}'; then break; fi
-  done
+  capture_seat "$phase" forward
   xdotool key F7; sleep .50
-  import -window root "$out/$phase-third-back.png"
+  import -window root -resize 960x600 -quality 91 "$out/$phase-third-back.jpg"
   xdotool key F7; sleep .50
-  import -window root "$out/$phase-third-front.png"
+  import -window root -resize 960x600 -quality 91 "$out/$phase-third-front.jpg"
   xdotool key F7; sleep .35
   xdotool keydown w; xdotool mousemove_relative -- 250 15; sleep 1; xdotool keyup w
   mark "RIDE_SIDE_VIEW $phase"
-  sleep .15
-  import -window root "$out/$phase-side.png"
-  if [[ "$phase" == bus ]]; then xdotool keydown e; sleep .22; xdotool keyup e
-  elif [[ "$phase" == cab ]]; then xdotool mousedown 3; sleep .22; xdotool mouseup 3
+  capture_seat "$phase" side
+  if [[ "$phase" == bus ]]; then
+    xdotool keydown e
+    if ! mark "PASS NATIVE PRIVATE RIDE $phase"; then xdotool keyup e; exit 1; fi
+    xdotool keyup e
+  elif [[ "$phase" == cab ]]; then
+    xdotool mousedown 3
+    if ! mark "PASS NATIVE PRIVATE RIDE $phase"; then xdotool mouseup 3; exit 1; fi
+    xdotool mouseup 3
   else
     xdotool key i; sleep .65
-    import -window root "$out/$phase-inventory.png"
+    import -window root -resize 960x600 -quality 91 "$out/$phase-inventory.jpg"
     xdotool mousemove 720 469 click 1
   fi
   mark "PASS NATIVE PRIVATE RIDE $phase"
@@ -101,25 +124,6 @@ done
 mark 'PASS NATIVE ALL SEATED MODES'
 mark 'PASS NATIVE WORKER SEAT COMMAND /ride'
 mark 'PASS NATIVE WORKER SEAT COMMAND /train'
-python3 - "$out" <<'PYQA'
-from pathlib import Path
-from PIL import Image
-from sys import argv
-root=Path(argv[1])
-def proportion(image, rect, test):
-    colors=list(image.crop(rect).getdata())
-    return sum(test(*rgb) for rgb in colors)/len(colors)
-def warm(r,g,b):
-    return r>b+9 and g>b-12
-def outside(r,g,b):
-    return (b-r>22 and b-g>6 and b>100) or (g-r>12 and g-b>12)
-for mode in ("bus","cab","coach"):
-    for view in ("forward","side"):
-        shot=Image.open(root/f"{mode}-{view}.png").convert("RGB")
-        structure=(585,100,850,235) if mode!="cab" or view=="side" else (40,80,320,235)
-        assert proportion(shot,structure,warm)>.08,(mode,view,"cabin mesh missing")
-        assert proportion(shot,(300,210,1130,545),outside)>.025,(mode,view,"outside scenery missing")
-print("Six native views show the cabin and actual scenery through its windows")
-PYQA
+python3 tests/private_ride_pixels.py "$out"
 grep -E 'RIDE|PASS NATIVE' "$out/server.log"
 ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log" "$out/observer.log"

@@ -167,25 +167,31 @@ local function inspect(phase,mode,q,rider,witness,id,next_)
         actual=nearby(anchor:get_pos(),nil,exterior)
         return inside and actual and api.vehicle_ui.riding(rider)
       end
-      assert(exists(),"No rider-only mesh or authoritative exterior")
-      local original=inside:get_effective_observers()
-      assert(original and original[rider_name] and not original[witness_name])
-      local ex=actual:get_effective_observers()
-      assert(ex and not ex[rider_name] and ex[witness_name])
-      assert(invariant(rider,anchor) and inside:get_attach()==anchor,"cabin and seat must share a client transform")
-      if mode=="rail" then
-        local consist_bodies=0
-        for _,peer in ipairs(core.get_objects_inside_radius(anchor:get_pos(),8)) do
-          local entity=peer:get_luaentity()
-          local pick=entity and entity.luanttd_vehicle
-          if pick and pick.kind=="rail" and pick.id==id then
-            local visible=peer:get_effective_observers()
-            assert(visible and visible[witness_name] and not visible[rider_name],"same-train body occluded rider")
-            consist_bodies=consist_bodies+1
+      local function phase_ready()
+        if not exists() then return end
+        local original=inside:get_effective_observers()
+        assert(original and original[rider_name] and not original[witness_name])
+        local ex=actual:get_effective_observers()
+        assert(ex and not ex[rider_name] and ex[witness_name])
+        assert(invariant(rider,anchor) and inside:get_attach()==anchor,"cabin and seat must share a client transform")
+        if mode=="rail" then
+          local consist_bodies=0
+          for _,peer in ipairs(core.get_objects_inside_radius(anchor:get_pos(),8)) do
+            local entity=peer:get_luaentity()
+            local pick=entity and entity.luanttd_vehicle
+            if pick and pick.kind=="rail" and pick.id==id then
+              local visible=peer:get_effective_observers()
+              assert(visible and visible[witness_name] and not visible[rider_name],"same-train body occluded rider")
+              consist_bodies=consist_bodies+1
+            end
           end
+          -- A sector can attach the cab before delivering the trailing
+          -- coach. Wait for the complete projected consist, not a subset.
+          if consist_bodies<2 then return end
         end
-        assert(consist_bodies>=2,"both train bodies must be verified")
+        return true
       end
+      wait_for(phase.." complete private and witnessed vehicle",phase_ready,function()
       local inside_origin=inside:get_pos()
       local camera_origin=anchor:get_pos()
       assert(math.abs(inside_origin.x-camera_origin.x)<.45 and
@@ -220,6 +226,7 @@ local function inspect(phase,mode,q,rider,witness,id,next_)
           core.log("action","PASS NATIVE PRIVATE RIDE "..phase)
           next_()
         end)
+      end)
       end)
     end)
   end)
