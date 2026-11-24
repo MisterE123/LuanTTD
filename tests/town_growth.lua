@@ -41,7 +41,7 @@ allowed,why=G.month(t,{c},2,function() call=call+1;return 0 end)
 assert(not allowed and why=="unmet-cargo-goal" and call==0)
 t.received.goods.new_act=5;c.time_since_load=0
 assert(G.month(t,{c},2) and t.received.goods.old_act==5)
-assert(G.fund(t,{c},0) and t.fund_buildings_months==3 and t.grow_counter<=140)
+assert(G.fund(t,{c},0) and t.fund_buildings_months==3 and t.grow_counter==141)
 assert(G.month(t,{c},0) and t.fund_buildings_months==2)
 assert(G.month(t,{c},0) and t.fund_buildings_months==1)
 assert(not G.month(t,{c},0) and t.fund_buildings_months==0)

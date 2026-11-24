@@ -458,6 +458,13 @@ local function pick(fields,id,a,prior)
   return prior
 end
 function U.fields(p,formname,f)
+  if formname=="luanttd_core:town_authority" then
+    if f.fund_buildings then U.fund_town_from_panel(p)
+    else
+      local v=view(p:get_player_name());v.town_funding=nil;v.authority_context=nil
+    end
+    return true
+  end
   if api.authority_handoff and formname==worker_jump_form then return worker_jump_fields(p,f) end
   if api.worker_fleet and formname==api.worker_fleet.form then return api.worker_fleet.fields(p,f) end
   if api.worker_finance and formname==api.worker_finance.form then return api.worker_finance.fields(p,f) end
@@ -3017,6 +3024,7 @@ function U.open_town_authority(p,town)
   if not client then return false end
   local token={}
   v.authority_context=token
+  v.town_funding=nil
   local queued=client.query({kind="town_authority",player=n,town=town},function(result)
     if v.authority_context~=token or not core.get_player_by_name(n) then return end
     if not result.ok then U.status(p,"Town authority information is unavailable.");return end
@@ -3027,19 +3035,50 @@ function U.open_town_authority(p,town)
     local junction=row.extra_dynamite and
       "Connected streets still require an unobstructed demolition site." or
       "Connected streets still require Extra Dynamite."
+    local action=""
+    local funding=row.funding
+    if funding then
+      local status=funding.months>0 and ("Building funding active for %d more month%s."):format(
+        funding.months,funding.months==1 and "" or "s") or "No building funding is active."
+      action="label[.45,3.63;"..esc(status).."]"
+      if funding.affordable then
+        v.town_funding={town=row.id,cost=funding.cost,revision=result.revision,token=token}
+        action=action.."button[.45,4.04;9.7,.57;fund_buildings;"..
+          esc("Fund new buildings for 3 months · "..dollars(funding.cost)).."]"
+      else
+        action=action.."label[.45,4.30;"..esc("Fund new buildings · "..dollars(funding.cost).." required").."]"
+      end
+    end
+    local size=funding and 5.9 or 4.7
+    local exit=funding and 4.99 or 3.78
     core.show_formspec(n,"luanttd_core:town_authority",
-      "formspec_version[7]size[10.6,4.7]bgcolor[#152334;false]"..
+      ("formspec_version[7]size[10.6,%g]bgcolor[#152334;false]"):format(size)..
       "label[.45,.48;LOCAL AUTHORITY]label[.45,.98;"..esc(row.town).."]"..
       "box[.45,1.44;9.7,.72;#2F4758]label[.63,1.80;"..
       esc(("Your company's rating: %s (%+d)"):format(row.grade,row.rating)).."]"..
-      "textarea[.45,2.34;9.7,1.15;;;"..esc(road.."\n"..junction).."]"..
-      "button_exit[.45,3.78;9.7,.57;close;Back to world]")
+      "textarea[.45,2.34;9.7,1.15;;;"..esc(road.."\n"..junction).."]"..action..
+      ("button_exit[.45,%g;9.7,.57;close;Back to world]"):format(exit))
   end)
   return not not queued
 end
+function U.fund_town_from_panel(p)
+  local name=p:get_player_name()
+  local v=view(name)
+  local q=v.town_funding
+  local client=api.worker_bridge_client
+  if not q or q.token~=v.authority_context or not client then return end
+  v.town_funding=nil
+  local ok,why=client.query({kind="command",player=name,command={
+    kind="town_fund_buildings",town=q.town,cost=q.cost,revision=q.revision}},function(result)
+    if v.authority_context~=q.token or not core.get_player_by_name(name) then return end
+    U.status(p,result.why=="STALE_COMMAND" and "The town changed. Review the latest funding offer." or result.why)
+    U.open_town_authority(p,q.town)
+  end)
+  if not ok then U.status(p,why or "The town funding request could not be sent.") end
+end
 function U.context(p,tile,hit)
   local n=p:get_player_name();local V=view(n)
-  V.authority_context=nil
+  V.authority_context=nil;V.town_funding=nil
   if V.pick_order then U.finish_order_pick(p);return end
   if api.authority_handoff and company_projection and api.worker_depot and tile then
     local x,z=Sim.xy(tile)

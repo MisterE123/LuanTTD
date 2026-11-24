@@ -289,7 +289,9 @@ return function(Sim,R,max_days)
     local company,town=s.companies[name],s.sites[id]
     if not company then return reply(false,"COMPANY_NOT_OPEN") end
     if not town or town.kind~="town" then return reply(false,"UNKNOWN_TOWN") end
-    return reply(true,nil,Sim.road_tree_authority().company_view(s,company,town))
+    local row=Sim.road_tree_authority().company_view(s,company,town)
+    row.funding=Sim.quote_town_buildings(s,name,id)
+    return reply(true,nil,row)
   end
   function A.company(name)
     if not owner(name) then return reply(false,"INVALID_REQUEST") end
@@ -515,6 +517,8 @@ return function(Sim,R,max_days)
       if s.chair~=name and c.admin~=true then return reply(false,"Only the first company or a server admin can change speed.") end
       s.speed=c.speed
       ok,note=true,c.speed==0 and "Simulation paused." or ("Simulation at "..c.speed.."×.")
+    elseif c.kind=="town_fund_buildings" and index(c.town) then
+      ok,note,value=Sim.fund_town_buildings(s,name,c.town,c.cost)
     elseif c.kind=="company_loan" and (c.amount==10000 or c.amount==-10000) then
       if not s.companies[name] then return reply(false,"COMPANY_NOT_OPEN") end
       ok,note=Sim.loan(s,name,c.amount)

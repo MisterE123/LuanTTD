@@ -94,6 +94,9 @@ fi
 if [[ ${LUANTTD_NATIVE_STOCK_ROAD_PRICE:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_stock_road_price = true' >> "$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_TOWN_FUND:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_town_fund = true' >> "$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}
@@ -227,10 +230,19 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
     do_road tree-road-done TREE_ROAD_PASS
   fi
   if [[ ${LUANTTD_NATIVE_TOWN_PANEL:-0} == 1 ]]; then
+    if [[ ${LUANTTD_NATIVE_TOWN_FUND:-0} == 1 ]]; then
+      do_road town-fund-loans TOWN_FUND_LOANS
+    fi
     do_road town-authority TOWN_PANEL
     sleep .45; xdotool mousedown 3; sleep .45; xdotool mouseup 3
     await_log NATIVE_ROAD_GESTURE_TOWN_PANEL_PASS
     sleep .55; import -window root -resize 960x600 "$out/town-authority.jpg"
+    if [[ ${LUANTTD_NATIVE_TOWN_FUND:-0} == 1 ]]; then
+      xdotool mousemove 590 456 click 1
+      sleep 1.2
+      import -window root -resize 960x600 "$out/town-funding.jpg"
+      do_road town-fund-done TOWN_FUND_PASS
+    fi
     xdotool key Escape
   fi
   do_road remove-start REMOVE

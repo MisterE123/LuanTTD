@@ -62,3 +62,35 @@ assert(Sim.build(s,"GrowthQA","clear",{qa.tile}))
 assert(s.sites[qa.town].population==before-H.specs[h.id][1])
 assert(not s.tiles[qa.tile].house)
 print(("PASS house built %d, completed %d, first stock production %d after reload"):format(h.built_tick,h.completed_tick,h.first_cargo_tick))
+
+do
+  local target=world()
+  local owner="Town funder"
+  local company=Sim.company(target,owner)
+  local id=target.stock_town_growth.order[1]
+  local state=target.stock_town_growth.towns[id]
+  local quote=assert(Sim.quote_town_buildings(target,owner,id))
+  assert(quote.cost==207031 and not quote.affordable and quote.months==0)
+  assert(not Sim.fund_town_buildings(target,owner,id,quote.cost) and company.cash==100000)
+  company.cash=quote.cost+10
+  assert(not Sim.fund_town_buildings(target,owner,id,quote.cost-1) and state.fund_buildings_months==0)
+  local A=dofile(p.."campaign_authority_endpoint.lua")(Sim,{world=target})
+  local live=assert(A.town_authority(owner,id))
+  assert(live.ok and live.value.funding.affordable and live.value.funding.cost==207031)
+  local cmd={kind="town_fund_buildings",town=id,cost=quote.cost,revision=live.revision}
+  assert(A.command(owner,cmd).ok)
+  assert(A.command(owner,cmd).why=="STALE_COMMAND")
+  assert(company.cash==10 and company.expense==207031 and company.month_exp==207031)
+  assert(state.fund_buildings_months==3 and state.growing and state.reason=="funded")
+  local Packed=dofile(p.."packed_campaign.lua")
+  local restored=assert(Packed.decode(Packed.encode(target)))
+  assert(restored.stock_town_growth.towns[id].fund_buildings_months==3)
+  assert(restored.companies[owner].cash==10)
+  Sim.mount_stock_town_growth(restored,W)
+  for month=1,3 do
+    restored.day=month*30
+    W.prepare_day(restored,function()return 65535 end,true)
+    assert(restored.stock_town_growth.towns[id].fund_buildings_months==3-month)
+  end
+  print("PASS normal town funding uses exact stock base cost, three live growth months, saved payments and expiry")
+end

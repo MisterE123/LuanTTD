@@ -113,6 +113,13 @@ core.register_on_joinplayer(function(p)
       end
       local delivered,revenue=v.delivered or 0,v.revenue or 0
       if label=="focus-return" then at_return=delivered end
+      if label=="reopen" and core.settings:get_bool("luanttd_native_town_fund",false) then
+        local f=assert(io.open(path.."/native-focus-funded-town","r"))
+        local id=f:read("*n"); f:close()
+        local t=assert(s.stock_town_growth.towns[id])
+        assert(t.growing and t.fund_buildings_months>=1 and t.fund_buildings_months<=3)
+        core.log("action","FOCUS_NATIVE_FUND_REOPEN_PASS town funding and paid service restored")
+      end
       core.log("action",("FOCUS_NATIVE_RECEIPT %s day=%d cash=%d bus=%d delivered=%d revenue=%d")
         :format(label,r.day,r.value.cash,stat_id,delivered,revenue))
     end)
@@ -321,6 +328,30 @@ core.register_on_joinplayer(function(p)
       local t=snapshot.tiles[q.tree.id]
       assert(q.tree_town and t.build=="road" and not t.wood)
       core.log("action","NATIVE_ROAD_GESTURE_TREE_ROAD_PASS actual tree removal and 35-point town authority penalty")
+    elseif label=="town-fund-loans" then
+      local function borrow()
+        ask({kind="company"},function(r)
+          if r.value.cash>=212000 then
+            -- Freeze the in-game clock just for the receipt comparison,
+            -- so the bus cannot add a daily operating cost between reads.
+            ask({kind="command",command={kind="speed",speed=0,revision=r.revision}},function()
+              core.log("action","NATIVE_ROAD_GESTURE_TOWN_FUND_LOANS")
+            end)
+          else
+            ask({kind="command",command={kind="company_loan",amount=10000,revision=r.revision}},borrow)
+          end
+        end)
+      end
+      borrow()
+    elseif label=="town-fund-done" then
+      local state=assert(OwnerCheckpoint.read())
+      assert(q.funded and state.stock_town_growth.towns[q.tree_town].fund_buildings_months==3)
+      assert(core.safe_file_write(path.."/native-focus-funded-town",tostring(q.tree_town)))
+      ask({kind="company"},function(r)
+        ask({kind="command",command={kind="speed",speed=1,revision=r.revision}},function()
+          core.log("action","NATIVE_ROAD_GESTURE_TOWN_FUND_PASS paid $207031 and funded real town growth")
+        end)
+      end)
     elseif label=="town-authority" then
       assert(q.tree_town and world.go_menu(player,"survey"))
       local state=assert(OwnerCheckpoint.read())
@@ -331,11 +362,33 @@ core.register_on_joinplayer(function(p)
       assert(found,"No town street for the authority inspection")
       local x,z=Sim.xy(found)
       aim(x,z,.5)
+      if core.settings:get_bool("luanttd_native_town_fund",false) then
+        local client=assert(api.worker_bridge_client)
+        local query=client.query
+        client.query=function(req,done)
+          if req.kind=="command" and req.command.kind=="town_fund_buildings" then
+            local before=assert(OwnerCheckpoint.read()).companies[name].expense
+            return query(req,function(result)
+              assert(result.ok,result.why)
+              local after=assert(OwnerCheckpoint.read())
+              assert(after.companies[name].expense==before+207031,("Expected $207031 expense; got $%d"):format(after.companies[name].expense-before))
+              local town=after.stock_town_growth.towns[q.tree_town]
+              assert(town.fund_buildings_months==3 and town.growing)
+              q.funded=true
+              return done(result)
+            end)
+          end
+          return query(req,done)
+        end
+      end
       local show=core.show_formspec
       core.show_formspec=function(who,form,body)
         if who==name and form=="luanttd_core:town_authority" then
           assert(body:find("Very good (+465)",1,true),body)
           assert(body:find(state.sites[q.tree_town].name,1,true),body)
+          if core.settings:get_bool("luanttd_native_town_fund",false) then
+            assert(body:find("fund_buildings;",1,true) and body:find(core.formspec_escape("$207,031"),1,true),body)
+          end
           core.log("action","NATIVE_ROAD_GESTURE_TOWN_PANEL_PASS authoritative rating 465 shown through Inspect")
           core.show_formspec=show
         end
@@ -538,10 +591,12 @@ core.register_on_joinplayer(function(p)
           core.log("action","FOCUS_NATIVE_REJOIN_MOVE")
           live:set_look_horizontal(1.34)
           live:set_look_vertical(.42)
-          live:set_pos({x=42.75,y=13.25,z=31.50})
+          local height=core.settings:get_bool("luanttd_native_town_fund",false) and 48.25 or 13.25
+          live:set_pos({x=42.75,y=height,z=31.50})
           core.after(.55,function() core.log("action","FOCUS_NATIVE_REJOIN_SET") end)
         elseif label=="check-rejoin" then
-          assert(math.abs(pos.x-42.75)<.08 and math.abs(pos.y-13.25)<.08 and math.abs(pos.z-31.50)<.08,
+          local height=core.settings:get_bool("luanttd_native_town_fund",false) and 48.25 or 13.25
+          assert(math.abs(pos.x-42.75)<.08 and math.abs(pos.y-height)<.08 and math.abs(pos.z-31.50)<.08,
             "Reopen did not restore the position the player left")
           assert(math.abs(live:get_look_horizontal()-1.34)<.05 and math.abs(live:get_look_vertical()-.42)<.05,
             "Reopen did not restore the direction the player was looking")

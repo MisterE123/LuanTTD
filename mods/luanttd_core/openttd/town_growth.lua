@@ -153,7 +153,7 @@ end
 function G.fund(t,stations,setting,random)
   t.fund_buildings_months=3
   local grow,why=G.update(t,stations,setting,random)
-  t.grow_counter=min(t.grow_counter,2*G.TOWN_TICKS-(t.growth_rate-t.grow_counter)%G.TOWN_TICKS)
+  t.grow_counter=min(t.grow_counter,2*G.TOWN_TICKS-math.fmod(t.growth_rate-t.grow_counter,G.TOWN_TICKS))
   return grow,why
 end
 function G.house_added(t,stations,setting)

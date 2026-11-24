@@ -171,4 +171,4 @@ Regular and one-way roads use the OpenTTD 16.0-RC1 base prices from `src/table/p
 
 Clearing trees with a road or road terminal also applies OpenTTD’s local authority penalty once per wooded tile, not per tree. It is posted only after successful construction and goes to the closest town within 20 tiles (Manhattan distance, exclusive). The per-company penalty is 35 points, floored at −1,000. The ordinary road receipt points out the deduction.
 
-With **Inspect** selected, right-click a town-owned street to view your company’s local authority rating and road-removal requirements. The labels use the stock OpenTTD boundaries. The panel is informational and does not issue council actions.
+With **Inspect** selected, right-click a town-owned street to view your company’s local authority rating and road-removal requirements. The labels use the stock OpenTTD boundaries. The panel also offers **Fund new buildings** when the company can afford the stock $207,031 base cost. Funding advances town growth for three in-game months. Other council actions are not offered yet.

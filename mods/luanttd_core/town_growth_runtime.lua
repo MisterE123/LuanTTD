@@ -132,6 +132,15 @@ return function(Sim,Terrain,G,B,H)
     end
   end
 
+  function W.fund_buildings(s,id)
+    local town=s.stock_town_growth and s.stock_town_growth.towns[id]
+    if not town then return nil end
+    local mounted=services(s)
+    local _,reason=G.fund(town,mounted,2)
+    town.reason,town.last_active=reason,G.active_stations(town,mounted)
+    return town
+  end
+
   local function visual_changed(s,id)
     s.changed=s.changed or {}
     s.changed[#s.changed+1]=id

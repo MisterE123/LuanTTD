@@ -3346,6 +3346,28 @@ function M.mount_stock_town_growth(s,world,want_new)
   town_growth_mount[s]={world=world,new=want_new~=false}
   return state
 end
+-- RC1 TownActionFundBuildings, GetTownActionCost[FundBuildings] (53),
+-- and Price::TownAction. Shares the mounted town growth state and clock.
+M.town_buildings_fund_cost=math.floor(1000000*53/256)
+function M.quote_town_buildings(s,owner,id)
+  local company=s.companies[owner]
+  local growth,town=town_growth_mount[s],s.stock_town_growth and s.stock_town_growth.towns[id]
+  if not growth or not company or not town then return end
+  local policy=s.stock_road_town_policy or {}
+  if policy.fund_buildings==false then return end
+  local cost=M.town_buildings_fund_cost
+  return {cost=cost,months=town.fund_buildings_months,affordable=company.cash>=cost}
+end
+function M.fund_town_buildings(s,owner,id,seen)
+  local q=M.quote_town_buildings(s,owner,id)
+  if not q then return false,"Town funding is unavailable." end
+  if q.cost~=seen then return false,"The town funding price changed." end
+  if not q.affordable then return false,"Not enough cash to fund buildings." end
+  local mount=town_growth_mount[s]
+  local town=assert(mount.world.fund_buildings(s,id))
+  debit(s.companies[owner],q.cost)
+  return true,"Funded town growth for three months.",{town=id,months=town.fund_buildings_months}
+end
 function M.road_stock_service_active(s)
   return s.road_stock_loading and s.road_stock_clock and s.road_economy and s.corner_grid~=nil
 end
