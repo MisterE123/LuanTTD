@@ -81,7 +81,7 @@ S.stock_road_town_policy={
 }
 Sim.restore_road_orders(S)
 local simulation_bindings=dofile(mod.."/campaign_simulation_bindings.lua")(Sim,mod)
-local api={Sim=Sim,s=S,generated_world=generated_world,road_first=true,
+local api={Sim=Sim,s=S,generated_world=generated_world,road_first=true,task_hotbar=worker_boot,
   capabilities={air={},ferry={},rail={engines={},ready={},split={}}},
   interest=dofile(mod.."/presentation_interest.lua").new()}
 local farm_profile=not generated_world and (S.stock_farm_industries~=nil or fresh and request_farm)

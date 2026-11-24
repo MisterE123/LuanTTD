@@ -8,15 +8,23 @@ It does not put rocks on all water or change the shape, waterline,
 coast clearance, or any world-generation probabilities.
 
 - **Rocky shore:** the ordinary shingle and bank use the same vertices
-  and texture pixels. Ground-matched boulders at the toe straddle
-  the waterline on the existing shore slopes.
-- **Open-water rocks:** low, tapered skerries sit among separate rocks
-  with crests below mean water level. Waves expose the shallow rocks
-  first. The sea shader and the navigation rules are unchanged.
+  and texture pixels. Each slope has two independently authored
+  arrangements. The bank is never rotated: squat slabs seat into the
+  terrain and shingle-toe stones straddle the existing wet edge.
+- **Open-water rocks:** four silhouettes (ledge, stack, twin islets and
+  scattered shoal), each with four rotations around the actual tile
+  center. A tile-coordinate hash chooses the shape and angle without
+  touching the simulation RNG, so repainting or reopening a world
+  preserves the arrangement. The exposed slabs are shallow; a wave
+  trough reveals separate, offset shelves and loose underwater stones
+  rather than a vertical extension of the rock above it. The sea
+  shader and navigation rules are unchanged.
 - **River rapids:** enclosed rock volumes rise from beneath the
-  four stock river inclines. Short-lived foam particles originate
-  just behind the rocks and fade as they travel downslope. Only
-  nearby players receive them. The flat river sections and inclines
+  four stock river inclines. At each major rock, the incoming
+  current throws up a brief plume, while a separate, wider wake
+  clings to the grade and breaks up downstream. The renderer reuses
+  a bounded set of emitters for nearby players; it removes them
+  when the player leaves or the river surface changes. The flat river sections and inclines
   share a fixed geometry to avoid opening a gap at the gradient
   joins; their directional flow textures still animate. No special
   upstream rocky-river tile class or hydrology changes.

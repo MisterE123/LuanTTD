@@ -38,6 +38,8 @@ return function(api,ui)
   if H and api.capabilities and api.capabilities.temperate_bank then H.enable_bank() end
   if H and api.oneway_tools then H.enable_oneway() end
   if H and api.road_bay_tools then H.enable_bay_termini() end
+  local function player_menus() return (api.task_hotbar or api.authority_handoff) and H.task_menus() or H.menus end
+  local live_menus=H and player_menus()
   local function entries(state)
     return H and state.visible_menu or slots
   end
@@ -45,7 +47,7 @@ return function(api,ui)
     if H then
       local visible,map
       if state.order_menu then visible,map=state.order_menu,state.order_layout
-      else visible,map=H.compact(H.menus[H.active(state.menus)]) end
+      else visible,map=H.compact(live_menus[H.active(state.menus)]) end
       state.visible_menu,state.hotbar_layout=visible,map
       state.layout_changed_at=core.get_us_time()
       -- Luanti retains/clamps the old physical slot when a row is
@@ -114,11 +116,11 @@ return function(api,ui)
       populate(p,state)
     end
   end
-  function W.has_menu(key) return H and H.path(key)~=nil end
-  function W.menu_title(key) return H and H.menus[key] and H.menus[key].title end
+  function W.has_menu(key) return H and H.path(key,live_menus)~=nil end
+  function W.menu_title(key) return live_menus and live_menus[key] and live_menus[key].title end
   function W.go_menu(p,key)
     local state=controls[p:get_player_name()]
-    local path=H and H.path(key)
+    local path=H and H.path(key,live_menus)
     if not state or not path then return false,"This hotbar section isn't mounted." end
     if state.order_menu then return false,"Finish selecting vehicle stops before opening a different workbench." end
     if api.owned_rail_ui and api.owned_rail_ui.active(p) then
@@ -256,7 +258,7 @@ return function(api,ui)
           W.hud(p)
           return item
         end
-        local action,value=H.choose(state.menus,state.hotbar_layout[index])
+        local action,value=H.choose(state.menus,state.hotbar_layout[index],live_menus)
         if action=="menu" then
           ui.select_tool(p,"inspect")
           populate(p,state)
@@ -264,6 +266,13 @@ return function(api,ui)
           return p:get_wielded_item()
         elseif not action then return item end
         key=value
+        if key=="service_depot" or key=="service_hangar" then
+          local tile,hit=W.target(p)
+          ui.open_mode_depot(p,tile,hit,({roads="road",freight="road",railworks="rail",
+            harbor="ship",airfields="air"})[H.active(state.menus)])
+          W.hud(p)
+          return item
+        end
         if H.sightseeing[key] then
           local ok,note=sightseeing.use(key,p,api,W)
           if not ok and note then ui.status(p,note) end
@@ -344,7 +353,8 @@ return function(api,ui)
   local function mount_menu(feature,...)
     if not H then return end
     H[feature](...)
-    for _,menu in pairs(H.menus) do
+    live_menus=player_menus()
+    for _,menu in pairs(live_menus) do
       for i=1,menu_size do
         local item=menu[i]
         if item and not core.registered_items["luanttd_core:menu_"..item[1]] then
@@ -365,7 +375,7 @@ return function(api,ui)
   if H then
     for _,tool in ipairs({H.order_pick,H.order_done,H.order_dispatch,H.order_cancel,H.teleport_tile}) do register_item(tool[1],tool) end
     local seen={}
-    for _,menu in pairs(H.menus) do for i=1,menu_size do
+    for _,menu in pairs(live_menus) do for i=1,menu_size do
       local item=menu[i]
       if item and not seen[item[1]] then
         seen[item[1]]=true
@@ -793,7 +803,7 @@ return function(api,ui)
             H.shortcut(state.order_cancel).." + click to cancel"
         end
       else
-        title,focus,help=H.legend(state.menus,p:get_wield_index(),world_tool,menu)
+        title,focus,help=H.legend(state.menus,p:get_wield_index(),world_tool,menu,live_menus)
         if inherited then
           focus=focus.."  (not armed)"
           help="Left-click once to arm Bulldoze, or select another tool."

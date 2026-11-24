@@ -973,6 +973,7 @@ return function(api)
     if river_view and terrain then R.rapid_particles.step(dt,S,terrain,viewers) end
   end
   function R.leave_ambient_particles(name)
+    if R.rapid_particles then R.rapid_particles.leave(name) end
     fountains.leave(name)
     if smoke then smoke.leave(name) end
   end
@@ -1083,6 +1084,7 @@ return function(api)
   end
   local shore,rocky_shore,rapids={},{},{}
   local water_rocks
+  local rock_variation=dofile(modpath.."/rock_variation.lua")
   local show_shore=S.stock_coastal_flood
   if terrain and not show_shore then
     for _,tile in ipairs(S.tiles) do if tile.coastal_water then show_shore=true;break end end
@@ -1093,13 +1095,24 @@ return function(api)
       shore[mask],rocky_shore[mask]={},{}
       for variant=0,3 do
         shore[mask][variant]=architecture("stock_shore_"..mask.."_"..variant,asset,"original_coast_"..variant)
-        rocky_shore[mask][variant]=architecture("stock_rocky_shore_"..mask.."_"..variant,
-          "rocky_coastal_bank_"..mask,"rocky_coast_"..variant)
+        local key="stock_rocky_shore_"..mask.."_"..variant
+        local mesh="rocky_coastal_bank_"..mask
+        local texture="rocky_coast_"..variant
+        rocky_shore[mask][variant]={[0]=architecture(key,mesh,texture),
+          architecture(key.."_alt",mesh.."_1",texture)}
       end
     end
   end
   if terrain then
-    water_rocks=architecture("stock_open_water_rocks","rocky_water_flat","stock_water_rocks_atlas")
+    water_rocks={}
+    for form=0,3 do
+      water_rocks[form]={}
+      for turn=0,3 do
+        local suffix=(form==0 and turn==0) and "" or ("_"..form.."_"..turn)
+        water_rocks[form][turn]=architecture("stock_open_water_rocks"..suffix,
+          "rocky_water_flat"..suffix,"stock_water_rocks_atlas")
+      end
+    end
     for _,mask in ipairs{3,6,9,12} do
       rapids[mask]=architecture("stock_river_rapid_rocks_"..mask,"river_rapid_rocks_"..mask,"stock_water_rocks_atlas")
     end
@@ -1199,7 +1212,11 @@ return function(api)
       if y==base then return ocean(x,z) end
       if y<base then return gnames.grass[t.variant] end
       if mask~=0 and y==base+1 and x%2==0 and z%2==0 then
-        return assert((t.stock_water_rocks and rocky_shore or shore)[mask][t.variant])
+        if t.stock_water_rocks then
+          local _,_,design=rock_variation(x/2,z/2)
+          return rocky_shore[mask][t.variant][design]
+        end
+        return assert(shore[mask][t.variant])
       end
       return "air"
     end
@@ -1430,7 +1447,8 @@ return function(api)
     end
     if water_rocks and t.stock_water_rocks and t.terrain=="water" and not t.coastal_water and not t.build and not t.ship
       and y==t.h+1 and x%2==0 and z%2==0 then
-      return water_rocks
+      local form,turn=rock_variation(x/2,z/2)
+      return water_rocks[form][turn]
     end
     if api.ship_tools and t.stock_canal then
       local _,level=terrain.tile(id)

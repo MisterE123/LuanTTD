@@ -9,7 +9,7 @@ Blender is optional for rebuilding the deterministic runtime OBJ/palette.
 from argparse import ArgumentParser
 from dataclasses import dataclass, field
 from io import BytesIO
-from math import cos, hypot, pi, sin, sqrt, tau
+from math import atan2, cos, hypot, pi, sin, sqrt, tau
 from pathlib import Path
 from random import Random
 import sys
@@ -110,62 +110,126 @@ def old_bank(mask):
     return p
 
 
-def shoreline(mask):
+# Low standalone slabs: widest part is close to half-height, and the foot
+# narrows back in. Nothing grows a straight shaft to meet a falling wave.
+def slab(name, x,z,rx,rz,top,thickness,angle,rng,wet=False):
+    p=Part(name)
+    n=6
+    angular=[tau*i/n+rng.uniform(-.12,.12) for i in range(n)]
+    edges=[rng.uniform(.82,1.09) for _ in range(n)]
+    for layer,(size,frac,sx,sz) in enumerate(((.53,0,-.08,.03),(1,.41,0,0),(.67,.83,.09,-.07))):
+        for i,a in enumerate(angular):
+            u=rx*(edges[i]*size*cos(a)+sx)
+            v=rz*(edges[i]*size*sin(a)+sz)
+            y=top-thickness+thickness*(frac+(rng.uniform(-.08,.08) if layer else 0))
+            p.points.append((x+u*cos(angle)-v*sin(angle),y,z+u*sin(angle)+v*cos(angle)))
+    p.points += [(x,top-thickness,z),(x+rx*.05,top,z)]
+    for j in range(n):
+        k=(j+1)%n
+        p.faces.append(((j,k,3*n),0))
+        for layer in range(2):
+            a,b,c,d=j+layer*n,k+layer*n,j+(layer+1)*n,k+(layer+1)*n
+            shades=(0,0,1) if wet else (1,2,2) if layer==0 else (2,3,3,4)
+            p.faces+= [((a,c,b),rng.choice(shades)),((b,c,d),rng.choice(shades))]
+        p.faces.append(((j+2*n,3*n+1,k+2*n),rng.choice((0,1,1) if wet else (3,4,4,5))))
+    return p
+
+
+def rotated(part, quarter):
+    # Actual parcel center in authored coordinates. The native even/even
+    # node anchor is offset by half a node, so facedir alone would drift.
+    points=[]
+    for x,y,z in part.points:
+        u,v=x+.5,z-.5
+        for _ in range(quarter): u,v=-v,u
+        points.append((u-.5,y,v+.5))
+    return Part(part.name,points,part.faces.copy(),part.uv)
+
+
+
+def shoreline(mask, variant):
     ground=height_field(mask)
-    rng=Random(0xC0A5+149*mask)
+    rng=Random(0xC0A5+149*mask+859*variant)
     parts=[old_bank(mask)]
     centers=[]
-
-    for i,(rx,rz,rise) in enumerate((
-        (.27,.229,.335),(.205,.168,.266),(.195,.125,.21),
-        (.115,.085,.15),(.098,.071,.106),(.074,.058,.095),
-    )):
-        room=max(rx,rz)*1.17+.018
+    # Candidate support is local, rather than rotating the bank. Forms lean
+    # toward the waterline, rather than borrowing the land's vertical scale.
+    designs=(
+        ((.244,.183,.130),(.217,.151,.114),(.160,.11,.088),(.138,.091,.076),(.101,.080,.058),(.074,.063,.045)),
+        ((.292,.169,.135),(.163,.107,.079),(.185,.118,.085),(.127,.097,.066),(.093,.072,.056),(.087,.057,.045)),
+    )
+    for i,(rx,rz,rise) in enumerate(designs[variant]):
+        room=max(rx,rz)*1.15+.008
         candidates=[]
-        for _ in range(550):
+        for _ in range(650):
             x,z=rng.uniform(-1.5+room,.5-room),rng.uniform(-.5+room,1.5-room)
             at=ground(x,z)
-            edge=[ground(x+rx*.85*cos(a),z+rx*.85*sin(a)) for a in (0,pi/2,pi,3*pi/2)]
+            edge=[ground(x+rx*.82*cos(a),z+rx*.82*sin(a)) for a in (0,pi/2,pi,3*pi/2)]
             lower,upper=min(edge),max(edge)
-            # Keep stone along the shore, not on top of the grass crest or on
-            # the distant flat part of a tile with one raised corner.
-            if upper<=SEA+1e-6:
+            if upper<=SEA+1e-6 or at>SEA+.41:
                 continue
-            if any(hypot(x-a,z-b)<.71*(rx+c) for a,b,c in centers): continue
-            if at>SEA+.75: continue
-            desired=SEA+(.056 if i<3 else .114)
-            near=1.7*abs(at-desired)+1.3*max(0,lower-SEA-.093)
-            # Space the big blocks somewhat evenly, with small loose toes.
-            crowd=sum(max(0,.63-hypot(x-a,z-b)) for a,b,_ in centers)*(.5 if i<3 else .10)
-            candidates.append((near+crowd+rng.uniform(0,.19),x,z))
+            if any(hypot(x-a,z-b)<.60*(rx+c) for a,b,c in centers): continue
+            desired=SEA+(.061 if i<3 else .085)
+            near=abs(at-desired)+.90*max(0,lower-SEA-.070)
+            crowd=sum(max(0,.57-hypot(x-a,z-b)) for a,b,_ in centers)*(.34 if variant==0 else -.11)
+            candidates.append((near+crowd+rng.uniform(0,.07),x,z,lower))
         if not candidates: continue
-        _,x,z=min(candidates)
+        _,x,z,lower=min(candidates)
         centers.append((x,z,rx))
-        parts.append(stone(f"Shore split rock {i+1}",x,z,rx,rz,rise,rng.uniform(0,tau),ground,rng,"shore",
-                           max(.19,min(.50,ground(x,z)-SEA+.18)) if i<3 else .19))
-    assert len(parts)>=4, mask
+        ceiling=max(SEA+.050,min(ground(x,z)+rise,SEA+max(.071,rx*.72)))
+        thickness=min(1.06*max(rx,rz),max(rise+.040,ceiling-lower+.068))
+        parts.append(slab(f"Shore slab {i+1}",x,z,rx,rz,ceiling,thickness,rng.uniform(0,tau),rng))
+    # Scatter real water-side toes into the two halves of the actual
+    # shoreline contour. These low boulders straddle the existing bank
+    # instead of revealing a blank vertical skirt under their crests.
+    edges=[]
+    for tri in source(mask):
+        if max(q[1] for q in tri)<=SEA:
+            continue
+        for a,b in zip(tri,tri[1:]+tri[:1]):
+            if a[1]==b[1]==SEA:
+                edges.append((a,b))
+    for i,(a,b) in enumerate(edges):
+        dx,dz=b[0]-a[0],b[2]-a[2]
+        angle=atan2(dz,dx)
+        for j,f in enumerate((.33,.66) if variant==0 else (.42,.71)):
+            u=f+rng.uniform(-.048,.048)
+            x,z=a[0]+u*dx,a[2]+u*dz
+            rx,rz=(.212,.129) if (variant+j)%2==0 else (.162,.118)
+            parts.append(slab(f"Shingle toe {i+1}.{j+1}", x,z,rx,rz,
+                              SEA+(.072 if j==0 else .034),.147,angle+rng.uniform(-.21,.21),rng))
+    assert len(parts)>=4, (mask,variant)
     return parts
 
 
-def open_water():
-    rng=Random(0xC1EA)
-    # Boulders overlap lower, broken ledges instead of standing on posts.
-    block=((-.82,.64,.41,.29,.42,.32),(-.51,.50,.29,.24,.29,.85),
-           (-1.14,.90,.24,.20,.23,.78),(-.14,.20,.16,.139,.145,-.15),
-           (.19,.96,.16,.15,.17,-.54))
-    parts = [stone(f"Wave-worn skerry {i+1}",x,z,rx,rz,h,a,lambda x,z:SEA,rng,"lake",.36)
-             for i,(x,z,rx,rz,h,a) in enumerate(block)]
-    # Crests entirely underwater at nominal height. A falling wave uncovers
-    # the shallow rocks first and the lower shelves only near the trough.
-    bed=((-1.14,.52,.28,.25,.13),(-.79,.91,.36,.27,.21),(-.47,.31,.32,.24,.16),
-         (-1.11,1.20,.29,.21,.36),(-.41,.83,.34,.32,.27),(-.68,1.16,.32,.24,.46),
-         (-.17,.53,.29,.24,.36),(.10,.77,.25,.27,.21),(.10,.34,.27,.20,.49),
-         (.13,1.18,.24,.23,.61),(-.28,1.10,.32,.26,.55))
-    for i,(x,z,rx,rz,depth) in enumerate(bed):
-        rise=rng.uniform(.24,.37)
-        level=SEA-depth-rise*1.03
-        parts.append(stone(f"Submerged crest {i+1}",x,z,rx,rz,rise,rng.uniform(-.31,.31),
-                           lambda x,z:level,rng,"bed",.22))
+# Distinct ledge, rounded stack, twin islets and scattered shoal profiles.
+# Tuples: offset from parcel center, ellipse radii, crest height, long axis.
+OPEN_SHAPES=(
+    ((-.24,.09,.39,.22,.177,.04),(.34,.16,.28,.19,.124,-.34),(-.45,-.28,.21,.14,.115,.12)),
+    ((-.33,-.18,.29,.28,.194,-.18),(-.06,.19,.29,.24,.118,.81),(.28,.38,.18,.15,.082,.12),( .26,-.32,.17,.14,.068,.42)),
+    ((-.38,.18,.33,.22,.126,.44),(.38,-.22,.32,.24,.180,-.20),(.53,.17,.15,.12,.078,.63),(-.56,-.14,.15,.13,.07,.26)),
+    ((-.49,-.06,.21,.17,.076,-1.11),(-.13,.38,.22,.17,.137,-.45),(.24,.17,.21,.17,.08,.58),(.48,-.24,.25,.17,.138,-1.10),(-.12,-.37,.20,.16,.064,.90)),
+)
+def open_water(form):
+    rng=Random(0xC1EA+7577*form)
+    parts=[]
+    for i,(u,v,rx,rz,h,angle) in enumerate(OPEN_SHAPES[form]):
+        x,z=u-.5,v+.5
+        parts.append(slab(f"Exposed skerry {i+1}",x,z,max(rx,.181),max(rz,.142),SEA+h,h+.101,angle,rng))
+        # Three shorter separate stones overlap and underlap the exposed
+        # body. Offset every successive shelf; no extruded silhouette.
+        for j,(top,thick,expand) in enumerate(((-.087,.210,1.07),(-.244,.239,1.18),(-.402,.302,1.11))):
+            dx=(j+1)*rng.uniform(-.055,.055)
+            dz=(j+1)*rng.uniform(-.059,.059)
+            parts.append(slab(f"Submerged shelf {i+1}.{j+1}",x+dx,z+dz,
+                              min(max(rx*expand,thick*.92),.40),min(max(rz*expand,thick*.86),.33),SEA+top,thick,
+                              angle+rng.uniform(-.49,.49),rng,True))
+    # Other lower rocks are secondary outcrops, not foundation feet.
+    for i,(u,v) in enumerate(((-.28,.59),(.06,-.54),(.46,.45))):
+        a=form*pi/8
+        x=u*cos(a)-v*sin(a)-.5
+        z=u*sin(a)+v*cos(a)+.5
+        parts.append(slab(f"Submerged spill {i+1}",x,z,.19,.15,SEA-(.11+i*.08),.15,.16+i*.9,rng,True))
     return parts
 
 
@@ -192,10 +256,18 @@ def waterfall(mask):
     return parts
 
 
-def batch():
+def batch(include_rotations=True):
     for mask in MASKS:
-        yield f"rocky_coastal_bank_{mask}", shoreline(mask), 0
-    yield "rocky_water_flat",open_water(),0
+        for variant in range(2):
+            suffix="_1" if variant else ""
+            yield f"rocky_coastal_bank_{mask}{suffix}", shoreline(mask,variant), 0
+    for form in range(len(OPEN_SHAPES)):
+        rocks=open_water(form)
+        for quarter in range(4):
+            if quarter and not include_rotations:
+                continue
+            suffix=f"_{form}_{quarter}" if form or quarter else ""
+            yield f"rocky_water_flat{suffix}", [rotated(p,quarter) for p in rocks], 0
     for mask in RAPIDS:
         # Adjacent +X anchor frees the actual sloping-water node. Native
         # OBJ flips X, so moving the anchor east adds one to authored X.
@@ -300,7 +372,7 @@ def create_blend():
         obj=bpy.data.objects.new(label,data);dest.objects.link(obj)
         return obj
 
-    for i,(name,parts,shift) in enumerate(batch()):
+    for i,(name,parts,shift) in enumerate(batch(include_rotations=False)):
         group=bpy.data.collections.new(name)
         group.use_fake_user=True
         ox,oz=(i%6)*2.7,-(i//6)*2.8
@@ -321,16 +393,16 @@ def create_blend():
                    [tuple(range(len(tri)))],[river if name_only else sea],[0],review)
     cam=bpy.data.objects.new("Survey review",bpy.data.cameras.new("Survey review"))
     scene.collection.objects.link(cam)
-    cam.location=(12.2,-12.9,28)
-    cam.rotation_euler=(Vector((6.3,-3.7,-.25))-cam.location).to_track_quat("-Z","Y").to_euler()
+    cam.location=(11.2,-15.2,30)
+    cam.rotation_euler=(Vector((6.3,-8.4,-.25))-cam.location).to_track_quat("-Z","Y").to_euler()
     cam.data.type="ORTHO"
-    cam.data.ortho_scale=21.0
+    cam.data.ortho_scale=27.0
     scene.camera=cam
     for screen in bpy.data.screens:
         for area in screen.areas:
             if area.type=="VIEW_3D":
-                area.spaces.active.region_3d.view_distance=21
-                area.spaces.active.region_3d.view_location=(6.3,-3.7,0)
+                area.spaces.active.region_3d.view_distance=27
+                area.spaces.active.region_3d.view_location=(6.3,-8.4,0)
                 area.spaces.active.region_3d.view_rotation=cam.rotation_euler.to_quaternion()
                 area.spaces.active.shading.color_type="MATERIAL"
     scene.render.engine="BLENDER_WORKBENCH"
@@ -339,7 +411,10 @@ def create_blend():
     scene.display.shading.show_cavity=True
     scene.display.shading.cavity_type="BOTH"
     scene.render.resolution_x,scene.render.resolution_y=1470,1100
-    bpy.ops.wm.save_as_mainfile(filepath=str(REPO/"art"/"stock_rocky_water.blend"),compress=True)
+    dest=REPO/"art"/"stock_rocky_water.blend"
+    temporary=dest.with_name("stock_rocky_water.tmp.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=str(temporary),compress=True)
+    temporary.replace(dest)
     import os
     if r:=os.getenv("LUANTTD_ROCKY_WATER_REVIEW"):
         scene.render.filepath=r

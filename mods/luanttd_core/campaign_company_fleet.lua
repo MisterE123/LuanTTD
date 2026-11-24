@@ -105,17 +105,23 @@ return function(Sim,R)
       local r=C.vehicle(n,mode,id)
       if r then rows[#rows+1]=r end
     end
-    if not filter then
+    if not filter or filter=="road" then
       for id in pairs(S.fleet) do add("road",id) end
-      if R.rail and R.rail.owned then
-        for _,v in ipairs(R.rail.owned.list(S,n)) do add("rail",v.id) end
-      end
+    end
+    if (not filter or filter=="rail") and R.rail and R.rail.owned then
+      for _,v in ipairs(R.rail.owned.list(S,n)) do add("rail",v.id) end
+    end
+    if not filter or filter=="air" then
       for id in pairs(S.stock_owned_air_fleet or {}) do add("air",id) end
       if S.stock_owned_aircraft and not (S.stock_owned_air_fleet or {})[1] then add("air",1) end
+    end
+    if not filter or filter=="ship" then
       add("ship","ferry");add("ship","coal");add("ship","oil")
     end
-    add("tram",1)
-    for id in pairs(S.stock_tram_fleet or {}) do add("tram",id) end
+    if not filter or filter=="tram" then
+      add("tram",1)
+      for id in pairs(S.stock_tram_fleet or {}) do add("tram",id) end
+    end
     table.sort(rows,function(a,b) return a.mode==b.mode and a.id<b.id or a.mode<b.mode end)
     local count=math.max(1,math.ceil(#rows/20))
     page=math.min(page,count)

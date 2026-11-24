@@ -210,6 +210,13 @@ print("PASS layer confirmation is owner-bound, stale selections fail, and bridge
 local page=A.company_fleet(john,1)
 assert(page.ok and page.value.total==2 and page.value.records[1].id==id)
 assert(A.company_fleet("Another",1).value.total==0)
+local road_only=A.company_fleet(john,1,"road")
+assert(road_only.ok and road_only.value.total==2 and road_only.value.records[1].mode=="road")
+for _,mode in ipairs({"rail","ship","air","tram"}) do
+  local filtered=A.company_fleet(john,1,mode)
+  assert(filtered.ok and filtered.value.total==0,mode)
+end
+assert(A.company_fleet(john,1,"invalid").why=="UNSUPPORTED_FLEET_FILTER")
 assert(A.vehicle(john,"road",purchase.value,true).value.position.x==16.5)
 assert(not A.vehicle("Another","road",purchase.value,true).ok)
 local own_depot=station_worker.demolition(john,Sim.id(11,15))

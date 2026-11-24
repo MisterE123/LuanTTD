@@ -13,8 +13,8 @@ H.teleport_slot=H.size+1
 local workbenches=item("workbench_index","Transport & World Guide","workbenches")
 H.order_pick=item("order_pick","Pick stop","order_stop")
 H.order_done=item("order_done","Done","order_done")
-H.order_cancel=item("order_cancel","Cancel orders","back")
-H.order_dispatch=item("order_dispatch","Dispatch","order_done")
+H.order_cancel=item("order_cancel","Cancel orders","order_cancel")
+H.order_dispatch=item("order_dispatch","Dispatch","order_dispatch")
 H.order_review=item("order_review","Review orders","rail_order_review")
 function H.order_overlay(slot,mode,label)
   if mode and mode~="road" and mode~="vehicle" then
@@ -125,7 +125,7 @@ function H.enable_trams()
     [2]=item("tram_track","Lay tramway","tram"),[3]=item("tram_stop","Through platform","tram_stop"),
     [4]=item("tram_depot","Tram depot","tram_depot"),[5]=item("tram_bit","Tramway half-piece","tram_half"),
     [6]=item("tram_rotate","Rotate direction","tram_rotate"),
-    [7]=section("tram_operations","Tram Operations","tram_order"),[8]=back,
+    [7]=section("tram_operations","Tram Operations","tram_operations"),[8]=back,
     [10]=item("tram_remove","Remove tram track")}
   H.menus.tram_operations={title="Tram Operations",[1]=inspect,
     [2]=item("tram_order","Streetcar orders","tram_order"),
@@ -351,6 +351,49 @@ function H.enable_freight()
 end
 -- Keep the authored slots stable for gates and workbench routes. Present
 -- common utilities first and pack feature-dependent tools in authored order.
+-- The live task graph is rebuilt from mounted authored commands. An
+-- ordinary row is not a second feature gate and never changes handlers.
+H.service_depot=item("service_depot","Open depot","service_depot")
+function H.task_menus()
+  local m={}
+  for key,row in pairs(H.menus) do
+    local copy={}
+    for k,v in pairs(row) do copy[k]=v end
+    m[key]=copy
+  end
+  m.fleet[3]=item("company","Open company fleet","fleet")
+  local roads=m.roads
+  if H.menus.roads[6] then
+    m.road_spans={title="Road Bridges & Tunnels",[1]=inspect,[2]=H.menus.roads[10],
+      [3]=H.menus.roads[6],[8]=back,[9]=bulldoze}
+    -- If the picker is off, follow the original bridge types directly.
+    roads[6]=section("road_spans","Road bridges & tunnels","road_spans")
+  end
+  roads[10]=m.road_stops and H.menus.roads[3] or nil
+  roads[3]=H.menus.road_stops and H.menus.road_stops[2] or roads[3]
+  if m.road_stops and m.freight then m.road_stops[7]=gates.freight end
+  if m.freight and not m.road_stops then roads[10]=gates.freight end
+  roads[5]=H.service_depot
+  if m.freight then m.freight[7]=H.service_depot end
+  if m.railworks then
+    m.railworks[6]=H.service_depot
+    m.railworks[10]=section("railengineering","Rail construction options","rail_engineering")
+    m.railops[1]=inspect
+  end
+  if m.harbor then m.harbor[5]=H.service_depot end
+  if m.airfields then
+    m.airfields[1]=item("service_hangar","Open hangar","service_hangar")
+  end
+  -- Rail, road, tram, water and air are peer launchers, like the
+  -- original toolbar. Survey owns navigation; no duplicate top slot.
+  if m.airfields then m.home[5]=gates.airfields end
+  if m.tramway then m.home[9]=gates.tramway end
+  if m.harbor then m.home[10]=gates.harbor
+  elseif m.airfields then m.home[10]=nil end
+  m.survey[10]=H.menus.home[5]
+  if m.portair then m.navigation[2]=gates.portair end
+  return m
+end
 function H.compact(menu)
   local visible,map={title=menu.title},{}
   local function add(slot, entry)
@@ -383,8 +426,9 @@ end
 
 -- Search the mounted menu graph, not a static list of assumed features.
 -- Returns a fresh canonical path for the ordinary Back action.
-function H.path(target)
-  if not H.menus[target] then return end
+function H.path(target,menus)
+  menus=menus or H.menus
+  if not menus[target] then return end
   local queue,seen={{"home"}},{home=true}
   local i=1
   while i<=#queue do
@@ -392,9 +436,9 @@ function H.path(target)
     local at=path[#path]
     if at==target then return path end
     for slot=1,H.size do
-      local item=H.menus[at][slot]
+      local item=menus[at][slot]
       local key=item and item[1]:match("^section_(.+)$")
-      if key and not seen[key] and H.menus[key] then
+      if key and not seen[key] and menus[key] then
         seen[key]=true
         local next_path={}
         for j,v in ipairs(path) do next_path[j]=v end
@@ -413,13 +457,14 @@ function H.shortcut(slot)
   return slot==H.size and "0" or tostring(slot)
 end
 
-function H.legend(stack,slot,is_world_tool,visible)
+function H.legend(stack,slot,is_world_tool,visible,menus)
+  menus=menus or H.menus
   local active=H.active(stack)
-  local menu=visible or H.menus[active]
+  local menu=visible or menus[active]
   local selected=menu[slot]
   local title=menu.title
   if active~="home" and #stack>2 then
-    title=H.menus[stack[#stack-1]].title.."  ›  "..title
+    title=menus[stack[#stack-1]].title.."  ›  "..title
   end
   local focus=selected and (H.shortcut(slot).."  "..selected[2]) or "Select a tool or section"
   local help={}
@@ -428,10 +473,12 @@ function H.legend(stack,slot,is_world_tool,visible)
     if id=="back" then
       help[1]="Left-click to return"
     elseif id:match("^section_") then
-      help[1]="Left-click to open"
+      help[1]=menus==H.menus and "Left-click to open" or "Use to open this section"
     elseif id=="teleport_tile" then
       help[1]="Left-click to teleport"
       help[2]="Right-click to inspect"
+    elseif id=="service_depot" or id=="service_hangar" then
+      help[1]=id=="service_hangar" and "Aim at your hangar and use" or "Aim at your depot and use"
     elseif H.sightseeing[id] then
       help[1]=H.sightseeing[id]
       help[2]="Right-click for details"
@@ -441,7 +488,7 @@ function H.legend(stack,slot,is_world_tool,visible)
       if id=="road_station" or id=="truck_stop_tool" then
         help[1]="Click to build; drag with a layout"
         help[#help+1]="Right-click for layout"
-      elseif id=="road_depot" then
+      elseif id=="road_depot" or id=="rail_depot_tool" or id=="rail_platform" then
         help[#help+1]="Right-click for layout"
       elseif id~="inspect" then help[#help+1]="Right-click to cancel" end
     else
@@ -459,8 +506,9 @@ function H.legend(stack,slot,is_world_tool,visible)
   return title, focus, table.concat(help,"   ·   ")
 end
 
-function H.choose(stack,slot)
-  local e=H.menus[H.active(stack)][slot]
+function H.choose(stack,slot,menus)
+  menus=menus or H.menus
+  local e=menus[H.active(stack)][slot]
   if not e then return end
   local id=e[1]
   if id=="back" then
@@ -468,7 +516,7 @@ function H.choose(stack,slot)
     return "menu",H.active(stack)
   end
   local next_menu=id:match("^section_(.+)$")
-  if next_menu and H.menus[next_menu] then
+  if next_menu and menus[next_menu] then
     stack[#stack+1]=next_menu
     return "menu",next_menu
   end

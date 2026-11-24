@@ -23,7 +23,7 @@ probe=coastal_sheet_native
 views=(overview near open)
 if [[ ${BAYLINE_NATIVE_ROCKY_WATER:-0} == 1 ]]; then
   probe=rocky_water_native
-  views=(rocky-shore open-rocks rapids rapids-back)
+  views=(rocky-shore open-rocks scattered-skerries rapids rapids-back)
   # Only this disposable fixture edits two local tile records.
   printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 fi
@@ -68,6 +68,10 @@ GAME
 if [[ ${BAYLINE_NATIVE_WAVES:-1} == 0 ]]; then
   sed -i 's/enable_waving_water = true/enable_waving_water = false/' "$out/client.conf"
 fi
+if [[ $probe == rocky_water_native ]]; then
+  sed -i 's/viewing_range = 100/viewing_range = 70/' "$out/client.conf"
+  printf 'client_mapblock_limit = 900\nmesh_generation_threads = 2\n' >> "$out/client.conf"
+fi
 opts=(-nolisten tcp)
 lib=()
 if [[ ${BAYLINE_NATIVE_TCP:-0} == 1 ]]; then
@@ -94,7 +98,7 @@ for _ in {1..300}; do
   sleep .25
 done
 grep COAST_SHEET_READY "$out/server.log" || { cat "$out/"{server,client}.log; exit 1; }
-win=$(xdotool search --sync --onlyvisible --pid "${pids[2]}" | tail -1)
+win=$(timeout 15 xdotool search --sync --onlyvisible --pid "${pids[2]}" | tail -1)
 xdotool windowfocus --sync "$win"
 xdotool mousemove 550 370
 for v in "${views[@]}"; do
@@ -102,11 +106,14 @@ for v in "${views[@]}"; do
   for _ in {1..30}; do grep -q "COAST_SHEET_VIEW $v" "$out/server.log" && break; sleep .2; done
   grep -q "COAST_SHEET_VIEW $v" "$out/server.log" || { cat "$out/server.log"; exit 1; }
   sleep 3
-  import -window root "$out/$v.png"
+  kill -0 "${pids[2]}"
+  import -window "$win" "$out/$v.png"
   sleep 1.4
-  import -window root "$out/$v-next.png"
+  kill -0 "${pids[2]}"
+  import -window "$win" "$out/$v-next.png"
 done
 if [[ $probe == rocky_water_native ]]; then
   grep -q COAST_SHEET_RAPID_FOAM "$out/server.log"
+  grep -q COAST_SHEET_VARIANTS "$out/server.log"
 fi
 ! grep -Ei 'error|could not load' "$out/client.log"

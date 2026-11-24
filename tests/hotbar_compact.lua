@@ -126,7 +126,7 @@ click("back")
 -- new slot's tool, even after the pressed-click debounce expires.
 tick();press(stale_index,stale);assert(builds==0 and W.menu(p)=="railworks")
 click("back"); click("section_company")
-assert(cap==6 and at("back")==1 and at("teleport_tile")==2)
+assert(cap==7 and at("back")==1 and at("teleport_tile")==2)
 for i=cap+1,main do assert(stacks[i]:get_name()=="") end
 tick();press(8,stale);assert(builds==0 and W.menu(p)=="company")
 for initial=1,10 do
@@ -141,7 +141,7 @@ for initial=1,10 do
   assert(picks==initial and finishes==initial-1)
   click("order_done")
   -- Menu restoration does not consume the same triggering click.
-  assert(finishes==initial and cap==6 and W.menu(p)=="company")
+  assert(finishes==initial and cap==7 and W.menu(p)=="company")
 end
 assert(builds==0)
 print("PASS: compact utilities, active legends, stable logical map, stale clicks, and both modal selections")

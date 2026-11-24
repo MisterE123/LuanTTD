@@ -369,7 +369,9 @@ return function(Sim,R,max_days)
     if not owner(name) or not s.companies[name] or not integer(page,1,1000000) then
       return reply(false,"COMPANY_FLEET_UNAVAILABLE")
     end
-    if mode~=nil and mode~="tram" then return reply(false,"UNSUPPORTED_FLEET_FILTER") end
+    if mode~=nil and mode~="road" and mode~="rail" and mode~="ship" and mode~="air" and mode~="tram" then
+      return reply(false,"UNSUPPORTED_FLEET_FILTER")
+    end
     return reply(true,nil,R.company_fleet.page(name,page,mode))
   end
   function A.vehicle(name,mode,id,locate)

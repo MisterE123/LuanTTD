@@ -791,7 +791,7 @@ function U.open_controls(p)
     core.show_formspec(p:get_player_name(),"luanttd_core:worker_controls",
       "formspec_version[7]size[10.5,6.12]bgcolor[#152334;false]label[.45,.48;Controls]"..
       [[textarea[.45,1.07;9.6,2.15;;;WASD moves. Space and Shift adjust altitude. Hold E to fly faster.
-Use the hotbar to build. Right-click depots to buy a vehicle and set its orders.
+Select a toolbar section and use it. Open depot or Open hangar buys vehicles and edits orders.
 ]]..      "Inventory opens Fleet, Finances, and the Jump map.]"..
       "button[.45,3.33;4.65,.55;luanttd_candy_toggle;"..
       (api.wildlife and api.wildlife.enabled(p) and "Hide decorative scenery" or "Show decorative scenery").."]"..
@@ -851,11 +851,11 @@ function U.guide(p,menu)
   local V=view(n)
   if V.pick_order then return "Click your stops in order. Right-click when done." end
   if menu=="railworks" or menu=="railops" then
-    return "Connect track, two stations and a depot. Right-click the depot to buy a train and set its orders."
+    return "Connect track, two stations and a depot. Use Open depot to buy a train, then choose its orders."
   end
-  if menu=="survey" then return "Choose a sightseeing tool, then aim and click. Right-click exits sightseeing." end
-  if menu=="harbor" then return "Place a dock on a straight sloping shore, and a ship depot in open water." end
-  if menu=="airfields" then return "Build two airfields. Right-click one to buy an aircraft and start its orders." end
+  if menu=="survey" then return "Use Jump map to find a place, or choose how to explore the world." end
+  if menu=="harbor" then return "Build docks and a ship depot. Use Open depot to buy and order a vessel." end
+  if menu=="airfields" then return "Build two airfields. Use Open hangar to buy and order aircraft." end
   if menu=="freight" then
     if api.authority_handoff then
       return "Inspect truck stops to see the cargo they supply or accept. Buy the matching vehicle at a road depot."
@@ -916,10 +916,10 @@ function U.guide(p,menu)
   local guide={
     api.generated_world and "Build a road between two towns. Inspect house catchments before placing stops."
       or "1 / 6   Choose AutoRoad, then drag to build a road between the two towns.",
-    api.road_bay_tools and "2 / 6   Open Bus Stops. Place two roadside stops on existing straight streets."
+    api.road_bay_tools and (api.task_hotbar and "2 / 6   Choose Bus stop. Place two stops on straight streets." or "2 / 6   Open Bus Stops. Place two roadside stops on existing straight streets.")
       or "2 / 6   Choose Bus stop and build one at each end.",
     "3 / 6   Choose Road depot. Aim at flat land beside the same street network.",
-    "4 / 6   Right-click the depot and buy a bus.",
+    api.task_hotbar and "4 / 6   Aim at the depot, then use Open depot to buy a bus." or "4 / 6   Right-click the depot and buy a bus.",
     "5 / 6   Click Add stops, then pick your two bus stops in the world.",
     "6 / 6   Start service in the bus window, or open Fleet from Sections.",
     "Bus dispatched. Watch it pick up and deliver passengers.",
@@ -3279,6 +3279,23 @@ function U.fund_town_from_panel(p,action)
   end)
   if not ok then U.status(p,why or "The town funding request could not be sent.") end
 end
+-- A first-class primary-use action between building and ordering: no
+-- secondary mouse button or chat command is required to reach a depot.
+function U.open_mode_depot(p,id,hit,mode)
+  local t
+  if id then
+    if api.authority_handoff then t=R.host_tile and R.host_tile(id) else t=S.tiles[id] end
+  end
+  local name=p:get_player_name()
+  local names={road="road depot",rail="rail depot",ship="ship depot",air="airport hangar"}
+  local facility=t and (mode=="road" and t.build=="road_depot" and t.owner==name or
+    mode=="rail" and t.rail_depot_dir~=nil and (t.owner==name or t.rail_owner==name) or
+    mode=="ship" and t.ship and t.ship.kind=="ship_depot" and t.ship.owner==name or
+    mode=="air" and t.airfield and t.airfield.layout~="heliport" and t.airfield.owner==name)
+  if not facility then U.status(p,"Aim at your "..(names[mode] or "depot").." to manage vehicles.");return false end
+  return U.context(p,id,hit)
+end
+
 function U.context(p,tile,hit)
   local n=p:get_player_name();local V=view(n)
   V.authority_context=nil;V.town_funding=nil;V.road_funding=nil;V.statue_offer=nil

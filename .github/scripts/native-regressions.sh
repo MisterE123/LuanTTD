@@ -16,6 +16,7 @@ case "${1:-}" in
     bash tests/campaign_generation_async_native.sh "$(command -v luantiserver)" "$(mktemp -d)/generation"
     bash tests/campaign_tick_worker_native.sh "$(command -v luantiserver)" "$(mktemp -d)/ticks"
     bash tests/campaign_ordinary_worker_native.sh
+    bash tests/hotbar_task_native.sh
     bash tests/campaign_worker_recovery_native.sh
     bash tests/daylight_native.sh
     bash tests/stock_town_city_native.sh

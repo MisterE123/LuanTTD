@@ -71,7 +71,7 @@ return function(api)
 
   rows("road",{
     {"bus_service","Passenger bus service","roads",function() return api.road_first and "live" end,
-      "Build one road, two bus stops near houses, and a depot. Inspect the depot to buy a bus. Go to its Fleet card, choose both stops and Start service. The Fleet card also shows orders and earnings."},
+      "Build one road, two bus stops near houses, and a depot. Use Open depot to buy a bus. Open its card, choose both stops in world and Start service. The Fleet card also shows orders and earnings."},
     {"bay","Two-bay bus terminus","road_stops",native("road_bay_tools"),
       "Use Two-bay bus terminus. Leave one legal, clear road entrance and use separate buses on the two stock bays. They still share the entrance.",
       nil,"Both bays can operate independently while sharing the same entrance."},
@@ -110,13 +110,13 @@ return function(api)
     {"order_lists","Copy or share road orders","fleet",function() return api.road_first and "live" end,
       "Stop the receiving and source vehicles as required in the Fleet card. Open Orders, choose Copy or Share, and select the other route. Shared lists keep each vehicle's own progress; Stop sharing empties only this vehicle's list."},
     {"mail","Town mail & postal routes","freight",function() return S.road_mail and api.terrain end,
-      "In Road Construction → Road Freight, use Truck stop near houses. Inspect a road depot for the postal van, add a pickup stop and a delivery stop, and check Mail acceptance before starting.",
+      "In Road Construction → Stops & Waypoints → Road Freight, use Truck stop near houses. Inspect a road depot for the postal van, add a pickup stop and a delivery stop, and check Mail acceptance before starting.",
     },
   })
 
   rows("rail",{
     {"railworks","Track, depots & platforms","railworks",rail,
-      "Use AutoRail for ordinary track, build a depot at a clear rail end, or select both ends of a straight station. Rail Tools & Operations opens pilots and manual construction tools.",
+      "Use AutoRail for ordinary track, build a depot at a clear rail end, or select both ends of a straight station. Rail construction options opens manual track, crossings and spans. Rail Tools & Operations opens specialist services.",
     },
     {"pbs","Path signals and dispatch","railsignals",rail,
       "Place forward-facing regular or one-way PBS heads. Rotate the fitting to reverse the direction. Two empty trains can contest a diamond and release their reservations only when the rear wagon clears.",
@@ -125,7 +125,7 @@ return function(api)
       "Place conventional heads before and after the shared unsigned diamond on each flat one-way route. Order two empty depot-to-platform trains to watch one wait at red until the other's tail clears the outgoing head.",
       nil,"Use a separate disposable railway with only conventional heads, not PBS. No paid freight or passenger switching in this pilot."},
     {"railspan","Rail bridge & tunnel","railworks",function() return api.rail_span_tools and rail() end,
-      "Use Bridge (0) to select two bridgeheads, or Tunnel (6) to click the entry slope. Connect both portals, then use Run train through rail spans. A coupled train keeps the span reserved until its final wagon clears.",
+      "Open Rail construction options. Use Bridge to select two bridgeheads, or Tunnel to click the entry slope. Connect both portals, then use Run train through rail spans. A coupled train keeps the span reserved until its final wagon clears.",
     },
     {"railgrade","Stock rail grades","railworks",function() return S.rail_grade_enabled and rail() end,
       "Lay compatible straight tracks on supported slopes. Compare climbing versus descending with the stock position and speed models.",
