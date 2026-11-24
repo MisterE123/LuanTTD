@@ -27,9 +27,18 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         -- Until the UI subscribes to notifications, do not retain
         -- transient loads, arrivals or effects for an invisible world.
         runtime.passengers.collect()
-        Sim.rail_paid_motion_events(s);Sim.rail_coal_loading_events(s)
+        Sim.rail_paid_motion_events(s)
+        runtime.passengers.collect_fares(Sim.rail_coal_loading_events(s),"rail")
+        runtime.passengers.collect_fares(Sim.rail_goods_loading_events(s),"rail")
+        runtime.passengers.collect_fares(Sim.rail_oil_loading_events(s),"rail")
+        for _,cargo in ipairs({"wood","grain","livestock","steel","iron_ore","valuables"}) do
+          local take=Sim["rail_"..cargo.."_loading_events"]
+          if take then runtime.passengers.collect_fares(take(s),"rail") end
+        end
         Sim.air_paid_motion_events(s)
-        if runtime.water and runtime.water.coal then runtime.water.coal.take(s) end
+        if runtime.water and runtime.water.coal then
+          runtime.passengers.collect_fares(runtime.water.coal.take(s),"ship")
+        end
       end,
       refresh=function() end,
     })

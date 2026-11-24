@@ -38,6 +38,7 @@ return function(core,api,motion,models,airframes)
   for _,kind in pairs(dofile(base.."/rail_dispatch_manifest.lua").stock_kind) do rail_engines[kind]=true end
   local passenger_bodies={wagon=true,manley=true,dash=true,mono_passenger=true,maglev_passenger=true}
   function A.render(rows,dt,signals)
+    if api.stock_audio then api.stock_audio.observe_vehicles(rows) end
     local visible,viewers={},nil
     repair_smoke.step(dt)
     local function present(key,row,name,mesh,pos,target,pitch,part,sync)

@@ -726,7 +726,7 @@ return function(Sim,R,max_days)
       if not r.ok then return r end
       scene(r.value,w.scene)
       if R.passengers then
-        r.value.boardings,r.value.boarding_cursor=R.passengers.events({w},w.after_boarding)
+        r.value.boardings,r.value.boarding_cursor,r.value.fares=R.passengers.events({w},w.after_boarding)
       end
       packets[#packets+1]=r.value
     end

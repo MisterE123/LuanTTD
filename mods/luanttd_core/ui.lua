@@ -45,7 +45,8 @@ function U.install_worker_controls(client)
   api.worker_tutorial_client=client
   api.worker_finance=dofile(mod.."/campaign_worker_finance_ui.lua")(core,client,formatted_date,dollars,
     function(p,id) U.teleport_tile(p,id) end)
-  api.worker_news=dofile(mod.."/campaign_news_ui.lua")(core,mod,client,formatted_date)
+  api.worker_news=dofile(mod.."/campaign_news_ui.lua")(core,mod,client,formatted_date,
+    api.stock_audio and api.stock_audio.effect)
   api.worker_build=api.worker_build or dofile(mod.."/campaign_build_proxy.lua")(client)
   api.worker_depot=dofile(mod.."/campaign_worker_depot_ui.lua")(core,client,api.worker_build,dollars,function(p,id)
     return api.owned_rail_ui and api.owned_rail_ui.assemble(p,id)
@@ -788,14 +789,15 @@ end
 function U.open_controls(p)
   if api.authority_handoff then
     core.show_formspec(p:get_player_name(),"luanttd_core:worker_controls",
-      "formspec_version[7]size[10.5,5.45]bgcolor[#152334;false]label[.45,.48;Controls]"..
+      "formspec_version[7]size[10.5,6.12]bgcolor[#152334;false]label[.45,.48;Controls]"..
       [[textarea[.45,1.07;9.6,2.15;;;WASD moves. Space and Shift adjust altitude. Hold E to fly faster.
 Use the hotbar to build. Right-click depots to buy a vehicle and set its orders.
 ]]..      "Inventory opens Fleet, Finances, and the Jump map.]"..
       "button[.45,3.33;4.65,.55;luanttd_candy_toggle;"..
       (api.wildlife and api.wildlife.enabled(p) and "Hide decorative scenery" or "Show decorative scenery").."]"..
       "button_exit[5.40,3.33;4.65,.55;luanttd_cine_toggle;Cinematic view]"..
-      "button_exit[.45,4.33;9.60,.55;close;Back to world]")
+      "button[.45,4.22;9.60,.55;luanttd_audio_open;Music & sound]"..
+      "button_exit[.45,5.16;9.60,.55;close;Back to world]")
     return true
   end
   if api.road_first then U.service(p,"controls");return end
@@ -1552,6 +1554,16 @@ local function worker_build(n,V,kind,request)
     if not built and (request.operation=="plant_tree" or request.operation=="purchase_land") then note=tree_build_errors[note] or note end
     V.status=note or (built and "Construction complete." or "That construction was not accepted.")
     if built and api.on_worker_build then api.on_worker_build(n,tiles,quote) end
+    if built and api.stock_audio then
+      local id=request.first or request.tile or request.start and request.start.tile
+      local host=id and R.host_tile and R.host_tile(id)
+      local location
+      if host then
+        local x,z=Sim.xy(id)
+        location={x=2*x+.5,y=(host.top or host.h or 0)+.6,z=2*z+.5}
+      end
+      api.stock_audio.construction(kind,request,n,location)
+    end
   end)
   if not ok then V.status=why end
   return true

@@ -6,7 +6,7 @@ return function()
   local epoch=0
   local actor_us
   local companies,company_seq={},-1
-  local pulses,seen,max_boarding={},{},0
+  local pulses,fares,seen,max_boarding={},{},{},0
   local function newer_than(a,b)
     return a.tick>b.tick or a.tick==b.tick and a.seq>b.seq
   end
@@ -56,13 +56,17 @@ return function()
         materialized.tiles,materialized.corners,materialized.registries=old.tiles,old.corners,old.registries
         w=materialized
       end
-      for _,event in ipairs(w.boardings or {}) do
-        local n=event.seq
-        if n>max_boarding-256 and not seen[n] then
-          seen[n]=true;pulses[#pulses+1]=event
-          max_boarding=math.max(max_boarding,n)
+      local function receive(events,out)
+        for _,event in ipairs(events or {}) do
+          local n=event.seq
+          if n>max_boarding-256 and not seen[n] then
+            seen[n]=true;out[#out+1]=event
+            max_boarding=math.max(max_boarding,n)
+          end
         end
       end
+      receive(w.boardings,pulses)
+      receive(w.fares,fares)
       for n in pairs(seen) do if n<=max_boarding-256 then seen[n]=nil end end
       P.accept(request.key,request.token,{ok=true,seq=reply.seq,tick=reply.tick,revision=reply.revision,value=w})
     end
@@ -90,6 +94,9 @@ return function()
   end
   function P.take_boardings()
     local list=pulses;pulses={};return list
+  end
+  function P.take_cash_sounds()
+    local list=fares;fares={};return list
   end
   function P.waiting(mode,id)
     local result,seq=0,-1

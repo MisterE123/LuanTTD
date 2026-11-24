@@ -30,6 +30,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
   local function xyz(p) return {x=p.x,y=p.y,z=p.z} end
   local function id_for(mode,id) return mode..":"..id end
   local function add(mode,id,data)
+    data.sound_paused=s.speed==0 or nil
     data.mode,data.id,data.key=mode,id,id_for(mode,id)
     out[#out+1]=data
   end
@@ -44,8 +45,13 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       local smoke=pos and not bore and s.speed~=0 and not (v.crashed or v.depot or
         v.road_speed_state and v.road_speed_state.depot_wait) and
         fault and fault.breakdown_ctr==1 and fault.breakdown_delay>0
+      local offer=Sim.vehicle_offer and Sim.vehicle_offer(s,v.engine)
       add("road",id,{tile=at,frame=pose,engine=v.engine,passenger=v.cargo=="passenger",running=not not v.running,
+        sound_engine=offer and (offer.stock_id or offer.stock_engine_id),
         breakdown_smoke=smoke and true or nil,
+        sound_idle=not v.running or not not (v.depot or v.load_state or
+          v.road_speed_state and v.road_speed_state.depot_wait),
+        sound_tick=fault and fault.tick_counter,sound_crashed=v.crashed or nil,
         pos=pos and xyz(pos),yaw=yaw,pitch=pitch,hidden=not pos,loaded=(v.units or 0),
         owner=v.owner,home_depot=v.home_depot or v.depot,label=v.name,order_count=#(v.orders or {})})
     end
@@ -69,8 +75,14 @@ return function(Sim,R,x,z,w,h,fraction,frame)
         -- not splice their locomotive and wagons into a stretched train.
         if frame.whole_trains then parts=consist end
         local unit=R.rail.owned and r.fleet_id and R.rail.owned.get(s,r.owner,r.fleet_id)
+        local lead=consist[1] and consist[1].pos
+        local index=lead and Sim.id(math.floor((lead.x+.5)/2),math.floor((lead.z+.5)/2))
+        local crossing=index and s.tiles[index] and s.tiles[index].level_crossing
         add("rail",r.fleet_id or r.id,{owner=r.owner,engine=r.stock_engine,wagon=r.stock_wagon,
           parts=parts,running=not (r.stopped or r.failure or r.crashed),complete_parts=frame.whole_trains,part_count=#r.consist.parts,collectors=not not r.bridge_collectors,
+          sound_idle=r.stopped or r.phase=="depot" or r.phase=="dwell" or r.phase=="arrived",
+          sound_crashed=r.crashed or nil,sound_breakdown=r.breakdown or nil,
+          sound_crossing=crossing and crossing.barred and index or nil,
           depot=unit and unit.depot,label=unit and "Train "..unit.unit_number})
       end
     end
@@ -82,13 +94,15 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       if ferry.paid_clock then p,dir=Sim.ferry_paid_pose(s,fraction)
       else p,dir=R.water.run.pose(ferry) end
       if point(p) then add("ship","ferry",{owner=ferry.owner,engine=ferry.engine_id,pos=xyz(p),dir=dir,
+        sound_idle=ferry.stopped or ferry.phase~="sailing",sound_crashed=ferry.crashed or nil,
         depot=ferry.depot,label=ferry.engine_id==208 and "Bakewell 300 Hovercraft" or ferry.engine_id==207 and "FFP Passenger Ferry" or "MPS Passenger Ferry"}) end
     end
     if R.water.tanker then
       local p,dir=R.water.tanker.pose(s,fraction)
       if point(p) then
         local hull=R.water.tanker.status(s)
-        add("ship","oil",{owner=hull.owner,engine=hull.engine,pos=xyz(p),dir=dir,depot=hull.depot,label=hull.name})
+        add("ship","oil",{owner=hull.owner,engine=hull.engine,pos=xyz(p),dir=dir,depot=hull.depot,
+          sound_idle=hull.phase~="sailing",label=hull.name})
       end
     end
     if R.water.freight and R.water.coal then
@@ -98,7 +112,8 @@ return function(Sim,R,x,z,w,h,fraction,frame)
         if point(p) then
           local hull=R.water.coal.status(s)
           add("ship","coal",{owner=ship.owner,engine=hull and hull.engine,pos=xyz(p),dir=dir,depot=ship.depot,
-            label=hull and hull.name or "Yate Cargo Ship"})
+            sound_idle=ship.stopped or ship.phase~="sailing",sound_crashed=ship.crashed or nil,
+          label=hull and hull.name or "Yate Cargo Ship"})
         end
       end
     end
@@ -111,7 +126,8 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       if point(p) then
         if airborne==nil then airborne=run.vehicle.airborne end
         add("air",run.paid_clock or 1,{owner=run.owner,engine=run.engine_id,pos=xyz(p),dir=dir,
-          airborne=not not airborne,rotor_period=run.vehicle.helicopter and math.floor((run.vehicle.rotor_speed or 0)/16),
+          airborne=not not airborne,sound_crashed=run.vehicle.crashed or nil,
+          sound_helicopter=run.vehicle.helicopter or nil,rotor_period=run.vehicle.helicopter and math.floor((run.vehicle.rotor_speed or 0)/16),
           label=R.air.run.engine_for and R.air.run.engine_for(run).name or "Aircraft #"..(run.paid_clock or 1)})
       end
     end

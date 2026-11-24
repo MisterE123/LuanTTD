@@ -328,6 +328,7 @@ api.trackworks,api.rail_spans,api.crossings,api.oneway=networks.lab,networks.spa
 api.rail_span_tools,api.crossing_tools,api.oneway_tools=true,true,true
 api.vehicle_ui=dofile(mod.."/vehicle_ui.lua")(api)
 api.vehicle_orders=api.vehicle_ui.orders
+api.stock_audio=dofile(mod.."/stock_audio.lua")(core,mod)
 local render=dofile(mod.."/render.lua")(api)
 api.render=render
 if api.structure_tools or api.rail_spans then
@@ -362,7 +363,9 @@ end,function(p)
   world.hud(p,0)
 end)
 core.register_on_player_receive_fields(function(p,form,fields)
-  if fields.luanttd_cine_toggle and (form=="luanttd_core:worker_controls" or form=="" and api.cinematic.active(p)) then
+  if fields.luanttd_audio_open and form=="luanttd_core:worker_controls" then
+    return api.stock_audio.open(p)
+  elseif fields.luanttd_cine_toggle and (form=="luanttd_core:worker_controls" or form=="" and api.cinematic.active(p)) then
     return api.cinematic.toggle(p)
   elseif fields.luanttd_candy_toggle and form=="luanttd_core:worker_controls" then
     api.wildlife.toggle(p);api.shop_scenery.step(.21,core.get_connected_players());ui.open_controls(p);return true

@@ -43,6 +43,15 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
     painting.present(projection)
     render.draw_worker_actors(projection)
     ui.use_worker_projection(projection)
+    if api.stock_audio and projection.take_cash_sounds then
+      for _,e in ipairs(projection.take_cash_sounds()) do
+        local top=render.host_terrain_top(e.tile)
+        if admitted[e.owner] and top then
+          local x,z=api.Sim.xy(e.tile)
+          api.stock_audio.effect("CASHTILL",{player=e.owner,pos={x=2*x+.5,y=top+.7,z=2*z+.5}})
+        end
+      end
+    end
     ui.hud()
   end
   H=Host(core,mod,{

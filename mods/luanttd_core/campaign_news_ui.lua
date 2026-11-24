@@ -1,6 +1,6 @@
 -- Native news view. An incoming bulletin is a non-modal HUD so it
 -- cannot steal aim from a build, erase orders, or replace another form.
-return function(core,mod,client,formatted_date)
+return function(core,mod,client,formatted_date,sound)
   local News=dofile(mod.."/openttd/news.lua")
   local U={form="luanttd_core:newspaper"}
   local esc=core.formspec_escape
@@ -80,6 +80,14 @@ return function(core,mod,client,formatted_date)
         mark(v,lane,row and cursor or math.max(cursor,v.received))
         if row then
           local length=mode==News.FULL and News.DURATION or mode==News.OFF and 3 or 7
+          if sound then
+            -- RC1 news_gui.cpp: summary uses the ticker cue, full
+            -- news plays its type's effect, off/status is silent.
+            local fx=mode==News.SUMMARY and "NEWS_TICKER"
+              or mode==News.FULL and ((row.kind=="arrival_player" or row.kind=="arrival_other") and
+                "APPLAUSE" or row.kind=="new_vehicles" and "NEW_ENGINE")
+            if fx then sound(fx,{player=name}) end
+          end
           local hud=lane=="paper" and bulletin(p,row) or status(p,row,mode)
           local item={hud=hud,row=row,until_=now()+length}
           v.active[lane]=item

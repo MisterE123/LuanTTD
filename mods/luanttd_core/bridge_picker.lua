@@ -88,6 +88,11 @@ return function(api)
   end
   local function commit(n,ticket,style)
     local function finish(ok,note)
+      if ok and api.stock_audio then
+        local x,z=Sim.xy(ticket.b)
+        local h=api.render.host_terrain_top and api.render.host_terrain_top(ticket.b)
+        api.stock_audio.effect("CONSTRUCTION_BRIDGE",{player=n,pos=h and {x=2*x+.5,y=h+.7,z=2*z+.5}})
+      end
       if ticket.callback then ticket.callback(ok,note) end
     end
     if ticket.remote then

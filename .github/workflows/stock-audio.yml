@@ -1,0 +1,69 @@
+name: Build stock audio
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/stock-audio.yml
+      - tools/build_stock_audio.py
+      - tools/render_stock_midi.py
+      - tests/stock_audio_media.py
+      - third_party/openmsx/**
+      - third_party/opensfx/**
+concurrency:
+  group: stock-audio-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  package:
+    name: Verify and publish the OpenTTD audio pack
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install audio rendering dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends ffmpeg libfluidsynth3 timgm6mb-soundfont
+      - name: Verify and render stock audio
+        env:
+          OMP_NUM_THREADS: 2
+        run: |
+          set -euo pipefail
+          audio_source="$(mktemp -d)"
+          git clone --depth 1 --branch 1.0.3 https://github.com/OpenTTD/OpenSFX "$audio_source"
+          sha256sum -c <(printf '%s  %s\n' c5378b62028c920cb11e4803327983fee2f2cdff5dc89c708e39da417e51c854 /usr/share/sounds/sf2/TimGM6mb.sf2)
+          (cd "$audio_source/src/wav" && sha256sum -c "$GITHUB_WORKSPACE/third_party/opensfx/source-sha256.txt")
+          python3 tools/build_stock_audio.py --sfx "$audio_source/src" --music third_party/openmsx
+          python3 tests/stock_audio_media.py
+      - name: Publish tested stock media to main
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Explicit glob allowlist; no workflow/source/local world files.
+          git add -- menu/theme.ogg mods/luanttd_core/stock_audio_music.lua \
+            mods/luanttd_core/sounds/openmsx_*.ogg mods/luanttd_core/sounds/stock_sfx_*.ogg
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'Ship verified OpenSFX and OpenMSX media'
+          # Follow concurrent source commits without force; a conflict
+          # fails closed instead of publishing stale/corrupted media.
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD
+          if ! git diff --quiet "$GITHUB_SHA" FETCH_HEAD -- tools/build_stock_audio.py tools/render_stock_midi.py \
+            third_party/openmsx third_party/opensfx .github/workflows/stock-audio.yml; then
+            echo "The source pack changed during rendering; let its own build publish."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' rebase FETCH_HEAD
+          git push origin HEAD:refs/heads/main
