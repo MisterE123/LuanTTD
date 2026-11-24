@@ -127,8 +127,16 @@ def test():
             assert min(y for x,y,z in pts)>=(-.43 if suffix else -.013)
             if not suffix: heights[stage]=max(y for x,y,z in pts)
             crop_bytes+=path.stat().st_size
+            lite=M/f"bl_crop_growth_{stage}{suffix}_lite.obj";items.append(lite)
+            lines=lite.read_text().splitlines()
+            points=[tuple(float(x)*.1 for x in row.split()[1:]) for row in lines if row.startswith("v ")]
+            n=sum(row.startswith("f ") for row in lines)
+            assert n<=max(14,len(faces)*(.55 if stage in (2,7,8) else .35)),(lite,n,len(faces))
+            assert max(max(abs(x),abs(z)) for x,y,z in points)<(.5 if suffix else .99)
+            assert abs(max(y for x,y,z in points)-max(y for x,y,z in pts))<.11
+            crop_bytes+=lite.stat().st_size
     assert list(sorted(heights,key=heights.get))==[7,2,8,3,4,5,6],heights
-    assert heights[6]>.42 and heights[4]>.26 and crop_bytes<220*1024
+    assert heights[6]>.42 and heights[4]>.26 and crop_bytes<250*1024
     assert (ROOT/"tools/build_crop_growth_art.py").is_file()
     buf=BytesIO()
     with ZipFile(buf,"w",compression=ZIP_DEFLATED,compresslevel=9) as z:

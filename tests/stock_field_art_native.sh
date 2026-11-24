@@ -26,6 +26,9 @@ printf 'name = goodsart\n' > "$mod/mod.conf"
 cp tests/stock_field_art_native.lua "$mod/init.lua"
 cp mods/luanttd_core/models/{bl_farm_land_*.obj,bl_farm_fence_*.obj,bl_crop_growth_*.obj} "$mod/models/"
 cp mods/luanttd_core/openttd/slope.lua "$mod/slope.lua"
+# Exercise the production LOD selector in the art fixture's namespace.
+sed -e 's/luanttd_core:/goodsart:/g' -e 's/if core.get_modpath then/if false then/'   mods/luanttd_core/farm_field_view.lua > "$mod/farm_field_view.lua"
+
 cp mods/luanttd_core/textures/{bl_farm_field_?,bl_farm_fence_atlas,bl_crop_growth_atlas,bl_grass*}.png "$mod/textures/"
 printf 'gameid = goods_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
@@ -76,11 +79,13 @@ xdotool mousemove 650 430
 sleep 3
 xdotool key F2
 sleep 2
-for shot in survey field-edge steep through-crops; do
+for shot in beyond-distance crop-distance survey field-edge steep through-crops; do
   xdotool key t; sleep .2; xdotool type "/fieldview $shot"; xdotool key Return
   sleep 2.6
   import -window root "$out/field-$shot.png"
 done
+grep 'CROP_LOD_NATIVE_beyond-distance: 0' "$out/server.log"
+grep 'CROP_LOD_NATIVE_crop-distance:' "$out/server.log"
 ! grep -Ei 'ERROR\[|could not load' "$out/client.log"
 python3 - "$out" <<'PYQA'
 from PIL import Image

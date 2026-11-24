@@ -181,14 +181,16 @@ return function(api,W)
     rear,front=rear or center_height,front or center_height
     return {x=x,y=(front+rear)*.5,z=z},math.atan2(front-rear,2*axle)
   end
+  -- This private mesh has its pivot at the driver's eye, not the floor.
+  -- Using a vertical eye_height would slide the eye through the dashboard
+  -- in local space on grades. Keep it centered under the headliner and
+  -- transform the exact seat offset with the chassis instead.
+  local seat_x,seat_y,seat_z=-.007,.189,-.075
   local function seated(at,yaw,pitch)
-    -- Luanti's first-person camera follows the attached object's origin,
-    -- independently of its visual attachment offset. Keep the private
-    -- object's origin at the driver's seat; the mesh is exported relative
-    -- to this point, so doors and exterior still occupy the same world pose.
     local x,z=math.sin(yaw),math.cos(yaw)
-    local depth=-.10*math.cos(pitch)
-    return {x=at.x+depth*x-.045*z,y=at.y-.10*math.sin(pitch),z=at.z+depth*z+.045*x}
+    local sin,cos=math.sin(pitch),math.cos(pitch)
+    local depth=seat_z*cos-seat_y*sin
+    return {x=at.x+depth*x+seat_x*z,y=at.y+seat_z*sin+seat_y*cos,z=at.z+depth*z-seat_x*x}
   end
   local function mount_pose(q,pitch)
     -- The car meshes point along local +Z. Positive Luanti object pitch
@@ -251,18 +253,18 @@ return function(api,W)
     mount_pose(q,pitch)
     q.pitch=pitch
     p:set_physics_override({gravity=0,speed=0,jump=0,sneak=false,speed_walk=0,speed_crouch=0})
-    p:set_eye_offset({x=0,y=0,z=0},{x=.45,y=2.5,z=0},{x=.45,y=1.0,z=4})
+    p:set_eye_offset({x=0,y=0,z=0},{x=.07,y=2.86,z=0},{x=.07,y=1.36,z=4})
     p:set_attach(q.interior,"",{x=0,y=0,z=0},{x=0,y=0,z=0},true)
     q.attached=true
     local graphics=p:get_properties()
     q.avatar_graphics={visual=graphics.visual,textures=graphics.textures,visual_size=graphics.visual_size}
     -- PlayerSAO keeps its own visual enabled for camera/attachment. Give it
     -- no visible pixels while mounted instead of hiding the parent/car.
-    p:set_properties({eye_height=.225,visual="sprite",textures={"bl_sightseeing_hidden_player.png"},
+    p:set_properties({eye_height=0,visual="sprite",textures={"bl_sightseeing_hidden_player.png"},
       visual_size={x=.001,y=.001,z=.001}})
     -- A non-forced child of the local player is hidden by Luanti only
     -- in first person; F7 shows the full exterior without a server poll.
-    q.shell:set_attach(p,"",{x=.45,y=0,z=1},{x=0,y=0,z=0},false)
+    q.shell:set_attach(p,"",{x=-seat_x*10,y=-seat_y*10,z=-seat_z*10},{x=0,y=0,z=0},false)
     p:set_look_horizontal(-q.look);p:set_look_vertical(.07-pitch)
     q.hud=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},
       text="",number=0xffe3a3,z_index=105})

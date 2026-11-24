@@ -93,7 +93,7 @@ xdotool mousemove 650 430
 sleep 3
 
 say() {
-  xdotool key t; sleep .24; xdotool type "$1"; xdotool key Return; sleep .52
+  xdotool windowfocus --sync "$win"; xdotool key --clearmodifiers t; sleep .32; xdotool type "$1"; xdotool key --clearmodifiers Return; sleep .65
 }
 if [[ ${LUANTTD_NATIVE_SCENERY:-0} == 1 ]]; then
   say "/carprobe cine-before"
@@ -124,6 +124,11 @@ if cmp -s "$out/car-entry.jpg" "$out/car-side.jpg"; then
   echo "Turning your head did not change the seated view." >&2
   exit 1
 fi
+say "/carprobe left"
+import -window root -quality 90 "$out/car-left.jpg"
+say "/carprobe right"
+import -window root -quality 90 "$out/car-right.jpg"
+say "/carprobe center"
 xdotool key F7
 sleep .55
 import -window root -quality 92 "$out/car-third-back.jpg"

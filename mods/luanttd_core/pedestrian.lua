@@ -117,6 +117,8 @@ function P.new(api)
     z=z and clamp(z,v*2-.25,v*2+1.25) or v*2+.5
     local deck=api.render.walk_bridge_surface and api.render.walk_bridge_surface(id,x,z,aim_y)
     if deck then return {x=x,y=deck+.045,z=z} end
+    local arena=api.render.walk_stadium_surface and api.render.walk_stadium_surface(id,x,z)
+    if arena then return {x=x,y=arena+.045,z=z} end
     if blocked(cell(id)) then return end
     local water=waterline(id,cell(id),x,z)
     local y=water and water-.18 or surface(id,x,z)

@@ -32,10 +32,19 @@ local function entity(name,crop)
   })
 end
 for style=1,6 do for grade=0,1 do entity("farm_fence_"..style.."_"..grade) end end
-for stage=2,8 do entity("crop_growth_"..stage,true); entity("crop_growth_"..stage.."_patch",true) end
+local fields,centers={},{}
+local field_view=dofile(core.get_modpath("goodsart").."/farm_field_view.lua")({
+  s={stock_farm_fields=fields},
+  Sim={xy=function(id)return unpack(centers[id]) end},
+  farm_world={field=function(_,id)return fields[id] end},
+  slope=terrain,
+},{})
+core.register_globalstep(function(dt) field_view.step(dt) end)
 
 local views={
   ["through-crops"]={from={x=6.5,y=.505,z=8.8},at={x=7.2,y=.76,z=10.8},walk=true},
+  ["crop-distance"]={from={x=7.5,y=13,z=40.8},at={x=7.5,y=.84,z=8.8}},
+  ["beyond-distance"]={from={x=7.5,y=13,z=70},at={x=7.5,y=.84,z=8.8}},
   survey={from={x=15.72,y=8.10,z=14.56},at={x=10.0,y=1.16,z=7.95}},
   ["field-edge"]={from={x=7.82,y=1.56,z=12.70},at={x=7.96,y=.95,z=8.70}},
   steep={from={x=14.27,y=1.68,z=11.67},at={x=10.6,y=1.20,z=7.9}},
@@ -63,7 +72,7 @@ local function height(x,z)
   return a+b
 end
 local function build()
-  for j=-5,13 do for i=-6,13 do
+  for j=-5,23 do for i=-6,13 do
     local crop=i>=0 and i<=4 and j>=0 and j<=3
     local stage=(j==2 and i<=2) and 6 or (j==3 and i<=2) and 8 or (j*5+i)%9
     local n,w,e,s=height(i,j),height(i+1,j),height(i,j+1),height(i+1,j+1)
@@ -82,15 +91,9 @@ local function build()
     if j==3 then fence(i%6+2,x0,z1,x1,z1,e,s) end
     if j==1 and i>=2 then fence(i+1,x0,z1,x1,z1,e,s) end
     if stage>=2 then
-      if mask==0 then
-        assert(core.add_entity({x=x+.5,y=base+.504,z=z+.5},"goodsart:crop_growth_"..stage))
-      elseif stage~=8 then
-        for a=0,3 do
-          local dx,dz=a%2-.5,math.floor(a/2)-.5
-          local y=base+.504+terrain.surface(.5+dx/2,.5+dz/2,mask)
-          assert(core.add_entity({x=x+.5+dx,y=y,z=z+.5+dz},"goodsart:crop_growth_"..stage.."_patch"))
-        end
-      end
+      local id=#centers+1
+      centers[id]={x/2,z/2}
+      fields[id]={variant=stage,slope=mask,base=base}
     end
     end
   end end
@@ -107,7 +110,7 @@ core.register_on_joinplayer(function(p)
   view(p,views.survey)
   if pending then return end
   pending=true
-  core.emerge_area({x=-8,y=-1,z=-5},{x=31,y=6,z=29},function(_,_,n)
+  core.emerge_area({x=-8,y=-1,z=-5},{x=31,y=6,z=52},function(_,_,n)
     if n==0 then
       build();ready=true
       local current=core.get_player_by_name(name)
@@ -120,5 +123,18 @@ core.register_chatcommand("fieldview",{params="survey|field-edge|steep",
   func=function(name,key)
     local p=core.get_player_by_name(name)
     if not p or not ready or not views[key] then return false end
-    view(p,views[key]);return true
+    view(p,views[key])
+    if key=="crop-distance" or key=="beyond-distance" then
+      core.after(1,function()
+        local n=0
+        for _,r in ipairs(core.get_objects_inside_radius({x=8,y=1,z=8},8)) do
+          local e=r:get_luaentity()
+          if e and e.name:find(":crop_growth_",1,true) then n=n+1 end
+        end
+        assert((key=="crop-distance" and n>=12 and n<=64) or (key=="beyond-distance" and n==0),
+          "bad crop LOD: "..key.." count "..n)
+        core.log("action","CROP_LOD_NATIVE_"..key..": "..n)
+      end)
+    end
+    return true
   end})

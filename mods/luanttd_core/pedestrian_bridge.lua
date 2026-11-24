@@ -34,4 +34,33 @@ function B.box(part,direction)
   end
   return out
 end
+-- Merge just the walk plate and the actual visual guard strips. Split the
+-- ramp guard into the existing eight treads so it follows the approach;
+-- never create a transverse wall at either end. Share flat measurements
+-- between all matching spans via the generated mesh table.
+function B.add_rails(deck,rails,along_x)
+  if not rails or not deck then return deck end
+  local cross=along_x and 3 or 1
+  local along=along_x and 1 or 3
+  local out={}
+  for _,d in ipairs(deck) do
+    local floor={unpack(d)}
+    for _,r in ipairs(rails) do
+      -- A rail may be just wider than the previous collision plate.
+      -- Carry the visible shoulder out to its inner face.
+      if r[cross]<.5 then floor[cross]=math.min(floor[cross],r[cross+3])
+      else floor[cross+3]=math.max(floor[cross+3],r[cross]) end
+      local a,b=math.max(d[along],r[along]),math.min(d[along+3],r[along+3])
+      if b-a>.009 then
+        local guard={unpack(r)}
+        guard[along],guard[along+3]=a,b
+        guard[2]=d[5]-.095
+        guard[5]=d[5]+math.max(.198,r[5]-.5)
+        out[#out+1]=guard
+      end
+    end
+    out[#out+1]=floor
+  end
+  return out
+end
 return B

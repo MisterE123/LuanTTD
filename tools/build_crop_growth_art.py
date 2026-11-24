@@ -23,7 +23,7 @@ def png():
     pix=b''.join(bytes(c)*8 for c in PALETTE)
     return (b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',pack('>IIBBBBB',len(PALETTE)*8,8,8,2,0,0,0))
             +chunk(b'IDAT',compress((b'\x00'+pix)*8))+chunk(b'IEND',b''))
-def mesh(phase,patch=False):
+def mesh(phase,patch=False,lite=False):
     root=-.43 if patch else -.012
     vertices,faces=[],[]
     def face(points,color):
@@ -39,13 +39,35 @@ def mesh(phase,patch=False):
             u=[(cos(i*pi/3)*rad,sin(i*pi/3)*yy+yy) for i in range(6)]
             for i,(x0,y0) in enumerate(u):
                 x1,y1=u[(i+1)%6]
-                for a,b,c in ((-.5,-.32,7),(-.32,-.25,10),(-.25,.25,9),(.25,.32,10),(.32,.5,7)):
+                for a,b,c in (((-.5,.5,7),) if lite else ((-.5,-.32,7),(-.32,-.25,10),(-.25,.25,9),(.25,.32,10),(.32,.5,7))):
                     face([(x+x0,y0,z+a*length),(x+x1,y1,z+a*length),
                           (x+x1,y1,z+b*length),(x+x0,y0,z+b*length)],c if i<3 else min(c+1,11))
             for side in (-.5,.5):
                 for i,(x0,y0) in enumerate(u):
                     x1,y1=u[(i+1)%6]
                     face([(x,yy,z+side*length),(x+x0,y0,z+side*length),(x+x1,y1,z+side*length)],8+i%2)
+    elif lite:
+        # Three faceted strips at most per diagonal row. Preserve foliage
+        # height and shadowed gaps without drawing individual leaf/stem faces.
+        h,c,_=PHASE[phase]
+        e=.37 if patch else .85
+        offsets=(-.26,.00,.26) if patch else (-.64,-.38,-.13,.13,.38,.64)
+        for i,k in enumerate(offsets):
+            a,b=-e+abs(k),e-abs(k)
+            if phase in (2,7): a,b=a*.85,b*.85
+            w=.057 if phase in (2,7) else .090
+            def at(t,y,off):
+                return (t-k+off,y,t+k-off)
+            mid=(a+b)*.5
+            for j,(lo,hi) in enumerate(((a,mid),(mid,b))):
+                ridge=h*(.89+((i*3+j)%4)*.04)
+                v0,v1=at(lo,ridge,0),at(hi,ridge,0)
+                face([at(lo,root,-w),at(hi,root,-w),v1,v0],c)
+                face([v0,v1,at(hi,root,w),at(lo,root,w)],min(11,c+1))
+                if phase in (5,6):
+                    # A narrow band catches the golden top at survey height.
+                    face([at(lo,ridge*.94,-.025),at(hi,ridge*.94,-.025),
+                          v1,v0],6+(i+j)%2)
     else:
         height,index,count=PHASE[phase]
         extent=.4 if patch else .88
@@ -86,16 +108,18 @@ def outputs():
     yield MOD/'textures'/'bl_crop_growth_atlas.png',png()
     for i in (*PHASE,8):
         for patch in (False,True):
-            yield MOD/'models'/f'bl_crop_growth_{i}{"_patch" if patch else ""}.obj',mesh(i,patch)
+            for lite in (False,True):
+                suffix=("_patch" if patch else "")+("_lite" if lite else "")
+                yield MOD/'models'/f'bl_crop_growth_{i}{suffix}.obj',mesh(i,patch,lite)
 def main():
     items=list(outputs())
-    assert sum(len(data) for _,data in items)<220*1024
+    assert sum(len(data) for _,data in items)<250*1024
     for p,data in items:
         if '--check' in sys.argv:
             assert p.read_bytes()==data,p
-        else:
+        elif not p.exists() or p.read_bytes()!=data:
             temp=p.with_suffix('.tmp')
             temp.write_bytes(data)
             temp.replace(p)
-    print(sum(len(data) for _,data in items),'bytes original growth art; 7 phases × 2 reusable mesh footprints')
+    print(sum(len(data) for _,data in items),'bytes original growth art; 7 phases × 2 footprints × 2 detail levels')
 if __name__=='__main__':main()

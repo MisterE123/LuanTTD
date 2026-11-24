@@ -24,7 +24,7 @@ return function(api)
     local graphics=p:get_properties()
     if mode and mode.mode=="car" then
       assert(car and car:get_luaentity().name=="luanttd_core:sightseeing_car_interior" and
-        math.abs(graphics.eye_height-.225)<.001 and graphics.visual_size.y<.01 and
+        graphics.eye_height==0 and graphics.visual_size.y<.01 and
         graphics.textures[1]=="bl_sightseeing_hidden_player.png","driver isn't seated inside the cabin")
       local viewers=car:get_observers()
       assert(viewers and viewers[owner] and not viewers.Observer,"cabin escapes driver visibility")
@@ -33,6 +33,10 @@ return function(api)
         if e and e.name=="luanttd_core:sightseeing_car" then
           assert(not o:get_observers()[owner],"unattached exterior is visible to the driver")
           local center,rot=o:get_pos(),o:get_rotation()
+          local want=vector.add(center,vector.rotate({x=-.007,y=.189,z=-.075},rot))
+          assert(vector.distance(car:get_pos(),want)<.008,"driver eye drifted relative to the sloped cabin")
+          v=center
+          at=Sim.id(math.floor((v.x+.5)/2),math.floor((v.z+.5)/2))
           local nose=vector.rotate({x=0,y=0,z=1},rot)
           local run=math.sqrt(nose.x^2+nose.z^2)
           local function height(d)
@@ -66,6 +70,7 @@ return function(api)
     core.log("action",("CAR_QA %s %s %.3f %.3f %.3f %.4f %.4f %.3f %s %s %s"):format(
       tag,mode and mode.mode or "builder",v.x,v.y,v.z,p:get_look_horizontal(),p:get_look_vertical(),
       R.surface(at,v.x,v.z),tostring(flags.hotbar),tostring(W.menu(p)),tostring(S.topology)))
+    return v
   end
   core.register_chatcommand("carprobe",{func=function(name,tag)
     local p=assert(core.get_player_by_name(name))
@@ -82,6 +87,13 @@ return function(api)
     elseif tag=="candy-off" or tag=="candy-on" then
       assert(api.wildlife.enabled(p)==(tag=="candy-on"))
       core.log("action","CANDY_NATIVE_"..tag)
+    elseif tag=="left" or tag=="right" or tag=="center" then
+      local cabin=assert(p:get_attach())
+      local r=cabin:get_rotation()
+      local yaw=tag=="left" and .72 or tag=="right" and -.72 or 0
+      p:set_look_horizontal((r.y+yaw)%(2*math.pi))
+      p:set_look_vertical(.07-r.x)
+      core.log("action","CAR_QA_LOOK "..tag)
     elseif tag=="leave-spot" then
       p:set_look_horizontal(2.1);p:set_look_vertical(.36)
       p:set_pos({x=29.75,y=8.25,z=19.50})
@@ -102,10 +114,9 @@ return function(api)
     elapsed=0
     local p=core.get_player_by_name(owner)
     if p and W.avatar_state(p) then
-      report(p,"trace")
+      local v=report(p,"trace")
       local car=p:get_attach()
-      if car then
-        local v=car:get_pos()
+      if car and v then
         if previous then
           core.log("action",("CAR_QA_SPEED %.3f"):format((v.x-previous[1])/(total-previous[2])))
         end

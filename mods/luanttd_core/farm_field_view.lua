@@ -28,7 +28,7 @@ return function(api,Terrain)
   local slope_sample=api.slope and api.slope.surface
   for i=2,8 do
     detail[i]={}
-    for k,suffix in ipairs({"","_patch"}) do
+    for k,suffix in ipairs({"","_patch","_lite","_patch_lite"}) do
       local asset="crop_growth_"..i..suffix
       local entity="luanttd_core:"..asset
       detail[i][k]=entity
@@ -70,23 +70,29 @@ return function(api,Terrain)
         local crop=detail[field.variant]
         if nearby and crop and slope_sample then
           local cx,cz=2*x+.5,2*z+.5
-          local function add(key,m,x,z,y)
-            local shown=refs[key]~=nil
-            local reach,altitude=shown and 23 or 18,shown and 14 or 11
-            local best
+          local function add(key,mesh_id,x,z,y)
+            local old=refs[key]
+            local shown=old~=nil
+            local near=old and not old.lite
+            local reach,altitude=shown and 45 or 38,shown and 28 or 22
+            local close_reach,close_height=near and 23 or 18,near and 14 or 11
+            local best,close
             for _,at in ipairs(positions) do
               local dy=at.y and math.abs(at.y-y) or 0
               local distance=(at.x-x)^2+(at.z-z)^2
               if dy<altitude and distance<reach^2 then
                 local rank=distance+dy*dy
                 if not best or rank<best then best=rank end
+                if dy<close_height and distance<close_reach^2 then
+                  if not close or rank<close then close=rank end
+                end
               end
             end
-            if best then crops[#crops+1]={key=key,id=id,name=m,x=x,y=y,z=z,yaw=0,
-              rank=best-(shown and 16 or 0)} end
+            if best then crops[#crops+1]={key=key,id=id,name=crop[mesh_id+(close and 0 or 2)],
+              x=x,y=y,z=z,yaw=0,lite=not close,rank=(close or best)-(shown and 16 or 0)} end
           end
           if field.slope==0 then
-            add("crop:"..id,crop[1],cx,cz,field.base+.504)
+            add("crop:"..id,1,cx,cz,field.base+.504)
           else
             -- Reuse four smaller stands anchored to the exact RC1 height
             -- field. Buried stem roots match even diagonal crossfalls.
@@ -94,7 +100,7 @@ return function(api,Terrain)
             if field.variant~=8 then
               for a=0,3 do
                 local dx,dz=a%2-.5,math.floor(a/2)-.5
-                add("crop:"..id..":"..a,crop[2],cx+dx,cz+dz,
+                add("crop:"..id..":"..a,2,cx+dx,cz+dz,
                   field.base+.504+slope_sample(.5+dx/2,.5+dz/2,field.slope))
               end
             end
@@ -124,9 +130,19 @@ return function(api,Terrain)
     end
     if local_interest then local_interest.each_tile(Sim,64,visit)
     else for id in pairs(fields) do visit(id) end end
-    table.sort(crops,function(a,b) return a.rank==b.rank and a.key<b.key or a.rank<b.rank end)
-    -- Bound per-world presentation work even in very large multiplayer maps.
-    for i=1,math.min(#crops,64) do active[crops[i].key]=crops[i] end
+    table.sort(crops,function(a,b)
+      if a.lite~=b.lite then return not a.lite end
+      return a.rank==b.rank and a.key<b.key or a.rank<b.rank
+    end)
+    -- Detailed rows keep priority. Distant meshes have their own smaller
+    -- share of the budget so a large survey view cannot max out draw calls.
+    local total,far=0,0
+    for _,piece in ipairs(crops) do
+      if total==64 or (piece.lite and far==28) then break end
+      active[piece.key]=piece
+      total=total+1
+      if piece.lite then far=far+1 end
+    end
     return active
   end
   -- Farm perimeters are rendered entities, so attach a few native

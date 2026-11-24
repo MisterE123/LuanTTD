@@ -147,8 +147,14 @@ return function(api)
     props[n]=reg(n,{{name=face,align_style="world",scale=2},png(base),side},
       raised and {drawtype="nodebox",node_box={type="fixed",fixed=fixed}} or nil)
   end
+  local add_guardrails=dofile(modpath.."/pedestrian_bridge.lua").add_rails
   local function architecture(name,asset,palette,rotates,solid)
     solid=walk_collision.box(asset) or solid
+    local rails=walk_collision.bridge(asset)
+    if solid and rails then
+      local axis=asset:match("_span_(%d)") or asset:match("_head_flat_(%d)") or asset:match("_head_ramp_(%d)")
+      solid=add_guardrails(solid,rails,tonumber(axis)%2==0)
+    end
     return reg(name,{png(palette or "road_architecture")},{drawtype="mesh",mesh="bl_"..asset..".obj",
       paramtype="light",paramtype2=rotates and "facedir" or nil,sunlight_propagates=true,walkable=not not solid,pointable=false,
       collision_box=solid and {type="fixed",fixed=solid} or nil,
@@ -805,6 +811,21 @@ return function(api)
       if land==nil or land>base+.505 then return end
     end
     return base+.5
+  end
+  function R.walk_stadium_surface(id,x,z)
+    local t=S.tiles[id]
+    local h=t and t.source_house
+    if not h or not h.completed or (h.asset_root~=0x14 and h.asset_root~=0x20) then return end
+    local u,v=Sim.xy(id)
+    x,z=x-u*2,z-v*2
+    local model=("town_stock_%02x_%d"):format(h.asset_root,h.asset_part)
+    local peak
+    for _,box in ipairs(walk_collision.box(model) or {}) do
+      if x>=box[1] and x<=box[4] and z>=box[3] and z<=box[6] then
+        peak=math.max(peak or -1,box[5])
+      end
+    end
+    return peak and t.h+1+peak
   end
   do
     local B=dofile(modpath.."/pedestrian_bridge.lua")

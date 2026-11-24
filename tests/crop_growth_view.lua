@@ -28,9 +28,11 @@ at(2.5,2,2.5);assert(#live()==0)
 S.stock_farm_fields[id].variant=4
 at(2.5,2,2.5); assert(#live()==1 and live()[1].n:match("crop_growth_4$"))
 assert(not models[live()[1].n].physical)
-at(23,2,2.5); assert(#live()==1) -- retained hysteresis band
-at(27,2,2.5); assert(#live()==0)
-at(23,2,2.5); assert(#live()==0) -- do not respawn before returning
+at(44,2,2.5); assert(#live()==1) -- retained hysteresis band
+at(49,2,2.5); assert(#live()==0)
+at(38,21,2.5); assert(#live()==1 and live()[1].n:match("_lite$")) -- survey range and height
+at(38,29,2.5); assert(#live()==0) -- above vertical retention
+at(44,2,2.5); assert(#live()==0) -- do not respawn before returning
 at(2.5,2,2.5); assert(#live()==1)
 S.stock_farm_fields[id]=field(6,23)
 at(2.5,2,2.5); assert(#live()==4)

@@ -25,6 +25,16 @@ return function(api)
   end end
   S.stock_farm_fields[Sim.id(9,19)]={slope=0,base=1,variant=3,fences={[2]=3}}
   S.tiles[Sim.id(11,19)].house=true
+  local farm=1000000
+  S.stock_farm_industries[farm]={id=farm,kind="farm",removed=false}
+  S.tiles[Sim.id(10,16)].stock_industry={id=farm,chain="farm",style="industry_farm",x=0,z=0}
+  for _,entry in ipairs({{18,19,0x14},{20,21,0x20}}) do
+    for dx=0,1 do for dz=0,1 do
+      local tile=S.tiles[Sim.id(entry[1]+dx,entry[2]+dz)]
+      tile.house=true
+      tile.source_house={asset_root=entry[3],asset_part=2*dx+dz,completed=true}
+    end end
+  end
   local ok,why=Sim.road_bridge(S,"WalkQA",Sim.id(12,11),Sim.id(16,11),0)
   assert(ok,why)
   local bridge=S.stock_road_bridges[S.tiles[Sim.id(12,11)].road_bridge_id]
@@ -62,19 +72,36 @@ return function(api)
     elseif tag=="bridge" then x,z,yaw=22.0,22.5,-math.pi/2
     elseif tag=="field" then x,z,yaw=25.7,34.5,math.pi/2
     elseif tag=="fence" then x,z,yaw=18.35,38.5,-math.pi/2
+    elseif tag=="parcel" then x,z,yaw=23.12,40.52,math.pi
+    elseif tag=="silo" then x,z,yaw=18.66,32.15,-math.pi/2
+    elseif tag=="arena" then x,z,yaw=34.89,39.10,-math.pi/2
+    elseif tag=="arena2" then x,z,yaw=40.65,43.10,-math.pi/2
     else error(tag) end
     p:set_pos({x=x,y=5,z=z});p:set_look_horizontal(yaw);p:set_look_vertical(1.567)
     phases.phase=tag
   end
   core.register_chatcommand("swimprobe",{func=function(n,tag)
     local p=assert(core.get_player_by_name(n))
-    if tag=="shore" or tag=="bridge" or tag=="field" or tag=="fence" then setup(p,tag);return true end
+    if tag=="shore" or tag=="bridge" or tag=="field" or tag=="fence" or tag=="parcel" or tag=="silo" or tag=="arena" or tag=="arena2" then setup(p,tag);return true end
     local v,a=sample(p)
     local flags=p:hud_get_flags()
     core.log("action",("COAST_SWIM %s %.3f %.3f %.3f swimming=%s %s"):format(tag,v.x,v.y,v.z,tostring(a and a.swimming),core.serialize(phases):gsub("%s","")))
     if tag=="house" then for y=1,3 do core.log("action", "QA house node "..y.." "..core.get_node({x=22,y=y,z=38}).name) end end
     if tag=="float" then assert(a and a.swimming and phases.floated,"did not float in channel")
     elseif tag=="climb" then assert(a and not a.swimming and phases.climbed,"did not climb rocky coast")
+    elseif tag=="guard" then
+      assert(a and not a.swimming and v.x>26 and v.x<31 and math.abs(v.y-(bridge.deck+.5))<.13
+        and math.abs(v.z-22.5)>.20 and math.abs(v.z-22.5)<.49,"walking sideways must stop at the bridge railing")
+    elseif tag=="parcel_blocked" then
+      assert(a and v.z>39.33 and v.z<39.49,"house pickets must stop walking without a jump")
+    elseif tag=="parcel_jumped" then
+      assert(a and v.z<39.24,"jump must clear the house pickets")
+    elseif tag=="silo_blocked" then
+      assert(a and v.x>19.75 and v.x<19.880,"silo wall must preserve at least .10 eye clearance")
+    elseif tag=="arena_crossed" then
+      assert(a and v.x>36.65 and v.x<39.7 and v.y>1.5,"walk onto pitch")
+    elseif tag=="arena2_crossed" then
+      assert(a and v.x>41.2 and v.x<43.6 and v.y>1.5,"start and walk inside athletics stadium")
     elseif tag=="span" then assert(a and not a.swimming and phases.deck and phases.bridge_exit,"did not cross timber bridge")
     elseif tag=="crop" then assert(a and not a.swimming and phases.field_grade and phases.field_up,"did not climb plowed field")
     elseif tag=="barrier" then
@@ -82,7 +109,7 @@ return function(api)
     elseif tag=="jumped" then
       assert(a and v.x>20.15 and v.x<21.95,"jump must clear the fence")
     elseif tag=="house" then
-      assert(a and v.x>21.65 and v.x<22.12,"walking must stop at the mesh-aligned house")
+      assert(a and v.x>21.65 and v.x<21.878,"house facade must preserve at least .10 eye clearance")
     elseif tag=="returned" then
       assert(not a and flags.hotbar and p:get_properties().eye_height>1 and math.abs(v.x-25.7)<.05)
     else error(tag) end
@@ -98,6 +125,7 @@ return function(api)
         local b=core.registered_nodes[core.get_node({x=28,y=bridge.deck,z=22}).name]
         local field=core.registered_nodes[core.get_node({x=24,y=1,z=34}).name]
         assert(b and b.mesh and b.mesh:find("bridge_wood") and b.walkable,"missing actual timber deck collision")
+        assert(core.get_node({x=20,y=2,z=32}).name=="luanttd_core:industry_farm_0_0")
         assert(field and field.mesh=="bl_farm_land_12.obj" and field.walkable,"missing actual field collision")
         local house="luanttd_core:scenery_house_0"
         assert(core.registered_nodes[house].walkable and #core.registered_nodes[house].collision_box.fixed>1)

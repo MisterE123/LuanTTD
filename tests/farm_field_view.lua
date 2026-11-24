@@ -115,3 +115,24 @@ accept()
 f.step(.4,player)
 assert(#runs==4 and not runs[4].pos,"props survived the end of their projected window")
 print("PASS worker farm fences: detached scene fields/corners, shared-edge identity, live occupation, distance and window culling")
+
+runs={}
+local flat={variant=6,base=3,slope=0,fences={}}
+local board={}
+for id=1,121 do board[id]=flat end
+local crowd=create({s={stock_farm_fields=board},farm_world={field=function(_,id)return board[id] end},
+  Sim={xy=function(id)return (id-1)%11,math.floor((id-1)/11) end},
+  slope=dofile(base.."openttd/slope.lua")},Terrain)
+crowd.step(.4,{{x=10.5,y=7,z=10.5}})
+assert(#runs==64,"crop budget changed in a dense view")
+for _,r in ipairs(runs) do
+  assert((r.pos.x-10.5)^2+(r.pos.z-10.5)^2<=4*20,"budget no longer prioritizes nearby crops")
+end
+print("PASS crop 3D nearest-64 priority cap")
+crowd.step(.4,{{x=10.5,y=20,z=10.5}})
+local far=0
+for _,r in ipairs(runs) do if r.pos then
+  assert(r.name:match("_lite$"),"survey unexpectedly used full foliage")
+  far=far+1
+end end
+assert(far==28,"distant crop cap")

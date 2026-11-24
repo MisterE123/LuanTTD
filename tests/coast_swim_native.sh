@@ -52,8 +52,8 @@ screen_w = 1300
 screen_h = 860
 fullscreen = false
 enable_sound = false
-viewing_range = 55
-client_mapblock_limit = 750
+viewing_range = 43
+client_mapblock_limit = 480
 mesh_generation_threads = 2
 enable_waving_water = false
 fps_max = 30
@@ -102,6 +102,26 @@ say() {
 
 capture() { import -window "$win" -quality 93 "$out/$1.jpg"; }
 hold() { local seconds=$1; shift; xdotool keydown "$@"; sleep "$seconds"; xdotool keyup "$@"; }
+if [[ ${BAYLINE_WALL_TEST_ONLY:-0} == 1 ]]; then
+  say "/swimprobe fence"
+  say "/walk"
+  sleep .8
+  hold 1.6 w
+  hold .32 w space
+  hold 2.3 w
+  say "/swimprobe house"
+  capture house
+  xdotool click 3
+  sleep .65
+  say "/swimprobe silo"
+  say "/walk"
+  hold 1.65 w
+  say "/swimprobe silo_blocked"
+  capture silo
+  grep -q "COAST_SWIM_PASS house" "$out/server.log"
+  grep -q "COAST_SWIM_PASS silo_blocked" "$out/server.log"
+  exit
+fi
 say "/walk"
 capture coast
 hold 2.4 w
@@ -119,6 +139,10 @@ sleep .65
 say "/swimprobe bridge"
 say "/walk"
 hold 4.3 w
+hold .55 d
+say "/swimprobe guard"
+capture bridge-guard
+xdotool keydown a; sleep .19; xdotool keyup a
 capture bridge
 hold 6.3 w
 say "/swimprobe span"
@@ -145,5 +169,36 @@ say "/swimprobe jumped"
 hold 1.9 w
 say "/swimprobe house"
 capture house
-for p in float climb span crop returned barrier jumped house; do grep -q "COAST_SWIM_PASS $p" "$out/server.log" || { cat "$out/server.log"; exit 1; }; done
+xdotool click 3
+sleep .65
+say "/swimprobe parcel"
+say "/walk"
+hold 1.55 w
+say "/swimprobe parcel_blocked"
+capture parcel
+hold .28 w space
+hold .30 w
+say "/swimprobe parcel_jumped"
+xdotool click 3
+sleep .65
+say "/swimprobe silo"
+say "/walk"
+hold 1.65 w
+say "/swimprobe silo_blocked"
+capture silo
+xdotool click 3
+sleep .65
+say "/swimprobe arena"
+say "/walk"
+hold 1.80 w
+say "/swimprobe arena_crossed"
+capture stadium
+xdotool click 3
+sleep .65
+say "/swimprobe arena2"
+say "/walk"
+hold .94 w
+say "/swimprobe arena2_crossed"
+capture stadium-2
+for p in arena_crossed arena2_crossed guard parcel_blocked parcel_jumped silo_blocked float climb span crop returned barrier jumped house; do grep -q "COAST_SWIM_PASS $p" "$out/server.log" || { cat "$out/server.log"; exit 1; }; done
 ! grep -Ei 'error|could not load' "$out/client.log"
