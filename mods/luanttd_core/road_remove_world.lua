@@ -32,7 +32,7 @@ return function(Sim,Terrain,rules)
     local x,z=Sim.xy(id)
     local shape=Terrain.tile(s.corner_grid,x,z)
     if shape==nil then return nil,"PARAMETERS" end
-    local other=tile.tram and tile.tram.bits or tile.tram_bits or 0
+    local other=tile.tram and (tile.tram.tram_bits or tile.tram.bits) or tile.tram_bits or 0
     local edit,why=Slope.remove(shape,wanted,Sim.road_bits(s,id),other,rules.build_on_slopes~=false)
     if not edit then return nil,why end
     edit.id,edit.cost,edit.under=id,count(edit.removed)*40+(edit.foundation and 250 or 0),other

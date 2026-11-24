@@ -738,7 +738,7 @@ return function(api,ui)
     local shade="inspect"
     local anchor=ui.anchor(p)
     if ids and valid~=nil then
-      shade=valid and tool~="clear" and ((tool=="road_remove" or tool=="road_waypoint_remove" or tool=="road_stop_remove") and "removal" or "valid") or "invalid"
+      shade=valid and tool~="clear" and ((tool=="road_remove" or tool=="tram_remove" or tool=="road_waypoint_remove" or tool=="road_stop_remove") and "removal" or "valid") or "invalid"
     end
     if api.selector then
       local rail=world_tool and ui.rail_overlay and ui.rail_overlay(p,t)

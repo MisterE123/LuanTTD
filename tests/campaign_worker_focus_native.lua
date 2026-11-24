@@ -178,6 +178,31 @@ core.register_on_joinplayer(function(p)
         q.was_waypoint=id
       end
       core.log("action","NATIVE_ROAD_GESTURE_"..(label=="waypoint-done" and "WAYPOINT_PASS" or "ERASE_WAYPOINT_PASS"))
+    elseif label=="tram-remove-start" then
+      local a,b=Sim.id(q.x+1,q.z),Sim.id(q.x+2,q.z)
+      local request={mode="tram",operation="build",kind="road",cells={a,b}}
+      ask({kind="transport_quote",request=request},function(r)
+        ask({kind="command",command={kind="transport_commit",revision=r.revision,token=r.value.token}},function()
+          local snapshot=assert(OwnerCheckpoint.read())
+          for _,id in ipairs{a,b} do assert(snapshot.tiles[id].tram and snapshot.tiles[id].road_bits==10) end
+          assert(world.go_menu(player,"tramway"))
+          local slot
+          for i,j in ipairs(world.hotbar_layout(player)) do if j==10 then slot=i end end
+          assert(slot)
+          aim(q.x+1,q.z,.12)
+          core.log("action","NATIVE_ROAD_GESTURE_TRAM_REMOVE slot="..(slot==10 and 0 or slot))
+        end)
+      end)
+    elseif label=="tram-remove-end" then
+      aim(q.x+2,q.z,.75)
+      core.log("action","NATIVE_ROAD_GESTURE_TRAM_REMOVE_RELEASE")
+    elseif label=="tram-remove-done" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      for x=q.x+1,q.x+2 do
+        local t=snapshot.tiles[Sim.id(x,q.z)]
+        assert(t.build=="road" and t.road_bits==10 and t.tram==nil)
+      end
+      core.log("action","NATIVE_ROAD_GESTURE_TRAM_REMOVE_PASS")
     elseif label=="remove-start" then ready("REMOVE",7,q.x,q.z,.12)
     elseif label=="remove-end" then
       aim(q.x+3,q.z,.75)

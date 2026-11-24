@@ -26,6 +26,15 @@ actual ordered footprint without changing the town's rating until
 the player commits. The enabled defaults and council tolerance come
 from OpenTTD, not a feature switch.
 
+## Remove only the tram track
+
+Open **Roadworks → Road Options → Electric Tramways → Remove tram
+track**. Click or drag along the track. The tool leaves shared pavement,
+town ownership and one-way signs in place. It skips another company's
+track and track occupied by traffic or protected by the active test
+streetcar; select a depot or stop with the layered Bulldozer instead.
+Streetcar dispatch and recall are in **Tram Operations**.
+
 ## Choose the entrance of a stop or depot
 
 Select **Bus stop**, **Freight loading stop**, or **Road depot** in the
@@ -146,6 +155,6 @@ a different drag never inherits the old quote.
   `LUANTTD_NATIVE_STOP_MIX=1` uses the regular truck layout selector,
   verifies the platform meshes and reopens the mixed station.
 
-Remaining: road and tram facility and bridge/tunnel removal through
+Remaining: layered tram facilities and bridge/tunnel removal through
 this tool, cross-mode road stop joining, and road-type conversion. The current
 tool protects game facilities where those rules are not yet mounted.

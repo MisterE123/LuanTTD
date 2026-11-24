@@ -129,6 +129,20 @@ return function(Sim,T,Terrain)
     s.topology=s.topology+1
     return dirty,cost
   end
+  local removal
+  function N.remove_plan(s,owner,request,busy)
+    if not removal then
+      local path=debug and debug.getinfo(1,"S").source
+      local mod=path and path:match("^@(.*/)tram_network%.lua$")
+      mod=mod or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+      removal=dofile(mod.."tram_remove_world.lua")(Sim,Terrain,
+        dofile(mod.."openttd/road_slope.lua"),dofile(mod.."openttd/road_remove_long.lua"))
+    end
+    return removal.plan(s,owner,request,busy)
+  end
+  function N.apply_remove(s,owner,plan)
+    return assert(removal).apply(s,owner,plan)
+  end
   function N.board(s,occupancy)
     local B={xy=Sim.xy,tile_at=Sim.id}
     function B.tile(id)

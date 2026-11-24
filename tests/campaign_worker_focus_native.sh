@@ -181,6 +181,16 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
       await_log NATIVE_ROAD_GESTURE_WAYPOINT_REBUILD_PASS
     fi
   fi
+  if [[ ${LUANTTD_NATIVE_TRAM_REMOVE:-0} == 1 ]]; then
+    do_road tram-remove-start TRAM_REMOVE
+    slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_TRAM_REMOVE slot=//p' "$log" | tail -1)
+    xdotool key "$slot"; sleep .4
+    xdotool mousedown 1; sleep .45
+    do_road tram-remove-end TRAM_REMOVE_RELEASE
+    sleep .65; import -window root -resize 960x600 "$out/tram-remove-preview.jpg"
+    xdotool mouseup 1; sleep 1.1
+    do_road tram-remove-done TRAM_REMOVE_PASS
+  fi
   do_road remove-start REMOVE
   slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_REMOVE slot=//p' "$log" | tail -1)
   xdotool key "$slot"; sleep .4; xdotool mousedown 1; sleep .5

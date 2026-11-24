@@ -1,6 +1,6 @@
 -- Validate the normal road gesture, then quote and commit it inside the
 -- authoritative Lua VM. Only finite typed values cross the mailbox.
-return function(Sim,s,oneway,Bank)
+return function(Sim,s,oneway,Bank,host)
   local M={}
   local function valid(id) return type(id)=="number" and id%1==0 and s.tiles[id]~=nil end
   local methods={}
@@ -23,6 +23,16 @@ return function(Sim,s,oneway,Bank)
     elseif op=="remove" then
       local q,why=Sim.road_remove_plan(s,player,first,last,request.axis,request.start_half==true,request.end_half==true)
       if not q then return nil,Sim.road_removal_error(why) end
+      return q
+    elseif op=="tram_remove" then
+      local tr=host and host.tram
+      if not tr then return nil,"Tramway tools are unavailable in this campaign." end
+      local q,why=tr.net.remove_plan(s,player,request,tr.busy)
+      if not q then
+        local messages={TRAM_FACILITY_PROTECTED="Use the Bulldozer to review the platform or depot.",
+          NO_TRAM="No electric tram track was selected."}
+        return nil,messages[why] or Sim.road_removal_error(why)
+      end
       return q
     elseif op=="bend" then
       return Sim.autoroad_bend_plan(s,player,first,last)
@@ -101,7 +111,7 @@ return function(Sim,s,oneway,Bank)
       parts[i]=table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
         tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation),tostring(c.rail_tracks),tostring(c.railtype),
         c.rail_owner and ("%q"):format(c.rail_owner) or "-",tostring(c.depot_dir),tostring(c.stop_axis),
-        tostring(c.road_terminal_level),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint),tostring(c.join_stop)},":")
+        tostring(c.road_terminal_level),tostring(c.tram_bits),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint),tostring(c.join_stop)},":")
     end
     if q.ratings then
       local keys={}
@@ -188,6 +198,8 @@ return function(Sim,s,oneway,Bank)
       return Sim.apply_road_stop_remove(s,player,q)
     elseif request.tool=="road_waypoint" then
       return Sim.apply_road_waypoint(s,player,q)
+    elseif request.tool=="tram_remove" then
+      return host.tram.net.apply_remove(s,player,q)
     elseif request.tool=="remove" then
       return Sim.apply_road_removal(s,player,q)
     elseif request.tool=="fund_bank" then

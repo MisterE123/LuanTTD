@@ -123,8 +123,11 @@ function H.enable_trams()
     [2]=item("tram_track","Lay tramway","tram"),[3]=item("tram_stop","Through platform","tram_stop"),
     [4]=item("tram_depot","Tram depot","tram_depot"),[5]=item("tram_bit","Tramway half-piece","tram_half"),
     [6]=item("tram_rotate","Rotate direction","tram_rotate"),
-    [7]=item("tram_clear","Clear test streetcar","tram_clear"),[8]=back,
-    [10]=item("tram_order","Order test streetcar","tram_order")}
+    [7]=section("tram_operations","Tram Operations","tram_order"),[8]=back,
+    [10]=item("tram_remove","Remove tram track")}
+  H.menus.tram_operations={title="Tram Operations",[1]=inspect,
+    [2]=item("tram_order","Order test streetcar","tram_order"),
+    [3]=item("tram_clear","Clear test streetcar","tram_clear"),[8]=back}
   sync_sections()
 end
 function H.enable_ships()
@@ -423,7 +426,7 @@ function H.legend(stack,slot,is_world_tool,visible)
       help[1]=H.sightseeing[id]
       help[2]="Right-click for details"
     elseif is_world_tool then
-      help[1]=(id=="road" or id=="road_axis_x" or id=="road_axis_y" or id=="road_remove" or id=="road_waypoint" or id=="road_waypoint_remove" or id=="road_stop_remove" or id=="clear" or id=="oneway_drag")
+      help[1]=(id=="road" or id=="road_axis_x" or id=="road_axis_y" or id=="road_remove" or id=="tram_remove" or id=="road_waypoint" or id=="road_waypoint_remove" or id=="road_stop_remove" or id=="clear" or id=="oneway_drag")
         and "Click or drag in the world" or "Left-click to use"
       if id=="road_station" or id=="truck_stop_tool" then
         help[1]="Click to build; drag with a layout"

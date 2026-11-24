@@ -990,6 +990,12 @@ def road_stop_remove(i):
     i.round((27,29,43,43),2.4,BRICK,CREAM,1)
     i.path([(30,36),(40,36)],CREAM,2)
 
+def tram_remove(i):
+    tram(i,"half")
+    i.round((22,23,42,39),2.5,BRICK,CREAM,1.1)
+    i.path([(26,31),(38,31)],CREAM,2.2)
+
+ART["tram_remove"]=tram_remove
 ART["road_stop_remove"]=road_stop_remove
 ART["road_waypoint"]=road_waypoint
 ART["road_waypoint_remove"]=lambda i: road_waypoint(i,True)

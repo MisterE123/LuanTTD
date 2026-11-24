@@ -28,7 +28,7 @@ return function(Sim,mod,s,cap)
   local N={world=s,network=network,farm=farm,oil=oil,terrain=Terrain}
   N.crossing_gesture=dofile(mod.."/crossing_gesture.lua")
   if cap.temperate_bank then N.bank=Sim.mount_temperate_bank(s,Terrain,growth) end
-  N.road_construction=dofile(mod.."/campaign_road_construction.lua")(Sim,s,network.oneway,N.bank)
+  N.road_construction=dofile(mod.."/campaign_road_construction.lua")(Sim,s,network.oneway,N.bank,N)
   N.terrain_projection=dofile(mod.."/campaign_terrain_projection.lua")
   N.landscape=dofile(mod.."/campaign_landscape_commands.lua")(Sim,s)
   local source=mod.."/openttd/"
