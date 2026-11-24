@@ -20,6 +20,11 @@ if [[ ${LUANTTD_QA_PLANT_TREES:-0} == 1 ]]; then
   fixture=tests/tree_plant_native.lua
   marker='PASS NATIVE TREE PLANT'
 fi
+if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/tree_shore_flood_native.lua
+  marker='PASS NATIVE SHORE GROVE'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -27,6 +32,9 @@ game="$out/games/luanttd"
 mkdir -p "$game" "$out/home" "$out/cache" "$out/world"
 cp "$src/game.conf" "$game/"
 cp -al "$src/mods" "$game/" 2>/dev/null || cp -a "$src/mods" "$game/"
+if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 ]]; then
+  printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
+fi
 install -m 644 "$src/mods/luanttd_core/init.lua" "$out/init"
 cat "$fixture" >>"$out/init"
 mv "$out/init" "$game/mods/luanttd_core/init.lua"
@@ -74,6 +82,12 @@ if [[ ${LUANTTD_QA_PLANT_TREES:-0} == 1 ]]; then
   xdotool mousedown 1
   for _ in {1..40}; do grep -q 'NATIVE TREE QA DRAG END' "$out/server.log" && break; sleep .15; done
   sleep .40; xdotool mouseup 1
+fi
+if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 ]]; then
+  for _ in {1..180}; do grep -q 'NATIVE SHORE GROVE WET' "$out/server.log" && break; sleep .25; done
+  grep -q 'NATIVE SHORE GROVE WET' "$out/server.log" || { tail -75 "$out/"{server,client}.log; exit 1; }
+  sleep .6
+  if command -v import >/dev/null; then import -window root -quality 91 "$out/shore-wet.jpg"; fi
 fi
 for _ in {1..360}; do grep -q "$marker" "$out/server.log" && break; kill -0 "$server" 2>/dev/null || break; sleep .25; done
 grep "$marker" "$out/server.log" || { tail -75 "$out/"{server,client}.log; exit 1; }

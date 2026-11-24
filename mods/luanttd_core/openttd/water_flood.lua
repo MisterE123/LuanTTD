@@ -32,7 +32,9 @@ end
 -- Board.can_clear(x,z,t) is the non-mutating ordinary-clear quote. Hosts
 -- may leave protected structures intact while still recognizing them as
 -- active water sources. The only committed classes here are ordinary
--- clear land, plain sea and shore. Return changes in source direction order.
+-- clear land, plain sea and shore. The RC1 tree branches replace woods
+-- on flat/one-corner terrain, and retain shore groves on other slopes.
+-- Return changes in source direction order.
 function F.visit(board,x,z)
   local source=board.tile(x,z)
   local behaviour=F.behaviour(source)
@@ -45,13 +47,16 @@ function F.visit(board,x,z)
     for dir=0,7 do
       local u,v=neighbor(dir)
       local t=u and board.tile(u,v)
-      if t and t.kind=="clear" and (t.foundation_base or t.base)==0 and has(directions(t),opposite(dir)) and
-         (not board.can_clear or board.can_clear(u,v,t)) then
-        changes[#changes+1]={x=u,z=v,from="clear",kind=t.slope==0 and "sea" or "coast",
-          rocks=t.slope~=0 and t.rocks or nil}
+      if t and (t.kind=="clear" or t.kind=="trees" and not t.water_ground)
+          and (t.foundation_base or t.base)==0 and has(directions(t),opposite(dir)) then
+        local keep_tree=t.kind=="trees" and t.slope~=0 and not raised[t.slope]
+        if keep_tree or not board.can_clear or board.can_clear(u,v,t) then
+          changes[#changes+1]={x=u,z=v,from=t.kind,kind=keep_tree and "shore_trees"
+            or t.slope==0 and "sea" or "coast",rocks=t.slope~=0 and t.rocks or nil}
+        end
       end
     end
-  elseif behaviour=="dryup" and source.kind=="coast" then
+  elseif behaviour=="dryup" and (source.kind=="coast" or source.kind=="trees") then
     local allowed=directions(source)
     for dir=0,7 do
       if has(allowed,dir) then
@@ -60,8 +65,8 @@ function F.visit(board,x,z)
         if k=="active" then return changes end
       end
     end
-    if not board.can_clear or board.can_clear(x,z,source) then
-      changes[1]={x=x,z=z,from="coast",kind="clear",rocks=source.rocks}
+    if source.kind=="trees" or not board.can_clear or board.can_clear(x,z,source) then
+      changes[1]={x=x,z=z,from=source.kind,kind=source.kind=="trees" and "dry_trees" or "clear",rocks=source.rocks}
     end
   end
   return changes
