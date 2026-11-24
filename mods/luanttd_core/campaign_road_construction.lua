@@ -24,6 +24,22 @@ return function(Sim,s,oneway,Bank,host)
       local q,why=Sim.road_remove_plan(s,player,first,last,request.axis,request.start_half==true,request.end_half==true)
       if not q then return nil,Sim.road_removal_error(why) end
       return q
+    elseif op=="tram_facility" and first==last then
+      local tr=host and host.tram
+      if not tr then return nil,"Tramway tools are unavailable in this campaign." end
+      local busy=tr.busy_probe and tr.busy_probe() or tr.busy
+      local changes,cost=tr.net.plan(s,player,request.kind,{first},request.direction,busy)
+      if not changes then return nil,cost end
+      local company=s.companies[player]
+      if not company or cost>company.cash then return nil,"Not enough cash." end
+      for _,c in ipairs(changes) do
+        c.tool="tram_facility"
+        c.build=c.record.kind
+        c.tram_bits=c.record.tram_bits
+        c.depot_dir=c.record.dir
+        c.road_terminal_level=c.record.terminal_level
+      end
+      return {changes=changes,cost=cost,facility=request.kind}
     elseif op=="tram_remove" or op=="tram_lay" then
       local tr=host and host.tram
       if not tr then return nil,"Tramway tools are unavailable in this campaign." end
@@ -206,6 +222,8 @@ return function(Sim,s,oneway,Bank,host)
       return Sim.apply_road_waypoint(s,player,q)
     elseif request.tool=="tram_lay" then
       return host.tram.net.apply_drag(s,player,q)
+    elseif request.tool=="tram_facility" then
+      return host.tram.net.apply_facility(s,player,q)
     elseif request.tool=="tram_remove" then
       return host.tram.net.apply_remove(s,player,q)
     elseif request.tool=="remove" then

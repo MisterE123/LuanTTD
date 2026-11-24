@@ -2108,7 +2108,11 @@ local function authority_preview(p,id,hit)
     if tram then
       if tool=="tram_track" and not V.anchor then return ids,true,"Mark the first tramway tile." end
       if face then label=label.." · "..face end
-      kind,request="transport",{mode="tram",operation="build",kind=tram,cells=cells,direction=direction}
+      if tool=="tram_track" then
+        kind,request="transport",{mode="tram",operation="build",kind=tram,cells=cells,direction=direction}
+      else
+        request={tool="tram_facility",first=id,kind=tram,direction=direction}
+      end
     end
   end
   if not request then return ids,false,label end
@@ -2121,7 +2125,7 @@ local function authority_preview(p,id,hit)
   -- A new hover is neither approved nor obstructed. Don't flash red
   -- while the worker validates the shape the player just selected.
   if not q then
-    local tram=request.mode=="tram"
+    local tram=request.mode=="tram" or request.tool=="tram_facility"
     if (kind=="road" or tram) and pending then return ids,nil,why end
     if tram and api.tram and why then why=api.tram.reason(why) end
     return ids,false,why
@@ -2682,7 +2686,11 @@ function U.build_world(p,id,hit)
     if tram then
       if V.tool=="tram_track" and not V.anchor then V.anchor=id;V.status="Choose the end of the tramway.";return end
       V.anchor=nil
-      worker_build(n,V,"transport",{mode="tram",operation="build",kind=tram,cells=cells,direction=direction})
+      if V.tool=="tram_track" then
+        worker_build(n,V,"transport",{mode="tram",operation="build",kind=tram,cells=cells,direction=direction})
+      else
+        worker_build(n,V,"road",{tool="tram_facility",first=id,kind=tram,direction=direction})
+      end
       return
     end
     local dock=ship_mode[V.tool]

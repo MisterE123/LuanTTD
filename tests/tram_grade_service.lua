@@ -124,3 +124,22 @@ s.tiles[road].build,s.tiles[road].road_bits="road",10
 command("depot",fourth,F.SW,500)
 assert(not s.tiles[road].tram and s.tiles[road].road_bits==10)
 print("PASS stock tram frontage: both platform ends and depot opening, untouched road-only mouth, and blocked or unaffordable optional track")
+
+local War=dofile(root.."campaign_road_construction.lua")(S,s,nil,nil,{tram={net=Network}})
+local one,side=at(39,16),at(40,16)
+build("road",{side},2)
+local req={tool="tram_facility",kind="depot",first=one,direction=F.SW}
+local visible=assert(War.quote(owner,req))
+assert(visible.cost==690 and #visible.tiles==2)
+local cash=c.cash
+s.tiles[side].roadworks=true
+local valid,stale=War.commit(owner,req,visible,true)
+assert(not valid and stale=="ROAD_QUOTE_CHANGED" and not s.tiles[one].tram and c.cash==cash)
+s.tiles[side].roadworks=nil
+local placed,message,tiles=War.commit(owner,req,visible,true)
+assert(placed and message=="Tram depot built for $690." and tiles[1]==one and tiles[2]==side)
+assert(s.tiles[one].tram.kind=="depot" and s.tiles[side].tram.tram_bits==10 and c.cash==cash-690)
+local two=at(43,16)
+local quick={tool="tram_facility",kind="drive_stop",first=two,direction=F.NE}
+assert(War.commit(owner,quick,nil,true) and s.tiles[two].tram.kind=="drive_stop")
+print("PASS tram facility click uses the normal one-turn road placement result, rejects withdrawn frontage, and permits quick clicks without a hover quote")

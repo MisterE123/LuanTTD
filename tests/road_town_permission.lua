@@ -34,3 +34,43 @@ local restored=assert(copy.decode(copy.encode(state)))
 assert(restored.companies.a.stock_town_authority_ratings[1]==129)
 
 print("PASS RC1 town road authority thresholds, reciprocity, outer and inner deductions, rating floor and monthly station age")
+
+do
+  -- Mixed roadpieces on a 96-tile municipal row with 4,000 unrelated
+  -- vehicle positions. Count actual position callbacks rather than
+  -- relying on variable timing in CI.
+  local Sim=dofile("mods/luanttd_core/sim.lua")
+  local Terrain=dofile("mods/luanttd_core/openttd/terrain.lua")
+  local s=Sim.new(1751)
+  Sim.W,Sim.H=128,64
+  s.corner_grid=Terrain.new(Sim.W,Sim.H)
+  s.tiles,s.fleet={},{}
+  for i=1,Sim.W*Sim.H do s.tiles[i]={h=0,terrain="grass",variant=1} end
+  local name="Road Gesture"
+  local company=Sim.company(s,name)
+  company.cash=100000
+  local function at(x,z) return assert(Sim.id(x,z)) end
+  for x=10,105 do
+    local t=s.tiles[at(x,20)]
+    t.build,t.road_town,t.road_bits="road",1,1
+  end
+  for i=1,4000 do s.fleet[i]={at=at(33,38)} end
+  local count=0
+  Sim.position=function(_,v) count=count+1;return v.at end
+  local function quote(z)
+    return assert(Sim.autoroad_plan(s,name,at(10,z),at(105,z),0,false,true))
+  end
+  assert(#quote(21).changes==96 and count==0,"no fleet inspection on a fresh, empty roadbed")
+  local q=quote(20)
+  assert(#q.changes==96 and q.cost==11876 and count==4000)
+  count=0
+  s.fleet[4000].at=at(83,20)
+  local blocked=quote(20)
+  assert(blocked.stopped_at==at(83,20) and #blocked.changes==73 and count==4000)
+  assert(company.cash==100000 and s.tiles[at(83,20)].road_bits==1,"read-only quote")
+  s.fleet[4000].at=at(36,38)
+  count=0
+  local again=quote(20)
+  assert(count==4000 and again.cost==q.cost and #again.changes==96,"next gesture checks new positions")
+  print("PASS 96-tile municipal AutoRoad does 4,000 fleet probes instead of 384,000; no probes on clear ground and moving obstruction still limits the drag")
+end

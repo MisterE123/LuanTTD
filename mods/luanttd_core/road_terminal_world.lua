@@ -24,16 +24,17 @@ return function(Sim,Terrain,Stop,Underlay,rules)
   end
   -- ConnectRoadToStructure only extends a neighboring normal road.
   -- The caller may exclude all tiles in the proposed station rectangle.
-  function W.frontage(s,owner,edit,selected,budget,edits,excluded)
+  function W.frontage(s,owner,edit,selected,budget,edits,excluded,occupied)
     local price=0
     local dir=4-selected.dir
     if rules.connect then
+      occupied=occupied or Sim.road_piece_occupancy(s)
       for _,d in ipairs(selected.through and {dir,(dir+1)%4+1} or {dir}) do
         local id=Sim.adjacent(edit.id,d)
         local t=id and s.tiles[id]
         if t and not (excluded and excluded[id]) and t.build=="road" and not t.level_crossing
             and not t.roadworks and Sim.road_bits(s,id)~=0 then
-          local addition,cost=rules.connect(s,owner,id,d,edit)
+          local addition,cost=rules.connect(s,owner,id,d,edit,occupied)
           if addition and cost>0 and price+cost<=budget then
             edits[#edits+1]=addition;price=price+cost
           end

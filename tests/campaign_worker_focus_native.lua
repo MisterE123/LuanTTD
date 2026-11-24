@@ -120,6 +120,16 @@ core.register_on_joinplayer(function(p)
   -- The fixture points the camera; only real client input selects and
   -- releases the two tools. The road is separate from the paid service.
   local road_qa
+  local tram_places,tram_purchase_quotes=0,0
+  local function observe_tram_placements()
+    local client=assert(api.worker_bridge_client)
+    local real_query=client.query
+    client.query=function(req,callback)
+      if req.kind=="road_place" and req.request and req.request.tool=="tram_facility" then tram_places=tram_places+1 end
+      if req.kind=="transport_quote" and req.request and req.request.mode=="tram" then tram_purchase_quotes=tram_purchase_quotes+1 end
+      return real_query(req,callback)
+    end
+  end
   local function road_test(player,label)
     if not road_qa then
       local x,z=Sim.xy(bus_layout().station_a)
@@ -178,6 +188,22 @@ core.register_on_joinplayer(function(p)
         q.was_waypoint=id
       end
       core.log("action","NATIVE_ROAD_GESTURE_"..(label=="waypoint-done" and "WAYPOINT_PASS" or "ERASE_WAYPOINT_PASS"))
+    elseif label=="tram-facility-depot" or label=="tram-facility-platform" then
+      assert(world.go_menu(player,"tramway"))
+      local depot=label=="tram-facility-depot"
+      if depot then observe_tram_placements() end
+      local slot
+      for i,j in ipairs(world.hotbar_layout(player)) do if j==(depot and 4 or 3) then slot=i end end
+      assert(slot)
+      aim(q.x+(depot and 1 or 2),q.z+1,.5)
+      core.log("action","NATIVE_ROAD_GESTURE_TRAM_"..(depot and "DEPOT" or "PLATFORM").." slot="..(slot==10 and 0 or slot))
+    elseif label=="tram-facility-done" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      local a,b=snapshot.tiles[Sim.id(q.x+1,q.z+1)],snapshot.tiles[Sim.id(q.x+2,q.z+1)]
+      assert(a.tram and a.tram.kind=="depot")
+      assert(b.tram and b.tram.kind=="drive_stop")
+      assert(tram_places==2 and tram_purchase_quotes==0,("Expected two placements and no purchase quotes; got %d and %d"):format(tram_places,tram_purchase_quotes))
+      core.log("action","NATIVE_ROAD_GESTURE_TRAM_FACILITY_PASS two normal tool clicks, two worker transactions")
     elseif label=="tram-lay-start" then
       assert(world.go_menu(player,"tramway"))
       local slot

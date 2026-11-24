@@ -880,7 +880,23 @@ function M.seed_town_road(s,town_id,id,bits)
   s.has_town_roads=true
   return true
 end
-local function road_piece_plan(s,owner,id,t,request)
+-- A road gesture is planned synchronously by the simulation owner.
+-- Snapshot positions at the first guarded tile, not once per piece;
+-- unoccupied terrain, no-ops and cheap edits never need the fleet.
+function M.road_piece_occupancy(s)
+  local occupied
+  return function(id)
+    if not occupied then
+      occupied={}
+      for _,v in pairs(s.fleet) do
+        local at=M.position(s,v)
+        if at then occupied[at]=true end
+      end
+    end
+    return occupied[id]==true
+  end
+end
+local function road_piece_plan(s,owner,id,t,request,occupied)
   if t.level_crossing then
     local q=t.level_crossing
     local _,added=new_pieces(request,q.road_bits)
@@ -954,9 +970,7 @@ local function road_piece_plan(s,owner,id,t,request)
   -- A change of foundation must not be made under a vehicle.
   if cost>0 and t.build and (t.road_town or
       road_rules.foundation(mask,existing)~=road_rules.foundation(mask,combined)) then
-    for _,v in pairs(s.fleet) do
-      if M.position(s,v)==id then return nil,"Wait for the vehicle to clear that tile." end
-    end
+    if occupied(id) then return nil,"Wait for the vehicle to clear that tile." end
   end
   return proposed,cost
 end
@@ -976,6 +990,7 @@ local function linking_errors(s,proposed)
 end
 local function road_drag_plan(s,owner,ids)
   local requested,order,proposed,result,total={}, {}, {order={}}, {}, 0
+  local occupied=M.road_piece_occupancy(s)
   if #ids==0 then return result,total end
   for i,id in ipairs(ids) do
     if not s.tiles[id] then return nil,"Outside the region." end
@@ -1004,7 +1019,7 @@ local function road_drag_plan(s,owner,ids)
     end
   end
   for _,id in ipairs(order) do
-    local proposal,cost=road_piece_plan(s,owner,id,s.tiles[id],requested[id])
+    local proposal,cost=road_piece_plan(s,owner,id,s.tiles[id],requested[id],occupied)
     if not proposal then return nil,cost end
     -- Unchanged legacy roads keep their already-established surface.
     if cost>0 then
@@ -1064,13 +1079,14 @@ function M.autoroad_plan(s,owner,start,last,axis,start_half,end_half)
     {toggle=0,start_half=start_half,end_half=end_half})
   if not drag then return nil,"Road drags must follow one axis." end
   local proposed={order={}}
+  local occupied=M.road_piece_occupancy(s)
   local q,err=long_road_rules.sweep(drag,function(req)
     if req.bits==0 then return nil,"No road half selected." end
     local id=req.tile
     local t=s.tiles[id]
     if t.stock_void then return nil,"Outside the playable map." end
     if t.roadworks then return nil,"Road works block that tile." end
-    local proposal,cost=road_piece_plan(s,owner,id,t,req.bits)
+    local proposal,cost=road_piece_plan(s,owner,id,t,req.bits,occupied)
     if not proposal then return nil,cost end
     if cost==0 then return nil,"ALREADY_BUILT" end
     proposed[id]=proposal;proposed.order[#proposed.order+1]=id
@@ -1199,10 +1215,10 @@ function M.stock_road_terminal_plan(s,owner,id,req)
         if edit.tool=="road_station" then edit.station_site,edit.station_served=road_stop_site(s,edit.id) end
         return true
       end,
-      connect=function(s,owner,id,dir,terminal)
+      connect=function(s,owner,id,dir,terminal,occupied)
         local t=s.tiles[id]
         local wanted=road_flags[opposite(dir)]
-        local proposed,cost=road_piece_plan(s,owner,id,t,wanted)
+        local proposed,cost=road_piece_plan(s,owner,id,t,wanted,occupied)
         if not proposed or cost<=0 or not profiles_match(s,terminal.id,terminal,id,proposed,dir) then return end
         local existing=M.road_bits(s,id)
         local _,pieces=new_pieces(proposed.road_bits,existing)
@@ -1363,10 +1379,11 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
   if cost>company.cash then return nil,"NOT_ENOUGH_CASH" end
   local sid=join and join.id or s.next_station
   local excluded,fronts={},{}
+  local occupied=M.road_piece_occupancy(s)
   for _,id in ipairs(ids) do excluded[id]=true end
   for _,edit in ipairs(changes) do
     edit.join_stop=sid
-    cost=cost+stock_road_terminals.frontage(s,owner,edit,req,company.cash-cost,fronts,excluded)
+    cost=cost+stock_road_terminals.frontage(s,owner,edit,req,company.cash-cost,fronts,excluded,occupied)
   end
   for _,edit in ipairs(fronts) do changes[#changes+1]=edit end
   return {cost=cost,changes=changes,stop_members=result,join_stop=sid,picker_area=area}
@@ -1548,6 +1565,7 @@ local function road_terminal_plan(s,owner,tool,ids)
   end
   local result,total,proposed={},0,{order={}}
   local seen={}
+  local occupied=M.road_piece_occupancy(s)
   for _,id in ipairs(ids) do
     if not seen[id] then
       seen[id]=true
@@ -1613,7 +1631,7 @@ local function road_terminal_plan(s,owner,tool,ids)
           local j=adjacent(id,d)
           local near=proposed[j] or s.tiles[j]
           if j and near and (near.build=="road" or near.build=="road_station") and road_access(near,owner) then
-            local p,cost=road_piece_plan(s,owner,j,near,road_flags[opposite(d)])
+            local p,cost=road_piece_plan(s,owner,j,near,road_flags[opposite(d)],occupied)
             if p and profiles_match(s,id,item,j,p,d) and (not best_cost or cost<best_cost) then
               item.depot_dir=d;item.road_bits=road_flags[d]
               best,best_cost=p,cost

@@ -165,6 +165,12 @@ return function(Sim,T,Terrain)
     if not items then return nil,cost,failed end
     return apply(s,owner,items,cost)
   end
+  function N.apply_facility(s,owner,q)
+    local ids,price=apply(s,owner,q.changes,q.cost)
+    if not ids then return false,price end
+    local name=q.facility=="depot" and "Tram depot" or q.facility=="drive_stop" and "Tram platform" or "Tram half-piece"
+    return true,("%s built for $%d."):format(name,price),ids
+  end
   local stock_sweep
   function N.drag_plan(s,owner,req,busy)
     local company=s.companies[owner]
