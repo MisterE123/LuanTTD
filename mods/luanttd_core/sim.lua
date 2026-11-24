@@ -1127,6 +1127,29 @@ local function road_stop_site(s,id)
   local town=M.nearest_town(s,id)
   return town and town.id or near,served,true
 end
+local overhead_road_layers={
+  {"bridge_above","stock_road_bridges"},
+  {"rail_bridge_above","stock_rail_spans"},
+  {"aqueduct_above","stock_aqueducts"},
+}
+-- The road construction adapter uses the limiting deck when multiple
+-- raised structures cross the site. Missing/corrupt span data is never
+-- interpreted as unlimited clearance.
+function M.road_overhead_deck(s,id)
+  local lowest
+  for _,layer in ipairs(overhead_road_layers) do
+    local index=s[layer[1]]
+    local key=index and index[id]
+    if key then
+      local spans=s[layer[2]]
+      local span=spans and spans[key]
+      local deck=span and span.deck
+      if type(deck)~="number" or deck%1~=0 or deck<0 then return nil,true end
+      lowest=lowest and math.min(lowest,deck) or deck
+    end
+  end
+  return lowest,lowest~=nil
+end
 local stock_road_terminals
 local terminal_errors={
   PARAMETERS="Choose a valid tile and direction.",
@@ -1140,6 +1163,8 @@ local terminal_errors={
   DRIVE_THROUGH_JUNCTION="Drive-through stops can't go on a road junction.",
   DRIVE_THROUGH_ON_TOWN_ROAD="The council doesn't allow a stop on this street.",
   BRIDGE_TOO_LOW_FOR_ROADVEH_DEPOT="The road depot needs three levels below the bridge.",
+  BRIDGE_TOO_LOW_FOR_ROADSTOP="The road stop needs two levels below the elevated deck.",
+  BRIDGE_TOO_LOW_FOR_ROAD_WAYPOINT="The waypoint needs two levels below the elevated deck.",
   MUST_DEMOLISH_BRIDGE_FIRST="There isn't enough clearance below the bridge for this stop.",
   ALREADY_BUILT="That terminal is already built in this direction.",
   ADJOINS_MULTIPLE_STATIONS="This selection touches more than one matching station. Hold E to build separately.",
@@ -1164,15 +1189,7 @@ function M.stock_road_terminal_plan(s,owner,id,req)
     stock_road_terminals=dofile(base.."road_terminal_world.lua")(M,terrain_rules,
       dofile(base.."openttd/road_stop_build.lua"),bridge_underlay,{
       ground=function(s) return default_oneway().ground_occupancy(s) end,
-      deck=function(s,id)
-        local road=s.bridge_above and s.bridge_above[id]
-        local rail=s.rail_bridge_above and s.rail_bridge_above[id]
-        local water=s.aqueduct_above and s.aqueduct_above[id]
-        local span=(road and s.stock_road_bridges and s.stock_road_bridges[road])
-        local above=span and span.deck
-        if rail or water then return nil,true end -- only equipped road-span clearance adapter by now
-        return above,road~=nil
-      end,
+      deck=M.road_overhead_deck,
       facility=function(s,owner,edit)
         if edit.rotate_depot then
           for _,v in pairs(s.fleet) do
@@ -1507,12 +1524,8 @@ function M.road_waypoint_plan(s,owner,req)
     road_waypoint_world=dofile(base.."road_waypoint_world.lua")(M,terrain_rules,dofile(base.."openttd/road_waypoint_build.lua")(S),bridge_underlay,{
       ground=function(state) return default_oneway().ground_occupancy(state) end,
       bridge=function(state,id)
-        local road=state.bridge_above and state.bridge_above[id]
-        if state.rail_bridge_above and state.rail_bridge_above[id] or state.aqueduct_above and state.aqueduct_above[id] then
-          return true
-        end
-        local span=road and state.stock_road_bridges and state.stock_road_bridges[road]
-        return road~=nil,span and span.deck
+        local deck,above=M.road_overhead_deck(state,id)
+        return above,deck
       end,
     })
   end

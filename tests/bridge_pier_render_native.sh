@@ -35,6 +35,10 @@ printf '\n' >> "$game/mods/luanttd_core/init.lua"
 fixture=bridge_pier_render_native
 if [[ ${BAYLINE_NATIVE_BRIDGE_ROAD_CLEAR:-0} == 1 ]]; then fixture=bridge_road_clearance_native; fi
 cat "tests/$fixture.lua" >> "$game/mods/luanttd_core/init.lua"
+# The terrain and companies in this graphics fixture are deliberately
+# seeded in the renderer's local world, not in the campaign worker.
+printf 'return function() return {local_replay=true} end\n' > "$game/mods/luanttd_core/qa_layout.lua"
+
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port
@@ -42,6 +46,7 @@ prometheus_listener_address = 127.0.0.1:$port
 server_announce = false
 bind_address = 127.0.0.1
 bayline_bridge_road_reference = $([[ ${BAYLINE_NATIVE_BRIDGE_ROAD_REFERENCE:-0} == 1 ]] && echo true || echo false)
+luanttd_native_bridge_ground_stop = $([[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 ]] && echo true || echo false)
 EOF
 cat > "$out/client.conf" <<'EOF'
 screen_w = 1300
@@ -56,7 +61,12 @@ water_wave_height = 2.0
 enable_dynamic_shadows = true
 enable_water_reflections = true
 EOF
-export HOME="$out/home" XDG_CACHE_HOME="$out/cache" XDG_CONFIG_HOME="$out/home/.config" \
+if [[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 ]]; then
+  # Keep this geometry screenshot readable in software-rendered CI.
+  sed -i -e 's/enable_dynamic_shadows = true/enable_dynamic_shadows = false/' \
+    -e 's/enable_water_reflections = true/enable_water_reflections = false/' "$out/client.conf"
+fi
+export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" XDG_CONFIG_HOME="$out/home/.config" \
   LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games" \
   LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
 export DISPLAY=":$disp" XAUTHORITY="$out/Xauthority"

@@ -32,14 +32,15 @@ return function(Sim,Terrain,Stock,Underlay,rules)
       local slope,base,top=Terrain.tile(s.corner_grid,x,z)
       local mark=t.road_waypoint_id and groups[t.road_waypoint_id]
       local above,deck=rules.bridge(s,id)
-      local bridge_forbidden=above and not deck
+      local bridge_forbidden,bridge_reason=above and not deck,nil
       if deck then
         local axis=mark and road_axis(s,id) or Stock.axis({kind="road",road={bits=Sim.road_bits(s,id)}}) or req.axis
-        bridge_forbidden=not Underlay.quote({kind="station",station_type="road_waypoint",layout=4+(axis or 0),max_z=top},0,deck)
+        local ok,reason=Underlay.quote({kind="station",station_type="road_waypoint",layout=4+(axis or 0),max_z=top},0,deck)
+        bridge_forbidden,bridge_reason=not ok,reason
       end
       return {kind=mark and "station" or "road",station=mark and mark.id,axis=mark and road_axis(s,id),
         stop_type=mark and "road_waypoint",through=mark~=nil,slope=slope,base=base,
-        occupied=ground[id]==true,bridge_forbidden=bridge_forbidden,
+        occupied=ground[id]==true,bridge_forbidden=bridge_forbidden,bridge_reason=bridge_reason,
         road={bits=Sim.road_bits(s,id),roadtype=t.roadtype or 0,owner=t.road_town and "town" or t.owner,
           disallowed=t.road_disallowed or t.disallowed}}
     end

@@ -57,6 +57,9 @@ In **Roadworks → Stops & Waypoints → Remove road stop**, click or
 drag to remove owned platforms without removing their through road.
 Orders remain valid while at least one usable platform remains; the
 tool won't remove a final platform that is still in vehicle orders.
+Stops and waypoints fit below a road bridge, railway bridge or
+aqueduct when the lowest deck leaves two levels of clearance. A depot
+needs three levels. A low deck leaves the ground road untouched.
 The tools protect unrelated facilities and competitor roads. A recently
 removed station can keep its name and identity if rebuilt nearby.
 The join picker also lists those stations; choose **New station** to

@@ -76,7 +76,7 @@ function R.tile(t,request,opts,allowed_z)
   if t.occupied then return nil,"VEHICLE_IN_THE_WAY" end
   local price,z=R.foundation(t.slope,t.base,request.dir,request.through,allowed_z,opts)
   if price==nil then return nil,z end
-  if t.bridge_forbidden then return nil,"MUST_DEMOLISH_BRIDGE_FIRST" end
+  if t.bridge_forbidden then return nil,t.bridge_reason or "MUST_DEMOLISH_BRIDGE_FIRST" end
   local axis=request.dir%2
   if t.kind=="station" then
     if t.stop_type~=request.stop_type or t.through~=request.through then return nil,"INCOMPATIBLE_STATION_TILE" end

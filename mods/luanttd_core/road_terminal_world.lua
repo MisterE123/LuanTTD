@@ -48,7 +48,7 @@ return function(Sim,Terrain,Stop,Underlay,rules)
     local dir=selected.dir
     if not t or not c or t.stock_void or dir~=0 and dir~=1 and dir~=2 and dir~=3 then return nil,"PARAMETERS" end
     if not s.corner_grid or t.terrain=="water" or district(t) or t.ship or t.airfield or t.level_crossing or t.road_waypoint_id or
-        t.rail_type~=nil or t.rail_tracks or t.rail_station_id or t.rail_depot_dir or t.road_bridge_id or t.road_tunnel_id or t.tram or s.stock_farm_fields and s.stock_farm_fields[id] then
+        t.rail_type~=nil or t.rail_tracks or t.rail_station_id or t.rail_depot_dir or t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or t.tram or s.stock_farm_fields and s.stock_farm_fields[id] then
       return nil,"PROTECTED_TERMINAL_TILE"
     end
     if not match_owner(t,owner) then return nil,"OWNED_BY" end
@@ -82,8 +82,8 @@ return function(Sim,Terrain,Stop,Underlay,rules)
     end
     if deck and not depot then
       local gfx=through and (4+dir%2) or dir
-      local ok=Underlay.quote({kind="station",station_type=selected.kind,layout=gfx,max_z=top},0,deck)
-      record.bridge_forbidden=not ok
+      local ok,reason=Underlay.quote({kind="station",station_type=selected.kind,layout=gfx,max_z=top},0,deck)
+      record.bridge_forbidden,record.bridge_reason=not ok,reason
     end
     local settings={company=owner,requested_type={kind="road",roadtype=0},
       build_on_slopes=s.stock_road_town_policy==nil or s.stock_road_town_policy.build_on_slopes~=false,

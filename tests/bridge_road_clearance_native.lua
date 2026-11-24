@@ -25,6 +25,9 @@ for z=1,Sim.H do for x=1,Sim.W do
   S.tiles[id]={terrain=base==0 and top==0 and "water" or "grass",variant=(x+z)%4,h=base}
   if x>=16 and x<=36 and z>=15 and z<=46 then dirty[#dirty+1]=id end
 end end
+-- Generated decoration is not part of these explicitly authored QA
+-- terrain rows; no farm ownership should survive the fixture reset.
+S.stock_farm_fields={}
 S.speed=0
 local owner="PierQA"
 local reference=core.settings:get_bool("bayline_bridge_road_reference",false)
@@ -94,6 +97,19 @@ core.register_on_joinplayer(function(p)
     assert(node(26,4,19,0,0)=="luanttd_core:stock_road_bridge_wood_span_0")
     assert(node(26,1,19,0,0)=="luanttd_core:stock_road_bridge_wood_pier_0")
 
+    if core.settings:get_bool("luanttd_native_bridge_ground_stop",false) then
+      local site=at(24,40)
+      local stock,why=Sim.auto_road_terminal_plan(S,owner,site,{kind="bus"})
+      assert(stock,tostring(why).." on "..core.serialize(S.tiles[site]))
+      local made,msg,tiles=Sim.apply_road_construction(S,owner,stock)
+      assert(made,msg)
+      api.render.update(tiles)
+      assert(S.rail_bridge_above[site] and S.tiles[site].stop_axis==5)
+      local shelter=node(24,1,40,0,0)
+      assert(shelter:find("shelter",1,true),shelter)
+      assert(node(24,4,40,0,0)=="luanttd_core:stock_rail_bridge_wood_span_0_road_clear")
+      core.log("action","BRIDGE_PIER_TERMINAL_NATIVE_PASS preserved deck and "..shelter)
+    end
     ready=true
     core.log("action","BRIDGE_PIER_RENDER_NATIVE_READY clear render; intact ground road routing, dry slopes and submerged adjacent piers")
   end)
