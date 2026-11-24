@@ -144,6 +144,7 @@ return function(api,ui)
     if ui.road_gesture and ui.road_gesture(tool,p) then return "autoroad" end
     if ui.rail_gesture and ui.rail_gesture(tool) then return "autorail" end
     if ui.station_gesture and ui.station_gesture(tool) then return "station" end
+    if ui.tree_gesture and ui.tree_gesture(tool) then return "tree" end
   end
   local function cancel_drag(p,state)
     local drag=state.build_drag
@@ -493,6 +494,7 @@ return function(api,ui)
       local state=controls[n]
       local entry=state and entries(state)[p:get_wield_index()]
       if entry and entry[1]=="teleport_tile" then ui.inspect(p,tile);return end
+      if entry and ui.tree_gesture and ui.tree_gesture(entry[1]) then ui.open_tree_palette(p);return end
       if entry and ui.station_gesture and ui.station_gesture(entry[1]) then ui.open_station_layout(p);return end
       if entry and entry[1]=="rail_depot_tool" and ui.open_depot_direction then ui.open_depot_direction(p);return end
       if entry and ui.road_terminal_tool and ui.road_terminal_tool(entry[1]) then ui.open_road_terminal(p,entry[1]);return end

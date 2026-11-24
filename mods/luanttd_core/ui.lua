@@ -459,7 +459,34 @@ local function pick(fields,id,a,prior)
   if a and i and a[i] then return i end
   return prior
 end
+local tree_palette_form="luanttd_core:plant_tree_palette"
+local function tree_species_name(species)
+  return (not species or species==255) and "Mixed Temperate" or ("Temperate tree %02d"):format(species+1)
+end
+function U.open_tree_palette(p)
+  local v=view(p:get_player_name())
+  local choices={"Mixed Temperate"}
+  for species=0,11 do choices[#choices+1]=tree_species_name(species) end
+  local selected=not v.tree_species and 1 or v.tree_species==255 and 1 or v.tree_species+2
+  core.show_formspec(p:get_player_name(),tree_palette_form,
+    "formspec_version[4]size[8,4.1]label[.44,.42;Plant trees]"..
+    "label[.44,.83;Choose a tree type. Mixed uses the original random mix.]"..
+    "dropdown[.44,1.36;7.1,.65;tree_choice;"..table.concat(choices,",")..";"..selected..";true]"..
+    "label[.44,2.25;Click to plant one tile or drag to plant an area.]"..
+    "label[.44,2.61;Hold Aux1 for a diagonal area. Right-click to change type.]"..
+    "button_exit[4.8,3.2;2.75,.55;tree_confirm;Use tree type]")
+end
 function U.fields(p,formname,f)
+  if formname==tree_palette_form then
+    local n=tonumber(f.tree_choice)
+    if f.tree_confirm and n and n%1==0 and n>=1 and n<=13 then
+      local v=view(p:get_player_name())
+      v.tree_species=n==1 and 255 or n-2
+      v.tree_press=nil
+      v.status=tree_species_name(v.tree_species).." · Click or drag to plant."
+    end
+    return true
+  end
   if formname==tram_offer_form then
     local n=p:get_player_name()
     local v=view(n)
@@ -711,7 +738,7 @@ end
 function U.select_tool(p,tool)
   local V=view(p:get_player_name())
   if V.tool~=tool then
-    V.tool=tool;V.tram_offer=nil;V.road_press=nil;V.demolition_anchor=nil;V.anchor=nil;V.rail_press=nil;V.rail_ghost=nil;V.rail_first=nil;V.airport_first=nil;V.ferry_depot=nil;V.ferry_first=nil;V.ship_coal_first=nil;V.tram_first=nil;V.ferry_via=nil
+    V.tool=tool;V.tram_offer=nil;V.road_press=nil;V.tree_press=nil;V.demolition_anchor=nil;V.anchor=nil;V.rail_press=nil;V.rail_ghost=nil;V.rail_first=nil;V.airport_first=nil;V.ferry_depot=nil;V.ferry_first=nil;V.ship_coal_first=nil;V.tram_first=nil;V.ferry_via=nil
   end
 end
 function U.select_rail_gauge(p,gauge)
@@ -848,6 +875,7 @@ function U.guide(p,menu)
     return running and summary or "Build a dedicated line, depot and two through stops. Then choose Order test streetcar."
   end
   if menu=="terrain" then
+    if V.tool=="landscape_plant_tree" then return "Click or drag to plant. Hold Aux1 (usually E) for diagonal planting. Right-click to change type." end
     return "Area tools take two corners. Hold Aux1 (usually E) on the second click for a diagonal selection."
   end
   if menu=="road_stops" then
@@ -1491,6 +1519,16 @@ function worker_action(n,V,command,complete)
   if not sent then finish(false,why) end
   return not not sent
 end
+local tree_build_errors={
+  TREE_ALREADY_HERE="This grove already has four trees.",
+  TREE_PLANT_LIMIT_REACHED="Tree planting limit reached. Let the game advance.",
+  CLEARING_LIMIT_REACHED="Clearing limit reached. Let the game advance.",
+  CANT_BUILD_ON_WATER="Plant on land or a suitable shore, not open water.",
+  SITE_UNSUITABLE="A structure, bridge, or unsuitable terrain blocks planting.",
+  INVALID_TREE_TYPE="Choose a Temperate tree type.",
+  TERRAIN_QUOTE_CHANGED="The landscape changed. Check the new planting area.",
+  NOT_ENOUGH_MONEY="Not enough money to plant this area.",
+}
 local function worker_build(n,V,kind,request)
   if not api.authority_handoff then return false end
   if not api.worker_build then V.status="The campaign worker is not ready.";return true end
@@ -1498,6 +1536,7 @@ local function worker_build(n,V,kind,request)
   request=U.rail_gauge_request(V,kind,request)
   local ok,why=api.worker_build.commit(n,kind,request,function(built,note,quote,tiles)
     if not built and note and request.mode=="air" and api.airfield then note=api.airfield.reason(note) end
+    if not built and request.operation=="plant_tree" then note=tree_build_errors[note] or note end
     V.status=note or (built and "Construction complete." or "That construction was not accepted.")
     if built and api.on_worker_build then api.on_worker_build(n,tiles,quote) end
   end)
@@ -1811,6 +1850,32 @@ U.layer_bulldozer=api.road_first and dofile(core.get_modpath("luanttd_core").."/
 local function clear_error(why)
   return why=="CLEARING_LIMIT_REACHED" and "Clearing limit reached. Let the game advance." or why
 end
+function U.tree_gesture(tool)
+  return api.authority_handoff and tool=="landscape_plant_tree"
+end
+function U.begin_tree(p,id)
+  local v=view(p:get_player_name())
+  if not U.tree_gesture(v.tool) or v.pick_order then return false end
+  v.tree_press=id
+  return true
+end
+function U.cancel_tree(p)
+  local v=view(p:get_player_name())
+  v.tree_press=nil
+  v.status="Tree planting canceled."
+end
+local function tree_request(p,v,id)
+  return {operation="plant_tree",first=v.tree_press or id,last=id,
+    species=v.tree_species or 255,diagonal=p:get_player_control().aux1==true}
+end
+function U.end_tree(p,id)
+  local n=p:get_player_name()
+  local v=view(n)
+  if not v.tree_press then return end
+  local request=tree_request(p,v,id)
+  v.tree_press=nil
+  if U.tree_gesture(v.tool) then worker_build(n,v,"terrain",request) end
+end
 local function clear_ticket(q)
   local noun=q.passed==1 and " tile" or " tiles"
   local text=("%s  ·  %d%s"):format(dollars(q.cost),q.passed,noun)
@@ -2112,6 +2177,9 @@ local function authority_preview(p,id,hit)
     kind,request="rail",{tool="depot",first=id,direction=V.rail_dir or 2}
   elseif tool=="rail_crossing_tool" or tool=="rail_waypoint_place" then
     kind,request="rail",{tool=tool=="rail_crossing_tool" and "crossing" or "waypoint",first=id}
+  elseif U.tree_gesture(tool) then
+    kind,request="terrain",tree_request(p,V,id)
+    label=tree_species_name(V.tree_species)
   elseif land then
     if land.area and not V.anchor then return ids,true,"Mark the first terrain corner." end
     kind,request="terrain",{operation=land.mode,first=V.anchor or id,last=land.area and id or nil,
@@ -2158,9 +2226,10 @@ local function authority_preview(p,id,hit)
   -- while the worker validates the shape the player just selected.
   if not q then
     local tram=request.mode=="tram" or request.tool=="tram_facility"
-    if (kind=="road" or tram or request.mode=="air") and pending then return ids,nil,why end
+    if (kind=="road" or tram or request.mode=="air" or request.operation=="plant_tree") and pending then return ids,nil,why end
     if tram and api.tram and why then why=api.tram.reason(why) end
     if request.mode=="air" and api.airfield and why then why=api.airfield.reason(why) end
+    if request.operation=="plant_tree" then why=tree_build_errors[why] or why end
     return ids,false,why
   end
   local cells=q.tiles or ids

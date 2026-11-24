@@ -15,6 +15,11 @@ if [[ ${LUANTTD_QA_STOCK_TREES:-0} == 1 ]]; then
   fixture=tests/stock_tree_lifecycle_native.lua
   marker='PASS NATIVE STOCK TREE LIFE'
 fi
+if [[ ${LUANTTD_QA_PLANT_TREES:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/tree_plant_native.lua
+  marker='PASS NATIVE TREE PLANT'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -46,6 +51,30 @@ for _ in {1..180}; do grep -q 'listening on' "$out/server.log" && break; sleep .
 grep -q 'listening on' "$out/server.log" || { cat "$out/server.log"; exit 1; }
 luanti --go --address 127.0.0.1 --port "$port" --name SteelReview --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
+if [[ ${LUANTTD_QA_PLANT_TREES:-0} == 1 ]]; then
+  for _ in {1..280}; do grep -q 'NATIVE TREE QA READY' "$out/server.log" && break; sleep .25; done
+  grep -q 'NATIVE TREE QA READY' "$out/server.log" || { tail -50 "$out/"{server,client}.log; exit 1; }
+  win=$(timeout 10 xdotool search --sync --onlyvisible --pid "$client" | tail -1)
+  xdotool windowraise "$win" windowfocus --sync "$win"
+  home=$(sed -n 's/.*NATIVE TREE QA HOME //p' "$out/server.log" | tail -1)
+  [[ -n "$home" ]]
+  sleep .8
+  xdotool key --repeat 3 --delay 140 "$home"; sleep .55
+  xdotool mousedown 1; sleep .30; xdotool mouseup 1
+  for _ in {1..30}; do grep -q 'NATIVE TREE QA SLOT' "$out/server.log" && break; sleep .15; done
+  slot=$(sed -n 's/.*NATIVE TREE QA SLOT //p' "$out/server.log" | tail -1)
+  [[ -n "$slot" ]] || { tail -50 "$out/server.log"; exit 1; }
+  [[ "$slot" != 10 ]] || slot=0
+  xdotool key --repeat 3 --delay 140 "$slot"
+  for _ in {1..30}; do grep -q 'NATIVE TREE QA SELECTED' "$out/server.log" && break; sleep .15; done
+  grep -q 'NATIVE TREE QA SELECTED' "$out/server.log"
+  xdotool click 3; sleep .35
+  if command -v import >/dev/null; then import -window root -quality 90 "$out/tree-palette.jpg"; fi
+  xdotool key Escape; sleep .3
+  xdotool mousedown 1
+  for _ in {1..40}; do grep -q 'NATIVE TREE QA DRAG END' "$out/server.log" && break; sleep .15; done
+  sleep .40; xdotool mouseup 1
+fi
 for _ in {1..360}; do grep -q "$marker" "$out/server.log" && break; kill -0 "$server" 2>/dev/null || break; sleep .25; done
 grep "$marker" "$out/server.log" || { tail -75 "$out/"{server,client}.log; exit 1; }
 sleep 4

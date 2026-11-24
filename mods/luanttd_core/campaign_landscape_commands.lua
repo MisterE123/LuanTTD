@@ -18,6 +18,12 @@ return function(Sim,s)
       if (math.abs(u-x)+1)*(math.abs(v-z)+1)>256 then return nil,"TERRAIN_SELECTION_TOO_LARGE" end
     end
     local a={operation=op,first=first,last=last,diagonal=request.diagonal==true}
+    if op=="plant_tree" then
+      a.species=request.species
+      local plan,why=Sim.plant_tree(s,owner,first,last or first,a.diagonal,a.species,false)
+      if not plan then return nil,why end
+      return {request=a,cost=plan.cost,tiles=plan.ids,topology=s.topology,terrain=s.corner_grid.revision}
+    end
     if op=="bulldoze" then
       local plan,why=Sim.clear_area(s,owner,first,last or first,a.diagonal,false)
       if not plan then return nil,why end
@@ -51,6 +57,11 @@ return function(Sim,s)
       return false,"TERRAIN_QUOTE_CHANGED"
     end
     local r=q.request
+    if r.operation=="plant_tree" then
+      local p,why=Sim.plant_tree(s,owner,r.first,r.last or r.first,r.diagonal,r.species,true)
+      if not p then return false,why end
+      return true,("Planted %d %s for $%d."):format(#p.ids,#p.ids==1 and "tree" or "trees",p.cost),p.ids
+    end
     if r.operation=="bulldoze" then
       local changed,why=Sim.clear_area(s,owner,r.first,r.last or r.first,r.diagonal,true)
       if not changed then return false,why end

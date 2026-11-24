@@ -296,6 +296,8 @@ jobs:
           python3 tests/tree_lifecycle_temperate_upstream.py "$src"
           python3 tests/tree_global_tick_upstream.py "$src"
           lua5.1 tests/tree_lifecycle_temperate.lua
+          lua5.1 tests/tree_plant_temperate.lua
+          lua5.1 tests/tree_plant_world.lua
           /usr/bin/python3 tests/stock_tree_lifecycle_art.py --upstream "$src"
           python3 tests/rail_ground_temperate_upstream.py "$src"
           lua5.1 tests/rail_ground_temperate.lua

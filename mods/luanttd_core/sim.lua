@@ -490,7 +490,7 @@ function M.rail_span_protected(s,id)
     or s.rail_tunnel_below and s.rail_tunnel_below[id])
 end
 local coastal_occupied=setmetatable({},{__mode="k"})
-local stock_rail_ground,stock_tree_lifecycle
+local stock_rail_ground,stock_tree_lifecycle,stock_tree_plant
 function M.mount_coastal_flood(s,occupied)
   assert(s.corner_grid and s.road_economy and s.road_stock_house_supply,
     "Stock coastal flooding requires shared corners and the source landscape clock.")
@@ -572,6 +572,86 @@ function M.clear_water(s,owner,id,quote_only)
     debit(c,price)
   end
   return {id},price
+end
+local function stock_plant_rules()
+  if not stock_tree_plant then
+    load_road_rules()
+    stock_tree_plant=dofile(module_root.."openttd/tree_plant_temperate.lua")(
+      dofile(module_root.."openttd/tree_worldgen.lua"),landscape_rules)
+  end
+  return stock_tree_plant
+end
+function M.plant_tree(s,owner,first,last,diagonal,species,execute)
+  local company=s.companies[owner]
+  if not (s.stock_generated_profile and s.corner_grid and company) then return nil,"TREE_PLANT_UNAVAILABLE" end
+  local rules=stock_plant_rules()
+  local clear_limit=clear_area_rules.replenish(company.clear_limit,0)
+  local grid=s.corner_grid
+  local function tile(x,z)
+    local id=M.id(x,z)
+    local t=id and s.tiles[id]
+    if not t or t.stock_void then return end
+    if type(t.wood)=="table" then return {id=id,class=4,count=t.wood.count} end
+    if t.wood or t.rail_tracks or t.rail_span_id or t.house or t.site or t.stock_industry or t.stock_landmark
+        or t.station or t.ship or t.tram or t.airfield or t.owner or t.build or (t.road_bits or 0)~=0 then return end
+    local bridge=s.bridge_above and s.bridge_above[id] or s.rail_bridge_above and s.rail_bridge_above[id]
+        or s.aqueduct_above and s.aqueduct_above[id]
+    if t.terrain=="water" then
+      return {id=id,class=6,coast=t.coastal_water,rocky=t.stock_water_rocks,bridge_above=bridge,
+        slope=terrain_rules.tile(grid,x,z)}
+    end
+    local field=s.stock_farm_fields and s.stock_farm_fields[id]
+    return {id=id,class=0,ground=field and 3 or t.stock_clear_ground or 0,
+      density=t.stock_clear_density or 3,bridge_above=bridge}
+  end
+  local opts={species=species,quota=company.stock_tree_plant_limit,tile=tile,cash=company.cash}
+  function opts.clear(t)
+    if clear_limit<rules.unit then return nil,"CLEARING_LIMIT_REACHED" end
+    local price,why
+    if t.class==6 then price,why=quote_water_clear(s,owner,t.id)
+    else price=M.road_site_clear_cost(s.tiles[t.id],s.stock_farm_fields and s.stock_farm_fields[t.id]) end
+    if not price then return nil,why end
+    clear_limit=clear_limit-rules.unit
+    return price,{class=0,ground=0,density=0}
+  end
+  local x,z=M.xy(first)
+  local u,v=M.xy(last)
+  local plan,why=rules.quote(grid,x,z,u,v,diagonal,opts)
+  if not plan then return nil,why end
+  local ids={}
+  for _,a in ipairs(plan.items) do ids[#ids+1]=a.id end
+  plan.ids=ids
+  if not execute then return plan end
+  local policy=s.stock_road_town_policy or {}
+  local authority=M.road_tree_authority()
+  local function random() return M.stock_random_u32(s) end
+  local ratings={}
+  for _,a in ipairs(plan.items) do
+    local t=s.tiles[a.id]
+    if a.add then
+      t.wood.count=t.wood.count+1
+    else
+      if a.clear then
+        if t.terrain=="water" then coastal_world.clear_apply(s,a.id) end
+        if s.stock_farm_fields then s.stock_farm_fields[a.id]=nil end
+        t.stock_clear_ground=nil
+      end
+      t.stock_clear_density=nil
+      t.wood=rules.new_tree(a,random)
+      local town,d=authority.nearest(s,a.id)
+      if town and d<(policy.dist_local_authority or 20) then
+        local old=ratings[town.id] or company.stock_town_authority_ratings and
+          company.stock_town_authority_ratings[town.id] or 500
+        ratings[town.id]=rules.rating(old)
+      end
+    end
+  end
+  authority.apply(company,ratings)
+  company.stock_tree_plant_limit=plan.quota_after
+  company.clear_limit=clear_limit
+  debit(company,plan.cost)
+  s.topology=(s.topology or 0)+1
+  return plan
 end
 function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
   if not s.corner_grid then return false,"Enable shared-corner terrain first." end
@@ -4550,6 +4630,7 @@ function M.daily(s,traverse)
     for _,c in pairs(s.companies) do
       if c.terraform_limit then c.terraform_limit=landscape_rules.replenish(c.terraform_limit,74) end
       if c.clear_limit then c.clear_limit=clear_area_rules.replenish(c.clear_limit,74) end
+      if c.stock_tree_plant_limit then c.stock_tree_plant_limit=stock_plant_rules().replenish(c.stock_tree_plant_limit,74) end
     end
   end
   local road_supply=s.road_economy and {}
