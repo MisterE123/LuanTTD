@@ -276,6 +276,72 @@ core.register_on_joinplayer(function(p)
         assert(t.build=="road" and t.road_bits==10 and t.tram==nil)
       end
       core.log("action","NATIVE_ROAD_GESTURE_TRAM_REMOVE_PASS")
+    elseif label=="tree-road" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      local corners=dofile(mod.."/openttd/terrain.lua")
+      local bus=bus_layout()
+      local served_a=snapshot.stations[snapshot.tiles[bus.station_a].station].site
+      local served_b=snapshot.stations[snapshot.tiles[bus.station_b].station].site
+      local terrain,town
+      for z=2,Sim.H-1 do for x=2,Sim.W-1 do
+        local id=Sim.id(x,z)
+        local t=snapshot.tiles[id]
+        if t.wood and not (t.build or t.house or t.site or t.tram or t.stock_void) and
+            corners.tile(snapshot.corner_grid,x,z)==0 then
+          local pick,dist=Sim.nearest_town(snapshot,id)
+          local before=snapshot.companies[name].stock_town_authority_ratings
+          if pick and dist<20 and pick.id~=served_a and pick.id~=served_b and (not before or not before[pick.id]) then
+            terrain={id=id,x=x,z=z,count=type(t.wood)=="table" and t.wood.count or 1}
+            town=pick.id
+            break
+          end
+        end
+      end if terrain then break end end
+      assert(terrain,"Default campaign has no unserved wooded tile near a town.")
+      q.tree=terrain
+      local client=assert(api.worker_bridge_client)
+      local query=client.query
+      client.query=function(req,done)
+        if req.kind=="road_place" and req.request.tool=="drag" and req.request.first==terrain.id then
+          return query(req,function(result)
+            local expected=95+20*terrain.count
+            assert(result.ok and (result.why or ""):find("$"..expected.." spent on 1 tile",1,true),result.why)
+            assert(result.why:find("local authority rating",1,true),result.why)
+            local after=assert(OwnerCheckpoint.read())
+            assert(after.companies[name].stock_town_authority_ratings[town]==465)
+            q.tree_town=town
+            return done(result)
+          end)
+        end
+        return query(req,done)
+      end
+      ready("TREE_ROAD",5,terrain.x,terrain.z,.12)
+    elseif label=="tree-road-done" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      local t=snapshot.tiles[q.tree.id]
+      assert(q.tree_town and t.build=="road" and not t.wood)
+      core.log("action","NATIVE_ROAD_GESTURE_TREE_ROAD_PASS actual tree removal and 35-point town authority penalty")
+    elseif label=="town-authority" then
+      assert(q.tree_town and world.go_menu(player,"survey"))
+      local state=assert(OwnerCheckpoint.read())
+      local found
+      for id,t in pairs(state.tiles) do
+        if t.road_town==q.tree_town and t.build=="road" then found=id;break end
+      end
+      assert(found,"No town street for the authority inspection")
+      local x,z=Sim.xy(found)
+      aim(x,z,.5)
+      local show=core.show_formspec
+      core.show_formspec=function(who,form,body)
+        if who==name and form=="luanttd_core:town_authority" then
+          assert(body:find("Very good (+465)",1,true),body)
+          assert(body:find(state.sites[q.tree_town].name,1,true),body)
+          core.log("action","NATIVE_ROAD_GESTURE_TOWN_PANEL_PASS authoritative rating 465 shown through Inspect")
+          core.show_formspec=show
+        end
+        return show(who,form,body)
+      end
+      core.log("action","NATIVE_ROAD_GESTURE_TOWN_PANEL")
     elseif label=="remove-start" then ready("REMOVE",7,q.x,q.z,.12)
     elseif label=="remove-end" then
       aim(q.x+3,q.z,.75)

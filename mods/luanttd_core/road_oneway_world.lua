@@ -177,7 +177,7 @@ return function(Sim,Terrain,Follow,OneWay,settings)
     end
     for i,e in ipairs(a.changes) do
       local f=b.changes[i]
-      for _,key in ipairs{"tile","road_bits","disallowed","owner","cost","added","foundation"} do
+      for _,key in ipairs{"tile","road_bits","disallowed","owner","cost","added","foundation","road_tree_town"} do
         if e[key]~=f[key] then return false end
       end
     end
@@ -218,6 +218,9 @@ return function(Sim,Terrain,Follow,OneWay,settings)
       end
       if e.added~=0 and t.tram and s.tram_pilot and occupied(e.tile,true) then
         return nil,"VEHICLE_IN_THE_WAY",e.tile
+      end
+      if e.added~=0 and not t.build and t.wood and not t.tram then
+        e.road_tree_town=Sim.road_tree_authority().tree_town(s,e.tile)
       end
     end
     local patches=proposed(s,p)
@@ -260,6 +263,7 @@ return function(Sim,Terrain,Follow,OneWay,settings)
     local dirty={}
     for _,e in ipairs(p.changes) do
       local t,patch=s.tiles[e.tile],patches[e.tile]
+      if e.road_tree_town then Sim.road_tree_authority().clear_road_trees(s.companies[owner],e.road_tree_town) end
       if t.build==nil and not t.tram and e.added~=0 then
         t.wood,t.stock_clear_ground,t.stock_clear_density=nil,nil,nil
         if s.stock_farm_fields then s.stock_farm_fields[e.tile]=nil end

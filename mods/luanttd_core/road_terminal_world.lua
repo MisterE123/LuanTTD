@@ -98,6 +98,10 @@ return function(Sim,Terrain,Stop,Underlay,rules)
       stop_axis=through and axis_bits[dir%2] or nil,road_terminal_level=leg.z,rotate_depot=leg.rotate,
       stop_type=not depot and selected.kind or nil}
     edit.build=edit.tool
+    if kind=="clear" then
+      edit.clear_road_site=true
+      edit.road_tree_town=t.wood and Sim.road_tree_authority().tree_town(s,id) or nil
+    end
     if rules.facility then
       local ok,details=rules.facility(s,owner,edit,selected)
       if not ok then return nil,details end

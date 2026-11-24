@@ -14,7 +14,29 @@ return function(Sim,Stock)
         end
       end
     end
-    return best
+    return best,distance
+  end
+  function A.company_view(s,company,town)
+    local policy=s.stock_road_town_policy or {}
+    local ratings=company.stock_town_authority_ratings
+    local rating=ratings and ratings[town.id] or Stock.initial
+    return {id=town.id,town=town.name,rating=rating,grade=Stock.rating_name(rating),
+      road_minimum=Stock.road_removal_minimum(policy.tolerance or 0),
+      extra_dynamite=policy.extra_dynamite~=false}
+  end
+  function A.tree_town(s,id)
+    local policy=s.stock_road_town_policy or {}
+    if policy.magic_bulldozer then return end
+    local t,distance=A.nearest(s,id)
+    if t and distance<(policy.dist_local_authority or 20) then return t.id end
+  end
+  function A.clear_road_trees(company,town)
+    if not town then return end
+    local ratings=company.stock_town_authority_ratings or {}
+    company.stock_town_authority_ratings=ratings
+    local before=ratings[town] or Stock.initial
+    ratings[town]=Stock.clear_trees(before)
+    return before~=ratings[town]
   end
   function A.quote(s,owner,id,wanted,journal)
     local t=A.nearest(s,id)

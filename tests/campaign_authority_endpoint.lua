@@ -450,3 +450,24 @@ do
   print("PASS road removal refuses stale occupancy changes, respects the affordable prefix, charges exact pieces, and reports the applied footprint")
   print("PASS one owner turn applies exact visible roads, rejects stale price without spending, and safely quotes a fresh placement")
 end
+
+do
+  local town=assert(s.sites[1])
+  assert(town.kind=="town")
+  local c=s.companies[john]
+  local earlier=s.authority_revision
+  local previous,policy=c.stock_town_authority_ratings,s.stock_road_town_policy
+  c.stock_town_authority_ratings=nil
+  local initial=A.town_authority(john,town.id)
+  assert(initial.ok and initial.value.rating==500 and initial.value.grade=="Very good" and initial.value.road_minimum==16)
+  assert(not c.stock_town_authority_ratings and s.authority_revision==earlier)
+  c.stock_town_authority_ratings={[town.id]=-200}
+  s.stock_road_town_policy={tolerance=2,extra_dynamite=false}
+  local strict=A.town_authority(john,town.id)
+  assert(strict.value.grade=="Very poor" and strict.value.road_minimum==112 and not strict.value.extra_dynamite)
+  assert(A.town_authority("Unknown",town.id).why=="COMPANY_NOT_OPEN")
+  assert(A.town_authority(john,2147483647).why=="UNKNOWN_TOWN")
+  assert(A.town_authority(john,0).why=="INVALID_REQUEST")
+  c.stock_town_authority_ratings,s.stock_road_town_policy=previous,policy
+  print("PASS authoritative town panel reads only the current company's rating and exact stock labels without opening an account or modifying the game")
+end

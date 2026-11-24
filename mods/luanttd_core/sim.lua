@@ -855,6 +855,15 @@ end
 -- Use the base (pre-inflation) prices for the ordinary stock ROAD type.
 M.road_foundation_price=250
 M.road_piece_price=95
+function M.road_tree_authority()
+  if not town_road_authority then
+    local path=debug and debug.getinfo(1,"S").source
+    local base=path and path:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    town_road_authority=dofile(base.."town_road_authority.lua")(M,dofile(base.."openttd/road_town_permission.lua"))
+  end
+  return town_road_authority
+end
 function M.road_site_clear_cost(t,farm_field)
   if t.wood then return 20*(type(t.wood)=="table" and t.wood.count or 1) end
   local kind=farm_field and 3 or t.stock_clear_ground or 0
@@ -1003,7 +1012,8 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
   local cost=count*M.road_piece_price+(foundation==true and M.road_foundation_price or 0)+clearing
   local proposed={id=id,tool=t.build or "road",build=t.build or "road",
     road_bits=combined,owner=(not t.road_town and owner or nil),
-    road_town=t.road_town,depot_dir=t.depot_dir,h=t.h,clear_road_site=clear_site,road_site_cost=clearing}
+    road_town=t.road_town,depot_dir=t.depot_dir,h=t.h,clear_road_site=clear_site,road_site_cost=clearing,
+    road_tree_town=clear_site and t.wood and M.road_tree_authority().tree_town(s,id) or nil}
   -- A change of foundation must not be made under a vehicle.
   if cost>0 and (other~=0 or t.build and (t.road_town or
       road_rules.foundation(mask,existing)~=road_rules.foundation(mask,combined))) then
@@ -1898,11 +1908,12 @@ end
 local function apply_build(s,owner,changes,cost)
   if #changes==0 then return true,"Nothing to change.",{} end
   local c=M.company(s,owner);debit(c,cost)
-  local changed,crossing_changed={}
+  local changed,crossing_changed,tree_rating_changed={}
   for _,item in ipairs(changes) do
     local id,k=item.id,item.tool
     local tile=s.tiles[id]
     local had_sign=road_sign(tile)~=0
+    if item.road_tree_town and M.road_tree_authority().clear_road_trees(c,item.road_tree_town) then tree_rating_changed=true end
     if item.clear_road_site then
       tile.stock_clear_ground,tile.stock_clear_density=nil,nil
       if s.stock_farm_fields then s.stock_farm_fields[id]=nil end
@@ -1997,8 +2008,10 @@ local function apply_build(s,owner,changes,cost)
   end
   s.topology=s.topology+1
   if crossing_changed then M.refresh_crossing_construction(s) end
-  return true,("$%d spent on %d tile%s%s."):format(cost,#changes,#changes==1 and "" or "s",
-    crossing_changed and ", including level crossing work" or ""),changed
+  local note=("$%d spent on %d tile%s%s."):format(cost,#changes,#changes==1 and "" or "s",
+    crossing_changed and ", including level crossing work" or "")
+  if tree_rating_changed then note=note.." Clearing trees lowered your local authority rating." end
+  return true,note,changed
 end
 local function build(s,owner,tool,ids,funded_clear)
   local changes,cost=M.plan(s,owner,tool,ids,funded_clear)

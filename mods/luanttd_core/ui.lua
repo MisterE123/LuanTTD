@@ -3010,8 +3010,36 @@ function U.build_world(p,id,hit)
     V.anchor=nil;R.update(changed);api.save()
   end
 end
+function U.open_town_authority(p,town)
+  local n=p:get_player_name()
+  local v=view(n)
+  local client=api.worker_bridge_client
+  if not client then return false end
+  local token={}
+  v.authority_context=token
+  local queued=client.query({kind="town_authority",player=n,town=town},function(result)
+    if v.authority_context~=token or not core.get_player_by_name(n) then return end
+    if not result.ok then U.status(p,"Town authority information is unavailable.");return end
+    local row=result.value
+    local road=row.road_minimum and row.rating<row.road_minimum and
+      "The council refuses municipal road removals at your current rating." or
+      "Your rating meets the minimum for requesting municipal road removal."
+    local junction=row.extra_dynamite and
+      "Connected streets still require an unobstructed demolition site." or
+      "Connected streets still require Extra Dynamite."
+    core.show_formspec(n,"luanttd_core:town_authority",
+      "formspec_version[7]size[10.6,4.7]bgcolor[#152334;false]"..
+      "label[.45,.48;LOCAL AUTHORITY]label[.45,.98;"..esc(row.town).."]"..
+      "box[.45,1.44;9.7,.72;#2F4758]label[.63,1.80;"..
+      esc(("Your company's rating: %s (%+d)"):format(row.grade,row.rating)).."]"..
+      "textarea[.45,2.34;9.7,1.15;;;"..esc(road.."\n"..junction).."]"..
+      "button_exit[.45,3.78;9.7,.57;close;Back to world]")
+  end)
+  return not not queued
+end
 function U.context(p,tile,hit)
   local n=p:get_player_name();local V=view(n)
+  V.authority_context=nil
   if V.pick_order then U.finish_order_pick(p);return end
   if api.authority_handoff and company_projection and api.worker_depot and tile then
     local x,z=Sim.xy(tile)
@@ -3043,6 +3071,8 @@ function U.context(p,tile,hit)
         local platform=R.host_record and R.host_record("stock_rail_stations",t.rail_station_id)
         if platform and not Freight.role(platform) then return api.worker_rail_mail_station.open(p,tile) end
       end
+      local town=site and site.kind=="town" and t.site or t.road_town
+      if town and U.open_town_authority(p,town) then return true end
       local name=st and st.name or site and site.name or t.terrain or "Tile"
       label=("%s · %d,%d"):format(name,x,z)
       if Sim.road_stop_tile_kind(st,tile,t)=="bus" and R.waiting_at then

@@ -219,6 +219,20 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
     done
     do_road tram-facility-done TRAM_FACILITY_PASS
   fi
+  if [[ ${LUANTTD_NATIVE_TREE_ROAD:-0} == 1 ]]; then
+    do_road tree-road TREE_ROAD
+    slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_TREE_ROAD slot=//p' "$log" | tail -1)
+    xdotool key "$slot"; sleep .55; xdotool mousedown 1; sleep .45; xdotool mouseup 1; sleep 1.05
+    import -window root -resize 960x600 "$out/tree-road.jpg"
+    do_road tree-road-done TREE_ROAD_PASS
+  fi
+  if [[ ${LUANTTD_NATIVE_TOWN_PANEL:-0} == 1 ]]; then
+    do_road town-authority TOWN_PANEL
+    sleep .45; xdotool mousedown 3; sleep .45; xdotool mouseup 3
+    await_log NATIVE_ROAD_GESTURE_TOWN_PANEL_PASS
+    sleep .55; import -window root -resize 960x600 "$out/town-authority.jpg"
+    xdotool key Escape
+  fi
   do_road remove-start REMOVE
   slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_REMOVE slot=//p' "$log" | tail -1)
   xdotool key "$slot"; sleep .4; xdotool mousedown 1; sleep .5

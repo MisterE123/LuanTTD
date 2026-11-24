@@ -74,3 +74,48 @@ do
   assert(count==4000 and again.cost==q.cost and #again.changes==96,"next gesture checks new positions")
   print("PASS 96-tile municipal AutoRoad does 4,000 fleet probes instead of 384,000; no probes on clear ground and moving obstruction still limits the drag")
 end
+
+do
+  local Sim=dofile("mods/luanttd_core/sim.lua")
+  local T=dofile("mods/luanttd_core/openttd/terrain.lua")
+  local s=Sim.new(1751)
+  local function at(x,z) return assert(Sim.id(x,z)) end
+  s.sites={{id=1,kind="town",tile=at(3,12),name="Forest City"},
+    {id=2,kind="town",tile=at(3,20),name="Farmland"}}
+  s.corner_grid=T.new(Sim.W,Sim.H)
+  s.tiles,s.fleet={},{}
+  for i=1,Sim.W*Sim.H do s.tiles[i]={h=0,terrain="grass",variant=1} end
+  local name="Named forester"
+  local c=Sim.company(s,name)
+  local ranger=Sim.company(s,"Other company")
+  local authority=Sim.road_tree_authority()
+  assert(R.clear_trees(500)==465 and R.clear_trees(-980)==-1000 and R.clear_trees(-1015)==-1015)
+  assert(authority.tree_town(s,at(22,12))==1 and not authority.tree_town(s,at(23,12)))
+  assert(authority.tree_town(s,at(9,16))==1, "nearest equal distance chooses lowest town ID")
+
+  local trees=at(22,12)
+  s.tiles[trees].wood={count=4}
+  local q=assert(Sim.autoroad_plan(s,name,trees,trees,0,true,true))
+  assert(q.cost==175 and q.changes[1].road_tree_town==1 and not c.stock_town_authority_ratings)
+  local ok,note=Sim.apply_road_construction(s,name,q)
+  assert(ok and note:find("local authority rating",1,true))
+  assert(c.stock_town_authority_ratings[1]==465 and not ranger.stock_town_authority_ratings)
+  assert(Sim.autoroad_build(s,name,trees,trees,0,false,true) and c.stock_town_authority_ratings[1]==465)
+  local unaff=at(21,12)
+  s.tiles[unaff].wood={count=3}
+  c.cash=50
+  assert(not Sim.autoroad_build(s,name,unaff,unaff,0,true,true))
+  assert(c.stock_town_authority_ratings[1]==465 and s.tiles[unaff].wood.count==3)
+  c.cash=100000
+  local distant=at(23,12)
+  s.tiles[distant].wood={count=3}
+  assert(Sim.autoroad_build(s,name,distant,distant,0,true,true))
+  assert(c.stock_town_authority_ratings[1]==465)
+  local depot=at(10,12)
+  s.tiles[depot].wood={count=2}
+  local build=assert(Sim.stock_road_terminal_plan(s,name,depot,{kind="depot",dir=2}))
+  assert(build.cost==540 and build.changes[1].road_tree_town==1)
+  assert(Sim.apply_road_construction(s,name,build))
+  assert(c.stock_town_authority_ratings[1]==430)
+  print("PASS source road clearance applies one local authority penalty per wooded tile, only on paid commits, within the strict radius")
+end

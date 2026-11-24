@@ -133,7 +133,7 @@ return function(Sim,s,oneway,Bank,host)
       parts[i]=table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
         tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation),tostring(c.rail_tracks),tostring(c.railtype),
         c.rail_owner and ("%q"):format(c.rail_owner) or "-",tostring(c.depot_dir),tostring(c.stop_axis),
-        tostring(c.road_terminal_level),tostring(c.tram_bits),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint),tostring(c.join_stop),tostring(c.clear_road_site),tostring(c.road_site_cost)},":")
+        tostring(c.road_terminal_level),tostring(c.tram_bits),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint),tostring(c.join_stop),tostring(c.clear_road_site),tostring(c.road_site_cost),tostring(c.road_tree_town)},":")
     end
     if q.ratings then
       local keys={}

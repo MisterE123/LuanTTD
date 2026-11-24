@@ -284,6 +284,13 @@ return function(Sim,R,max_days)
     end
     return reply(true,nil,{token=quote_sequence,options=options})
   end
+  function A.town_authority(name,id)
+    if not owner(name) or not index(id) then return reply(false,"INVALID_REQUEST") end
+    local company,town=s.companies[name],s.sites[id]
+    if not company then return reply(false,"COMPANY_NOT_OPEN") end
+    if not town or town.kind~="town" then return reply(false,"UNKNOWN_TOWN") end
+    return reply(true,nil,Sim.road_tree_authority().company_view(s,company,town))
+  end
   function A.company(name)
     if not owner(name) then return reply(false,"INVALID_REQUEST") end
     local c=s.companies[name]

@@ -4,11 +4,28 @@
 -- UpdateTownRating; source constants in src/town_type.h.
 local R={initial=500}
 local required={[0]=16,64,112,-1000}
+function R.road_removal_minimum(tolerance) return required[tolerance] end
+-- TownAuthorityWindow::GetRatingString, strict OpenTTD boundaries.
+function R.rating_name(rating)
+  if rating>800 then return "Outstanding" end
+  if rating>600 then return "Excellent" end
+  if rating>400 then return "Very good" end
+  if rating>200 then return "Good" end
+  if rating>0 then return "Mediocre" end
+  if rating>-200 then return "Poor" end
+  if rating>-400 then return "Very poor" end
+  return "Appalling"
+end
 local bits={1,2,4,8} -- NW, SW, SE, NE in native board order
 local reverse={4,8,1,2}
 local function has(mask,b) return math.floor(mask/b)%2==1 end
 local function lower(rating,by,limit)
   return rating>limit and math.max(rating-by,limit) or rating
+end
+-- Tree clearing penalizes the company once per tile, not per stem.
+-- Tree purchase/removal price is a separate per-stem amount.
+function R.clear_trees(rating)
+  return lower(rating,35,-1000)
 end
 -- Only the valid company / town-owner branch. The owning command
 -- resolves the town and source flags; no map or persistent rating is
