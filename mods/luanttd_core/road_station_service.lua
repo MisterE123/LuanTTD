@@ -29,6 +29,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
 
   function M.handles(s,v)
     if not s.road_stock_loading or not s.road_economy or not v then return false end
+    if v.stock_tram then return v.cargo=="passenger" end
     local def=Sim.vehicles[v.engine]
     return def and def.mode=="road" and
       (v.cargo=="passenger" or (s.road_mail and Mail.supported_vehicle(v)) or
@@ -135,6 +136,13 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
   -- Stock reservation removes units from AvailableCount. It must not make
   -- our visible figures disappear: they are still waiting for physical
   -- boarding. Queue pressure/rating continues to use unreserved units.
+  local function tram_carrier(s)
+    return s.tram_pilot and s.tram_pilot.carrier
+  end
+  local function loading_vehicle(s,id)
+    local tram=tram_carrier(s)
+    return s.fleet[id] or tram and tram.id==id and tram or nil
+  end
   function M.display_waiting(s,st,cargo)
     if cargo=="coal" then
       local b=host.coal and host.coal(s)
@@ -147,7 +155,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     local count=0
     for _,p in ipairs((st.stock or {})[cargo] or {}) do count=count+p.units end
     for _,id in ipairs(st.loading_order or {}) do
-      local v=s.fleet[id]
+      local v=loading_vehicle(s,id)
       if v and v.cargo==cargo and v.load_state and v.load_state.station==st.id then
         count=count+v.load_state.reserved_units
       end
@@ -371,11 +379,13 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     end
     table.sort(ids)
     local api=opts(s,tick)
+    local tram=tram_carrier(s)
+    local carriers=tram and setmetatable({[tram.id]=tram},{__index=s.fleet}) or s.fleet
     for _,sid in ipairs(ids) do
       local st=s.stations[sid]
       local aliases={}
       for _,id in ipairs(st.loading_order) do
-        local v=assert(s.fleet[id],"Missing vehicle in saved loading order")
+        local v=assert(carriers[id],"Missing vehicle in saved loading order")
         aliases[id]={stopped=v.stopped,broken=v.broken}
         -- Stock station transfers are separate; a depot fault blocks the
         -- road controller's leave decision, not existing reservations.
@@ -383,17 +393,17 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         local fault=v.road_fault
         if fault and (fault.breakdown_ctr==1 or fault.breakdown_ctr==2) then v.broken=true end
       end
-      local slice,leave=Loading.tick(st,s.fleet,api)
+      local slice,leave=Loading.tick(st,carriers,api)
       if api.station_done then api.station_done(st) end
       for id,saved in pairs(aliases) do
-        local v=s.fleet[id];v.stopped,v.broken=saved.stopped,saved.broken
+        local v=carriers[id];v.stopped,v.broken=saved.stopped,saved.broken
       end
       for _,event in ipairs(slice) do
         event.tick=tick;event.station=sid;rounds[#rounds+1]=event
       end
       for _,id in ipairs(leave) do departures[#departures+1]=id end
       for _,id in ipairs(st.loading_order) do
-        local v=s.fleet[id]
+        local v=carriers[id]
         if not v.running then v.status="Stopped"
         elseif v.load_state.finished then v.status="Waiting for departure"
         elseif v.load_state.full then v.status="Waiting for full load"
@@ -423,7 +433,8 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     if not M.handles(s,v) then return end
     if v.stock_aged_tick==tick then return end
     if v.stock_aged_tick then assert(tick==v.stock_aged_tick+1,"Road cargo aging tick skipped") end
-    local period=v.cargo=="mail" and Mail.engine.cargo_aging_ticks or 185
+    local period=v.stock_tram and v.stock_tram.aging or
+      (v.cargo=="mail" and Mail.engine.cargo_aging_ticks or 185)
     if v.cargo=="coal" then local _,ticks=assert(host.coal(s)).timing(v);period=ticks end
     if timber_cargo(v.cargo) then local _,ticks=assert(host.timber(s)).timing(v);period=ticks end
     Loading.age_vehicle(v,1,period)

@@ -426,8 +426,11 @@ return function(Sim,R)
       return ok,ok and "Flight pilot cleared." or why
     end
     if req.mode=="tram" and R.tram and req.clear==true then
+      local active=R.tram.run.current(s)
       local ok,why=R.tram.run.clear(s,owner)
-      return ok,ok and "Test streetcar removed. Your tramway and stops remain." or why
+      local note=active and active.carrier and "Streetcar retired. Your tramway and stops remain."
+        or "Test streetcar removed. Your tramway and stops remain."
+      return ok,ok and note or why
     end
     if req.mode=="rail" and req.copied==true and R.rail and R.rail.owned and id(req.vehicle) and tile(req.depot) then
       if type(req.draft_revision)~="string" or #req.draft_revision>32 then return false,"Invalid order list." end
@@ -435,6 +438,10 @@ return function(Sim,R)
     end
     if not (id(req.first) and id(req.second)) or req.first==req.second then return false,"INVALID_DESTINATIONS" end
     if req.mode=="tram" and R.tram and tile(req.depot) and tile(req.first) and tile(req.second) then
+      if req.paid==true then
+        local run,why=R.tram.run.start_paid(s,owner,req.depot,req.first,req.second,req.cost)
+        return run~=nil,run and "Streetcar bought and dispatched to both shared platforms." or why
+      end
       local run,why=R.tram.run.start(s,owner,req.depot,req.first,req.second)
       return run~=nil,run and "Test streetcar dispatched between the two stops. It does not carry passengers." or why
     elseif req.mode=="rail" and R.rail and R.rail.owned and id(req.vehicle) then

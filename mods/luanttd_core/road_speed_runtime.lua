@@ -384,6 +384,10 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       local external=companion and companion.seed(s,W,tick,k)
       k=k+1
       for _,id in ipairs(ids) do
+        if external and external.id<id then
+          companion.advance(s,W,tick,external,k,ready)
+          external=nil
+        end
         local v=s.fleet[id]
         local held=hooks.before(v,tick,ready[id])==true
         local frames=v.road_motion_frames
@@ -414,7 +418,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         hooks.age(v,tick)
         sample(id,k)
       end
-      if external then companion.advance(s,W,tick,external,k) end
+      if external then companion.advance(s,W,tick,external,k,ready) end
     end)
     return worked,timelines
   end

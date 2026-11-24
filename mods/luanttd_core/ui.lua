@@ -6,6 +6,8 @@ local Freight=dofile(moddir.."/rail_freight_kinds.lua")
 local worker_action
 local worker_jump_fields
 local worker_jump_form="luanttd_core:worker_jump"
+local tram_offer_form="luanttd_core:tram_service_offer"
+local TramMarket=dofile(moddir.."/tram_market.lua")
 local esc=core.formspec_escape
 local session,hud={},{}
 local Workbenches=api.road_first and dofile(core.get_modpath("luanttd_core").."/workbench_index.lua")(api)
@@ -458,6 +460,26 @@ local function pick(fields,id,a,prior)
   return prior
 end
 function U.fields(p,formname,f)
+  if formname==tram_offer_form then
+    local n=p:get_player_name()
+    local v=view(n)
+    local offer=v.tram_offer
+    v.tram_offer=nil
+    if not offer then return true end
+    if not (f.tram_paid or f.tram_test) then
+      v.status="Streetcar setup canceled. Nothing was bought."
+      return true
+    end
+    if f.tram_paid and f.tram_test then return true end
+    offer.paid=f.tram_paid~=nil
+    if offer.paid then offer.cost=TramMarket.price end
+    worker_action(n,v,offer,function(ok)
+      if not ok then return end
+      v.anchor,v.tram_first,v.fixed_route=nil,nil,nil
+      if api.world and api.world.end_order_selection then api.world.end_order_selection(p) end
+    end)
+    return true
+  end
   if formname=="luanttd_core:town_authority" then
     if f.fund_buildings or f.fund_roads then U.fund_town_from_panel(p,f.fund_roads and "roads" or "buildings")
     else
@@ -689,7 +711,7 @@ end
 function U.select_tool(p,tool)
   local V=view(p:get_player_name())
   if V.tool~=tool then
-    V.tool=tool;V.road_press=nil;V.demolition_anchor=nil;V.anchor=nil;V.rail_press=nil;V.rail_ghost=nil;V.rail_first=nil;V.airport_first=nil;V.ferry_depot=nil;V.ferry_first=nil;V.ship_coal_first=nil;V.tram_first=nil;V.ferry_via=nil
+    V.tool=tool;V.tram_offer=nil;V.road_press=nil;V.demolition_anchor=nil;V.anchor=nil;V.rail_press=nil;V.rail_ghost=nil;V.rail_first=nil;V.airport_first=nil;V.ferry_depot=nil;V.ferry_first=nil;V.ship_coal_first=nil;V.tram_first=nil;V.ferry_via=nil
   end
 end
 function U.select_rail_gauge(p,gauge)
@@ -821,7 +843,7 @@ function U.guide(p,menu)
     return "Build truck stops near the mine and power station, then buy a coal tipper at the depot."
   end
   if menu=="tramway" and api.tram then
-    if api.authority_handoff then return "Build a dedicated line, depot and two through stops. Then choose Order test streetcar." end
+    if api.authority_handoff then return "Choose Streetcar orders. Use two electrified bus platforms for a paid route, or run a free test." end
     local running,summary=api.tram.status(n)
     return running and summary or "Build a dedicated line, depot and two through stops. Then choose Order test streetcar."
   end
@@ -2684,7 +2706,20 @@ function U.build_world(p,id,hit)
       if not V.tram_first then V.tram_first=id;V.status="First stop selected. Click a different through stop.";return end
       if id==V.tram_first then V.status="Choose a different through stop.";return end
       if stage_fixed_destination(V,id) then return end
-      worker_action(n,V,{kind="transport_start",mode="tram",depot=V.anchor,first=V.tram_first,second=id},function(ok)
+      local request={kind="transport_start",mode="tram",depot=V.anchor,first=V.tram_first,second=id}
+      local first=R.host_tile and R.host_tile(V.tram_first)
+      local left=first and first.tram and first.tram.shared_station
+      if left and record.shared_station and left~=record.shared_station then
+        V.tram_offer=request
+        core.show_formspec(n,tram_offer_form,("formspec_version[4]size[10,4]"..
+          "label[.5,.5;%s]label[.5,1.1;%d passengers  |  %d km/h  |  %s]"..
+          "label[.5,1.7;Paid service shares the bus platforms and their passenger queues.]"..
+          "button_exit[.5,2.5;4.2,.8;tram_paid;Buy and dispatch]"..
+          "button_exit[5,2.5;4.5,.8;tram_test;Run a free test]"):format(
+          esc(TramMarket.name),TramMarket.capacity,TramMarket.speed/2,dollars(TramMarket.price)))
+        return
+      end
+      worker_action(n,V,request,function(ok)
         if ok then V.anchor,V.tram_first,V.fixed_route=nil,nil,nil end
       end)
       return

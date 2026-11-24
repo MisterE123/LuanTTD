@@ -943,6 +943,12 @@ return function(api)
       local _,ground=terrain.tile(id)
       local level=track and track.base or ground
       local slope=track and track.grade or 0
+      if p.shared_station then
+        if x%2==0 and z%2==0 and y==level+2 then
+          return R.tram_crossing_node({tramtype=p.tramtype,top=level,road_axis=p.dir},x,y,z)
+        end
+        return -- the ordinary road stop keeps its single shelter/foundation
+      end
       if x%2==0 and z%2==0 then
         if slope~=0 then
           local marks=api.oneway and (t.road_disallowed or t.disallowed or 0)~=0

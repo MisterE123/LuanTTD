@@ -40,7 +40,20 @@ return function(api,clear_structure)
     end
     if t.tram then
       local tr=api.tram
-      if (t.tram.kind=="depot" or t.tram.kind=="drive_stop") and tr and tr.network and tr.network.facility_removal_plan then
+      if t.tram.shared_station and tr and tr.network then
+        local function plan()
+          local busy=tr.busy_probe and tr.busy_probe() or tr.busy
+          return tr.network.remove_plan(S,n,{first=id,last=id,axis=t.tram.dir,start_half=false,end_half=true},busy)
+        end
+        local q,why=plan()
+        add("tram_shared_stop","Remove tram tracks, keep the shared bus platform",q,
+          q and ("Refund: "..money(-q.cost)) or Sim.road_removal_error(why),function()
+            local fresh,note=plan()
+            if not fresh then return true,nil,Sim.road_removal_error(note) end
+            local ok,result,tiles=tr.network.apply_remove(S,n,fresh)
+            return true,ok and tiles or nil,result
+          end)
+      elseif (t.tram.kind=="depot" or t.tram.kind=="drive_stop") and tr and tr.network and tr.network.facility_removal_plan then
         local function busy()
           return tr.busy_probe and tr.busy_probe() or tr.busy
         end

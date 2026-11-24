@@ -98,17 +98,22 @@ return function(api)
     local items,targets={},{}
     local function label(tile)
       local x,z=Sim.xy(tile)
-      return ("Tram stop (%d, %d)"):format(x,z)
+      local record=S.tiles[tile]
+      local st=record and record.tram and record.tram.shared_station and S.stations[record.tram.shared_station]
+      return st and st.name or ("Tram stop (%d, %d)"):format(x,z)
     end
     for _,tile in ipairs(orders) do items[#items+1]={id=tile,label=label(tile)} end
     for tile,t in ipairs(S.tiles) do
-      if t.tram and t.tram.owner==owner and t.tram.kind=="drive_stop" then
+      if t.tram and t.tram.owner==owner and t.tram.kind=="drive_stop" and (not p.carrier or t.tram.shared_station) then
         targets[#targets+1]={id=tile,label=label(tile)}
       end
     end
     local leg=p.legs[p.leg]
     local active=leg.order_index or (not p.loop and (p.leg==3 and 1 or p.leg==2 and 2 or p.leg==4 and 2 or 1)) or nil
-    return {items=items,targets=targets,revision=rev,active=active,pending=(not active and p.pending_order or nil)}
+    local carrier=p.carrier
+    local summary=carrier and ("%d / %d aboard  |  %d delivered  |  $%d fares"):format(
+      carrier.units,carrier.stock_tram.capacity,carrier.delivered,carrier.revenue)
+    return {items=items,targets=targets,revision=rev,active=active,pending=(not active and p.pending_order or nil),summary=summary}
   end
   function Tram.edit(owner,id,revision,op,index,target)
     local current=Tram.read(owner,id)

@@ -29,6 +29,16 @@ return function(Sim,Terrain,Slope,Sweep,clear_per_piece)
         return Sim.tram_crossing_remove_quote(s,owner,id,bits,clear_per_piece)
       end
       if not tr or tr.tramtype~=1 or not tr.tram_bits or tr.tram_bits==0 then return nil,"NO_TRAM" end
+      if tr.kind=="drive_stop" and tr.shared_station~=nil and t.station==tr.shared_station then
+        if tr.tram_owner and tr.tram_owner~=owner then return nil,"OWNED_BY" end
+        if busy(id) then return nil,"VEHICLE_IN_THE_WAY" end
+        local base=tr.tram_bits==10 and 2 or 1
+        if math.floor(bits/base)%2==0 and math.floor(bits/(4*base))%2==0 then return nil,"NO_TRAM" end
+        -- RemoveRoad's non-last through-stop way: both pieces paid;
+        -- station, shared queues, road bitset and station owner retained.
+        return {id=id,tool="tram_remove_shared_stop",build=t.build,road_bits=Sim.road_bits(s,id),
+          tram_bits=0,cost=2*clear_per_piece}
+      end
       if tr.kind~="road" or t.level_crossing or t.road_waypoint_id or t.station or t.road_tunnel_id
           or t.road_bridge_id or t.rail_span_id or t.stock_void then return nil,"TRAM_FACILITY_PROTECTED" end
       if tr.tram_owner and tr.tram_owner~=owner then return nil,"OWNED_BY" end

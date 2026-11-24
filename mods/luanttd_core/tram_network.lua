@@ -31,7 +31,17 @@ return function(Sim,T,Terrain,Span)
     if p then
       for k,v in pairs(p) do out[k]=v end
     end
-    if t.build=="road" or (p and p.kind=="drive_stop" and t.build=="road_station") then
+    -- RC1 road_cmd.cpp CmdBuildRoad/TileType::Station admits only the
+    -- through-stop axis, preserving the existing Stop and road owner.
+    local station=t.build=="road_station" and t.station and s.stations[t.station]
+    local road_mask=station and Sim.road_bits(s,id)
+    local axis=road_mask==10 and 0 or road_mask==5 and 1 or nil
+    if station and not t.road_stop_pair and axis and Sim.road_stop_tile_kind(station,id,t)=="bus" then
+      out.kind,out.dir,out.owner="drive_stop",axis,station.owner
+      out.terminal_level=t.road_terminal_level or select(2,Sim.road_surface(s,id))
+      out.station,out.stop_type,out.shared_station=id,"bus",station.id
+    end
+    if t.build=="road" or out.shared_station or (p and p.kind=="drive_stop" and t.build=="road_station") then
       out.kind=out.kind or "road"
       out.road_bits=Sim.road_bits(s,id)
       if out.road_bits>0 then
@@ -96,7 +106,8 @@ return function(Sim,T,Terrain,Span)
     return {kind=p.kind,dir=p.dir or t.dir,tram_bits=p.tram_bits,tramtype=p.tramtype,
       owner=p.kind~="road" and (p.owner or t.owner) or nil,tram_owner=p.tram_owner,
       terminal_level=(kind=="depot" or kind=="drive_stop") and p.base or t.terminal_level,
-      station=(p.kind=="drive_stop") and id or nil,stop_type=(p.kind=="drive_stop") and "bus" or nil},
+      station=(p.kind=="drive_stop") and id or nil,stop_type=(p.kind=="drive_stop") and "bus" or nil,
+      shared_station=(p.kind=="drive_stop") and t.shared_station or nil},
       p.cost
   end
 
@@ -307,6 +318,7 @@ return function(Sim,T,Terrain,Span)
     local company=s.companies[owner]
     if not company or not part or part.tramtype~=ELRL or
         (part.kind~="depot" and part.kind~="drive_stop") then return nil,"NO_TRAM_FACILITY" end
+    if part.shared_station then return nil,"SHARED_BUS_PLATFORM" end
     if part.owner~=owner then return nil,"OWNED_BY_ANOTHER" end
     if not busy or busy(id) then return nil,"VEHICLE_IN_THE_WAY" end
     local price=part.kind=="depot" and 80 or 50
@@ -398,7 +410,8 @@ return function(Sim,T,Terrain,Span)
     function B.stop_continues(a,b)
       local t,u=B.tile(a),B.tile(b)
       return t and u and t.kind=="drive_stop" and u.kind=="drive_stop" and
-        t.station==u.station and t.dir==u.dir and t.stop_type==u.stop_type or false
+        (t.shared_station and t.shared_station==u.shared_station or t.station==u.station) and
+        t.dir==u.dir and t.stop_type==u.stop_type or false
     end
     function B.stop_entry(id,d)
       return occupancy and occupancy.drive_length and occupancy.drive_length(id,d) or 0,16

@@ -1551,7 +1551,8 @@ function M.stock_road_stop_remove_plan(s,owner,first,last)
     local id=M.id(a,b)
     local t=s.tiles[id]
     local st=t.station and s.stations[t.station]
-    if st and st.owner==owner and t.build=="road_station" and not t.road_stop_pair and not occupied[id] then
+    if st and st.owner==owner and t.build=="road_station" and not t.road_stop_pair and not occupied[id] and
+        not (t.tram and t.tram.shared_station) then
       local parts=groups[st.id] or {}
       groups[st.id]=parts;parts[#parts+1]={id=id}
       changes[#changes+1]={id=id,tool="remove_stop_part",build=t.stop_axis and "road" or "land",join_stop=st.id,
@@ -2494,10 +2495,12 @@ function M.road_fault_rating(s,v)
 end
 local function stock_bus(v) return v.stock_bus or v.stock_regal end
 function M.vehicle_capacity(v)
+  if v.stock_tram then return v.stock_tram.capacity end
   local s=stock_bus(v)
   return s and road_bus_catalog().capacity(s.stock_id) or M.vehicles[v.engine].capacity
 end
 function M.vehicle_stock_load_amount(v)
+  if v.stock_tram then return v.stock_tram.slice end
   local r=stock_bus(v)
   return r and road_bus_catalog().quote(nil,nil,r.stock_id).load_amount
 end
@@ -3090,6 +3093,35 @@ local function passenger_modules()
   paid_ferry=dofile(base.."ship_paid_runtime.lua")(M,commercial,mux,credit,push,
     dofile(base.."rail_paid_actors.lua"),mail_runtime,catchment,rating_runtime.random_u32)
   return passenger_rules,income_rules
+end
+-- RC1 trams use the RoadVehicle station loader. Keep the custom body in
+-- its streetcar run, not in the bus route planner or the general fleet.
+-- The tram caller may only select a registered, shared through platform.
+function M.tram_passenger_arrive(s,v,frame,order,tick)
+  local t=frame and s.tiles[frame[4]]
+  local tr=t and t.tram
+  local st=tr and tr.shared_station and s.stations[tr.shared_station]
+  if not st or t.station~=st.id or not v or not v.stock_tram or v.owner~=st.owner then
+    return nil,"INCOMPATIBLE_STATION"
+  end
+  passenger_modules()
+  if not frame[6] or frame[6]<64 or frame[6]>=80 then return nil,"NOT_AT_PLATFORM" end
+  if v.load_state then return v.load_state.station==st.id and v.load_state or nil end
+  v.station,v.road_stop_pose=st.id,frame
+  local state,why=station_service.begin(s,st,v,order,tick)
+  if not state then v.station,v.road_stop_pose=nil,nil end
+  return state,why
+end
+function M.tram_passenger_depart(s,v,tick,force)
+  passenger_modules()
+  if not v or not v.load_state or not (force or v.load_state.finished) then return false,"NOT_READY" end
+  local ok=station_service.leave(s,v,tick)
+  if ok then v.road_stop_pose,v.station=nil,nil end
+  return ok
+end
+function M.tram_passenger_age(s,v,tick)
+  passenger_modules()
+  station_service.age_vehicle(s,v,tick)
 end
 function M.stock_random_u32(s)
   passenger_modules()

@@ -201,9 +201,9 @@ return function(api)
       return api.airport_tools and S.air_fleet_preview and S.air_paid_service
     end,"Buy two supported Sampsons in distinct hangars. Give them distinct orders with a common country airfield and watch the stock runway and terminal blocks sequence them.",
       nil,"Use separate real hangars and the supported fixed-wing country-airfield layout."},
-    {"tram","Electric tram pilot","tramway",native("tram_tools"),
-      "Build a tram line, one depot and two through stops. Normal streetcars can share pavement with buses. Select Order test streetcar (0), then click the depot and both stops.",
-      nil,"Clear test streetcar (7) keeps your infrastructure. This runs a test vehicle, not a paid commercial tram fleet."},
+    {"tram","Electric streetcar service","tramway",native("tram_tools"),
+      "Build a tramway and depot, then pick Streetcar orders. Select the depot and two through stops. Electrify two bus through-stops to buy and run a fare-earning streetcar; a free test is still available.",
+      nil,"One original streetcar per campaign. Removing it keeps your infrastructure."},
   })
 
   rows("scenarios",{

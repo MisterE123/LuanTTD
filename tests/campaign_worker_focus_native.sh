@@ -21,6 +21,9 @@ else
 fi
 mod="$game/mods/luanttd_core"
 cp tests/campaign_worker_focus_geography.lua "$mod/"
+if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
+  sed -i 's/for i=0,10 do/for i=0,11 do/; /local fields=/i\  s.tiles[Sim.id(x+4,z-1)].wood=nil'     "$mod/campaign_worker_focus_geography.lua"
+fi
 python3 - "$mod/init.lua" <<'PY'
 from pathlib import Path
 import sys
@@ -38,7 +41,9 @@ s=s.replace(game, 'if not resumed_owner then dofile(mod.."/campaign_worker_focus
 p.write_text(s)
 PY
 printf '\n' >> "$mod/init.lua"
-cat tests/campaign_worker_focus_native.lua >> "$mod/init.lua"
+fixture=campaign_worker_focus_native
+if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then fixture=tram_paid_render_native; fi
+cat "tests/$fixture.lua" >> "$mod/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/native.conf" <<'CONF'
 screen_w = 1180
@@ -116,7 +121,7 @@ trap '[[ -z "$client" ]] || kill "$client" 2>/dev/null || true; [[ -z "$sink" ]]
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 xdpyinfo >/dev/null
 await_log() {
-  for _ in {1..220}; do
+  for ((attempt=1; attempt<=${2:-220}; attempt++)); do
     grep -q "$1" "$log" && return
     kill -0 "$client" 2>/dev/null || break
     sleep .25
@@ -132,6 +137,41 @@ open() {
   await_log 'FOCUS_NATIVE_POSITION'
 }
 open first
+if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
+  slot=$(sed -n 's/.*TRAM_PAID_NATIVE_SLOT //p' "$log" | tail -1)
+  xdotool mousemove 590 380 key "$slot"; sleep .7
+  xdotool mousedown 1; sleep .32; xdotool mouseup 1
+  sleep .55
+  xdotool mousedown 1; sleep .32; xdotool mouseup 1 # explicitly pick depot after changing tools
+  for stage in first second; do
+    printf '%s\n' "$stage" > "$out/world/native-focus-step"
+    await_log "TRAM_PAID_NATIVE_STAGE $stage"
+    sleep .6
+    xdotool mousedown 1; sleep .32; xdotool mouseup 1
+  done
+  dispatch=$(sed -n 's/.*TRAM_PAID_NATIVE_DISPATCH //p' "$log" | tail -1)
+  xdotool key "$dispatch"; sleep .55
+  xdotool mousedown 1; sleep .32; xdotool mouseup 1
+  await_log TRAM_PAID_NATIVE_OFFER
+  import -window root -resize 840x541 "$out/streetcar-offer.jpg"
+  xdotool mousemove "${LUANTTD_NATIVE_TRAM_BUY_X:-455}" "${LUANTTD_NATIVE_TRAM_BUY_Y:-428}" click 1
+  sleep .85; import -window root -resize 840x541 "$out/after-buy.jpg"
+  await_log TRAM_PAID_NATIVE_FARE 480
+  sleep .8
+  import -window root -resize 840x541 "$out/shared-platform.jpg"
+  rm -f -- "$out/world/native-focus-step"
+  kill -TERM "$client";wait "$client" || true
+  client=
+  open reopen
+  await_log TRAM_PAID_NATIVE_REOPEN
+  grep TRAM_PAID_NATIVE_REOPEN "$log"
+  kill -TERM "$client";wait "$client" || true
+  client=
+  ! grep -Ei 'ERROR\[|could not load' "$out/"{first,reopen}.log
+  rm -rf -- "$out/games" "$out/cache"
+  echo "PASS: real native Streetcar Orders, paid modal, stock fare, and reopen: $out"
+  exit
+fi
 printf '%s\n' initial > "$out/world/native-focus-step"
 await_log 'FOCUS_NATIVE_RECEIPT initial'
 import -window root "$out/before.png"

@@ -198,3 +198,18 @@ itinerary must be stopped before this layer can be removed. The existing
 road and its owner stay in place. Removing only the tramway returns the
 material refund. Existing trams use the real bridge ramps and tunnel
 bore, with the same road-vehicle separation checks as a bus.
+
+### Paid streetcar at shared platforms
+
+Lay Tram Track along two owned, straight drive-through **Bus** platforms.
+Each platform retains its shelter, name, passenger queue, town catchment
+and bus ownership. Build a tram depot and connect the approaches. In
+**Tram Operations → Streetcar orders**, select the depot and the two
+different shared stations, then choose **Buy and dispatch**. The original
+LuanTTD streetcar has 24 seats, a 48 km/h top speed and a posted one-time
+cost. A free test is still available and carries no passengers.
+
+Buses and the paid streetcar board from the same waiting queue and yield
+to one another on shared pavement. Fares appear in the streetcar’s
+Orders panel. **Remove streetcar** keeps all facilities and clears
+its loading reservation; it does not refund the vehicle purchase.
