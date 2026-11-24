@@ -490,7 +490,7 @@ function M.rail_span_protected(s,id)
     or s.rail_tunnel_below and s.rail_tunnel_below[id])
 end
 local coastal_occupied=setmetatable({},{__mode="k"})
-local stock_rail_ground
+local stock_rail_ground,stock_tree_lifecycle
 function M.mount_coastal_flood(s,occupied)
   assert(s.corner_grid and s.road_economy and s.road_stock_house_supply,
     "Stock coastal flooding requires shared corners and the source landscape clock.")
@@ -509,11 +509,19 @@ local function coastal_visit(s)
     local rules=dofile(module_root.."openttd/rail_ground_temperate.lua")(track)
     stock_rail_ground=dofile(module_root.."rail_ground_world.lua")(M,rules)
   end
+  if s.stock_generated_profile and not stock_tree_lifecycle then
+    local gen=dofile(module_root.."openttd/tree_worldgen.lua")
+    local rules=dofile(module_root.."openttd/tree_lifecycle_temperate.lua")(gen)
+    stock_tree_lifecycle=dofile(module_root.."tree_lifecycle_world.lua")(M,terrain_rules,rules)
+  end
   local board=coastal_world.board(s)
-  return function(x,z)
+  local trees=s.stock_generated_profile and stock_tree_lifecycle
+  local random=trees and function() return M.stock_random_u32(s) end
+  return function(x,z,tick)
     local u,v=x+1,z+1
     coastal_world.visit(s,u,v,board)
     stock_rail_ground.visit(s,u,v)
+    if trees and tick then trees.visit(s,u,v,tick,random) end
   end
 end
 local function coastal_tile_occupied(s,id)
@@ -2159,6 +2167,7 @@ local function apply_build(s,owner,changes,cost)
         -- Remove the stop without erasing the selected underlying road.
         tile.build="road";tile.station=nil;tile.owner=not tile.road_town and owner or nil;tile.stop_axis=nil
       else
+        if type(tile.wood)=="table" and tile.terrain~="water" then tile.stock_clear_ground,tile.stock_clear_density=nil,0 end
         tile.build=nil;tile.rail_tracks=nil;tile.rail_type=nil;tile.station=nil;tile.signal=nil;tile.closed=nil;tile.owner=nil;tile.depot_dir=nil;tile.road_bits=nil;tile.stop_axis=nil;tile.house=nil;tile.source_house=nil;tile.wood=nil
       end
     elseif k=="grade" then tile.h=tile.h-1;tile.terrain=tile.h==0 and "grass" or "hill"
@@ -4310,7 +4319,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
           if tick~=road_tick then road_ground=nil;road_tick=tick end
           works.visit(s,x+1,z+1,growth_random,ground_available)
         end
-        if tide then tide(x,z) end
+        if tide then tide(x,z,tick) end
         if coal then coal.tile_visit(x,z,tick) end
         if timber then timber.tile_visit(x,z,tick,commercial and commercial.offer_rig_passengers) end
       end

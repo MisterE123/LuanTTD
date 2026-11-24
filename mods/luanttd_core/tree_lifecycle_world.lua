@@ -1,0 +1,57 @@
+-- Native owner adapter for the RC1 Temperate tile-loop tree rules.
+return function(Sim,Terrain,Rules)
+  local W={}
+  local dx,dz={[0]=-1,-1,-1,0,1,1,1,0},{[0]=-1,0,1,1,1,0,-1,-1}
+  local function clean(t)
+    return t and not (t.stock_void or t.wood or t.build or t.house or t.site or t.stock_industry or t.rail_tracks
+      or t.stock_landmark or t.ship or t.tram or t.airfield or t.owner or (t.road_bits or 0)~=0)
+  end
+  local function tile(s,x,z,id)
+    local t=s.tiles[id]
+    if not clean(t) then return end
+    local field=s.stock_farm_fields and s.stock_farm_fields[id]
+    local ground=field and 3 or t.stock_clear_ground or 0
+    if t.terrain=="water" then
+      return {class=6,coast=t.coastal_water,rocky=t.stock_water_rocks,slope=Terrain.tile(s.corner_grid,x,z),
+        bridge_above=s.bridge_above and s.bridge_above[id] or s.rail_bridge_above and s.rail_bridge_above[id]
+          or s.aqueduct_above and s.aqueduct_above[id]}
+    end
+    return {class=0,ground=ground,density=t.stock_clear_density or 3,
+      bridge_above=s.bridge_above and s.bridge_above[id] or s.rail_bridge_above and s.rail_bridge_above[id]
+        or s.aqueduct_above and s.aqueduct_above[id]}
+  end
+  function W.visit(s,x,z,tick,random)
+    local id=Sim.id(x,z)
+    local t=id and s.tiles[id]
+    if not t then return end
+    if type(t.wood)~="table" then
+      -- In this mount the only explicit immature clear grass is tree
+      -- clearance/restoration. Fully grown grass need not store a byte.
+      if t.stock_clear_density and clean(t) and t.terrain~="water"
+          and (t.stock_clear_ground or 0)==0 and not (s.stock_farm_fields and s.stock_farm_fields[id]) then
+        if (11*(x-1)+9*(z-1)+math.floor(tick/256))%8==7 then
+          local density=t.stock_clear_density+1
+          t.stock_clear_density=density<3 and density or nil
+        end
+      end
+      return
+    end
+    local target_id
+    local next_tree,event=Rules.visit(t.wood,x-1,z-1,tick,s.stock_extra_tree_placement,random,function(d)
+      local u,v=x+dx[d],z+dz[d]
+      target_id=Sim.id(u,v)
+      return target_id and tile(s,u,v,target_id)
+    end)
+    t.wood=next_tree
+    if event and event.kind=="plant" then
+      local next_tile=assert(s.tiles[target_id])
+      next_tile.stock_clear_density=nil
+      next_tile.wood=event.tree
+    elseif event and event.kind=="clear" and event.ground~=3 then
+      t.stock_clear_ground=event.ground==1 and 1 or nil
+      t.stock_clear_density=event.ground==0 and event.density<3 and event.density or nil
+    end
+    return event
+  end
+  return W
+end

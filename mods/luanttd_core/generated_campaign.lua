@@ -353,7 +353,7 @@ function M.forests(Sim,Terrain,s,Generator,Trees,tree_placer,pulse)
     local slope,base=Terrain.tile(s.corner_grid,x,z)
     local field=s.stock_farm_fields and s.stock_farm_fields[id]
     return {class=t.terrain=="water" and 6 or 0,ground=field and 3 or t.stock_clear_ground or 0,
-      slope=slope,height=base,coast=t.coastal_water==true,
+      slope=slope,height=base,coast=t.coastal_water==true,rocky=t.stock_water_rocks==true,
       bridge_above=s.bridge_above and s.bridge_above[id]~=nil or
         s.rail_bridge_above and s.rail_bridge_above[id]~=nil}
   end

@@ -766,11 +766,23 @@ return function(api)
     end
   end
   if S.stock_generated_profile and S.stock_generated_profile.forest then
+    local available={}
+    if core.get_dir_list then
+      for _,name in ipairs(core.get_dir_list(modpath.."/models",false)) do available[name]=true end
+    end
+    stock_scenery.forest_growth={}
     for v=0,3 do
       stock_scenery.forest[v]={}
+      stock_scenery.forest_growth[v]={}
       for elevation=0,4 do
         local name=("stock_forest_%d_%d"):format(v,elevation)
         stock_scenery.forest[v][elevation]=architecture(name,name,"scenery_palette")
+        local phases={}
+        for _,phase in ipairs({0,1,2,4,5,6}) do
+          local variant=name.."_g"..phase
+          if available["bl_"..variant..".obj"] then phases[phase]=architecture(variant,variant,"scenery_palette") end
+        end
+        stock_scenery.forest_growth[v][elevation]=phases
       end
     end
   end
@@ -1257,7 +1269,12 @@ return function(api)
         if stem<trees.count then
           local u,v=(x%2+.5)/2,(z%2+.5)/2
           local lift=math.floor(api.slope.surface(u,v,mask)*2+.00001)
-          return stock_scenery.forest[trees.type%4][math.max(0,math.min(4,lift))]
+          local v,g=trees.type%4,math.max(0,math.min(4,lift))
+          if stem==trees.count-1 and stock_scenery.forest_growth then
+            local current=stock_scenery.forest_growth[v][g][trees.growth]
+            if current then return current end
+          end
+          return stock_scenery.forest[v][g]
         end
       end
     end

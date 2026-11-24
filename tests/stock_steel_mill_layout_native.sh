@@ -10,6 +10,11 @@ if [[ ${LUANTTD_QA_RAIL_GROUND:-0} =~ ^[12]$ ]]; then
   fixture=tests/stock_rail_ground_native.lua
   marker='PASS NATIVE STOCK RAIL GROUND'
 fi
+if [[ ${LUANTTD_QA_STOCK_TREES:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/stock_tree_lifecycle_native.lua
+  marker='PASS NATIVE STOCK TREE LIFE'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")

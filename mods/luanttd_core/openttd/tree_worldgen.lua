@@ -26,7 +26,7 @@ local function bits(r,start,n) return floor(r/2^start)%2^n end
 -- Source CanPlantTreesOnTile; world generation passes allow_desert=true.
 function T.can_plant(t,allow_desert)
   if not t or t.bridge_above then return false end
-  if t.class==MP_WATER then return t.coast==true and int(t.slope,0,30) and not one_raised[t.slope] end
+  if t.class==MP_WATER then return t.coast==true and not t.rocky and int(t.slope,0,30) and not one_raised[t.slope] end
   if t.class~=MP_CLEAR then return false end
   local g=t.ground or GRASS
   return g~=FIELDS and (t.raw_ground or g)~=ROCKS and (allow_desert or g~=DESERT)

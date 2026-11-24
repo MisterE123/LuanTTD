@@ -18,10 +18,11 @@ core.after(.2,function()
   assert(#members==4)
   local owner_file="stock-town-native.chk"
   local checkpoint=dofile(mod.."/campaign_checkpoint.lua")(core,dofile(mod.."/packed_campaign.lua"),owner_file)
-  local finished,command,expected_cost
+  local finished,command,expected_cost,stopping
+  local phase="handing off the generated campaign"
   function hooks.freeze_host() api.authority_handoff=true end
   function hooks.seal_checkpoint() checkpoint.write_state(S);return owner_file end
-  function hooks.ready() end
+  function hooks.ready() phase="waiting for the four painted football-ground tiles" end
   function hooks.present(v) end
   function hooks.stopped(why,_,elapsed,detail)
     assert(why=="stopped" and finished and elapsed>day,detail or why)
@@ -51,7 +52,9 @@ core.after(.2,function()
     assert(ok,reason)
     if not command and painted(true) then
       command=true
+      phase="quoting demolition from the child tile"
       ask({kind="terrain_quote",request={operation="bulldoze",first=members[4].id}},function(q)
+        phase="committing the single demolition debit"
         expected_cost=q.value.cost
         assert(expected_cost>0)
         ask({kind="command",command={kind="terrain_commit",revision=q.revision,token=q.value.token}},function(r)
@@ -60,9 +63,12 @@ core.after(.2,function()
           assert(live.companies[owner].cash==cash-expected_cost)
           for _,m in ipairs(members) do assert(not live.tiles[m.id].source_house) end
           finished=true
+          phase="waiting for the four tiles to repaint clean"
         end)
       end)
-    elseif finished and painted(false) then
+    elseif finished and not stopping and painted(false) then
+      stopping=true
+      phase="stopping the proven worker"
       assert(authority.query({kind="stop"},function() end))
     end
   end)
@@ -76,4 +82,8 @@ core.after(.2,function()
   for k,value in pairs(api.capabilities) do if caps[k]==nil then caps[k]=value end end
   assert(authority.start(caps,Sim.W,Sim.H))
   tick()
+  core.after(22,function()
+    error(("Native stock town replay timed out %s (worker %s, football ground at %d,%d)")
+      :format(phase,authority.status(),root.x,root.z))
+  end)
 end)
