@@ -61,6 +61,15 @@ if [[ ${BAYLINE_FOCUS_DEAD_END:-0} == 1 ]]; then
 elif [[ ${BAYLINE_FOCUS_DEAD_END:-0} == depot ]]; then
   printf '%s\n' 'luanttd_native_focus_terminal_depot = true' >>"$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_ROAD_MUNICIPAL:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_municipal_road = true' 'luanttd_extra_dynamite = false' >>"$out/native.conf"
+fi
+if [[ ${LUANTTD_NATIVE_EXPLICIT_FACILITIES:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_explicit_road_facilities = true' >>"$out/native.conf"
+fi
+if [[ ${LUANTTD_NATIVE_EXPLICIT_FACILITY_UI:-0} == 1 ]]; then
+  printf "%s\n" "luanttd_native_explicit_road_ui = true" >>"$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}
@@ -133,6 +142,28 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
   sleep .65; import -window root -resize 960x600 "$out/remove-preview.jpg"
   xdotool mouseup 1; sleep .85
   do_road check-remove REMOVE_PASS
+  if [[ ${LUANTTD_NATIVE_ROAD_MUNICIPAL:-0} == 1 ]]; then
+    do_road town-start TOWN
+    slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_TOWN slot=//p' "$log" | tail -1)
+    xdotool key "$slot"; sleep .4; xdotool mousedown 1; sleep .5
+    do_road town-end TOWN_RELEASE
+    sleep .65; import -window root -resize 960x600 "$out/town-preview.jpg"
+    xdotool mouseup 1; sleep .85
+    do_road check-town TOWN_PASS
+  fi
+  if [[ ${LUANTTD_NATIVE_EXPLICIT_FACILITY_UI:-0} == 1 ]]; then
+    do_road layout LAYOUT
+    slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_LAYOUT slot=//p' "$log" | tail -1)
+    xdotool key "$slot"; sleep .45
+    xdotool click 3
+    await_log NATIVE_ROAD_GESTURE_LAYOUT_OPEN
+    sleep .5; import -window root -resize 960x600 "$out/road-layout.jpg"
+    xdotool mousemove 759 352 click 1
+    sleep .5
+    xdotool mousedown 1; sleep .2; xdotool mouseup 1
+    sleep .85
+    do_road layout-done LAYOUT_PASS
+  fi
 fi
 if [[ ${LUANTTD_NATIVE_REJOIN:-0} == 1 ]]; then
   printf '%s\n' set-rejoin > "$out/world/native-focus-step"

@@ -12,6 +12,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   local storage=Checkpoints(setmetatable({get_worldpath=function() return path end},{__index=core}),
     Codec,filename or "luanttd-wide-campaign.chk")
   local s=assert(storage.read(),"authority requires a prepared checkpoint")
+  if cap.road_town_policy then s.stock_road_town_policy=cap.road_town_policy end
   local Sim=dofile(mod.."/sim.lua")
   local runtime=mounts(Sim,mod,s,cap)
   local A=endpoint(Sim,runtime)

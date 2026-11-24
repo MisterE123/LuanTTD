@@ -289,9 +289,7 @@ local auto_oneway
 function M.mount_road_oneway(s,W)
   oneway_bindings[s]=W
 end
-local function oneway_world(s)
-  local w=oneway_bindings[s]
-  if w or not s.road_oneway_revision then return w end
+local function default_oneway()
   -- Persisted traffic rules remain authoritative even with the UI disabled
   -- or after the campaign is deserialized into a fresh Sim instance.
   if not auto_oneway then
@@ -304,6 +302,9 @@ local function oneway_world(s)
     auto_oneway=dofile(base.."road_oneway_world.lua")(M,terrain_rules,Follow,OneWay)
   end
   return auto_oneway
+end
+local function oneway_world(s)
+  return oneway_bindings[s] or s.road_oneway_revision and default_oneway() or nil
 end
 local function road_traffic_board(s,b)
   b=crossing_road_board(s,b)
@@ -331,7 +332,7 @@ local function one_way_edit(s,id,removed)
     s.road_oneway_removed[id]=nil
   end
 end
-local road_remove_world
+local road_remove_world,town_road_authority
 local road_removal_errors={
   NO_ROAD="No road to remove on that line.",
   NO_ROAD_PIECES="No road on the selected side of the tile.",
@@ -345,6 +346,7 @@ local road_removal_errors={
   OCCUPANCY_UNKNOWN="Wait for traffic positions to be confirmed.",
   RESERVATION_UNKNOWN="Wait for the crossing reservation to be confirmed.",
   ROAD_DRAG_TOO_LONG="Drag across fewer than 128 tiles at a time.",
+  NOT_ENOUGH_CASH="Not enough cash to remove the first road piece.",
 }
 function M.road_removal_error(reason)
   return road_removal_errors[reason] or ("Cannot remove this road: "..tostring(reason))
@@ -356,10 +358,10 @@ function M.road_remove_plan(s,owner,first,last,axis,start_half,end_half)
     local source=debug and debug.getinfo(1,"S").source
     local base=source and source:match("^@(.*/)sim%.lua$")
     base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
-    local Follow=dofile(base.."openttd/yapf_road_follow.lua")
-    local OneWay=dofile(base.."openttd/road_oneway.lua")(road_rules,Follow)
-    auto_oneway=auto_oneway or dofile(base.."road_oneway_world.lua")(M,terrain_rules,Follow,OneWay)
+    default_oneway()
+    town_road_authority=dofile(base.."town_road_authority.lua")(M,dofile(base.."openttd/road_town_permission.lua"))
     road_remove_world=dofile(base.."road_remove_world.lua")(M,terrain_rules,{
+      town=town_road_authority.quote,
       context=function(state) return auto_oneway.ground_occupancy(state) end,
       occupied=function(_,id,ground) return ground[id]==true end,
       special=function(state,company,id,tile,wanted,ground)
@@ -380,7 +382,7 @@ function M.road_remove_plan(s,owner,first,last,axis,start_half,end_half)
 end
 function M.apply_road_removal(s,owner,q)
   local c=s.companies[owner]
-  local ids,total,limited,crossing_changed={},0,false,false
+  local ids,total,limited,crossing_changed={},0,q.unfunded,false
   for _,edit in ipairs(q.changes) do
     if total+edit.cost>c.cash then limited=true;break end
     if edit.tool=="remove_crossing" then
@@ -396,6 +398,7 @@ function M.apply_road_removal(s,owner,q)
     total=total+edit.cost;ids[#ids+1]=edit.id
   end
   if #ids==0 then return false,"Not enough cash to remove the first road piece." end
+  town_road_authority.apply(c,q.ratings)
   debit(c,total)
   s.topology=s.topology+1
   if crossing_changed then M.refresh_crossing_construction(s) end
@@ -781,6 +784,10 @@ local function ground_shape(s,id)
 end
 local function road_shape(s,id,t)
   if not road_kind(t) then return nil end
+  if t.road_terminal_level then
+    local _,base=ground_shape(s,id)
+    return 0,t.road_terminal_level,t.road_terminal_level>base and "leveled" or "none"
+  end
   if t.level_crossing then
     local q=t.level_crossing
     return 0,q.top,q.foundation
@@ -1115,6 +1122,68 @@ local function road_stop_site(s,id)
   local town=M.nearest_town(s,id)
   return town and town.id or near,served,true
 end
+local stock_road_terminals
+local terminal_errors={
+  PARAMETERS="Choose a valid tile and direction.",
+  OWNED_BY="That tile belongs to another company.",
+  PROTECTED_TERMINAL_TILE="Choose an unoccupied dry tile or a suitable straight stretch of road.",
+  LAND_SLOPED_IN_WRONG_DIRECTION="That slope is too low at the chosen door.",
+  FLAT_LAND_REQUIRED="That slope can't support a stop in this orientation.",
+  VEHICLE_IN_THE_WAY="Wait until traffic has cleared the tile.",
+  DRIVE_THROUGH_DIRECTION="Match the axis of the existing road.",
+  DRIVE_THROUGH_CORNER="Drive-through stops can't go on a road corner.",
+  DRIVE_THROUGH_JUNCTION="Drive-through stops can't go on a road junction.",
+  DRIVE_THROUGH_ON_TOWN_ROAD="The council doesn't allow a stop on this street.",
+  BRIDGE_TOO_LOW_FOR_ROADVEH_DEPOT="The road depot needs three levels below the bridge.",
+  MUST_DEMOLISH_BRIDGE_FIRST="There isn't enough clearance below the bridge for this stop.",
+  ALREADY_BUILT="That terminal is already built in this direction.",
+  ACTIVE_DEPOT_ROUTE="Wait for vehicles currently arriving at or leaving this depot.",
+  NOT_ENOUGH_CASH="Not enough cash.",
+}
+function M.stock_road_terminal_error(why)
+  return terminal_errors[why] or ("Cannot build the selected road terminal: "..tostring(why))
+end
+function M.stock_road_terminal_plan(s,owner,id,req)
+  if not stock_road_terminals then
+    load_road_rules()
+    local path=debug and debug.getinfo(1,"S").source
+    local base=path and path:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    stock_road_terminals=dofile(base.."road_terminal_world.lua")(M,terrain_rules,
+      dofile(base.."openttd/road_stop_build.lua"),bridge_underlay,{
+      ground=function(s) return default_oneway().ground_occupancy(s) end,
+      deck=function(s,id)
+        local road=s.bridge_above and s.bridge_above[id]
+        local rail=s.rail_bridge_above and s.rail_bridge_above[id]
+        local water=s.aqueduct_above and s.aqueduct_above[id]
+        local span=(road and s.stock_road_bridges and s.stock_road_bridges[road])
+        local above=span and span.deck
+        if rail or water then return nil,true end -- only equipped road-span clearance adapter by now
+        return above,road~=nil
+      end,
+      facility=function(s,owner,edit)
+        if edit.rotate_depot then
+          for _,v in pairs(s.fleet) do
+            for _,at in ipairs(v.route or {}) do if at==edit.id then return nil,"ACTIVE_DEPOT_ROUTE" end end
+          end
+        end
+        if edit.tool=="road_station" then edit.station_site,edit.station_served=road_stop_site(s,edit.id) end
+        return true
+      end,
+      connect=function(s,owner,id,dir,terminal)
+        local t=s.tiles[id]
+        local wanted=road_flags[opposite(dir)]
+        local proposed,cost=road_piece_plan(s,owner,id,t,wanted)
+        if not proposed or cost<=0 or not profiles_match(s,terminal.id,terminal,id,proposed,dir) then return end
+        local existing=M.road_bits(s,id)
+        local _,pieces=new_pieces(proposed.road_bits,existing)
+        local foundation=cost-math.ceil(M.tools.road.price*pieces/2)
+        return proposed,pieces*95+foundation
+      end,
+    })
+  end
+  return stock_road_terminals.quote(s,owner,id,req)
+end
 local function road_terminal_plan(s,owner,tool,ids)
   local pair=tool=="road_bay_pair"
   if pair then
@@ -1445,6 +1514,7 @@ local function apply_build(s,owner,changes,cost)
         local town=M.nearest_town(s,id)
         if town then c.rating[town.id]=math.max(10,(c.rating[town.id] or 48)-10) end
       end
+      tile.road_terminal_level=nil
       if tile.road_town or item.keep_road then
         -- Remove the stop without erasing the selected underlying road.
         tile.build="road";tile.station=nil;tile.owner=not tile.road_town and owner or nil;tile.stop_axis=nil
@@ -1453,11 +1523,14 @@ local function apply_build(s,owner,changes,cost)
       end
     elseif k=="grade" then tile.h=tile.h-1;tile.terrain=tile.h==0 and "grass" or "hill"
     elseif k=="signal" then tile.signal=true
+    elseif item.rotate_depot then
+      tile.depot_dir,tile.road_bits,tile.road_terminal_level=item.depot_dir,item.road_bits,item.road_terminal_level
     elseif item.road_bits~=nil and tile.build==k then
       -- Lay additional halves without recreating terminal entities.
       tile.road_bits=item.road_bits
     else
       tile.build=k; tile.owner=owner; tile.wood=nil
+      tile.road_terminal_level=item.road_terminal_level
       tile.road_bits=item.road_bits;tile.road_town=item.road_town;tile.stop_axis=item.stop_axis
       tile.road_stop_pair=item.road_stop_pair
       if k=="road_depot" then
@@ -1476,6 +1549,11 @@ local function apply_build(s,owner,changes,cost)
         s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,
           name=(site and site.name.." " or "")..label.." #"..sid,site=best,served=served,stock={},last_service={}}
         tile.station=sid
+        if item.stop_type=="truck" then
+          local stop=s.stations[sid]
+          stop.stop_type,stop.freight_art="truck",true
+          stop.coal_art=M.road_coal_active(s) or nil
+        end
         if tile.road_stop_pair then M.install_road_bay(s,id) end
       end
     end

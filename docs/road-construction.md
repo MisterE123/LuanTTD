@@ -17,6 +17,35 @@ actually occupying the crossing blocks the removal; a rail reservation
 on its own does not. Bulldoze remains the tool for reviewing and
 choosing structural layers.
 
+Town-owned streets have a separate authority check. With Extra
+Dynamite off, an inner stretch that connects on more than one side
+can't be cut at a connected edge in the middle of the street. A
+continuous sweep may still work from an already open end: as each
+tile is removed, the next can become an edge. The worker quotes the
+actual ordered footprint without changing the town's rating until
+the player commits. The enabled defaults and council tolerance come
+from OpenTTD, not a feature switch.
+
+## Choose the entrance of a stop or depot
+
+Select **Bus stop**, **Freight loading stop**, or **Road depot** in the
+hotbar, then **right-click** to open its layout chooser. Pick the
+entrance direction and left-click the tile to build. At bus and truck
+stops, choose an **east–west** or **north–south through** layout to let
+traffic pass along that axis. **Auto orientation** retains the default
+quick-placement behavior. Explicitly oriented depots can be placed
+before the connecting road; they also try to complete the missing
+half of an existing street directly at the selected door. An empty
+owned depot can be turned in place, but an active route through it
+must finish first.
+
+Explicit stops and depots use the original stock single-tile slope
+checks, build prices and leveled foundations for supported sites.
+The current explicit tools protect existing unrelated facilities
+and do not replace a competitor's road. Joining multiple tiles, rail
+and aqueduct overpasses, and mixed tram facilities still need their
+own verified adapters.
+
 ## Scope and evidence
 
 Source: OpenTTD 16.0-RC1 (`07b339c`), `road_gui.cpp` sizing modes and
@@ -44,8 +73,24 @@ a different drag never inherits the old quote.
   straight road, then the removal tool clears it and the world reopens
   with the same running paid bus and no returned pavement.
 
-Remaining: local-authority approval/rating, road and tram facility and
-bridge/tunnel removal through this tool, waypoint placement and orders,
+- `tests/road_town_permission_rc1.py`: 288,000 compiled comparisons of
+  town street permission and rating changes. Native graphical municipal
+  sweep with Extra Dynamite off verified three tiles on one town street, a preserved town rating, and a paid route across restart.
+  The authority ledger also follows the original passive,
+  loading/unloading, and rating-bound rules for station clocks already
+  supplied by the ordinary campaign; it does not claim complete council
+  actions or that all station classes share one stock index.
+
+- `tests/road_stop_foundations_rc1.py`: 9,728 compiled source checks
+  for both stop layouts, slope/facing, height and foundations.
+- `LUANTTD_NATIVE_EXPLICIT_FACILITIES=1 LUANTTD_NATIVE_EXPLICIT_FACILITY_UI=1`
+  on the graphical focus test: the worker builds a real service with
+  explicit through stops and a selected depot direction, then a real
+  right-click layout selection and world click builds another depot
+  facing East. Both persist on reopen; the operating service paid for
+  31 passengers.
+
+Remaining: road and tram facility and bridge/tunnel removal through
+this tool, waypoint placement and orders,
 stop drag/orientation/joining and road-type conversion. The current
-tool protects town streets and game facilities where those rules are
-not yet mounted.
+tool protects game facilities where those rules are not yet mounted.

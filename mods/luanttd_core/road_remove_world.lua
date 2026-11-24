@@ -12,7 +12,7 @@ return function(Sim,Terrain,rules)
     while bits>0 do n=n+bits%2;bits=math.floor(bits/2) end
     return n
   end
-  local function quote_tile(s,owner,id,wanted,ctx)
+  local function quote_tile(s,owner,id,wanted,ctx,journal)
     local tile=s.tiles[id]
     if not tile or tile.stock_void then return nil,"NO_ROAD" end
     if tile.build~="road" or tile.level_crossing or tile.road_bridge_id or tile.road_tunnel_id
@@ -23,12 +23,10 @@ return function(Sim,Terrain,rules)
     if (tile.roadtype or 0)~=0 or Sim.road_bits(s,id)==0 then return nil,"NO_ROAD" end
     if not rules.occupied then return nil,"OCCUPANCY_UNKNOWN" end
     if rules.occupied(s,id,ctx) then return nil,"VEHICLE_IN_THE_WAY" end
-    local rating
     if tile.road_town then
       if not rules.town then return nil,"TOWN_REFUSES" end
-      local allowed,change=rules.town(s,owner,id,wanted)
-      if not allowed then return nil,"TOWN_REFUSES" end
-      rating=change
+      local allowed,why=rules.town(s,owner,id,wanted,journal)
+      if not allowed then return nil,why or "TOWN_REFUSES" end
     elseif tile.owner and tile.owner~=owner then return nil,"OWNED_BY" end
     if tile.roadworks then return nil,"ROAD_WORKS_IN_PROGRESS" end
     local x,z=Sim.xy(id)
@@ -37,7 +35,7 @@ return function(Sim,Terrain,rules)
     local other=tile.tram and tile.tram.bits or tile.tram_bits or 0
     local edit,why=Slope.remove(shape,wanted,Sim.road_bits(s,id),other,rules.build_on_slopes~=false)
     if not edit then return nil,why end
-    edit.id,edit.cost,edit.rating,edit.under=id,count(edit.removed)*40+(edit.foundation and 250 or 0),rating,other
+    edit.id,edit.cost,edit.under=id,count(edit.removed)*40+(edit.foundation and 250 or 0),other
     edit.tool,edit.build="remove",edit.road_bits==0 and "land" or "road"
     return edit
   end
@@ -51,7 +49,32 @@ return function(Sim,Terrain,rules)
     local req,why=Sweep.request(board,first,last,axis,start_half,end_half)
     if not req then return nil,why end
     local ctx=rules.context and rules.context(s)
-    return Sweep.sweep(req,function(id,bits) return quote_tile(s,owner,id,bits,ctx) end)
+    local function run(journal)
+      return function(id,bits) return quote_tile(s,owner,id,bits,ctx,journal) end
+    end
+    if rules.town then
+      local has_town
+      for _,edge in ipairs(req) do
+        local t=s.tiles[edge.tile]
+        if t and t.road_town and t.build=="road" then has_town=true;break end
+      end
+      if has_town then
+        -- RC1 preflight has a shadow town ledger but its map doesn't
+        -- change. CmdNoTest allows execution to see earlier removals as
+        -- the line is worked from the lowest tile index to the highest.
+        local initial,invalid=Sweep.sweep(req,run({ratings={},road={}}))
+        if not initial then return nil,invalid end
+        local journal={ratings={},road={}}
+        local actual,why=Sweep.sweep(req,run(journal),true,s.companies[owner].cash,function(edit)
+          journal.road[edit.id]=edit.road_bits
+        end)
+        if not actual then return nil,why end
+        if #actual.changes==0 then return nil,"NOT_ENOUGH_CASH" end
+        actual.ratings=journal.ratings
+        return actual
+      end
+    end
+    return Sweep.sweep(req,run())
   end
   function W.apply_plain(s,edit)
     local t=s.tiles[edit.id]

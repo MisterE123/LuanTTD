@@ -22,7 +22,13 @@ core.register_on_joinplayer(function(p)
       ask({kind="command",command=c},done)
     end)
   end
+  local fixed=core.settings:get_bool("luanttd_native_explicit_road_facilities",false)
   local function build(request,done)
+    if fixed and request.tool=="road_depot" then
+      request={tool="stock_terminal",first=request.first,kind="depot",direction=1}
+    elseif fixed and request.tool=="road_station" then
+      request={tool="stock_terminal",first=request.first,kind="bus",direction=0,through=true}
+    end
     ask({kind="road_quote",request=request},function(r)
       ask({kind="command",command={kind="road_commit",revision=r.revision,request=request,
         token=r.value.token,quote=r.value}},done)
@@ -84,6 +90,12 @@ core.register_on_joinplayer(function(p)
       local s=assert(OwnerCheckpoint.read())
       local v=assert(stat_id and s.fleet[stat_id])
       assert(v.owner==name and v.running and #v.orders==2)
+      if fixed then
+        local b=bus_layout()
+        assert(s.tiles[b.depot].depot_dir==3 and s.tiles[b.depot].road_terminal_level)
+        assert(s.tiles[b.station_a].stop_axis==10 and s.tiles[b.station_b].stop_axis==10)
+        assert(s.tiles[b.station_a].road_terminal_level and s.tiles[b.station_b].road_terminal_level)
+      end
       local delivered,revenue=v.delivered or 0,v.revenue or 0
       if label=="focus-return" then at_return=delivered end
       core.log("action",("FOCUS_NATIVE_RECEIPT %s day=%d cash=%d bus=%d delivered=%d revenue=%d")
@@ -98,7 +110,7 @@ core.register_on_joinplayer(function(p)
       local x,z=Sim.xy(bus_layout().station_a)
       local first=Sim.id(x+3,z-3)
       local last=Sim.id(x+6,z-3)
-      road_qa={x=x+3,z=z-3,first=first,last=last}
+      road_qa={x=x+3,z=z-3,first=first,last=last,tx=x+2,tz=z+1}
     end
     local q=road_qa
     local function aim(x,z,offset)
@@ -135,9 +147,48 @@ core.register_on_joinplayer(function(p)
       for id=q.first,q.last do assert(snapshot.tiles[id].build==nil) end
       assert(snapshot.fleet[load_id()].running and snapshot.fleet[load_id()].revenue>0)
       core.log("action","NATIVE_ROAD_GESTURE_REMOVE_PASS")
+    elseif label=="layout" then
+      assert(world.go_menu(player,"roads"))
+      local slot
+      for i,j in ipairs(world.hotbar_layout(player)) do if j==4 then slot=i end end
+      assert(slot and slot<=9)
+      aim(q.x,q.z+1,.12)
+      local show=core.show_formspec
+      core.show_formspec=function(user,form,body)
+        if user==name and form=="luanttd_core:road_terminal_layout" then
+          assert(body:find("Road depot layout",1,true) and body:find("door_2;East",1,true))
+          core.log("action","NATIVE_ROAD_GESTURE_LAYOUT_OPEN")
+          core.show_formspec=show
+        end
+        return show(user,form,body)
+      end
+      core.log("action","NATIVE_ROAD_GESTURE_LAYOUT slot="..slot)
+    elseif label=="layout-done" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      local depot=snapshot.tiles[Sim.id(q.x,q.z+1)]
+      assert(depot.build=="road_depot" and depot.depot_dir==2 and depot.road_terminal_level)
+      core.log("action","NATIVE_ROAD_GESTURE_LAYOUT_PASS")
+    elseif label=="town-start" then ready("TOWN",7,q.tx,q.tz,.12)
+    elseif label=="town-end" then
+      aim(q.tx+2,q.tz,.75)
+      core.log("action","NATIVE_ROAD_GESTURE_TOWN_RELEASE")
+    elseif label=="check-town" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      for ix=q.tx,q.tx+2 do assert(snapshot.tiles[Sim.id(ix,q.tz)].road_town==nil) end
+      local ratings=snapshot.companies[name].stock_town_authority_ratings
+      assert(ratings and next(ratings))
+      core.log("action","NATIVE_ROAD_GESTURE_TOWN_PASS")
     elseif label=="reopen" then
       local snapshot=assert(OwnerCheckpoint.read())
+      if core.settings:get_bool("luanttd_native_municipal_road",false) then
+        for ix=q.tx,q.tx+2 do assert(snapshot.tiles[Sim.id(ix,q.tz)].road_town==nil) end
+        assert(next(snapshot.companies[name].stock_town_authority_ratings))
+      end
       for id=q.first,q.last do assert(snapshot.tiles[id].build==nil) end
+      if fixed and core.settings:get_bool("luanttd_native_explicit_road_ui",false) then
+        local depot=snapshot.tiles[Sim.id(q.x,q.z+1)]
+        assert(depot.build=="road_depot" and depot.depot_dir==2)
+      end
       core.log("action","NATIVE_ROAD_GESTURE_REOPEN_PASS")
     end
   end

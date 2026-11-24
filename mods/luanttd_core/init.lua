@@ -75,6 +75,10 @@ if S.stock_generated_profile then
   Sim.W,Sim.H=p.width,p.depth
   generated_world=true
 end
+S.stock_road_town_policy={
+  tolerance=math.max(0,math.min(3,math.floor(tonumber(settings:get("luanttd_town_council_tolerance")) or 0))),
+  extra_dynamite=settings:get_bool("luanttd_extra_dynamite",true),
+}
 Sim.restore_road_orders(S)
 local simulation_bindings=dofile(mod.."/campaign_simulation_bindings.lua")(Sim,mod)
 local api={Sim=Sim,s=S,generated_world=generated_world,road_first=true,
@@ -626,7 +630,7 @@ local authority_started
 local function start_authority()
   if not authority or authority_started then return end
   authority_started=true
-  local cap={autoplay=true,seconds_per_day=interval,durable_actions=true}
+  local cap={autoplay=true,seconds_per_day=interval,durable_actions=true,road_town_policy=S.stock_road_town_policy}
   for k,value in pairs(api.capabilities) do if cap[k]==nil then cap[k]=value end end
   authority.start(cap,Sim.W,Sim.H)
 end

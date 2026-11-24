@@ -44,6 +44,13 @@ return function(core,s,Sim,mod)
   -- Keep the depot off the main axis so the two dead ends remain
   -- ordinary pavement. This specifically does not test non-order depot entry.
   for dz=-3,-1 do s.tiles[Sim.id(x+1,z+dz)].wood=nil end
+  if core.settings:get_bool("luanttd_native_municipal_road",false) then
+    local town=s.sites[next_id].id
+    for ix=x+4,x+6 do
+      local t=s.tiles[Sim.id(ix,z+1)]
+      t.build,t.road_bits,t.road_town,t.wood="road",10,town,nil
+    end
+  end
   local fields={Sim.id(x+1,z-3),Sim.id(x+1,z),Sim.id(x+10,z),Sim.id(x+2,z),Sim.id(x+8,z),
     Sim.id(x+1,z+3),Sim.id(x+10,z+3),Sim.id(x,z),Sim.id(x+1,z-2)}
   assert(core.safe_file_write(core.get_worldpath().."/native-focus-layout",table.concat(fields,"\n")))

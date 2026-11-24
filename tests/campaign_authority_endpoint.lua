@@ -390,6 +390,63 @@ do
   assert(Sim.road_bits(r,fresh.first)==0 and Sim.road_bits(r,Sim.id(5,16))==0 and Sim.road_bits(r,Sim.id(6,16))==10)
   local too_short={tool="remove",first=Sim.id(6,16),axis=0,start_half=false,end_half=true}
   assert(not R.road_place(john,too_short).ok and Sim.road_bits(r,Sim.id(6,16))==10)
+  local west,east=Sim.id(3,20),Sim.id(5,20)
+  local left=#r.sites+1
+  r.sites[left]={kind="town",tile=Sim.id(4,18),id=left,name="Near Town"}
+  r.sites[left+1]={kind="town",tile=Sim.id(4,22),id=left+1,name="Other Town"}
+  for at=west,east do
+    local t=r.tiles[at]
+    t.build,t.road_bits,t.road_town="road",10,left+1 -- recorded builder isn't the nearest authority
+  end
+  r.stock_road_town_policy={tolerance=0,extra_dynamite=false}
+  budget.cash=240
+  local municipal={tool="remove",first=east,last=west,axis=0,start_half=true,end_half=false}
+  local pub=assert(R.road_quote(john,municipal).value)
+  assert(pub.cost==240 and #pub.tiles==3 and budget.stock_town_authority_ratings==nil)
+  budget.stock_town_authority_ratings={[left]=36}
+  assert(R.road_place(john,municipal,pub).why=="ROAD_QUOTE_CHANGED")
+  assert(budget.cash==240 and budget.stock_town_authority_ratings[left]==36)
+  budget.stock_town_authority_ratings=nil
+  assert(R.road_place(john,municipal,pub).ok)
+  assert(budget.cash==0 and budget.stock_town_authority_ratings[left]==446)
+  assert(budget.stock_town_authority_ratings[left+1]==nil)
+  assert(r.tiles[west+1].road_town==nil and r.tiles[west+1].build==nil)
+  do
+    local p=Sim.id(12,25)
+    local entrance=Sim.id(13,25)
+    budget.cash=5000
+    r.tiles[entrance].build,r.tiles[entrance].road_bits,r.tiles[entrance].owner="road",2,john
+    local spec={tool="stock_terminal",kind="depot",direction=2,first=p}
+    local offer=assert(R.road_quote(john,spec).value)
+    assert(offer.cost==615 and #offer.tiles==2,offer.cost)
+    assert(R.road_place(john,spec,offer).ok)
+    assert(r.tiles[p].depot_dir==2 and Sim.road_bits(r,entrance)==10)
+    assert(budget.cash==4385)
+    spec.direction=0
+    local spin=assert(R.road_quote(john,spec).value)
+    assert(spin.cost==500 and #spin.tiles==1)
+    assert(R.road_place(john,spec,spin).ok and r.tiles[p].depot_dir==4)
+    local stop={tool="stock_terminal",kind="truck",direction=0,through=true,first=entrance}
+    local cargo=assert(R.road_quote(john,stop).value)
+    assert(cargo.cost==200)
+    assert(R.road_place(john,stop,cargo).ok)
+    local t=r.tiles[entrance]
+    assert(t.stop_axis==10 and r.stations[t.station].stop_type=="truck" and t.road_terminal_level==1)
+    local crest=Sim.id(20,24)
+    local idx=(24-1)*(Sim.W+1)+21
+    r.corner_grid.levels[idx]=2 -- the stock W corner is raised
+    local bay={tool="stock_terminal",kind="bus",direction=3,first=crest}
+    local hillside=assert(R.road_quote(john,bay).value)
+    assert(hillside.cost==660)
+    assert(R.road_place(john,bay,hillside).ok)
+    local shape,z,foundation=Sim.road_surface(r,crest)
+    assert(shape==0 and z==2 and foundation=="leveled")
+    assert(r.tiles[crest].road_terminal_level==2 and Sim.road_bits(r,crest)==1)
+    local projected=assert(R.snapshot(20,24,1,1,0).value)
+    assert(projected.tiles[1].surface.road_terminal_level==2)
+    print("PASS stock explicit depot mouth, reciprocal half pricing, rotation, exact through truck, and projected sloped bus foundation")
+  end
+  print("PASS worker resolves the nearest town by stock tie-break and commits ordered town clearing, matching the visible ledger ticket")
   print("PASS road removal refuses stale occupancy changes, respects the affordable prefix, charges exact pieces, and reports the applied footprint")
   print("PASS one owner turn applies exact visible roads, rejects stale price without spending, and safely quotes a fresh placement")
 end

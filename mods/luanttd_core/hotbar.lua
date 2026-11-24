@@ -424,7 +424,9 @@ function H.legend(stack,slot,is_world_tool,visible)
     elseif is_world_tool then
       help[1]=(id=="road" or id=="road_axis_x" or id=="road_axis_y" or id=="road_remove" or id=="clear" or id=="oneway_drag")
         and "Click or drag in the world" or "Left-click to use"
-      if id~="inspect" then help[#help+1]="Right-click to cancel" end
+      if id=="road_depot" or id=="road_station" or id=="truck_stop_tool" then
+        help[#help+1]="Right-click for layout"
+      elseif id~="inspect" then help[#help+1]="Right-click to cancel" end
     else
       help[1]="Left-click to activate"
     end

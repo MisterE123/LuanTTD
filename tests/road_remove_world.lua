@@ -19,3 +19,31 @@ assert(t.tram==rail and t.road_disallowed==nil and t.road_bits==2)
 assert(s.tiles[Sim.id(11,7)].road_bits==10 and s.tiles[Sim.id(12,7)].road_bits==10)
 assert(s.tiles[Sim.id(13,7)].build==nil and s.tiles[Sim.id(13,7)].owner==nil)
 print("PASS private normal-road adapter keeps unrelated owners, occupied traffic and parallel tram layers intact")
+
+-- NoTest terrain changes may make a later inner tile become an edge:
+-- stock test sees [10,11,12], actual sweep sees 11 after 10 vanished.
+local Town=dofile(mod.."openttd/road_town_permission.lua")
+local town={}
+function town.town(state,_,id,wanted,journal)
+  local rate=journal.ratings[1] or 500
+  local near={}
+  for direction=1,4 do
+    local n=Sim.adjacent(id,direction)
+    near[direction]=journal.road[n] or (n and Sim.road_bits(state,n) or 0)
+  end
+  local changed,why=Town.check(rate,0,false,Sim.road_bits(state,id),wanted,near)
+  if not changed then return nil,why end
+  journal.ratings[1]=changed
+  return true
+end
+town.occupied=function()return false end
+local TownWorld=dofile(mod.."road_remove_world.lua")(Sim,Terrain,town)
+for x=10,12 do s.tiles[Sim.id(x,8)]={terrain="grass",h=0,build="road",road_bits=10,road_town=1} end
+local city_first,city_last=Sim.id(10,8),Sim.id(12,8)
+local ripe=assert(TownWorld.plan(s,name,city_first,city_last,0,false,true))
+assert(#ripe.changes==3 and ripe.cost==240 and ripe.ratings[1]==446)
+assert(s.tiles[city_first].road_bits==10 and s.tiles[city_first+1].road_bits==10)
+s.companies[name].cash=100
+ripe=assert(TownWorld.plan(s,name,city_first,city_last,0,false,true))
+assert(#ripe.changes==1 and ripe.cost==80 and ripe.unfunded and ripe.ratings[1]==464)
+print("PASS isolated ordered town permission replay reflects prior cuts and stock NoTest budget behavior")

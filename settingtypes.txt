@@ -24,3 +24,8 @@ bayline_stock_bus_breakdowns (Vehicle breakdown difficulty) int 2 0 2
 bayline_stock_bus_service_interval (Road vehicle service interval) int 150 0 800
 bayline_stock_bus_service_percent (Service interval is a reliability percentage) bool false
 bayline_stock_bus_start_year (Starting year) int 1950 1950 2050
+
+[OpenTTD town authority]
+# The original RC1 construction and difficulty options, not feature unlocks.
+luanttd_town_council_tolerance (Council tolerance: 0 Lenient, 1 Neutral, 2 Hostile, 3 Permissive) int 0 0 3
+luanttd_extra_dynamite (Extra dynamite) bool true

@@ -468,6 +468,7 @@ function U.fields(p,formname,f)
   if api.world and api.world.avatar_state and api.world.avatar_state(p) then return false end
   if formname=="luanttd_core:station_layout" then return U.station_layout_fields(p,f) end
   if formname=="luanttd_core:rail_depot_direction" then return U.depot_direction_fields(p,f) end
+  if formname=="luanttd_core:road_terminal_layout" then return U.road_terminal_fields(p,f) end
   if U.signal_ui and formname==U.signal_ui.form then
     return U.signal_ui.fields(p,f,U.layer_bulldozer.open)
   end
@@ -1118,6 +1119,69 @@ function U.depot_direction_fields(p,f)
   V.rail_dir,V.depot_direction_open=chosen,nil
   core.close_formspec(n,"luanttd_core:rail_depot_direction")
   U.status(p,"Depot door faces "..tram_dir[chosen]..". Click a tile to build or turn an empty depot.")
+  return true
+end
+local road_terminal_kind={road_station="bus",truck_stop_tool="truck",road_depot="depot"}
+local road_terminal_title={bus="Bus stop",truck="Truck stop",depot="Road depot"}
+function U.road_terminal_tool(tool) return road_terminal_kind[tool]~=nil end
+local function road_terminal_request(V,id)
+  local kind=road_terminal_kind[V.tool]
+  local spec=kind and V.road_terminal_layout and V.road_terminal_layout[kind]
+  if spec then return {tool="stock_terminal",first=id,kind=kind,direction=spec.dir,through=spec.through} end
+end
+local function road_terminal_label(req)
+  local kind=req.kind
+  local layout=req.through and (req.direction==0 and "east–west through" or "north–south through")
+    or ("door "..tram_dir[req.direction]:lower())
+  return road_terminal_title[kind].." · "..layout
+end
+function U.open_road_terminal(p,tool)
+  local kind=road_terminal_kind[tool]
+  if not kind then return false end
+  local name=p:get_player_name()
+  local V=view(name)
+  V.current_road_terminal=kind
+  V.road_terminal_layout=V.road_terminal_layout or {}
+  local spec=V.road_terminal_layout[kind]
+  local form={"formspec_version[7]size[9.6,5.35]bgcolor[#152334;false]",
+    "label[.46,.38;"..road_terminal_title[kind].." layout]",
+    "label[.46,.91;Choose an entrance, then click a tile in the world.]"}
+  local coords={[0]={.5,2.13},[1]={3.57,2.94},[2]={6.65,2.13},[3]={3.57,1.39}}
+  local function button(key,text,x,y,active)
+    if active then form[#form+1]="style["..key..";bgimg=bl_button_active.png]" end
+    form[#form+1]=("button[%g,%g;2.45,.61;%s;%s]"):format(x,y,key,esc(text))
+  end
+  for dir=0,3 do
+    local pos=coords[dir]
+    button("door_"..dir,tram_dir[dir],pos[1],pos[2],spec and not spec.through and spec.dir==dir)
+  end
+  if kind~="depot" then
+    button("through_0","East–west through",.5,3.93,spec and spec.through and spec.dir==0)
+    button("through_1","North–south through",3.57,3.93,spec and spec.through and spec.dir==1)
+    button("auto","Auto orientation",6.65,3.93,not spec)
+  else
+    button("auto","Auto orientation",3.57,3.93,not spec)
+  end
+  core.show_formspec(name,"luanttd_core:road_terminal_layout",table.concat(form))
+  return true
+end
+function U.road_terminal_fields(p,f)
+  local name=p:get_player_name()
+  local V=view(name)
+  local kind=V.current_road_terminal
+  if not kind then return true end
+  if f.quit then V.current_road_terminal=nil;return true end
+  local chosen,n=nil,f.auto and 1 or 0
+  for dir=0,3 do if f["door_"..dir] then chosen={dir=dir};n=n+1 end end
+  if kind~="depot" then
+    for axis=0,1 do if f["through_"..axis] then chosen={dir=axis,through=true};n=n+1 end end
+  end
+  if n~=1 then return true end
+  V.road_terminal_layout[kind]=chosen
+  V.current_road_terminal=nil
+  core.close_formspec(name,"luanttd_core:road_terminal_layout")
+  U.status(p,chosen and road_terminal_label({kind=kind,direction=chosen.dir,through=chosen.through}) or
+    "Auto orientation. Click a site in the world.")
   return true
 end
 function U.toggle_rail_remove(p)
@@ -1893,8 +1957,9 @@ local function authority_preview(p,id,hit)
     kind,request="terrain",{operation="bulldoze",first=V.demolition_anchor,last=id,diagonal=p:get_player_control().aux1==true}
   elseif tool=="fund_bank" then
     label="Fund Bank";request={tool=tool,first=id}
-  elseif tool=="road_station" or tool=="road_depot" or tool=="road_bay_pair" or tool=="truck_stop_tool" then
-    request={tool=tool=="truck_stop_tool" and "truck_stop" or tool,first=id}
+  elseif road_terminal_kind[tool] or tool=="road_bay_pair" then
+    request=road_terminal_request(V,id) or {tool=tool=="truck_stop_tool" and "truck_stop" or tool,first=id}
+    if request.tool=="stock_terminal" then label=road_terminal_label(request) end
   elseif dock=="dock" or dock=="depot" or tool=="ship_buoy" then
     kind,request="transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=V.ship_axis or 0}
   elseif dock=="lock" or dock=="canal" or dock=="aqueduct" then
@@ -1936,6 +2001,14 @@ function U.preview(p,id,hit)
     return {id},not not target,hint
   end
   if V.tool=="teleport_tile" then return {id},true,"Teleport above this tile" end
+  local oriented=road_terminal_request(V,id)
+  if oriented then
+    local q,why=Sim.stock_road_terminal_plan(S,n,id,{kind=oriented.kind,dir=oriented.direction,through=oriented.through})
+    if not q then return {id},false,Sim.stock_road_terminal_error(why) end
+    local ids={}
+    for _,e in ipairs(q.changes) do ids[#ids+1]=e.id end
+    return ids,true,road_terminal_label(oriented).."  |  "..dollars(q.cost)
+  end
   if api.road_first and U.road_gesture(V.tool) and hit then
     local press=V.road_press or {id=id,hit=hit}
     if autoroad_bend(p,V,press.id,id) then
@@ -2298,6 +2371,16 @@ function U.build_world(p,id,hit)
       elseif built then V.status="Bridge built." end
     end,bridge=="rail" and V.rail_gauge or nil)
     if ok then V.anchor=nil else V.status=why or "No bridge can join these heads." end
+    return
+  end
+  local oriented=road_terminal_request(V,id)
+  if oriented then
+    if api.authority_handoff then worker_build(n,V,"road",oriented);return end
+    local q,why=Sim.stock_road_terminal_plan(S,n,id,{kind=oriented.kind,dir=oriented.direction,through=oriented.through})
+    if not q then V.status=Sim.stock_road_terminal_error(why);return end
+    local ok,note,tiles=Sim.apply_road_construction(S,n,q)
+    V.status=note
+    if ok then R.update(tiles);api.save() end
     return
   end
   if api.authority_handoff then

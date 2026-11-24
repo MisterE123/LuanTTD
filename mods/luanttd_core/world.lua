@@ -492,6 +492,7 @@ return function(api,ui)
       if entry and entry[1]=="teleport_tile" then ui.inspect(p,tile);return end
       if entry and ui.station_gesture and ui.station_gesture(entry[1]) then ui.open_station_layout(p);return end
       if entry and entry[1]=="rail_depot_tool" and ui.open_depot_direction then ui.open_depot_direction(p);return end
+      if entry and ui.road_terminal_tool and ui.road_terminal_tool(entry[1]) then ui.open_road_terminal(p,entry[1]);return end
       ui.context(p,tile,hit);return
     end
     if tile then ui.build_world(p,tile,hit)

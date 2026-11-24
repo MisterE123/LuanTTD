@@ -5,6 +5,7 @@ local path=(core and core.get_modpath and core.get_modpath("luanttd_core") and c
 return function(Sim,Terrain,G,B,H)
   local W={}
   local names=dofile(path.."stock_town_art.lua")
+  local authority=dofile(path.."town_road_authority.lua")(Sim,dofile(path.."openttd/road_town_permission.lua"))
   local function at(layer,id) return layer and layer[id] end
   local function record(t) return t and t.house and t.source_house or nil end
   local function protected(s,id,t)
@@ -119,11 +120,13 @@ return function(Sim,Terrain,G,B,H)
     end
     if want_new and first and state.last_month~=month then
       views=services(s)
+      local ratings=authority.station_view(s)
       for _,id in ipairs(state.order) do
         local t=state.towns[id]
         local _,reason=G.month(t,views,2,random)
         t.reason=reason
         t.last_active=G.active_stations(t,views)
+        authority.month(s,t,ratings)
       end
       state.last_month=month
     end

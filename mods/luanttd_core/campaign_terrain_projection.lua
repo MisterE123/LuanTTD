@@ -2,7 +2,7 @@
 -- VM handles, station queues, finance, and unrelated tiles are not copied.
 local keys={
   "terrain","variant","h","build","owner","wood","house","parcel","site",
-  "road_bits","road_town","road_disallowed","disallowed","road_stop_pair","stop_axis","depot_dir",
+  "road_bits","road_town","road_disallowed","disallowed","road_stop_pair","stop_axis","depot_dir","road_terminal_level",
   "rail_tracks","rail_type","rail_depot_dir","rail_station_id","rail_station_axis","rail_waypoint_id",
   "rail_span_id","road_bridge_id","road_tunnel_id","station","signal","closed","level_crossing",
   "coastal_water","stock_void","stock_clear_ground","water_class","stock_canal","stock_river_bits",

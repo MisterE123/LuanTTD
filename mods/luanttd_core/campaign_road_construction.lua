@@ -26,6 +26,13 @@ return function(Sim,s,oneway,Bank)
       return q
     elseif op=="bend" then
       return Sim.autoroad_bend_plan(s,player,first,last)
+    elseif op=="stock_terminal" and first==last then
+      if request.kind~="depot" and request.kind~="truck" and request.kind~="bus" then
+        return nil,"INVALID_ROAD_GESTURE"
+      end
+      local q,why=Sim.stock_road_terminal_plan(s,player,first,{kind=request.kind,dir=request.direction,through=request.through})
+      if not q then return nil,Sim.stock_road_terminal_error(why) end
+      return q
     elseif op=="fund_bank" and first==last and Bank then
       local q,why=Bank.plan(s,first)
       if not q then return nil,Bank.reason(why) end
@@ -54,8 +61,16 @@ return function(Sim,s,oneway,Bank)
       ids[i]=c.id or c.tile
       parts[i]=table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
         tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation),tostring(c.rail_tracks),tostring(c.railtype),
-        c.rail_owner and ("%q"):format(c.rail_owner) or "-"},":")
+        c.rail_owner and ("%q"):format(c.rail_owner) or "-",tostring(c.depot_dir),tostring(c.stop_axis),
+        tostring(c.road_terminal_level),tostring(c.stop_type),tostring(c.rotate_depot)},":")
     end
+    if q.ratings then
+      local keys={}
+      for id in pairs(q.ratings) do keys[#keys+1]=id end
+      table.sort(keys)
+      for _,id in ipairs(keys) do parts[#parts+1]="town:"..id..":"..q.ratings[id] end
+    end
+    if q.unfunded then parts[#parts+1]="unfunded:"..tostring(q.first_unfunded) end
     return {tiles=ids,cost=q.cost,topology=s.topology,terrain=s.corner_grid and s.corner_grid.revision,stopped_at=q.stopped_at,ticket=table.concat(parts,"/")}
   end
   function M.quote(player,request)
