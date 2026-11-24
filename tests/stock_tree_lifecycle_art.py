@@ -18,6 +18,9 @@ TREE_NAMES=("Growing1","Growing2","Growing3","Grown","Dying1","Dying2","Dead")
 
 
 def check_upstream(path):
+    # CI passes the checkout root; direct art workflows may pass its src directory.
+    if (path / "src" / "tree_map.h").is_file():
+        path = path / "src"
     text=(path/"tree_map.h").read_text()
     part=re.search(r"enum class TreeGrowthStage.*?\{(.*?)\};",text,re.S)[1]
     assert dict((n,int(v)) for n,v in re.findall(r"\b(\w+)\s*=\s*([0-6])\b",part))==dict(zip(TREE_NAMES,range(7)))
