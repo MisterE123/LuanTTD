@@ -38,7 +38,17 @@ return function(api,root)
       local p=pieces[i]
       local slope,base=terrain.tile(p.id)
       local grade,level=surface(slope,base,p.tracks)
-      if grade then
+      local split=not grade and api.trackworks.split_surface and api.trackworks.split_surface(slope,base,p.tracks)
+      if split then
+        local x,z=Sim.xy(p.id)
+        for y=base,base+2 do
+          local bits=split.groups[y]
+          if bits then
+            out[#out+1]={id=p.id,mesh=("bl_rail_track_%d.obj"):format(bits),atlas="bl_rail_atlas.png",
+              pos={x=2*x,y=y+1.038,z=2*z}}
+          end
+        end
+      elseif grade then
         local x,z=Sim.xy(p.id)
         local mode=grade==0 and diagonal.mode(projected,p.id) or 0
         local mesh=mode>0 and ("bl_rail_eased_"..p.tracks.."_"..mode..".obj")

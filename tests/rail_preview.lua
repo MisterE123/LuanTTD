@@ -69,3 +69,9 @@ S.tiles[a].slope=3
 advanced=Ghost({{id=a,tracks=1,result_railtype=2}},"QA")[1]
 assert(advanced.mesh=="bl_guideway_mono_grade_1.obj" and advanced.pos.y==4.038)
 print("PASS monorail and maglev previews show their own guideway profiles without foreign-gauge easing")
+
+S.tiles[a].slope=8
+local split=Ghost({{id=a,tracks=12}},"QA")
+assert(#split==2 and split[1].mesh=="bl_rail_track_8.obj" and split[2].mesh=="bl_rail_track_4.obj")
+assert(math.abs(split[1].pos.y-3.038)<1e-9 and math.abs(split[2].pos.y-4.038)<1e-9 and not S.tiles[a].rail_tracks)
+print("PASS split-level preview shows both individual opposed railheads")

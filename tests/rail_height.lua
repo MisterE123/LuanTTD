@@ -15,7 +15,7 @@ local cases={
   {23,1,"x",3,3},              -- steep slope raises foundation base one level
   {29,2,"y",9,3},
   {13,1,"leveled",0,3},        -- rail top comes from stock foundation
-  {8,12,"half",232,2},         -- pure integer query, not native runtime
+  {8,12,"half",232,2},         -- split upper/lower levels
   {30,48,"steep_both",164,3},
 }
 for _,q in ipairs(cases) do
@@ -30,8 +30,8 @@ for _,kind in ipairs({"station","waypoint","depot","crossing"}) do
   local mid,angle=Height.render(p,1,.5)
   assert(mid==4 and angle==0)
 end
-local no_mesh=assert(Height.profile({kind="rail",slope=8,trackbits=12},2))
-assert(not Height.render(no_mesh,2,.5))
+local split=assert(Height.profile({kind="rail",slope=8,trackbits=12},2))
+assert(Height.render(split,2,.5)==3 and Height.render(split,3,.5)==2)
 
 -- A real shared-corner X profile: low, up one level, high, down, low.
 -- Traverse in both directions. Every train movement pixel matches stock

@@ -2,6 +2,9 @@
 return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
   local Lab={}
   local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  local Height=dofile(source.."rail_height.lua")(Track,Slope)
+  local Split=dofile(source.."../rail_split_profile.lua")(Track,Height)
+  Lab.split_surface=Split.profile
   Lab.depot_surface=dofile(source.."rail_depot_construction.lua")(Track).surface
   local pieces={x=0,y=1,upper=2,lower=3,left=4,right=5}
   function Lab.piece(word) return pieces[word] end
@@ -298,10 +301,12 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     if t.rail_type==1 and new>0 and new~=1 and new~=2 and new~=4 and new~=8 and new~=16 and new~=32 then
       return false,"Convert to ordinary rail before adding a junction."
     end
-    if new>0 and not Lab.surface(shape,0,new) then
-      return false,"This piece needs a supported foundation. Try flat ground or a straight track aligned with the slope."
+    local split=new>0 and Lab.split_surface(shape,0,new)
+    if split and (t.rail_type or 0)~=0 then return false,"Use ordinary rail on this split foundation." end
+    if new>0 and not split and not Lab.surface(shape,0,new) then
+      return false,"This piece needs a stock-compatible foundation. Try a different curve or align a straight track with the slope."
     end
-    return true,{id=id,tracks=new,prior=old,shape=shape,track=track,remove=remove}
+    return true,{id=id,tracks=new,prior=old,shape=shape,track=track,remove=remove,split_foundation=not not split}
   end
   function Lab.commit_piece(s,owner,plan)
     if Lab.span_protected(s,plan.id) then return false,protected end

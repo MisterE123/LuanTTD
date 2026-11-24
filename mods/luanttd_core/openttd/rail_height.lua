@@ -10,6 +10,18 @@ return function(Track,Slope)
   for i=1,14 do raw[i]=true end
   local flat_facility={station=true,waypoint=true,depot=true,crossing=true}
   local axis={[3]=Track.X,[12]=Track.X,[6]=Track.Y,[9]=Track.Y}
+  local curve_positions={[Track.UPPER]={.1464466094,.1464466094},
+    [Track.LOWER]={.8535533906,.8535533906},[Track.LEFT]={.8535533906,.1464466094},
+    [Track.RIGHT]={.1464466094,.8535533906}}
+  local split_families={half=true,rail=true,steep_lower=true,steep_both=true}
+  function H.split(profile)
+    return profile and split_families[profile.foundation]==true or false
+  end
+  function H.curve_level(profile,track)
+    if not H.split(profile) or not Track.has(profile.trackbits,track) then return end
+    local p=curve_positions[track]
+    if p then return profile.base_level+Slope.surface(p[1],p[2],profile.surface) end
+  end
   local edges={[0]={0,.5},{.5,1},{1,.5},{.5,0}}
 
   -- tile.slope is the RAW shared-corner shape, not the surface after
@@ -103,11 +115,13 @@ return function(Track,Slope)
   -- flat/leveled track or any supported single straight on an inclined
   -- foundation/natural side slope. Pitch is signed uphill-positive in
   -- travel coordinates, NOT a Luanti Euler angle around a model's axis.
-  -- Other stock foundations remain queryable via pixel() but must not
-  -- invent a 3D surface where the game has no matching mesh.
+  -- Special curved foundations are projected at the constant per-piece
+  -- railhead, including the two independently elevated halves of a tile.
   function H.render(profile,td,progress,width,level_height)
     if not Track.valid_trackdir(td) or not Track.has(profile.trackbits,Track.track(td)) then return end
     if profile.surface==0 then return profile.base_level,0,0 end
+    local curved=H.curve_level(profile,Track.track(td))
+    if curved then return curved,0,0 end
     if axis[profile.surface]~=Track.track(td) or profile.trackbits~=2^Track.track(td) then return end
     local a,b=edges[Track.entry_side(td)],edges[Track.exit_side(td)]
     local h0=Slope.surface(a[1],a[2],profile.surface)

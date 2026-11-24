@@ -25,6 +25,11 @@ if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 ]]; then
   fixture=tests/tree_shore_flood_native.lua
   marker='PASS NATIVE SHORE GROVE'
 fi
+if [[ ${LUANTTD_QA_SPLIT_RAIL:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/rail_split_native.lua
+  marker='PASS NATIVE SPLIT RAIL'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")

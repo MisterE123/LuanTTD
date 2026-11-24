@@ -135,6 +135,7 @@ return function(api,Lab,Track,Run,prices)
         local ok,plan=Lab.piece_plan(S,owner,id,track,remove,shape)
         if not ok then return nil,plan end
         p=plan
+        if p.split_foundation and gauge~=Types.RAIL then return nil,"Use ordinary rail on this split foundation." end
         local tile=record(id)
         if tile.kind=="signals" then
           -- CmdBuildSingleRail keeps signals when adding an independent

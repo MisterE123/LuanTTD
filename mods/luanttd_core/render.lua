@@ -654,6 +654,45 @@ return function(api)
     check("aqueduct_above","stock_aqueducts")
     return level
   end
+  local split_nodes={}
+  if terrain and api.trackworks and api.trackworks.split_surface then
+    local roots=api.trackworks.split_surface
+    for _,raw in ipairs({1,2,3,4,5,6,7,8,9,10,11,12,13,14,23,27,29,30}) do
+      for bits=1,63 do
+        local p=roots(raw,0,bits)
+        if p and not split_nodes[p.mesh_key] then
+          local shape,key,top=p.surface,p.mesh_key,p.base_level
+          local fixed={}
+          for u=0,5 do for v=0,5 do
+            local hi=top+api.slope.surface((u+.5)/6,(v+.5)/6,shape)
+            if hi>0 then
+              fixed[#fixed+1]={-1.5+u/3,-1.5,-.5+v/3,-1.5+(u+1)/3,hi-.5,-.5+(v+1)/3}
+            end
+          end end
+          split_nodes[key]=reg("rail_foundation_split_"..key,{png("rail_split_foundation_atlas")},{
+            drawtype="mesh",mesh="bl_rail_foundation_split_"..key..".obj",
+            paramtype="light",sunlight_propagates=true,pointable=false,
+            collision_box={type="fixed",fixed=fixed}})
+        end
+      end
+    end
+  end
+  local function split_rail(id,t,shape,base)
+    if not (terrain and t and t.rail_tracks and (t.rail_type or 0)==0 and api.trackworks
+        and api.trackworks.split_surface and not (t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir~=nil or t.level_crossing)) then return end
+    if not shape then shape,base=terrain.tile(id) end
+    return api.trackworks.split_surface(shape,base,t.rail_tracks)
+  end
+  function R.split_rail_node(id,t,x,y,z,shape,base)
+    local split=split_rail(id,t,shape,base)
+    if not split then return end
+    if y<base then return gnames.grass[t.variant] end
+    if y==base then return slope_fill end
+    if x%2==1 and z%2==0 and y==base+1 then return assert(split_nodes[split.mesh_key]) end
+    local pieces=split.groups[y-1]
+    if x%2==0 and z%2==0 and pieces then return stock_rail.visual(id,pieces,0) end
+    return "air"
+  end
   function R.host_signal(id)
     local d=S.stock_rail_dispatch
     return id and d and d.signals and d.signals.records[id]
@@ -666,7 +705,7 @@ return function(api)
     local t=S.tiles[id]
     return t and not t.stock_void and (t.coastal_water or t.water_class=="river" or
       (not t.site and not t.house and not t.build and t.terrain~="water") or road_surface(id)~=nil or
-      t.rail_depot_dir~=nil or t.tram~=nil)
+      t.rail_depot_dir~=nil or t.tram~=nil or split_rail(id,t)~=nil)
   end
   function R.surface(id,x,z)
     local t=S.tiles[id]
@@ -674,6 +713,11 @@ return function(api)
       local shape,base=terrain.tile(id)
       local _,level=api.trackworks.depot_surface(shape,base)
       if level then return level+.5 end
+    end
+    local p=split_rail(id,t)
+    if p then
+      local u,v=Sim.xy(id)
+      return p.base_level+.5+api.slope.surface((x-2*u+.5)/2,(z-2*v+.5)/2,p.surface)
     end
     local slope,base=road_surface(id)
     if slope==nil and R.tram_surface then
@@ -1307,6 +1351,8 @@ return function(api)
     if t.rail_tracks then
       local shape,base=0,t.h
       if terrain then shape,base=terrain.tile(id) end
+      local split_node=R.split_rail_node(id,t,x,y,z,shape,base)
+      if split_node then return split_node end
       local grade,level,foundation,profile
       if t.rail_depot_dir~=nil then grade,level,foundation=api.trackworks.depot_surface(shape,base)
       else grade,level,foundation,profile=api.trackworks.surface(shape,base,t.rail_tracks) end
