@@ -77,6 +77,12 @@ if command -v import >/dev/null; then import -window root "$out/survey-hotbar.pn
 press_until 1 SURVEY_NATIVE_WALKING
 sleep .40
 if command -v import >/dev/null; then import -window root "$out/survey-walk.png"; fi
-press_until 3 'PASS NATIVE SURVEY'
+press 3
+sleep .28
+xdotool key i
+sleep .42
+if command -v import >/dev/null; then import -window root "$out/survey-inventory.png"; fi
+xdotool mousemove 640 420 click 1
+mark 'PASS NATIVE SURVEY'
 grep 'PASS NATIVE SURVEY' "$out/server.log"
 ! grep 'ERROR\[' "$out/"{client,server}.log

@@ -93,8 +93,13 @@ for phase in bus cab coach; do
   xdotool windowraise "$win" windowfocus --sync "$win"
   sleep .30
   import -window root -resize 960x600 -quality 91 "$out/$phase-builder.jpg"
-  if [[ "$phase" == cab ]]; then xdotool mousemove 682 232 click 1
-  else xdotool mousemove 794 232 click 1
+  xdotool mousedown 1; sleep .18; xdotool mouseup 1
+  if [[ "$phase" != bus ]]; then
+    mark "RIDE_TRAIN_SEAT $phase"
+    sleep .52
+    if [[ "$phase" == cab ]]; then xdotool mousemove 810 473 click 1
+    else xdotool mousemove 620 473 click 1
+    fi
   fi
   mark "RIDE_VISIBLE $phase"
   capture_seat "$phase" forward
@@ -106,24 +111,12 @@ for phase in bus cab coach; do
   xdotool keydown w; xdotool mousemove_relative -- 250 15; sleep 1; xdotool keyup w
   mark "RIDE_SIDE_VIEW $phase"
   capture_seat "$phase" side
-  if [[ "$phase" == bus ]]; then
-    xdotool keydown e
-    if ! mark "PASS NATIVE PRIVATE RIDE $phase"; then xdotool keyup e; exit 1; fi
-    xdotool keyup e
-  elif [[ "$phase" == cab ]]; then
-    xdotool mousedown 3
-    if ! mark "PASS NATIVE PRIVATE RIDE $phase"; then xdotool mouseup 3; exit 1; fi
-    xdotool mouseup 3
-  else
-    xdotool key i; sleep .65
-    import -window root -resize 960x600 -quality 91 "$out/$phase-inventory.jpg"
-    xdotool mousemove 720 469 click 1
-  fi
+  xdotool key i; sleep .62
+  import -window root -resize 960x600 -quality 91 "$out/$phase-inventory.jpg"
+  xdotool mousemove 720 469 click 1
   mark "PASS NATIVE PRIVATE RIDE $phase"
 done
 mark 'PASS NATIVE ALL SEATED MODES'
-mark 'PASS NATIVE WORKER SEAT COMMAND /ride'
-mark 'PASS NATIVE WORKER SEAT COMMAND /train'
 python3 tests/private_ride_pixels.py "$out"
 grep -E 'RIDE|PASS NATIVE' "$out/server.log"
 ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log" "$out/observer.log"

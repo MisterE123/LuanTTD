@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exercise /walk and right-click on a real campaign with a disposable road and house.
+# Exercise /walk and inventory exit on a real campaign with a disposable road and house.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo=$PWD
@@ -29,7 +29,7 @@ cp "$mod/init.lua" "$mod/init.native.lua"
 mv -f "$mod/init.native.lua" "$mod/init.lua"
 cp tests/coast_swim_native.lua "$mod/coast_swim_native.lua"
 printf '\ndofile(mod.."/coast_swim_native.lua")(api)\n' >> "$mod/init.lua"
-if [[ -n ${BAYLINE_NATIVE_CACHE_SEED:-} && -d "$BAYLINE_NATIVE_CACHE_SEED/minetest" ]]; then
+if [[ -z ${LUANTTD_NATIVE_MEDIA_CACHE:-} && -n ${BAYLINE_NATIVE_CACHE_SEED:-} && -d "$BAYLINE_NATIVE_CACHE_SEED/minetest" ]]; then
   # Hash-addressed Luanti media; keep mutable Mesa caches separate.
   cp -al "$BAYLINE_NATIVE_CACHE_SEED/minetest" "$out/cache/"
 fi
@@ -111,7 +111,7 @@ if [[ ${BAYLINE_WALL_TEST_ONLY:-0} == 1 ]]; then
   hold 2.3 w
   say "/swimprobe house"
   capture house
-  xdotool click 3
+  xdotool key i; sleep .35; xdotool mousemove 650 451 click 1
   sleep .65
   say "/swimprobe silo"
   say "/walk"
@@ -134,7 +134,7 @@ hold 3.5 s space
 sleep .25
 say "/swimprobe climb"
 capture ashore
-xdotool click 3
+xdotool key i; sleep .35; xdotool mousemove 650 451 click 1
 sleep .65
 say "/swimprobe bridge"
 say "/walk"
@@ -146,7 +146,7 @@ xdotool keydown a; sleep .19; xdotool keyup a
 capture bridge
 hold 6.3 w
 say "/swimprobe span"
-xdotool click 3
+xdotool key i; sleep .35; xdotool mousemove 650 451 click 1
 sleep .65
 say "/swimprobe field"
 say "/walk"
@@ -154,7 +154,7 @@ hold 1.1 w
 capture plowed-slope
 hold 2.3 w
 say "/swimprobe crop"
-xdotool click 3
+xdotool key i; sleep .35; xdotool mousemove 650 451 click 1
 sleep .65
 say "/swimprobe returned"
 say "/swimprobe fence"
@@ -169,7 +169,7 @@ say "/swimprobe jumped"
 hold 1.9 w
 say "/swimprobe house"
 capture house
-xdotool click 3
+xdotool key i; sleep .35; xdotool mousemove 650 451 click 1
 sleep .65
 say "/swimprobe parcel"
 say "/walk"
@@ -179,21 +179,21 @@ capture parcel
 hold .28 w space
 hold .30 w
 say "/swimprobe parcel_jumped"
-xdotool click 3
+xdotool key i; sleep .35; xdotool mousemove 650 451 click 1
 sleep .65
 say "/swimprobe silo"
 say "/walk"
 hold 1.65 w
 say "/swimprobe silo_blocked"
 capture silo
-xdotool click 3
+xdotool key i; sleep .35; xdotool mousemove 650 451 click 1
 sleep .65
 say "/swimprobe arena"
 say "/walk"
 hold 1.80 w
 say "/swimprobe arena_crossed"
 capture stadium
-xdotool click 3
+xdotool key i; sleep .35; xdotool mousemove 650 451 click 1
 sleep .65
 say "/swimprobe arena2"
 say "/walk"

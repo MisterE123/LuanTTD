@@ -107,3 +107,18 @@ end
 local flat=P.slope_box(T.surface,0,true)
 assert(#flat.fixed==1 and flat.fixed[1][5]==-.5)
 print("PASS bounded plate collision and accurate ramp heights for all four deck orientations; flat crop support")
+
+-- Check a simulated native velocity response at different step cadences
+-- and validate no single packet can add a large impulse.
+for _,dt in ipairs({.03,.07,.09,.1}) do
+  local y,speed,high=-.31,-.64,-.31
+  for i=1,math.ceil(4/dt) do
+    local dy=P.swim_impulse(.14-y,speed,dt)
+    assert(dy<=4.8*dt+1e-9 and dy>=-3.8*dt-1e-9)
+    speed=speed+dy
+    y=y+speed*dt
+    high=math.max(high,y)
+  end
+  assert(math.abs(y-.14)<.04 and high<.24,"unstable water rise")
+end
+print("PASS waterline trim settles at different step rates without a hard vertical impulse")

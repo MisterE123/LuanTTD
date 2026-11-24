@@ -58,6 +58,13 @@ for _,picker in ipairs({false,true}) do for _,features in ipairs({false,true}) d
     for _,mode in ipairs({"roads","railworks","tramway","harbor","airfields"}) do
       assert(#H.path(mode,live)==2,mode.." is not a peer")
     end
+    local r,p=H.compact(live.roads),H.compact(live.railworks)
+    for i,pair in ipairs({{"road","rail_autotrack"},{"road_station","rail_platform"},
+        {"road_depot","rail_depot_tool"},{"service_depot","service_depot"},
+        {"section_road_spans","section_railengineering"}}) do
+      assert(r[i+3][1]==pair[1] and p[i+3][1]==pair[2],"transport shortcuts diverged at "..(i+3))
+    end
+    assert(p[9][1]=="section_railsignals" and p[10][1]=="section_railops")
     assert(find(live.railworks,"rail_autotrack") and find(live.railworks,"rail_platform"))
     assert(find(live.railworks,"service_depot") and find(live.harbor,"service_depot"))
     assert(find(live.airfields,"service_hangar") and find(live.road_stops,"road_stop_remove"))

@@ -110,7 +110,7 @@ for layout in country city; do
   sleep 1.12
   say '/planetrace landed'
   mark "PLANE_QA $layout landed"
-  if [[ $layout == country ]]; then xdotool click 3; sleep .65; else say '/plane'; fi
+  if [[ $layout == country ]]; then xdotool key i; sleep .45; xdotool mousemove 640 420 click 1; sleep .65; else say '/plane'; fi
   say '/planetrace returned'
   mark "PLANE_QA $layout returned"
 done

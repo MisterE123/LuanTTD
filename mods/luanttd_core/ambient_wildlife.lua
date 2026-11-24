@@ -280,10 +280,10 @@ return function(core,Sim,view,media)
     local off=V.enabled(p)
     p:get_meta():set_int(key,off and 1 or 0)
     V.step(.16,core.get_connected_players())
-    return true,off and "Decorative wildlife and shop cars hidden." or "Decorative wildlife and shop cars shown."
+    return true,off and "Decorative scenery hidden." or "Decorative scenery shown."
   end
   if core.register_chatcommand then core.register_chatcommand("candy",{
-    description="Show or hide decorative wildlife and shop cars for yourself",
+    description="Show or hide decorative wildlife, traffic and storms for yourself",
     func=function(n)
       local p=core.get_player_by_name(n)
       if p then return V.toggle(p) end

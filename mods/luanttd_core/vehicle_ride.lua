@@ -8,7 +8,7 @@ return function(core,api,path)
   local now,roster=0,{}
   local anchor_name="luanttd_core:seated_camera"
   local shell_name="luanttd_core:seated_exterior"
-  local names={"bus_interior","train_interior","train_cab"}
+  local names={"bus_interior","train_interior","train_cab","airliner_interior","ferry_interior"}
   -- Standard ride interiors are authored in node units with +Z facing out
   -- the windscreen. Stock exteriors are authored nose -Z. The limited
   -- body envelope is enforced for every private variant.
@@ -16,6 +16,8 @@ return function(core,api,path)
     bus_interior={eye={x=-.020,y=.117,z=-.042},floor=.071,scale=.76},
     train_interior={eye={x=-.091,y=.207,z=-.080},floor=.202,depth=.80,scale=.78},
     train_cab={eye={x=.075,y=.228,z=-.228},floor=.247,scale=.76},
+    airliner_interior={eye={x=.048,y=.181,z=.105},floor=.20,depth=.90,scale=.83,look=-1.24,tilt=.46},
+    ferry_interior={eye={x=-.059,y=.181,z=.085},floor=.295,scale=1,look=-.85,tilt=.06},
   }
   local function alive(o) return o and o:get_pos()~=nil end
   local function copy(x)
@@ -42,9 +44,6 @@ return function(core,api,path)
   local models,textures=assets("models"),assets("textures")
   for _,design in ipairs(names) do
     local stem="bl_ride_"..design
-    if design=="bus_interior" then stem="bl_ride_bus_interior"
-    elseif design=="train_interior" then stem="bl_ride_train_interior"
-    else stem="bl_ride_train_cab" end
     local mesh,texture=stem..".obj",stem..".png"
     if models[mesh] and textures[texture] then
       local d=interiors[design]
@@ -65,7 +64,8 @@ return function(core,api,path)
   end
   function R.capable(kind,mode)
     if mode=="cab" then return kind=="rail" and rooms.train_cab~=nil end
-    return kind=="road" and rooms.bus_interior~=nil or kind=="rail" and rooms.train_interior~=nil
+    return kind=="road" and rooms.bus_interior~=nil or kind=="rail" and rooms.train_interior~=nil or
+      kind=="air" and rooms.airliner_interior~=nil or kind=="ship" and rooms.ferry_interior~=nil
   end
 
   local function rebuild_mask(ref,m)
@@ -112,7 +112,8 @@ return function(core,api,path)
   end
 
   function R.track(kind,id,ref,pos,rotation,meta)
-    if (kind~="road" and kind~="rail") or not id or not alive(ref) or not meta or not rotation then return end
+    if not (kind=="road" or kind=="rail" or kind=="air" or kind=="ship" and id=="ferry") or
+      not id or not alive(ref) or not meta or not rotation then return end
     local k=key(kind,id)
     local list=tracked[k]
     if not list then list={};tracked[k]=list end
@@ -130,6 +131,13 @@ return function(core,api,path)
   end
   local function chosen(kind,id,body,mode)
     local list=tracked[key(kind,id)]
+    if kind=="air" or kind=="ship" then
+      local b=list and list[1]
+      if live(b) and b.meta.passenger and b.meta.running then
+        return b,1,kind=="air" and "airliner_interior" or "ferry_interior"
+      end
+      return nil,kind=="air" and "Choose an airplane in passenger service." or "Choose a ferry in passenger service."
+    end
     if not list then return nil,"Aim at a nearby running bus or train first." end
     if kind=="road" then
       local b=list[1]
@@ -184,11 +192,16 @@ return function(core,api,path)
               for _,k in ipairs({"visual","mesh","textures","visual_size","backface_culling","use_texture_alpha",
                 "shaded","glow","colors"}) do graphics[k]=props[k] end
               proxy:set_properties(graphics)
-              shell={ref=proxy};state.shells[ref]=shell
+              shell={ref=proxy,mesh=props.mesh};state.shells[ref]=shell
             end
           end
         end
         if shell and alive(shell.ref) then
+          local mesh=body.meta and body.meta.mesh
+          if mesh and mesh~=shell.mesh then
+            shell.ref:set_properties({mesh=mesh})
+            shell.mesh=mesh
+          end
           local offset={x=10*(at.x-feet.x),y=10*(at.y-feet.y),z=10*(at.z-feet.z)}
           if diff(shell.offset,offset) or diff(shell.rotation,r) then
             -- Only a non-forced child of the local player is hidden by
@@ -302,17 +315,17 @@ return function(core,api,path)
     if state.hud then p:hud_remove(state.hud) end
     if api.world and api.world.follow_hud then api.world.follow_hud(p,false) end
     if state.flags then p:hud_set_flags(state.flags) end
-    if api.vehicle_status then api.vehicle_status(p,why or "Returned to the builder camera.") end
+    if api.vehicle_status then api.vehicle_status(p,why or "Returned to your previous view.") end
     return true
   end
   function R.enter(p,mode,target)
     local n=name(p)
     if riders[n] then return R.exit(p) end
-    if not target or not target.id then return false,mode=="cab" and "Aim at a running train or select it first." or "Aim at a running bus or passenger train." end
+    if not target or not target.id then return false,mode=="cab" and "Aim at a running train or select it first." or "Aim at a running passenger bus, train, airplane or ferry." end
     if not R.capable(target.kind,mode) then
-      return false,mode=="cab" and "Choose a running train for the cab view." or "Choose a passenger bus or train."
+      return false,mode=="cab" and "Choose a running train for the cab view." or "Choose a passenger bus, train, airplane or ferry."
     end
-    if p:get_attach() then return false,"Return to the builder camera before boarding." end
+    if p:get_attach() then return false,"Leave the current vehicle before boarding." end
     if api.world and api.world.may_board then
       local ok,why=api.world.may_board(p)
       if not ok then return false,why end
@@ -338,31 +351,25 @@ return function(core,api,path)
       return false,"Could not create the vehicle cabin."
     end
     riders[n]=state;settling[n]=nil
-    local keys=p:get_player_control()
-    state.right,state.aux=keys.place or keys.RMB,keys.aux1
     p:set_eye_offset()
     p:set_attach(state.anchor,"",zero,zero,false)
     -- Keep an unrotated attachment: the cam moves along with the seat
     -- but neither a turn nor key input changes the player's look direction.
     local forward=vector.rotate(axes,r)
     state.view_heading,state.view_turn_at=heading(r),now
-    p:set_look_horizontal(state.view_heading)
-    p:set_look_vertical(math.atan2(-forward.y,math.sqrt(forward.x^2+forward.z^2)))
+    local room=interiors[design]
+    p:set_look_horizontal((state.view_heading+(room.look or 0))%circle)
+    p:set_look_vertical(math.atan2(-forward.y,math.sqrt(forward.x^2+forward.z^2))+(room.tilt or 0))
     if api.world and api.world.follow_hud then api.world.follow_hud(p,true) end
     state.hud=p:hud_add({type="text",position={x=.5,y=.88},alignment={x=0,y=0},z_index=110,
-      text=(mode=="cab" and "Driver's seat" or "Window seat").."  ·  E / right-click to leave  ·  Inventory: Leave ride",number=0xffedbe})
+      text=(mode=="cab" and "Driver's seat" or "Window seat").."  ·  Inventory: leave ride",number=0xffedbe})
     p:set_inventory_formspec("formspec_version[7]size[7,2.5]bgcolor[#152334;true]"..
       "label[.5,.55;Seated sightseeing]button_exit[.5,1.30;6,.68;luanttd_leave_ride;Leave ride]")
     return true
   end
-  function R.controls(p,k)
-    local state=riders[name(p)]
-    if not state then return false end
-    local right=k.place or k.RMB
-    if (right and not state.right) or (k.aux1 and not state.aux) then return R.exit(p) end
-    state.right,state.aux=right,k.aux1
-    return true
-  end
+  -- World input must not leak into construction or eject a sightseer.
+  -- Leave is an explicit inventory action (or repeating a ride command).
+  function R.controls(p) return R.active(p) end
   function R.step(dt,players)
     now=now+dt
     local incoming,changed={},false
@@ -390,7 +397,7 @@ return function(core,api,path)
           -- advancing the vehicle locally; retry until the bounded grace
           -- expires or the physical body returns (possibly with a new ref).
           state.missing=state.missing or now
-          if now-state.missing>3 then R.exit(p,"The vehicle is no longer visible. Returned to the builder camera.") end
+          if now-state.missing>3 then R.exit(p,"The vehicle is no longer visible. Returned to your previous view.") end
         end
       end
     end

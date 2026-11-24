@@ -52,3 +52,14 @@ p.line([(13,49),(13,26),(32,13),(51,26),(51,49),(13,49)], fill=GOLD, width=3)
 p.polygon([(32,21),(36,34),(46,40),(45,43),(35,41),(35,45),(39,47),(39,49),(32,48),
            (25,49),(25,47),(29,45),(29,41),(19,43),(18,40),(28,34)], fill=SKY)
 im.save(OUT / "bl_dispatch_service_hangar.png")
+
+# Railroad bridge portal: distinctive lime sleepers converge on a portal,
+# separately recognizable from the road bridge's bright blue waterline.
+im, p = plate()
+p.rectangle((11,15,51,23), outline=GOLD, width=3)
+p.line([(14,23),(14,41),(23,30),(39,30),(48,41),(48,23)], fill=GOLD, width=4, joint="curve")
+p.line([(22,50),(29,31)], fill=SKY, width=3)
+p.line([(40,50),(33,31)], fill=SKY, width=3)
+for x,y in ((27,35),(25,40),(23,45),(21,50)):
+    p.line([(x,y),(62-x,y)], fill=OUTLINE, width=2)
+im.save(OUT / "bl_dispatch_rail_spans.png")

@@ -183,11 +183,13 @@ return function(api,ui)
     local state=controls[n]
     if not state then return item end
     if api.vehicle_ui and api.vehicle_ui.following(p) then
-      if menu then api.vehicle_ui.exit(p);state.right_at=core.get_us_time() end
+      if menu and not (api.vehicle_ui.riding and api.vehicle_ui.riding(p)) then
+        api.vehicle_ui.exit(p);state.right_at=core.get_us_time()
+      end
       return item
     end
     if state.avatar then
-      if menu then W.exit_avatar(p) end
+      if not menu and state.avatar.mode=="walk" then W.scenic_click(p) end
       return item
     end
     if api.cinematic and api.cinematic.active(p) then return item end
@@ -438,6 +440,7 @@ return function(api,ui)
   end
   function W.target(p,walk)
     local pos=p:get_pos()
+    if not pos then return end
     local eye=p:get_properties().eye_height or 1.625
     local ray=p:get_look_dir()
     if ray.y>=-0.025 then return nil end
@@ -522,10 +525,82 @@ return function(api,ui)
     local state=controls[p:get_player_name()]
     return state and state.avatar
   end
+  local function walk_hint(p,avatar,note)
+    local text=note or (avatar.swimming and "Swim  ·  Space to surface  ·  Inventory: leave Walk"
+      or "Walk  ·  Click a vehicle to board  ·  Inventory: leave Walk")
+    if avatar.hint then p:hud_change(avatar.hint,"text",text)
+    else avatar.hint=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},
+      z_index=100,text=text,number=0xffe8b7}) end
+  end
+  local function scenic_inventory(p,avatar)
+    local label=({walk="Walk",car="Drive",plane="Pilot"})[avatar.mode]
+    local back=avatar.previous and "Return to walking" or "Return to builder"
+    p:set_inventory_formspec("formspec_version[7]size[8,2.4]bgcolor[#152334;true]"..
+      "label[.5,.55;"..label.." mode]"..
+      "button_exit[.5,1.25;7,.7;luanttd_scenic_exit;"..back.."]")
+  end
+  local train_seat_form="luanttd_core:scenic_train_seat"
+  local function scenic_feedback(p,avatar,note)
+    if not note then return end
+    walk_hint(p,avatar,note.."  ·  Inventory: leave Walk")
+    local n=p:get_player_name()
+    core.after(3,function()
+      local who=core.get_player_by_name(n)
+      if who and W.avatar_state(who)==avatar and avatar.hint then walk_hint(who,avatar) end
+    end)
+  end
+  function W.scenic_click(p)
+    local state=controls[p:get_player_name()]
+    local avatar=state and state.avatar
+    if not avatar or avatar.mode~="walk" or avatar.leaving or p:get_attach() then return false end
+    local now=core.get_us_time()
+    if state.scenic_at and now-state.scenic_at<230000 then return false end
+    state.scenic_at=now
+    local render=api.render
+    local tile=render.pick_sightseeing_hangar and render.pick_sightseeing_hangar(p)
+    if tile and api.sightseeing_plane then
+      state.hangar_entry=true
+      local ok,why=api.sightseeing_plane.board(p,tile)
+      state.hangar_entry=nil
+      if not ok then scenic_feedback(p,avatar,why) end
+      return ok
+    end
+    local v=api.vehicle_ui
+    if not (v and v.pick and v.ride_toggle) then return false end
+    local pick=v.pick(p,4.5)
+    if not pick then return false end
+    if pick.kind=="rail" then
+      state.seat_pick={at=now,avatar=avatar,target=pick}
+      core.show_formspec(p:get_player_name(),train_seat_form,
+        "formspec_version[7]size[8,2.8]bgcolor[#152334;true]label[.5,.55;Where do you want to sit?]"..
+        "button_exit[.5,1.45;3.3,.72;coach;Passenger seat]"..
+        "button_exit[4.15,1.45;3.35,.72;cab;Driver's cab]")
+      return true
+    end
+    local ok,why=v.ride_toggle(p,"ride",pick)
+    if not ok then scenic_feedback(p,avatar,why) end
+    return ok
+  end
+  function W.scenic_fields(p,form,fields)
+    local state=controls[p:get_player_name()]
+    local avatar=state and state.avatar
+    if form=="" and fields.luanttd_scenic_exit and avatar then return W.exit_avatar(p) end
+    if form~=train_seat_form then return false end
+    local selection=state and state.seat_pick
+    if state then state.seat_pick=nil end
+    if selection and avatar==selection.avatar and not avatar.leaving and
+        core.get_us_time()-selection.at<12000000 and (fields.coach or fields.cab) then
+      local ok,why=api.vehicle_ui.ride_toggle(p,fields.cab and "cab" or "ride",selection.target)
+      if not ok then scenic_feedback(p,avatar,why) end
+    end
+    return true
+  end
   function W.may_board(p)
     local state=controls[p:get_player_name()]
     if not state then return false,"Join the campaign before boarding." end
-    if state.avatar then return false,"Return to the builder camera before boarding." end
+    if state.avatar and (state.avatar.leaving or state.avatar.mode~="walk") then
+      return false,"Leave the current scenic mode before boarding."
+    end
     if state.order_mode or state.build_drag or state.demolishing then
       return false,"Finish or cancel construction or orders before boarding."
     end
@@ -535,18 +610,19 @@ return function(api,ui)
     local n=p:get_player_name()
     local state=controls[n]
     if not state then return nil,"Join the campaign to enter street view." end
-    if state.avatar or p.get_attach and p:get_attach() or api.vehicle_ui and api.vehicle_ui.following(p) then
-      return nil,"Return to the builder camera before switching modes."
+    local previous=state.avatar
+    if previous and (previous.leaving or previous.mode~="walk" or mode~="plane" or not state.hangar_entry)
+      or p.get_attach and p:get_attach() or api.vehicle_ui and api.vehicle_ui.following(p) then
+      return nil,"Leave the current scenic mode in Inventory first."
     end
     if state.order_mode or state.build_drag or state.demolishing then
       return nil,"Finish or right-click to cancel construction or orders first."
     end
-    local avatar={mode=mode,saved=Pedestrian.capture(p)}
+    local avatar={mode=mode,saved=Pedestrian.capture(p),previous=previous}
+    if previous and previous.hint then p:hud_remove(previous.hint);previous.hint=nil end
     state.avatar=avatar
-    p:hud_set_flags({hotbar=false,crosshair=false})
-    p:set_inventory_formspec("formspec_version[7]size[8,2.4]bgcolor[#152334;true]"..
-      "label[.5,.55;"..(mode=="plane" and "Sightseeing flight active" or "Street view active").."]"..
-      "label[.5,1.45;Close this panel, then right-click to return to the builder camera.]")
+    p:hud_set_flags({hotbar=false,crosshair=mode=="walk"})
+    scenic_inventory(p,avatar)
     for _,id in pairs(hud[n] or {}) do
       if type(id)=="number" then p:hud_remove(id) end
     end
@@ -555,11 +631,7 @@ return function(api,ui)
     state.labels,state.label_names,state.label_heights=nil,nil,nil
     if api.selector then api.selector.leave(n) end
     if ui.cinematic then ui.cinematic(p,true) end
-    -- The hint is the only HUD owned by avatar mode.
-    if mode=="walk" then
-      avatar.hint=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},z_index=100,
-        text="STREET VIEW  ·  WASD walk  ·  Right-click to return",number=0xffe8b7})
-    end
+    if mode=="walk" then walk_hint(p,avatar) end
     return avatar
   end
   function W.end_avatar(p,mode)
@@ -577,10 +649,13 @@ return function(api,ui)
     core.after(.21,function()
       local who=core.get_player_by_name(name)
       if not who or controls[name]~=state or state.avatar~=avatar then return end
-      state.avatar=nil
+      state.avatar=avatar.previous
       Pedestrian.restore_pose(who,avatar.saved)
-      ui.inventory(who)
-      if ui.cinematic then ui.cinematic(who,false) end
+      if state.avatar then scenic_inventory(who,state.avatar);walk_hint(who,state.avatar)
+      else
+        ui.inventory(who)
+        if ui.cinematic then ui.cinematic(who,false) end
+      end
       local now=core.get_us_time()
       local keys=who:get_player_control()
       state.clicked,state.right_at=now,now
@@ -623,7 +698,7 @@ return function(api,ui)
   function W.toggle_walk(p) return toggle_walk(p) end
   function W.toggle_walk_at(p,id,hit) return toggle_walk(p,id,hit,true) end
   core.register_chatcommand("walk",{
-    description="Walk or swim at street level; use /walk or right-click to return to the builder camera",
+    description="Walk or swim at street level; use /walk or Inventory to return to the builder camera",
     func=function(name)
       local p=core.get_player_by_name(name)
       if not p then return false,"Join the campaign to walk." end
@@ -707,13 +782,17 @@ return function(api,ui)
     local n=p:get_player_name()
     local s=controls[n]
     if not s then return end
-    p:hud_set_flags({hotbar=not active,crosshair=not active})
+    p:hud_set_flags({hotbar=not active and not s.avatar,
+      crosshair=not active and (not s.avatar or s.avatar.mode=="walk")})
     if active then
+      if s.avatar and s.avatar.hint then p:hud_remove(s.avatar.hint);s.avatar.hint=nil end
       for _,id in pairs(hud[n] or {}) do if type(id)=="number" then p:hud_remove(id) end end
       hud[n]=nil
       for _,id in pairs(s.labels or {}) do p:hud_remove(id) end
       s.labels,s.label_names,s.label_heights=nil,nil,nil
       if api.selector then api.selector.leave(n) end
+    elseif s.avatar and s.avatar.mode=="walk" then
+      walk_hint(p,s.avatar)
     else
       W.hud(p,0)
     end
@@ -941,8 +1020,11 @@ return function(api,ui)
         local keys=p:get_player_control()
         local right=keys.place or keys.RMB
         if not state.avatar.leaving then
-          if right and not state.place then W.exit_avatar(p)
-          elseif state.avatar.mode=="walk" then pedestrian.step(p,state.avatar,keys)
+          if state.avatar.mode=="walk" then
+            pedestrian.step(p,state.avatar,keys,dt)
+            local click=keys.dig or keys.LMB
+            if click and not state.dig then W.scenic_click(p) end
+            state.dig=click
           elseif state.avatar.mode=="car" and api.car then api.car.step(p,state.avatar,keys,dt)
           elseif state.avatar.mode=="plane" and api.sightseeing_plane then api.sightseeing_plane.step(p,state.avatar,keys,dt) end
         end

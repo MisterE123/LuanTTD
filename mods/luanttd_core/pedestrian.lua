@@ -33,7 +33,9 @@ function P.hide_builder(p)
   -- PlayerSAO ignores is_visible=false on some engine versions. A fully
   -- transparent sprite works in all camera views and for other clients
   -- without affecting the local eye height or flight physics.
-  p:set_properties({visual="sprite",mesh="",textures={hidden_texture},
+  -- The engine binds zoom locally (Z by default). Keep a nonzero camera
+  -- FOV for the same key in overview, walking, piloting and passenger modes.
+  p:set_properties({visual="sprite",mesh="",textures={hidden_texture},zoom_fov=24,
     visual_size={x=.001,y=.001,z=.001},nametag_color={r=255,g=255,b=255,a=0}})
 end
 
@@ -86,6 +88,17 @@ function P.slope_box(sample,shape,include_flat)
   return {type="fixed",fixed=fixed}
 end
 
+-- Player velocity arrives in packets; apply a small acceleration-limited
+-- trim rather than overwriting the client's vertical velocity every step.
+function P.swim_impulse(error,velocity,dt)
+  local function clamp(a,lo,hi) return math.min(hi,math.max(lo,a)) end
+  dt=clamp(dt or .09,0,.10)
+  local wanted=clamp(error*3.2,-.78,.95)
+  local change=(wanted-velocity)*(1-math.exp(-7*dt))
+  if math.abs(error)<.018 and math.abs(velocity)<.050 then return 0 end
+  return clamp(change,-3.8*dt,4.8*dt)
+end
+
 function P.new(api)
   local Sim,S=api.Sim,api.s
   local function cell(id)
@@ -97,7 +110,7 @@ function P.new(api)
   local function blocked(t)
     return not t or t.stock_void or t.site or t.house or t.stock_landmark or t.stock_industry
       or t.build=="road_depot" or t.rail_depot_dir or t.road_bridge_id or
-      t.road_tunnel_id or t.rail_span_id or t.airfield or (t.ship and t.ship.kind~="buoy")
+      t.road_tunnel_id or t.rail_span_id or t.airfield or (t.ship and t.ship.kind~="buoy" and t.ship.kind~="dock")
   end
   local function waterline(id,t,x,z)
     if blocked(t) then return end
@@ -117,6 +130,8 @@ function P.new(api)
     z=z and clamp(z,v*2-.25,v*2+1.25) or v*2+.5
     local deck=api.render.walk_bridge_surface and api.render.walk_bridge_surface(id,x,z,aim_y)
     if deck then return {x=x,y=deck+.045,z=z} end
+    local dock=api.render.walk_dock_surface and api.render.walk_dock_surface(id,x,z)
+    if dock and (not aim_y or math.abs(dock-aim_y)<.30) then return {x=x,y=dock+.045,z=z} end
     local arena=api.render.walk_stadium_surface and api.render.walk_stadium_surface(id,x,z)
     if arena then return {x=x,y=arena+.045,z=z} end
     if blocked(cell(id)) then return end
@@ -154,8 +169,8 @@ function P.new(api)
       sneak=not swimming,speed_walk=swimming and .27 or .38,acceleration_air=swimming and 2.8 or 1})
     if state.hint and p.hud_change then
       p:hud_change(state.hint,"text",swimming
-        and "SWIMMING  ·  Move to paddle  ·  Jump to climb out  ·  Right-click to return"
-        or "STREET VIEW  ·  Jump fences  ·  Wade or swim  ·  Right-click to return")
+        and "SWIMMING  ·  Space to surface  ·  Inventory: leave Walk"
+        or "Walk  ·  Click a vehicle to board  ·  Inventory: leave Walk")
     end
   end
   function W.enter(p,state,land,water)
@@ -172,7 +187,7 @@ function P.new(api)
     swim_mode(p,state,water~=nil)
     position(p,land,state.saved.yaw,0)
   end
-  function W.step(p,state,keys)
+  function W.step(p,state,keys,dt)
     local at=p:get_pos()
     local speed=p:get_velocity()
     local moving=speed.x*speed.x+speed.z*speed.z>.12^2
@@ -183,6 +198,9 @@ function P.new(api)
     local id=tile_at(at.x,at.z)
     local t=id and cell(id)
     local deck=id and api.render.walk_bridge_surface and api.render.walk_bridge_surface(id,at.x,at.z,at.y)
+    if not deck and id and api.render.walk_dock_surface then
+      deck=api.render.walk_dock_surface(id,at.x,at.z,at.y)
+    end
     local water=not deck and waterline(id,t,at.x,at.z)
     if water and at.y<(water+(state.swimming and .37 or .18)) then
       swim_mode(p,state,true)
@@ -190,9 +208,8 @@ function P.new(api)
       -- vertical velocity toward the mean surface; Space strokes upward
       -- into the walkable bank. Bounded correction avoids teleport jitters.
       local goal=water+((keys and keys.jump) and .14 or -.18)
-      local desired=clamp((goal-at.y)*4,-1.2,1.8)
-      local dy=clamp(desired-speed.y,-1.5,1.5)
-      if math.abs(dy)>.045 then p:add_velocity({x=0,y=dy,z=0}) end
+      local dy=P.swim_impulse(goal-at.y,speed.y,dt)
+      if math.abs(dy)>.016 then p:add_velocity({x=0,y=dy,z=0}) end
       if math.abs(at.y-goal)<.28 then state.last_safe=at end
     elseif state.swimming and blocked(t) then
       -- Don't swim through facilities or the edge of the projected map.

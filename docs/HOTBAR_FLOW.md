@@ -88,6 +88,22 @@ all foreign companies, all station/fleet/group actions, conditional/timetable or
 every stock signal variant and every airport layout. Presence in the flow map does not claim
 these features are implemented.
 
+### Construction rhythm and first service
+
+Road and rail start with the same spatial order: tools **4** lay infrastructure,
+**5** place a stop or station, **6** build a depot, **7** open that depot, and
+**8** opens spans. Rail's next tiles are Signals and rail operations, with
+visible names and help instead of a generic wrench. Harbor places the dock,
+ship depot and **Open depot** together before Waterworks. Utility order is
+unchanged: Back, Bulldoze, Teleport (secondary action Inspect).
+
+After buying a vehicle, open it from the depot. Train and ferry setup
+offer world picks as well as station lists, then review and explicit Start.
+The back button returns to the original depot and selection. Bus depots
+start on the first available passenger vehicle, without removing freight
+choices. The window retains normal vehicle Follow; passenger sightseeing
+is a nearby Walk interaction, not an administrative fleet control.
+
 ### Completeness check
 
 The task presentation is derived from mounted tool definitions, not a second

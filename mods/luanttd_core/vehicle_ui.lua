@@ -13,6 +13,7 @@ return function(api)
   local remote,pickers={},{}
   local path=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local order_target=dofile(path.."/campaign_order_target.lua")
+  local Initial=dofile(path.."/initial_vehicle_route.lua")
   local ride=dofile(path.."/vehicle_ride.lua")(core,api,path)
   local selected={}
   V.ride_track=ride.track
@@ -84,6 +85,13 @@ return function(api)
         obj.luanttd_vehicle=pick
         obj.on_rightclick=function(_,player)
           if api.world then api.world.select_vehicle(player,pick) end
+        end
+        local old_punch=obj.on_punch
+        obj.on_punch=function(self,player,...)
+          local world=api.world
+          local avatar=player and player:is_player() and world and world.avatar_state(player)
+          if avatar and avatar.mode=="walk" then world.scenic_click(player);return end
+          if old_punch then return old_punch(self,player,...) end
         end
         bodies[ref]=pick
         ref:set_properties({pointable=true,selectionbox=box[kind]})
@@ -164,7 +172,7 @@ return function(api)
   if core.register_chatcommand then
     for command,mode in pairs({train="cab",ride="ride"}) do
       core.register_chatcommand(command,{
-        description=mode=="cab" and "Sit in the cab of a selected running train" or "Ride a selected passenger bus or train",
+        description=mode=="cab" and "Sit in the cab of a selected running train" or "Ride a selected passenger bus, train, airplane or ferry",
         func=function(n)
           local p=core.get_player_by_name(n)
           if not p then return false,"Join the campaign before boarding." end
@@ -262,13 +270,6 @@ return function(api)
     local toggle=adapter and adapter.toggle and data and data.can_toggle
     local extended=cargo or toggle
     local b=title(v.label,extended and 9).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
-    if ride.capable(kind,"ride") and (kind~="road" or v.source.passenger~=false and
-        (v.source.cargo==nil or v.source.cargo=="passenger")) then
-      b=b.."button[5.93,.22;1.80,.62;V_TOKEN_ride;Ride]"
-    end
-    if ride.capable(kind,"cab") then
-      b=b.."button[4.06,.22;1.63,.62;V_TOKEN_cab;Cab view]"
-    end
     if note or data and data.summary then
       b=b..("textarea[.45,%g;10,.63;;;%s]"):format(cargo and 7.56 or 6.35,esc(note or data.summary))
     end
@@ -296,10 +297,11 @@ return function(api)
           "button[5.55,4.43;5,.57;V_TOKEN_replace_world;Pick replacement in world]")
       end
       if data.can_reorder~=false then
-        b=b.."button[.45,5.16;1.53,.57;V_TOKEN_up;Move up]button[2.07,5.16;1.64,.57;V_TOKEN_down;Move down]"
+        if row>1 then b=b.."button[.45,5.16;1.53,.57;V_TOKEN_up;Move up]" end
+        if row<#items then b=b.."button[2.07,5.16;1.64,.57;V_TOKEN_down;Move down]" end
       end
-      if data.can_remove~=false then b=b.."button[3.80,5.16;1.63,.57;V_TOKEN_remove;Remove]" end
-      if data.can_skip~=false then b=b.."button[.45,5.78;4.98,.53;V_TOKEN_skip;Skip to selected order]" end
+      if #items>0 and data.can_remove~=false then b=b.."button[3.80,5.16;1.63,.57;V_TOKEN_remove;Remove]" end
+      if #items>1 and data.can_skip~=false then b=b.."button[.45,5.78;4.98,.53;V_TOKEN_skip;Skip to selected order]" end
       if data.can_insert~=false and #targets>0 then
         b=b.."button[5.55,5.16;5,.57;V_TOKEN_append;Add selected destination]"
       end
@@ -328,19 +330,53 @@ return function(api)
       prior={row=row,target=target,revision=data.revision,targets=targets,item_count=#items,cargo=cargo,
         pick_append=pick_append,pick_replace=pick_replace,eligible=eligible}
     else
+      if why=="ORDERS_UNAVAILABLE" then why="No orders yet. Open this vehicle from its depot to set up service." end
       b=b.."textarea[.45,1.22;10,1.35;;;"..esc(why or "Set initial orders from the depot. No editable orders are available for this vehicle yet.").."]"
       prior={}
     end
     if toggle then
       b=b.."button[.45,6.68;10.10,.57;V_TOKEN_toggle;"..(data.running and "Stop service" or "Start service").."]"
+    elseif kind=="road" and adapter and adapter.toggle and data then
+      b=b.."box[.45,6.68;10.10,.57;#263949]label[.68,6.94;Start service: add at least two stops first]"
     end
     prior.can_toggle=not not toggle
     local footer=extended and 8.15 or 7.11
     if back then b=b..("button[.45,%g;4.98,.57;V_TOKEN_depot;%s]"):format(footer,
-      back.directory and "Company fleet" or "Depot vehicles") end
+      back.directory and "Company fleet" or back.return_ and "Back to depot" or "Depot vehicles") end
     b=b..("button_exit[5.55,%g;5,.57;V_TOKEN_close;Back to world]"):format(footer)
     prior.kind,prior.id,prior.back=kind,id,back
     return show(p,prior,b)
+  end
+  local function draw_initial(p,v,kind,id,back,selection,note)
+    local route=back.initial
+    selection=selection or {first=route.from,second=route.to}
+    local function picker(list,current,x,field,label)
+      local _,index=Initial.find(list,current)
+      local labels={esc("Choose a destination…")}
+      for _,r in ipairs(list) do labels[#labels+1]=esc(r.label) end
+      return ("label[%g,2.10;%s]dropdown[%g,2.42;4.9,.65;V_TOKEN_%s;%s;%d;true]")
+        :format(x,label,x,field,table.concat(labels,","),(index or 0)+1)
+    end
+    local ready=Initial.possible(route.first,route.last)
+    local selected=selection.first and selection.second and selection.first~=selection.second
+    local clue=kind=="ship" and "Choose two docks. The ferry shuttles between them."
+      or "Choose the first station, then the next one on the train’s route."
+    local b=title(v.label).."label[.45,1.16;Set up this vehicle’s first service]"
+      .."textarea[.45,1.47;10,.65;;;"..esc(ready and clue or route.notice).."]"
+    if ready then
+      b=b..picker(route.first,selection.first,.45,"initial_from","1. First destination")
+        ..picker(route.last,selection.second,5.65,"initial_to","2. Second destination")
+        .."button[.45,3.38;10.10,.67;V_TOKEN_initial_world;Pick both destinations in world]"
+    end
+    if selected and ready then
+      b=b.."button[.45,4.35;10.10,.67;V_TOKEN_initial_start;Start service]"
+    else
+      b=b.."box[.45,4.35;10.10,.67;#263949]label[.68,4.67;Start service: choose two different destinations first]"
+    end
+    if note then b=b.."textarea[.45,5.47;10,1.22;;;"..esc(note).."]" end
+    b=b.."button[.45,7.11;4.98,.57;V_TOKEN_depot;Back to depot]"
+      .."button_exit[5.55,7.11;5,.57;V_TOKEN_close;Back to world]"
+    return show(p,{kind=kind,id=id,back=back,initial=route,selection=selection},b)
   end
   function V.open(p,kind,id,back,prior,note)
     local n=p:get_player_name()
@@ -376,6 +412,9 @@ return function(api)
         "button_exit[5.55,7.11;5,.57;V_TOKEN_close;Back to world]")
       local function loaded(data,why)
         if panels[n]~=pending then return end
+        if not data and back and back.initial then
+          return draw_initial(p,v,kind,id,back,prior and prior.selection,note)
+        end
         return draw_orders(p,v,kind,id,back,prior,note,data,why)
       end
       local queued,why=a.fetch(n,id,loaded)
@@ -398,6 +437,18 @@ return function(api)
     local id,label=order_target(q.kind,q.id,n,tile,t,function(registry,id)
       return render.host_record and render.host_record(registry,id)
     end)
+    if q.initial then
+      local second=q.selection.first~=nil
+      local current=second and "second" or "first"
+      if q.selection.second then
+        return "Two destinations selected. Use Done to review and start.",q.note,tile and {tile},nil
+      end
+      local row=id and Initial.find(second and q.initial.last or q.initial.first,id)
+      if row and id==q.selection.first then
+        return "Choose a different second destination.",q.note,{tile},false
+      end
+      return row and ("Pick "..current..": "..row.label) or ("Aim at the "..current.." destination"),q.note,tile and {tile},row~=nil
+    end
     local phrase=q.replace and "Choose a replacement on the map" or "Aim at a stop and click to add it"
     if not id then return phrase,q.note,tile and {tile},false end
     if q.panel.eligible then
@@ -414,6 +465,12 @@ return function(api)
     if q.pending then q.finish=true;return end
     pickers[n]=nil
     api.world.end_order_selection(p)
+    if q.initial then
+      local v=get(n,q.kind,q.id)
+      if not v then return q.panel.back.return_() end
+      return draw_initial(p,v,q.kind,q.id,q.panel.back,
+        q.selection.first and q.selection or q.panel.selection,q.note)
+    end
     V.open(p,q.kind,q.id,q.panel.back,q.panel,q.note)
   end
   function V.pick_world_order(p,tile)
@@ -421,6 +478,21 @@ return function(api)
     local q=pickers[n]
     if not q or q.pending then return end
     if not tile then q.note="Aim at a station tile before picking.";return end
+    if q.initial then
+      if q.selection.second then return end
+      local r=api.render
+      local t=r.host_tile(tile)
+      local dest=order_target(q.kind,q.id,n,tile,t,r.host_record)
+      local field=q.selection.first and "second" or "first"
+      if not Initial.find(field=="first" and q.initial.first or q.initial.last,dest) or dest==q.selection.first then
+        q.note="That stop is not valid for this part of the route."
+      else
+        q.selection[field],q.selection[field.."_tile"]=dest,tile
+        q.note=field=="first" and "First destination selected." or "Both destinations selected."
+      end
+      if api.world.hud then api.world.hud(p) end
+      return
+    end
     q.pending=true
     local function completed(ok,why,result)
       if pickers[n]~=q then return end
@@ -514,18 +586,53 @@ return function(api)
       return true
     end
     if field("depot") and q.back then
-      if q.back.directory and q.back.return_ then panels[n]=nil;return q.back.return_() end
+      if q.back.return_ and (q.back.directory or not q.back.rows) then
+        panels[n]=nil;return q.back.return_(q.selection)
+      end
       return V.depot(p,q.kind,q.back.depot,q.back.return_)
-    end
-    if field("ride") or field("cab") then
-      local saved=selected[n]
-      local ok,why=V.ride_toggle(p,field("cab") and "cab" or "ride",
-        {kind=q.kind,id=q.id,body=saved and saved.kind==q.kind and saved.id==q.id and saved.body or nil})
-      if not ok then V.open(p,q.kind,q.id,q.back,q,why) end
-      return true
     end
     if field("follow") then
       if not V.follow(p,q.kind,q.id) then V.open(p,q.kind,q.id,q.back,q,"Follow is unavailable from the current camera mode.") end
+      return true
+    end
+    if q.initial then
+      if q.pending then return true end
+      local v=get(n,q.kind,q.id)
+      if not v then return q.back.return_() end
+      for _,side in ipairs({"from","to"}) do
+        local index=tonumber(field("initial_"..side))
+        if index then
+          local rows=side=="from" and q.initial.first or q.initial.last
+          local entry=rows[index-1]
+          local k=side=="from" and "first" or "second"
+          local new=entry and entry.id
+          if new~=q.selection[k] then
+            q.selection[k],q.selection[k.."_tile"]=new,nil
+          end
+        end
+      end
+      if field("initial_start") then
+        q.pending=true
+        local function finished(ok,why)
+          if panels[n]~=q then return end
+          q.pending=nil
+          if ok then return V.open(p,q.kind,q.id,q.back,nil,why or "Service started.") end
+          local notes={INVALID_DESTINATIONS="Choose two different destinations.",
+            STALE_COMMAND="The campaign changed. Try starting again.",
+            DESTINATION_TILE_CHANGED="A selected stop changed. Pick the destinations again."}
+          return draw_initial(p,v,q.kind,q.id,q.back,q.selection,notes[why] or why or "The vehicle could not start.")
+        end
+        local sent,why=q.initial.start(q.selection,finished)
+        if not sent then finished(false,why) end
+      elseif field("initial_world") and Initial.possible(q.initial.first,q.initial.last) and api.world then
+        if api.world.begin_order_selection(p,"vehicle","Pick two destinations") then
+          pickers[n]={kind=q.kind,id=q.id,initial=q.initial,selection={},panel=q}
+          panels[n]=nil;close(p)
+          if api.world.hud then api.world.hud(p) end
+        end
+      elseif field("initial_from") or field("initial_to") then
+        return draw_initial(p,v,q.kind,q.id,q.back,q.selection)
+      end
       return true
     end
     local a=V.orders[q.kind]

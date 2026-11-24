@@ -201,7 +201,7 @@ return function(api,W)
   end
   local function status(p,q,waiting)
     local speed=math.floor(q.speed*14+.5)
-    local msg=("Sightseeing car  ·  %d km/h%s  |  W drive  ·  A/D steer  ·  S brake/reverse  ·  Right-click or /car to exit"):
+    local msg=("Sightseeing car  ·  %d km/h%s  |  W drive  ·  A/D steer  ·  S brake/reverse  ·  Inventory: leave car"):
       format(speed,waiting and "  ·  No open road in that direction" or "")
     if msg~=q.message then
       q.message=msg

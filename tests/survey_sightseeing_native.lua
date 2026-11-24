@@ -23,8 +23,8 @@ local function survey_probe()
   p:set_look_vertical(math.pi/2)
   p:set_pos({x=x,y=h+7,z=z})
   local pending,deadline,builder=0,core.get_us_time()+30000000,nil
-  local expected={"back","teleport_tile","inspect","jump","workbench_index","survey_walk","survey_drive_car",
-    "survey_fly_plane","survey_train_cab","survey_ride_vehicle"}
+  local expected={"back","teleport_tile","inspect","jump","workbench_index","survey_walk","survey_drive_car","section_navigation",
+  }
   local function step()
     assert(core.get_us_time()<deadline,"Native survey timed out at step "..pending)
     local mode=world.avatar_state(p)
@@ -55,7 +55,7 @@ local function survey_probe()
       if (at.x-old.x)^2+(at.y-old.y)^2+(at.z-old.z)^2<.05^2 then
         assert(math.abs(p:get_look_vertical()-builder.pitch)<.025)
         assert(#world.hotbar_layout(p)==#expected)
-        core.log("action","PASS NATIVE SURVEY: clicked Survey, selected Walk, landed on aimed terrain, right-click restored original view/menu")
+        core.log("action","PASS NATIVE SURVEY: clicked Survey, selected Walk, landed on aimed terrain, Inventory restored original view/menu")
         return
       end
     end

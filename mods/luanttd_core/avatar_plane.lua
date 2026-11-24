@@ -97,7 +97,7 @@ return function(api,W)
         F.distance(f,q.origin)*5,way)
     if text~=q.text then q.text=text;p:hud_change(q.status,"text",text) end
     local hint=q.blocked or (f.mode=="air" and "Landing: line up with the runway, descend gently at 55–110 km/h."
-      or f.mode=="rollout" and "Safe landing. Press E for a new takeoff or right-click to leave."
+      or f.mode=="rollout" and "Safe landing. Press E for a new takeoff, or leave in Inventory."
       or "Hold W to build power and Space to lift off. The runway is short.")
     if hint~=q.hint_text then q.hint_text=hint;p:hud_change(q.hint,"text",hint) end
   end
@@ -149,7 +149,7 @@ return function(api,W)
   end)
   function Plane.board(p,targeted)
     local n=p:get_player_name()
-    if players[n] then return false,"Right-click or use /plane to leave this cockpit first." end
+    if players[n] then return false,"Use Inventory to leave this cockpit first." end
     if not art then return false,"The sightseeing plane is missing its native model." end
     local strip=runway_at_tile(targeted)
     if not strip then return false,"Aim at a built Country or City Airport to enter the sightseeing plane." end
@@ -179,7 +179,7 @@ return function(api,W)
     q.shell:set_attach(p,"",vector.multiply(seat_offset,-10),{x=0,y=0,z=0},false)
     q.status=text(p,.118,0x25281c,"")
     q.hint=text(p,.165,0x26312c,"")
-    q.controls=text(p,.212,0x26312c,"W/S power · A/D bank · Space/Shift pitch · E recover · Right-click or /plane exit")
+    q.controls=text(p,.212,0x26312c,"W/S power · A/D bank · Space/Shift pitch · E recover · Inventory: leave cockpit")
     players[n]=q
     q.audio=Effects.start(n)
     pose(p,q,true)
@@ -191,7 +191,7 @@ return function(api,W)
     if players[n] then
       Plane.leave(n)
       W.end_avatar(p,"plane")
-      return true,"Returned to the builder camera."
+      return true,"Returned to your previous view."
     end
     return Plane.board(p,W.target(p))
   end
@@ -201,7 +201,7 @@ return function(api,W)
     if not q then return end
     if not q.object:get_pos() or not q.exterior:get_pos() or not q.shell:get_pos() or p:get_attach()~=q.object then
       Plane.toggle(p)
-      core.chat_send_player(n,"Aircraft view lost. Returned to the builder camera.")
+      core.chat_send_player(n,"Aircraft view lost. Returned to your previous view.")
       return
     end
     local reset=keys.aux1 and not q.reset
@@ -213,7 +213,7 @@ return function(api,W)
         q.flight,q.blocked=f,nil;pose(p,q,true);hud(p,q);Effects.update(q.audio,f,.2)
       else
         Plane.toggle(p)
-        core.chat_send_player(n,"The departure runway is no longer available. Returned to the builder camera.")
+        core.chat_send_player(n,"The departure runway is no longer available. Returned to your previous view.")
       end
       return
     end

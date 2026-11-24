@@ -112,7 +112,7 @@ _G.core=nil
 print("PASS assembly picker rows have their own tooltip and selection, even for unowned wagons")
 
 local picked=nil
-assert(D.open(mock,"rail",69,nil,function(mode,id) picked={mode,id} end))
+assert(D.open(mock,"rail",69,nil,function(mode,id,back) picked={mode,id,back} end))
 local rail_depot={offers={},targets={{id=8,label="Near"},{id=9,label="Far"}},vehicles={
   {id=21,label="Train 1"}, {id=22,label="Train 2",order_copy=true}}}
 done({ok=true,revision=21,value=rail_depot})
@@ -137,7 +137,15 @@ assert(body:find("Copied 3 orders.",1,true) and body:find("Review orders",1,true
   not body:find("Start service",1,true))
 D.fields(mock,{[start.."orders"]=true})
 assert(picked[1]=="rail" and picked[2]==22)
-D.fields(mock,{[start.."start_copied"]=true})
+assert(picked[3].depot==69 and not picked[3].initial)
+D.fields(mock,{[start.."start_copied"]=true}) -- retired on opening the vehicle screen
+assert(request.kind=="depot")
+picked[3].return_()
+assert(request.kind=="depot" and request.depot==69)
+done({ok=true,revision=22,value=rail_depot})
+local restored=assert(body:match("(d%d+_)start_copied"))
+assert(restored~=start)
+D.fields(mock,{[restored.."start_copied"]=true})
 assert(request.command.mode=="rail" and request.command.copied and request.command.vehicle==22
   and request.command.draft_revision=="rail-parked:1" and request.command.first==nil)
 print("PASS railway depot keeps the parked destination selected and can review/start its independent copied orders")

@@ -139,27 +139,38 @@ local function inspect(phase,mode,q,rider,witness,id,next_)
       return ok,why
     end
     assert(api.authority_handoff and authority.status()=="owned")
-    if phase~="coach" then
-      local command=phase=="cab" and "train" or "ride"
-      local handler=assert(core.registered_chatcommands[command]).func
-      local ok,why=handler(rider_name,"")
-      assert(ok and api.vehicle_ui.riding(rider),why or "Worker startup suppressed the seat command")
-      assert(handler(rider_name,"") and not api.vehicle_ui.riding(rider),
-        "Repeating the actual registered worker command must exit")
-      core.log("action","PASS NATIVE WORKER SEAT COMMAND /"..command)
-    end
-    core.after(.35,function()
+    local t=q.first
+    local x,z=Sim.xy(t)
+    assert(world.toggle_walk_at(rider,t,{x=x*2+.5,y=q.level+.5,z=z*2+.5}))
+    local opened=false
     local show=core.show_formspec
     core.show_formspec=function(name,form,body)
       show(name,form,body)
-      if name==rider_name and form=="luanttd_core:vehicle_details" and body:find("Follow vehicle",1,true) then
-        assert(body:find("Ride",1,true) and (phase~="cab" or body:find("Cab view",1,true)))
+      if name==rider_name and form=="luanttd_core:scenic_train_seat" then
+        opened=true
         core.show_formspec=show
-        core.log("action","RIDE_READY "..phase)
+        core.log("action","RIDE_TRAIN_SEAT "..phase)
       end
     end
-    assert(api.vehicle_ui.open(rider,mode,id))
-    end)
+    local announced=false
+    local function aim_to_board()
+      if opened or api.vehicle_ui.riding(rider) then core.show_formspec=show;return end
+      local ref=nearby(witness:get_pos(),nil,exterior)
+      if ref then
+        local at=ref:get_pos()
+        local feet={x=at.x,y=q.level+.52,z=at.z-1.25}
+        local eye=rider:get_properties().eye_height
+        rider:set_look_horizontal(0)
+        rider:set_look_vertical(math.atan2(feet.y+eye-at.y-.13,1.25))
+        rider:set_pos(feet)
+        local hit=api.vehicle_ui.pick(rider,4.5)
+        if hit and hit.kind==mode and hit.id==id and not announced then
+          announced=true;core.log("action","RIDE_READY "..phase)
+        end
+      end
+      core.after(.18,aim_to_board)
+    end
+    core.after(.4,aim_to_board)
     wait_for(phase.." camera",function() return rider:get_attach() end,function(anchor)
       local inside,actual
       local function exists()
@@ -222,9 +233,11 @@ local function inspect(phase,mode,q,rider,witness,id,next_)
           assert(d<.12 and diff<.035 and math.abs(rider:get_look_vertical()-state.pitch)<.035,
             ("Builder pose not restored: %.3f / %.3f"):format(d,diff))
           assert(rider:get_inventory_formspec()==state.inventory)
+          assert(world.avatar_state(rider).mode=="walk" and not rider:hud_get_flags().hotbar)
           assert(not actual:get_pos() or not actual:get_observers())
           core.log("action","PASS NATIVE PRIVATE RIDE "..phase)
-          next_()
+          assert(world.exit_avatar(rider))
+          core.after(.48,next_)
         end)
       end)
       end)

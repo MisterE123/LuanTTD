@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exercise /car and right-click on a real campaign with a graded road.
+# Exercise /car and inventory exit on a real campaign with a graded road.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo=$PWD
@@ -159,7 +159,7 @@ xdotool keydown s
 sleep 3.1
 xdotool keyup s
 say "/carprobe reverse"
-xdotool click 3
+xdotool key i; sleep .45; xdotool mousemove 650 451 click 1
 sleep .8
 say "/carprobe returned"
 import -window root -quality 87 "$out/car-returned.jpg"
@@ -187,7 +187,7 @@ assert sum(2.97<=v<=3.03 for v in samples)>=5, samples
 assert sum(-1.23<=v<=-1.17 for v in samples)>=4, samples
 assert max(samples)<=3.03 and min(samples)>=-1.23, samples
 print(f"Native /car: {max(samples):.2f} nodes/s cruise, {-min(samples):.2f} nodes/s reverse. "
-      "Hill road driving, right-click restore, and unchanged route state passed.")
+      "Hill road driving, Inventory restore, and unchanged route state passed.")
 LOG
 
 python3 - "$out" <<'CAMERAS'

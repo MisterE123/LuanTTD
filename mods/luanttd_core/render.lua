@@ -343,7 +343,20 @@ return function(api)
     end
   end
   local airfield_nodes={}
+
   if api.airport_tools then
+    local ga_hangar=dofile(modpath.."/sightseeing_hangar.lua")(
+      dofile(modpath.."/openttd/airport_small.lua"),dofile(modpath.."/openttd/airport_city.lua"))
+    local ga_node=reg("airport_hangar_ga",{{name=png("hangar_ga_atlas"),backface_culling=false}},{drawtype="mesh",mesh="bl_hangar_ga.obj",
+      paramtype="light",sunlight_propagates=true,walkable=true,pointable=false,backface_culling=false,
+      collision_box={type="fixed",fixed=ga_hangar.collision}})
+    airfield_nodes.ga,airfield_nodes.ga_node=ga_hangar,ga_node
+    function R.pick_sightseeing_hangar(player)
+      return ga_hangar.pick(player,Sim,function(id)return S.tiles[id] end,function(x,y,z)
+        local n=core.get_node_or_nil({x=x,y=y,z=z})
+        return n and n.name==ga_node
+      end)
+    end
     local function airport_media(kind,asset,w,h)
       local nodes={}
       airfield_nodes[kind]=nodes
@@ -351,7 +364,7 @@ return function(api)
         nodes[z]={}
         for x=0,w-1 do
           local cell=("%s_%d_%d"):format(asset,x,z)
-          nodes[z][x]=architecture(cell,cell,asset.."_atlas")
+          nodes[z][x]=architecture(cell,cell,asset.."_atlas",false,ga_hangar.walls[cell])
         end
       end
     end
@@ -1549,6 +1562,8 @@ return function(api)
       local nodes=airfield_nodes[field.layout or "country"]
       local row=nodes and nodes[field.z]
       if row and y==level+1 and x%2==0 and z%2==0 then return row[field.x] or "air" end
+      if row and airfield_nodes.ga and y==level+1 and x%2==airfield_nodes.ga.x and z%2==airfield_nodes.ga.z
+          and airfield_nodes.ga.has(field) then return airfield_nodes.ga_node end
       return y<=level and gnames.grass[t.variant] or "air"
     end
     if api.ship_tools and S.aqueduct_above and S.aqueduct_above[id] then

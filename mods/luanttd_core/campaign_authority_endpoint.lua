@@ -480,6 +480,16 @@ return function(Sim,R,max_days)
       if not q or q.token~=c.token or q.topology~=s.topology then return reply(false,"TRANSPORT_QUOTE_EXPIRED") end
       ok,note,value=R.transport.commit(name,q.quote)
     elseif c.kind=="transport_start" and R.transport then
+      if c.first_tile~=nil or c.second_tile~=nil then
+        if c.mode~="rail" and c.mode~="ship" then return reply(false,"INVALID_DESTINATIONS") end
+        for _,side in ipairs({"first","second"}) do
+          local at=c[side.."_tile"]
+          if at~=nil and (not tile_id(at) or
+              order_target(c.mode,c.vehicle,name,at,s.tiles[at],facility_record)~=c[side]) then
+            return reply(false,"DESTINATION_TILE_CHANGED")
+          end
+        end
+      end
       ok,note=R.transport.start(name,c)
     elseif c.kind=="rail_commit" then
       local quote=rail_quotes[name]

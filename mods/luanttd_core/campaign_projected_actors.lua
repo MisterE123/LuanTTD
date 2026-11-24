@@ -85,10 +85,11 @@ return function(core,api,motion,models,airframes)
         if not (part and part.visual_only) then
           api.vehicle_ui.track(row.mode,row.id,pos,v.ref,not part or part.index==1,part and part.body_index or 1)
         end
-        if api.vehicle_ui.ride_track and (row.mode=="road" or row.mode=="rail") then
+        if api.vehicle_ui.ride_track and (row.mode=="road" or row.mode=="rail" or row.mode=="air" or
+          row.mode=="ship" and row.id=="ferry") then
           api.vehicle_ui.ride_track(row.mode,row.id,v.ref,pos,rotation,{running=row.running,
             passenger=row.passenger or part and passenger_bodies[part.kind],
-            engine=part and rail_engines[part.kind],
+            engine=part and rail_engines[part.kind],mesh=row.mode=="air" and mesh or nil,
             body=part and part.body_index or 1,travel=part and part.index or 1,
             auxiliary=part and part.visual_only})
         end

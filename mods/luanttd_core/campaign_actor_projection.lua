@@ -94,6 +94,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       if ferry.paid_clock then p,dir=Sim.ferry_paid_pose(s,fraction)
       else p,dir=R.water.run.pose(ferry) end
       if point(p) then add("ship","ferry",{owner=ferry.owner,engine=ferry.engine_id,pos=xyz(p),dir=dir,
+        passenger=true,running=not (ferry.stopped or ferry.crashed or ferry.phase=="blocked"),
         sound_idle=ferry.stopped or ferry.phase~="sailing",sound_crashed=ferry.crashed or nil,
         depot=ferry.depot,label=ferry.engine_id==208 and "Bakewell 300 Hovercraft" or ferry.engine_id==207 and "FFP Passenger Ferry" or "MPS Passenger Ferry"}) end
     end
@@ -125,10 +126,14 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       else p,dir=R.air.run.pose(run) end
       if point(p) then
         if airborne==nil then airborne=run.vehicle.airborne end
+        local v=run.vehicle
+        local engine=R.air.run.engine_for and R.air.run.engine_for(run)
         add("air",run.paid_clock or 1,{owner=run.owner,engine=run.engine_id,pos=xyz(p),dir=dir,
+          passenger=not v.helicopter and not (engine and engine.passengers==0),
+          running=not (v.stopped or v.crashed or v.hidden or run.phase=="blocked"),
           airborne=not not airborne,sound_crashed=run.vehicle.crashed or nil,
           sound_helicopter=run.vehicle.helicopter or nil,rotor_period=run.vehicle.helicopter and math.floor((run.vehicle.rotor_speed or 0)/16),
-          label=R.air.run.engine_for and R.air.run.engine_for(run).name or "Aircraft #"..(run.paid_clock or 1)})
+          label=engine and engine.name or "Aircraft #"..(run.paid_clock or 1)})
       end
     end
   end

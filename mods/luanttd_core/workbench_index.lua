@@ -116,7 +116,7 @@ return function(api)
 
   rows("rail",{
     {"railworks","Track, depots & platforms","railworks",rail,
-      "Use AutoRail for ordinary track, build a depot at a clear rail end, or select both ends of a straight station. Rail construction options opens manual track, crossings and spans. Rail Tools & Operations opens specialist services.",
+      "Use AutoRail for ordinary track, build a depot at a clear rail end, or select both ends of a straight station. Bridges, tunnels & track tools opens manual track pieces, crossings and spans. Rail Tools & Operations opens specialist services.",
     },
     {"pbs","Path signals and dispatch","railsignals",rail,
       "Place forward-facing regular or one-way PBS heads. Rotate the fitting to reverse the direction. Two empty trains can contest a diamond and release their reservations only when the rear wagon clears.",
@@ -125,7 +125,7 @@ return function(api)
       "Place conventional heads before and after the shared unsigned diamond on each flat one-way route. Order two empty depot-to-platform trains to watch one wait at red until the other's tail clears the outgoing head.",
       nil,"Use a separate disposable railway with only conventional heads, not PBS. No paid freight or passenger switching in this pilot."},
     {"railspan","Rail bridge & tunnel","railworks",function() return api.rail_span_tools and rail() end,
-      "Open Rail construction options. Use Bridge to select two bridgeheads, or Tunnel to click the entry slope. Connect both portals, then use Run train through rail spans. A coupled train keeps the span reserved until its final wagon clears.",
+      "Open Bridges, tunnels & track tools. Use Bridge to select two bridgeheads, or Tunnel to click the entry slope. Connect both portals, then use Run train through rail spans. A coupled train keeps the span reserved until its final wagon clears.",
     },
     {"railgrade","Stock rail grades","railworks",function() return S.rail_grade_enabled and rail() end,
       "Lay compatible straight tracks on supported slopes. Compare climbing versus descending with the stock position and speed models.",

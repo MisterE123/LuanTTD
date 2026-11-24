@@ -1,5 +1,5 @@
 -- Genuine Survey inventory and pointer gestures, on a real road and Country
--- Airport built by the ordinary worker. The fixture only aims the builder and
+-- Airport built by the ordinary worker. The fixture only aims the builder or a walker and
 -- reads observations; it never substitutes a mode backend or triggers clicks.
 local function start(p)
   local player=p:get_player_name()
@@ -30,9 +30,9 @@ local function start(p)
     assert(ok,why)
   end
   local function stage(name) core.log("action","SURVEY_BACKENDS_"..name) end
-  local initial,saved
+  local initial,saved,walk_saved
   local phase="ready"
-  local deadline=core.get_us_time()+45000000
+  local deadline=core.get_us_time()+105000000
   local function aim(tile,theta)
     local a,b=Sim.xy(tile)
     local pitch=1.16
@@ -93,7 +93,10 @@ local function start(p)
       phase="opening"
     elseif phase=="opening" and world.menu(p)=="survey" then
       assert(p:get_inventory():get_stack("main",7):get_name()=="luanttd_core:menu_survey_drive_car")
-      assert(p:get_inventory():get_stack("main",8):get_name()=="luanttd_core:menu_survey_fly_plane")
+      for i=1,#world.hotbar_layout(p) do
+        local name=p:get_inventory():get_stack("main",i):get_name()
+        assert(not name:find("survey_fly_plane",1,true) and not name:find("survey_ride_vehicle",1,true))
+      end
       stage("OPEN")
       phase="car_selected"
     elseif phase=="car_selected" and p:get_wield_index()==7 and
@@ -124,41 +127,46 @@ local function start(p)
     elseif phase=="car_leave" and restored() then
       assert(p:get_wield_index()==7,"Drive Car slot lost after restore")
       phase="aiming"
-      phase_aim(grass,-1.12,"plane_selected")
-    elseif phase=="plane_selected" and tile==grass then
-      if saved then saved=nil;stage("CAR_RESTORE") end
-      if p:get_wield_index()==8 and visible_help("Fly Plane","Left-click an airport to start flying") then
-        stage("PLANE_SELECTED")
-        phase="plane_bad"
-      end
-    elseif phase=="plane_bad" and tile==grass then
-      if status and status:find("Aim at a built Country or City Airport",1,true) then
-        assert(not status:find("/plane",1,true),"Hotbar keyboard flow was replaced by a command")
-        assert(not avatar and not p:get_attach())
-        phase="aiming"
-        phase_aim(airport,-.73,"plane_good")
-      end
-    elseif phase=="plane_good" then
-      if avatar and avatar.mode=="plane" then
-        assert(saved)
-        initial=mounted("bl_sightseeing_plane_cockpit.obj")
-        assert(nearby(initial,{x=x*2+4,y=h+.95,z=z*2+4},4),
-          "Plane attached away from the aimed Country Airport runway")
-        stage("PLANE_ENTER")
-        phase="plane_roll"
-      elseif tile==airport and not saved then
-        saved=snap_builder()
-        stage("PLANE_REJECT")
-      end
+      phase_aim(grass,-1.12,"walk_select")
+    elseif phase=="walk_select" and tile==grass then
+      saved=snap_builder()
+      stage("CAR_RESTORE")
+      phase="walk_to_hangar"
+    elseif phase=="walk_to_hangar" and avatar and avatar.mode=="walk" then
+      stage("WALK_ENTER")
+      phase="settling_walk"
+      local door={x=2*(x+3)+.945,y=h+.51,z=z*2+2.53}
+      core.after(.46,function()
+        assert(world.avatar_state(p)==avatar)
+        p:set_look_horizontal(math.pi);p:set_look_vertical(.07);p:set_pos(door)
+        phase="waiting_for_hangar"
+      end)
+    elseif phase=="waiting_for_hangar" and api.render.pick_sightseeing_hangar(p)==xy(x+3,z) then
+      assert(avatar and avatar.mode=="walk" and p:get_properties().zoom_fov>0)
+      walk_saved=p:get_pos()
+      stage("HANGAR_AIMED")
+      phase="plane_good"
+    elseif phase=="plane_good" and avatar and avatar.mode=="plane" then
+      assert(saved and avatar.previous and avatar.previous.mode=="walk")
+      initial=mounted("bl_sightseeing_plane_cockpit.obj")
+      assert(nearby(initial,{x=x*2+4,y=h+.95,z=z*2+4},4),
+        "Plane attached away from the clicked Country Airport")
+      stage("PLANE_ENTER")
+      phase="plane_roll"
     elseif phase=="plane_roll" then
       local at=mounted("bl_sightseeing_plane_cockpit.obj")
       if at.y>initial.y+1.25 and not nearby(at,initial,2) then
         stage("PLANE_AIRBORNE")
         phase="plane_leave"
       end
-    elseif phase=="plane_leave" and restored() then
-      assert(p:get_wield_index()==8,"Fly Plane slot lost after restore")
-      core.log("action","PASS NATIVE SURVEY BACKENDS: aimed wrong tiles rejected, selected exact road and Country Airport, drove actual car and took off in an actual plane, right-click restored both complete aerial views")
+    elseif phase=="plane_leave" and avatar and avatar.mode=="walk" and not p:get_attach() then
+      if nearby(p:get_pos(),walk_saved,.16) then
+        assert(not p:hud_get_flags().hotbar and p:get_properties().zoom_fov>0)
+        stage("WALK_RESTORED")
+        phase="walk_leave"
+      end
+    elseif phase=="walk_leave" and restored() then
+      core.log("action","PASS NATIVE SURVEY BACKENDS: drove a real car, clicked a hangar aircraft from Walk, took off, and returned to Walk and Builder through Inventory")
       return
     end
     core.after(.074,step)

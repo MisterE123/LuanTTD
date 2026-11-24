@@ -83,17 +83,31 @@ snap survey-car-cockpit
 xdotool keydown w
 mark SURVEY_BACKENDS_CAR_MOVED
 xdotool keyup w
-press_until 3 SURVEY_BACKENDS_CAR_RESTORE
-xdotool key 8; mark SURVEY_BACKENDS_PLANE_SELECTED; sleep .35
-snap survey-plane-selected
-press_until 1 SURVEY_BACKENDS_PLANE_REJECT
+exit_scenic() {
+  xdotool key i; sleep .44
+  snap survey-inventory
+  xdotool mousemove 640 420 click 1
+  sleep .42
+}
+press 3
+sleep .25
+exit_scenic
+mark SURVEY_BACKENDS_CAR_RESTORE
+xdotool key 6; sleep .34
+press 1
+mark SURVEY_BACKENDS_WALK_ENTER
+mark SURVEY_BACKENDS_HANGAR_AIMED
+snap survey-plane-hangar
 press_until 1 SURVEY_BACKENDS_PLANE_ENTER
 snap survey-plane-cockpit
 xdotool keydown w keydown space
 mark SURVEY_BACKENDS_PLANE_AIRBORNE
 snap survey-plane-airborne
 xdotool keyup space keyup w
-press_until 3 'PASS NATIVE SURVEY BACKENDS'
+exit_scenic
+mark SURVEY_BACKENDS_WALK_RESTORED
+exit_scenic
+mark 'PASS NATIVE SURVEY BACKENDS'
 
 grep -E 'SURVEY_BACKENDS_|PASS NATIVE SURVEY' "$out/server.log"
 ! grep 'ERROR\[' "$out/"{client,server}.log

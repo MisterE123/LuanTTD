@@ -62,7 +62,15 @@ return function(api,Run,RoadVisual,verified_art)
           end
           x.pitch=airborne and x.pitch+(target-x.pitch)*math.min(1,4*dt) or 0
           x.ref:move_to(pos,true)
-          x.ref:set_rotation({x=art.rotor and 0 or x.pitch,y=x.yaw,z=0})
+          local rotation={x=art.rotor and 0 or x.pitch,y=x.yaw,z=0}
+          x.ref:set_rotation(rotation)
+          if api.vehicle_ui and api.vehicle_ui.ride_track then
+            local v=run.vehicle
+            local engine=Run.engine_for and Run.engine_for(run)
+            api.vehicle_ui.ride_track("air",identity,x.ref,pos,rotation,{
+              mesh=mesh,passenger=not v.helicopter and not (engine and engine.passengers==0),
+              running=not (v.stopped or v.crashed or v.hidden or run.phase=="blocked")})
+          end
           rotors.step(x,art,pos,math.floor((run.vehicle.rotor_speed or 0)/16),dt)
           x.last=pos
         end

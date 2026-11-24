@@ -48,7 +48,12 @@ return function(api,Run,RoadVisual)
       if api.vehicle_ui then api.vehicle_ui.track("ship","ferry",pos,ref) end
       ref:move_to(pos,true)
       yaw=RoadVisual.turn(yaw,RoadVisual.nose_yaw(dir),math.min(.8,dt*7))
-      ref:set_rotation({x=0,y=yaw,z=0})
+      local rotation={x=0,y=yaw,z=0}
+      ref:set_rotation(rotation)
+      if api.vehicle_ui and api.vehicle_ui.ride_track then
+        api.vehicle_ui.ride_track("ship","ferry",ref,pos,rotation,{
+          passenger=true,running=not (p.stopped or p.crashed or p.phase=="blocked")})
+      end
     end
   end
   return M

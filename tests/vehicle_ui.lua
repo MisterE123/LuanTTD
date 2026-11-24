@@ -224,3 +224,61 @@ assert(V.following(p))
 V.leave(p)
 assert(not p.parent and not V.following(p))
 print("PASS a company can open and follow an out-of-view vehicle; the worker supplies its real starting position")
+
+do
+  local posts,launch,depot_returns=0,nil,0
+  V.orders.ship={fetch=function(_,_,complete) complete(nil,"ORDERS_UNAVAILABLE");return true end}
+  local endpoint={
+    query=function(req,done)
+      posts=posts+1
+      assert(req.mode=="ship" or req.command.mode=="ship")
+      if req.kind=="depot" then
+        done({ok=true,revision=39,value={vehicles={{id="ferry"}},targets={{id=5,label="Western Dock"},{id=6,label="Eastern Dock"}}}})
+      else
+        launch=req.command
+        done({ok=false,why="DESTINATION_TILE_CHANGED"})
+      end
+      return true
+    end,
+  }
+  local back={depot=depot,return_=function(selection)
+    assert(selection.first==5 and selection.second==6)
+    depot_returns=depot_returns+1
+  end}
+  local route=dofile("mods/luanttd_core/initial_vehicle_route.lua")
+  back.initial=route.context(endpoint,p,"ship",depot,{id="ferry"},
+    {targets={{id=5,label="Western Dock"},{id=6,label="Eastern Dock"}}})
+  V.install_worker({query=function(req,done)
+    assert(req.kind=="vehicle" and req.vehicle=="ferry")
+    done({ok=true,value={mode="ship",id="ferry",owner="E",label="Company ferry",depot=depot,depot_key=depot}})
+    return true
+  end})
+  api.render={
+    host_tile=function(id) return {ship={kind="dock",station=id-100}} end,
+    host_record=function(_,id) return {owner=id==5 or id==6 and "E" or "Other"} end,
+  }
+  api.render.host_record=function(reg,id)
+    assert(reg=="stock_ship_stations")
+    return {owner=(id==5 or id==6) and "E" or "Other"}
+  end
+  assert(V.open(p,"ship","ferry",back))
+  assert(open.b:find("first service",1,true) and open.b:find("dropdown",1,true))
+  assert(not field(open,"initial_start") and not open.b:find("ORDERS_UNAVAILABLE",1,true))
+  fn(p,open.key,{[field(open,"initial_world")]=true})
+  assert(active and not open)
+  assert(V.world_order_preview(p,105)=="Pick first: Western Dock")
+  V.pick_world_order(p,105)
+  V.pick_world_order(p,109) -- foreign dock
+  assert(V.world_order_preview(p,105)=="Choose a different second destination.")
+  V.pick_world_order(p,105)
+  V.pick_world_order(p,106)
+  assert(posts==0,"pointing is not an order submission or dispatch")
+  V.finish_world_orders(p)
+  assert(not active and open.b:find("Both destinations selected",1,true))
+  fn(p,open.key,{[field(open,"initial_start")]=true})
+  assert(posts==2 and launch.first_tile==105 and launch.second_tile==106 and launch.revision==39 and launch.vehicle=="ferry")
+  assert(open.b:find("A selected stop changed",1,true))
+  fn(p,open.key,{[field(open,"depot")]=true})
+  assert(depot_returns==1)
+  print("PASS staged world orders reject foreign or repeated docks, start explicitly at fresh revision, and return to the same depot")
+end

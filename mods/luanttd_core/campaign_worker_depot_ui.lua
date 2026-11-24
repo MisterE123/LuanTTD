@@ -2,6 +2,7 @@
 return function(core,client,build,money,assembly)
   local mod=core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
   local Help=dofile(mod.."/depot_vehicle_help.lua")
+  local Route=dofile(mod.."/initial_vehicle_route.lua")
   local esc=core.formspec_escape
   local D={form="luanttd_core:worker_depot"}
   local panels={}
@@ -9,15 +10,7 @@ return function(core,client,build,money,assembly)
   local function routes(p)
     local data=p.data or {}
     local unit=data.vehicles and data.vehicles[p.unit or 1]
-    local cargo=unit and unit.cargo
-    local first,last={},{}
-    if unit and unit.unsupported then return first,last,cargo end
-    for _,r in ipairs(data.targets or {}) do
-      local town_mail=p.mode=="rail" and (cargo=="mail" or cargo=="mixed") and not r.cargo
-      if town_mail or r.cargo==cargo and (not cargo or r.role=="load") then first[#first+1]=r end
-      if town_mail or r.cargo==cargo and (not cargo or r.role=="unload") then last[#last+1]=r end
-    end
-    return first,last,cargo
+    return Route.targets(p.mode,data,unit)
   end
   local function draw(n,p,note)
     local data=p.data or {}
@@ -59,8 +52,9 @@ return function(core,client,build,money,assembly)
         b[#b+1]="tooltip["..stem.."copy;Copy an independent order list from another vehicle to the selected vehicle.]"
       else b[#b+1]="button[5.82,5.42;5.12,.59;"..stem.."orders;Open selected vehicle]" end
     end
-    local town_mail=p.mode=="rail" and (cargo=="mail" or cargo=="mixed")
-    local route_ok=(not cargo or town_mail) and #first>=2 or cargo and not town_mail and #first>0 and #last>0
+    local route_ok=Route.possible(first,last)
+    local origin=p.mode=="air" and p.depot or (first[p.from or 1] or {}).id
+    local default_to=last[1] and last[1].id==origin and 2 or 1
     if p.mode=="rail" and active and active.copied then
       b[#b+1]="label[.45,6.47;"..active.copied.." copied station orders. Start when the route is ready.]"
       b[#b+1]="button[7.50,6.17;3.44,.57;"..stem.."start_copied;Start copied orders]"
@@ -68,14 +62,13 @@ return function(core,client,build,money,assembly)
       if p.mode~="air" then
         b[#b+1]=("dropdown[.45,6.17;3.39,.57;%sfrom;%s;%d;true]"):format(stem,table.concat(from,","),p.from or 1)
       end
-      b[#b+1]=("dropdown[3.98,6.17;3.38,.57;%sto;%s;%d;true]"):format(stem,table.concat(to,","),p.to or (cargo and cargo~="mail" and cargo~="mixed" and 1 or 2))
+      b[#b+1]=("dropdown[3.98,6.17;3.38,.57;%sto;%s;%d;true]"):format(stem,table.concat(to,","),p.to or default_to)
       b[#b+1]="button[7.50,6.17;3.44,.57;"..stem.."start;Start service]"
     end
     if units[p.unit or 1] and units[p.unit or 1].unsupported then
       b[#b+1]="label[.45,6.45;Unsupported freight formation. Rearrange its wagons in the depot.]"
-    elseif cargo and not route_ok and not (active and active.copied) then
-      b[#b+1]=town_mail and "label[.45,6.45;Build two ordinary rail stations near town houses.]"
-        or "label[.45,6.45;No matching loading and unloading stops. See the vehicle details.]"
+    elseif active and not route_ok and (p.mode=="rail" or p.mode=="ship") and not active.copied then
+      b[#b+1]="textarea[.45,6.15;10.49,.69;;;"..esc(Route.notice(p.mode,active)).."]"
     end
     local chosen=p.focus~="offer" and units[p.unit or 1] or offers[p.offer or 1]
     chosen=chosen or offers[p.offer or 1]
@@ -87,7 +80,7 @@ return function(core,client,build,money,assembly)
     b[#b+1]="button_exit[5.82,9.09;5.12,.58;close;Back to world]"
     core.show_formspec(n,D.form,table.concat(b))
   end
-  function D.open(player,mode,depot,note,vehicle_handler,selected_vehicle)
+  function D.open(player,mode,depot,note,vehicle_handler,selected_vehicle,prior)
     local name=player:get_player_name()
     serial=serial+1
     local p={serial=serial,mode=mode,depot=depot,vehicle_handler=vehicle_handler,focus="offer"}
@@ -99,6 +92,19 @@ return function(core,client,build,money,assembly)
         p.data,p.revision=reply.value,reply.revision
         for i,row in ipairs(p.data.vehicles or {}) do
           if row.id==selected_vehicle then p.unit,p.focus=i,"unit";break end
+        end
+        if prior then
+          p.offer_scroll,p.unit_scroll=prior.offer_scroll,prior.unit_scroll
+          for i,q in ipairs(p.data.offers) do if q.name==prior.offer_name then p.offer=i;break end end
+          if p.unit then
+            local first,last=routes(p)
+            local _,i=Route.find(first,prior.first);p.from=i
+            _,i=Route.find(last,prior.second);p.to=i
+          end
+        elseif mode=="road" then
+          for i,q in ipairs(p.data.offers) do
+            if q.request.cargo=="passenger" then p.offer=i;p.offer_scroll=Help.scroll_to(i);break end
+          end
         end
       end
       draw(name,p,note or reply.why)
@@ -218,7 +224,19 @@ return function(core,client,build,money,assembly)
     if p.mode=="rail" and f[stem.."assemble"] and assembly then return assembly(player,p.depot) end
     if f[stem.."orders"] and p.vehicle_handler then
       local u=p.data.vehicles[p.unit or 1]
-      if u then p.vehicle_handler(p.mode,u.id) end
+      if u then
+        local first,last=routes(p)
+        local offer=p.data.offers[p.offer or 1]
+        local prior={offer_name=offer and offer.name,offer_scroll=p.offer_scroll,unit_scroll=p.unit_scroll,
+          first=first[p.from or 0] and first[p.from].id,second=last[p.to or 0] and last[p.to].id}
+        local back={depot=p.depot,initial=Route.context(client,player,p.mode,p.depot,u,p.data,p.from,p.to)}
+        function back.return_(selection)
+          if selection then prior.first,prior.second=selection.first,selection.second end
+          return D.open(player,p.mode,p.depot,nil,p.vehicle_handler,u.id,prior)
+        end
+        panels[n]=nil
+        return p.vehicle_handler(p.mode,u.id,back)
+      end
       return true
     end
     if p.mode=="rail" and f[stem.."start_copied"] then
@@ -236,9 +254,12 @@ return function(core,client,build,money,assembly)
     if f[stem.."start"] then
       local unit=p.data.vehicles[p.unit or 1]
       local sources,sinks,cargo=routes(p)
-      local first=sources[tonumber(f[stem.."from"]) or p.from or 1]
-      local last=sinks[tonumber(f[stem.."to"]) or p.to or (cargo and cargo~="mail" and cargo~="mixed" and 1 or 2)]
-      if not (unit and first and last) then return true end
+      local first=p.mode=="air" and Route.find(sources,p.depot) or sources[p.from or 1]
+      local default_to=sinks[1] and first and sinks[1].id==first.id and 2 or 1
+      local last=sinks[p.to or default_to]
+      if not (unit and first and last and first.id~=last.id) then
+        draw(n,p,"Choose two different destinations.");return true
+      end
       p.pending=true
       local sent,why=client.query({kind="command",player=n,command={kind="transport_start",mode=p.mode,
         vehicle=unit.id,depot=p.depot,first=p.mode=="air" and p.depot or first.id,second=last.id,cargo=cargo,

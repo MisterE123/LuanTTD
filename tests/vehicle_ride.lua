@@ -55,7 +55,8 @@ local name_bank={}
 local attachments={}
 local core={get_dir_list=function(path)
   local ext=path:find("/models",1,true) and ".obj" or ".png"
-  return {"bl_ride_bus_interior"..ext,"bl_ride_train_interior"..ext,"bl_ride_train_cab"..ext}
+  return {"bl_ride_bus_interior"..ext,"bl_ride_train_interior"..ext,"bl_ride_train_cab"..ext,
+    "bl_ride_airliner_interior"..ext,"bl_ride_ferry_interior"..ext}
 end,register_entity=function(name,def) name_bank[name]=def end,add_entity=function(pos,name)
   local o=object(pos);o.name=name;attachments[#attachments+1]=o;return o
 end}
@@ -106,7 +107,9 @@ R.track("road",2,bus,bus:get_pos(),{x=0,y=-math.pi+.41,z=0},{passenger=true,runn
 R.step(.11,{a,b,c})
 assert(a.look_changes==turning+1 and equal(a:get_look_horizontal(),2.05),"tiny wraparound motion recentered the view")
 assert(R.enter(b,"ride",{kind="road",id=2}) and not bus:get_observers().Other)
-assert(R.controls(a,{aux1=true}) and not R.active(a))
+assert(R.controls(a,{aux1=true,place=true}) and R.active(a)
+  and a.label:find("Inventory: leave ride",1,true),"ordinary controls must not eject a rider")
+assert(R.exit(a) and not R.active(a))
 assert(bus:get_observers().Rider and not bus:get_observers().Other)
 assert(a:get_pos().x==old_pos.x and a:get_pos().y==old_pos.y and a:get_pos().z==old_pos.z)
 assert(a:get_look_horizontal()==.33 and a:get_look_vertical()==-.09)
@@ -155,6 +158,38 @@ rebuilt:remove()
 R.step(.1,{a,b,c});R.step(3.1,{a,b,c})
 assert(not R.active(a) and not a:get_attach() and not interior:get_pos(),
   "a truly lost target must remove its private cabin and restore builder mode")
+-- Running passenger airplanes and ferries share the actual geometry and
+-- visibility lifecycle, including the gear-up mesh change in chase view.
+local air=object({x=40,y=21,z=55})
+air:set_properties({visual="mesh",mesh="stock_gear.obj",textures={"flight.png"}})
+local air_pick={kind="air",id=12}
+local i=#attachments
+R.track("air",12,air,air:get_pos(),zero,{running=true,passenger=false})
+assert(not R.enter(a,"ride",air_pick) and not R.enter(a,"cab",air_pick))
+R.track("air",12,air,air:get_pos(),zero,{running=false,passenger=true})
+assert(not R.enter(a,"ride",air_pick))
+R.track("air",12,air,air:get_pos(),zero,{running=true,passenger=true,mesh="stock_gear.obj"})
+assert(R.enter(a,"ride",air_pick))
+assert(attachments[i+2].name=="luanttd_core:ride_airliner_interior" and a.label:find("Window seat",1,true))
+assert(math.abs(a:get_look_horizontal()-math.pi)>1,"air passenger seated straight ahead instead of looking out")
+local plane_pos=a:get_attach():get_pos()
+air:set_pos({x=42,y=25,z=57})
+R.track("air",12,air,air:get_pos(),zero,{running=true,passenger=true,mesh="flight_gear_up.obj"})
+R.step(.12,{a,b,c})
+assert(a:get_attach():get_pos().y==plane_pos.y+4 and attachments[i+3].props.mesh=="flight_gear_up.obj")
+assert(not air:get_observers().Rider and air:get_observers().Other and R.exit(a) and not air:get_observers())
+
+local ferry=object({x=8,y=3,z=5})
+ferry:set_properties({visual="mesh",mesh="paid_ferry.obj",textures={"ferry.png"}})
+local i=#attachments
+R.track("ship","coal",ferry,ferry:get_pos(),zero,{running=true,passenger=true})
+assert(not R.enter(a,"ride",{kind="ship",id="coal"}))
+R.track("ship","ferry",ferry,ferry:get_pos(),zero,{running=true,passenger=true})
+assert(R.enter(a,"ride",{kind="ship",id="ferry"}))
+assert(attachments[i+2].name=="luanttd_core:ride_ferry_interior" and a:get_attach()==attachments[i+1])
+assert(R.controls(a,{place=true}) and R.active(a))
+assert(R.exit(a) and not ferry:get_observers() and a:get_pos().y==old_pos.y)
+
 -- Exercise the real Luanti command registration and target fallback,
 -- not merely the internal presenter entry point.
 local commands,receive={}
@@ -177,6 +212,13 @@ assert(commands.ride.func("Rider","") and not V.riding(a))
 V.remember(a,{kind="rail",id=9})
 assert(commands.train.func("Rider","") and V.riding(a))
 assert(receive(a,"",{luanttd_leave_ride=true}) and not V.riding(a))
+V.ride_track("air",12,air,air:get_pos(),zero,{running=true,passenger=true})
+V.ride_track("ship","ferry",ferry,ferry:get_pos(),zero,{running=true,passenger=true})
+for _,target in ipairs({air_pick,{kind="ship",id="ferry"}}) do
+  V.remember(a,target)
+  assert(commands.ride.func("Rider","") and V.riding(a))
+  assert(receive(a,"",{luanttd_leave_ride=true}) and not V.riding(a))
+end
 assert(not commands.train.func("Disconnected",""))
 _G.core=nil
 print("PASS /ride and /train use the selected real vehicle; repeating the command and the inventory button exit")

@@ -526,3 +526,29 @@ do
   assert(not option(E.demolition(surface,roof),"surface_road"))
   print("PASS authoritative Bulldozer independently clears all surface road bits over a rival-owned bore")
 end
+
+do
+  local start=runtime.transport.start
+  local called=0
+  runtime.transport.start=function(owner,q)
+    assert(owner==john and q.first==1 and q.second==2)
+    called=called+1
+    return true,"Test dispatcher called."
+  end
+  local first,last=Sim.id(20,21),Sim.id(25,21)
+  local a,b=s.tiles[first],s.tiles[last]
+  local prev1,prev2,prev3=a.rail_station_id,b.rail_station_id,s.stock_rail_stations
+  a.rail_station_id,b.rail_station_id=1,2
+  s.stock_rail_stations={[1]={owner=john},[2]={owner="Another"}}
+  local c={kind="transport_start",mode="rail",vehicle=10,depot=first,first=1,second=2,
+    first_tile=first,second_tile=last,revision=A.company(john).revision}
+  assert(A.command(john,c).why=="DESTINATION_TILE_CHANGED" and called==0)
+  s.stock_rail_stations[2].owner=john
+  b.rail_station_id=3
+  assert(A.command(john,c).why=="DESTINATION_TILE_CHANGED" and called==0)
+  b.rail_station_id=2
+  assert(A.command(john,c).ok and called==1)
+  runtime.transport.start=start
+  a.rail_station_id,b.rail_station_id,s.stock_rail_stations=prev1,prev2,prev3
+  print("PASS initial map routes reject forged or replaced station tiles before hitting the dispatcher")
+end

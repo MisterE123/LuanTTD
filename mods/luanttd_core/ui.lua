@@ -3334,7 +3334,7 @@ function U.context(p,tile,hit)
       elseif t.ship and t.ship.kind=="ship_depot" then mode,key="ship",t.ship.depot
       elseif t.airfield then mode,key="air",t.airfield.airport end
       if mode then
-        return api.worker_depot.open(p,mode,key,nil,function(kind,id) api.vehicle_ui.open(p,kind,id) end)
+        return api.worker_depot.open(p,mode,key,nil,function(kind,id,back) return api.vehicle_ui.open(p,kind,id,back) end)
       end
     end
   end

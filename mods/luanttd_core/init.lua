@@ -613,6 +613,9 @@ local atmosphere,lighting=dofile(mod.."/atmosphere.lua").start(core,function()
   else return solar.phase(local_solar(now),now) end
 end,storage)
 api.lighting=lighting
+dofile(mod.."/ambient_storms.lua").start(core,function(p)
+  return not placement and api.wildlife.enabled(p)
+end)
 local function open_campaign_player(p)
   local name=p:get_player_name()
   if not authority then Sim.company(S,name) end
@@ -728,6 +731,7 @@ core.register_on_leaveplayer(function(p)
   if api.trackworks_demo then api.trackworks_demo.leave(name) end
   api.save()
 end)
+core.register_on_player_receive_fields(world.scenic_fields)
 core.register_on_player_receive_fields(ui.fields)
 core.register_chatcommand("dispatch",{description="Open LuanTTD dispatcher",func=function(name)
   local p=core.get_player_by_name(name)

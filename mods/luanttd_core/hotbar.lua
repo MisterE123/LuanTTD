@@ -37,9 +37,6 @@ local function section(id,label,asset) return item("section_"..id,label,asset) e
 H.sightseeing={
   survey_walk="Left-click dry ground to walk here",
   survey_drive_car="Left-click a connected street to drive",
-  survey_fly_plane="Left-click an airport to start flying",
-  survey_train_cab="Left-click a train to ride in its cab",
-  survey_ride_vehicle="Left-click a passenger train or bus to ride",
 }
 H.menus={
   home={title="Transport & construction",
@@ -53,8 +50,7 @@ H.menus={
   },
   survey={title="Survey",[1]=inspect,[2]=jump,[3]=workbenches,
     [4]=item("survey_walk","Walk"),[5]=item("survey_drive_car","Drive Car"),
-    [6]=item("survey_fly_plane","Fly Plane"),[7]=item("survey_train_cab","Train Cab"),
-    [8]=back,[9]=item("survey_ride_vehicle","Ride Vehicle")},
+    [8]=back},
   roads={title="Road Construction",[1]=inspect,[2]=item("road","AutoRoad: click or drag"),
     [3]=item("road_station","Bus stop","stop"),
     [4]=item("road_depot","Road depot","depot"),
@@ -362,25 +358,41 @@ function H.task_menus()
     m[key]=copy
   end
   m.fleet[3]=item("company","Open company fleet","fleet")
+  -- Common construction paths start with the same sequence on land:
+  -- 4 Lay  /  5 Stop or Station  /  6 Build depot  /  7 Open depot.
+  -- Back, Bulldoze and Teleport take the first three slots. Inspect is
+  -- Teleport's alternate action, leaving the first task in slot 4.
   local roads=m.roads
+  roads[1]=nil
   if H.menus.roads[6] then
     m.road_spans={title="Road Bridges & Tunnels",[1]=inspect,[2]=H.menus.roads[10],
       [3]=H.menus.roads[6],[8]=back,[9]=bulldoze}
     -- If the picker is off, follow the original bridge types directly.
-    roads[6]=section("road_spans","Road bridges & tunnels","road_spans")
+    roads[6]=section("road_spans","Bridges & tunnels","road_spans")
   end
-  roads[10]=m.road_stops and H.menus.roads[3] or nil
+  if roads[7] then roads[7]=section("road_direction","Road directions & removal","road_tools") end
+  roads[10]=m.road_stops and section("road_stops","Stops, waypoints & freight","bus_stops") or nil
   roads[3]=H.menus.road_stops and H.menus.road_stops[2] or roads[3]
   if m.road_stops and m.freight then m.road_stops[7]=gates.freight end
   if m.freight and not m.road_stops then roads[10]=gates.freight end
   roads[5]=H.service_depot
   if m.freight then m.freight[7]=H.service_depot end
   if m.railworks then
-    m.railworks[6]=H.service_depot
-    m.railworks[10]=section("railengineering","Rail construction options","rail_engineering")
+    local rail=m.railworks
+    rail[1]=nil
+    rail[5]=H.service_depot
+    rail[6]=section("railengineering","Bridges, tunnels & track tools","rail_spans")
+    rail[7]=H.menus.railworks[5]
+    rail[10]=H.menus.railworks[7]
+    m.railengineering.title="Rail Spans & Track Tools"
     m.railops[1]=inspect
   end
-  if m.harbor then m.harbor[5]=H.service_depot end
+  if m.harbor then
+    local harbor=m.harbor
+    harbor[1]=nil
+    harbor[4]=H.service_depot
+    harbor[5]=H.menus.harbor[4]
+  end
   if m.airfields then
     m.airfields[1]=item("service_hangar","Open hangar","service_hangar")
   end
@@ -457,6 +469,20 @@ function H.shortcut(slot)
   return slot==H.size and "0" or tostring(slot)
 end
 
+local section_help={
+  roads="Lay roads and build stops, depots and crossings.",
+  railworks="Lay track and build stations, depots and signals.",
+  harbor="Build docks and ship depots, then start a service.",
+  airfields="Build an airport or heliport, or open a hangar.",
+  road_spans="Choose a bridge or tunnel before setting the endpoints.",
+  railengineering="Build a bridge, tunnel or crossing, or pick track pieces or types.",
+  railsignals="Place, rotate or remove signals. A simple shuttle needs none.",
+  railops="Freight tools, waypoints and specialist services.",
+  road_stops="Build bus or truck stops and waypoints; manage roadside freight.",
+  road_direction="Paint one-way or fixed directions, or remove road pavement.",
+  waterworks="Canals, locks, aqueducts and buoys.",
+  fleet="Find vehicles, edit orders and follow their routes.",
+}
 function H.legend(stack,slot,is_world_tool,visible,menus)
   menus=menus or H.menus
   local active=H.active(stack)
@@ -473,7 +499,8 @@ function H.legend(stack,slot,is_world_tool,visible,menus)
     if id=="back" then
       help[1]="Left-click to return"
     elseif id:match("^section_") then
-      help[1]=menus==H.menus and "Left-click to open" or "Use to open this section"
+      help[1]=menus==H.menus and "Left-click to open" or
+        section_help[id:sub(9)] or "Click to open"
     elseif id=="teleport_tile" then
       help[1]="Left-click to teleport"
       help[2]="Right-click to inspect"
@@ -499,7 +526,7 @@ function H.legend(stack,slot,is_world_tool,visible,menus)
   end
   for i=1,H.size do
     local entry=menu[i]
-    if entry and (entry[1]=="back" or entry[1]=="clear") then
+    if menus==H.menus and entry and (entry[1]=="back" or entry[1]=="clear") then
       help[#help+1]=H.shortcut(i).." "..entry[2]
     end
   end
