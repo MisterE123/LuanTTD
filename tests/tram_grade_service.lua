@@ -29,7 +29,7 @@ local depot,lower,upper,ramp=at(5,10),at(8,8),at(8,13),at(8,11)
 local Transport=dofile(root.."campaign_transport_commands.lua")(S,{world=s,tram={net=Network}})
 local function command(kind,id,direction,cost)
   local q=assert(Transport.quote(owner,{mode="tram",operation="build",kind=kind,cells={id},direction=direction}))
-  assert(q.price==cost and q.tiles[1]==id and #q.tiles==1)
+  assert(q.price==cost and q.tiles[1]==id)
   local ok,receipt,applied=Transport.commit(owner,q)
   assert(ok,receipt)
   assert(applied.tiles[1]==id)
@@ -90,3 +90,37 @@ assert(rt.build=="road" and rt.road_bits==5 and rt.owner==owner)
 assert(Network.surface(s,r).base==2)
 assert(t.tram and t.tram.kind=="road")
 print("PASS stock graded depot and platform levels; live tram route crosses a real source incline both ways with continuous sampled elevation and opposite chassis pitch")
+
+-- RC1 GUI frontage: spend only on missing opposite half-pieces at
+-- immediate normal neighbors with an existing compatible tram layer.
+local function frontage_sites(x)
+  local terminal,west,east=at(x,16),at(x-1,16),at(x+1,16)
+  build("road",{west},8)
+  build("road",{east},2)
+  return terminal,west,east
+end
+local a,w,e=frontage_sites(24)
+local q,cost=Network.plan(s,owner,"drive_stop",{a},0)
+assert(#q==3 and q[2].id==w and q[3].id==e and cost==960)
+command("drive_stop",a,0,960)
+assert(s.tiles[w].tram.tram_bits==10 and s.tiles[e].tram.tram_bits==10)
+
+local b,_,outside=frontage_sites(28)
+local c=S.company(s,owner)
+c.cash=500
+local pts,amount=Network.plan(s,owner,"depot",{b},F.SW)
+assert(#pts==1 and amount==500)
+command("depot",b,F.SW,500)
+assert(s.tiles[outside].tram.tram_bits==2)
+c.cash=10000
+local third,_,rside=frontage_sites(32)
+local blocked,price=Network.plan(s,owner,"depot",{third},F.SW,function(id) return id==rside end)
+assert(#blocked==1 and price==500)
+local fix,fee=Network.plan(s,owner,"depot",{third},F.SW)
+assert(#fix==2 and fix[2].id==rside and fix[2].record.tram_bits==10 and fee==690)
+command("depot",third,F.SW,690)
+local fourth,road=at(36,16),at(37,16)
+s.tiles[road].build,s.tiles[road].road_bits="road",10
+command("depot",fourth,F.SW,500)
+assert(not s.tiles[road].tram and s.tiles[road].road_bits==10)
+print("PASS stock tram frontage: both platform ends and depot opening, untouched road-only mouth, and blocked or unaffordable optional track")

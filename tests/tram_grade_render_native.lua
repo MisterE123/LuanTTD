@@ -25,9 +25,11 @@ local depot,first,last,ramp=at(depot_x,15),at(route_x,13),at(route_x,21),at(rout
 local function construct(kind,tiles,arg)
   assert(net.construct(S,owner,kind,tiles,arg))
 end
-construct("depot",{depot},2)
 construct("road",Sim.line(at(depot_x+1,15),at(route_x,15)))
-construct("road",{at(depot_x+1,15)},8)
+assert(S.tiles[at(depot_x+1,15)].tram.tram_bits==2)
+local served,price=net.construct(S,owner,"depot",{depot},2)
+assert(served and served[2]==at(depot_x+1,15) and price==940)
+assert(S.tiles[at(depot_x+1,15)].tram.tram_bits==10)
 construct("road",Sim.line(at(route_x,12),at(route_x,22)))
 construct("drive_stop",{first},1)
 construct("drive_stop",{last},1)
@@ -71,7 +73,7 @@ core.register_on_joinplayer(function(p)
         local pos,rot=ref:get_pos(),ref:get_rotation()
         assert(pos.y>1.75 and pos.y<2.28 and rot.x<-.3)
         ready=true
-        core.log("action","TRAM_GRADE_NATIVE_READY rendered terminal foundations, graded rail, wire and streetcar pitch")
+        core.log("action","TRAM_GRADE_NATIVE_READY rendered terminal foundations, automatic entrance rail, graded wire and streetcar pitch")
         break
       end
     end

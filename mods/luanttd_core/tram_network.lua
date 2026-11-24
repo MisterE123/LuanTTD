@@ -125,6 +125,27 @@ return function(Sim,T,Terrain)
       end
     end
     if #items==0 then return nil,"ALREADY_BUILT" end
+    -- OpenTTD 16.0-RC1 road_gui.cpp: CcRoadDepot/CcRoadStop call
+    -- ConnectRoadToStructure after the facility is placed. Only extend an
+    -- existing normal tram layer; nothing is built on empty or road-only
+    -- land. A blocked or unaffordable extension never cancels the facility.
+    if kind~="road" then
+      local budget=(s.companies[owner] and s.companies[owner].cash or 100000)-total
+      local axis=4-arg
+      local directions=kind=="drive_stop" and {axis,(axis+1)%4+1} or {axis}
+      for _,dir in ipairs(directions) do
+        local next_id=Sim.adjacent(ids[1],dir)
+        local neighbor=load(s,next_id)
+        if neighbor and neighbor.kind=="road" and neighbor.tramtype==ELRL and (neighbor.tram_bits or 0)>0 then
+          local back=2^((dir+1)%4)
+          local link,price=propose(s,owner,"road",next_id,back,occupancy)
+          if link and price<=budget then
+            items[#items+1]={id=next_id,record=link,frontage=true}
+            total,budget=total+price,budget-price
+          end
+        end
+      end
+    end
     return items,total
   end
   local function apply(s,owner,items,cost)
