@@ -123,7 +123,7 @@ return function(api,Lab,Track,Run,prices)
         if t.level_crossing.rail_owner~=owner then return nil,"Another company owns a tile on this route." end
         return false,unchanged
       elseif protected(id) then return nil,span_msg
-      elseif not remove and S.level_crossing_enabled and t.build=="road" and not t.rail_tracks then
+      elseif not remove and S.level_crossing_enabled and (t.build=="road" or t.tram and t.tram.kind=="road") and not t.rail_tracks then
         if gauge~=Types.RAIL then return nil,"Build this rail type away from road crossings." end
         local q,why=Sim.crossing_construction_quote(S,owner,id,{kind="rail",track=track})
         if not q then return nil,Sim.crossing_construction_error(why) end

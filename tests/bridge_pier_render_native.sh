@@ -43,6 +43,12 @@ if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   view_mark=TRAM_GRADE_NATIVE_VIEW
   views=(tram depot platform overlay)
 fi
+if [[ ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then
+  fixture=tram_crossing_render_native
+  ready_mark=TRAM_CROSSING_NATIVE_READY
+  view_mark=TRAM_CROSSING_NATIVE_VIEW
+  views=(tram_barred tram_crossing tram_modal tram_remove_rail)
+fi
 cat "tests/$fixture.lua" >> "$game/mods/luanttd_core/init.lua"
 # The terrain and companies in this graphics fixture are deliberately
 # seeded in the renderer's local world, not in the campaign worker.
@@ -70,7 +76,7 @@ water_wave_height = 2.0
 enable_dynamic_shadows = true
 enable_water_reflections = true
 EOF
-if [[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 || ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
+if [[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 || ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 || ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then
   # Keep this geometry screenshot readable in software-rendered CI.
   sed -i -e 's/enable_dynamic_shadows = true/enable_dynamic_shadows = false/' \
     -e 's/enable_water_reflections = true/enable_water_reflections = false/' "$out/client.conf"
@@ -115,10 +121,23 @@ for view in "${views[@]}"; do
   for _ in {1..25}; do grep -q "$view_mark $view" "$out/server.log" && break; sleep .2; done
   grep -q "$view_mark $view" "$out/server.log"
   sleep 2.5
+  if [[ "$view" == tram_modal ]]; then
+    slot=$(sed -n 's/.*TRAM_CROSSING_NATIVE_SLOT //p' "$out/server.log" | tail -1)
+    xdotool key "$slot"; sleep .45; xdotool mousedown 1; sleep .45; xdotool mouseup 1
+    for _ in {1..30}; do grep -q TRAM_CROSSING_NATIVE_MODAL "$out/server.log" && break; sleep .2; done
+    grep -q TRAM_CROSSING_NATIVE_MODAL "$out/server.log"
+    sleep .4
+  fi
   import -window root "$out/$view.png"
+  if [[ "$view" == tram_modal ]]; then
+    xdotool mousemove 650 451 click 1
+    sleep .9
+  fi
 done
 ! grep -Ei 'ERROR\[|could not load' "$out/client.log" "$out/server.log"
-if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
+if [[ ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then
+  echo "PASS: native tram stops at reserved rails and crosses only on release: $out"
+elif [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   echo "PASS: native graded terminal foundations, rails, wire and moving tram: $out"
 else
   echo "PASS: native submerged timber road and rail footings, dry slopes and animated ocean preserved: $out"

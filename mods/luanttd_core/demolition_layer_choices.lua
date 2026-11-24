@@ -26,8 +26,43 @@ return function(api,clear_structure)
     span(S.tunnel_below,S.stock_road_tunnels,"Remove road tunnel below, keep surface","road_tunnel")
     span(S.rail_tunnel_below,S.stock_rail_spans,"Remove rail tunnel below, keep surface","rail_tunnel")
     if t.tram then add("tramway","Tramway or tram facility",false,"This version does not support removing the tram layer separately.") end
-    if t.level_crossing then
-      add("crossing","Level crossing",false,"Separate road and rail removal is not available on a level crossing.")
+    local crossing=t.level_crossing
+    if crossing then
+      local axis=crossing.road_axis
+      if crossing.roadtype~=nil and Sim.road_remove_plan then
+        local q,why=Sim.road_remove_plan(S,n,id,id,axis,false,true)
+        add("crossing_road","Remove road pavement, keep rails and any tramway",q,
+          q and ("Cost: "..money(q.cost)) or Sim.road_removal_error(why),function()
+            local ok,note,tiles=Sim.apply_road_removal(S,n,q)
+            return true,ok and tiles or nil,note
+          end)
+      end
+      if crossing.tramtype~=nil and api.tram and api.tram.network then
+        local busy=api.tram.busy_probe and api.tram.busy_probe() or api.tram.busy
+        local q,why=api.tram.network.remove_plan(S,n,{first=id,last=id,axis=axis,
+          start_half=false,end_half=true},busy)
+        add("crossing_tram","Remove tram tracks, keep rails and any pavement",q,
+          q and (q.cost<0 and ("Refund: "..money(-q.cost)) or ("Cost: "..money(q.cost))) or
+            (api.tram.reason and api.tram.reason(why) or tostring(why)),function()
+            local ok,note,tiles=api.tram.network.apply_remove(S,n,q)
+            return true,ok and tiles or nil,note
+          end)
+      end
+      if Sim.crossing_rail_remove_plan then
+        local q,why=Sim.crossing_rail_remove_plan(S,n,id)
+        local rule=why=="WAIT_RAIL_RESERVATION" and "Wait for the rail reservation to be released."
+          or why=="OWNED_BY" and "The railway belongs to another company."
+          or why=="VEHICLE_IN_THE_WAY" and "Wait for vehicles to clear the crossing."
+          or why and Sim.crossing_construction_error(why)
+        add("crossing_rail","Remove the railway, keep road and tramway",q,
+          q and ("Refund: "..money(-q.cost)) or rule,function()
+            local ok,note,tiles=Sim.apply_crossing_rail_removal(S,n,q)
+            return true,ok and tiles or nil,note
+          end)
+      end
+      if not (seen.crossing_road or seen.crossing_tram or seen.crossing_rail) then
+        add("crossing","Level crossing",false,"No removable surface layer is available on this crossing.")
+      end
     end
     if t.rail_station_id or t.rail_depot_dir~=nil then
       local title=t.rail_station_id and "Remove entire station platform, keep rails" or "Remove railway depot, keep rails"

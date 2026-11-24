@@ -4,6 +4,7 @@ return function(Sim,mod,R)
   local s,net=R.world,R.network
   local api={s=s,Sim=Sim,structure_tools=true,trackworks=net.lab,rail_spans=net.spans,
     rail_build=R.rail and R.rail.build}
+  if R.tram then api.tram={network=R.tram.net,busy=R.tram.busy,busy_probe=R.tram.busy_probe} end
   local aquatic_remove
   if R.water then
     local w=R.water

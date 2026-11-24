@@ -26,6 +26,14 @@ return function(Sim,World)
           end
         end
       end
+      local tram=s.tram_pilot
+      if tram and tram.phase~="depot" then
+        local leg=tram.legs[tram.leg]
+        local f=leg and leg.frames[tram.index]
+        if f and f[4]==id then
+          a[#a+1]={type="road",id=-1,tile=id,x=f[1],y=f[2],direction=f[3]}
+        end
+      end
       -- Before the first physical movement a new frame may live in the
       -- road loop's authoritative hash but not yet in saved fleet state.
       -- Merge it with saved stationary/stop records without duplicates.
@@ -48,6 +56,10 @@ return function(Sim,World)
   function R.road_step(s,rail,hash,from,to,td,commit)
     if from==to or not (World.protected(s,from) or World.protected(s,to)) then return commit() end
     return World.road_step(s,R.context(s,rail,hash),from,to,td,false,commit)
+  end
+  function R.tram_step(s,rail,from,to,td,commit)
+    if from==to or not (World.protected(s,from) or World.protected(s,to)) then return commit() end
+    return World.road_step(s,R.context(s,rail),from,to,td,true,commit)
   end
   function R.train_move(s,rail,transitions,owner,commit)
     if not has_crossing(s) or #transitions==0 then return commit() end

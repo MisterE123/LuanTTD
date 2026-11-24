@@ -394,3 +394,4 @@ for i,bits in ipairs({4,8,16,32,3,6,24,63}) do
   assert(s.tiles[tile].rail_tracks==bits)
 end
 print("PASS AutoRoad preview rejects live-world curves and junctions without touching reservation bits")
+dofile("tests/tram_crossing_live.lua")

@@ -18,6 +18,12 @@ return function(Sim,T,Terrain)
     local t=id and s.tiles[id]
     if not t then return end
     local p=t.tram
+    local crossing=t.level_crossing
+    if crossing then
+      return {kind="crossing",axis=crossing.road_axis,tramtype=crossing.tramtype,
+        tram_bits=crossing.tram_bits,tram_owner=crossing.tram_owner,roadtype=crossing.roadtype,
+        road_bits=crossing.road_bits,road_owner=crossing.road_owner,slope=0,base=crossing.top}
+    end
     local slope,base=shape(s,id)
     local out={slope=slope,base=base,roadworks=t.roadworks,
       overhead=(s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id])~=nil}
@@ -41,7 +47,7 @@ return function(Sim,T,Terrain)
   end
   local function playable(s,id,t)
     return t and t.slope~=nil and not t.overhead and
-      not (Sim.rail_span_protected and Sim.rail_span_protected(s,id)) and
+      not (t.kind~="crossing" and Sim.rail_span_protected and Sim.rail_span_protected(s,id)) and
       not (s.tunnel_below and s.tunnel_below[id])
   end
   local function options(owner,allow_slopes)
@@ -55,6 +61,15 @@ return function(Sim,T,Terrain)
     local t=load(s,id)
     if not playable(s,id,t) then return nil,"TRAM_SITE_CLEARANCE" end
     if occupancy and occupancy(id) then t.occupied=true end
+    local source=s.tiles[id]
+    if kind=="road" and (source.level_crossing or source.build=="stock_rail") and Sim.crossing_construction_quote then
+      if t.occupied then return nil,"VEHICLE_IN_THE_WAY" end
+      local q,why=Sim.crossing_construction_quote(s,owner,id,{kind="tram",pieces=arg})
+      if not q then return nil,why end
+      local crossing=q.crossing
+      return {kind="crossing",tramtype=crossing.tramtype,tram_bits=crossing.tram_bits,
+        tram_owner=crossing.tram_owner,crossing_quote=q},q.price
+    end
     local p,why
     local policy=s.stock_road_town_policy or {}
     local opts=options(owner,policy.build_on_slopes~=false)
@@ -156,8 +171,18 @@ return function(Sim,T,Terrain)
     company.expense=company.expense+cost
     company.month_exp=company.month_exp+cost
     local dirty={}
-    for i,p in ipairs(items) do s.tiles[p.id].tram=p.record;dirty[i]=p.id end
+    local crossing
+    for i,p in ipairs(items) do
+      if p.record.crossing_quote then
+        Sim.apply_crossing_construction(s,p.record.crossing_quote)
+        crossing=true
+      else
+        s.tiles[p.id].tram=p.record
+      end
+      dirty[i]=p.id
+    end
     s.topology=s.topology+1
+    if crossing then Sim.refresh_crossing_construction(s) end
     return dirty,cost
   end
   function N.construct(s,owner,kind,ids,arg,occupancy)
@@ -234,6 +259,10 @@ return function(Sim,T,Terrain)
   end
   function N.apply_remove(s,owner,plan)
     return assert(removal).apply(s,owner,plan)
+  end
+  function N.move(s,from,to,commit)
+    if Sim.tram_crossing_step then return Sim.tram_crossing_step(s,from,to,commit) end
+    return commit()
   end
   function N.surface(s,id)
     local t=load(s,id)

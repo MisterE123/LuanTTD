@@ -135,16 +135,23 @@ return function(Network,Trip,Speed)
         Speed.tick(p,speed_cap,false,function(c)
           local f=leg.frames[c.index+1]
           if not f then return false end
-          if c.heading~=f[3] then c.heading=f[3];Speed.turn(c) end
-          c.index=c.index+1
-          c.steps=c.steps+1
-          if observe then observe(f,c) end
-          if c.index==#leg.frames then
-            local serviced=not c.loop or leg.order_index~=nil
-            if serviced then c.arrivals=c.arrivals+1 end
-            c.phase,c.wait,c.speed,c.subspeed,c.progress="stopped",serviced and 30 or 1,0,0,0
+          local function commit()
+            c.crossing_wait=nil
+            if c.heading~=f[3] then c.heading=f[3];Speed.turn(c) end
+            c.index=c.index+1
+            c.steps=c.steps+1
+            if observe then observe(f,c) end
+            if c.index==#leg.frames then
+              local serviced=not c.loop or leg.order_index~=nil
+              if serviced then c.arrivals=c.arrivals+1 end
+              c.phase,c.wait,c.speed,c.subspeed,c.progress="stopped",serviced and 30 or 1,0,0,0
+            end
+            return true
           end
-          return true
+          if not Network.move or leg.frames[c.index][4]==f[4] then return commit() end
+          local moved,why=Network.move(s,leg.frames[c.index],f,commit)
+          if not moved then c.speed,c.crossing_wait=0,why end
+          return moved
         end)
         if p.phase=="stopped" then p.progress=0 end
       end

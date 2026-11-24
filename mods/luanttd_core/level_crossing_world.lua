@@ -25,11 +25,11 @@ return function(Sim,Terrain,Crossing,Track)
     local x,z=Sim.xy(id)
     return Terrain.tile(s.corner_grid,x,z)
   end
-  local function occupied_layer(s, id, t)
+  local function occupied_layer(s, id, t, plain_tram)
     local dispatch=s.stock_rail_dispatch
     return t.terrain=="water" or t.tunnel_id or t.road_tunnel_id or t.road_bridge_id or
       t.rail_span_id or t.rail_station_id or t.rail_waypoint_id or t.road_waypoint_id or t.rail_depot_dir or t.station or t.depot_dir or
-      t.site or t.house or t.wood or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or
+      t.site or t.house or t.wood or t.tram and not plain_tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or
       t.signal or dispatch and dispatch.signals and dispatch.signals.records and dispatch.signals.records[id] or
       s.tunnel_below and s.tunnel_below[id] or s.bridge_above and s.bridge_above[id] or
       s.aqueduct_above and s.aqueduct_above[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
@@ -58,11 +58,30 @@ return function(Sim,Terrain,Crossing,Track)
   function W.quote(s,owner,id,r,ctx)
     if not s.level_crossing_enabled then return nil,"LEVEL_CROSSING_DISABLED" end
     local t=tile(s,id)
-    if not t or not r or (r.kind~="road" and r.kind~="rail") then return nil,"INVALID_PARAMETER" end
-    if W.protected(s,id) then return nil,"ALREADY_BUILT" end
+    if not t or not r or (r.kind~="road" and r.kind~="rail" and r.kind~="tram") then return nil,"INVALID_PARAMETER" end
+    local existing=t.level_crossing
     local company=s.companies and s.companies[owner]
-    if not company or t.owner~=owner or t.road_town then return nil,"OWNED_BY_ANOTHER" end
-    if occupied_layer(s,id,t) then return nil,"PROTECTED_TILE" end
+    if not company then return nil,"OWNED_BY_ANOTHER" end
+    if existing then
+      if r.kind=="rail" or r.kind=="road" and existing.roadtype~=nil or r.kind=="tram" and existing.tramtype~=nil then
+        return nil,"ALREADY_BUILT"
+      end
+      local vehicles=observe(ctx,id)
+      if not vehicles then return nil,"OCCUPANCY_UNKNOWN" end
+      local input=copy(existing)
+      for _,part in ipairs(vehicles) do if physical(part) then input.occupied=true;break end end
+      local reserved=reservation(s,id,existing.rail_axis,ctx,existing.reserved)
+      if reserved==nil then return nil,"RESERVATION_UNKNOWN" end
+      input.reserved=reserved
+      local request=copy(r);request.owner=owner
+      local plan,why=Crossing.quote(input,request,{cash=company.cash})
+      if not plan then return nil,why end
+      return {id=id,owner=owner,topology=s.topology,request=request,price=plan.cost,prior_build=t.build,
+        prior_bits=existing.road_bits or 0,prior_tram_bits=existing.tram_bits or 0,crossing=plan}
+    end
+    local tram=r.kind=="rail" and t.tram and t.tram.kind=="road" and t.tram or nil
+    if (t.owner or tram and tram.tram_owner)~=owner or t.road_town then return nil,"OWNED_BY_ANOTHER" end
+    if occupied_layer(s,id,t,tram) then return nil,"PROTECTED_TILE" end
     local slope,base,top=shape(s,id)
     if slope==nil then return nil,"NEEDS_SHARED_CORNERS" end
     if slope~=0 and not (ctx and ctx.allow_sloped) then return nil,"HOST_FLAT_ONLY" end
@@ -73,18 +92,22 @@ return function(Sim,Terrain,Crossing,Track)
     for _,v in ipairs(present) do if physical(v) then base_record.occupied=true;break end end
     local req=copy(r)
     req.owner=owner
-    if r.kind=="rail" and t.build=="road" and not t.rail_tracks then
+    if r.kind=="rail" and (t.build=="road" or tram) and not t.rail_tracks then
       if (r.railtype or 0)~=0 then return nil,"HOST_RAILTYPE_UNSUPPORTED" end
       base_record.kind="road"
       -- Host bit order N/E/S/W already equals stock NW/SW/SE/NE.
       base_record.road_bits=Sim.road_bits(s,id)
-      if base_record.road_bits==0 then return nil,"NO_ROAD_TRACK" end
-      base_record.roadtype=t.roadtype or 0
-      if base_record.roadtype~=0 then return nil,"HOST_ROADTYPE_UNSUPPORTED" end
-      base_record.road_owner=owner
+      if base_record.road_bits==0 and not tram then return nil,"NO_ROAD_TRACK" end
+      base_record.roadtype=base_record.road_bits>0 and (t.roadtype or 0) or nil
+      if base_record.roadtype and base_record.roadtype~=0 then return nil,"HOST_ROADTYPE_UNSUPPORTED" end
+      base_record.road_owner=base_record.roadtype~=nil and t.owner or nil
+      if tram then
+        base_record.tramtype,base_record.tram_bits,base_record.tram_owner=tram.tramtype,tram.tram_bits,tram.tram_owner
+      end
       base_record.disallowed,base_record.roadworks=t.road_disallowed or t.disallowed,t.roadworks
-    elseif r.kind=="road" and t.build=="stock_rail" and t.rail_tracks then
-      if (r.roadtype or 0)~=0 then return nil,"HOST_ROADTYPE_UNSUPPORTED" end
+    elseif (r.kind=="road" or r.kind=="tram") and t.build=="stock_rail" and t.rail_tracks then
+      local wanted=r.kind=="tram" and 1 or 0
+      if (r.roadtype or wanted)~=wanted then return nil,"HOST_ROADTYPE_UNSUPPORTED" end
       local gauge=t.rail_type or t.railtype or 0
       if gauge~=0 then return nil,gauge==1 and "ELECTRIC_CROSSING_NOT_MOUNTED" or "GUIDEWAY_CROSSING_NOT_MOUNTED" end
       if (r.disallowed or 0)~=0 then return nil,"CROSSING_ON_ONEWAY_ROAD" end
@@ -103,33 +126,79 @@ return function(Sim,Terrain,Crossing,Track)
     if not out then return nil,err end
     return {id=id,owner=owner,topology=s.topology,request=req,price=out.cost,
       prior_build=t.build,prior_bits=base_record.road_bits or base_record.trackbits,
-      crossing=out}
+      prior_tram_bits=base_record.tram_bits or 0,crossing=out}
   end
   -- RC1 RemoveRoad, RoadTileType::Crossing: the road's whole axis
   -- goes away even when the drag selects a single half. The separate
   -- rail claim lives in the dispatcher, not the road tile record.
-  function W.road_remove_quote(s,owner,id,wanted,ctx)
+  function W.surface_remove_quote(s,owner,id,wanted,ctx,tram,piece_price)
     local a=W.record(s,id)
-    if not a or a.roadtype~=0 or a.tramtype~=nil then return nil,"NOT_PLAIN_ROAD" end
-    if a.road_owner~=owner then return nil,"OWNED_BY" end
+    if not a or tram and a.tramtype==nil or not tram and a.roadtype==nil then
+      return nil,tram and "NO_TRAM" or "NOT_PLAIN_ROAD"
+    end
+    local type_owner=tram and a.tram_owner or a.road_owner
+    if type_owner~=owner then return nil,"OWNED_BY" end
     if a.road_axis~=0 and a.road_axis~=1 or a.rail_axis~=1-a.road_axis then return nil,"INVALID_PARAMETER" end
+    local present=tram and a.tram_bits or a.road_bits
     for _,b in ipairs{1,2,4,8} do
-      if math.floor(wanted/b)%2==1 and math.floor(a.road_bits/b)%2==0 then return nil,"NO_ROAD_PIECES" end
+      if math.floor(wanted/b)%2==1 and math.floor(present/b)%2==0 then return nil,"NO_ROAD_PIECES" end
     end
     local current=observe(ctx,id)
     if not current then return nil,"OCCUPANCY_UNKNOWN" end
     for _,v in ipairs(current) do if physical(v) then return nil,"VEHICLE_IN_THE_WAY" end end
     local life=s.stock_rail_dispatch and s.stock_rail_dispatch.life
     if a.reserved and not (life and life.bits) then return nil,"RESERVATION_UNKNOWN" end
-    return {id=id,tool="remove_crossing",build="stock_rail",road_bits=0,
-      rail_tracks=2^a.rail_axis,railtype=a.railtype,rail_owner=a.rail_owner,cost=80}
+    local remains=tram and a.roadtype~=nil or not tram and a.tramtype~=nil
+    return {id=id,tool=tram and "tram_remove_crossing" or "remove_crossing",build=remains and "road" or "stock_rail",
+      road_bits=tram and a.road_bits or 0,tram_bits=tram and 0 or a.tram_bits,
+      rail_tracks=2^a.rail_axis,railtype=a.railtype,rail_owner=a.rail_owner,cost=2*piece_price}
   end
-  function W.road_remove_apply(s,edit)
+  function W.road_remove_quote(s,owner,id,wanted,ctx)
+    return W.surface_remove_quote(s,owner,id,wanted,ctx,false,40)
+  end
+  function W.surface_remove_apply(s,edit)
     local id=edit.id
     local t=s.tiles[id]
-    assert(t.level_crossing and edit.rail_tracks)
-    t.build,t.owner,t.rail_tracks,t.rail_type=edit.build,edit.rail_owner,edit.rail_tracks,edit.railtype
-    t.road_bits,t.roadtype,t.road_town,t.road_disallowed,t.disallowed,t.level_crossing=nil,nil,nil,nil,nil,nil
+    local record=assert(t.level_crossing)
+    assert(edit.rail_tracks)
+    if edit.build=="road" then
+      if edit.tool=="tram_remove_crossing" then record.tramtype,record.tram_owner,record.tram_bits=nil,nil,0
+      else record.roadtype,record.road_owner,record.road_bits=nil,nil,0 end
+      t.owner,t.road_bits=record.road_owner or record.tram_owner,record.road_bits
+    else
+      t.build,t.owner,t.rail_tracks,t.rail_type=edit.build,edit.rail_owner,edit.rail_tracks,edit.railtype
+      t.road_bits,t.roadtype,t.road_town,t.road_disallowed,t.disallowed,t.level_crossing=nil,nil,nil,nil,nil,nil
+      s.level_crossing_tiles[id]=nil
+    end
+  end
+  W.road_remove_apply=W.surface_remove_apply
+
+  -- RC1 CmdRemoveSingleRail on a road crossing. Both other layers
+  -- keep their full inherited road axis and independent owners.
+  function W.rail_remove_quote(s,owner,id,ctx)
+    local a=W.record(s,id)
+    if not a or a.railtype~=0 then return nil,"NO_RAIL_ON_CROSSING" end
+    if a.rail_owner~=owner then return nil,"OWNED_BY" end
+    local occupied=observe(ctx,id)
+    if not occupied then return nil,"OCCUPANCY_UNKNOWN" end
+    for _,part in ipairs(occupied) do if physical(part) then return nil,"VEHICLE_IN_THE_WAY" end end
+    local held=reservation(s,id,a.rail_axis,ctx,a.reserved)
+    if held==nil then return nil,"RESERVATION_UNKNOWN" end
+    if held then return nil,"WAIT_RAIL_RESERVATION" end
+    return {id=id,cost=-70,rail_axis=a.rail_axis,roadtype=a.roadtype,road_bits=a.road_bits,road_owner=a.road_owner,
+      tramtype=a.tramtype,tram_bits=a.tram_bits,tram_owner=a.tram_owner}
+  end
+  function W.rail_remove_apply(s,edit)
+    local id=edit.id
+    local t=s.tiles[id]
+    assert(t.level_crossing)
+    t.level_crossing,t.rail_tracks,t.rail_type=nil,nil,nil
+    t.build=edit.roadtype~=nil and "road" or nil
+    t.road_bits=edit.roadtype~=nil and edit.road_bits or nil
+    t.roadtype,t.owner=edit.roadtype,edit.road_owner
+    if edit.tramtype~=nil then
+      t.tram={kind="road",tramtype=edit.tramtype,tram_bits=edit.tram_bits,tram_owner=edit.tram_owner}
+    end
     s.level_crossing_tiles[id]=nil
   end
 
@@ -138,7 +207,8 @@ return function(Sim,Terrain,Crossing,Track)
     local q,err=W.quote(s,owner,p.id,p.request,ctx)
     if not q then return nil,err end
     local a,b=q.crossing,p.crossing
-    if not b or q.price~=p.price or q.prior_build~=p.prior_build or q.prior_bits~=p.prior_bits or
+    if not b or q.price~=p.price or q.prior_build~=p.prior_build or q.prior_bits~=p.prior_bits or q.prior_tram_bits~=p.prior_tram_bits or
+        a.tramtype~=b.tramtype or a.roadtype~=b.roadtype or
         a.rail_axis~=b.rail_axis or a.road_axis~=b.road_axis or a.slope~=b.slope or a.top~=b.top then
       return nil,"STALE_QUOTE"
     end
@@ -155,7 +225,8 @@ return function(Sim,Terrain,Crossing,Track)
     if (ctx and ctx.reserved) or (d and d.life and d.life.bits) then a.reserved=nil end
     -- Do not leave a second owner or competing rail editing path: Rail
     -- board reads the canonical crossing while legacy road keeps its tool.
-    t.build,t.owner,t.road_bits,t.rail_tracks="road",a.road_owner,a.road_bits,nil
+    t.build,t.owner,t.road_bits,t.rail_tracks="road",a.road_owner or a.tram_owner,a.road_bits,nil
+    t.tram=nil
     t.level_crossing=a
     index[q.id]=true
     return a

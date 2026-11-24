@@ -9,7 +9,7 @@ return function(F,Cost,Search,Motion)
   local function depot(t) return t and t.kind=="depot" end
   local function stop(t) return t and t.kind=="drive_stop" end
   local function end_state(t,td) return stop(t) and 64+td or td end
-  local function driving(t) return t and (t.kind=="road" or depot(t) or stop(t)) end
+  local function driving(t) return t and (t.kind=="road" or t.kind=="crossing" or depot(t) or stop(t)) end
   local function tram_type(v,t)
     if not driving(t) or t.tramtype==nil then return false end
     if v.compatible then return v.compatible[t.tramtype]==true end

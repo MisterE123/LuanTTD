@@ -24,6 +24,10 @@ return function(Sim,Terrain,Slope,Sweep,clear_per_piece)
     local function quote(id,bits)
       local t=s.tiles[id]
       local tr=t and t.tram
+      if t and t.level_crossing and Sim.tram_crossing_remove_quote then
+        if t.level_crossing.tramtype and busy(id) then return nil,"VEHICLE_IN_THE_WAY" end
+        return Sim.tram_crossing_remove_quote(s,owner,id,bits,clear_per_piece)
+      end
       if not tr or tr.tramtype~=1 or not tr.tram_bits or tr.tram_bits==0 then return nil,"NO_TRAM" end
       if tr.kind~="road" or t.level_crossing or t.road_waypoint_id or t.station or t.road_tunnel_id
           or t.road_bridge_id or t.rail_span_id or t.stock_void then return nil,"TRAM_FACILITY_PROTECTED" end
@@ -45,9 +49,13 @@ return function(Sim,Terrain,Slope,Sweep,clear_per_piece)
   function M.apply(s,owner,q)
     local company=s.companies[owner]
     local dirty={}
+    local crossing
     for i,edit in ipairs(q.changes) do
       local t=s.tiles[edit.id]
-      if edit.tram_bits==0 then t.tram=nil
+      if edit.tool=="tram_remove_crossing" then
+        Sim.tram_crossing_remove_apply(s,edit)
+        crossing=true
+      elseif edit.tram_bits==0 then t.tram=nil
       else t.tram.tram_bits=edit.tram_bits end
       dirty[i]=edit.id
     end
@@ -55,6 +63,7 @@ return function(Sim,Terrain,Slope,Sweep,clear_per_piece)
     company.expense=company.expense+q.cost
     company.month_exp=company.month_exp+q.cost
     s.topology=s.topology+1
+    if crossing then Sim.refresh_crossing_construction(s) end
     local money=q.cost<0 and ("Recovered $%d."):format(-q.cost) or ("Cost $%d."):format(q.cost)
     return true,("Removed tram track on %d tile%s. %s"):format(#dirty,#dirty==1 and "" or "s",money),dirty
   end

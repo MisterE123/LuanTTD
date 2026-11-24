@@ -379,6 +379,16 @@ return function(api)
       tramway.grade[slope]=architecture(asset,asset,"tram_palette")
       tramway.signed[slope]=architecture(asset.."_signed",asset.."_signed","tram_palette")
     end
+    local tram_crossing={}
+    for axis=0,1 do
+      local asset="tramway_crossing_"..axis
+      tram_crossing[axis]=architecture(asset,asset,"tram_palette")
+    end
+    function R.tram_crossing_node(c,x,y,z)
+      if c.tramtype==1 and y==c.top+2 and x%2==0 and z%2==0 then
+        return tram_crossing[c.road_axis]
+      end
+    end
     for mask=1,15 do
       local asset="tramway_"..mask
       tramway[mask]=architecture(asset,asset,"tram_palette")
@@ -979,6 +989,8 @@ return function(api)
     end
     if api.crossings and t.level_crossing then
       local c=t.level_crossing
+      local tram=R.tram_crossing_node and R.tram_crossing_node(c,x,y,z)
+      if tram then return tram end
       if y<=c.top then return c.foundation~="none" and retaining or gnames[t.terrain][t.variant] end
       if y==c.top+1 and x%2==0 and z%2==0 then
         local gate=(c.barred or c.phase=="unobserved" or c.phase=="mixed_occupancy") and "closed" or "open"

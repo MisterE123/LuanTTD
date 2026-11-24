@@ -284,6 +284,40 @@ local function crossing_road_step(s,world,from,to,td,commit)
   if not c then return false end
   return c.runtime.road_step(s,c.rail(s),world,from,to,td,commit)
 end
+function M.tram_crossing_step(s,from,to,commit)
+  if not (M.crossing_protected(s,from[4]) or M.crossing_protected(s,to[4])) then return commit() end
+  local c=crossing_bindings[s]
+  if not c then return false,"CROSSING_UNOBSERVED" end
+  return c.runtime.tram_step(s,c.rail(s),from[4],to[4],to[6],commit)
+end
+function M.tram_crossing_remove_quote(s,owner,id,bits,piece_price)
+  local c=crossing_bindings[s]
+  if not c then return nil,"TRAM_FACILITY_PROTECTED" end
+  if s.stock_rail_run or c.survey_clear and not c.survey_clear() then return nil,"CLEAR_SURVEYED_TRAIN" end
+  return c.runtime.world.surface_remove_quote(s,owner,id,bits,c.runtime.context(s,c.rail(s)),true,piece_price)
+end
+function M.tram_crossing_remove_apply(s,edit)
+  return assert(crossing_bindings[s]).runtime.world.surface_remove_apply(s,edit)
+end
+function M.crossing_rail_remove_plan(s,owner,id)
+  local c=crossing_bindings[s]
+  if not c or not s.companies[owner] then return nil,"NO_RAIL_ON_CROSSING" end
+  if s.stock_rail_run or c.survey_clear and not c.survey_clear() then return nil,"CLEAR_SURVEYED_TRAIN" end
+  return c.runtime.world.rail_remove_quote(s,owner,id,c.runtime.context(s,c.rail(s)))
+end
+function M.apply_crossing_rail_removal(s,owner,quote)
+  local now,why=M.crossing_rail_remove_plan(s,owner,quote.id)
+  if not now then return false,why end
+  for _,field in ipairs{"rail_axis","roadtype","road_bits","road_owner","tramtype","tram_bits","tram_owner","cost"} do
+    if now[field]~=quote[field] then return false,"STALE_QUOTE" end
+  end
+  local c=crossing_bindings[s]
+  c.runtime.world.rail_remove_apply(s,now)
+  debit(s.companies[owner],now.cost)
+  s.topology=s.topology+1
+  M.refresh_crossing_construction(s)
+  return true,"Removed the railway. Road and tram layers remain; recovered $70.",{now.id}
+end
 local oneway_bindings=setmetatable({},{__mode="k"})
 local auto_oneway
 function M.mount_road_oneway(s,W)
@@ -937,6 +971,13 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
   if t.roadworks then return nil,"Road works block that tile." end
   if t.level_crossing then
     local q=t.level_crossing
+    if q.roadtype==nil then
+      if q.tramtype and occupied(id,true) then return nil,"Wait for the tram to clear its route." end
+      local change,why=M.crossing_construction_quote(s,owner,id,{kind="road",pieces=request})
+      if not change then return nil,M.crossing_construction_error(why) end
+      return {id=id,tool="road",build="road",road_bits=change.crossing.road_bits,owner=owner,h=t.h,
+        level_crossing=change.crossing,crossing_quote=change},change.price
+    end
     local _,added=new_pieces(request,q.road_bits)
     if q.road_owner~=owner then return nil,M.crossing_construction_error("OWNED_BY_ANOTHER") end
     if added~=0 then return nil,M.crossing_construction_error("FALLBACK_CLEAR") end

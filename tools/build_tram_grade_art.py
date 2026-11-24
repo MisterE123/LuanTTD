@@ -32,6 +32,17 @@ def variant(grade, offset=1):
     return "\n".join(lines)+"\n"
 
 
+def level_crossing(axis):
+    bits={0:10,1:5}[axis]
+    lines=["# Original flat tram mesh translated for the crossing host voxel"]
+    for line in (MODELS/f"bl_tramway_{bits}.obj").read_text().splitlines():
+        if line.startswith("v "):
+            x,y,z=map(float,line.split()[1:])
+            line=f"v {x:.6f} {y-1:.6f} {z:.6f}"
+        lines.append(line)
+    return "\n".join(lines)+"\n"
+
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--check",action="store_true")
@@ -44,7 +55,14 @@ def main():
                 assert target.read_text()==content,target
             elif not target.exists() or target.read_text()!=content:
                 target.write_text(content)
-    print("PASS original tram rails, wires and masts match four source inclines")
+    for axis in range(2):
+        target=MODELS/f"bl_tramway_crossing_{axis}.obj"
+        content=level_crossing(axis)
+        if args.check:
+            assert target.read_text()==content,target
+        elif not target.exists() or target.read_text()!=content:
+            target.write_text(content)
+    print("PASS original tram rails, wires and masts match four source inclines and both level crossing axes")
 
 
 if __name__=="__main__":
