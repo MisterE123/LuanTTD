@@ -137,6 +137,7 @@ case "${1:-}" in
     LUANTTD_QA_OWNED_LAND=1 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_TOWN_STATUE=1 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_COMPANY_HQ=1 bash tests/stock_steel_mill_layout_native.sh
+    LUANTTD_QA_SPLIT_FENCE=1 bash tests/stock_steel_mill_layout_native.sh
     ;;
   rail-dispatch)
     python3 tests/rail_early_diesel_art.py

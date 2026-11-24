@@ -5,6 +5,7 @@ local Terrain=dofile(mod.."/openttd/terrain.lua")
 local Flood=dofile(mod.."/openttd/water_flood.lua")
 local R=dofile(mod.."/openttd/rail_half_water.lua")(T,api.slope)
 local Coast=dofile(mod.."/water_flood_world.lua")(Sim,Terrain,Flood,T,api.slope,R)
+local Fence=dofile(mod.."/rail_split_fence.lua")(api.slope)
 local id,x,z,base,shape,bits,corner_profile
 local wet,done
 local build={{7,8},{11,16},{13,4},{14,32}}
@@ -16,11 +17,13 @@ local function paint_check(p)
   local def=core.registered_nodes[n]
   local expect="bl_rail_foundation_split_"..corner_profile.mesh_key..(done and "" or "_wet")..".obj"
   if not def or def.mesh~=expect then return false end
-  local g=R.dry_ground(bits)
+  local ground=done and R.dry_ground(bits) or 13
+  local key=assert(Fence.design(corner_profile,ground,bits,base))
+  local f=core.registered_nodes[core.get_node({x=2*x+1,y=base+1,z=2*z+1}).name]
+  if f.mesh~="bl_rail_split_fence_"..key..".obj" then return false end
   for h,pieces in pairs(corner_profile.groups) do
     local rail=core.registered_nodes[native_node(0,h+1)]
-    local fence=core.registered_nodes[native_node(1,h+1)]
-    if rail.mesh~="bl_rail_track_"..pieces..".obj" or fence.mesh~="bl_rail_ground_fence_"..g.."_0.obj" then return false end
+    if rail.mesh~="bl_rail_track_"..pieces..".obj" then return false end
   end
   return true
 end

@@ -324,6 +324,8 @@ jobs:
           /usr/bin/python3 tools/build_company_hq_art.py --check
           lua5.1 tools/build_rail_split_foundations.lua --check
           /usr/bin/python3 tools/build_rail_split_atlas.py --check
+          lua5.1 tests/rail_split_fence_art.lua
+          /usr/bin/python3 tools/build_rail_split_fences.py --check
           lua5.1 tests/stock_rail_ground_fence_art_surface.lua
           /usr/bin/python3 tests/stock_rail_ground_fence_art.py
           python3 tools/build_rail_barren_texture.py --check

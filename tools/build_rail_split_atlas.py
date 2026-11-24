@@ -27,11 +27,15 @@ for y in range(64, 128):
         else:
             c = (105, 116, 96)
         out.putpixel((x, y), tuple(v + grain + room for v in c))
-target = root / "bl_rail_split_foundation_atlas.png"
-buf = io.BytesIO()
-out.save(buf, format="PNG", optimize=True)
-if a.check:
-    actual = Image.open(target)
-    assert actual.size == (128, 128) and actual.tobytes() == out.tobytes()
-else:
-    target.write_bytes(buf.getvalue())
+green=out.copy()
+barren=Image.open(root / "bl_rail_barren.png").convert("RGB").resize((128,64),Image.Resampling.NEAREST)
+out.paste(barren,(0,0))
+for suffix,atlas in (("",green),("_barren",out)):
+    target = root / f"bl_rail_split_foundation{suffix}_atlas.png"
+    buf = io.BytesIO()
+    atlas.save(buf, format="PNG", optimize=True)
+    if a.check:
+        actual = Image.open(target)
+        assert actual.size == (128, 128) and actual.tobytes() == atlas.tobytes()
+    else:
+        target.write_bytes(buf.getvalue())

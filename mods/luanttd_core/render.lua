@@ -660,7 +660,9 @@ return function(api)
     check("aqueduct_above","stock_aqueducts")
     return level
   end
-  local split_nodes,split_wet_nodes={},{}
+  local split_nodes,split_wet_nodes,split_barren_nodes={},{},{}
+  local split_fences={}
+  local split_fence=dofile(modpath.."/rail_split_fence.lua")(api.slope)
   if terrain and api.trackworks and api.trackworks.split_surface then
     local roots=api.trackworks.split_surface
     local t=dofile(modpath.."/openttd/rail_track.lua")
@@ -681,6 +683,10 @@ return function(api)
             drawtype="mesh",mesh="bl_rail_foundation_split_"..key..".obj",
             paramtype="light",sunlight_propagates=true,pointable=false,
             collision_box={type="fixed",fixed=fixed}})
+          split_barren_nodes[key]=reg("rail_foundation_split_"..key.."_barren",{png("rail_split_foundation_barren_atlas")},{
+            drawtype="mesh",mesh="bl_rail_foundation_split_"..key..".obj",
+            paramtype="light",sunlight_propagates=true,pointable=false,
+            collision_box={type="fixed",fixed=fixed}})
           if p.foundation=="half" or p.foundation=="none" or p.foundation=="rail" then
             local wet=shore.flood(raw,bits,0,function() return false end)
             if wet and wet.ground==13 then
@@ -691,6 +697,14 @@ return function(api)
             end
           end
         end
+      end
+    end
+    for _,mesh in ipairs(core.get_dir_list(modpath.."/models",false)) do
+      local pattern=mesh:match("^bl_rail_split_fence_([%d_]+)%.obj$")
+      if pattern then
+        split_fences[pattern]=reg("rail_split_fence_"..pattern,{png("rail_ground_fence_atlas")},{
+          drawtype="mesh",mesh=mesh,use_texture_alpha="clip",paramtype="light",
+          sunlight_propagates=true,walkable=false,pointable=false})
       end
     end
   end
@@ -706,12 +720,15 @@ return function(api)
     local wet=t.rail_ground==13 and split_wet_nodes[split.mesh_key]
     if y<base then return gnames.grass[t.variant] end
     if y==base then return wet and ocean(x,z) or slope_fill end
-    if x%2==1 and z%2==0 and y==base+1 then return wet or assert(split_nodes[split.mesh_key]) end
+    if x%2==1 and z%2==0 and y==base+1 then
+      return wet or ((not t.rail_ground or t.rail_ground==0) and split_barren_nodes[split.mesh_key])
+        or assert(split_nodes[split.mesh_key])
+    end
     local pieces=split.groups[y-1]
     if x%2==0 and z%2==0 and pieces then return stock_rail.visual(id,pieces,0) end
-    if x%2==1 and z%2==0 and R.split_rail_fence then
-      local fence=R.split_rail_fence(t,split,y)
-      if fence then return fence end
+    if x%2==1 and z%2==1 and y==base+1 then
+      local key=split_fence.design(split,t.rail_ground,t.rail_tracks,base)
+      if key then return assert(split_fences[key],key) end
     end
     return "air"
   end
@@ -1085,16 +1102,6 @@ return function(api)
     for _,mask in ipairs{3,6,9,12} do
       rapids[mask]=architecture("stock_river_rapid_rocks_"..mask,"river_rapid_rocks_"..mask,"stock_water_rocks_atlas")
     end
-  end
-  local fence_for_piece={[4]=10,[8]=11,[16]=8,[32]=9}
-  function R.split_rail_fence(t,profile,y)
-    local ground=t.rail_ground
-    if ground==13 then ground=fence_for_piece[t.rail_tracks] end
-    if not (ground and ground>=8 and ground<=11) then return end
-    local piece=profile.groups[y-1]
-    if not piece or fence_for_piece[piece]~=ground then return end
-    local row=stock_scenery.rail_fence and stock_scenery.rail_fence[ground]
-    return row and row[0]
   end
   if terrain and api.generated_world then
     local land=reg("owned_land_ground",{png("owned_land_ground"),png("hill0"),png("grass_side")})

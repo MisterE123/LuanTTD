@@ -60,6 +60,11 @@ if [[ ${LUANTTD_QA_COMPANY_HQ:-0} == 1 ]]; then
   fixture=tests/company_hq_native.lua
   marker='PASS NATIVE HQ'
 fi
+if [[ ${LUANTTD_QA_SPLIT_FENCE:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/rail_split_fence_native.lua
+  marker='PASS NATIVE SPLIT FENCE'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -232,6 +237,20 @@ if [[ ${LUANTTD_QA_COMPANY_HQ:-0} == 1 ]]; then
   if command -v import >/dev/null; then import -window root -quality 91 "$out/headquarters-build.jpg"; fi
   wait_hq 'NATIVE HQ MOVE READY'
   sleep .50; xdotool mousedown 1; sleep .30; xdotool mouseup 1
+fi
+if [[ ${LUANTTD_QA_SPLIT_FENCE:-0} == 1 ]]; then
+  for ptn in 'NATIVE SPLIT FENCE BARREN' 'NATIVE SPLIT FENCE BORDER'; do
+    for _ in {1..255}; do
+      grep -q "$ptn" "$out/server.log" && break
+      kill -0 "$server" 2>/dev/null || break
+      sleep .25
+    done
+    grep -q "$ptn" "$out/server.log" || { tail -n 60 "$out/"{server,client}.log; exit 1; }
+    sleep .6
+    if command -v import >/dev/null; then
+      import -window root -quality 91 "$out/fence-${ptn##* }.jpg"
+    fi
+  done
 fi
 for _ in {1..360}; do grep -q "$marker" "$out/server.log" && break; kill -0 "$server" 2>/dev/null || break; sleep .25; done
 grep "$marker" "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
