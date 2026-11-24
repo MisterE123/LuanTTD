@@ -89,14 +89,15 @@ return function(Sim,Terrain,Follow,OneWay,settings)
     if slope==nil then return end
     local out={kind="obstructed",slope=slope,roadworks=t.roadworks}
     if Sim.rail_span_protected and Sim.rail_span_protected(s,id) then return out end
-    if normal(t) then
+    local tram_only=t.build==nil and t.tram and t.tram.kind=="road"
+    if normal(t) or tram_only then
       if t.site or t.stock_industry or t.ship or t.airfield or t.house or (t.tram and t.tram.kind~="road") then return out end
       local d=W.read(t)
       local bits=Sim.road_bits(s,id)
       if not valid_drd(d) or (d~=0 and not straight(bits)) then return out end
       out.kind,out.roadtype,out.road_bits,out.disallowed="road",t.roadtype or 0,bits,d
       out.owner=t.road_town and town_owner or t.owner
-      out.tram_bits=t.tram and t.tram.bits or t.tram_bits
+      out.tram_bits=t.tram and t.tram.tram_bits or t.tram_bits
     elseif not t.build and not (t.owner or t.station or t.site or t.house or t.wood or t.stock_industry or
         t.source_house or t.level_crossing or t.rail_tracks or t.rail_span_id or t.tram or t.ship or t.airfield or
         t.stock_canal or t.water_class or t.tunnel_id or t.road_tunnel_id or t.road_bridge_id or t.terrain=="water") then
@@ -205,12 +206,16 @@ return function(Sim,Terrain,Follow,OneWay,settings)
     p.owner,p.start,p.last,p.axis,p.topology=owner,start,last,axis,s.topology
     p.terrain_revision=s.corner_grid.revision
     p.affordable=company.cash>=p.cost
+    local occupied=Sim.road_piece_occupancy(s)
     -- Host keeps town/competitor geometry protected even in the stock
     -- half-tile additions path where there is no sign-only ownership gate.
     for _,e in ipairs(p.changes) do
       local t=s.tiles[e.tile]
       if e.added~=0 and (t.road_town or t.owner and t.owner~=owner) then
         return nil,"OWNED_BY",e.tile
+      end
+      if e.added~=0 and t.tram and s.tram_pilot and occupied(e.tile,true) then
+        return nil,"VEHICLE_IN_THE_WAY",e.tile
       end
     end
     local patches=proposed(s,p)

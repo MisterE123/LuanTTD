@@ -373,10 +373,11 @@ return function(api)
   end
   local tramway,tram_stops,tram_depots={},{},{}
   if api.tram_tools then
-    tramway.grade={}
+    tramway.grade,tramway.signed={},{}
     for _,slope in ipairs{3,6,9,12} do
       local asset="tramway_grade_"..slope
       tramway.grade[slope]=architecture(asset,asset,"tram_palette")
+      tramway.signed[slope]=architecture(asset.."_signed",asset.."_signed","tram_palette")
     end
     for mask=1,15 do
       local asset="tramway_"..mask
@@ -903,7 +904,11 @@ return function(api)
       local level=track and track.base or ground
       local slope=track and track.grade or 0
       if x%2==0 and z%2==0 then
-        if slope~=0 and y==level+2 then return tramway.grade[slope] end
+        if slope~=0 then
+          local marks=api.oneway and (t.road_disallowed or t.disallowed or 0)~=0
+          if marks and y==level+3 then return tramway.signed[slope] end
+          if not marks and y==level+2 then return tramway.grade[slope] end
+        end
         if slope==0 and y==level+1 then
           if p.kind=="depot" then return tram_depots[p.dir] end
           if p.kind=="drive_stop" then return tram_stops[p.dir] end

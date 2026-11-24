@@ -884,8 +884,8 @@ end
 -- Snapshot positions at the first guarded tile, not once per piece;
 -- unoccupied terrain, no-ops and cheap edits never need the fleet.
 function M.road_piece_occupancy(s)
-  local occupied
-  return function(id)
+  local occupied,pilot_path
+  return function(id,with_tram)
     if not occupied then
       occupied={}
       for _,v in pairs(s.fleet) do
@@ -893,7 +893,20 @@ function M.road_piece_occupancy(s)
         if at then occupied[at]=true end
       end
     end
-    return occupied[id]==true
+    if occupied[id] then return true end
+    if not with_tram then return false end
+    -- The pilot depends on an exclusive tram route, even when its
+    -- mesh is out of range. Index that path only for shared-layer work.
+    if not pilot_path then
+      pilot_path={}
+      local tram=s.tram_pilot
+      if tram and tram.version==1 then
+        for _,leg in ipairs(tram.legs) do
+          for _,at in ipairs(leg.path) do pilot_path[at]=true end
+        end
+      end
+    end
+    return pilot_path[id]==true
   end
 end
 local function road_piece_plan(s,owner,id,t,request,occupied)
@@ -912,7 +925,7 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
   end
   if t.airfield then return nil,"That tile is part of the country airfield." end
   if t.ship then return nil,"That tile is part of a ship facility." end
-  if t.tram and (not t.build or t.tram.kind~="road") then
+  if t.tram and t.tram.kind~="road" then
     return nil,"That tile has a dedicated tramway or tram facility."
   end
   if t.stock_landmark then return nil,"This landmark is protected." end
@@ -960,17 +973,28 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
     return nil,"Different infrastructure already occupies that tile."
   end
   local mask=ground_shape(s,id)
-  local pieces,foundation=road_rules.prepare(mask,request,existing,0,true)
-  if not pieces and foundation~="ALREADY_BUILT" then return nil,"Land sloped in the wrong direction." end
+  local other=t.tram and t.tram.tram_bits or 0
+  local policy=s.stock_road_town_policy
+  local pieces,foundation=request,false
+  -- RC1 CmdBuildRoad: an exact copy of the other layer needs no second
+  -- foundation. Other requests pass the stock slope tables and still
+  -- must agree with the installed tramway's physical foundation.
+  if other~=request then
+    pieces,foundation=road_rules.prepare(mask,request,existing,other,not policy or policy.build_on_slopes~=false)
+    if not pieces and foundation~="ALREADY_BUILT" then return nil,"Land sloped in the wrong direction." end
+  end
   local combined,count=new_pieces(pieces or 0,existing)
+  if other~=0 and count>0 and road_rules.foundation(mask,combined)~=road_rules.foundation(mask,other) then
+    return nil,"The road and tram tracks must share the same foundation."
+  end
   local cost=math.ceil(M.tools.road.price*count/2)+(foundation==true and M.road_foundation_price or 0)
   local proposed={id=id,tool=t.build or "road",build=t.build or "road",
     road_bits=combined,owner=(not t.road_town and owner or nil),
     road_town=t.road_town,depot_dir=t.depot_dir,h=t.h}
   -- A change of foundation must not be made under a vehicle.
-  if cost>0 and t.build and (t.road_town or
-      road_rules.foundation(mask,existing)~=road_rules.foundation(mask,combined)) then
-    if occupied(id) then return nil,"Wait for the vehicle to clear that tile." end
+  if cost>0 and (other~=0 or t.build and (t.road_town or
+      road_rules.foundation(mask,existing)~=road_rules.foundation(mask,combined))) then
+    if occupied(id,other~=0) then return nil,"Wait for the vehicle to clear that tile." end
   end
   return proposed,cost
 end

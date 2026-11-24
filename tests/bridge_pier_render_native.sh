@@ -41,7 +41,7 @@ if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   fixture=tram_grade_render_native
   ready_mark=TRAM_GRADE_NATIVE_READY
   view_mark=TRAM_GRADE_NATIVE_VIEW
-  views=(tram depot platform)
+  views=(tram depot platform overlay)
 fi
 cat "tests/$fixture.lua" >> "$game/mods/luanttd_core/init.lua"
 # The terrain and companies in this graphics fixture are deliberately

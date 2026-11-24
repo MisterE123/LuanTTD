@@ -143,3 +143,42 @@ local two=at(43,16)
 local quick={tool="tram_facility",kind="drive_stop",first=two,direction=F.NE}
 assert(War.commit(owner,quick,nil,true) and s.tiles[two].tram.kind=="drive_stop")
 print("PASS tram facility click uses the normal one-turn road placement result, rejects withdrawn frontage, and permits quick clicks without a hover quote")
+
+-- Building the second layer in either order must obey the very same
+-- source foundation. The street and the tram can have different owners.
+local overlay=at(20,11)
+build("road",{overlay},5)
+local before_grade=assert(Network.surface(s,overlay))
+assert(before_grade.grade==6 and before_grade.base==1)
+local paving="Street owner"
+local paving_company=S.company(s,paving)
+local bad_road,denied=S.autoroad_plan(s,paving,overlay,overlay,0,false,true)
+assert(not bad_road and denied:find("sloped",1,true))
+assert(not s.tiles[overlay].build and s.tiles[overlay].tram.tram_owner==owner)
+local road_quote=assert(S.autoroad_plan(s,paving,overlay,overlay,1,false,true))
+assert(#road_quote.changes==1 and road_quote.changes[1].road_bits==5)
+local cash_before=paving_company.cash
+assert(S.apply_road_construction(s,paving,road_quote))
+local ground=s.tiles[overlay]
+assert(ground.build=="road" and ground.road_bits==5 and ground.owner==paving)
+assert(ground.tram.tram_bits==5 and ground.tram.tram_owner==owner)
+assert(paving_company.cash==cash_before-road_quote.cost)
+local asphalt,asphalt_base=S.road_surface(s,overlay)
+local after_grade=assert(Network.surface(s,overlay))
+assert(asphalt==after_grade.grade and asphalt_base==after_grade.base and asphalt==6 and asphalt_base==1)
+local _,active_denial=S.autoroad_plan(s,paving,ramp,ramp,1,false,true)
+assert(active_denial=="Wait for the vehicle to clear that tile." and not s.tiles[ramp].build)
+print("PASS road can overlay an existing separate owner's tram track without charging for or changing its foundation, and incompatible or active grades are refused")
+local Way=upstream("road_oneway")(upstream("road_slope"),F)
+local W=dofile(root.."road_oneway_world.lua")(S,Terrain,F,Way)
+s.road_economy,s.road_stock_clock=true,true
+local signed=at(22,11)
+build("road",{signed},5)
+local wrong,reason=W.quote(s,paving,signed,signed,0,{start_half=false,end_half=true})
+assert(not wrong and reason=="WRONG_SLOPE")
+local one_way=assert(W.quote(s,paving,signed,signed,1,{start_half=false,end_half=true,toggle=1}))
+assert(one_way.cost==190 and W.commit(s,paving,one_way))
+assert(s.tiles[signed].road_disallowed~=nil and s.tiles[signed].road_bits==5 and s.tiles[signed].tram.tram_owner==owner)
+local _,busy=W.quote(s,paving,ramp,ramp,1,{start_half=false,end_half=true,toggle=1})
+assert(busy=="VEHICLE_IN_THE_WAY" and not s.tiles[ramp].build)
+print("PASS signed road matches the installed tram foundation, charges only its own pavement and leaves the tram owner and track unchanged")

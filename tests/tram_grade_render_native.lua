@@ -33,6 +33,17 @@ assert(S.tiles[at(depot_x+1,15)].tram.tram_bits==10)
 construct("road",Sim.line(at(route_x,12),at(route_x,22)))
 construct("drive_stop",{first},1)
 construct("drive_stop",{last},1)
+local overlay=at(route_x+3,ramp_z)
+construct("road",{overlay},5)
+assert(not S.tiles[overlay].build and net.surface(S,overlay).grade==6)
+local duplicate=Sim.autoroad_plan(S,owner,overlay,overlay,0,false,true)
+assert(not duplicate)
+assert(Sim.autoroad_build(S,owner,overlay,overlay,1,false,true))
+assert(S.tiles[overlay].road_bits==5 and S.tiles[overlay].tram.tram_bits==5)
+local signed=at(route_x+4,ramp_z)
+construct("road",{signed},5)
+assert(api.oneway.build(S,owner,signed,signed,1,{start_half=false,end_half=true,toggle=1}))
+assert(S.tiles[signed].road_bits==5 and S.tiles[signed].tram.tram_bits==5 and S.tiles[signed].road_disallowed)
 local pilot=assert(run.start(S,owner,depot,first,last))
 local wanted={x=2*route_x+.5,y=2,z=2*ramp_z+.5}
 local camera={x=wanted.x+6,y=4.4,z=wanted.z-3.8}
@@ -57,6 +68,11 @@ core.register_on_joinplayer(function(p)
     assert(core.get_node({x=48,y=3,z=42}).name=="luanttd_core:tram_stop_1")
     assert(core.get_node({x=48,y=2,z=34}).name=="luanttd_core:road_grade_6")
     assert(core.get_node({x=48,y=3,z=34}).name=="luanttd_core:tramway_grade_6")
+    assert(core.get_node({x=54,y=2,z=34}).name=="luanttd_core:road_grade_6")
+    assert(core.get_node({x=54,y=3,z=34}).name=="luanttd_core:tramway_grade_6")
+    assert(core.get_node({x=56,y=2,z=34}).name=="luanttd_core:road_grade_6")
+    assert(core.get_node({x=56,y=3,z=34}).name:find("luanttd_core:oneway_",1,true))
+    assert(core.get_node({x=56,y=4,z=34}).name=="luanttd_core:tramway_grade_6_signed")
     local function grade_object()
       for _,object in ipairs(core.get_objects_inside_radius(wanted,3)) do
         local e=object:get_luaentity()
@@ -95,6 +111,7 @@ core.register_globalstep(function()
     else
       local x,z,y=2*route_x+.5,42.5,2.7
       if view=="depot" then x,z,y=42.5,30.5,1.8 end
+      if view=="overlay" then x,z,y=55.5,34.5,2 end
       wanted,camera={x=x,y=y,z=z},{x=x+5,y=y+2.5,z=z+4}
       place_camera(p)
     end
