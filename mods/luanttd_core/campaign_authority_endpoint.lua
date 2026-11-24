@@ -9,6 +9,7 @@ return function(Sim,R,max_days)
   local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local order_target=dofile(mod.."/campaign_order_target.lua")
   local styles=dofile(mod.."/bridge_style_assets.lua")
+  local place_labels=dofile(mod.."/world_place_labels.lua")
   local function facility_record(registry,id)
     return id~=nil and s[registry] and s[registry][id]
   end
@@ -314,6 +315,17 @@ return function(Sim,R,max_days)
     end
     local step,fare,warning=R.lesson(name,lesson)
     return reply(true,nil,{step=step,fare=fare,warning=warning})
+  end
+  function A.place_labels(name,x,z)
+    if not owner(name) or not s.companies[name] or not integer(x,-512,2*Sim.W+512)
+        or not integer(z,-512,2*Sim.H+512) then
+      return reply(false,"Place names unavailable.")
+    end
+    local function top(_,u,v)
+      local _,_,y=R.terrain.tile(s.corner_grid,u,v)
+      return y
+    end
+    return reply(true,nil,place_labels.describe(Sim,s,x,z,top))
   end
   function A.jump_map(name,zoom,here,focus)
     if not owner(name) or not s.companies[name] or here~=nil and not tile_id(here)

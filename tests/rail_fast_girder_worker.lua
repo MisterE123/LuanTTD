@@ -7,10 +7,10 @@ local C=m("campaign_authority_client")(core,mod)
 local cp=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
 local owner="Bridge Railway"
 local phase=core.settings:get("luanttd_qa_bridge_phase")
-local upgrade=tonumber(core.settings:get("luanttd_qa_bridge_style")) or 9
-local speed=({[3]=80,[9]=256})[upgrade]
 local function id(x,z)return (z-1)*64+x end
-local a,b,depot=id(21,27),id(24,27),id(8,27)
+local upgrade=tonumber(core.settings:get("luanttd_qa_bridge_style")) or 9
+local speed=({[3]=80,[4]=96,[5]=112,[9]=256})[upgrade]
+local a,b,depot=id(21,27),id((upgrade==4 or upgrade==5) and 25 or 24,27),id(8,27)
 local west,east=id(13,27),id(32,27)
 local cap={road={start_year=1950,breakdowns=0,service_interval=0},ferry={},air={},
   rail=m("rail_dispatch_manifest").scan(mod,false,false),durable_actions=true}
@@ -76,7 +76,7 @@ local function run()
   if not previous then
     chosen(0)
     build{tool="track",track=0,first=id(9,27),last=id(20,27)}
-    build{tool="track",track=0,first=id(25,27),last=id(37,27)}
+    build{tool="track",track=0,first=b+1,last=id(37,27)}
     build{tool="depot",first=depot,direction=2}
     for _,at in ipairs{west,east} do
       build{tool="station",first=at,last=at+2,axis=0,length=3,tracks=1,separate=true,drag=true}

@@ -417,10 +417,14 @@ def authored_variant(name,work,mat,export=True):
     if export:
         out=["# Original LuanTTD wildlife, authored in Blender; +Y up and +Z forward.",
             "# Ten OBJ units per Luanti node. Packed source: art/wildlife.blend."]
+        # They share one opaque atlas in the native entity. OBJ groups
+        # otherwise become separate buffers in the Luanti mesh loader.
+        # Preserve editorial parts in the Blender collection and comments.
+        out.append("g Wildlife")
         out.extend("vt %.7f %.7f" % texcoord(key) for key in PALETTE)
         vbase=nbase=0
         for label,mesh,colors,smooth in stored:
-            out.append("g "+label.replace(" ","_"))
+            out.append("# part "+label.replace(" ","_"))
             out.extend("v %.5f %.5f %.5f" % to_obj(v.co) for v in mesh.vertices)
             normals=[v.normal for v in mesh.vertices] if smooth else [p.normal for p in mesh.polygons]
             out.extend("vn %.6f %.6f %.6f" % to_obj(v) for v in normals)

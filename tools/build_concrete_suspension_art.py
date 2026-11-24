@@ -78,10 +78,10 @@ def roadway(m,h,mode,head):
                   lambda q:h(q)-.177,lambda q:h(q)-.054)
 
 
-def suspension(mode,ends):
+def suspension(mode,ends,deck_art=roadway,tower_art=towers):
     m=kit.Mesh()
-    roadway(m,lambda v:.5,mode,False)
-    towers(m,ends)
+    deck_art(m,lambda v:.5,mode,False)
+    tower_art(m,ends)
     n,s=1.451 if -1 in ends else .835,1.451 if 1 in ends else .835
     for sign in (-1,1):
         u=sign*.445
@@ -94,11 +94,11 @@ def suspension(mode,ends):
     return m
 
 
-def head_mesh(mode,flat):
+def head_mesh(mode,flat,deck_art=roadway):
     m=kit.Mesh()
     h=(lambda v:.5) if flat else (lambda v:v/2)
     if flat and mode=="rail": rail.descending_land(m)
-    roadway(m,h,mode,True)
+    deck_art(m,h,mode,True)
     for u in (-.445,.445):
         block(m,"Land cable anchorage","Concrete pearl",u,.53,.99,.172,.282,.719)
         block(m,"Bolted cable end block","Concrete satin",u,.63,.97,.145,.703,.822)
@@ -117,26 +117,43 @@ def pier_mesh(ends):
     return m
 
 
-def main():
+def build(family, colors, deck_art=roadway, tower_art=towers, pier_art=pier_mesh,
+          bearing=BEARING, core_group="Concrete_suspension_core", alternate=None):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.preferences.filepaths.save_version=0
-    bpy.context.scene.name="LuanTTD | Concrete suspension, high and low stock segments"
-    kit.COLORS=COLORS
+    bpy.context.scene.name=f"LuanTTD | {family.replace('_',' ').title()}, high and low stock segments"
+    kit.COLORS=colors
     mats=kit.materials()
+    if alternate:
+        for name, palette in alternate.items():
+            kit.COLORS=palette
+            for label, mat in kit.materials().items():
+                mat.name=label+" | "+name.title()
+                mat.use_fake_user=True
+        kit.COLORS=colors
     showcase={}
     for mode in ("road","rail"):
-        stem=f"{mode}_bridge_suspension_concrete"
+        stem=f"{mode}_bridge_suspension_{family}"
         kit.PREFIX="bl_"+stem
         parts={}
         for name in ("head_flat","head_ramp"):
-            m=head_mesh(mode,name=="head_flat")
+            m=head_mesh(mode,name=="head_flat",deck_art)
             for d in range(4): parts[f"{name}_{d}"]=m.oriented(d)
         for key,ends in PIECES.items():
-            m=suspension(mode,ends)
-            p=pier_mesh(ends)
+            m=suspension(mode,ends,deck_art,tower_art)
+            p=pier_art(ends)
             for axis,d in ((0,2),(1,1)):
                 parts[f"span_{axis}_{key}"]=m.oriented(d)
                 if ends: parts[f"pier_{axis}_{key}"]=p.oriented(d)
+        if alternate:
+            # UV slots and triangles are shared. Only palette pixels differ.
+            for name, palette in alternate.items():
+                assert list(palette)==list(colors)
+                kit.PREFIX="bl_"+stem+"_"+name
+                kit.COLORS=palette
+                kit.atlas()
+            kit.PREFIX="bl_"+stem
+            kit.COLORS=colors
         kit.atlas()
         for name,shape in parts.items():
             kit.export(name,shape)
@@ -146,11 +163,11 @@ def main():
             if not ends: continue
             for axis in (0,1):
                 span=kit.MODELS/f"{kit.PREFIX}_span_{axis}_{key}.obj"
-                span.with_name(span.stem+"_road_clear.obj").write_text(clear_span(span,BEARING))
+                span.with_name(span.stem+"_road_clear.obj").write_text(clear_span(span,bearing))
                 # The generic foot maker accepts axis followed by the suffix;
                 # use the original course by passing a distinct pier basename.
                 for depth in (1,2,"water"):
-                    write_feet(stem,"Concrete_suspension_core",axis,depth,variant=key)
+                    write_feet(stem,core_group,axis,depth,variant=key)
     kit.showcase({"head_ramp_2":showcase["head_ramp_2"],"head_flat_0":showcase["head_flat_0"],
       "span_0":showcase["span_0_plus"],"pier_0":showcase["pier_0_plus"]})
     # The exact length-three stock composition is plus, double, minus.
@@ -160,8 +177,8 @@ def main():
         wanted="minus" if ob.location.x>0 else "double" if ob.location.x==0 else "plus"
         key=("span" if "span" in ob.instance_collection.name else "pier")+"_0_"+wanted
         ob.instance_collection=showcase[key]
-    bpy.ops.wm.save_as_mainfile(filepath=str(kit.ROOT/"art"/"concrete_suspension.blend"),compress=True)
+    bpy.ops.wm.save_as_mainfile(filepath=str(kit.ROOT/"art"/(family+"_suspension.blend")),compress=True)
 
 
 if __name__=="__main__":
-    main()
+    build("concrete",COLORS)

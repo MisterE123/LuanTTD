@@ -45,3 +45,6 @@ done
 for _ in {1..40}; do grep -q WILDLIFE_NATIVE_PASS "$out/server.log" && break; sleep .22; done
 grep WILDLIFE_NATIVE_PASS "$out/server.log"
 ! grep -E 'ERROR\[' "$out/"{server,client}.log
+if grep -Eq 'Model bl_wildlife_.* is missing [0-9]+ more texture' "$out/client.log"; then
+  echo "Wildlife unexpectedly allocated extra material sections" >&2; exit 1
+fi

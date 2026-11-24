@@ -399,16 +399,17 @@ return function(api)
     local piece=dofile(modpath.."/bridge_piece_art.lua")(architecture,rules,Sim.xy)
     for style,prefix in pairs(bridge_styles.road) do
       local manifest=bridge_styles.pieces[style]
+      local geometry=bridge_styles.mesh_stem("road",style)
       local parts={head_flat={},head_ramp={}}
       if not manifest then parts.span={};parts.pier={} end
       for part,list in pairs(parts) do
         local limit=(part=="span" or part=="pier") and 1 or 3
         for d=0,limit do
           local asset=prefix.."_"..part.."_"..d
-          list[d]=architecture("stock_"..asset,asset,prefix)
+          list[d]=architecture("stock_"..asset,geometry.."_"..part.."_"..d,prefix)
         end
       end
-      if manifest then parts.piece=piece.mount(prefix,manifest) end
+      if manifest then parts.piece=piece.mount(prefix,manifest,geometry) end
       parts.clear_span=clear_span(architecture,prefix,manifest~=nil)
       bridges[style]=parts
     end
@@ -536,6 +537,9 @@ return function(api)
     return {x=x,y=y,z=z+.61-.185,side={x=0,z=-1},along={x=1,z=0},width=.22,length=layout=="corner" and .646 or 1.70}
   end
   function R.host_state() return S end
+  function R.host_terrain_top(id)
+    if terrain then local _,_,level=terrain.tile(id);return level end
+  end
   function R.host_tile(id)
     return id and S.tiles[id]
   end

@@ -8,12 +8,12 @@ local client=m("campaign_authority_client")(core,mod)
 local cp=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
 local owner="Ordinary Bridge Construction"
 local function id(x,z) return (z-1)*64+x end
-local a,b,water=id(18,22),id(21,22),id(19,22)
+local upgrade=tonumber(core.settings:get("luanttd_qa_bridge_style")) or 9
+local speed=({[3]=80,[4]=96,[5]=112,[9]=256})[upgrade]
+local a,b,water=id(18,22),id((upgrade==4 or upgrade==5) and 22 or 21,22),id(19,22)
 local rails=id(20,22)
 local depot,west,east=id(9,21),id(12,22),id(29,22)
 local phase=core.settings:get("luanttd_qa_bridge_phase")
-local upgrade=tonumber(core.settings:get("luanttd_qa_bridge_style")) or 9
-local speed=({[3]=80,[9]=256})[upgrade]
 local cap={road={start_year=1950,breakdowns=0,service_interval=0},ferry={},air={},
   rail=m("rail_dispatch_manifest").scan(mod,false,false),durable_actions=true}
 for _,group in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..group,"air") end

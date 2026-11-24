@@ -620,6 +620,7 @@ if worker_boot then
         "formspec_version[7]size[10,2.2]textarea[.5,.6;9,1.3;;;"..message.."]")
     end})
   api.authority_frame=authority.step
+  api.worker_place_labels=authority.place_labels
 end
 local authority_started
 local function start_authority()

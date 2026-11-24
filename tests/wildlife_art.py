@@ -22,8 +22,10 @@ def parse(name):
             {"v": verts, "vt": uv, "vn": normals}[kind].append(result)
         if kind == "f":
             faces.append(tuple(tuple(int(i)-1 for i in f.split("/")) for f in values.split()))
-        if kind == "g":
-            groups.append(values)
+        if line.startswith("# part "):
+            groups.append(line.removeprefix("# part "))
+    assert path.read_text().splitlines().count("g Wildlife")==1
+    assert sum(line.startswith("g ") for line in path.read_text().splitlines())==1
     assert 400<=len(verts)<=4200 and 350<=len(faces)<=4000
     assert len(groups)>=10 and len(set(groups))>=6
     assert len(normals)>=len(verts)*.88 and all(.999 < sum(x*x for x in n) < 1.001 for n in normals)

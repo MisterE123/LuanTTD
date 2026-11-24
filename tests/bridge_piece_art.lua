@@ -26,3 +26,22 @@ plan.middle={41,61,81,101,121};plan.middle_by_tile={[41]=true,[61]=true,[81]=tru
 a,b,c,d,mask=kit.models(plan,121)
 assert(mask==9 and a:match("1_outer_s$"))
 print("PASS bridge art resolves the pinned stock piece/orientation from detached terrain registries")
+
+local called={}
+local recolor=dofile(mod.."bridge_piece_art.lua")(function(node,file,palette)
+  assert(palette=="yellow_suspension")
+  assert(node==("stock_yellow_suspension"..file:sub(#"native_suspension"+1)))
+  assert(file:match("^native_suspension_"))
+  called[node]=file
+  return node
+end,B,xy)
+local yellow=recolor.mount("yellow_suspension",{
+  pieces={"outer_n","outer_s","through"},bearing={outer_n=true,outer_s=true},
+  choices={[0]="outer_n",[1]="outer_s",[2]="outer_s",[3]="outer_n",[4]="outer_n",[5]="through"},
+},"native_suspension")
+local draw,under,pier,feet=yellow.models(plan,121)
+assert(called[draw]=="native_suspension_span_1_outer_s")
+assert(called[under]=="native_suspension_span_1_outer_s_road_clear")
+assert(called[pier]=="native_suspension_pier_1_outer_s")
+assert(called[feet.water]=="native_suspension_foot_1_outer_s_water")
+print("PASS palette variants share original deck, clear span, pier, and foot geometry")

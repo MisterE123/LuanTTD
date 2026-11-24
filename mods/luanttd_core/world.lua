@@ -7,6 +7,7 @@ return function(api,ui)
   local Pedestrian=dofile(mod.."/pedestrian.lua")
   local pedestrian=Pedestrian.new(api)
   local sightseeing=dofile(mod.."/survey_sightseeing.lua")
+  local place_labels=dofile(mod.."/world_place_labels.lua")
   local hud={}
   local controls={}
   local slots={
@@ -531,7 +532,7 @@ return function(api,ui)
     end
     hud[n]=nil
     for _,id in pairs(state.labels or {}) do p:hud_remove(id) end
-    state.labels,state.label_names=nil,nil
+    state.labels,state.label_names,state.label_heights=nil,nil,nil
     if api.selector then api.selector.leave(n) end
     if ui.cinematic then ui.cinematic(p,true) end
     -- The hint is the only HUD owned by avatar mode.
@@ -691,7 +692,7 @@ return function(api,ui)
       for _,id in pairs(hud[n] or {}) do if type(id)=="number" then p:hud_remove(id) end end
       hud[n]=nil
       for _,id in pairs(s.labels or {}) do p:hud_remove(id) end
-      s.labels,s.label_names=nil,nil
+      s.labels,s.label_names,s.label_heights=nil,nil,nil
       if api.selector then api.selector.leave(n) end
     else
       W.hud(p,0)
@@ -706,7 +707,7 @@ return function(api,ui)
     for _,id in pairs(hud[n] or {}) do if type(id)=="number" then p:hud_remove(id) end end
     hud[n]=nil
     for _,id in pairs(state.labels or {}) do p:hud_remove(id) end
-    state.labels,state.label_names=nil,nil
+    state.labels,state.label_names,state.label_heights=nil,nil,nil
     if api.selector then api.selector.leave(n) end
   end
   function W.hud(p)
@@ -809,27 +810,51 @@ return function(api,ui)
     local ids=state.labels or {}
     local keep={}
     local names=state.label_names or {}
-    local function visit(k,id,name,color,height)
+    local heights=state.label_heights or {}
+    local function visit(k,id,name,color,height,range)
       local x,z=Sim.xy(id);x,z=x*2+.5,z*2+.5
-      if (x-pos.x)^2+(z-pos.z)^2>42^2 then return end
+      if not place_labels.within(x,z,pos.x,pos.z,range or place_labels.stop_radius) then return end
+      local at={x=x,y=height,z=z}
       keep[k]=true
       if not ids[k] then
         ids[k]=p:hud_add({type="waypoint",name=name,text="",precision=0,
-          world_pos={x=x,y=height or 2.55,z=z},number=color,z_index=-300})
-      elseif names[k]~=name then
-        p:hud_change(ids[k],"name",name)
+          world_pos=at,number=color,z_index=-300})
+      else
+        if names[k]~=name then p:hud_change(ids[k],"name",name) end
+        local old=heights[k]
+        if not old or old.x~=at.x or old.y~=at.y or old.z~=at.z then
+          p:hud_change(ids[k],"world_pos",at)
+        end
       end
       names[k]=name
+      heights[k]=at
     end
     local worker=api.authority_handoff and api.render.host_state
     local board=worker and api.render.host_state() or S
-    for _,site in pairs(board.sites) do
-      if not site.closed and board.tiles[site.tile] then
-        if api.road_first and site.kind=="town" then
-          visit("f"..site.id,site.tile,site.name.."  ("..(site.population or 0)..")",0xffebaf,
-            api.generated_world and board.tiles[site.tile].h+3 or 3)
-        else visit("f"..site.id,site.tile,site.name,0xffebaf) end
+    local function roof(id)
+      if worker and api.render.host_terrain_top then return api.render.host_terrain_top(id) end
+      if api.terrain then
+        local _,_,top=api.terrain.tile(id)
+        return top
       end
+    end
+    if worker and api.worker_place_labels and not state.place_wait and
+        (not state.last_place_request or core.get_us_time()-state.last_place_request>1350000) then
+      local owner=p:get_player_name()
+      state.place_wait=true
+      local queued=api.worker_place_labels(owner,math.floor(pos.x),math.floor(pos.z),function(result)
+        if controls[owner]~=state then return end
+        state.place_wait=nil
+        if result.ok then state.remote_places=result.value end
+      end)
+      state.last_place_request=core.get_us_time()
+      if not queued then state.place_wait=nil end
+    end
+    local spots=worker and state.remote_places or place_labels.describe(Sim,board,pos.x,pos.z,roof)
+    for _,site in ipairs(spots) do
+      local name=site.name
+      if api.road_first and site.kind=="town" then name=name.."  ("..(site.population or 0)..")" end
+      visit("f"..site.id,site.tile,name,0xffebaf,site.y,place_labels.place_radius)
     end
     if api.road_first and not api.generated_world and not worker then
       local phase=ui.phase(p)
@@ -838,10 +863,11 @@ return function(api,ui)
       if starter and phase<=2 then
         for _,mark in ipairs({{"guide_a",9,"A  •  Port Alder stop"},{"guide_b",18,"B  •  Mason Quay stop"}}) do
           local id=Sim.id(mark[2],12)
-          if not S.tiles[id].station then visit(mark[1],id,mark[3],0xffcf76,.66) end
+          if not S.tiles[id].station then visit(mark[1],id,mark[3],0xffcf76,place_labels.surface(S.tiles[id],roof(id))+.86) end
         end
       elseif starter and phase==3 then
-        visit("guide_depot",Sim.id(10,13),"Suggested depot",0xffcf76,.66)
+        local id=Sim.id(10,13)
+        visit("guide_depot",id,"Suggested depot",0xffcf76,place_labels.surface(S.tiles[id],roof(id))+.86)
       end
     end
     for _,st in pairs(board.stations) do
@@ -866,11 +892,11 @@ return function(api,ui)
         elseif st.stop_type~="truck" then waiting=Sim.waiting_passengers(S,st) end
         if (waiting or 0)>0 then title=title.."   ·   "..waiting..units end
       end
-      visit("s"..st.id,st.tile,title,0xaddbe5)
+      visit("s"..st.id,st.tile,title,0xaddbe5,place_labels.stop_height(board.tiles[st.tile],roof(st.tile)))
       end
     end
-    for k,id in pairs(ids) do if not keep[k] then p:hud_remove(id);ids[k]=nil;names[k]=nil end end
-    state.labels=ids;state.label_names=names
+    for k,id in pairs(ids) do if not keep[k] then p:hud_remove(id);ids[k]=nil;names[k]=nil;heights[k]=nil end end
+    state.labels=ids;state.label_names=names;state.label_heights=heights
   end
   function W.step(dt)
     dt=math.min(dt,.10)

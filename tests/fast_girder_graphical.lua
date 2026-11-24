@@ -16,7 +16,8 @@ core.register_on_joinplayer(function(p)
     S.tiles[id]={h=base,terrain=(x==16 or x==17) and "water" or "grass",variant=(x+z)%4}
   end end
   local style=tonumber(core.settings:get("luanttd_qa_bridge_style")) or 9
-  local west,east,zr,zl=15,style==3 and 21 or 18,13,19
+  local suspension=style==3 or style==4 or style==5
+  local west,east,zr,zl=15,suspension and 21 or 18,13,19
   Sim.company(S,name).cash=80000
   local roads=assert(({Sim.road_bridge(S,name,tile(west,zr),tile(east,zr),style)})[3])
   local W=assert(api.rail_spans)
@@ -34,12 +35,17 @@ core.register_on_joinplayer(function(p)
       local node=core.get_node(at(x,z,q.deck))
       assert(node.name==expect,expect.." != "..node.name)
       local def=assert(core.registered_nodes[expect])
-      assert(def.drawtype=="mesh" and def.mesh=="bl_"..key..".obj")
+      local expected_geometry=style==5 and key:gsub("_steel_yellow_","_steel_") or key
+      assert(def.drawtype=="mesh" and def.mesh=="bl_"..expected_geometry..".obj")
+      local expected_atlas="bl_"..family..".png"
+      local tx=def.tiles[1]
+      assert((type(tx)=="table" and tx.name or tx)==expected_atlas)
     end
-    if style==3 then
+    if suspension then
+      local variant=({[3]="concrete",[4]="steel",[5]="steel_yellow"})[style]
       for mode,z in pairs({road=zr,rail=zl}) do
         for at,section in pairs({[16]="plus",[18]="clear",[20]="minus"}) do
-          mesh_found(at,z,mode.."_bridge_suspension_concrete","_"..section)
+          mesh_found(at,z,mode.."_bridge_suspension_"..variant,"_"..section)
         end
       end
     else

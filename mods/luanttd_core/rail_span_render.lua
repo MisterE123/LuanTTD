@@ -10,16 +10,17 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
   local parts={}
   for style,stem in pairs(styles.rail) do
     local manifest=styles.pieces[style]
+    local geometry=styles.mesh_stem("rail",style)
     local defs={head_flat={},head_ramp={}}
     if not manifest then defs.span={};defs.pier={} end
     for part,list in pairs(defs) do
       local limit=(part=="span" or part=="pier") and 1 or 3
       for dir=0,limit do
         local asset=stem.."_"..part.."_"..dir
-        list[dir]=architecture("stock_"..asset,asset,stem)
+        list[dir]=architecture("stock_"..asset,geometry.."_"..part.."_"..dir,stem)
       end
     end
-    if manifest then defs.piece=piece.mount(stem,manifest) end
+    if manifest then defs.piece=piece.mount(stem,manifest,geometry) end
     defs.clear=clearance(architecture,stem,manifest~=nil)
     parts[style]=defs
   end
