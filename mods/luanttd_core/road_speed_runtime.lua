@@ -227,6 +227,15 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
           Speed.grade(state,record.z,actual_z,permitted)
         end
         state.index=state.index+1
+        if entering and v.road_via_pending then
+          local wp=s.tiles[b[4]].road_waypoint_id
+          local pending=v.road_via_pending
+          if wp and pending[1]==wp then
+            v.last_road_waypoint=wp
+            repeat table.remove(pending,1) until pending[1]~=wp
+            if #pending==0 then v.road_via_pending=nil end
+          end
+        end
         old=b
         if Pass then Pass.accept(state,b,nominal) end
         if b[16] then

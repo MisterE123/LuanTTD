@@ -47,6 +47,11 @@ return function(Sim,s,F,occupancy)
       out.station=t.station
       out.stop_type=st.stop_type or "bus"
       out.pair=t.road_stop_pair==true and out.kind=="bay_stop" and out.stop_type=="bus"
+    elseif t.build=="road" and t.road_waypoint_id then
+      local wp=s.stock_road_waypoints and s.stock_road_waypoints[t.road_waypoint_id]
+      if not wp or not wp.tiles[id] then return nil end
+      out.kind,out.dir,out.station,out.stop_type="drive_stop",wp.axis,wp.id,"road_waypoint"
+      out.waypoint=true
     elseif t.build=="road" then
       out.kind="road"
       out.road_bits=Sim.road_bits(s,id)
@@ -104,6 +109,10 @@ return function(Sim,s,F,occupancy)
   -- Current save format uses one tile per station. Don't extrapolate a
   -- multi-tile station from rendered shelters or their catchment area.
   function B.station_area(id,facility)
+    if facility=="road_waypoint" then
+      local wp=s.stock_road_waypoints and s.stock_road_waypoints[id]
+      return wp and wp.area,wp and wp.tile
+    end
     local st=s.stations[id]
     if not st then return nil,nil end
     local t=B.tile(st.tile)

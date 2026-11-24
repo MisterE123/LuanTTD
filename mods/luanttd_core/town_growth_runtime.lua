@@ -10,7 +10,7 @@ return function(Sim,Terrain,G,B,H)
   local function record(t) return t and t.house and t.source_house or nil end
   local function protected(s,id,t)
     return t.stock_canal or t.rail_tracks or t.rail_station_id or t.rail_depot_dir or
-      t.level_crossing or t.rail_span_id or t.road_tunnel_id or t.road_bridge_id or
+      t.level_crossing or t.road_waypoint_id or t.rail_span_id or t.road_tunnel_id or t.road_bridge_id or
       t.stock_industry or t.stock_landmark or t.ship or t.airfield or t.tram or t.signal or
       at(s.level_crossing_tiles,id) or at(s.bridge_above,id) or at(s.tunnel_below,id) or
       at(s.rail_bridge_above,id) or at(s.rail_tunnel_below,id) or at(s.aqueduct_above,id)

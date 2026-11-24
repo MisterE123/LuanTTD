@@ -16,7 +16,7 @@ return function(Sim,Terrain,rules)
     local tile=s.tiles[id]
     if not tile or tile.stock_void then return nil,"NO_ROAD" end
     if tile.build~="road" or tile.level_crossing or tile.road_bridge_id or tile.road_tunnel_id
-        or tile.station or tile.stop_axis or tile.road_stop_pair then
+        or tile.road_waypoint_id or tile.station or tile.stop_axis or tile.road_stop_pair then
       if rules.special then return rules.special(s,owner,id,tile,wanted,ctx) end
       return nil,"NOT_PLAIN_ROAD"
     end

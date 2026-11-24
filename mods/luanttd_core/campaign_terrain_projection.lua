@@ -2,7 +2,7 @@
 -- VM handles, station queues, finance, and unrelated tiles are not copied.
 local keys={
   "terrain","variant","h","build","owner","wood","house","parcel","site",
-  "road_bits","road_town","road_disallowed","disallowed","road_stop_pair","stop_axis","depot_dir","road_terminal_level",
+  "road_bits","road_town","road_disallowed","disallowed","road_stop_pair","stop_axis","depot_dir","road_terminal_level","road_waypoint_id",
   "rail_tracks","rail_type","rail_depot_dir","rail_station_id","rail_station_axis","rail_waypoint_id",
   "rail_span_id","road_bridge_id","road_tunnel_id","station","signal","closed","level_crossing",
   "coastal_water","stock_void","stock_clear_ground","water_class","stock_canal","stock_river_bits",
@@ -102,6 +102,7 @@ function M.registries(s,ids)
     add(out,s,"sites",t.site,site_fields)
     add(out,s,"sites",t.road_town,site_fields)
     add(out,s,"stations",t.station,station_fields)
+    add(out,s,"stock_road_waypoints",t.road_waypoint_id,{"id","name","owner","tile","axis"})
     add(out,s,"stock_rail_stations",t.rail_station_id,station_fields)
     if t.ship and (t.ship.kind=="dock" or t.ship.kind=="oilrig") then
       add(out,s,"stock_ship_stations",t.ship.station,port_fields)

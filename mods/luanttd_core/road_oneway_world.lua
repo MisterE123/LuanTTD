@@ -12,7 +12,7 @@ return function(Sim,Terrain,Follow,OneWay,settings)
   end
   local function tile(s,id) return id~=nil and s.tiles[id] or nil end
   local function normal(t)
-    return t and t.build=="road" and not t.level_crossing and not t.road_bridge_id and not t.road_tunnel_id
+    return t and t.build=="road" and not t.level_crossing and not t.road_waypoint_id and not t.road_bridge_id and not t.road_tunnel_id
   end
   local function straight(bits) return bits==5 or bits==10 end
   local function is_active(s)

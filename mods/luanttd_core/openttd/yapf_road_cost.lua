@@ -17,7 +17,7 @@ return function(F)
 
   -- Board adds xy(id) and tile_at(stock_x,stock_y), center_z(id) in stock
   -- height pixels, and the following station/traffic adapters:
-  -- station_area(station, "bus"|"truck") -> {tile, w, h} or nil, sign id.
+  -- station_area(station, "bus"|"truck"|"road_waypoint") -> {tile, w, h} or nil, sign id.
   -- Road-stop records have station and stop_type ("bus" or "truck").
   -- stop_continues(id, previous_id) compares stock stop continuation.
   -- stop_entry(id, exit_direction) -> occupied length, total length.
@@ -30,7 +30,7 @@ return function(F)
     local t=assert(board.tile(tile))
     if t.kind=="crossing" then
       cost=cost+setting(settings,"road_crossing_penalty")
-    elseif t.kind=="drive_stop" then
+    elseif t.kind=="drive_stop" and t.stop_type~="road_waypoint" then
       cost=cost+setting(settings,"road_stop_penalty")
       local dir=F.exit_direction(td)
       local prior=board.adjacent(tile,F.reverse_direction(dir))
@@ -54,10 +54,13 @@ return function(F)
 
   function C.destination(board,vehicle,order)
     if order.kind=="any_depot" then return {kind=order.kind} end
-    if order.kind~="station" then
+    if order.kind~="station" and order.kind~="road_waypoint" then
       return {kind="tile",tile=order.tile,trackdirs=F.status(board.tile(order.tile),vehicle.tram)}
     end
-    local stop_type=vehicle.bus and "bus" or "truck"
+    -- RC1 CYapfDestinationTileRoadT::SetDestination for OT_GOTO_WAYPOINT
+    -- chooses the closest tile of the road-waypoint facility; it never
+    -- treats it as a loading stop even when the vehicle is a bus.
+    local stop_type=order.kind=="road_waypoint" and "road_waypoint" or (vehicle.bus and "bus" or "truck")
     local area,sign=board.station_area(order.station,stop_type)
     local target=sign
     if area and area.tile~=nil then

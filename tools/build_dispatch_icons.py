@@ -975,6 +975,18 @@ def road_remove(i):
     i.path([(21,25),(29,25)],CREAM,2.35)
 
 
+def road_waypoint(i,remove=False):
+    i.path([(11,39),(36,11)],SLATE,10)
+    i.path([(11,39),(36,11)],CREAM,1.35)
+    i.path([(31,37),(31,20)],BRASS,2.3)
+    i.round((22,13,40,28),2,BRICK if remove else BRASS,CREAM,1.15)
+    if remove:
+        i.path([(26,20.5),(36,20.5)],CREAM,2.1)
+    else:
+        i.path([(26,22),(30.5,17.5),(35,22)],CREAM,2)
+
+ART["road_waypoint"]=road_waypoint
+ART["road_waypoint_remove"]=lambda i: road_waypoint(i,True)
 ART["road_remove"]=road_remove
 ART.update(road_axis_x=road_axis,road_axis_y=lambda i: road_axis(i,True))
 ART.update(survey_walk=survey_walk,survey_drive_car=survey_drive_car,

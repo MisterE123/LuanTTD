@@ -446,6 +446,8 @@ return function(api)
     local asset="road_bus_bay_pair_"..d
     road_bay_pairs[d]=architecture(asset,asset,"road_bus_bay_pair")
   end
+  local road_waypoint_mark={}
+  for axis=0,1 do road_waypoint_mark[axis]=architecture("road_waypoint_"..axis,"road_waypoint_"..axis,"road_waypoint_atlas") end
   local shelter=architecture("stop_shelter","bus_shelter")
   local shelter_quarter=architecture("stop_shelter_quarter","bus_shelter_quarter")
   local shelter_corner=architecture("stop_shelter_corner","bus_shelter_corner")
@@ -1140,7 +1142,9 @@ return function(api)
       end
     end
     if y==(base or 0)+1 and x%2==0 and z%2==0 then
-      if t.build=="road_station" then
+      if t.road_waypoint_id then
+        return road_waypoint_mark[t.road_bits==10 and 0 or 1]
+      elseif t.build=="road_station" then
         local st=S.stations[t.station]
         if t.road_stop_pair then return assert(road_bay_pairs[bay_dir[Sim.road_bits(S,id)]]) end
         if st and st.stop_type=="truck" and (st.coal_art or st.freight_art) and freight_straight[0] then

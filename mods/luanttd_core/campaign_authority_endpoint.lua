@@ -34,7 +34,7 @@ return function(Sim,R,max_days)
     return R.orders and R.orders[mode]
   end
   local function destination(id)
-    return index(id) or type(id)=="string" and #id<24 and id:match("^buoy:%d+$")
+    return index(id) or type(id)=="string" and #id<24 and (id:match("^buoy:%d+$") or id:match("^waypoint:%d+$"))
   end
   function A.orders(name,mode,id,page)
     if not owner(name) then return reply(false,"INVALID_REQUEST") end

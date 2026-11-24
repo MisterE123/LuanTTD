@@ -1761,12 +1761,21 @@ end
 -- OpenTTD 16.0-RC1 road_gui.cpp: dedicated sizing pins the axis after
 -- pointer-down, while AutoRoad chooses from the pointer coordinates.
 local fixed_road_axes={road_axis_x=0,road_axis_y=1}
-local fixed_road_labels={road_axis_x="East–west road",road_axis_y="North–south road",road_remove="Remove road"}
+local fixed_road_labels={road_axis_x="East–west road",road_axis_y="North–south road",road_remove="Remove road",road_waypoint="Road waypoint",road_waypoint_remove="Remove road waypoint"}
 local function road_gesture_op(tool)
   return tool=="oneway_drag" and "oneway" or tool=="road_remove" and "remove" or "drag"
 end
+function U.waypoint_tool(tool)
+  return tool=="road_waypoint" or tool=="road_waypoint_remove"
+end
+function U.waypoint_request(p,tool,first,last)
+  -- The projected tile may be behind a worker edit. The authority locks
+  -- the drag perpendicular to the current pavement, not this scene.
+  return {tool="road_waypoint",first=first,last=last,remove=tool=="road_waypoint_remove",
+    separate=p:get_player_control().aux1==true}
+end
 function U.road_gesture(tool)
-  return S.corner_grid and (tool=="road" or tool=="road_remove" or fixed_road_axes[tool]~=nil or tool=="oneway_drag" and api.oneway_tools)
+  return S.corner_grid and (tool=="road" or tool=="road_remove" or U.waypoint_tool(tool) or fixed_road_axes[tool]~=nil or tool=="oneway_drag" and api.oneway_tools)
 end
 function U.begin_autoroad(p,id,hit)
   local V=view(p:get_player_name())
@@ -1812,6 +1821,17 @@ function U.end_autoroad(p,id,hit)
   if not V.road_press or not U.road_gesture(V.tool) then return end
   if not hit then U.cancel_autoroad(p);return end
   local first=V.road_press.id
+  if U.waypoint_tool(V.tool) then
+    local req=U.waypoint_request(p,V.tool,first,id)
+    V.road_press=nil
+    if api.authority_handoff then worker_build(n,V,"road",req);return end
+    local q,why=Sim.road_waypoint_plan(S,n,req)
+    if not q then V.status=why;return end
+    local ok,note,tiles=Sim.apply_road_waypoint(S,n,q)
+    V.status=note
+    if ok then R.update(tiles);api.save() end
+    return
+  end
   local last,axis,start_half,end_half=autoroad_args(V,id,hit)
   V.road_press=nil
   local bend=autoroad_bend(p,V,first,id)
@@ -1920,7 +1940,12 @@ local function authority_preview(p,id,hit)
     local q,hint=U.signal_ui.preview(p,tool,id,hit)
     return {id},q~=nil,hint
   end
-  if U.road_gesture(tool) and hit then
+  if U.waypoint_tool(tool) and hit then
+    local first=V.road_press and V.road_press.id or id
+    label=fixed_road_labels[tool]
+    request=U.waypoint_request(p,tool,first,id)
+    ids={first,request.last}
+  elseif U.road_gesture(tool) and hit then
     label=fixed_road_labels[tool] or label
     local press=V.road_press or {id=id,hit=hit}
     if autoroad_bend(p,V,press.id,id) then request={tool="bend",first=press.id,last=id}
@@ -1989,7 +2014,8 @@ local function authority_preview(p,id,hit)
     if kind=="road" and pending then return ids,nil,why end
     return ids,false,why
   end
-  return q.tiles or ids,true,("%s  |  %s  ·  %d tiles"):format(label,dollars(q.cost or 0),#(q.tiles or ids))
+  local cells=q.tiles or ids
+  return cells,true,("%s  |  %s  ·  %d tile%s"):format(label,dollars(q.cost or 0),#cells,#cells==1 and "" or "s")
 end
 function U.preview(p,id,hit)
   if api.authority_handoff then return authority_preview(p,id,hit) end
@@ -2008,6 +2034,13 @@ function U.preview(p,id,hit)
     local ids={}
     for _,e in ipairs(q.changes) do ids[#ids+1]=e.id end
     return ids,true,road_terminal_label(oriented).."  |  "..dollars(q.cost)
+  end
+  if U.waypoint_tool(V.tool) and hit then
+    local q,why=Sim.road_waypoint_plan(S,n,U.waypoint_request(p,V.tool,V.road_press and V.road_press.id or id,id))
+    if not q then return {id},false,why end
+    local ids={}
+    for i,e in ipairs(q.changes) do ids[i]=e.id end
+    return ids,true,fixed_road_labels[V.tool].."  |  "..dollars(q.cost)
   end
   if api.road_first and U.road_gesture(V.tool) and hit then
     local press=V.road_press or {id=id,hit=hit}

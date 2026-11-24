@@ -22,6 +22,7 @@ core.register_on_joinplayer(function(p)
       ask({kind="command",command=c},done)
     end)
   end
+  local waypoints=core.settings:get_bool("luanttd_native_waypoint",false)
   local fixed=core.settings:get_bool("luanttd_native_explicit_road_facilities",false)
   local function build(request,done)
     if fixed and request.tool=="road_depot" then
@@ -70,10 +71,23 @@ core.register_on_joinplayer(function(p)
                 local s=assert(OwnerCheckpoint.read())
                 local a,b=s.tiles[q.station_a].station,s.tiles[q.station_b].station
                 commit({kind="road_order_add",vehicle=stat_id,station=a},function()
-                  commit({kind="road_order_add",vehicle=stat_id,station=b},function()
-                    commit({kind="road_toggle",vehicle=stat_id},function()
-                      assert(core.safe_file_write(path.."/native-focus-bus",tostring(stat_id)))
-                      ready()
+                  local function finish()
+                    commit({kind="road_order_add",vehicle=stat_id,station=b},function()
+                      commit({kind="road_toggle",vehicle=stat_id},function()
+                        assert(core.safe_file_write(path.."/native-focus-bus",tostring(stat_id)))
+                        ready()
+                      end)
+                    end)
+                  end
+                  if not waypoints then return finish() end
+                  local target=q.station_a+2
+                  build({tool="road_waypoint",first=target,axis=0},function()
+                    ask({kind="orders",mode="road",vehicle=stat_id},function(list)
+                      commit({kind="vehicle_order",mode="road",vehicle=stat_id,tile=target,
+                        order_revision=list.value.revision,operation="append"},function(applied)
+                        assert(applied.value.count==2)
+                        finish()
+                      end)
                     end)
                   end)
                 end)
@@ -89,7 +103,8 @@ core.register_on_joinplayer(function(p)
       stat_id=stat_id or load_id()
       local s=assert(OwnerCheckpoint.read())
       local v=assert(stat_id and s.fleet[stat_id])
-      assert(v.owner==name and v.running and #v.orders==2)
+      assert(v.owner==name and v.running and #v.orders==(waypoints and 3 or 2))
+      if waypoints then assert(v.orders[2].action=="via") end
       if fixed then
         local b=bus_layout()
         assert(s.tiles[b.depot].depot_dir==3 and s.tiles[b.depot].road_terminal_level)
@@ -138,6 +153,23 @@ core.register_on_joinplayer(function(p)
       assert(not snapshot.tiles[Sim.id(q.x+3,q.z+1)].build)
       assert(snapshot.tiles[q.first+1].road_bits==10)
       core.log("action","NATIVE_ROAD_GESTURE_X_PASS")
+    elseif label=="waypoint" or label=="erase-waypoint" then
+      assert(world.go_menu(player,"road_stops"))
+      local slot
+      local logical=label=="waypoint" and 5 or 6
+      for i,j in ipairs(world.hotbar_layout(player)) do if j==logical then slot=i end end
+      assert(slot and slot<=9)
+      aim(q.x+1,q.z,.12)
+      core.log("action","NATIVE_ROAD_GESTURE_"..(logical==5 and "WAYPOINT" or "ERASE_WAYPOINT").." slot="..slot)
+    elseif label=="waypoint-done" or label=="erase-waypoint-done" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      local tile=Sim.id(q.x+1,q.z)
+      local target,hit=world.target(player)
+      local desc,note=ui.world_status(player,target,true,hit)
+      assert((snapshot.tiles[tile].road_waypoint_id~=nil)==(label=="waypoint-done"),
+        ("wanted %d, hit %s, tool %s, status %s"):format(tile,tostring(target),tostring(desc),tostring(note)))
+      assert(snapshot.tiles[tile].road_bits==10)
+      core.log("action","NATIVE_ROAD_GESTURE_"..(label=="waypoint-done" and "WAYPOINT_PASS" or "ERASE_WAYPOINT_PASS"))
     elseif label=="remove-start" then ready("REMOVE",7,q.x,q.z,.12)
     elseif label=="remove-end" then
       aim(q.x+3,q.z,.75)
@@ -224,6 +256,10 @@ core.register_on_joinplayer(function(p)
         local v=s and s.fleet[stat_id]
         if v and v.delivered>at_return then
           assert(v.running and v.revenue>0 and s.companies[name].revenue==v.revenue)
+          if waypoints then
+            assert(v.last_road_waypoint==1 and v.orders[2].station=="waypoint:1")
+            core.log("action","NATIVE_ROAD_WAYPOINT_PAID")
+          end
           core.log("action",("FOCUS_NATIVE_PAID bus=%d delivered=%d revenue=%d"):format(stat_id,v.delivered,v.revenue))
           at_return=nil
         end

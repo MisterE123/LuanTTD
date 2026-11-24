@@ -29,7 +29,37 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     for i=entry,#second do bays.second[#bays.second+1]=second[i] end
     return frames,bays
   end
-  function R.route(s,a,b,owner,vehicle,occupancy)
+  -- Concatenate stock pathfinder legs by the exact trackdir of the
+  -- moving front. The waypoint is a destination for YAPF, never a
+  -- stopping frame; the complete motion raster is compiled only once.
+  local function through(board,v,start,mask,stops,destination)
+    local trace,cost,best={},0,nil
+    local orders={}
+    for _,wp in ipairs(stops or {}) do
+      if not board.station_area(wp,"road_waypoint") then return end
+      orders[#orders+1]={kind="road_waypoint",station=wp}
+    end
+    orders[#orders+1]=destination
+    for _,order in ipairs(orders) do
+      v.tile=start
+      local goal=C.destination(board,v,order)
+      local found,tail=Search.find(board,v,start,mask,goal)
+      if not found then return end
+      local leg=Search.trace(board,v,goal,tail)
+      if not leg or #leg==0 then return end
+      if #trace>0 then
+        local prior,current=trace[#trace],leg[1]
+        if prior.tile~=current.tile or prior.td~=current.td then return end
+        cost=cost-C.one_tile(board,prior.tile,prior.td)
+      end
+      for i=#trace>0 and 2 or 1,#leg do trace[#trace+1]=leg[i] end
+      local last=assert(trace[#trace])
+      start,mask=last.tile,2^last.td
+      cost,best=cost+tail.cost,tail
+    end
+    return trace,best,cost
+  end
+  function R.route(s,a,b,owner,vehicle,occupancy,waypoints)
     local board=Board(Sim,s,F,occupancy)
     local source,dest=board.tile(a.tile),board.tile(b.tile)
     if not source or not dest or not dest.station then return nil end
@@ -38,7 +68,7 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
         vehicle.engine~="leopard_bus" and vehicle.engine~="foster_bus" and vehicle.engine~="foster_mk2_bus" then return nil end
     local v={owner=owner,bus=bus,tile=a.tile,display_max_speed=speed[vehicle and vehicle.engine or "bus"]}
     if dest.stop_type~=(bus and "bus" or "truck") then return nil end
-    if a.tile==b.tile then return {a.tile},vehicle and vehicle.road_arrival_td end
+    if a.tile==b.tile and not (waypoints and #waypoints>0) then return {a.tile},vehicle and vehicle.road_arrival_td end
     local mask
     if source.kind=="depot" or source.kind=="bay_stop" then
       -- Stock depot departure or the outward-facing phase after leaving
@@ -53,10 +83,8 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     else
       return nil
     end
-    local d=C.destination(board,v,{kind="station",station=dest.station})
-    local found,best=Search.find(board,v,a.tile,mask,d)
-    if not found then return nil end
-    local trace=Search.trace(board,v,d,best)
+    local trace,best,cost=through(board,v,a.tile,mask,waypoints,{kind="station",station=dest.station})
+    if not trace then return nil end
     local path,bridge={},false
     for _,piece in ipairs(trace) do
       local kind=board.tile(piece.tile).kind
@@ -71,14 +99,14 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     local frames,bays=R.frames(board,trace,nil,origin_bay)
     -- Do not fall back to a ground-plane line between bridgeheads if a
     -- stale or malformed span cannot produce its selected crossing.
-    if (bridge or source.pair or dest.pair) and not frames then return nil end
-    return path,best.last_td,best.cost,frames,bays
+    if (bridge or source.pair or dest.pair or waypoints and #waypoints>0) and not frames then return nil end
+    return path,best.last_td,cost,frames,bays
   end
   -- From the exact front position on an ordinary road in mid-leg.
   -- Warehouse stops, tunnel/bridge interiors and a temporary passing lane
   -- have distinct controller states; never snap them to an invented road
   -- origin. The caller can retry after a real ordinary position is reached.
-  function R.from_live_frame(s,vehicle,frame,target_station,occupancy)
+  function R.from_live_frame(s,vehicle,frame,target_station,occupancy,waypoints)
     if not frame or not vehicle or vehicle.road_speed_state and vehicle.road_speed_state.lane_pose then return end
     local board=Board(Sim,s,F,occupancy)
     local id,td=frame[4],frame[6]
@@ -89,11 +117,7 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     local v={owner=vehicle.owner,bus=bus,tile=id,display_max_speed=speed[vehicle.engine]}
     if not v.display_max_speed then return end
     local dest=target_station and {kind="station",station=target_station} or {kind="any_depot"}
-    local goal=C.destination(board,v,dest)
-    if not goal then return end
-    local found,best=Search.find(board,v,id,2^td,goal)
-    if not found then return end
-    local trace=Search.trace(board,v,goal,best)
+    local trace,best,cost=through(board,v,id,2^td,waypoints,dest)
     if not trace or #trace<2 then return end
     local last=trace[#trace]
     local finish=board.tile(last.tile)
@@ -114,7 +138,7 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     for _,piece in ipairs(trace) do
       if path[#path]~=piece.tile then path[#path+1]=piece.tile end
     end
-    return path,last.tile,best.last_td,best.cost,frames,bays
+    return path,last.tile,best.last_td,cost,frames,bays
   end
 
   -- OpenTTD 14.1 YapfRoadVehicleFindNearestDepot: exact current trackdir

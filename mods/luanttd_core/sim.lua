@@ -907,6 +907,11 @@ local function road_piece_plan(s,owner,id,t,request)
   if t.house then return nil,"Bulldoze that building first." end
   if wet(s,id) then return nil,"Use a bridge over open water." end
   local existing=bits_for(s,id,t)
+  if t.road_waypoint_id then
+    local _,added=new_pieces(request,existing)
+    if added~=0 then return nil,"Road waypoints must stay straight. Connect on the adjacent tile." end
+    return {id=id,tool="road",build="road",road_bits=existing,owner=t.owner,h=t.h},0
+  end
   if road_sign(t)~=0 then
     local combined=new_pieces(request,existing)
     if combined~=5 and combined~=10 then
@@ -1184,6 +1189,35 @@ function M.stock_road_terminal_plan(s,owner,id,req)
   end
   return stock_road_terminals.quote(s,owner,id,req)
 end
+local road_waypoint_world
+function M.road_waypoint_plan(s,owner,req)
+  if not road_waypoint_world then
+    load_road_rules()
+    local path=debug and debug.getinfo(1,"S").source
+    local base=path and path:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    local S=dofile(base.."openttd/road_stop_build.lua")
+    road_waypoint_world=dofile(base.."road_waypoint_world.lua")(M,terrain_rules,dofile(base.."openttd/road_waypoint_build.lua")(S),bridge_underlay,{
+      ground=function(state) return default_oneway().ground_occupancy(state) end,
+      bridge=function(state,id)
+        local road=state.bridge_above and state.bridge_above[id]
+        if state.rail_bridge_above and state.rail_bridge_above[id] or state.aqueduct_above and state.aqueduct_above[id] then
+          return true
+        end
+        local span=road and state.stock_road_bridges and state.stock_road_bridges[road]
+        return road~=nil,span and span.deck
+      end,
+    })
+  end
+  return road_waypoint_world.quote(s,owner,req)
+end
+function M.apply_road_waypoint(s,owner,plan)
+  local dirty=road_waypoint_world.apply(s,owner,plan)
+  debit(s.companies[owner],plan.cost)
+  s.topology=s.topology+1
+  return true,plan.id and ("Road waypoint #%d placed for $%d."):format(plan.id,plan.cost) or
+    ("Road waypoint markings removed for $%d."):format(plan.cost),dirty
+end
 local function road_terminal_plan(s,owner,tool,ids)
   local pair=tool=="road_bay_pair"
   if pair then
@@ -1304,6 +1338,7 @@ local function road_terminal_plan(s,owner,tool,ids)
 end
 function M.plan(s,owner,tool,ids,quote_clear_only)
   for _,id in ipairs(ids or {}) do
+    if s.tiles[id] and s.tiles[id].road_waypoint_id and tool~="road" then return nil,"Remove the road waypoint while keeping its pavement." end
     if M.crossing_protected(s,id) and tool~="road" then
       return nil,"That tile is a protected level crossing."
     end
@@ -1735,9 +1770,9 @@ local function road_routing()
   end
   return source_routing
 end
-local function road_departure(s,a,b,owner,vehicle)
+local function road_departure(s,a,b,owner,vehicle,waypoints)
   local r=road_routing()
-  return source_route.route(s,a,b,owner,vehicle,r.occupancy(M,s))
+  return source_route.route(s,a,b,owner,vehicle,r.occupancy(M,s),waypoints)
 end
 road_replan=function(s,v,state,frames,current,vehicle_limit)
   local revision=s.road_oneway_revision
@@ -1755,10 +1790,19 @@ road_replan=function(s,v,state,frames,current,vehicle_limit)
   end
   if not bad then return end
   local r=road_routing()
-  local base=crossing_road_board(s,r.board(M,s,r.follow,r.occupancy(M,s)))
-  local alternate=w.reroute(s,v,current,base,r.search,r.cost,{display_max_speed=vehicle_limit,compatible={[0]=true}})
-  if not alternate then return end
-  local new,bays=source_route.frames(w.path_board(s,base),alternate.trace,alternate.origin_frame)
+  local path,td,cost,new,bays
+  if v.road_via_pending and v.dest then
+    local _
+    path,_,td,cost,new,bays=source_route.from_live_frame(s,v,current,v.dest,r.occupancy(M,s),v.road_via_pending)
+  else
+    local base=crossing_road_board(s,r.board(M,s,r.follow,r.occupancy(M,s)))
+    local alternate=w.reroute(s,v,current,base,r.search,r.cost,{display_max_speed=vehicle_limit,compatible={[0]=true}})
+    if not alternate then return end
+    new,bays=source_route.frames(w.path_board(s,base),alternate.trace,alternate.origin_frame)
+    td,cost=alternate.last_td,alternate.cost
+    path={}
+    for _,n in ipairs(alternate.trace) do if path[#path]~=n.tile then path[#path+1]=n.tile end end
+  end
   if v.road_bay_branch and not bays then return end
   if not new or #new<2 then return end
   -- Never replace a cursor if the road row/heading cannot meet at the
@@ -1766,20 +1810,18 @@ road_replan=function(s,v,state,frames,current,vehicle_limit)
   local first=new[1]
   for _,i in ipairs{1,2,3,4,6,15} do if first[i]~=current[i] then return end end
   for i=2,#new do if not one_way_pose(s,new[i-1],new[i]) then return end end
-  local path={}
-  for _,n in ipairs(alternate.trace) do if path[#path]~=n.tile then path[#path+1]=n.tile end end
-  if #path<2 then return end
-  v.route,v.road_leg_td,v.road_route_cost,v.road_motion_frames=path,alternate.last_td,alternate.cost,new
+  if not path or #path<2 then return end
+  v.route,v.road_leg_td,v.road_route_cost,v.road_motion_frames=path,td,cost,new
   v.road_bay_branch=bays
   state.index,state.waiting,state.oneway_tile=1,nil,nil
   state.oneway_reroutes=(state.oneway_reroutes or 0)+1
   if v.status=="Waiting at one-way road" then v.status="En route" end
   return new
 end
-function M.path(s,a,b,mode,owner,avoid,vehicle)
+function M.path(s,a,b,mode,owner,avoid,vehicle,waypoints)
   if not a or not b or not a.tile or not b.tile or a.mode~=mode or b.mode~=mode or a.owner~=owner or b.owner~=owner then return nil end
   if mode=="road" and s.road_economy and s.corner_grid and not avoid then
-    return road_departure(s,a,b,owner,vehicle)
+    return road_departure(s,a,b,owner,vehicle,waypoints)
   end
   if a.tile==b.tile then return {a.tile} end
   if mode=="air" then return M.line(a.tile,b.tile) end
@@ -2072,8 +2114,37 @@ local function orders_module()
   return order_lists
 end
 local function is_road_vehicle(v) return M.vehicles[v.engine].mode=="road" end
+local function waypoint_destination(id)
+  return type(id)=="string" and tonumber(id:match("^waypoint:(%d+)$")) or nil
+end
+local function road_order_location(s,id)
+  local wp=waypoint_destination(id)
+  if wp then return s.stock_road_waypoints and s.stock_road_waypoints[wp],wp end
+  return s.stations[id]
+end
+function M.road_order_name(s,id)
+  local row=road_order_location(s,id)
+  return row and row.name
+end
+-- Index arrives at the next actual loading stop, collecting every
+-- pinned Go via order on the way. With no cargo stop there is no run.
+local function road_order_leg(s,v,first,skip_station)
+  local vias={}
+  if #v.orders==0 then return end
+  local i=first
+  for _=1,#v.orders do
+    local order=v.orders[i]
+    if not order then return end
+    local target,waypoint=road_order_location(s,order.station)
+    if not target or target.owner~=v.owner then return end
+    if waypoint then vias[#vias+1]=waypoint
+    elseif target.id~=skip_station or #vias>0 then return target,i,vias end
+    i=i%#v.orders+1
+  end
+end
 local function can_use_road_order(s,v,o)
-  local st=s.stations[o.station]
+  local st,waypoint=road_order_location(s,o.station)
+  if waypoint then return st~=nil and st.owner==v.owner and M.road_stock_service_active(s) end
   if not st or st.owner~=v.owner or st.mode~="road" then return false end
   if not s.road_economy then return true end
   local truck=st.stop_type=="truck"
@@ -2110,8 +2181,10 @@ end
 -- separate Lua motion cursor: reindex it too, or replace it through YAPF
 -- from the physical front rather than teleporting to a stop/depot.
 function M.road_order_target(s,owner,id,station)
-  local v,st=s.fleet[id],s.stations[station]
-  if not v or not st or v.owner~=owner or st.owner~=owner or st.mode~=M.vehicles[v.engine].mode then
+  local v=s.fleet[id]
+  local st,waypoint=road_order_location(s,station)
+  if not v or not st or v.owner~=owner or st.owner~=owner or
+      (waypoint and not is_road_vehicle(v) or not waypoint and st.mode~=M.vehicles[v.engine].mode) then
     return nil,"Choose a compatible terminal."
   end
   if not is_road_vehicle(v) then
@@ -2137,7 +2210,8 @@ function M.add_order(s,owner,id,station,action)
   if not st then return false,note end
   if not is_road_vehicle(v) and #v.orders>=16 then return false,"Limit of 16 orders." end
   if action~="transfer" and action~="full" and action~="unload" then action="normal" end
-  v.orders[#v.orders+1]={station=station,action=action}
+  local wp=waypoint_destination(station)
+  v.orders[#v.orders+1]={station=station,action=wp and "via" or action}
   return true,"Added "..st.name.."."
 end
 function M.edit_order(s,owner,id,index,op)
@@ -2164,6 +2238,7 @@ function M.edit_order(s,owner,id,index,op)
   local members=road and orders_module().members(s,v) or {v}
   local moved
   if op=="remove" then table.remove(v.orders,index)
+  elseif op=="cycle_load" and waypoint_destination(o.station) then return false,"A waypoint does not load cargo."
   elseif op=="cycle_load" then o.action=o.action=="full" and "normal" or "full"
   elseif op=="up" and index>1 then
     moved=index-1;v.orders[index],v.orders[moved]=v.orders[moved],o
@@ -2213,21 +2288,35 @@ function M.toggle(s,owner,id)
     if v.route then v.stop_requested=true;return true,"Vehicle will stop at the next terminal." end
     v.running=false;v.status="Stopped";return true,"Vehicle stopped."
   end
-  local different=false
-  for i=2,#v.orders do if v.orders[i].station~=v.orders[1].station then different=true;break end end
-  if not different then return false,"Add at least two different terminal orders." end
   local mode=M.vehicles[v.engine].mode
-  for i,o in ipairs(v.orders) do
-    local d=v.orders[i%#v.orders+1]
-    -- Validate from an unspecified approach at each stop. The driven
-    -- itinerary uses the actual arrival trackdir at the next departure.
-    local route_vehicle=mode=="road" and {engine=v.engine,cargo=v.cargo} or nil
-    if o.station~=d.station and not M.path(s,s.stations[o.station],s.stations[d.station],mode,owner,nil,route_vehicle) then
-      return false,"No route from order "..i.." to its next terminal."
+  local distinct,first_station=false,nil
+  for _,o in ipairs(v.orders) do
+    if not waypoint_destination(o.station) then
+      if first_station and o.station~=first_station then distinct=true end
+      first_station=first_station or o.station
     end
   end
-  local resume=v.orders[v.road_order_override or v.road_depot_resume or 1] or v.orders[1]
-  if v.depot and not M.path(s,depot_endpoint(s,owner,v.depot),s.stations[resume.station],mode,owner,nil,v) then
+  if not distinct then return false,"Add at least two different terminal orders." end
+  for i,o in ipairs(v.orders) do
+    if not waypoint_destination(o.station) then
+      local to,vias
+      if mode=="road" then
+        local _
+        to,_,vias=road_order_leg(s,v,i%#v.orders+1,o.station)
+      else to=s.stations[v.orders[i%#v.orders+1].station] end
+      local actor=mode=="road" and {engine=v.engine,cargo=v.cargo} or nil
+      if (not to or o.station~=to.id or vias and #vias>0) and not M.path(s,s.stations[o.station],to,mode,owner,nil,actor,vias) then
+        return false,"No route from order "..i.." to its next terminal."
+      end
+    end
+  end
+  local resume=v.road_order_override or v.road_depot_resume or 1
+  local to,vias
+  if mode=="road" then
+    local _
+    to,_,vias=road_order_leg(s,v,v.orders[resume] and resume or 1)
+  else to=s.stations[(v.orders[resume] or v.orders[1]).station] end
+  if v.depot and not M.path(s,depot_endpoint(s,owner,v.depot),to,mode,owner,nil,v,vias) then
     return false,"The depot has no road connection to the first stop."
   end
   v.running=true;v.status=v.depot and "Leaving depot" or "Boarding";v.wait=0;v.loaded_at=nil;v.rail_wait_key=nil
@@ -3276,6 +3365,7 @@ local function vehicle_order(v,station)
   return nil
 end
 local function launch(s,v,route,dest,index,arrival_td,route_cost,frames,bays)
+  v.road_via_pending=nil
   v.home_depot=v.home_depot or v.depot
   v.road_motion_frames=frames;v.road_stop_pose=nil;v.road_speed_state=nil;v.stock_loading_complete=nil
   v.road_leg_td=arrival_td;v.road_route_cost=route_cost
@@ -3400,14 +3490,10 @@ end
 local function stock_next_plan(s,v,st)
   local i=current_station_order(v,st)
   local n=v.road_order_override or (i and i%#v.orders+1 or 1)
-  for _=1,#v.orders do
-    if not v.orders[n] or v.orders[n].station~=st.id then break end
-    n=n%#v.orders+1
-  end
-  local target=v.orders[n] and s.stations[v.orders[n].station]
-  if not target or target==st then return end
-  local path,td,cost,frames,bays=M.path(s,st,target,"road",v.owner,nil,v)
-  if path and frames and #path>1 then return path,td,cost,frames,target.id,n,bays end
+  local target,index,vias=road_order_leg(s,v,n,st.id)
+  if not target then return end
+  local path,td,cost,frames,bays=M.path(s,st,target,"road",v.owner,nil,v,vias)
+  if path and frames and #path>1 then return path,td,cost,frames,target.id,index,bays,vias end
 end
 local function stock_seed_parked_pose(s,v,st)
   if v.road_stop_pose then return end
@@ -3424,6 +3510,7 @@ end
 -- origin. Spans/special stop transitions have their own live state and
 -- are not snapped onto a plain road to force an early service detour.
 local function automatic_road_service(s,faults,v,f,difficulty,date,random)
+  if v.road_via_pending then return end
   local cfg=faults.auto
   if not cfg or v.stop_requested or v.road_return_depot and not v.road_auto_service then return end
   local engine=M.stock_road_offer(s,v.engine)
@@ -3606,10 +3693,13 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       if priced_mail(v.engine) then v.stock_mail_running_ticks=(v.stock_mail_running_ticks or 0)+1 end
       if industry_truck(v.engine) then v.stock_timber_running_ticks=(v.stock_timber_running_ticks or 0)+1 end
       if v.route then
-        local order=v.road_order_override and v.orders[v.road_order_override]
-        if order and not v.road_return_depot then
-          if order.station==v.dest then
-            v.dest_index,v.road_order_override=v.road_order_override,nil
+        local target,index,vias
+        if v.road_order_override and not v.road_return_depot then
+          target,index,vias=road_order_leg(s,v,v.road_order_override)
+        end
+        if target then
+          if target.id==v.dest and #vias==0 and not v.road_via_pending then
+            v.dest_index,v.road_order_override=index,nil
           else
             local state=v.road_speed_state
             local frame=state and M.road_motion_frame(s,v)
@@ -3618,11 +3708,12 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
                 state.order_retry_tile~=tile then
               state.order_retry_tile=tile
               local r=road_routing()
-              local route,_,td,cost,frames,bays=source_route.from_live_frame(s,v,frame,order.station,r.occupancy(M,s))
+              local route,_,td,cost,frames,bays=source_route.from_live_frame(s,v,frame,target.id,r.occupancy(M,s),vias)
               if route then
-                launch(s,v,route,order.station,v.road_order_override,td,cost,frames,bays)
+                launch(s,v,route,target.id,index,td,cost,frames,bays)
                 state.index,state.waiting,state.oneway_tile,state.order_retry_tile=1,nil,nil,nil
                 v.road_speed_state,v.road_order_override=state,nil
+                v.road_via_pending=#vias>0 and vias or nil
               end
             end
           end
@@ -3633,10 +3724,11 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       if v.depot then
         local order=v.road_order_override or v.road_depot_resume or 1
         if not v.orders[order] then order=1 end
-        local to=v.orders[order] and s.stations[v.orders[order].station]
-        local route,td,cost,frames,bays=M.path(s,depot_endpoint(s,v.owner,v.depot),to,"road",v.owner,nil,v)
+        local to,index,vias=road_order_leg(s,v,order)
+        local route,td,cost,frames,bays=M.path(s,depot_endpoint(s,v.owner,v.depot),to,"road",v.owner,nil,v,vias)
         if route and frames then
-          launch(s,v,route,to.id,order,td,cost,frames,bays)
+          launch(s,v,route,to.id,index,td,cost,frames,bays)
+          v.road_via_pending=#vias>0 and vias or nil
           v.road_depot_resume,v.road_order_override=nil,nil;v.last_departure=s.day;v.last_departure_tick=tick
         else v.status="No road from depot" end
         return
@@ -3653,7 +3745,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         begin(v,st,tick)
         return
       end
-      local route,td,cost,frames,dest,index,bays=stock_next_plan(s,v,st)
+      local route,td,cost,frames,dest,index,bays,vias=stock_next_plan(s,v,st)
       if not route then v.status="No path";return end
       local old,new=v.road_stop_pose,frames[1]
       if old and (old[1]~=new[1] or old[2]~=new[2] or old[3]~=new[3] or old[4]~=new[4]) then
@@ -3661,6 +3753,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         return
       end
       launch(s,v,route,dest,index,td,cost,frames,bays);v.road_order_override=nil
+      v.road_via_pending=#vias>0 and vias or nil
       v.last_departure=s.day;v.last_departure_tick=tick
     end,
     exited=faults and function(v,tick) faults.service(v,tick) end or nil,
@@ -3681,6 +3774,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       end
       if s.stock_road_bays then road_clock().bay.arrive(s,v,frame) end
       v.station,v.index=v.dest,v.dest_index
+      v.road_via_pending=nil
       v.last_road_arrival_tick=tick
       v.road_arrival_td,v.road_leg_td=v.road_leg_td,nil
       v.road_stop_pose=frame

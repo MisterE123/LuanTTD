@@ -28,7 +28,7 @@ return function(Sim,Terrain,Crossing,Track)
   local function occupied_layer(s, id, t)
     local dispatch=s.stock_rail_dispatch
     return t.terrain=="water" or t.tunnel_id or t.road_tunnel_id or t.road_bridge_id or
-      t.rail_span_id or t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir or t.station or t.depot_dir or
+      t.rail_span_id or t.rail_station_id or t.rail_waypoint_id or t.road_waypoint_id or t.rail_depot_dir or t.station or t.depot_dir or
       t.site or t.house or t.wood or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or
       t.signal or dispatch and dispatch.signals and dispatch.signals.records and dispatch.signals.records[id] or
       s.tunnel_below and s.tunnel_below[id] or s.bridge_above and s.bridge_above[id] or

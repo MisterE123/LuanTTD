@@ -49,16 +49,33 @@ return function(api)
     if not v or v.owner~=owner or Sim.vehicles[v.engine].mode~="road" then return end
     local items,targets={},{}
     for _,o in ipairs(v.orders) do
-      local st=S.stations[o.station]
-      local suffix=({full=" (Full load)",unload=" (Unload only)",transfer=" (Transfer)"})[o.action] or ""
-      items[#items+1]={id=o.station,label=(st and st.name or "Missing stop")..suffix}
+      local title=Sim.road_order_name(S,o.station)
+      local suffix=({full=" (Full load)",unload=" (Unload only)",transfer=" (Transfer)",via=" (Go via)"})[o.action] or ""
+      items[#items+1]={id=o.station,label=(title or "Missing stop")..suffix}
     end
     for sid,st in pairs(S.stations) do
       if Sim.road_order_target(S,owner,id,sid) then targets[#targets+1]={id=sid,label=st.name} end
     end
-    table.sort(targets,function(a,b) return a.id<b.id end)
+    for wp,mark in pairs(S.stock_road_waypoints or {}) do
+      local key="waypoint:"..wp
+      if Sim.road_order_target(S,owner,id,key) then targets[#targets+1]={id=key,label=mark.name} end
+    end
+    table.sort(targets,function(a,b)
+      if type(a.id)~=type(b.id) then return type(a.id)=="number" end
+      return a.id<b.id
+    end)
     local active=type(v.road_order_override)=="number" and v.road_order_override
       or v.dest_index or v.road_depot_resume or v.index
+    if #v.orders>0 and v.road_via_pending and v.dest_index and not v.road_order_override then
+      local tag="waypoint:"..v.road_via_pending[1]
+      local index=(v.dest_index-2)%#v.orders+1
+      for _=1,#v.orders do
+        local row=v.orders[index]
+        if not row or row.action~="via" then break end
+        if row.station==tag then active=index end
+        index=(index-2)%#v.orders+1
+      end
+    end
     return {items=items,targets=targets,revision=signature(v),active=active,
       can_toggle=v.running or #v.orders>=2,running=not not v.running}
   end

@@ -46,6 +46,30 @@ and do not replace a competitor's road. Joining multiple tiles, rail
 and aqueduct overpasses, and mixed tram facilities still need their
 own verified adapters.
 
+## Route a vehicle through a waypoint
+
+Open **Roadworks → Stops & Waypoints → Road waypoint**. Click an
+existing straight road. Drag across parallel streets to make a wider
+waypoint; the worker locks the drag perpendicular to the first road
+and checks the whole footprint. Hold **E** to create a separate
+waypoint instead of joining an adjacent one.
+
+In a bus or truck's **Orders**, add the waypoint from the destination
+list or **Pick in world**. The order is labeled **Go via**. Vehicles
+pass the signs without loading or stopping and continue to their next
+real stop. Use **Remove road waypoint** to take down the signs without
+removing pavement. Clear an active approach first and remove the
+waypoint's orders before removing its last remaining tile.
+
+The shipped path is for ordinary roads. Mixed tram facilities,
+distant joining through the game UI, recently deleted ID reuse and
+the less common ownership cases remain separate.
+
+The regression tests include an off-route waypoint that diverts an
+otherwise shorter route, a paid bus service through the marker, and
+a native mouse-and-hotbar placement and removal replay. The released
+add-on signs retain original editable Blender geometry.
+
 ## Scope and evidence
 
 Source: OpenTTD 16.0-RC1 (`07b339c`), `road_gui.cpp` sizing modes and
@@ -91,6 +115,6 @@ a different drag never inherits the old quote.
   31 passengers.
 
 Remaining: road and tram facility and bridge/tunnel removal through
-this tool, waypoint placement and orders,
+this tool, advanced waypoint joins,
 stop drag/orientation/joining and road-type conversion. The current
 tool protects game facilities where those rules are not yet mounted.

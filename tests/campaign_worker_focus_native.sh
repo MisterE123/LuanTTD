@@ -70,6 +70,9 @@ fi
 if [[ ${LUANTTD_NATIVE_EXPLICIT_FACILITY_UI:-0} == 1 ]]; then
   printf "%s\n" "luanttd_native_explicit_road_ui = true" >>"$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_WAYPOINT:-0} == 1 ]]; then
+  printf "%s\n" "luanttd_native_waypoint = true" >> "$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}
@@ -135,6 +138,18 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
   sleep .65; import -window root -resize 960x600 "$out/x-preview.jpg"
   xdotool mouseup 1; sleep .85
   do_road check-x X_PASS
+  if [[ ${LUANTTD_NATIVE_WAYPOINT:-0} == 1 ]]; then
+    for spec in "waypoint WAYPOINT" "erase-waypoint ERASE_WAYPOINT"; do
+      read -r stage key <<<"$spec"
+      do_road "$stage" "$key"
+      slot=$(sed -n "s/.*NATIVE_ROAD_GESTURE_$key slot=//p" "$log" | tail -1)
+      xdotool key "$slot"; sleep .4
+      xdotool mousedown 1; sleep .55; xdotool mouseup 1
+      sleep 1.05
+      import -window root -resize 960x600 "$out/$stage.jpg"
+      do_road "$stage-done" "${key}_PASS"
+    done
+  fi
   do_road remove-start REMOVE
   slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_REMOVE slot=//p' "$log" | tail -1)
   xdotool key "$slot"; sleep .4; xdotool mousedown 1; sleep .5

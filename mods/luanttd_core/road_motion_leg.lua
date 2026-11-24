@@ -13,7 +13,7 @@ return function(Motion,F,board)
       -- are stock trackdirs 0, 1, 8 and 9.
       return 32+td+(bay or 0)*2
     end
-    if t.kind=="drive_stop" then return 64+td end
+    if t.kind=="drive_stop" and not t.waypoint then return 64+td end
     return td
   end
   local function stop_frame(tile,state)

@@ -26,6 +26,26 @@ return function(Sim,s,oneway,Bank)
       return q
     elseif op=="bend" then
       return Sim.autoroad_bend_plan(s,player,first,last)
+    elseif op=="road_waypoint" then
+      if request.join~=nil and (type(request.join)~="number" or request.join<1 or request.join%1~=0) then
+        return nil,"INVALID_ROAD_GESTURE"
+      end
+      local q,why=Sim.road_waypoint_plan(s,player,{first=first,last=last,axis=request.axis,
+        remove=request.remove==true,join=request.join,separate=request.separate==true})
+      if not q then
+        local errors={ALREADY_BUILT="This road waypoint is already built.",
+          NO_VALID_ROAD_WAYPOINT_AXIS="Start on a straight, ordinary road.",
+          WAYPOINT_IN_USE="Wait for the vehicle traveling to this waypoint.",
+          WAYPOINT_IN_ORDERS="Remove the waypoint from vehicle orders before removing its last tile.",
+          NO_CLEAR_WAYPOINT="Choose an empty road waypoint your company owns.",
+          STATION_SPREAD="The waypoint is too wide. Hold E to place a separate waypoint.",
+          ADJOINS_MULTIPLE_WAYPOINTS="The drag joins more than one waypoint. Hold E to keep them separate.",
+          VEHICLE_IN_THE_WAY="Wait for the road to clear.",
+          NO_ROAD="Waypoints need existing road on every tile.",
+          FLAT_LAND_REQUIRED="All waypoint tiles need a suitable slope at the same height."}
+        return nil,errors[why] or Sim.stock_road_terminal_error(why)
+      end
+      return q
     elseif op=="stock_terminal" and first==last then
       if request.kind~="depot" and request.kind~="truck" and request.kind~="bus" then
         return nil,"INVALID_ROAD_GESTURE"
@@ -62,7 +82,7 @@ return function(Sim,s,oneway,Bank)
       parts[i]=table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
         tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation),tostring(c.rail_tracks),tostring(c.railtype),
         c.rail_owner and ("%q"):format(c.rail_owner) or "-",tostring(c.depot_dir),tostring(c.stop_axis),
-        tostring(c.road_terminal_level),tostring(c.stop_type),tostring(c.rotate_depot)},":")
+        tostring(c.road_terminal_level),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint)},":")
     end
     if q.ratings then
       local keys={}
@@ -102,6 +122,8 @@ return function(Sim,s,oneway,Bank)
       return true,note,ids
     elseif request.tool=="drag" or request.tool=="bend" then
       return Sim.apply_road_construction(s,player,q)
+    elseif request.tool=="road_waypoint" then
+      return Sim.apply_road_waypoint(s,player,q)
     elseif request.tool=="remove" then
       return Sim.apply_road_removal(s,player,q)
     elseif request.tool=="fund_bank" then

@@ -7,6 +7,8 @@ return function(mode,vehicle,owner,id,t,record)
   if mode=="road" then
     local st=record("stations",t.station)
     if owned(st,owner) and st.mode=="road" then return t.station,st.name or "Road stop" end
+    local wp=t.road_waypoint_id and record("stock_road_waypoints",t.road_waypoint_id)
+    if owned(wp,owner) then return "waypoint:"..wp.id,wp.name end
   elseif mode=="rail" then
     local st=record("stock_rail_stations",t.rail_station_id)
     if owned(st,owner) then return t.rail_station_id,st.name or ("Rail station #"..t.rail_station_id) end

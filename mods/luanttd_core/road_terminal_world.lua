@@ -27,7 +27,7 @@ return function(Sim,Terrain,Stop,Underlay,rules)
     local c=s.companies[owner]
     local dir=selected.dir
     if not t or not c or t.stock_void or dir~=0 and dir~=1 and dir~=2 and dir~=3 then return nil,"PARAMETERS" end
-    if not s.corner_grid or t.terrain=="water" or district(t) or t.ship or t.airfield or t.level_crossing or
+    if not s.corner_grid or t.terrain=="water" or district(t) or t.ship or t.airfield or t.level_crossing or t.road_waypoint_id or
         t.rail_type~=nil or t.rail_tracks or t.rail_station_id or t.rail_depot_dir or t.road_bridge_id or t.road_tunnel_id or t.tram or s.stock_farm_fields and s.stock_farm_fields[id] then
       return nil,"PROTECTED_TERMINAL_TILE"
     end

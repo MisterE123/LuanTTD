@@ -404,7 +404,8 @@ return function(api)
       if not q.panel.eligible[id] then return "This stop is not in the vehicle's destination list",q.note,{tile},false end
       label=q.panel.eligible[id]
     end
-    return (q.replace and "Replace with: " or "Add stop: ")..label,q.note,{tile},true
+    local via=q.kind=="road" and type(id)=="string" and id:match("^waypoint:")
+    return (q.replace and "Replace with: " or via and "Go via: " or "Add stop: ")..label,q.note,{tile},true
   end
   function V.finish_world_orders(p)
     local n=p:get_player_name()
