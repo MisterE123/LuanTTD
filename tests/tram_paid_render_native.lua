@@ -2,6 +2,7 @@
 -- is the stock QA corridor; construction, dispatch, and fares use the worker.
 local native_paid_form=core.show_formspec
 local offers=0
+local dedicated=core.settings:get_bool("luanttd_native_tram_dedicated",false)
 local fleet_case=core.settings:get_bool("luanttd_native_tram_fleet",false)
 core.show_formspec=function(owner,form,spec)
   if form=="luanttd_core:tram_service_offer" then
@@ -48,7 +49,14 @@ core.register_on_joinplayer(function(player)
   local function geom(firsts)
     for _,id in ipairs(firsts) do
       local cell=assert(api.render.host_tile(id))
-      assert(cell.tram and cell.tram.kind=="drive_stop" and cell.tram.shared_station)
+      assert(cell.tram and cell.tram.kind=="drive_stop")
+      local sid=assert(Sim.tram_stop_id(cell))
+      local st=assert(api.render.host_record("stations",sid))
+      if dedicated then
+        assert(st.tram_only and not cell.station and cell.tram.tram_station==sid)
+        local strips=assert(api.render.tram_platforms(st))
+        assert(#strips==2 and (strips[1].x~=strips[2].x or strips[1].z~=strips[2].z))
+      else assert(cell.tram.shared_station==sid and not st.tram_only) end
     end
   end
   local function aim(tile,far)
@@ -93,12 +101,18 @@ core.register_on_joinplayer(function(player)
     return
   end
   core.after(1,function()
-    chain({
-      function(done) command({kind="road_build",first=Sim.id(x-2,z),last=Sim.id(x+9,z)},done) end,
-      stop(a),stop(b),
-      function(done) road({tool="tram_lay",axis=0,first=first,last=last},done) end,
-      function(done) road({tool="tram_facility",kind="depot",first=depot,direction=1},done) end,
-    },1,function()
+    local list={}
+    if not dedicated then
+      list={function(done) command({kind="road_build",first=Sim.id(x-2,z),last=Sim.id(x+9,z)},done) end, stop(a),stop(b)}
+    end
+    list[#list+1]=function(done) road({tool="tram_lay",axis=0,first=first,last=last},done) end
+    if dedicated then
+      for _,tile in ipairs({a,b}) do
+        list[#list+1]=function(done) road({tool="tram_facility",kind="drive_stop",first=tile,direction=0},done) end
+      end
+    end
+    list[#list+1]=function(done) road({tool="tram_facility",kind="depot",first=depot,direction=1},done) end
+    chain(list,1,function()
       assert(world.go_menu(player,"tram_operations"))
       local slot
       for i,j in ipairs(world.hotbar_layout(player)) do if j==2 then slot=i end end

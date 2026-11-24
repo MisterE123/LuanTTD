@@ -103,16 +103,23 @@ return function(api)
     local items,targets={},{}
     local function label(tile)
       local x,z=Sim.xy(tile)
-      local record=S.tiles[tile]
-      local st=record and record.tram and record.tram.shared_station and S.stations[record.tram.shared_station]
+      local st=Sim.tram_stop_station(S,tile,owner)
       return st and st.name or ("Tram stop (%d, %d)"):format(x,z)
     end
     for _,tile in ipairs(orders) do items[#items+1]={id=tile,label=label(tile)} end
-    for tile,t in ipairs(S.tiles) do
-      if t.tram and t.tram.owner==owner and t.tram.kind=="drive_stop" and (not p.carrier or t.tram.shared_station) then
-        targets[#targets+1]={id=tile,label=label(tile)}
+    -- Enumerate physical platforms from the station registry instead
+    -- of walking every cell on large generated worlds.
+    for _,st in pairs(S.stations) do
+      if st.owner==owner and st.mode=="road" then
+        local function offer(tile)
+          if Sim.tram_stop_station(S,tile,owner)==st then targets[#targets+1]={id=tile,label=st.name} end
+        end
+        if st.road_members then
+          for tile in pairs(st.road_members) do offer(tile) end
+        else offer(st.tile) end
       end
     end
+    table.sort(targets,function(a,b) return a.id<b.id end)
     local leg=p.legs[p.leg]
     local active=leg.order_index or (not p.loop and (p.leg==3 and 1 or p.leg==2 and 2 or p.leg==4 and 2 or 1)) or nil
     local carrier=p.carrier

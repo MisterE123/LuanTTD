@@ -60,7 +60,7 @@ function M.corners(terrain,grid,x,z,w,h)
   return table.concat(rows)
 end
 local span_fields={"start","end","head","tail","middle","middle_by_tile","axis","owner","base","deck","bridge_type","railtype","kind","roadtype","tramtype","road_owner","tram_owner"}
-local station_fields={"owner","id","tile","mode","name","tiles","stop_axis","stop_type","bus_tile","truck_tile","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror","oil_role","goods_role","iron_ore_role","steel_role","valuables_role","livestock_role","grain_role","wood_role"}
+local station_fields={"owner","id","tile","mode","name","tiles","tram_only","stop_axis","stop_type","bus_tile","truck_tile","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror","oil_role","goods_role","iron_ore_role","steel_role","valuables_role","livestock_role","grain_role","wood_role"}
 local industry_fields={"id","removed","kind","x","z","tiles"}
 local farm_fields={"variant","slope","base","fences"}
 local site_fields={"id","kind","name","tile","closed","population"}
@@ -102,6 +102,7 @@ function M.registries(s,ids)
     add(out,s,"sites",t.site,site_fields)
     add(out,s,"sites",t.road_town,site_fields)
     add(out,s,"stations",t.station,station_fields)
+    add(out,s,"stations",t.tram and t.tram.tram_station,station_fields)
     add(out,s,"stock_road_waypoints",t.road_waypoint_id,{"id","name","owner","tile"})
     add(out,s,"stock_rail_stations",t.rail_station_id,station_fields)
     if t.ship and (t.ship.kind=="dock" or t.ship.kind=="oilrig") then

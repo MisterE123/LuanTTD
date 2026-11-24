@@ -32,11 +32,11 @@ return function(Sim)
     table.sort(out,function(a,b)return a.id<b.id end)
     return out
   end
-  function R.closest(s,kind,owner,tile)
+  function R.closest(s,kind,owner,tile,eligible)
     local closest,threshold=nil,8
     for _,row in ipairs(R.list(s,kind,owner)) do
       local dist=Sim.distance(tile,row.tile)
-      if dist<threshold then closest,threshold=row,dist end
+      if dist<threshold and (not eligible or eligible(row)) then closest,threshold=row,dist end
     end
     return closest
   end

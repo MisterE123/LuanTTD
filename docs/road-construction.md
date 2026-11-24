@@ -199,13 +199,17 @@ road and its owner stay in place. Removing only the tramway returns the
 material refund. Existing trams use the real bridge ramps and tunnel
 bore, with the same road-vehicle separation checks as a bus.
 
-### Paid streetcar at shared platforms
+### Paid streetcar service
 
-Lay Tram Track along two owned, straight drive-through **Bus** platforms.
-Each platform retains its shelter, name, passenger queue, town catchment
-and bus ownership. Build a tram depot and connect the approaches. In
-**Tram Operations → Streetcar orders**, select the depot and the two
-different shared stations, then choose **Buy and dispatch**. The original
+Build **Tram Platform** on a tramway, or run Tram Track through an owned
+straight drive-through **Bus** platform. Dedicated tram platforms have
+their own station and catchment; bus services cannot order them. Existing
+bus platforms retain their shelter, name, passenger queue, catchment and
+bus ownership. A streetcar can use either kind on the same route.
+
+Build a tram depot and connect the approaches. In **Tram Operations →
+Streetcar orders**, select the depot and two different platforms, then
+choose **Buy and dispatch**. The original
 LuanTTD streetcar has 24 seats, a 48 km/h top speed and a posted one-time
 cost. A free test is still available and carries no passengers.
 

@@ -1,24 +1,31 @@
-local depot,platform,mixed=88,97,107
-local s={stations={[1]={mode="road"},[4]={mode="road",stop_type="truck"}},
-  tiles={[depot]={station=1},[platform]={rail_station_id=15},[mixed]={station=4}}}
+local depot,platform,mixed,tram=88,97,107,108
+local s={stations={[1]={mode="road"},[4]={mode="road",stop_type="truck"},[5]={mode="road",tram_only=true}},
+  tiles={[depot]={station=1},[platform]={rail_station_id=15},[mixed]={station=4},[tram]={tram={kind="drive_stop",tram_station=5}}}}
 local road={{kind="board",cargo="passenger",data={tile=depot,units=6}},
-  {kind="board",cargo="mail",data={tile=mixed,units=8}}}
+  {kind="board",cargo="mail",data={tile=mixed,units=8}},
+  {kind="board",cargo="passenger",data={tile=tram,units=4}}}
 local rail={{kind="board",tile=platform,station_local=15,units=3}}
 local sim={
   xy=function(t) return t%10,math.floor(t/10) end,
-  waiting_passengers=function(_,st) assert(st==s.stations[1]);return 9 end,
+  tram_stop_id=dofile("mods/luanttd_core/sim.lua").tram_stop_id,
+  waiting_passengers=function(_,st)
+    if st==s.stations[5] then return 12 end
+    assert(st==s.stations[1]);return 9
+  end,
   commercial_passengers_waiting=function(_,mode,id) assert(mode=="rail" and id==15);return 2 end,
   road_loading_events=function() local old=road;road={};return old end,
   rail_loading_events=function() local old=rail;rail={};return old end,
 }
 local P=dofile("mods/luanttd_core/campaign_passenger_projection.lua")(sim,s)
-local counts=P.counts({{id=depot},{id=platform},{id=mixed}})
-assert(counts["road:1"]==9 and counts["rail:15"]==2 and counts["road:4"]==0)
+local counts=P.counts({{id=depot},{id=platform},{id=mixed},{id=tram}})
+assert(counts["road:1"]==9 and counts["rail:15"]==2 and counts["road:4"]==0 and counts["road:5"]==12)
 P.collect()
 local one,tick=P.events({{x=7,z=8,w=2,h=1}},0)
-assert(#one==1 and one[1].mode=="road" and one[1].units==6 and tick==2)
+assert(#one==1 and one[1].mode=="road" and one[1].units==6 and tick==3)
 local two,tick2=P.events({{x=7,z=9,w=1,h=1}},0)
-assert(#two==1 and two[1].mode=="rail" and two[1].units==3 and tick2==2)
+assert(#two==1 and two[1].mode=="rail" and two[1].units==3 and tick2==3)
+local three=P.events({{x=8,z=10,w=1,h=1}},0)
+assert(#three==1 and three[1].mode=="road" and three[1].id==5 and three[1].units==4)
 assert(#P.events({{x=7,z=8,w=2,h=3}},tick2)==0)
 P.frame(2)
 assert(#P.events({{x=7,z=8,w=2,h=3}},0)==0)

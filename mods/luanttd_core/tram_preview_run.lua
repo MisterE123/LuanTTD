@@ -7,11 +7,8 @@ return function(Network,Trip,Speed,shared,Passenger)
   local R={VERSION=1}
   local speed_cap=body.speed
   local function paid_stop(s,id,owner)
-    local tile=s.tiles[id]
-    local part=tile and tile.tram
-    local sid=part and part.shared_station
-    local station=sid and s.stations[sid]
-    return station and tile.station==sid and station.owner==owner and part.kind=="drive_stop" and sid
+    local station=Passenger.station(s,id,owner)
+    return station and station.id
   end
   function R.offer()
     return {name=body.name,price=body.price,capacity=body.capacity,speed=body.speed/2}
@@ -78,7 +75,7 @@ return function(Network,Trip,Speed,shared,Passenger)
     if not Passenger or not shared or not shared(s) then return nil,"TRAM_SERVICE_UNAVAILABLE" end
     if quoted_price~=body.price then return nil,"TRAM_PRICE_CHANGED" end
     local a,b=paid_stop(s,first,owner),paid_stop(s,second,owner)
-    if not a or not b or a==b then return nil,"TWO_SHARED_BUS_PLATFORMS_REQUIRED" end
+    if not a or not b or a==b then return nil,"TWO_OWNED_TRAM_PLATFORMS_REQUIRED" end
     local c=s.companies[owner]
     if not c or c.cash<body.price then return nil,"NOT_ENOUGH_MONEY" end
     if not additional and R.current(s) then return nil,"pilot_already_exists" end
@@ -112,11 +109,11 @@ return function(Network,Trip,Speed,shared,Passenger)
       local ids={}
       for _,tile in ipairs(orders) do
         local id=paid_stop(s,tile,owner)
-        if not id then return false,"Passenger trams need owned shared bus platforms." end
+        if not id then return false,"Passenger trams need owned tram platforms." end
         ids[id]=true
       end
       local a=next(ids)
-      if not a or not next(ids,a) then return false,"Choose two distinct shared stations." end
+      if not a or not next(ids,a) then return false,"Choose two distinct stations." end
     end
     local current=p.legs[p.leg]
     local end_pose=current.frames[#current.frames]

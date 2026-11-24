@@ -6,7 +6,7 @@ return function(mode,vehicle,owner,id,t,record)
   if not t then return end
   if mode=="road" then
     local st=record("stations",t.station)
-    if owned(st,owner) and st.mode=="road" then return t.station,st.name or "Road stop" end
+    if owned(st,owner) and st.mode=="road" and not st.tram_only then return t.station,st.name or "Road stop" end
     local wp=t.road_waypoint_id and record("stock_road_waypoints",t.road_waypoint_id)
     if owned(wp,owner) then return "waypoint:"..wp.id,wp.name end
   elseif mode=="rail" then
@@ -32,6 +32,9 @@ return function(mode,vehicle,owner,id,t,record)
     if owned(st,owner) then return f.airport,st.layout=="city" and "City Airport" or "Airfield" end
   elseif mode=="tram" then
     local f=t.tram
-    if f and f.kind=="drive_stop" and f.owner==owner then return id,"Tram stop" end
+    if f and f.kind=="drive_stop" and f.owner==owner then
+      local st=record("stations",f.shared_station or f.tram_station)
+      return id,st and st.name or "Tram stop"
+    end
   end
 end

@@ -565,6 +565,25 @@ return function(api)
       return sampler.for_tile(shape,base,t.tram,Sim.road_bits(S,id))
     end
   end
+  -- Positions against the two raised waiting strips in the Blender tram
+  -- shelter, outside the posts, glazing and rail stopping envelope.
+  function R.tram_platforms(st)
+    local at=st and st.tram_only and st.tile
+    local t=at and S.tiles[at]
+    if not t or Sim.tram_stop_id(t)~=st.id or not R.tram_surface then return end
+    local level=R.tram_surface(at)
+    if not level then return end
+    local tx,tz=Sim.xy(at)
+    local x,y,z=tx*2+.5,level.base+.575,tz*2+.5
+    local across_x=t.tram.dir==1 and 1 or 0
+    local across_z=t.tram.dir==1 and 0 or 1
+    local strips={}
+    for _,sign in ipairs({-1,1}) do
+      strips[#strips+1]={x=x+sign*.459*across_x,y=y,z=z+sign*.459*across_z,
+        side={x=across_x,z=across_z},along={x=across_z,z=across_x},width=.093,length=1.61}
+    end
+    return strips
+  end
   function R.platform(st)
     local at=st and (st.bus_tile or (st.stop_type~="truck" and st.tile))
     local t=at and S.tiles[at]
@@ -1798,7 +1817,7 @@ return function(api)
       if event.units<=0 then return end
       R.float(owner,event.tile,event.units..(cargo=="coal" and " t coal loaded" or cargo=="mail" and " mail bags loaded" or " boarded"),0x9bdce8)
       local t=S.tiles[event.tile]
-      local station=t and S.stations[t.station]
+      local station=t and S.stations[t.station or Sim.tram_stop_id(t)]
       if station and api.crowd and cargo=="passenger" then api.crowd.board(station,event.units) end
     end
     -- One rendered day can contain several real boarding slices and even

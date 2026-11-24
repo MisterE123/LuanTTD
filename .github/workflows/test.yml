@@ -48,6 +48,8 @@ jobs:
           lua5.1 tests/tram_shared_road_live.lua
           lua5.1 tests/tram_shared_station.lua
           LUANTTD_TEST_TRAM_FLEET=1 lua5.1 tests/tram_shared_station.lua
+          lua5.1 tests/tram_dedicated_station.lua
+          LUANTTD_TEST_TRAM_MIXED=1 lua5.1 tests/tram_dedicated_station.lua
           lua5.1 tests/tram_station_cargo.lua
           lua5.1 tests/road_dead_end.lua
           lua5.1 tests/road_transit_depot.lua

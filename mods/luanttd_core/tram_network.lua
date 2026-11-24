@@ -107,7 +107,8 @@ return function(Sim,T,Terrain,Span)
       owner=p.kind~="road" and (p.owner or t.owner) or nil,tram_owner=p.tram_owner,
       terminal_level=(kind=="depot" or kind=="drive_stop") and p.base or t.terminal_level,
       station=(p.kind=="drive_stop") and id or nil,stop_type=(p.kind=="drive_stop") and "bus" or nil,
-      shared_station=(p.kind=="drive_stop") and t.shared_station or nil},
+      shared_station=(p.kind=="drive_stop") and t.shared_station or nil,
+      tram_station=(p.kind=="drive_stop") and t.tram_station or nil},
       p.cost
   end
 
@@ -189,7 +190,16 @@ return function(Sim,T,Terrain,Span)
         Sim.apply_crossing_construction(s,p.record.crossing_quote)
         crossing=true
       else
-        s.tiles[p.id].tram=p.record
+        local previous=s.tiles[p.id].tram
+        local part=p.record
+        if part and part.kind=="drive_stop" and not (part.shared_station or part.tram_station) then
+          part.tram_station=Sim.register_tram_station(s,owner,p.id)
+        end
+        if previous and previous.tram_station and
+            (not part or part.tram_station~=previous.tram_station) then
+          Sim.retire_road_station(s,previous.tram_station)
+        end
+        s.tiles[p.id].tram=part
       end
       dirty[i]=p.id
     end
@@ -324,12 +334,12 @@ return function(Sim,T,Terrain,Span)
     local price=part.kind=="depot" and 80 or 50
     if price>company.cash then return nil,"NOT_ENOUGH_MONEY" end
     return {id=id,cost=price,kind=part.kind,dir=part.dir,terminal_level=part.terminal_level,
-      bits=part.tram_bits,tram_owner=part.tram_owner,tramtype=part.tramtype}
+      bits=part.tram_bits,tram_owner=part.tram_owner,tramtype=part.tramtype,tram_station=part.tram_station}
   end
   function N.apply_facility_removal(s,owner,prior,busy)
     local q,why=N.facility_removal_plan(s,owner,prior.id,busy)
     if not q then return false,why end
-    for _,field in ipairs{"cost","kind","dir","terminal_level","bits","tram_owner","tramtype"} do
+    for _,field in ipairs{"cost","kind","dir","terminal_level","bits","tram_owner","tramtype","tram_station"} do
       if q[field]~=prior[field] then return false,"STALE_QUOTE" end
     end
     local items={{id=q.id}}

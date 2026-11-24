@@ -105,6 +105,9 @@ fi
 if [[ ${LUANTTD_NATIVE_ROAD_REBUILD:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_road_rebuild = true' >> "$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_TRAM_DEDICATED:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_tram_dedicated = true' >> "$out/native.conf"
+fi
 if [[ ${LUANTTD_NATIVE_TRAM_FLEET:-0} == 1 ]]; then
   printf '%s
 ' 'luanttd_native_tram_fleet = true' >> "$out/native.conf"

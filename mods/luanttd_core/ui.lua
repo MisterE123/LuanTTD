@@ -2707,12 +2707,12 @@ function U.build_world(p,id,hit)
       if stage_fixed_destination(V,id) then return end
       local request={kind="transport_start",mode="tram",depot=V.anchor,first=V.tram_first,second=id}
       local first=R.host_tile and R.host_tile(V.tram_first)
-      local left=first and first.tram and first.tram.shared_station
-      if left and record.shared_station and left~=record.shared_station then
+      local left,right=Sim.tram_stop_id(first),Sim.tram_stop_id(t)
+      if left and right and left~=right then
         V.tram_offer=request
         core.show_formspec(n,tram_offer_form,("formspec_version[4]size[10,4]"..
           "label[.5,.5;%s]label[.5,1.1;%d passengers  |  %d km/h  |  %s]"..
-          "label[.5,1.7;Paid service shares the bus platforms and their passenger queues.]"..
+          "label[.5,1.7;Paid service carries passengers and earns fares.]"..
           "button_exit[.5,2.5;4.2,.8;tram_paid;Buy and dispatch]"..
           "button_exit[5,2.5;4.5,.8;tram_test;Run a free test]"):format(
           esc(TramMarket.name),TramMarket.capacity,TramMarket.speed/2,dollars(TramMarket.price)))

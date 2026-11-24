@@ -37,7 +37,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
        (host.timber_handles and host.timber_handles(s,v))) or false
   end
   local function compatible(st,v)
-    return st and st.mode=="road" and
+    return st and st.mode=="road" and (not st.tram_only or v.stock_tram) and
       ((v.cargo=="passenger" and Sim.road_stop_has(st,"bus"))
         or ((v.cargo=="mail" or v.cargo=="coal" or timber_cargo(v.cargo)) and Mail.truck_stop(st)))
   end
@@ -58,7 +58,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     return sum,per_town
   end
   function M.acceptance(s,st,cargo)
-    if not compatible(st,{cargo=cargo}) then return 0 end
+    if not compatible(st,{cargo=cargo,stock_tram=st and st.tram_only}) then return 0 end
     if cargo=="coal" then
       local b=host.coal and host.coal(s)
       return b and b.report(st).eighths or 0

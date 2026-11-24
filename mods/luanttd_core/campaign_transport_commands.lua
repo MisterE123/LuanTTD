@@ -456,7 +456,7 @@ return function(Sim,R)
       if req.paid==true then
         local run,why=R.tram.run.start_paid(s,owner,req.depot,req.first,req.second,req.cost,
           R.tram.run.current(s)~=nil)
-        return run~=nil,run and "Streetcar bought and dispatched to both shared platforms." or why
+        return run~=nil,run and "Streetcar bought and dispatched to both platforms." or why
       end
       local run,why=R.tram.run.start(s,owner,req.depot,req.first,req.second)
       return run~=nil,run and "Test streetcar dispatched between the two stops. It does not carry passengers." or why

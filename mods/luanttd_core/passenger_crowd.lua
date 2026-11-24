@@ -63,7 +63,8 @@ return function(api)
       local st=S.stations[id]
       local at=st and (st.bus_tile or st.tile)
       local tile=at and S.tiles[at]
-      if st and st.mode=="road" and st.stop_type~="truck" and tile and tile.build=="road_station" and tile.station==id then
+      if st and st.mode=="road" and st.stop_type~="truck" and tile and
+        (st.tram_only and Sim.tram_stop_id(tile)==id or tile.build=="road_station" and tile.station==id) then
         return Sim.waiting_passengers(S,st)
       end
     elseif Zones then
@@ -102,7 +103,10 @@ return function(api)
     platforms={}
     for id,st in pairs(S.stations) do
       local count=waiting("road",id)
-      if count>0 then add("road",id,{api.render.platform(st)},count) end
+      if count>0 then
+        local rectangles=st.tram_only and api.render.tram_platforms(st) or {api.render.platform(st)}
+        add("road",id,rectangles,count)
+      end
     end
     if not Zones then return end
     for _,m in ipairs({{"rail",S.stock_rail_stations},{"ship",S.stock_ship_stations},{"air",S.stock_small_airports}}) do

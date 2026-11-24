@@ -193,7 +193,7 @@ return function(Sim,mod)
     local search=dofile(source.."yapf_road_search.lua")(follow,cost)
     local wormhole=dofile(mod.."/road_bridge_motion.lua")
     local trip=dofile(mod.."/tram_trip.lua")(follow,cost,search,motion,wormhole)
-    local passenger={arrive=Sim.tram_passenger_arrive,depart=Sim.tram_passenger_depart,age=Sim.tram_passenger_age}
+    local passenger={station=Sim.tram_stop_station,arrive=Sim.tram_passenger_arrive,depart=Sim.tram_passenger_depart,age=Sim.tram_passenger_age}
     local run=dofile(mod.."/tram_preview_run.lua")(net,trip,dofile(source.."road_speed.lua"),
       Sim.shared_road_tram_active,passenger)
     local clock=dofile(mod.."/aux_transport_clock.lua")(s,interval,function() return run.current(s) end,

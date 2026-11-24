@@ -24,7 +24,7 @@ return function(Sim,s)
     end
     for _,row in ipairs(cells) do
       local t=s.tiles[row.id]
-      observe("road",t.station)
+      observe("road",t.station or Sim.tram_stop_id(t))
       observe("rail",t.rail_station_id)
       if t.ship and t.ship.kind=="dock" then observe("ship",t.ship.station) end
       if t.airfield then observe("air",t.airfield.airport) end
@@ -47,7 +47,7 @@ return function(Sim,s)
     for _,e in ipairs(road) do
       if e.kind=="board" and e.cargo=="passenger" then
         local t=s.tiles[e.data.tile]
-        add("road",t and t.station,e.data.units,e.data.tile)
+        add("road",t and (t.station or Sim.tram_stop_id(t)),e.data.units,e.data.tile)
       end
     end
     local sources={rail=Sim.rail_loading_events,ship=Sim.ferry_loading_events,air=Sim.air_loading_events}

@@ -1246,6 +1246,43 @@ local function road_stop_site(s,id)
   local town=M.nearest_town(s,id)
   return town and town.id or near,served,true
 end
+-- RC1 BuildRoadStop: one canonical station with the bus facility and a
+-- physical tile for catchment. Keep its access type distinct from road.
+function M.register_tram_station(s,owner,id)
+  local retirement=M.road_station_retirement()
+  local previous=retirement.closest(s,"station",owner,id,function(row) return row.tram_only end)
+  local best,served=road_stop_site(s,id)
+  if previous then
+    local station=assert(retirement.take(s,"station",previous.id))
+    station.tile,station.site,station.served=id,best,served
+    station.road_members=nil
+    s.stations[station.id]=station
+    return station.id
+  end
+  local sid=s.next_station
+  s.next_station=sid+1
+  local town=s.sites[best]
+  s.stations[sid]={id=sid,tile=id,mode="road",owner=owner,tram_only=true,stop_type="bus",
+    name=(town and town.name.." " or "").."Tram platform #"..sid,
+    site=best,served=served,stock={},last_service={}}
+  return sid
+end
+function M.tram_stop_id(t)
+  local part=t and t.tram
+  if not part or part.kind~="drive_stop" then return end
+  if part.shared_station and part.shared_station==t.station then return part.shared_station end
+  return part.tram_station
+end
+function M.tram_stop_station(s,id,owner)
+  local tile=s.tiles[id]
+  local sid=M.tram_stop_id(tile)
+  local st=sid and s.stations[sid]
+  if st and (not owner or st.owner==owner) and st.owner==tile.tram.owner and
+     ((st.tram_only and st.tile==id and sid==tile.tram.tram_station) or
+      (not st.tram_only and sid==tile.station)) then
+    return st
+  end
+end
 local overhead_road_layers={
   {"bridge_above","stock_road_bridges"},
   {"rail_bridge_above","stock_rail_spans"},
@@ -1374,7 +1411,7 @@ function M.road_loading_tile(s,st,v)
   local f=v.road_stop_pose
   local id=f and f[4]
   local t=id and s.tiles[id]
-  if t and t.station==st.id then return id end
+  if t and (t.station==st.id or v.stock_tram and M.tram_stop_id(t)==st.id) then return id end
   return M.road_stop_anchor(st,v.cargo=="passenger" and "bus" or "truck") or st.tile
 end
 function M.road_stop_catchment(s,st,r)
@@ -1435,9 +1472,12 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
   local function compatible(st)
     -- Road bus and truck facilities share the station; other modes
     -- have their own construction registries.
-    return st and st.mode=="road" and not s.tiles[st.tile].road_stop_pair
+    return st and st.mode=="road" and not st.tram_only and not s.tiles[st.tile].road_stop_pair
   end
-  function board.station(id) return s.stations[id] or M.road_station_retirement().get(s,"station",id) end
+  function board.station(id)
+    local st=s.stations[id] or M.road_station_retirement().get(s,"station",id)
+    if st and not st.tram_only then return st end
+  end
   function board.surrounding(rect)
     local x,z=M.xy(rect.tile)
     local found,seen={},{}
@@ -1470,7 +1510,7 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
   local join,why=road_stop_area.find_join(board,area,over,owner,req.join,req.adjacent,true)
   if why then return nil,why end
   if not join and not req.adjacent and not req.join then
-    join=M.road_station_retirement().closest(s,"station",owner,area.tile)
+    join=M.road_station_retirement().closest(s,"station",owner,area.tile,function(row) return not row.tram_only end)
   end
   if join and s.stations[join.id] and not compatible(join) then return nil,"INCOMPATIBLE_STATION_TILE" end
   local result=road_stop_members.preview(join,parts)
@@ -2299,6 +2339,7 @@ road_replan=function(s,v,state,frames,current,vehicle_limit)
 end
 function M.path(s,a,b,mode,owner,avoid,vehicle,waypoints)
   if not a or not b or not a.tile or not b.tile or a.mode~=mode or b.mode~=mode or a.owner~=owner or b.owner~=owner then return nil end
+  if mode=="road" and (a.tram_only or b.tram_only) then return nil end
   if mode=="road" and s.road_economy and s.corner_grid and not avoid then
     return road_departure(s,a,b,owner,vehicle,waypoints)
   end
@@ -2563,7 +2604,7 @@ function M.purchase(s,owner,engine,cargo,station,depot)
   if industry_truck(engine) and not depot then return nil,"Buy this freight vehicle in an owned road depot." end
   if depot then
     if station or e.mode~="road" or not depot_endpoint(s,owner,depot) then return nil,"Select a road depot you own." end
-  elseif not st or st.owner~=owner or st.mode~=e.mode then return nil,"Select a compatible terminal you own." end
+  elseif not st or st.tram_only or st.owner~=owner or st.mode~=e.mode then return nil,"Select a compatible terminal you own." end
   if st and s.tiles[st.tile].road_stop_pair then
     return nil,"Buy this vehicle in a road depot, then order the two-bay terminus."
   end
@@ -2626,7 +2667,7 @@ end
 local function can_use_road_order(s,v,o)
   local st,waypoint=road_order_location(s,o.station)
   if waypoint then return st~=nil and st.owner==v.owner and M.road_stock_service_active(s) end
-  if not st or st.owner~=v.owner or st.mode~="road" then return false end
+  if not st or st.tram_only or st.owner~=v.owner or st.mode~="road" then return false end
   if not s.road_economy then return true end
   if v.cargo=="passenger" then return M.road_stop_has(st,"bus") end
   if mail_engine(v.engine) or coal_engine(v.engine) or industry_truck(v.engine) then return M.road_stop_has(st,"truck") end
@@ -3094,12 +3135,10 @@ local function passenger_modules()
 end
 -- RC1 trams use the RoadVehicle station loader. Keep the custom body in
 -- its streetcar run, not in the bus route planner or the general fleet.
--- The tram caller may only select a registered, shared through platform.
+-- The tram caller must select a real registered through platform.
 function M.tram_passenger_arrive(s,v,frame,order,tick)
-  local t=frame and s.tiles[frame[4]]
-  local tr=t and t.tram
-  local st=tr and tr.shared_station and s.stations[tr.shared_station]
-  if not st or t.station~=st.id or not v or not v.stock_tram or v.owner~=st.owner then
+  local st=v and frame and M.tram_stop_station(s,frame[4],v.owner)
+  if not st or not v.stock_tram then
     return nil,"INCOMPATIBLE_STATION"
   end
   passenger_modules()
