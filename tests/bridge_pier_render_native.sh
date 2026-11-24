@@ -41,7 +41,7 @@ if [[ ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 ]]; then
   fixture=bridge_bank_render_native
   ready_mark=BRIDGE_BANK_NATIVE_READY
   view_mark=BRIDGE_BANK_NATIVE_VIEW
-  views=(left_bank right_bank)
+  views=(left_bank right_bank upper modern rail)
 fi
 if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   fixture=tram_grade_render_native
@@ -162,7 +162,7 @@ for view in "${views[@]}"; do
 done
 ! grep -Ei 'ERROR\[|could not load' "$out/client.log" "$out/server.log"
 if [[ ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 ]]; then
-  echo "PASS: native stock coastal ramps retain full bank slopes beneath their timber deck: $out"
+  echo "PASS: native timber, girder and rail abutments use the stock shore beneath unchanged decks: $out"
 elif [[ ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
   echo "PASS: native road bridge and tunnel retain their original mesh under electrified tramway: $out"
 elif [[ ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then

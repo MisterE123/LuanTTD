@@ -1,22 +1,23 @@
 -- Mount only fully authored piecewise families. Stock supplies the
 -- structural piece (and thereby which faces have supports); the Luanti
 -- asset manifest only maps that class to an original native model.
-return function(architecture,Bridge,xy)
+return function(architecture,Bridge,xy,walking_box)
   local R={}
   function R.mount(prefix,manifest,geometry)
     geometry=geometry or prefix
-    local function model(suffix)
-      return architecture("stock_"..prefix..suffix,geometry..suffix,prefix)
+    local function model(suffix,solid)
+      return architecture("stock_"..prefix..suffix,geometry..suffix,prefix,false,solid)
     end
     local def={span={[0]={},[1]={}},pier={[0]={},[1]={}},feet={[0]={},[1]={}},
       under={[0]={},[1]={}},choices=manifest.choices}
     for axis=0,1 do
       for _,name in ipairs(manifest.pieces) do
         local key="_span_"..axis.."_"..name
-        def.span[axis][name]=model(key)
+        local solid=walking_box and walking_box("span",axis)
+        def.span[axis][name]=model(key,solid)
         if manifest.bearing[name] then
           local clear=key.."_road_clear"
-          def.under[axis][name]=model(clear)
+          def.under[axis][name]=model(clear,solid)
           key="_pier_"..axis.."_"..name
           def.pier[axis][name]=model(key)
           local feet={}

@@ -26,6 +26,10 @@ cp tests/atmosphere_native.lua "$mod/init.lua"
 cp mods/luanttd_core/atmosphere.lua "$mod/atmosphere.lua"
 cp mods/luanttd_core/textures/{bl_coastal_moon,bl_grass2,bl_grass_side,bl_hill_side,bl_water_sea_anim}.png "$mod/textures/"
 cp mods/luanttd_core/models/bl_land_3.obj "$mod/models/"
+if [[ ${BAYLINE_ATMOSPHERE_TEST_FEATURE:-0} == 1 ]]; then
+  cp mods/luanttd_core/models/bl_stock_forest_{0,1,2}_2.obj "$mod/models/"
+  cp mods/luanttd_core/textures/bl_scenery_palette.png "$mod/textures/"
+fi
 python3 - "$mod/textures/calibration.png" <<'PYQA'
 from PIL import Image, ImageDraw
 from sys import argv
@@ -45,6 +49,7 @@ prometheus_listener_address = 127.0.0.1:$port
 server_announce = false
 bind_address = 127.0.0.1
 time_speed = ${BAYLINE_ATMOSPHERE_TEST_SPEED:-0}
+luanttd_daylight_feature_test = ${BAYLINE_ATMOSPHERE_TEST_FEATURE:-0}
 bayline_coastal_haze = ${BAYLINE_ATMOSPHERE_TEST_HAZE:-true}
 EOF
 cat > "$out/client.conf" <<'EOF'
@@ -60,6 +65,14 @@ video_driver = opengl
 shadow_map_max_distance = 100
 shadow_map_texture_size = 1024
 EOF
+if [[ ${BAYLINE_ATMOSPHERE_TEST_FEATURE:-0} == 1 ]]; then
+  printf 'enable_post_processing = true
+enable_bloom = true
+enable_volumetric_lighting = true
+fov = 104
+' >>"$out/client.conf"
+fi
+export LP_NUM_THREADS=2
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache" XDG_CONFIG_HOME="$out/home/.config" \
   LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games" \
   LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
@@ -94,7 +107,36 @@ xdotool mousemove 650 430
 sleep 3
 xdotool key F1
 sleep 2
-if [[ ${BAYLINE_ATMOSPHERE_TEST_SPEED:-0} == 0 ]]; then
+if [[ ${BAYLINE_ATMOSPHERE_TEST_FEATURE:-0} == 1 ]]; then
+  for shot in rays-off rays-on hold cycle; do
+    xdotool key t; sleep .2; xdotool type "/atmosfeature $shot"; xdotool key Return
+    for _ in {1..40}; do
+      if grep -q "ATMOSPHERE_FEATURE $shot" "$out/server.log"; then break; fi
+      sleep .25
+    done
+    grep "ATMOSPHERE_FEATURE $shot" "$out/server.log"
+    sleep 2
+    import -window "$win" -quality 92 "$out/lighting-$shot.jpg"
+  done
+  python3 - "$out" <<'PYQA'
+from pathlib import Path
+from statistics import mean
+from sys import argv
+from PIL import Image
+
+root = Path(argv[1])
+def sample(shot, area):
+    region = Image.open(root / f"lighting-{shot}.jpg").convert("L").crop(area)
+    return mean(region.getdata())
+
+halo = (450, 129, 760, 410)
+baseline = sample("rays-off", halo)
+scattering = sample("rays-on", halo)
+assert scattering > baseline + 12, (baseline, scattering, "no native volumetric sun glow")
+assert sample("hold", halo) > sample("cycle", halo) + 24, "held sunlight didn't show in the client"
+print(f"Native rendered bloom/volume: same camera halo {baseline:.1f} → {scattering:.1f}; verified fixed day vs restored night")
+PYQA
+elif [[ ${BAYLINE_ATMOSPHERE_TEST_SPEED:-0} == 0 ]]; then
   for shot in noon dusk moonrise midnight slope shadow; do
     xdotool key t; sleep .2; xdotool type "/atmosqa $shot"; xdotool key Return
     sleep 2.25
@@ -147,5 +189,5 @@ PYQA
 else
   grep -q "ATMOSPHERE_VIEW advance" "$out/server.log"
 fi
-grep "ATMOSPHERE_VIEW" "$out/server.log"
+if [[ ${BAYLINE_ATMOSPHERE_TEST_FEATURE:-0} != 1 ]]; then grep "ATMOSPHERE_VIEW" "$out/server.log"; fi
 ! grep -Ei 'error|could not load' "$out/"{server,client}.log

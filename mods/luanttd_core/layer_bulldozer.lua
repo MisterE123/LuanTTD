@@ -70,11 +70,14 @@ return function(api,clear_structure,status)
     if not prior or not prior.ok then return true end
     pending[n]=nil
     core.close_formspec(n,B.form)
+    local fx=api.demolition_effects
+    local origin=fx and fx.origin(q.id,prior.key)
     if q.remote then
       local client=api.worker_layer_client
       local ok,why=client.query({kind="command",player=n,command={kind="demolition",token=q.remote.token,
         revision=q.remote.revision,layer=prior.key}},function(r)
         status(p,r.why or (r.ok and "Layer removed." or "Layer removal canceled."))
+        if fx then fx.receipt(r.ok,r.value,q.id,origin) end
       end)
       if not ok then status(p,why) end
       return true
@@ -89,6 +92,7 @@ return function(api,clear_structure,status)
     local _,ids,note,level=fresh.apply()
     status(p,note or "Layer removal canceled.")
     if ids then
+      if fx then fx.receipt(true,ids,q.id,origin) end
       if level then R.raise_bound(level) end
       if #ids>0 then R.update(ids);api.save() end
     end

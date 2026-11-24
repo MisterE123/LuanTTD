@@ -144,3 +144,54 @@ clock(nil)
 clock("300")
 clock("0")
 print("Daylight clock: calendar year and leap days, pause/resume, bounded worker interpolation, saved phase, and exact native synchronization")
+
+do
+  local p1,p2={},{}
+  local function setup(p,name)
+    for _,key in ipairs({"sky","sun","moon","stars","clouds","lighting"}) do
+      p["set_"..key]=function(_,value) p[key]=value end
+    end
+    p.get_player_name=function() return name end
+    p.override_day_night_ratio=function(_,ratio) p.ratio=ratio end
+  end
+  setup(p1,"Host")
+  setup(p2,"Guest")
+  local by_name={Host=p1,Guest=p2}
+  local world_phase,display=.82,.50
+  local singleplayer,saved=false,0
+  local step
+  local core={
+    is_singleplayer=function() return singleplayer end,
+    check_player_privs=function(name,wanted) return name=="Host" and wanted.server end,
+    get_player_by_name=function(name) return by_name[name] end,
+    get_timeofday=function() return display end,
+    set_timeofday=function(x) display=math.floor(x*24000)/24000 end,
+    register_globalstep=function(fn) step=fn end,
+    register_on_leaveplayer=function()end,
+    register_on_shutdown=function()end,
+    settings={get=function()end,set=function()end},
+  }
+  local storage={
+    get_int=function(_,k) assert(k=="atmosphere_always_day_v1");return saved end,
+    set_int=function(_,k,v) assert(k=="atmosphere_always_day_v1");saved=v end,
+  }
+  local function start() return A.start(core,function() return world_phase end,storage) end
+  local open,lighting=start()
+  open(p1);open(p2)
+  assert(eq(display,.82) and p1.ratio<.60 and eq(p2.ratio,p1.ratio))
+  assert(eq(p1.lighting.volumetric_light.strength,.2) and p1.lighting.bloom.intensity>0)
+  assert(not lighting.is_always_day() and not lighting.allowed(p2) and not lighting.toggle(p2) and saved==0)
+  assert(lighting.allowed(p1) and lighting.toggle(p1) and lighting.is_always_day())
+  assert(eq(display,.4) and eq(p1.ratio,.98) and eq(p2.ratio,.98) and saved==1)
+  world_phase=.10
+  step(1)
+  assert(eq(display,.4) and eq(world_phase,.10),"the real phase continues behind the held sun")
+  local reopen,restart=start()
+  reopen(p2)
+  assert(restart.is_always_day() and eq(display,.4) and eq(p2.ratio,.98))
+  assert(restart.toggle(p1) and not restart.is_always_day() and saved==0)
+  assert(eq(display,.10) and p2.ratio<.60,"restoring cycle instantly resumes the current phase")
+  singleplayer=true
+  assert(restart.allowed(p2),"single-player need not have multiplayer operator privilege")
+end
+print("World daylight preference: original default, authorized multiplayer control, real phase independent, and saved/reloaded preference")

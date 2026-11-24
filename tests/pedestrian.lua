@@ -53,7 +53,9 @@ local p={
   set_eye_offset=function(_,v) eye=v end,
   hud_set_flags=function(_,v)flags=v end,
 }
-assert(not walk.at(2,{x=4.5,z=2.5}) and not walk.at(4,{x=8.5,z=2.5}))
+assert(not walk.at(1,{x=2.5,z=2.5}) and not walk.at(2,{x=4.5,z=2.5}))
+local afloat,water=walk.at(4,{x=8.5,z=2.5})
+assert(afloat and water==1.5 and math.abs(afloat.y-1.32)<.0001)
 local target=assert(walk.find(p,2,{x=4.5,z=2.5}))
 assert(target.x==6.5 and target.y>2.29 and target.y<2.30,"choose a road instead of burrowing into a house")
 local edge=assert(walk.find(p,3,{x=5.51,z=3.49}))
@@ -71,7 +73,13 @@ assert(physics.gravity==1 and physics.speed_walk==.38 and properties.eye_height=
 assert(vel.x==0 and vel.y==0 and vel.z==0)
 pos={x=8.5,y=.12,z=2.5};vel.y=-2
 walk.step(p,avatar)
-assert(pos==target,"falling off the road into water safely returns to dry ground")
+assert(avatar.swimming and physics.gravity==0 and vel.y> -2,"falling into water changes to a controlled float")
+pos={x=8.5,y=1.32,z=2.5};vel.y=0
+walk.step(p,avatar,{jump=true})
+assert(vel.y>0,"Space strokes toward shore level")
+pos={x=10.5,y=1.50,z=2.5};vel.y=0
+walk.step(p,avatar)
+assert(not avatar.swimming and physics.gravity==1,"dry ground restores walking")
 P.restore_controls(p,avatar.saved)
 P.restore_pose(p,avatar.saved)
 assert(pos.x==3 and pos.y==15 and yaw==1.2 and pitch==.62)
@@ -79,3 +87,23 @@ assert(properties.eye_height==1.63 and physics.gravity==0 and flags.crosshair an
 assert(properties.visual=="sprite" and properties.textures[1]=="bl_sightseeing_hidden_player.png"
   and properties.visual_size.y==.001 and properties.nametag_color.a==0)
 print("Pedestrian: safe landing, slope support, client walking parameters, shoreline recovery and builder state restore")
+
+local B=dofile("mods/luanttd_core/pedestrian_bridge.lua")
+for d=0,3 do
+  local boxes=B.box("head_ramp",d)
+  assert(#boxes==8 and #B.box("span",d%2)==1)
+  local span={axis=d%2,deck=3,start=1,["end"]=3,head={inside_direction=d},tail={flat_ramp=true}}
+  local last=-2
+  for _,b in ipairs(boxes) do
+    local a=B.floor(span,1,b[1],b[3])-3
+    local q=B.floor(span,1,b[4],b[6])-3
+    assert(math.abs(b[5]-math.min(a,q))<1e-8 and math.abs(a-q)<.28)
+    if last~=-2 then assert(math.abs(last-b[5])<.28) end
+    last=b[5]
+  end
+  assert(B.floor(span,2,.5,.5)==3.5 and B.floor(span,3,.5,.5)==3.5)
+  assert(not B.on_deck(span.axis,-.4,-.4) and B.on_deck(span.axis,.5,.5))
+end
+local flat=P.slope_box(T.surface,0,true)
+assert(#flat.fixed==1 and flat.fixed[1][5]==-.5)
+print("PASS bounded plate collision and accurate ramp heights for all four deck orientations; flat crop support")

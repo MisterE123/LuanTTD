@@ -25,13 +25,18 @@ return function(Sim,Terrain,Rules)
     local t=id and s.tiles[id]
     if not t then return end
     if type(t.wood)~="table" then
-      -- In this mount the only explicit immature clear grass is tree
-      -- clearance/restoration. Fully grown grass need not store a byte.
+      -- RC1 ClearTile_Clear: eight actual landscape visits per
+      -- density increment, independent of placement date and tile phase.
       if t.stock_clear_density and clean(t) and t.terrain~="water"
           and (t.stock_clear_ground or 0)==0 and not (s.stock_farm_fields and s.stock_farm_fields[id]) then
-        if (11*(x-1)+9*(z-1)+math.floor(tick/256))%8==7 then
+        local n=(t.stock_clear_visits or 0)+1
+        if n==8 then
           local density=t.stock_clear_density+1
-          t.stock_clear_density=density<3 and density or nil
+          t.stock_clear_density,t.stock_clear_visits=density<3 and density or nil,nil
+          s.changed=s.changed or {}
+          s.changed[#s.changed+1]=id
+        else
+          t.stock_clear_visits=n
         end
       end
       return
@@ -45,11 +50,11 @@ return function(Sim,Terrain,Rules)
     t.wood=next_tree
     if event and event.kind=="plant" then
       local next_tile=assert(s.tiles[target_id])
-      next_tile.stock_clear_density=nil
+      next_tile.stock_clear_density,next_tile.stock_clear_visits=nil,nil
       next_tile.wood=event.tree
     elseif event and event.kind=="clear" and event.ground~=3 then
       t.stock_clear_ground=event.ground==1 and 1 or nil
-      t.stock_clear_density=event.ground==0 and event.density<3 and event.density or nil
+      t.stock_clear_density,t.stock_clear_visits=event.ground==0 and event.density<3 and event.density or nil,nil
     end
     return event
   end
@@ -62,7 +67,7 @@ return function(Sim,Terrain,Rules)
     s.stock_tree_tick_counter=next_counter
     if tree then
       local t=s.tiles[i+1]
-      t.stock_clear_density=nil
+      t.stock_clear_density,t.stock_clear_visits=nil,nil
       t.wood=tree
     end
     return i and i+1,tree

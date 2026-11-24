@@ -40,7 +40,7 @@ fake={
 }
 local cap_tile,target_vehicle=7,nil
 local ray_picks=0
-local roads={[7]={h=1,terrain="grass",build="road"},[8]={h=0,terrain="water"}}
+local roads={[7]={h=1,terrain="grass",build="road"},[8]={h=0,terrain="water",ship={kind="ship_depot"}}}
 local api={road_first=true,s={tiles=roads},Sim={xy=function(id)return 3,id==7 and 2 or 3 end,id=function()end},
   render={uses_slope=function()return false end}}
 local car,plane
@@ -116,9 +116,9 @@ press("survey_ride_vehicle");assert(ray_picks==5 and #actions==2 and status:find
 cap_tile=nil
 press("survey_fly_plane");assert(plane==1 and status:find("Aim at an airport",1,true))
 press("survey_drive_car");assert(car==1 and status:find("Aim at a connected street",1,true))
-press("survey_walk");assert(not W.avatar_state(fake) and status:find("Aim at a dry patch",1,true))
+press("survey_walk");assert(not W.avatar_state(fake) and status:find("Aim at open ground",1,true))
 cap_tile=8
-press("survey_walk");assert(not W.avatar_state(fake) and status:find("Choose dry, open ground",1,true))
+press("survey_walk");assert(not W.avatar_state(fake) and status:find("Choose open ground",1,true))
 cap_tile=7
 local previous_x,previous_y,previous_z=at.x,at.y,at.z
 press("survey_walk")

@@ -1,6 +1,7 @@
 return function(api)
   local Sim,S=api.Sim,api.s
   local modpath=core.get_modpath("luanttd_core")
+  local walk_collision=dofile(modpath.."/walk_collision_art.lua")
   local road_motion=dofile(modpath.."/road_motion.lua")
   local road_lanes=dofile(modpath.."/road_lanes.lua")
   local source_motion=dofile(modpath.."/road_motion_presentation.lua")(road_lanes)
@@ -146,6 +147,7 @@ return function(api)
       raised and {drawtype="nodebox",node_box={type="fixed",fixed=fixed}} or nil)
   end
   local function architecture(name,asset,palette,rotates,solid)
+    solid=walk_collision.box(asset) or solid
     return reg(name,{png(palette or "road_architecture")},{drawtype="mesh",mesh="bl_"..asset..".obj",
       paramtype="light",paramtype2=rotates and "facedir" or nil,sunlight_propagates=true,walkable=not not solid,pointable=false,
       collision_box=solid and {type="fixed",fixed=solid} or nil,
@@ -291,11 +293,13 @@ return function(api)
         farm_buildings[mesh]=architecture(mesh,mesh,style.."_atlas")
       end
     end
+    local Pedestrian=dofile(modpath.."/pedestrian.lua")
     for _,slope in ipairs(assets.slopes) do
+      local field_collision=Pedestrian.slope_box(api.slope.surface,slope,true).fixed
       farm_fields[slope]={}
       for v=0,8 do
         local key=("farm_ground_%d_%d"):format(slope,v)
-        farm_fields[slope][v]=architecture(key,"farm_land_"..slope,"farm_field_"..v)
+        farm_fields[slope][v]=architecture(key,"farm_land_"..slope,"farm_field_"..v,false,field_collision)
       end
     end
   end
@@ -428,7 +432,8 @@ return function(api)
   do
     local clear_span=dofile(modpath.."/bridge_clearance_render.lua")
     local rules=dofile(modpath.."/openttd/road_bridge.lua")(api.slope)
-    local piece=dofile(modpath.."/bridge_piece_art.lua")(architecture,rules,Sim.xy)
+    local walk_bridge=dofile(modpath.."/pedestrian_bridge.lua")
+    local piece=dofile(modpath.."/bridge_piece_art.lua")(architecture,rules,Sim.xy,walk_bridge.box)
     for style,prefix in pairs(bridge_styles.road) do
       local manifest=bridge_styles.pieces[style]
       local geometry=bridge_styles.mesh_stem("road",style)
@@ -438,11 +443,11 @@ return function(api)
         local limit=(part=="span" or part=="pier") and 1 or 3
         for d=0,limit do
           local asset=prefix.."_"..part.."_"..d
-          list[d]=architecture("stock_"..asset,geometry.."_"..part.."_"..d,prefix)
+          list[d]=architecture("stock_"..asset,geometry.."_"..part.."_"..d,prefix,false,walk_bridge.box(part,d))
         end
       end
       if manifest then parts.piece=piece.mount(prefix,manifest,geometry) end
-      parts.clear_span=clear_span(architecture,prefix,manifest~=nil)
+      parts.clear_span=clear_span(architecture,prefix,manifest~=nil,walk_bridge.box)
       bridges[style]=parts
     end
   end
@@ -514,7 +519,7 @@ return function(api)
     end
   end
   local road_slope_mesh,road_foundation_mesh={},{}
-  local bridge_bank_mesh={}
+  local bridge_bank_mesh,bridge_shore_mesh={},{}
   local retaining=reg("road_retaining",{png("grass0"),png("hill0"),png("road_surface_retaining")})
   if terrain then
     for shape,mask in pairs({[3]=10,[6]=5,[9]=5,[12]=10}) do
@@ -524,10 +529,13 @@ return function(api)
       for i,a in ipairs(slope_collision(shape).fixed) do
         shifted.fixed[i]={a[1]-1,a[2],a[3],a[4]-1,a[5],a[6]}
       end
-      bridge_bank_mesh[shape]={}
+      bridge_bank_mesh[shape],bridge_shore_mesh[shape]={},{}
       for variant=0,3 do
         bridge_bank_mesh[shape][variant]=reg("bridge_bank_"..shape.."_"..variant,{png("grass"..variant)},
           {drawtype="mesh",mesh="bl_land_bridge_bank_"..shape..".obj",paramtype="light",
+           sunlight_propagates=true,collision_box=shifted,pointable=false})
+        bridge_shore_mesh[shape][variant]=reg("bridge_shore_"..shape.."_"..variant,{png("original_coast_"..variant)},
+          {drawtype="mesh",mesh="bl_coastal_bridge_bank_"..shape..".obj",paramtype="light",
            sunlight_propagates=true,collision_box=shifted,pointable=false})
       end
       road_slope_mesh[shape]=reg("road_grade_"..shape,{png("road_surface_"..mask)},
@@ -702,9 +710,11 @@ return function(api)
     for _,mesh in ipairs(core.get_dir_list(modpath.."/models",false)) do
       local pattern=mesh:match("^bl_rail_split_fence_([%d_]+)%.obj$")
       if pattern then
+        local solid=walk_collision.box("rail_split_fence_"..pattern)
         split_fences[pattern]=reg("rail_split_fence_"..pattern,{png("rail_ground_fence_atlas")},{
           drawtype="mesh",mesh=mesh,use_texture_alpha="clip",paramtype="light",
-          sunlight_propagates=true,walkable=false,pointable=false})
+          sunlight_propagates=true,walkable=not not solid,pointable=false,
+          collision_box=solid and {type="fixed",fixed=solid} or nil})
       end
     end
   end
@@ -768,6 +778,65 @@ return function(api)
       return base+.5+api.slope.surface((x-2*u+.5)/2,(z-2*v+.5)/2,slope)
     end
     return terrain.sample(id,x,z)
+  end
+  -- Use the authoritative mean surface, not client-only wave displacement.
+  -- An inclined river is a water sheet on its full slope. A coastal tile
+  -- is water only on the low, flat part of the shared corner geometry.
+  function R.walk_waterline(id,x,z)
+    local t=S.tiles[id]
+    if not t or t.stock_void or not (t.terrain=="water" or t.coastal_water or
+        t.water_class=="river" or t.stock_canal or (t.ship and t.ship.water_ground)) then return end
+    if not terrain then return t.h+.5 end
+    local _,base=terrain.tile(id)
+    if base==nil then return end
+    if t.water_class=="river" and not t.ship then return terrain.sample(id,x,z) end
+    if t.coastal_water then
+      local land=terrain.sample(id,x,z)
+      if land==nil or land>base+.505 then return end
+    end
+    return base+.5
+  end
+  do
+    local B=dofile(modpath.."/pedestrian_bridge.lua")
+    local function spans(id)
+      local t=S.tiles[id]
+      if not t then return end
+      local road_id=t.road_bridge_id or R.host_record("bridge_above",id)
+      local rail_id=t.rail_span_id or R.host_record("rail_bridge_above",id)
+      local road,rail=R.host_record("stock_road_bridges",road_id),R.host_record("stock_rail_spans",rail_id)
+      return road,rail and rail.kind=="bridge" and rail or nil
+    end
+    local function floor(span,id,x,z,clip)
+      if not span then return end
+      local u,v=Sim.xy(id)
+      x,z=x-u*2,z-v*2
+      if not clip or B.on_deck(span.axis,x,z) then return B.floor(span,id,x,z) end
+    end
+    function R.walk_bridge_surface(id,x,z,near)
+      local a,b=spans(id)
+      local u,v=floor(a,id,x,z,true),floor(b,id,x,z,true)
+      if near then
+        if u and math.abs(near-u)>.33 then u=nil end
+        if v and math.abs(near-v)>.33 then v=nil end
+      end
+      return u and v and math.max(u,v) or u or v
+    end
+    function R.pick_walk_bridge(origin,ray,limit)
+      if not terrain then return end
+      local function pick(index)
+        local function get(id) return select(index,spans(id)) end
+        local id,t=terrain.pick(origin,ray,function(id) return get(id)~=nil end,limit,
+          function(id,x,z) return floor(get(id),id,x,z,false) end)
+        if id and t then
+          local y=floor(get(id),id,origin.x+t*ray.x,origin.z+t*ray.z,true)
+          if y then return id,t end
+        end
+      end
+      local a,u=pick(1)
+      local b,v=pick(2)
+      if v and (not u or v<u) then return b,v end
+      return a,u
+    end
   end
   local function depot_door(t,id)
     if t.depot_dir then return t.depot_dir end
@@ -1052,9 +1121,11 @@ return function(api)
       for _,profile in ipairs(profiles) do
         local name=("rail_ground_fence_%d_%d"):format(g,profile)
         if fence_media["bl_"..name..".obj"] then
+          local solid=walk_collision.box(name)
           family[profile]=reg(name,{png("rail_ground_fence_atlas")},{
             drawtype="mesh",mesh="bl_"..name..".obj",use_texture_alpha="clip",
-            paramtype="light",sunlight_propagates=true,walkable=false,pointable=false,
+            paramtype="light",sunlight_propagates=true,walkable=not not solid,pointable=false,
+            collision_box=solid and {type="fixed",fixed=solid} or nil,
           })
         end
       end
@@ -1071,6 +1142,17 @@ return function(api)
     end
   end
   if api.generated_world then
+    generated_ground.grass={}
+    for density=0,2 do
+      local texture=png("clear_grass_"..density)
+      local family={flat=reg("stock_clear_grass_"..density,{texture,png("grass2"),png("grass_side")})}
+      for mask in pairs(ground_mesh) do
+        family[mask]=reg("stock_clear_grass_"..density.."_slope_"..mask,{texture},
+          {drawtype="mesh",mesh="bl_land_"..mask..".obj",paramtype="light",
+            sunlight_propagates=true,collision_box=slope_collision(mask),pointable=false})
+      end
+      generated_ground.grass[density]=family
+    end
     for class,name in ipairs({"clear_rough","clear_rocks"}) do
       local texture=png(name)
       local family={flat=reg("stock_clear_ground_"..class,{texture,png("grass2"),rock_side})}
@@ -1093,13 +1175,14 @@ return function(api)
     for _,mask in ipairs{1,2,3,4,6,7,8,9,11,12,13,14,23,27,29,30} do
       local asset="coastal_bank_"..mask
       shore[mask],rocky_shore[mask]={},{}
+      local solid=slope_collision(mask).fixed
       for variant=0,3 do
-        shore[mask][variant]=architecture("stock_shore_"..mask.."_"..variant,asset,"original_coast_"..variant)
+        shore[mask][variant]=architecture("stock_shore_"..mask.."_"..variant,asset,"original_coast_"..variant,false,solid)
         local key="stock_rocky_shore_"..mask.."_"..variant
         local mesh="rocky_coastal_bank_"..mask
         local texture="rocky_coast_"..variant
-        rocky_shore[mask][variant]={[0]=architecture(key,mesh,texture),
-          architecture(key.."_alt",mesh.."_1",texture)}
+        rocky_shore[mask][variant]={[0]=architecture(key,mesh,texture,false,solid),
+          architecture(key.."_alt",mesh.."_1",texture,false,solid)}
       end
     end
   end
@@ -1223,6 +1306,25 @@ return function(api)
     if t.terrain=="water" and not t.coastal_water and not t.build and not t.ship and
         (not t.water_class or t.water_class=="sea") then return ocean(x,z) end
   end
+  local function bridge_bank_node(head,id,t,x,y,z)
+    local bank=bridge_bank_mesh[head.foundation_slope]
+    local wall=head.foundation~="none" and retaining or gnames.grass[t.variant]
+    if y<head.base or not bank and y==head.base then return wall end
+    if bank then
+      -- OpenTTD 16.0-RC1 DrawTile_TunnelBridge: DrawFoundation first;
+      -- DrawShoreTile for a nonflat sea-level foundation with sea one
+      -- tile inwards. This is presentation only, not Terraform.
+      local inside=Sim.adjacent(id,4-head.inside_direction)
+      local neighbor=inside and S.tiles[inside]
+      local sea=head.base==0 and neighbor and
+        (neighbor.water_class=="sea" or neighbor.ship and neighbor.ship.water_class=="sea")
+      if y==head.base then return sea and ocean(x,z) or slope_fill end
+      if y==head.base+1 and x%2==1 and z%2==0 then
+        return (sea and bridge_shore_mesh[head.foundation_slope] or bank)[t.variant]
+      end
+    end
+    return "air"
+  end
   local function tile_node_base(id,x,y,z)
     local t=S.tiles[id]
     if y<-1 or y>top_bound then return "air" end
@@ -1256,7 +1358,7 @@ return function(api)
       return "air"
     end
     if rail_spans then
-      local span_node=rail_spans.node(id,x,y,z,gnames.grass[t.variant],retaining)
+      local span_node=rail_spans.node(id,x,y,z,gnames.grass[t.variant],bridge_bank_node)
       if span_node then return span_node end
     end
     if api.crossings and t.level_crossing then
@@ -1309,18 +1411,7 @@ return function(api)
           if pier then return pier end
         end
       end
-      if head then
-        local wall=head.foundation~="none" and retaining or gnames.grass[t.variant]
-        local bank=bridge_bank_mesh[head.foundation_slope]
-        if bank then
-          if y==head.base then return slope_fill end
-          if y==head.base+1 and x%2==1 and z%2==0 then return bank[t.variant] end
-        end
-        if y<head.base or not bank and y==head.base then
-          return wall
-        end
-        return "air"
-      end
+      if head then return bridge_bank_node(head,id,t,x,y,z) end
     end
     if t.road_tunnel_id then
       local tunnel=S.stock_road_tunnels[t.road_tunnel_id]
@@ -1556,6 +1647,9 @@ return function(api)
     if R.uses_slope(id) then
       local mask,base=terrain.tile(id)
       local material=generated_ground[trees and trees.ground or not t.wood and t.stock_clear_ground]
+      if not material and generated_ground.grass and not t.wood and not t.build then
+        material=generated_ground.grass[t.stock_clear_density]
+      end
       if material and y==base and mask==0 then return material.flat end
       if material and mask~=0 and y==base+1 and x%2==0 and z%2==0 then return material[mask] end
       if mask~=0 then

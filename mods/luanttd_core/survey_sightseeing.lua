@@ -15,9 +15,9 @@ function S.use(key,p,api,world)
     return v.ride_toggle(p,"ride",target)
   end
 
-  local tile,hit=world.target(p)
+  local tile,hit=world.target(p,key=="survey_walk")
   if key=="survey_walk" then
-    if not tile then return false,"Aim at a dry patch of ground, then click." end
+    if not tile then return false,"Aim at open ground, a bridge deck or water, then click." end
     return world.toggle_walk_at(p,tile,hit)
   elseif key=="survey_drive_car" then
     if not tile then return false,"Aim at a connected street, then click." end

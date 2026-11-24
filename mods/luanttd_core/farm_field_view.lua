@@ -8,6 +8,17 @@ return function(api,Terrain)
     S,projected=state,true
   end
   local refs,elapsed={},0
+  local hulls={}
+  local name_hull="luanttd_core:farm_fence_walk_hull"
+  local heights
+  if core.get_modpath then
+    heights=dofile(core.get_modpath("luanttd_core").."/walk_collision_art.lua").farm
+    core.register_entity(name_hull,{initial_properties={
+      physical=true,collide_with_objects=true,pointable=false,static_save=false,
+      visual="sprite",textures={"bl_sightseeing_hidden_player.png"},visual_size={x=.001,y=.001},
+      collisionbox={0,0,0,0,0,0},
+    }})
+  end
   local spec={
     [0]={0,0,0,1,"v"},[1]={0,1,1,1,"h"},
     [2]={1,0,1,1,"v"},[3]={0,0,1,0,"h"},
@@ -67,7 +78,8 @@ return function(api,Terrain)
                 local dx,dz=xb-xa,zb-za
                 if low>high then dx,dz=-dx,-dz end
                 local yaw=math.atan2(dz,dx)
-                active[key]={id=id,name=name(style,rise),x=xa+xb-.5,y=math.min(low,high)+.5,z=za+zb-.5,yaw=yaw}
+                active[key]={id=id,name=name(style,rise),x=xa+xb-.5,y=math.min(low,high)+.5,z=za+zb-.5,
+                  yaw=yaw,style=style,rise=rise,dx=dx,dz=dz}
               end
             end
           end
@@ -78,11 +90,63 @@ return function(api,Terrain)
     else for id in pairs(fields) do visit(id) end end
     return active
   end
+  -- Farm perimeters are rendered entities, so attach a few native
+  -- collision-only boxes only near pedestrians, never the whole map.
+  local function collision(keep)
+    if not heights or not api.world then return end
+    local walkers={}
+    for _,p in ipairs(core.get_connected_players()) do
+      local a=api.world.avatar_state(p)
+      if a and a.mode=="walk" and not a.leaving then walkers[#walkers+1]=p:get_pos() end
+    end
+    local choices={}
+    if #walkers>0 then
+      for key,w in pairs(keep) do
+        if w.style then
+          local distance=81
+          for _,p in ipairs(walkers) do
+            distance=math.min(distance,(p.x-w.x)^2+(p.z-w.z)^2)
+          end
+          if distance<81 then choices[#choices+1]={key=key,record=w,distance=distance} end
+        end
+      end
+      table.sort(choices,function(a,b) return a.distance==b.distance and a.key<b.key or a.distance<b.distance end)
+    end
+    local current={}
+    for i=1,math.min(48,#choices) do
+      local key,w=choices[i].key,choices[i].record
+      local old=hulls[key]
+      if old and old.name==w.name and old.y==w.y and old.yaw==w.yaw then
+        current[key]=old;hulls[key]=nil
+      else
+        w.objects={}
+        local n=w.rise==0 and 1 or 4
+        local half=1/n
+        local h=heights[w.style]
+        for j=0,n-1 do
+          local u=-1+(j+.5)*2/n
+          local at={x=w.x+u*w.dx,y=w.y+w.rise*(j/n),z=w.z+u*w.dz}
+          local bounds=w.dx==0 and {.028,half} or {half,.028}
+          local ref=core.add_entity(at,name_hull)
+          if ref then
+            ref:set_properties({collisionbox={-bounds[1],-.11,-bounds[2],bounds[1],h,bounds[2]}})
+            w.objects[#w.objects+1]=ref
+          end
+        end
+        current[key]=w
+      end
+    end
+    for _,v in pairs(hulls) do for _,ref in ipairs(v.objects) do
+      if ref:get_pos() then ref:remove() end
+    end end
+    hulls=current
+  end
   function F.step(dt,positions)
     elapsed=elapsed+dt
     if elapsed<.35 then return end
     elapsed=0
     local keep=wanted(positions)
+    collision(keep)
     for k,v in pairs(refs) do
       local w=keep[k]
       if not w or w.name~=v.name or w.y~=v.y or w.yaw~=v.yaw or not v.ref:get_pos() then

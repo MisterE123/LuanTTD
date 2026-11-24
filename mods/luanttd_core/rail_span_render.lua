@@ -5,7 +5,8 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
   local modpath=core.get_modpath("luanttd_core")
   local styles=dofile(modpath.."/bridge_style_assets.lua")
   local rules=dofile(modpath.."/openttd/road_bridge.lua")(dofile(modpath.."/openttd/slope.lua"))
-  local piece=dofile(modpath.."/bridge_piece_art.lua")(architecture,rules,xy)
+  local walk_bridge=dofile(modpath.."/pedestrian_bridge.lua")
+  local piece=dofile(modpath.."/bridge_piece_art.lua")(architecture,rules,xy,walk_bridge.box)
   local clearance=dofile(modpath.."/bridge_clearance_render.lua")
   local parts={}
   for style,stem in pairs(styles.rail) do
@@ -17,11 +18,11 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
       local limit=(part=="span" or part=="pier") and 1 or 3
       for dir=0,limit do
         local asset=stem.."_"..part.."_"..dir
-        list[dir]=architecture("stock_"..asset,geometry.."_"..part.."_"..dir,stem)
+        list[dir]=architecture("stock_"..asset,geometry.."_"..part.."_"..dir,stem,false,walk_bridge.box(part,dir))
       end
     end
     if manifest then defs.piece=piece.mount(stem,manifest,geometry) end
-    defs.clear=clearance(architecture,stem,manifest~=nil)
+    defs.clear=clearance(architecture,stem,manifest~=nil,walk_bridge.box)
     parts[style]=defs
   end
   local foot=dofile(modpath.."/bridge_pier_render.lua")(architecture,terrain,styles.static("rail"))
@@ -51,10 +52,10 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
       for part,list in pairs(shapes) do
         for dir=0,part=="span" and 1 or 3 do
           local asset=stem.."_"..part.."_"..dir
-          list[dir]=architecture("stock_"..asset,asset,stem)
+          list[dir]=architecture("stock_"..asset,asset,stem,false,walk_bridge.box(part,dir))
         end
       end
-      shapes.clear=dofile(modpath.."/bridge_clearance_render.lua")(architecture,stem)
+      shapes.clear=dofile(modpath.."/bridge_clearance_render.lua")(architecture,stem,false,walk_bridge.box)
       advanced[g]=shapes
     end
   end
@@ -79,7 +80,7 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
     end
     return peak
   end
-  function R.node(id,x,y,z,ground,retaining)
+  function R.node(id,x,y,z,ground,bridge_bank_node)
     local span=World.by_portal(s,id)
     local anchor=x%2==0 and z%2==0
     if span then
@@ -98,7 +99,7 @@ return function(World,s,architecture,terrain,bridge_wire,xy)
           local shape=head.flat_ramp and "head_flat" or "head_ramp"
           return advanced[span.railtype] and advanced[span.railtype][shape][head.inside_direction] or parts[span.bridge_type or 0][shape][head.inside_direction]
         end
-        if y<=head.base then return head.foundation~="none" and retaining or ground end
+        return bridge_bank_node(head,id,s.tiles[id],x,y,z)
       end
       return "air"
     end

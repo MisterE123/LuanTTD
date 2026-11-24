@@ -329,6 +329,7 @@ api.rail_span_tools,api.crossing_tools,api.oneway_tools=true,true,true
 api.vehicle_ui=dofile(mod.."/vehicle_ui.lua")(api)
 api.vehicle_orders=api.vehicle_ui.orders
 api.stock_audio=dofile(mod.."/stock_audio.lua")(core,mod)
+api.demolition_effects=dofile(mod.."/demolition_effects.lua")(core,api)
 local render=dofile(mod.."/render.lua")(api)
 api.render=render
 if api.structure_tools or api.rail_spans then
@@ -363,7 +364,10 @@ end,function(p)
   world.hud(p,0)
 end)
 core.register_on_player_receive_fields(function(p,form,fields)
-  if fields.luanttd_audio_open and form=="luanttd_core:worker_controls" then
+  if fields.luanttd_daylight_toggle and form=="luanttd_core:worker_controls" then
+    if api.lighting and api.lighting.toggle(p) then ui.open_controls(p) end
+    return true
+  elseif fields.luanttd_audio_open and form=="luanttd_core:worker_controls" then
     return api.stock_audio.open(p)
   elseif fields.luanttd_cine_toggle and (form=="luanttd_core:worker_controls" or form=="" and api.cinematic.active(p)) then
     return api.cinematic.toggle(p)
@@ -600,14 +604,15 @@ core.register_on_shutdown(function()
 end)
 local solar=dofile(mod.."/campaign_solar_clock.lua")
 local local_solar=solar.new(Sim,S,interval)
-local atmosphere=dofile(mod.."/atmosphere.lua").start(core,function()
+local atmosphere,lighting=dofile(mod.."/atmosphere.lua").start(core,function()
   if placement then return end
   local now=core.get_us_time()
   if authority then
     local sample=authority.solar_clock()
     if sample then return solar.phase(sample,now) end
   else return solar.phase(local_solar(now),now) end
-end)
+end,storage)
+api.lighting=lighting
 local function open_campaign_player(p)
   local name=p:get_player_name()
   if not authority then Sim.company(S,name) end

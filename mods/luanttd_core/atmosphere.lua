@@ -1,4 +1,5 @@
--- Native sky, sun and moon follow the authoritative campaign calendar.
+-- Native sky, sun and moon follow the authoritative campaign calendar,
+-- unless the world operator holds the time of day for presentation.
 local A={}
 local function smooth(a,b,x)
   local t=math.max(0,math.min(1,(x-a)/(b-a)))
@@ -46,12 +47,22 @@ end
 
 -- Explicit synchronization makes core.get_timeofday() (including for
 -- headlights, beacons, and other mods) match the authoritative sun.
-function A.start(core,calendar_phase)
+function A.start(core,calendar_phase,storage)
   local haze,moonlight=true,.53
+  local key,fixed_sun="atmosphere_always_day_v1",.40
+  local fixed=storage and storage:get_int(key)==1 or false
+  local L={}
+  function L.is_always_day() return fixed end
+  function L.allowed(p)
+    return calendar_phase~=nil and p~=nil and
+      (core.is_singleplayer() or core.check_player_privs(p:get_player_name(),{server=true}))
+  end
   local joined,elapsed={},0
   local clock_elapsed,solar_tick=.12,nil
   local function sync_clock()
-    local phase=calendar_phase()
+    -- Do not alter the calendar or even sample it while the display is
+    -- held. Releasing this override immediately uses its current phase.
+    local phase=fixed and fixed_sun or calendar_phase()
     if phase==nil then return end
     local tick=math.floor(phase*24000+.5)%24000
     if solar_tick==tick and math.floor(core.get_timeofday()*24000+.5)%24000==tick then return end
@@ -81,6 +92,22 @@ function A.start(core,calendar_phase)
       state.ratio=phase.ratio
     end
   end
+  local function refresh()
+    if not next(joined) then return end
+    local phase=A.sample(core.get_timeofday(),moonlight)
+    for name,state in pairs(joined) do
+      local p=core.get_player_by_name(name)
+      if p then update(p,state,phase) end
+    end
+  end
+  function L.toggle(p)
+    if not L.allowed(p) then return false end
+    fixed=not fixed
+    if storage then storage:set_int(key,fixed and 1 or 0) end
+    sync_clock()
+    refresh()
+    return true
+  end
   core.register_globalstep(function(dt)
     if calendar_phase then
       clock_elapsed=clock_elapsed+dt
@@ -90,11 +117,7 @@ function A.start(core,calendar_phase)
     elapsed=elapsed+dt
     if elapsed<.6 then return end
     elapsed=elapsed%.6
-    local phase=A.sample(core.get_timeofday(),moonlight)
-    for name,state in pairs(joined) do
-      local p=core.get_player_by_name(name)
-      if p then update(p,state,phase) end
-    end
+    refresh()
   end)
   core.register_on_leaveplayer(function(p) joined[p:get_player_name()]=nil end)
   return function(p)
@@ -107,10 +130,15 @@ function A.start(core,calendar_phase)
       p:set_clouds({density=.17,height=66,thickness=6,speed={x=1.1,z=.4},
         color="#E5ECE4D2",ambient="#243B58",shadow="#91A8B8"})
     end
-    if p.set_lighting then p:set_lighting({shadows={intensity=.34}}) end
+    if p.set_lighting then
+      -- Use the built-in post-processing pass, not fake ray entities or
+      -- fog billboards. Luanti still honours each client's shader settings.
+      p:set_lighting({shadows={intensity=.34},bloom={intensity=.05},
+        volumetric_light={strength=.20}})
+    end
     if calendar_phase then sync_clock() end
     update(p,state,A.sample(core.get_timeofday(),moonlight))
-  end
+  end,L
 end
 
 return A

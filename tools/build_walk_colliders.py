@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Export bounded Walk hulls from original game OBJ assets (no engine-time parsing).
+
+Building hulls are face-connected components. Ignore horizontal/decorative
+chips based on minimum volume, then keep at most six substantial structures.
+Rail fences follow the authored line of steel posts, not one large diagonal
+rectangle. Identical variants share rows. All data is fixed-point 1/128 node.
+"""
+import argparse
+from collections import defaultdict
+from math import floor, ceil, dist, prod
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1] / "mods/luanttd_core"
+OUT = ROOT / "walk_collision_art.lua"
+MIN_DIM = (.069, .165, .069)
+SKIP = {0x09,0x0a,0x0b,0x0c,0x14,0x20}
+
+
+def components(path, section=None):
+    """Union faces sharing a position, including OBJ duplicates across UV seams."""
+    coords, seen, groups, parents = [], {}, defaultdict(list), []
+    active = section is None
+
+    def root(a):
+        while parents[a] != a:
+            parents[a] = parents[parents[a]]
+            a = parents[a]
+        return a
+
+    for line in path.read_text().splitlines():
+        if section and line.startswith("# "):
+            active = section.lower() in line.lower()
+        if line.startswith("v "):
+            x, y, z = map(float, line.split()[1:4])
+            p = (-round(x, 5), round(y, 5), round(z, 5))
+            coords.append(seen.setdefault(p, len(seen)))
+            if len(parents) < len(seen):
+                parents.append(len(parents))
+        elif active and line.startswith("f "):
+            ix = [coords[int(v.split("/")[0])-1] for v in line.split()[1:]]
+            a = root(ix[0])
+            for b in ix[1:]:
+                parents[root(b)] = a
+            for i in ix:
+                groups[i].append(True)
+    result = defaultdict(list)
+    for p, i in seen.items():
+        if i in groups:
+            result[root(i)].append(p)
+    return result.values()
+
+
+def bounds(points):
+    axes = list(zip(*points))
+    return tuple(min(q) for q in axes) + tuple(max(q) for q in axes)
+
+
+def dims(b):
+    return tuple(b[i+3] - b[i] for i in range(3))
+
+
+def fixed(b):
+    return tuple(floor(b[i]*128+1e-6) if i<3 else ceil(b[i]*128-1e-6) for i in range(6))
+
+
+def buildings(path):
+    ranked = []
+    for points in components(path):
+        b = bounds(points)
+        size = dims(b)
+        if all(a >= low for a, low in zip(size, MIN_DIM)) and prod(size) > .013:
+            ranked.append((prod(size), b))
+    selected = []
+    for _, b in sorted(ranked, reverse=True):
+        if not any(all(a[i]<=b[i] and a[i+3]>=b[i+3] for i in range(3)) for a in selected):
+            selected.append(b)
+        if len(selected) == 6:
+            break
+    return tuple(map(fixed, selected))
+
+
+def railway(path):
+    # Authored comments delimit geometry, including 5 individual closed posts
+    # per boundary. Order each line by its coordinates relative to the anchor.
+    posts=[bounds(p) for p in components(path, "steel posts")]
+    points=[((b[0]+b[3])/2,(b[2]+b[5])/2,b[1],b[4]) for b in posts]
+    todo=set(points)
+    lines=[]
+    while todo:
+        queue=[min(todo)]
+        todo.remove(queue[0])
+        for p in queue:
+            nearby=sorted(q for q in todo if dist(p[:2],q[:2]) <= .73)
+            for q in nearby:
+                todo.remove(q)
+                queue.append(q)
+        lines.append(sorted(queue))
+    assert lines and all(len(line)==5 for line in lines), (path, lines)
+    boxes=[]
+    for line in lines:
+        diagonal=line[0][0]!=line[-1][0] and line[0][1]!=line[-1][1]
+        for a,b in zip(line,line[1:]):
+            segs=2 if diagonal else 1
+            for i in range(segs):
+                p,q=[tuple(a[j]+(b[j]-a[j])*u for j in range(4)) for u in (i/segs,(i+1)/segs)]
+                boxes.append(fixed((min(p[0],q[0])-.017,min(p[2],q[2]),min(p[1],q[1])-.017,
+                               max(p[0],q[0])+.017,min(p[3],q[3]),max(p[1],q[1])+.017)))
+    assert len(boxes)<=8
+    return tuple(boxes)
+
+
+def write():
+    lookup, templates = {}, {}
+    for p in sorted((ROOT/"models").glob("bl_*.obj")):
+        name = p.stem[3:]
+        if name.startswith(("rail_ground_fence_", "rail_split_fence_")):
+            rows = railway(p)
+        elif name.startswith("scenery_house_") or name.startswith("town_stock_") and (
+            name[11:13] not in {f"{i:02x}" for i in SKIP} and name[11:13].isalnum()
+        ):
+            rows = buildings(p)
+        else:
+            continue
+        if rows:
+            lookup[name] = templates.setdefault(rows,len(templates)+1)
+    # Original farm fence y is entity units (one tenth of a node).
+    heights=[]
+    for i in range(1,7):
+        path=ROOT/"models"/f"bl_farm_fence_{i}_0.obj"
+        height=max(float(line.split()[2]) for line in path.read_text().splitlines() if line.startswith("v "))
+        heights.append(ceil(height/10*128))
+    result = ["-- Generated by tools/build_walk_colliders.py from original OBJ; fixed point 1/128 node.",
+              "local T={"]
+    for rows in templates:
+        result.append("{" + ",".join("{"+",".join(map(str,b))+"}" for b in rows)+"},")
+    result += ["}","local I={"]
+    for name, ix in lookup.items():
+        result.append(f'  {name}={ix},')
+    result += ["}","local C={farm={"+",".join(map(str,heights))+"}}",
+               "for i,h in ipairs(C.farm) do C.farm[i]=h/128 end",
+               "for _,row in ipairs(T) do for _,b in ipairs(row) do",
+               "  for i,n in ipairs(b) do b[i]=n/128 end", "end end",
+               "function C.box(mesh) return T[I[mesh]] end",
+               "return C", ""]
+    out = "\n".join(result).encode()
+    assert len(out)<36*1024,"collision asset exceeds its 36 KiB total budget"
+    return out,len(lookup),len(templates)
+
+
+if __name__=="__main__":
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--check", action="store_true")
+    options=p.parse_args()
+    data,assets,rows=write()
+    if options.check:
+        assert OUT.read_bytes()==data
+    else:
+        t=OUT.with_suffix(".tmp");t.write_bytes(data);t.replace(OUT)
+    print(f"{assets} collision assets, {rows} shared hulls, {len(data)} bytes")

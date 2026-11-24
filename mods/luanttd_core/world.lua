@@ -436,7 +436,7 @@ return function(api,ui)
     local measured=p:get_velocity().y
     if math.abs(desired-measured)>.035 then p:add_velocity({x=0,y=desired-measured,z=0}) end
   end
-  function W.target(p)
+  function W.target(p,walk)
     local pos=p:get_pos()
     local eye=p:get_properties().eye_height or 1.625
     local ray=p:get_look_dir()
@@ -462,6 +462,10 @@ return function(api,ui)
           if top==level then best,tbest=tile,t end
         end
       end
+    end
+    if walk and api.render.pick_walk_bridge then
+      local bridge,dist=api.render.pick_walk_bridge({x=x0,y=y0,z=z0},ray,tbest or 90)
+      if dist and (not tbest or dist<tbest) then best,tbest=bridge,dist end
     end
     if best and tbest then
       return best,{x=x0+tbest*ray.x,y=y0+tbest*ray.y,z=z0+tbest*ray.z}
@@ -602,24 +606,24 @@ return function(api,ui)
       return false,"Return to the builder camera before you start walking."
     end
     if not controls[p:get_player_name()] then return false,"Join the campaign to walk." end
-    local land
+    local land,water
     if strict then
-      land=pedestrian.at(id,hit)
-      if not land then return false,"Choose dry, open ground to start walking." end
+      land,water=pedestrian.at(id,hit)
+      if not land then return false,"Choose open ground or water to start exploring." end
     else
-      id,hit=W.target(p)
-      land=pedestrian.find(p,id,hit)
-      if not land then return false,"Aim at dry ground or a nearby road, then use /walk again." end
+      id,hit=W.target(p,true)
+      land,water=pedestrian.find(p,id,hit)
+      if not land then return false,"Aim at open ground or water, then use /walk again." end
     end
     local avatar,why=W.begin_avatar(p,"walk")
     if not avatar then return false,why end
-    pedestrian.enter(p,avatar,land)
+    pedestrian.enter(p,avatar,land,water)
     return true
   end
   function W.toggle_walk(p) return toggle_walk(p) end
   function W.toggle_walk_at(p,id,hit) return toggle_walk(p,id,hit,true) end
   core.register_chatcommand("walk",{
-    description="Drop to street level; use /walk or right-click to return to the builder camera",
+    description="Walk or swim at street level; use /walk or right-click to return to the builder camera",
     func=function(name)
       local p=core.get_player_by_name(name)
       if not p then return false,"Join the campaign to walk." end
@@ -938,7 +942,7 @@ return function(api,ui)
         local right=keys.place or keys.RMB
         if not state.avatar.leaving then
           if right and not state.place then W.exit_avatar(p)
-          elseif state.avatar.mode=="walk" then pedestrian.step(p,state.avatar)
+          elseif state.avatar.mode=="walk" then pedestrian.step(p,state.avatar,keys)
           elseif state.avatar.mode=="car" and api.car then api.car.step(p,state.avatar,keys,dt)
           elseif state.avatar.mode=="plane" and api.sightseeing_plane then api.sightseeing_plane.step(p,state.avatar,keys,dt) end
         end

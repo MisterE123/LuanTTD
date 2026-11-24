@@ -91,6 +91,8 @@ local function check()
     end
   end
   if returned and not s.tiles[plot].stock_object and not post:find("owned_land",1,true) then
+    if core.get_node({x=x*2,y=base,z=z*2}).name~="luanttd_core:stock_clear_grass_0" then core.after(.16,check);return end
+    assert(s.tiles[plot].stock_clear_density==0,"the stock land sale must begin grass regrowth")
     assert(c.cash==starting_cash-340 and not s.tiles[plot].owner,"Land resale did not issue the stock $80 refund")
     core.log("action","PASS NATIVE OWNED LAND: mouse purchased and resold the visible company stake")
     return

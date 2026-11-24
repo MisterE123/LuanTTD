@@ -154,6 +154,8 @@ if [[ ${LUANTTD_QA_OWNED_LAND:-0} == 1 ]]; then
   press_native_slot 'NATIVE LAND SELL SLOT'
   wait_land 'NATIVE LAND SELL READY'
   sleep .55; xdotool mousedown 1; sleep .30; xdotool mouseup 1
+  wait_land "PASS NATIVE OWNED LAND"
+  if command -v import >/dev/null; then import -window root -quality 92 "$out/cleared-land.jpg"; fi
 fi
 if [[ ${LUANTTD_QA_PLANT_TREES:-0} == 1 ]]; then
   for _ in {1..280}; do grep -q 'NATIVE TREE QA READY' "$out/server.log" && break; sleep .25; done

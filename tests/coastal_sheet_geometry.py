@@ -50,3 +50,17 @@ for slope in MASKS:
             assert max(v[1] for v in points)>SEA, "Zero-height water side has no flat ground cap"
 assert skirts > 0 and APRON > 4 * .5, "Cover worst allowed stock native wave depression"
 print(f"PASS: 16 seamless top-only water phases, {len(MASKS)} original wet banks and {skirts} submerged skirt triangles")
+
+for slope in (3, 6, 9, 12):
+    shifted, coords, faces = parse(bank(slope, bridge=True))
+    verts = [(round(x-1,8),y,z) for x,y,z in shifted]
+    ordinary, uv, ordinary_faces = parse(bank(slope))
+    top = lambda vertices, indices: sorted(tuple(sorted(vertices[i] for i in f))
+        for f in indices if all(vertices[i][1]>=SEA for i in f))
+    assert top(verts,faces) == top(ordinary,ordinary_faces), "Bridge top matches the stock sloping coast"
+    assert all(-1.5 <= x <= .5 and -.5 <= z <= 1.5 for x,_,z in verts), "No mesh on neighbor"
+    assert all(u <= 2/3 for u,v in coords), "Water is always the separate native ocean"
+    walls=[tuple(verts[i] for i in f) for f in faces if any(verts[i][1]<SEA for i in f)]
+    assert len(walls)==8, "All four edges have two closed wall triangles"
+    assert all(min(v[1] for v in wall)==SEA-APRON for wall in walls)
+print("PASS: four stock bridge-shore slopes preserve their exact top and close each bank to below the wave envelope")

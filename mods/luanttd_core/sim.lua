@@ -650,7 +650,7 @@ function M.plant_tree(s,owner,first,last,diagonal,species,execute)
         if s.stock_farm_fields then s.stock_farm_fields[a.id]=nil end
         t.stock_clear_ground=nil
       end
-      t.stock_clear_density=nil
+      t.stock_clear_density,t.stock_clear_visits=nil,nil
       t.wood=rules.new_tree(a,random)
       local town,d=authority.nearest(s,a.id)
       if town and d<(policy.dist_local_authority or 20) then
@@ -722,7 +722,7 @@ function M.purchase_land(s,owner,first,last,diagonal,execute)
         authority.clear_road_trees(company,authority.tree_town(s,cell.id))
       end
       if s.stock_farm_fields then s.stock_farm_fields[cell.id]=nil end
-      t.wood,t.stock_clear_ground,t.stock_clear_density=nil,nil,0
+      t.wood,t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,nil,0,nil
       t.owner=owner
       t.stock_object={kind="owned_land"}
     end
@@ -1154,6 +1154,14 @@ function M.road_tree_authority()
     town_road_authority=dofile(base.."town_road_authority.lua")(M,dofile(base.."openttd/road_town_permission.lua"))
   end
   return town_road_authority
+end
+-- DoClearSquare stores density zero on cleared stock land. Width,
+-- height, variant and the corner grid are untouched.
+function M.mark_clear_land(s,id)
+  local t=s.tiles[id]
+  if not s.stock_generated_profile or not t or t.terrain=="water" or t.stock_void then return end
+  t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,0,nil
+  if s.stock_farm_fields then s.stock_farm_fields[id]=nil end
 end
 function M.road_site_clear_cost(t,farm_field)
   if M.is_owned_land(t) then return -M.owned_land_resale() end
@@ -2257,7 +2265,15 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
       elseif tool=="grade" then
         if existing or wet(s,id) or t.h==0 then return nil,"Only unbuilt hills can be graded." end
       elseif tool=="clear" then
-        if not existing and not t.house and not t.wood then skip=true end
+        if not existing and not t.house and s.stock_generated_profile then
+          local clearing=M.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[id])
+          if clearing==0 then skip=true end
+          -- The stock natural-ground clear price replaces the fallback
+          -- flat fee used by the small authored tool set.
+          extra=clearing-w.price
+        elseif not existing and not t.house and not t.wood then
+          skip=true
+        end
         if t.station then
           for _,v in pairs(s.fleet) do
             for _,order in ipairs(v.orders) do if order.station==t.station then return nil,"Remove the station from vehicle orders first." end end
@@ -2322,7 +2338,7 @@ local function apply_build(s,owner,changes,cost)
     if item.clear_owned_land then tile.stock_object,tile.owner=nil,nil end
     if item.road_tree_town and M.road_tree_authority().clear_road_trees(c,item.road_tree_town) then tree_rating_changed=true end
     if item.clear_road_site then
-      tile.stock_clear_ground,tile.stock_clear_density=nil,nil
+      tile.stock_clear_ground,tile.stock_clear_density,tile.stock_clear_visits=nil,nil,nil
       if s.stock_farm_fields then s.stock_farm_fields[id]=nil end
     end
     if item.clear_road_coast then coastal_world.clear_apply(s,id) end
@@ -2335,6 +2351,7 @@ local function apply_build(s,owner,changes,cost)
       M.activate_tram_road_stop(s,id,owner)
     elseif item.water_clear then
       coastal_world.clear_apply(s,id)
+      M.mark_clear_land(s,id)
     elseif k=="clear" then
       if tile.road_stop_pair then
         local bs=s.stock_road_bays and s.stock_road_bays.stops[id]
@@ -2352,6 +2369,7 @@ local function apply_build(s,owner,changes,cost)
             growth.world.remove(s,part.record)
             local parcel=s.tiles[part.id]
             parcel.house,parcel.source_house=nil,nil
+            M.mark_clear_land(s,part.id)
             if part.id~=id then changed[#changed+1]=part.id end
           end
         elseif growth then growth.world.remove(s,tile.source_house) end
@@ -2363,7 +2381,12 @@ local function apply_build(s,owner,changes,cost)
         -- Remove the stop without erasing the selected underlying road.
         tile.build="road";tile.station=nil;tile.owner=not tile.road_town and owner or nil;tile.stop_axis=nil
       else
-        if type(tile.wood)=="table" and tile.terrain~="water" then tile.stock_clear_ground,tile.stock_clear_density=nil,0 end
+        if tile.wood and tile.coastal_water and s.corner_grid then
+          load_road_rules()
+          coastal_world.clear_apply(s,id)
+        end
+        if type(tile.wood)=="table" and tile.terrain~="water" then tile.stock_clear_ground,tile.stock_clear_density,tile.stock_clear_visits=nil,0,nil end
+        M.mark_clear_land(s,id)
         tile.build=nil;tile.rail_tracks=nil;tile.rail_type=nil;tile.station=nil;tile.signal=nil;tile.closed=nil;tile.owner=nil;tile.depot_dir=nil;tile.road_bits=nil;tile.stop_axis=nil;tile.house=nil;tile.source_house=nil;tile.wood=nil
         tile.roadside,tile.stock_roadside_town=nil,nil
       end

@@ -58,7 +58,11 @@ local function planting_clock()
 end
 local function due(x,z) return ((15-(11*(x-1)+9*(z-1)))%16)*256 end
 assert(not Adapter.visit(s,7,7,due(7,7),planting_clock()) and not right.wood)
-for i=0,2 do Adapter.visit(s,8,7,due(8,7)+i*2048,fail) end
+for i=1,24 do
+  Adapter.visit(s,8,7,due(8,7)+i*256,fail)
+  assert(right.stock_clear_density==(i<24 and math.floor(i/8) or nil))
+end
+assert(#s.changed==3 and s.changed[1]==Sim.id(8,7))
 assert(right.stock_clear_density==nil)
 assert(Adapter.visit(s,7,7,due(7,7),planting_clock()).kind=="plant")
 assert(right.wood.type==7 and right.wood.growth==0 and right.wood.count==1)

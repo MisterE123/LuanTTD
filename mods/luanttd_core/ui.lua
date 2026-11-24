@@ -788,16 +788,23 @@ function U.open_workbenches(p)
 end
 function U.open_controls(p)
   if api.authority_handoff then
+    local lighting=api.lighting
+    local mode=lighting and lighting.is_always_day() and "Always day" or "Cycle"
+    local sky=lighting and lighting.allowed(p) and
+      ("button[.45,4.22;4.65,.55;luanttd_daylight_toggle;Daylight: "..mode.."]") or
+      ("label[.45,4.49;Daylight: "..mode.." (server setting)]")
     core.show_formspec(p:get_player_name(),"luanttd_core:worker_controls",
-      "formspec_version[7]size[10.5,6.12]bgcolor[#152334;false]label[.45,.48;Controls]"..
+      "formspec_version[7]size[10.5,6.55]bgcolor[#152334;false]label[.45,.48;Controls]"..
       [[textarea[.45,1.07;9.6,2.15;;;WASD moves. Space and Shift adjust altitude. Hold E to fly faster.
 Select a toolbar section and use it. Open depot or Open hangar buys vehicles and edits orders.
 ]]..      "Inventory opens Fleet, Finances, and the Jump map.]"..
       "button[.45,3.33;4.65,.55;luanttd_candy_toggle;"..
       (api.wildlife and api.wildlife.enabled(p) and "Hide decorative scenery" or "Show decorative scenery").."]"..
       "button_exit[5.40,3.33;4.65,.55;luanttd_cine_toggle;Cinematic view]"..
-      "button[.45,4.22;9.60,.55;luanttd_audio_open;Music & sound]"..
-      "button_exit[.45,5.16;9.60,.55;close;Back to world]")
+      sky..
+      "button[5.40,4.22;4.65,.55;luanttd_audio_open;Music & sound]"..
+      "label[.45,5.08;Godrays use Luanti's Volumetric Lighting setting.]"..
+      "button_exit[.45,5.58;9.60,.55;close;Back to world]")
     return true
   end
   if api.road_first then U.service(p,"controls");return end
@@ -1554,7 +1561,9 @@ local function worker_build(n,V,kind,request)
     if not built and (request.operation=="plant_tree" or request.operation=="purchase_land") then note=tree_build_errors[note] or note end
     V.status=note or (built and "Construction complete." or "That construction was not accepted.")
     if built and api.on_worker_build then api.on_worker_build(n,tiles,quote) end
-    if built and api.stock_audio then
+    if kind=="terrain" and request.operation=="bulldoze" then
+      if api.demolition_effects then api.demolition_effects.receipt(built,tiles,request.first) end
+    elseif built and api.stock_audio then
       local id=request.first or request.tile or request.start and request.start.tile
       local host=id and R.host_tile and R.host_tile(id)
       local location
@@ -1948,7 +1957,10 @@ function U.end_demolition(p,id,diagonal)
   if not q then V.status=clear_error(why);return end
   V.status=(q.passed==0 and "Nothing cleared  ·  " or "Bulldozed  ·  ")..clear_ticket(q)
   if #q.dirty>0 then R.update(q.dirty) end
-  if q.passed>0 then api.save() end
+  if q.passed>0 then
+    if api.demolition_effects then api.demolition_effects.receipt(true,q.dirty,start) end
+    api.save()
+  end
 end
 -- OpenTTD 16.0-RC1 road_gui.cpp: dedicated sizing pins the axis after
 -- pointer-down, while AutoRoad chooses from the pointer coordinates.

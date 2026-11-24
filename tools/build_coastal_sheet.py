@@ -22,7 +22,7 @@ def ocean(x, z):
                 [(1, 2, 3), (1, 3, 4)])
 
 
-def bank(mask, width=32):
+def bank(mask, width=32, *, bridge=False):
     verts, uv, faces = [], [], []
 
     def triangle(poly, kind, aprons=False):
@@ -36,7 +36,7 @@ def bank(mask, width=32):
                 if aprons:
                     # The same muted shingle strip, wrapped downward.
                     v = ((max(0, SEA-y)/APRON*.45) + v*.5)
-                verts.append((x,y,z))
+                verts.append((x + int(bridge),y,z))
                 uv.append(((kind*width+.5+u*(width-1))/(3*width), v))
                 face.append(len(verts))
             faces.append(tuple(face))
@@ -49,9 +49,23 @@ def bank(mask, width=32):
         # Close the wet contour where a rising face has an actual low edge.
         # The edge is drawn in source winding, so the apron faces the sea.
         for a, b in zip(p, p[1:] + p[:1]):
-            if a[1] == b[1] == SEA:
+            low_edge = a[1] == b[1] == SEA
+            if low_edge:
                 down = lambda q: (q[0], SEA-APRON, q[2])
                 triangle((b,a,down(a),down(b)), 1, True)
+            elif bridge and (
+                (a[0] == b[0] and a[0] in (-1.5, .5)) or
+                (a[2] == b[2] and a[2] in (-.5, 1.5))
+            ):
+                # A stock sloping foundation can raise a bank corner above
+                # adjacent terrain. Close the underneath instead of showing
+                # an open wedge above the sea. Set the side just inside the
+                # top's edge to avoid coplanar faces with adjoining fill.
+                inset = lambda q: (q[0] * .997 - .0015, q[1] - .001,
+                                   q[2] * .997 + .0015)
+                aa, bb = inset(a), inset(b)
+                down = lambda q: (q[0], SEA-APRON, q[2])
+                triangle((bb,aa,down(aa),down(bb)), 1, True)
     return mesh("Bank", verts, uv, faces)
 
 
@@ -69,12 +83,15 @@ def main():
     args = p.parse_args()
     files = {f"bl_ocean_top_{x}_{z}.obj": ocean(x,z) for z in range(SIZE) for x in range(SIZE)}
     files.update({f"bl_coastal_bank_{mask}.obj": bank(mask) for mask in MASKS})
+    files.update({f"bl_coastal_bridge_bank_{mask}.obj": bank(mask, bridge=True) for mask in (3, 6, 9, 12)})
     for filename,data in files.items():
         path = ROOT/"models"/filename
         if args.check:
             assert path.read_text() == data, filename
         else:
-            path.write_text(data)
+            tmp=path.with_suffix(".tmp")
+            tmp.write_text(data)
+            tmp.replace(path)
 
 
 if __name__ == "__main__":
