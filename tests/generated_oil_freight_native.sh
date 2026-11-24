@@ -14,15 +14,6 @@ cp game.conf "$game"
 cp -al mods "$game/" || cp -R mods "$game/"
 cp mods/luanttd_core/init.lua "$out/copy-init.lua"
 mv "$out/copy-init.lua" "$game/mods/luanttd_core/init.lua"
-# Preserve the narrow route fixture's exact seeded occupancy and finance
-# goldens without altering the ordinary catalogue. The city suite exercises
-# all enabled parcels on the actual worker-owned default game.
-art="$game/mods/luanttd_core/stock_town_art.lua"
-if [[ -f "$art" ]]; then
-  cp tests/fixed_parcel_footprint.lua "$game/mods/luanttd_core/fixed_parcel_footprint.lua"
-  sed 's|^return Art$|return dofile((debug.getinfo(1,"S").source:sub(2):match("^(.+/)")).."fixed_parcel_footprint.lua")(Art)|' "$art" > "$out/fixed-stock-art"
-  mv "$out/fixed-stock-art" "$art"
-fi
 printf '\n' >> "$game/mods/luanttd_core/init.lua"
 printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 cat tests/generated_oil_freight_native.lua >> "$game/mods/luanttd_core/init.lua"

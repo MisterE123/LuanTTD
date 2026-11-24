@@ -118,11 +118,13 @@ case "${1:-}" in
     python3 tests/stock_airliners_g_art.py
     python3 tests/city_airport_art.py
     ;;
-  airport-rotor)
+  native-map-art)
     export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/cache"
     python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
     LUANTTD_QA_AIR_LAYOUT=heliport LUANTTD_QA_AIR_YEAR=1963 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
     LUANTTD_QA_AIR_LAYOUT=ground_rotary LUANTTD_QA_AIR_YEAR=1980 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
+    LUANTTD_QA_STEEL_LAYOUT=1 bash tests/stock_steel_mill_layout_native.sh
+    LUANTTD_QA_STEEL_LAYOUT=0 bash tests/stock_steel_mill_layout_native.sh
     ;;
   rail-dispatch)
     python3 tests/rail_early_diesel_art.py

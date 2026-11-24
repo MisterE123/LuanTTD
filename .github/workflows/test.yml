@@ -147,7 +147,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [startup, stock-rail, industry-air-and-water, rail-dispatch, airport-rotor]
+        suite: [startup, stock-rail, industry-air-and-water, rail-dispatch, native-map-art]
     defaults:
       run:
         shell: bash
@@ -290,6 +290,8 @@ jobs:
           python3 tools/build_rotary_ground_airports.py "$src/src/table"
           lua5.1 tests/airport_rotary_ground_motion.lua
           lua5.1 tests/airport_rotary_ground_paid.lua
+          /usr/bin/python3 tests/stock_steel_mill_layout_1_art.py --upstream-layout "$src/src/table/build_industry.h"
+          lua5.1 tests/iron_steel_ordinary_worker.lua early layout1
           python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"
           python3 tests/stock_tim_art.py --upstream-engines "$src/src/table/engines.h"
           python3 tests/stock_tim_art.py --variant asiastar --upstream-engines "$src/src/table/engines.h"

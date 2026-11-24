@@ -4,6 +4,7 @@ local root="mods/luanttd_core/"
 local function m(p) return dofile(root..p..".lua") end
 local Sim,T=m("sim"),m("openttd/terrain")
 local mode=arg and arg[1] or "early"
+local alternate=arg and arg[2]=="layout1"
 local dated={early={1950,"iron_mps","steel_balogh",22,15},mid={1985,"iron_uhl","steel_uhl",25,18},
   late={2025,"iron_chippy","steel_kelling",27,20}}
 local selected=assert(dated[mode])
@@ -20,7 +21,8 @@ local H=Sim.mount_heavy_world(s,T)
 assert(Sim.mount_oil_world(s,T,true))
 local at=Sim.id
 local function produce(kind,x,z)
-  return Rules.new(kind,0,x-1,z-1,{completed=true,counter=1,economy_year=1950})
+  return Rules.new(kind,0,x-1,z-1,{completed=true,counter=1,economy_year=1950,
+    layout=alternate and kind=="steel_mill" and 1 or 0})
 end
 local ore=assert(H.place_generated(s,"iron_mine",at(10,12),{record=produce("iron_mine",10,12),name="Ore"}))
 local mill=assert(H.place_generated(s,"steel_mill",at(26,12),{record=produce("steel_mill",26,12),name="Steel"}))

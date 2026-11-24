@@ -56,7 +56,7 @@ production-driven placement, and full terrain leveling are not covered.
 
 ## Temperate iron and steel
 
-The ordinary worker mounts the [16.0-RC1 Iron Ore Mine and Steel Mill](stock-iron-steel.md) on the same terrain and town board. Both use original layout 0. Type 18 excludes nearby Steel Mills, and type 8 excludes nearby Mines and Factories as in the pinned source. Because the second Steel Mill layout and placement leveling do not have native support yet, generation can still omit an eligible site on constrained terrain.
+The ordinary worker mounts the [16.0-RC1 Iron Ore Mine and Steel Mill](stock-iron-steel.md) on the same terrain and town board. The Iron Ore Mine uses layout 0. The Steel Mill may generate either of its stock layouts, with 12 and 14 occupied cells respectively; the irregular rear yard keeps the two southern corners clear. Both were observed in normal Linux Luanti worlds (seeds 11 and 1751). Type 18 excludes nearby Steel Mills, and type 8 excludes nearby Mines and Factories as in the pinned source. Platform leveling is not yet mounted, so the generator can still omit an otherwise eligible site on constrained terrain.
 
 ## Interface
 

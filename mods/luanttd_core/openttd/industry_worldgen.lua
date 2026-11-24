@@ -71,7 +71,7 @@ return function(Coal,Timber,Oil,Farm,Heavy)
       local def=assert(Farm.spec[kind])
       W.specs[id]={kind=kind,name=id==18 and "Iron Ore Mine" or "Steel Mill",layout=Farm.layout[kind],
         weight=def.generation[1],conflict=id==18 and {[8]=true} or {[18]=true,[6]=true},
-        available={[0]=true},picture="industry_"..kind,kernel=Farm}
+        available=id==8 and {[0]=true,[1]=true} or {[0]=true},picture="industry_"..kind,kernel=Farm}
     end
     last_type=max(last_type,18)
   end

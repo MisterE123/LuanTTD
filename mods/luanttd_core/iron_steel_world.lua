@@ -1,9 +1,10 @@
 -- Native mounting of exact OpenTTD RC1 industry footprints. Producers
 -- and the calendar are supplied by ordinary generated-campaign authority.
--- The two currently modeled layouts are each row-0, not a new footprint.
+-- Both original Steel Mill layouts use the same tracked industry type.
 return function(Sim,Terrain,Rules)
   local W={BASE=0x4000,LIMIT=0x5000}
   local style={iron_mine="industry_iron_mine",steel_mill="industry_steel_mill"}
+  local steel_alt="industry_steel_mill_l1"
   local names={iron_mine="Iron Ore Mine",steel_mill="Steel Mill"}
   W.facilities={stock_iron_mine={name=names.iron_mine,produces={},takes={}},
     stock_steel_mill={name=names.steel_mill,produces={},takes={}}}
@@ -21,9 +22,10 @@ return function(Sim,Terrain,Rules)
       return nil,"INVALID_HEAVY_INDUSTRY_SITE"
     end
     local x,z=Sim.xy(tile)
-    if layout~=0 then return nil,"HEAVY_INDUSTRY_LAYOUT_NOT_MOUNTED" end
+    local footprint=Rules.layout[kind][layout]
+    if not footprint then return nil,"HEAVY_INDUSTRY_LAYOUT_NOT_MOUNTED" end
     local cells,level={},nil
-    for _,row in ipairs(assert(Rules.layout[kind][layout])) do
+    for _,row in ipairs(footprint) do
       local a,b=x+row[1],z+row[2]
       local id=Sim.id(a,b)
       local t=id and s.tiles[id]
@@ -34,7 +36,7 @@ return function(Sim,Terrain,Rules)
       level=h
       cells[#cells+1]={id=id,x=a,z=b,gfx=row[3],offset_x=row[1],offset_z=row[2]}
     end
-    return {kind=kind,x=x,z=z,level=level,cells=cells}
+    return {kind=kind,x=x,z=z,level=level,cells=cells,layout=layout}
   end
   function W.place_generated(s,kind,tile,opts)
     local source=opts and opts.record
@@ -58,7 +60,8 @@ return function(Sim,Terrain,Rules)
     local site_id=#s.sites+1
     local site={id=site_id,name=opts.name,kind="stock_"..kind,tile=tile,stock={},produced={},received={},
       service=0,stock_industry=id,industry_chain="heavy",town=source.town}
-    plan.id,plan.site,plan.style,plan.source_type=id,site_id,style[kind],Rules.spec[kind].id
+    plan.id,plan.site,plan.style,plan.source_type=id,site_id,
+      kind=="steel_mill" and plan.layout==1 and steel_alt or style[kind],Rules.spec[kind].id
     source.id,source.site=id,site_id
     for _,c in ipairs(plan.cells) do
       local ground=s.tiles[c.id]
@@ -93,6 +96,9 @@ return function(Sim,Terrain,Rules)
     end
     return dirty
   end
-  function W.visual_sources() return {[style.iron_mine]=Rules.layout.iron_mine[0],[style.steel_mill]=Rules.layout.steel_mill[0]} end
+  function W.visual_sources()
+    return {[style.iron_mine]=Rules.layout.iron_mine[0],[style.steel_mill]=Rules.layout.steel_mill[0],
+      [steel_alt]=Rules.layout.steel_mill[1]}
+  end
   return W
 end
