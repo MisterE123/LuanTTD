@@ -29,18 +29,23 @@ cp mods/luanttd_core/textures/{bl_industry_oil_rig_atlas,bl_water[0-3]}.png "$mo
 printf 'gameid = offshore\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 shots=(approach berth pad)
 art_heli=false
-if [[ -r mods/luanttd_core/models/bl_stock_tricario_heli.obj ]]; then
-  cp mods/luanttd_core/models/bl_stock_tricario_heli*.obj "$mod/models/"
-  cp mods/luanttd_core/textures/bl_stock_tricario_heli_atlas.png "$mod/textures/"
+heli=${LUANTTD_QA_RIG_HELICOPTER:-tricario}
+case "$heli" in tricario) stem=tricario_heli ;; guru_x2) stem=guru_x2 ;; *) exit 2 ;; esac
+if [[ -r "mods/luanttd_core/models/bl_stock_$stem.obj" ]]; then
+  cp mods/luanttd_core/models/bl_stock_"$stem"*.obj "$mod/models/"
+  cp "mods/luanttd_core/textures/bl_stock_${stem}_atlas.png" "$mod/textures/"
   cp mods/luanttd_core/{airport_rotor_view,airport_airframe_art}.lua "$mod/"
   art_heli=true
-  shots+=(tricario)
+  shots+=("$heli")
+elif [[ "$heli" == guru_x2 ]]; then
+  echo "Guru X2 media missing" >&2; exit 1
 fi
 cat > "$out/server.conf" <<EOF
 port = $port
 prometheus_listener_address = 127.0.0.1:$port
 server_announce = false
 rig_art_helicopter = $art_heli
+rig_art_helicopter_model = $heli
 bind_address = 127.0.0.1
 EOF
 cat > "$out/client.conf" <<'EOF'
@@ -98,13 +103,15 @@ for shot in "${shots[@]}"; do
 done
 ! grep -Ei 'ERROR\[|could not load' "$out/client.log" "$out/server.log"
 if [[ "$art_heli" == true ]]; then grep -q OIL_RIG_ROTARY_DUAL_AXES_ATTACHED "$out/server.log"; fi
+if [[ "$heli" == guru_x2 ]]; then grep -q GURU_X2_INDEPENDENT_ROTOR_AXES_MOVED "$out/server.log"; fi
 python3 - "$out" <<'PYQA'
 from PIL import Image
 from pathlib import Path
 import sys
 shots = ["approach","berth","pad"]
-if (Path(sys.argv[1])/"rig-tricario.png").is_file():
-    shots.append("tricario")
+for model in ("tricario","guru_x2"):
+    if (Path(sys.argv[1])/f"rig-{model}.png").is_file():
+        shots.append(model)
 for label in shots:
     im=Image.open(Path(sys.argv[1])/f"rig-{label}.png").convert("RGB").crop((150,90,1150,770))
     pixels=list(im.get_flattened_data() if hasattr(im,"get_flattened_data") else im.getdata())
@@ -114,6 +121,12 @@ for label in shots:
         ivory=sum(110<r<245 and 100<g<231 and 65<b<205 and r>g+3 and g>b+12 for r,g,b in pixels)
         vinyl=sum(45<r<115 and 75<g<160 and 73<b<140 and g>r+18 and b>r+12 for r,g,b in pixels)
         assert ivory>650 and vinyl>350,(label,ivory,vinyl)
+    elif label=="guru_x2":
+        near=Image.open(Path(sys.argv[1])/f"rig-{label}.png").convert("RGB").crop((385,235,965,625))
+        crop=getattr(near,"get_flattened_data",near.getdata)()
+        ivory=sum(110<r<245 and 100<g<231 and 70<b<220 and r>b+7 for r,g,b in crop)
+        rust=sum(100<r<230 and 45<g<141 and 25<b<115 and r>g+29 and g>b+10 for r,g,b in crop)
+        assert ivory>650 and rust>500,(label,ivory,rust)
     else:
         assert steel>1100 and paint>180,(label,steel,paint)
     print(f"{label}: {steel} jacket/steel pixels, {paint} visible derrick or safety paint pixels")

@@ -9,6 +9,20 @@ cp game.conf "$game/"
 cp -al mods "$game/" 2>/dev/null || cp -a mods/. "$game/mods/"
 cp mods/luanttd_core/init.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
+# The expensive late supersonic type is tested as a mature company,
+# not with an impossible new-company loan. Seed capital only in this
+# disposable fixture; the actual purchase still debits normal cash.
+if [[ ${LUANTTD_QA_AIRFRAME:-226} == 247 ]]; then
+  python3 - "$game/mods/luanttd_core/init.lua" <<'PYFIX'
+from pathlib import Path
+from sys import argv
+p=Path(argv[1])
+s=p.read_text()
+key="local api={Sim=Sim,s=S"
+assert key in s
+p.write_text(s.replace(key,'if not resumed_owner then Sim.company(S,"CityReview").cash=350000 end\n'+key,1))
+PYFIX
+fi
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
 cat tests/stock_city_airport_native.lua >>"$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
@@ -66,7 +80,7 @@ capture(){
   fi
 }
 case "$airframe" in
-  218|221|222|223|224|227|229|230|231|232|233|234|235|237|238)
+  218|221|222|223|224|227|229|230|231|232|233|234|235|236|237|238|239|247)
     mark 'NATIVE AIR TAXI'
     capture taxi.jpg
     mark 'NATIVE AIR AIRBORNE'

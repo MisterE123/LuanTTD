@@ -11,6 +11,10 @@ DATA={
     "airtaxi_a21": (1.778, .293, .168, .263, .114, []),
     "airtaxi_a31": (1.786, .321, .155, .208, .122, []),
     "airtaxi_a32": (1.636, .291, .135, .213, .096, []),
+    "airtaxi_a33": (1.868, .329, .153, .229, .111, []),
+    "airtaxi_a34_1000": (1.524, .250, .131, .203, .086, []),
+    "dinger_1000": (1.58*.88, .159*.88, .119*.88, .105*.88, .048*.88,
+                   [(-.272*.88,.115*.88,.031*.88,.048*.84*.88),(.272*.88,.115*.88,.031*.88,.048*.84*.88)]),
     "dinger_100": (1.378, .155, .247, -.368, .060, []),
     "yate_yae46": (1.612, .248, .258, .169, .061,
                   [(-.477,.272,.092,.055*.87),(.477,.272,.092,.055*.87)]),
@@ -26,7 +30,7 @@ for name,(width,x,y,z,r,extra) in DATA.items():
     signatures.add(sha256(texture.read_bytes()).hexdigest())
     lo,hi=[tuple(op(c) for c in zip(*ground)) for op in (min,max)]
     assert abs(hi[0]-lo[0]-width)<.034 and lo[1]==0
-    medium=name in ("yate_yae46","dinger_100","airtaxi_a32")
+    medium=name in ("yate_yae46","dinger_100","airtaxi_a32","airtaxi_a34_1000")
     assert lo[2]<(-.74 if medium else -.92) and hi[2]>(.70 if medium else .89)
     if name=="yate_yae46":
         fin_band=[y for a,y,c in ground if abs(a)<.041 and .39<c<.69]
@@ -34,7 +38,7 @@ for name,(width,x,y,z,r,extra) in DATA.items():
     assert min(v[1] for v in air)>.025 and max(v[1] for v in air)==hi[1]
     contacts={(a,c) for a,b,c in ground if b==0}
     tires={(a,c) for ps,tag in faces if tag in (25,26) for a,b,c in ps if b==0}
-    assert contacts==tires and len(tires)==(12 if name=="dinger_100" else 20), (name,len(tires))
+    assert contacts==tires and len(tires)==(12 if name in ("dinger_100","airtaxi_a34_1000") else 20), (name,len(tires))
     assert not any(tag in (25,26) for _,tag in flight)
     # A shoulder-wing regional jet retracts its gear much higher.
     above_gear=.335 if name=="yate_yae46" else .217

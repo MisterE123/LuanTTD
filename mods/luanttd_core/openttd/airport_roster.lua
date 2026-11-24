@@ -10,6 +10,10 @@ local rows={
   [253]={stock_id=253,name="Tricario Helicopter",image=9,passengers=40,mail=15,acceleration=20,
     source_speed=25,intro_after_1920=13575,life=20,model_life=40,buy_factor=15,running_factor=81,
     small=true,dated=true,helicopter=true,visual="tricario_heli"},
+  -- 16.0-RC1 table/engines.h MA #254 and AVI #39.
+  [254]={stock_id=254,name="Guru X2 Helicopter",image=19,passengers=55,mail=20,acceleration=20,
+    source_speed=40,intro_after_1920=28215,life=20,model_life=50,buy_factor=17,running_factor=77,
+    small=true,dated=true,helicopter=true,visual="guru_x2"},
   [215]={stock_id=215,name="Sampson U52",image=1,passengers=25,mail=4,acceleration=18,
     source_speed=37,intro_after_1920=2922,life=20,model_life=20,buy_factor=14,running_factor=85,
     small=true,visual="sampson"},
@@ -86,6 +90,15 @@ local rows={
   [235]={stock_id=235,name="Airtaxi A32",image=4,passengers=160,mail=20,acceleration=40,
     source_speed=74,intro_after_1920=24472,life=24,model_life=30,buy_factor=18,running_factor=170,
     small=false,jet=true,visual="airtaxi_a32"},
+  [236]={stock_id=236,name="Airtaxi A33",image=4,passengers=220,mail=20,acceleration=40,
+    source_speed=74,intro_after_1920=26724,life=24,model_life=30,buy_factor=26,running_factor=210,
+    small=false,jet=true,visual="airtaxi_a33"},
+  [239]={stock_id=239,name="AirTaxi A34-1000",image=11,passengers=75,mail=10,acceleration=40,
+    source_speed=74,intro_after_1920=29310,life=25,model_life=60,buy_factor=16,running_factor=130,
+    small=true,dated=true,visual="airtaxi_a34_1000"},
+  [247]={stock_id=247,name="Dinger 1000",image=18,passengers=130,mail=45,acceleration=50,
+    source_speed=181,intro_after_1920=32963,life=20,model_life=60,buy_factor=80,running_factor=251,
+    small=false,jet=true,visual="dinger_1000"},
 }
 A.BUY_BASE,A.RUN_BASE=700000,9600
 A.DAY_TICKS,A.DAYS_IN_YEAR=74,365
@@ -100,10 +113,12 @@ function A.entry(id)
 end
 function A.catalog(include_rotary)
   local out={}
-  for _,id in ipairs({215,219,216,217,220,225,226,221,227,228,218,232,223,233,222,237,230,229,234,238,235,224,231}) do
+  for _,id in ipairs({215,219,216,217,220,225,226,221,227,228,218,232,223,233,222,237,230,229,234,238,235,224,236,231,239,247}) do
     out[#out+1]=A.entry(id)
   end
-  if include_rotary then out[#out+1]=A.entry(253) end
+  if include_rotary then
+    for _,id in ipairs({253,254}) do out[#out+1]=A.entry(id) end
+  end
   return out
 end
 local calendar_cache=setmetatable({},{__mode="k"})
@@ -114,7 +129,7 @@ function A.available(Sim,s,id)
   local market=s.stock_bus_market
   if not market then
     return Sim.date(s)>=({[217]=1955,[218]=1969,[220]=1958,[221]=1964,[222]=1978,[223]=1970,[224]=1989,[225]=1962,[226]=1963,[227]=1967,[228]=1968,
-      [229]=1982,[230]=1981,[231]=1995,[232]=1969,[233]=1972,[237]=1980,[234]=1981,[238]=1986,[235]=1987,[253]=1957})[id]
+      [229]=1982,[230]=1981,[231]=1995,[232]=1969,[233]=1972,[237]=1980,[234]=1981,[238]=1986,[235]=1987,[236]=1993,[239]=2000,[247]=2010,[253]=1957,[254]=1997})[id]
   end
   local cached=calendar_cache[market]
   if not cached then cached={};calendar_cache[market]=cached end

@@ -16,9 +16,10 @@ local rows={[217]={90,10,43750,1248000},[218]={100,20,205078,2400000},[220]={200
   [228]={300,50,82031,2428800},[229]={200,25,49218,2016000},[230]={240,25,51953,2112000},
   [231]={260,40,73828,2208000},[232]={240,35,68359,2160000},[233]={260,30,54687,2256000},
   [234]={210,25,51953,2112000},[237]={80,10,43750,1200000},[238]={85,10,46484,1392000},
-  [235]={160,20,49218,1632000}}
+  [235]={160,20,49218,1632000},[236]={220,20,71093,2016000},
+  [239]={75,10,43750,1248000},[247]={130,45,218750,2409600}}
 local selected=assert(rows[stock])
-local short_runway=stock==221 or stock==237 or stock==238
+local short_runway=stock==221 or stock==237 or stock==238 or stock==239
 local function fixture(year,ready)
   local s=Sim.new(1751)
   s.road_economy,s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading=true,true,true,true
@@ -53,7 +54,7 @@ do
   assert(not q and e=="AIRPORT_TYPE_NOT_AVAILABLE")
 end
 do
-  local mixed=stock==238 and 1991 or stock==237 and 1985 or stock==221 and 1975 or 1958
+  local mixed=stock==239 and 2004 or stock==238 and 1991 or stock==237 and 1985 or stock==221 and 1975 or 1958
   local airframe=short_runway and stock or 215
   local state,N,R,O=fixture(mixed,true)
   local small=assert(N.build(state,owner,Sim.id(9,18)))
@@ -70,7 +71,7 @@ do
   assert(visits[small.id] and visits[city.id] and Sim.air_paid_status(state,unit.id).fare>0)
   print(("PASS stock #%d mixed Country–City service uses each airport's own FTA and pays real fares"):format(airframe))
 end
-local year=({[222]=1986,[224]=1996,[229]=1988,[230]=1988,[231]=2000,[234]=1987,[237]=1985,[238]=1991,[235]=1992})[stock] or 1975
+local year=({[222]=1986,[224]=1996,[229]=1988,[230]=1988,[231]=2000,[234]=1987,[237]=1985,[238]=1991,[235]=1992,[236]=1998,[239]=2004,[247]=2016})[stock] or 1975
 if stock==218 or stock>=221 and stock<=224 or stock==227 or stock>=229 then
   local too_early,net,_,O=fixture(1960,true)
   local hangar=assert(net.build(too_early,owner,Sim.id(9,18),"city"))
@@ -88,7 +89,7 @@ if stock==218 or stock>=221 and stock<=224 or stock==227 or stock>=229 then
   assert(not q and err=="NATIVE_AIRCRAFT_MODEL_UNAVAILABLE")
 end
 local s,N,R,O,A=fixture(year,true)
-local reserve=stock==218 and 300000 or stock==228 and 150000 or 125000
+local reserve=(stock==218 or stock==247) and 300000 or stock==228 and 150000 or 125000
 Sim.company(s,owner).cash=reserve
 local C=m("campaign_transport_commands")(Sim,{world=s,air={network=N,run=R,owned=O,roster=A}})
 local function build(x,z,layout)

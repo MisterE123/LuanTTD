@@ -87,6 +87,8 @@ case "${1:-}" in
     bash tests/stock_offshore_tanker_worker_native.sh
     bash tests/offshore_rotary_worker_native.sh
     LUANTTD_QA_ROTARY_FIELD=city bash tests/offshore_rotary_worker_native.sh
+    LUANTTD_QA_ROTARY_MODEL=254 bash tests/offshore_rotary_worker_native.sh
+    LUANTTD_QA_RIG_HELICOPTER=guru_x2 bash tests/stock_oil_rig_art_native.sh
     bash tests/stock_oil_rig_art_native.sh
     lua5.1 tests/coal_ship_ordinary_worker.lua 211
     lua5.1 tests/coal_ship_ordinary_worker.lua 212
@@ -96,7 +98,7 @@ case "${1:-}" in
     python3 tests/stock_oil_ships_art.py
     bash tests/generated_oil_freight_native.sh
     bash tests/mixed_freight_live_native.sh
-    for engine in 216 218 232 233 237 234 238 235; do LUANTTD_QA_PAID_AIRFRAME="$engine" bash tests/stock_aircraft_mail_live_native.sh; done
+    for engine in 216 218 232 233 237 234 238 235 236 239 247; do LUANTTD_QA_PAID_AIRFRAME="$engine" bash tests/stock_aircraft_mail_live_native.sh; done
     lua5.1 tests/airport_city_paid.lua
     lua5.1 tests/airport_city_paid.lua 217
     lua5.1 tests/airport_city_paid.lua 218
@@ -106,8 +108,11 @@ case "${1:-}" in
     lua5.1 tests/airport_city_paid.lua 228
     for engine in 227 229 230 231; do lua5.1 tests/airport_city_paid.lua "$engine"; done
     python3 tests/darwin_family_art.py
-    for engine in 232 233 237 234 238 235; do lua5.1 tests/airport_city_paid.lua "$engine"; done
+    for engine in 232 233 237 234 238 235 236 239 247; do lua5.1 tests/airport_city_paid.lua "$engine"; done
     python3 tests/guru_airtaxi_art.py
+    python3 tests/guru_x2_art.py
+    lua5.1 tests/darwin_city_art_trace.lua > "$TMPDIR/a34-dinger-city-poses.txt"
+    python3 tests/a34_dinger_1000_clearance.py "$TMPDIR/a34-dinger-city-poses.txt"
     for engine in 221 222 223 224; do lua5.1 tests/airport_city_paid.lua "$engine"; done
     python3 tests/bakewell_luckett_art.py
     python3 tests/stock_airliners_g_art.py

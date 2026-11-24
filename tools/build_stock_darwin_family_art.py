@@ -173,7 +173,8 @@ def control_surfaces(q):
           for f in (.055,.27,.49,.75,.895,1)]
     for side in (-1,1):
         art.foil("Raked swept main wing with camber" if q.raked else "Swept main wing with authentic camber",main,side)
-        art.foil("Conventional low tailplane with elevator foil",tail,side)
+        if not getattr(q,"tailless",False):
+            art.foil("Conventional low tailplane with elevator foil",tail,side)
         x,lead,end,top,_=main[-1]
         C("Fitted wingtip navigation lamp",(side*x,lead+.005,top),(side*x,lead-.022,top),.0078,.0047,
           "Port marker ruby" if side<0 else "Starboard marker mint",10)
@@ -282,7 +283,7 @@ def write_native(q,scene,objects,mode,colors):
     suffix="_flight" if mode=="flight" else ""
     obj=ROOT/f"mods/luanttd_core/models/bl_stock_{q.stem}{suffix}.obj"
     bpy.ops.wm.obj_export(filepath=str(obj),export_selected_objects=True,export_materials=False,
-                          export_uv=True,export_normals=True,export_triangulated_mesh=False,global_scale=10,
+                          export_uv=True,export_normals=True,export_triangulated_mesh=False,global_scale=10*getattr(q,"native_scale",1),
                           forward_axis="NEGATIVE_Z",up_axis="Y")
     art.compact_obj(obj)
     bpy.data.objects.remove(mesh,do_unlink=True)

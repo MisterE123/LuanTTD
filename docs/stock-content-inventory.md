@@ -15,7 +15,7 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | Rail | 34 | 0 | 53 |
 | Road | 34 | 0 | 34 |
 | Ship | 7 | 0 | 7 |
-| Aircraft | 24 | 0 | 35 |
+| Aircraft | 28 | 0 | 35 |
 
 ## Rail
 
@@ -151,10 +151,10 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 233 | Airtaxi A21 | Playable | 260 passengers + 30 Mail. City Airport, original wide-body twinjet with retracting gear. |
 | 234 | Airtaxi A31 | Playable | 210 passengers + 25 Mail. City Airport, original compact wide-body twinjet. |
 | 235 | Airtaxi A32 | Playable | 160 passengers + 20 Mail. City Airport, shortened Airtaxi derivative. |
-| 236 | Airtaxi A33 | Not mounted |  |
+| 236 | Airtaxi A33 | Playable | 220 passengers + 20 Mail. City Airport, later wide-body Airtaxi. |
 | 237 | Yate Aerospace YAe46 | Playable | 80 passengers + 10 Mail. Country or City Airport, original four-engine short-runway airframe. |
 | 238 | Dinger 100 | Playable | 85 passengers + 10 Mail. Country or City Airport, rear-engine regional twinjet. |
-| 239 | AirTaxi A34-1000 | Not mounted |  |
+| 239 | AirTaxi A34-1000 | Playable | 75 passengers + 10 Mail. Country or City Airport, short-field twinjet. |
 | 240 | Yate Z-Shuttle | Not mounted |  |
 | 241 | Kelling K1 | Not mounted |  |
 | 242 | Kelling K6 | Not mounted |  |
@@ -162,6 +162,6 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 244 | Darwin 700 | Not mounted |  |
 | 245 | FFP Hyperdart 2 | Not mounted |  |
 | 246 | Dinger 200 | Not mounted |  |
-| 247 | Dinger 1000 | Not mounted |  |
+| 247 | Dinger 1000 | Playable | 130 passengers + 45 Mail. City Airport, original supersonic delta with physically tested clearance. |
 | 253 | Tricario Helicopter | Playable | Country/City hangars and neutral oil-rig pad, 40 seats + 15 Mail, original rotating 3D rotors. |
-| 254 | Guru X2 Helicopter | Not mounted |  |
+| 254 | Guru X2 Helicopter | Playable | 55 passengers + 20 Mail. Country/City hangars and neutral oil rig, original five- and four-blade independent rotors. |

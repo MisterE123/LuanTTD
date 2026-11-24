@@ -13,11 +13,13 @@ for q=0,3 do
     tiles={"bl_water"..q..".png"},walkable=false, pointable=false})
 end
 local helicopter=core.settings:get_bool("rig_art_helicopter",false)
+local heli_model=core.settings:get("rig_art_helicopter_model") or "tricario"
 local rotors,model,pose,craft
 if helicopter then
   rotors=dofile(core.get_modpath("rigqa").."/airport_rotor_view.lua")(core)
-  model=dofile(core.get_modpath("rigqa").."/airport_airframe_art.lua").tricario
-  model.entity="rigqa:tricario"
+  model=dofile(core.get_modpath("rigqa").."/airport_airframe_art.lua")[heli_model]
+  assert(model)
+  model.entity="rigqa:"..heli_model
   rotors.register(model)
   core.register_entity(model.entity,{initial_properties={visual="mesh",static_save=false,
     physical=false,pointable=false,backface_culling=true,visual_size={x=1,y=1,z=1},
@@ -31,6 +33,7 @@ local views={
   berth={from={x=-5.37,y=-.7,z=1.19},at={x=-.1,y=2.3,z=1.5}},
   pad={from={x=8.1,y=8.4,z=-3.1},at={x=1.7,y=5.5,z=2.3}},
   tricario={from={x=1.2,y=6.67,z=-1.4},at={x=2.85,y=7.42,z=.625}},
+  guru_x2={from={x=.75,y=6.62,z=-1.65},at={x=2.85,y=7.53,z=.625}},
 }
 local function go(p,k)
   local v=views[k]; p:set_pos(v.from)
@@ -68,6 +71,16 @@ core.register_on_joinplayer(function(p)
       assert(craft.rotors and #craft.rotors==2)
       for _,r in ipairs(craft.rotors) do assert(r:get_attach()==body) end
       core.log("action","OIL_RIG_ROTARY_DUAL_AXES_ATTACHED")
+      if heli_model=="guru_x2" then
+        local _,_,_,main=craft.rotors[1]:get_attach()
+        local _,_,_,tail=craft.rotors[2]:get_attach()
+        core.after(.37,function()
+          local _,_,_,m=craft.rotors[1]:get_attach()
+          local _,_,_,t=craft.rotors[2]:get_attach()
+          assert(m.y~=main.y and t.x~=tail.x and m.x==0 and m.z==0 and t.y==0 and t.z==0)
+          core.log("action","GURU_X2_INDEPENDENT_ROTOR_AXES_MOVED")
+        end)
+      end
     end
     ready=true
     local joined=core.get_player_by_name(name)

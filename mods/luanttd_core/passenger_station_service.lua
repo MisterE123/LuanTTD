@@ -8,11 +8,9 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
   local base=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
   local Roster=dofile(base.."/openttd/rail_roster.lua")
   local aircraft={}
-  for _,row in ipairs(dofile(base.."/openttd/airport_roster.lua").catalog()) do
+  for _,row in ipairs(dofile(base.."/openttd/airport_roster.lua").catalog(true)) do
     aircraft[row.stock_id]={engine=row.stock_id,cap=row.passengers,mail=row.mail,slice=20,aging=185,wait=20}
   end
-  local rotary=dofile(base.."/openttd/airport_roster.lua").entry(253)
-  aircraft[253]={engine=253,cap=rotary.passengers,mail=rotary.mail,slice=20,aging=185,wait=20}
   local vessels={}
   local ships=dofile(base.."/openttd/passenger_ship_roster.lua")
   for _,id in ipairs(ships.order) do

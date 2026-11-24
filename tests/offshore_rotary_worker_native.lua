@@ -11,8 +11,13 @@ local actor="North Reach Aviation"
 local balance=120000
 local function cell(x,z) return (z-1)*64+x end
 local profile=core.settings:get("luanttd_qa_rotary_field") or "country"
-local cap={road={start_year=1965,foster=true,breakdowns=0,service_interval=0},
-  air={[215]=true,[253]=true},ferry={},city_airport=true,oil_tanker=true,durable_actions=true}
+local stock=tonumber(core.settings:get("luanttd_qa_rotary_model")) or 253
+local model=assert(m("openttd/airport_roster").entry(stock))
+assert(model.helicopter)
+local manifest=m("airport_manifest")(core,mod)
+assert(manifest[stock] and manifest[stock].rotor and manifest[stock].tail_rotor)
+local cap={road={start_year=stock==254 and 2001 or 1965,foster=true,breakdowns=0,service_interval=0},
+  air={[215]=true,[stock]=true},ferry={},city_airport=true,oil_tanker=true,durable_actions=true}
 for _,id in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..id,"air") end
 if not initial then
   local s=Sim.new(1751)
@@ -64,7 +69,7 @@ end
 local function view()
   local groups=ask("actor_frames",{windows={{x=1,z=8,w=31,h=28},{x=1,z=36,w=31,h=24}},fraction=1})
   for _,group in ipairs(groups) do for _,r in ipairs(group.actors) do
-    if r.mode=="air" and r.engine==253 then
+    if r.mode=="air" and r.engine==stock then
       assert(r.rotor_period~=nil and r.rotor_period>=0)
       return true,r.pos.y
     end
@@ -76,8 +81,9 @@ local function snapshot()
   assert(rig.neutral_station==1 and s.stock_neutral_stations[1].industry==rig.id)
   local run=assert(s.airport_owned_runs[1])
   local v=assert(s.stock_ship_commercial.service.vehicles[0xC001])
-  assert(run.engine_id==253 and run.vehicle.helicopter and not run.failure,run.failure)
+  assert(run.engine_id==stock and run.vehicle.helicopter and not run.failure,run.failure)
   assert(v.air_mail and #v.carrying_parts==2)
+  assert(v.carrying_parts[1].capacity==model.passengers and v.carrying_parts[2].capacity==model.mail)
   return s,run,v,rig
 end
 local function work()
@@ -89,8 +95,8 @@ local function work()
     local field=commit({mode="air",operation="build",layout=profile,tile=cell(12,20)}).id
     local airport=ask("depot",{mode="air",depot=field})
     local offer
-    for _,row in ipairs(airport.offers) do if row.request.engine==253 then offer=row end end
-    assert(offer and offer.price==41015 and offer.help.model:find("40 seats",1,true))
+    for _,row in ipairs(airport.offers) do if row.request.engine==stock then offer=row end end
+    assert(offer and offer.price==(stock==254 and 46484 or 41015) and offer.help.model:find(model.passengers.." seats",1,true))
     local v=commit(offer.request)
     cmd("transport_start",{mode="air",vehicle=v.id,first=field,second=1})
     local orders=ask("orders",{mode="air",vehicle=v.id,page=1})
@@ -127,8 +133,8 @@ local function work()
         local c=s.companies[actor]
         assert(c.revenue==v.route_profit and c.revenue>baseline and c.cash==balance-c.expense+c.revenue)
         assert(c.paid_units==v.delivered and r.finance.expense>0)
-        goal=("OFFSHORE_ROTARY_NATIVE_PASS %s airport restored and paid fare; %d people and %d bags total $%d")
-          :format(profile,v.cargo_totals.passenger.delivered,v.cargo_totals.mail.delivered,c.revenue)
+        goal=("OFFSHORE_ROTARY_NATIVE_PASS %s #%d airport restored and paid fare; %d people and %d bags total $%d")
+          :format(profile,stock,v.cargo_totals.passenger.delivered,v.cargo_totals.mail.delivered,c.revenue)
         return {kind="stop"}
       end
     end

@@ -14,11 +14,13 @@ local models={
   [232]={visual="guru_galaxy",price=68359,flight=true},[233]={visual="airtaxi_a21",price=54687,flight=true},
   [234]={visual="airtaxi_a31",price=51953,flight=true},[237]={visual="yate_yae46",price=43750,flight=true},
   [235]={visual="airtaxi_a32",price=49218,flight=true},[238]={visual="dinger_100",price=46484,flight=true},
+  [236]={visual="airtaxi_a33",price=71093,flight=true},
+  [239]={visual="airtaxi_a34_1000",price=43750,flight=true},[247]={visual="dinger_1000",price=218750,flight=true},
 }
 local model=assert(models[stock])
 local layout=core.settings:get("luanttd_qa_air_layout") or "city"
 local city=layout=="city"
-assert(city or ((stock==221 or stock==237 or stock==238) and layout=="country"))
+assert(city or ((stock==221 or stock==237 or stock==238 or stock==239) and layout=="country"))
 local w,d=city and 6 or 4,city and 6 or 3
 local airport_cost=w*d*600
 local function scene(viewer)
@@ -147,7 +149,8 @@ local function scene(viewer)
     end
     core.after(.12,observe)
   end
-  local loans=math.max(0,math.ceil((2*airport_cost+model.price-100000)/10000))
+  local starting_cash=stock==247 and 350000 or 100000
+  local loans=math.max(0,math.ceil((2*airport_cost+model.price-starting_cash)/10000))
   local function airports()
     use({mode="air",operation="build",layout=layout,tile=positions[1].id},function(one)
       use({mode="air",operation="build",layout=layout,tile=positions[2].id},function(two)
@@ -161,7 +164,7 @@ local function scene(viewer)
                 revision=bought.revision}},function()
               local disk=assert(OwnerCheckpoint.read())
               assert((disk.stock_small_airports[first].layout or "country")==layout and disk.stock_owned_air_fleet[bought.value.id].stock_id==stock)
-              assert(disk.companies[owner].cash==100000+loans*10000-2*airport_cost-model.price)
+              assert(disk.companies[owner].cash==starting_cash+loans*10000-2*airport_cost-model.price)
               core.after(.22,observe)
             end)
           end)

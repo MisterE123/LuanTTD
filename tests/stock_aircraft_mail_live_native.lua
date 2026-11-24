@@ -19,20 +19,22 @@ local expected_mesh={
   [232]="bl_stock_guru_galaxy.obj",[233]="bl_stock_airtaxi_a21.obj",
   [234]="bl_stock_airtaxi_a31.obj",[237]="bl_stock_yate_yae46.obj",
   [235]="bl_stock_airtaxi_a32.obj",[238]="bl_stock_dinger_100.obj",
+  [236]="bl_stock_airtaxi_a33.obj",
+  [239]="bl_stock_airtaxi_a34_1000.obj",[247]="bl_stock_dinger_1000.obj",
 }
 assert(expected_mesh[stock])
-local city=stock~=216 and stock~=237 and stock~=238
+local city=stock~=216 and stock~=237 and stock~=238 and stock~=239
 local layout=city and "city" or "country"
 local airport_tiles=city and 36 or 12
 local spec=assert(Roster.entry(stock))
 local road_depot,road_one,road_two=cell(17,7),cell(10,11),cell(43,11)
-local cap={road={start_year=(stock==235 or stock==238) and 1991 or stock>=234 and 1987 or city and 1975 or 1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
+local cap={road={start_year=stock==247 and 2016 or stock==239 and 2004 or stock==236 and 1998 or (stock==235 or stock==238) and 1991 or stock>=234 and 1987 or city and 1975 or 1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true,mail_reynard=stock>=239,mail_perry=stock>=239}},
   ferry={},air={},city_airport=city,oil_tanker=true,durable_actions=true}
 local art=m("airport_manifest")(core,mod)
 assert(art[stock] and art[stock].mesh==expected_mesh[stock])
 for id in pairs(art) do cap.air[id]=true end
 for _,group in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..group,"air") end
-local balance=300000
+local balance=stock==247 and 350000 or 300000
 if not initial then
   assert(mode=="start")
   local s=Sim.new(1751)
@@ -94,13 +96,16 @@ local function build_road()
   local state=assert(Checkpoint.read())
   local from,to=state.tiles[road_one].station,state.tiles[road_two].station
   local panel=ask("depot",{mode="road",depot=road_depot,player=road_owner})
-  local van
+  local offer
   for _,o in ipairs(panel.offers) do
-    if o.request.engine=="mail_mps" then
-      van=command("road_buy",o.request,road_owner);break
+    local engine=o.request.engine
+    if engine=="mail_mps" or stock>=239 and (engine=="mail_reynard" or engine=="mail_perry") then
+      offer=o
+      if engine=="mail_mps" then break end
     end
   end
-  assert(van,"No mounted stock MPS Mail Truck")
+  assert(offer,"No available stock Mail Truck")
+  local van=command("road_buy",offer.request,road_owner)
   command("road_order_add",{vehicle=van,station=from},road_owner)
   command("road_order_add",{vehicle=van,station=to},road_owner)
   command("road_toggle",{vehicle=van},road_owner)
@@ -232,7 +237,17 @@ local function work()
           f.amount,v.route_profit,commercial.revenue,commercial.paid_units,f.units,f.station or -1,f.tick))
       assert(commercial.cash==balance-commercial.expense+commercial.revenue and run.finance.expense>0)
       assert(c.mail_towns[2]==spec.mail and c.towns[2]==spec.passengers and s.sites[2].received.passenger==spec.passengers)
-      assert((s.sites[1].received.mail or 0)+s.sites[2].received.mail==spec.mail+s.companies[road_owner].paid_units)
+      -- Stock delivery reaches the town during gradual unloading; the
+      -- truck credits its cash only on departure. Its concurrent pending
+      -- packets belong to the town receipt, not the aircraft payout.
+      local road_pending=0
+      for _,truck in pairs(s.fleet) do
+        if truck.owner==road_owner and truck.cargo=="mail" and truck.load_state then
+          road_pending=road_pending+truck.load_state.payment.delivered
+        end
+      end
+      assert((s.sites[1].received.mail or 0)+s.sites[2].received.mail==
+        spec.mail+s.companies[road_owner].paid_units+road_pending)
       assert(s.stock_load_tick==s.passenger_house_clock.counter)
       goal=("AIR_MAIL_NATIVE_PASS paid once $%d: %d passengers/$%d + %d Mail bags/$%d, one real airframe and shared road Mail provisioning")
         :format(f.amount,spec.passengers,pb.route,spec.mail,mb.route)

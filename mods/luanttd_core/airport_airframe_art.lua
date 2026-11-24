@@ -37,6 +37,27 @@ return {
     mesh="bl_stock_airtaxi_a32.obj",flight="bl_stock_airtaxi_a32_flight.obj",
     atlas="bl_stock_airtaxi_a32_atlas.png",scale=1,
   },
+  airtaxi_a33={
+    id=236,entity="luanttd_core:stock_airtaxi_a33",
+    mesh="bl_stock_airtaxi_a33.obj",flight="bl_stock_airtaxi_a33_flight.obj",
+    atlas="bl_stock_airtaxi_a33_atlas.png",scale=1,
+  },
+  guru_x2={
+    id=254,entity="luanttd_core:stock_guru_x2",mesh="bl_stock_guru_x2.obj",
+    atlas="bl_stock_guru_x2_atlas.png",scale=1,
+    rotor="bl_stock_guru_x2_rotor.obj",tail_rotor="bl_stock_guru_x2_tail.obj",
+    rotor_offset={x=0,y=5.15,z=-.22},tail_offset={x=-.49,y=3.25,z=7.74},
+  },
+  airtaxi_a34_1000={
+    id=239,entity="luanttd_core:stock_airtaxi_a34_1000",
+    mesh="bl_stock_airtaxi_a34_1000.obj",flight="bl_stock_airtaxi_a34_1000_flight.obj",
+    atlas="bl_stock_airtaxi_a34_1000_atlas.png",scale=1,
+  },
+  dinger_1000={
+    id=247,entity="luanttd_core:stock_dinger_1000",
+    mesh="bl_stock_dinger_1000.obj",flight="bl_stock_dinger_1000_flight.obj",
+    atlas="bl_stock_dinger_1000_atlas.png",scale=1,
+  },
   darwin_200={
     id=227,entity="luanttd_core:stock_darwin_200",
     mesh="bl_stock_darwin_200.obj",

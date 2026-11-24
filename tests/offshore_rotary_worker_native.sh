@@ -20,6 +20,7 @@ export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/g
 port=${BAYLINE_NATIVE_PORT:-40004}
 for phase in start reload; do
   printf 'port = %s\nprometheus_listener_address = 127.0.0.1:%s\nserver_announce = false\nbind_address = 127.0.0.1\nluanttd_qa_rotary_field = %s\n' "$port" "$port" "${LUANTTD_QA_ROTARY_FIELD:-country}" > "$out/server.conf"
+  printf 'luanttd_qa_rotary_model = %s\n' "${LUANTTD_QA_ROTARY_MODEL:-253}" >> "$out/server.conf"
   timeout 100 luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' > "$out/$phase.log" 2>&1 || {
     tail -80 "$out/$phase.log";exit 1;
   }
