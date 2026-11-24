@@ -160,7 +160,7 @@ return function(Coal,Timber,Oil,Farm,Heavy)
   -- Follows the source industry's expanded platform area, including
   -- max offset + 2 (corners), map edge guards and the caller's platform.
   -- A host that cannot perform terrain writes must reject affected cells.
-  function W.platform(board,x,z,layout,opts)
+  function W.platform(board,x,z,layout,opts,industry)
     opts=opts or {}
     local p=uint(opts.platform or 1,0,4,"Invalid stock industry platform border.")
     if x<=p+1 or z<=p+1 then return nil,"PLATFORM_TOO_CLOSE_TO_EDGE" end
@@ -179,7 +179,9 @@ return function(Coal,Timber,Oil,Farm,Heavy)
       if n==nil then return nil,"PLATFORM_HEIGHT_UNKNOWN" end
       if n~=level then
         if not surrounding(board,xx,zz,level,false) then return nil,"PLATFORM_SURROUNDINGS_REFUSED" end
-        if not board.terraform_quote then return nil,"PLATFORM_TERRAFORM_UNPORTED" end
+        if not board.terraform_quote or board.can_level_industry and not board.can_level_industry(industry) then
+          return nil,"PLATFORM_TERRAFORM_UNPORTED"
+        end
         -- Stock DC_NO_WATER queries one SLOPE_N corner change from the
         -- original map (not a mutation or a full leveling guarantee).
         if not board.terraform_quote(xx,zz,n<level) then return nil,"PLATFORM_TERRAFORM_REFUSED" end
@@ -232,19 +234,20 @@ return function(Coal,Timber,Oil,Farm,Heavy)
       level=level or h
       cells[#cells+1]={x=u,z=v,offset_x=q[1],offset_z=q[2],gfx=q[3]}
     end
-    local platform,why=W.platform(board,x,z,layout,opts)
+    local platform,why=W.platform(board,x,z,layout,opts,id)
     if not platform and (opts.terragenesis~=false or needs_leveling) then return nil,why end
+    local leveling
     if needs_leveling or platform and #platform.changes>0 then
-      -- Existing native structures are dry and flat. Callback-based
-      -- future leveling queries can be exercised, but cannot alter the
-      -- map or permit an unrepresentable terrain placement.
-      return nil,"PLATFORM_TERRAFORM_UNPORTED"
+      if not (platform and board.level_platform) then return nil,"PLATFORM_TERRAFORM_UNPORTED" end
+      leveling,why=board.level_platform(id,platform,cells)
+      if not leveling then return nil,why or "PLATFORM_TERRAFORM_REFUSED" end
+      level=platform.level
     end
     if #placed>=W.POOL_MAX or board.can_allocate and not board.can_allocate(#placed) then
       return nil,"TOO_MANY_INDUSTRIES"
     end
     return {type=id,kind=spec.kind,name=spec.name,style=spec.picture,x=x,z=z,layout=variant,
-      town=town.id,level=level,cells=cells,platform=platform}
+      town=town.id,level=level,cells=cells,platform=platform,leveling=leveling}
   end
 
   -- Translate DoCreateNewIndustry's accepted-candidate draws to explicit

@@ -221,6 +221,30 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     if native.stock_industry then tile.kind="industry";tile.industry=true end
     return tile
   end
+  local Platform=Heavy and dofile(path.."openttd/industry_platform_level.lua")(Terrain)
+  if Platform then
+    local function terraform_options()
+      return {validate_tile=function(_,x,z)
+        local t=board.tile(x-1,z-1)
+        return t and (t.kind=="clear" or t.kind=="trees") and not t.owner and 0 or nil
+      end}
+    end
+    function board.terraform_quote(x,z,raise)
+      return Terrain.plan(s.corner_grid,x+1,z+1,8,raise,terraform_options())~=nil
+    end
+    function board.can_level_industry(id) return id==8 end
+    function board.level_platform(kind,platform,cells)
+      -- Factory/mining lifecycles may handle cleared neighbors differently.
+      -- Only the stock Steel Mill occupies leveled sites in this tranche.
+      if kind~=8 then return nil,"PLATFORM_TERRAFORM_UNPORTED" end
+      local receipt,shadow=Platform.plan(s.corner_grid,platform,terraform_options)
+      for _,c in ipairs(cells) do
+        local slope,h=Terrain.tile(shadow,c.x+1,c.z+1)
+        if slope~=0 or h~=platform.level then return nil,"PLATFORM_NOT_LEVEL" end
+      end
+      return receipt
+    end
+  end
   local choices={}
   local function commit(plan)
     local record=Industry.record(plan,0,{year=Sim.date(s)})
@@ -229,6 +253,16 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     local opts={record=record,name=site.name.." "..plan.name}
     local placed,cells
     local chain
+    if plan.leveling then
+      assert(Platform.apply(s.corner_grid,plan.leveling))
+      for _,d in ipairs(plan.leveling.dirty) do
+        local tile=Sim.id(d.x,d.z)
+        local t=s.tiles[tile]
+        local _,base=Terrain.tile(s.corner_grid,d.x,d.z)
+        t.h,t.terrain,t.wood,t.stock_clear_ground=base,base>0 and "hill" or "grass",nil,nil
+        if s.stock_farm_fields then s.stock_farm_fields[tile]=nil end
+      end
+    end
     if plan.type==2 or plan.type==3 then
       chain="timber"
       assert(Timber,"Generated Timber needs its native industry world")
@@ -251,7 +285,7 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     if not placed then return false end
     for _,c in ipairs(cells) do s.tiles[c.id].stock_clear_ground=nil end
     choices[#choices+1]={industry=placed.id,site=placed.site,kind=plan.kind,tile=id,near=plan.town,
-      chain=chain}
+      chain=chain,leveled=plan.leveling and #plan.leveling.changes>0 or nil}
     return true
   end
   local result=Industry.generate(board,{random=function() return Generator.next_random(state) end,

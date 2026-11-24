@@ -10,17 +10,19 @@ local function ready()
   -- the QA camera to the mill, or the capture will show the town square.
   if not settle_at then settle_at=core.get_us_time()+5000000 end
   if core.get_us_time()<settle_at then core.after(.2,ready);return end
-  local selected
-  for _,p in pairs(S.stock_heavy_placements or {}) do
-    if p.kind=="steel_mill" and p.layout==expected then selected=p;break end
-  end
-  if not selected then
-    local world_state=assert(OwnerCheckpoint.read())
-    for _,p in pairs(world_state.stock_heavy_placements or {}) do
-      if p.kind=="steel_mill" and p.layout==expected then selected=p;break end
-    end
+  local selected,leveled
+  local world_state=assert(OwnerCheckpoint.read())
+  for _,site in ipairs(world_state.stock_generated_profile.industries) do
+    local p=site.kind=="steel_mill" and world_state.stock_heavy_placements[site.industry]
+    if p and p.layout==expected then selected,leveled=p,site.leveled;break end
   end
   assert(selected and #selected.cells==(expected==1 and 14 or 12),"Stock fresh seed did not generate the expected mill")
+  assert(leveled,"Stock quarrying fixture never saw a source leveling receipt")
+  local Grid=dofile(mod.."/openttd/terrain.lua")
+  for _,c in ipairs(selected.cells) do
+    local slope,base=Grid.tile(world_state.corner_grid,c.x,c.z)
+    assert(slope==0 and base==selected.level)
+  end
   local x,z,h=selected.x,selected.z,selected.level
   local at={x=2*x+3.6,y=h+1.65,z=2*z+3.1}
   local camera={x=at.x+6.6,y=h+8.7,z=at.z+13}
@@ -42,7 +44,7 @@ local function ready()
         assert(not hole:match("industry_steel_mill"),"Occupied a stock layout hole")
       end
     end
-    core.log("action",("PASS NATIVE STOCK STEEL MILL: seed=%d layout=%d has %d mounted stock mesh cells")
+    core.log("action",("PASS NATIVE STOCK STEEL MILL: seed=%d layout=%d has %d mounted stock mesh cells on the leveled platform")
       :format(S.seed,expected,#selected.cells))
   end
   mounted()

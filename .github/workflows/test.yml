@@ -292,6 +292,7 @@ jobs:
           lua5.1 tests/airport_rotary_ground_paid.lua
           /usr/bin/python3 tests/stock_steel_mill_layout_1_art.py --upstream-layout "$src/src/table/build_industry.h"
           lua5.1 tests/iron_steel_ordinary_worker.lua early layout1
+          lua5.1 tests/industry_platform_level.lua
           python3 tests/rail_ground_temperate_upstream.py "$src"
           lua5.1 tests/rail_ground_temperate.lua
           lua5.1 tests/stock_rail_ground_fence_art_surface.lua

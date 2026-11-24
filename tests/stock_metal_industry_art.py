@@ -9,6 +9,7 @@ from argparse import ArgumentParser
 from math import sqrt
 from pathlib import Path
 import re
+from runpy import run_path
 import struct
 import sys
 
@@ -111,7 +112,10 @@ def audit(opts):
         if opts.site and opts.site!=site:continue
         source=ROOT/"art"/f"stock_{site}.blend"
         assert source.is_file() and source.stat().st_size>80000
-        fns=set(M.glob(f"bl_industry_{site}_*_*.obj"))
+        # Layout 0 owns the two-numeric-component paths; named alternate
+        # layouts have their own exact inventory and geometry audit below.
+        fns={p for p in M.glob(f"bl_industry_{site}_*_*.obj")
+             if re.fullmatch(rf"bl_industry_{site}_\d+_\d+\.obj",p.name)}
         assert fns=={M/f"bl_industry_{site}_{x}_{z}.obj" for x,z in layout}
         a=T/f"bl_industry_{site}_atlas.png"
         raw=a.read_bytes()
@@ -142,6 +146,8 @@ def audit(opts):
             error=abs(area-saved)/saved
             print(f"    Saved .blend surface {saved:.6f}; all tile pieces {area:.6f}; relative difference {error:.8g}")
             assert error<.000035,(site,area,saved,error)
+    if opts.site in (None,"steel_mill"):
+        run_path(str(ROOT/"tests/stock_steel_mill_layout_1_art.py"))["check"](opts)
 
 
 if __name__=="__main__":

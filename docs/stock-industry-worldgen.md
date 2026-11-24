@@ -46,17 +46,17 @@ no extra height or existing-tree test for Temperate. The mixed generator
 still mounts only Temperate. Layout holes are not occupied by graphics
 or clearing. The
 TerraGenesis industry platform query uses the exact expanded bounds
-and corner height, including the surrounding-corner guard. This native
-slice builds only where it requires **no terrain edits**. Single-corner
-terraform quotes can be exercised without mutation, but a leveling
-plan needing writes is still rejected by placement. A poor seed can
+and corner height, including the surrounding-corner guard. Except for the Steel Mill, current
+industry placement still requires a site with **no terrain edits**.
+Single-corner terraform quotes are nonmutating; accepted Steel Mill
+platform changes are applied only when placement commits. A poor seed can
 legitimately omit one or more selected industries. Other climates,
 NewGRF callbacks, funding/prospecting, industry objects, dynamic
 production-driven placement, and full terrain leveling are not covered.
 
 ## Temperate iron and steel
 
-The ordinary worker mounts the [16.0-RC1 Iron Ore Mine and Steel Mill](stock-iron-steel.md) on the same terrain and town board. The Iron Ore Mine uses layout 0. The Steel Mill may generate either of its stock layouts, with 12 and 14 occupied cells respectively; the irregular rear yard keeps the two southern corners clear. Both were observed in normal Linux Luanti worlds (seeds 11 and 1751). Type 18 excludes nearby Steel Mills, and type 8 excludes nearby Mines and Factories as in the pinned source. Platform leveling is not yet mounted, so the generator can still omit an otherwise eligible site on constrained terrain.
+The ordinary worker mounts the [16.0-RC1 Iron Ore Mine and Steel Mill](stock-iron-steel.md) on the same terrain and town board. The Iron Ore Mine uses layout 0. The Steel Mill may generate either of its stock layouts, with 12 and 14 occupied cells respectively; the irregular rear yard keeps the two southern corners clear. Both were observed in normal Linux Luanti worlds (seeds 11 and 1751). Type 18 excludes nearby Steel Mills, and type 8 excludes nearby Mines and Factories as in the pinned source. The Steel Mill now uses the stock dry industry platform during generation. OpenTTD first quotes each needed north-corner command on unmodified ground; the host then replays the source row-major one-level edits on a sparse shadow, commits the accepted platform, and clears only the affected terrain and crop marks. Both layouts were observed on leveled sites in Linux Luanti (seed 1751/layout 0 and seed 11/layout 1). Other industries, adjacent protected structures and non-worldgen funding are separate.
 
 ## Interface
 
