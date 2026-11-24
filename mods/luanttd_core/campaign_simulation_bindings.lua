@@ -27,13 +27,14 @@ return function(Sim,mod)
     Sim.mount_stock_town_growth(s,runtime,true)
     return runtime
   end
-  function B.air(s,slope,ready,city_ready)
+  function B.air(s,slope,ready,city_ready,heliport_ready)
     local terrain=dofile(source.."terrain.lua")
     local small=dofile(source.."airport_small.lua")
     local motion=dofile(source.."airport_motion.lua")(small)
     local city=city_ready and dofile(source.."airport_city.lua")
     local rig=dofile(source.."airport_oil_rig.lua")
-    local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small,city or nil,rig)
+    local heliport=heliport_ready and dofile(source.."airport_heliport.lua")
+    local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small,city or nil,rig,heliport or nil)
     local roster=dofile(source.."airport_roster.lua")
     local run=dofile(mod.."/airport_preview_run.lua")(Sim,net,small,motion,terrain,slope,roster)
     run.paid_art_ready=function(p) return not p or not p.engine_id or ready(p.engine_id) end

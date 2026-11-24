@@ -15,5 +15,6 @@ return function(core,mod)
   for z=0,5 do for x=0,5 do
     city=city and files[("bl_city_airport_%d_%d.obj"):format(x,z)]
   end end
-  return assets,not not city
+  local heliport=files["bl_heliport_0_0.obj"] and files["bl_heliport_atlas.png"] and files["bl_dispatch_heliport.png"]
+  return assets,not not city,not not heliport
 end

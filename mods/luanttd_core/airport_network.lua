@@ -2,12 +2,17 @@
 -- branch of OpenTTD 14.1 CmdBuildAirport / CheckFlatLandAirport.
 -- Noise, stations shared across modes, foundation clearing and airport
 -- replacement are explicit future work; the preview never clears objects.
-return function(Sim,Terrain,Small,City,OilRig)
+return function(Sim,Terrain,Small,City,OilRig,Heliport)
   local N={PRICE_PER_TILE=600,CLEAR_PER_TILE=30}
   function N.layout(name)
     if name=="city" then return City end
     if name=="oilrig" then return OilRig end
+    if name=="heliport" then return Heliport end
     if name==nil or name=="country" then return Small end
+  end
+  function N.has_hangar(airport)
+    local field=airport and N.layout(airport.layout)
+    return field and field.hangar~=nil or false
   end
   function N.footprint(origin,name)
     local field=N.layout(name)
@@ -23,11 +28,14 @@ return function(Sim,Terrain,Small,City,OilRig)
   function N.quote(s,owner,origin,name)
     local field=N.layout(name)
     if not field or name=="oilrig" then return nil,"AIRPORT_TYPE_NOT_AVAILABLE" end
-    if field.intro_year and Sim.date(s)<field.intro_year then return nil,"CITY_AIRPORT_NOT_INTRODUCED" end
+    if field.intro_year and Sim.date(s)<field.intro_year then
+      return nil,name=="heliport" and "HELIPORT_NOT_INTRODUCED" or "CITY_AIRPORT_NOT_INTRODUCED"
+    end
     if not (s.corner_grid and origin and s.tiles[origin]) then return nil,"SELECT_AIRFIELD_ORIGIN" end
     local x,z=Sim.xy(origin)
     local airport={owner=owner,origin=origin,x=x*16,z=z*16,rotation=0,
-      width=field.W,height=field.H,flags=0,tiles={},layout=name=="city" and name or nil}
+      width=field.W,height=field.H,flags=0,tiles={},layout=name~="country" and name or nil,
+      delta_z=field.delta_z}
     local h
     for dz=0,field.H-1 do for dx=0,field.W-1 do
       local a=Sim.id(x+dx,z+dz)
@@ -70,7 +78,7 @@ return function(Sim,Terrain,Small,City,OilRig)
     s.stock_small_airports[airport.id]=airport
     local dirty={}
     for _,pos in ipairs(airport.tiles) do
-      s.tiles[pos.id].airfield={airport=airport.id,x=pos.x,z=pos.z,layout=airport.layout}
+      s.tiles[pos.id].airfield={airport=airport.id,x=pos.x,z=pos.z,layout=airport.layout,owner=owner}
       dirty[#dirty+1]=pos.id
     end
     expense(s,owner,airport.price)

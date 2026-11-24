@@ -58,6 +58,14 @@ return function(api)
   function Z.air(id)
     local st=S.stock_small_airports[id]
     if not st then return end
+    if st.layout=="heliport" then
+      local t=st.origin and S.tiles[st.origin]
+      if not (t and t.airfield and t.airfield.airport==id) then return end
+      local _,level=terrain(st.origin)
+      -- Exterior of the ground-floor canopy, on the granite forecourt.
+      -- Never place waiting passengers on the operating flight deck.
+      return {rect(st.origin,level+.537,-.180,.967,.49,.038,east)}
+    end
     if st.layout=="city" then
       local t=st.origin and S.tiles[st.origin]
       if not (t and t.airfield and t.airfield.airport==id) then return end

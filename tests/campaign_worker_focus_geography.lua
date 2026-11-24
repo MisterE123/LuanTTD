@@ -10,8 +10,10 @@ return function(core,s,Sim,mod)
         local id=Sim.id(u,v)
         local t=s.tiles[id]
         local mask,h=T.tile(s.corner_grid,u,v)
+        -- Fields use a separate occupancy index and may look like bare ground.
         if mask~=0 or base and base~=h or not t or t.build or t.site or t.house or t.owner
-          or t.stock_industry or t.stock_landmark or t.stock_void or t.terrain=="water" then flat=false end
+          or t.stock_industry or t.stock_landmark or t.stock_void or t.terrain=="water"
+          or s.stock_farm_fields and s.stock_farm_fields[id] then flat=false end
         base=h
       end end
       if flat then x,z=xx,zz;break end

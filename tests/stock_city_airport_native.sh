@@ -24,7 +24,15 @@ p.write_text(s.replace(key,'if not resumed_owner then Sim.company(S,"CityReview"
 PYFIX
 fi
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
-cat tests/stock_city_airport_native.lua >>"$game/mods/luanttd_core/init.lua"
+fixture=tests/stock_city_airport_native.lua
+pass_mark='PASS NATIVE CITY:'
+restart_mark='PASS NATIVE CITY RESTART'
+if [[ ${LUANTTD_QA_AIR_LAYOUT:-city} == heliport ]]; then
+  fixture=tests/stock_heliport_native.lua
+  pass_mark='PASS NATIVE HELIPORT:'
+  restart_mark='PASS NATIVE HELIPORT RESTART'
+fi
+cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 airframe=${LUANTTD_QA_AIRFRAME:-226}
 port=${BAYLINE_NATIVE_PORT:-40024}
@@ -80,17 +88,17 @@ capture(){
   fi
 }
 case "$airframe" in
-  218|221|222|223|224|227|229|230|231|232|233|234|235|236|237|238|239|247)
+  218|221|222|223|224|227|229|230|231|232|233|234|235|236|237|238|239|240|241|242|243|244|245|246|247)
     mark 'NATIVE AIR TAXI'
     capture taxi.jpg
     mark 'NATIVE AIR AIRBORNE'
     ;;
 esac
-mark 'PASS NATIVE CITY:'
+mark "$pass_mark"
 sleep .15
 capture city.jpg
-grep 'PASS NATIVE CITY' "$out/server.log"
-! grep -E 'ERROR\[|LuanTTD viewport placement:' "$out/server.log" "$out/client.log"
+grep "$pass_mark" "$out/server.log"
+if grep -E 'ERROR\[|LuanTTD viewport placement:' "$out/server.log" "$out/client.log"; then exit 1; fi
 
 if [[ ${LUANTTD_QA_AIR_RESTART:-0} == 1 ]]; then
   kill -TERM "$client" 2>/dev/null || true; wait "$client" || true; client=
@@ -102,8 +110,8 @@ if [[ ${LUANTTD_QA_AIR_RESTART:-0} == 1 ]]; then
   grep -q 'listening on' "$out/restart-server.log"
   luanti --go --address 127.0.0.1 --port "$port" --name CityReview --password '' --config "$out/client.conf" --logfile '' >"$out/restart-client.log" 2>&1 &
   client=$!
-  for _ in {1..220}; do grep -q 'PASS NATIVE CITY RESTART' "$out/restart-server.log" && break; sleep .25; done
-  grep 'PASS NATIVE CITY RESTART' "$out/restart-server.log" || { tail -60 "$out/restart-server.log"; exit 1; }
+  for _ in {1..220}; do grep -q "$restart_mark" "$out/restart-server.log" && break; sleep .25; done
+  grep "$restart_mark" "$out/restart-server.log" || { tail -60 "$out/restart-server.log"; exit 1; }
   capture restart.jpg
-  ! grep -E 'ERROR\[' "$out/"restart-{server,client}.log
+  if grep -E 'ERROR\[' "$out/"restart-{server,client}.log; then exit 1; fi
 fi

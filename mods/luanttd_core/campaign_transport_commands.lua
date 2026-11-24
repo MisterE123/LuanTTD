@@ -206,7 +206,7 @@ return function(Sim,R)
       entry=entry or {}
       return Help.describe("air",entry.mail and entry.mail>0 and "mixed" or nil,entry.name,{capacity=entry.passengers,
         capacity_unit="seats",mail_capacity=entry.mail,speed=entry.max_speed,
-        runway=entry.helicopter and "Can serve Oil Rigs; buy at your airport" or entry.jet and "use City Airports"})
+        runway=entry.helicopter and "Can serve Heliports and Oil Rigs; buy at your airport" or entry.jet and "use City Airports"})
     end
     if mode=="road" and tile(key) then
       local t=s.tiles[key]
@@ -362,6 +362,7 @@ return function(Sim,R)
     elseif mode=="air" and R.air and id(key) then
       local t=s.stock_small_airports and s.stock_small_airports[key]
       if not t or t.owner~=owner then return nil,"Choose an airfield you own." end
+      if t.layout=="heliport" then return nil,"This Heliport does not have a hangar." end
       for _,engine in ipairs(R.air.roster.catalog(true)) do
         add(engine.name,{mode=mode,operation="buy",depot=key,engine=engine.stock_id},air_help(engine))
       end
@@ -382,7 +383,7 @@ return function(Sim,R)
         local x,z
         if cell then x,z=Sim.xy(cell) end
         local cargo=Freight.role(r)
-        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(rig and rig.name or mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or "Airfield") or "Dock")
+        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(rig and rig.name or mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or r.layout=="heliport" and "Heliport" or "Airfield") or "Dock")
           .." "..key_..(x and (" (%d, %d)"):format(x,z) or "")}
         if mode=="ship" and R.water.coal then
           local report=R.water.coal.order_report(s,key_)

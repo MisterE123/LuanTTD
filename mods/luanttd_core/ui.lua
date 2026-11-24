@@ -1497,6 +1497,7 @@ local function worker_build(n,V,kind,request)
   V.status="Checking construction…"
   request=U.rail_gauge_request(V,kind,request)
   local ok,why=api.worker_build.commit(n,kind,request,function(built,note,quote,tiles)
+    if not built and note and request.mode=="air" and api.airfield then note=api.airfield.reason(note) end
     V.status=note or (built and "Construction complete." or "That construction was not accepted.")
     if built and api.on_worker_build then api.on_worker_build(n,tiles,quote) end
   end)
@@ -1706,7 +1707,8 @@ function U.clear_ship_run(p)
   if ok then V.ferry_depot,V.ferry_first,V.ferry_via=nil,nil,nil end
   V.status=msg
 end
-local airfield_tools={airfield_build={name="Build country airfield"},city_airport_build={name="Build City Airport",layout="city"},airfield_remove={name="Dismantle airfield"}}
+local airfield_tools={airfield_build={name="Build country airfield"},city_airport_build={name="Build City Airport",layout="city"},
+  heliport_build={name="Build Heliport",layout="heliport"},airfield_remove={name="Dismantle airfield"}}
 local airfield_order={name=S.air_owned_preview and "Order aircraft" or "Order trimotor"}
 local function airport_order_target(n,V,id)
   if not S.air_fleet_preview and api.airfield.current() then
@@ -2127,7 +2129,8 @@ local function authority_preview(p,id,hit)
   elseif dock=="lock" or dock=="canal" or dock=="aqueduct" then
     if dock~="lock" and not V.anchor then return ids,true,"Mark the first waterway tile." end
     kind,request="transport",{mode="ship",operation="waterwork",kind=dock,tile=V.anchor or id,last=id}
-  elseif tool=="airfield_build" or tool=="city_airport_build" then
+  elseif airfield_tools[tool] and tool~="airfield_remove" then
+    label=airfield_tools[tool].name
     kind,request="transport",{mode="air",operation="build",tile=id,layout=airfield_tools[tool].layout}
   elseif tool=="structure_tunnel" or tool=="rail_span_tunnel" then
     kind,request="transport",{mode=tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id}
@@ -2154,8 +2157,9 @@ local function authority_preview(p,id,hit)
   -- while the worker validates the shape the player just selected.
   if not q then
     local tram=request.mode=="tram" or request.tool=="tram_facility"
-    if (kind=="road" or tram) and pending then return ids,nil,why end
+    if (kind=="road" or tram or request.mode=="air") and pending then return ids,nil,why end
     if tram and api.tram and why then why=api.tram.reason(why) end
+    if request.mode=="air" and api.airfield and why then why=api.airfield.reason(why) end
     return ids,false,why
   end
   local cells=q.tiles or ids
@@ -2683,8 +2687,12 @@ function U.build_world(p,id,hit)
       return
     end
     if V.tool=="airfield_order" then
-      local field=surface and surface.owner==n and surface.airfield and surface.airfield.airport
+      local part=surface and surface.airfield
+      local field=part and (part.owner or surface.owner)==n and part.airport
       if not field then V.status="Choose one of your airfields.";return end
+      if not V.airport_first and part.layout=="heliport" then
+        V.status="Choose your helicopter's purchase hangar first. The Heliport is a destination.";return
+      end
       if not V.airport_first then V.airport_first=field;V.status="Departure selected. Pick a destination.";return end
       if field==V.airport_first then V.status="Choose a different airfield.";return end
       if stage_fixed_destination(V,id) then return end
@@ -2746,7 +2754,7 @@ function U.build_world(p,id,hit)
       worker_build(n,V,"transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=V.ship_axis or 0})
       return
     end
-    if V.tool=="airfield_build" or V.tool=="city_airport_build" then
+    if airfield_tools[V.tool] and V.tool~="airfield_remove" then
       worker_build(n,V,"transport",{mode="air",operation="build",tile=id,layout=airfield_tools[V.tool].layout});return
     end
     if V.tool=="structure_tunnel" or V.tool=="rail_span_tunnel" then
@@ -3135,6 +3143,16 @@ function U.context(p,tile,hit)
     local row=company_projection.terrain(x,z)
     local t=row and row.surface
     if t then
+      if t.airfield and t.airfield.layout=="heliport" then
+        local waiting=R.waiting_at and R.waiting_at("air",t.airfield.airport) or 0
+        local title=("Heliport #%d  ·  %s"):format(t.airfield.airport,t.airfield.owner or "Company")
+        core.show_formspec(n,"luanttd_core:heliport_status",
+          "formspec_version[7]size[10.3,3.7]bgcolor[#152334;false]label[.45,.55;"..esc(title).."]"..
+          "label[.45,1.28;Helicopters only. Buy and order from an airport hangar.]"..
+          "label[.45,1.93;"..number(waiting).." passengers waiting]"..
+          "button_exit[.45,2.72;9.4,.55;close;Back to world]")
+        return true
+      end
       if R.host_signal and R.host_signal(tile) then return U.signal_ui.inspect(p,tile,hit) end
       local mode,key
       if t.rail_depot_dir~=nil then mode,key="rail",tile
@@ -3318,7 +3336,7 @@ function U.service(p,kind,id)
     if kind_=="tram_depot_status" then return t and t.tram and t.tram.owner==n_ and "tram",id_ end
     if kind_=="airfield_status" then
       local f=S.stock_small_airports and S.stock_small_airports[id_]
-      return f and f.owner==n_ and "air",id_
+      return f and f.owner==n_ and f.layout~="heliport" and "air",id_
     end
     if kind_=="harbor_status" or kind_=="passenger_depot" or kind_=="cargo_depot" then
       local r=t and t.ship
@@ -3625,8 +3643,10 @@ function U.service(p,kind,id)
   elseif kind=="airfield_status" then
     local field=S.stock_small_airports and S.stock_small_airports[id]
     if not field then return end
-    label(.4,.45,("%s #%d  ·  %s"):format(field.layout=="city" and "City Airport" or "Country airfield",id,field.owner))
-    label(.4,1.20,math.floor(field.flags/256)%2==1 and "Runway reserved." or "Runway clear.")
+    local heliport=field.layout=="heliport"
+    label(.4,.45,("%s #%d  ·  %s"):format(heliport and "Heliport" or field.layout=="city" and "City Airport" or "Country airfield",id,field.owner))
+    if heliport then label(.4,1.20,field.flags~=0 and "Helipad reserved." or "Helipad clear.")
+    else label(.4,1.20,math.floor(field.flags/256)%2==1 and "Runway reserved." or "Runway clear.") end
     local flights=api.airfield.at(id)
     local function air_load(stats)
       local a,b=stats.cargo_onboard,stats.cargo_capacity
@@ -3659,6 +3679,9 @@ function U.service(p,kind,id)
         if paid.paused then label(.4,4.04,"Paid air service paused or aircraft model missing.")
         elseif paid.running_expense then label(.4,4.04,dollars(paid.running_expense).." in running costs") end
       end
+    elseif heliport then
+      label(.4,1.78,"Helicopters only. This station has no hangar.")
+      label(.4,2.31,"Buy and order a helicopter from another airport's hangar.")
     elseif S.air_owned_preview then
       if unit then
         if unit.owner==n and unit.hangar==id then

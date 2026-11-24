@@ -43,14 +43,18 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       return false
     end
     local design=engine and Roster and Roster.entry(engine)
-    if field.layout=="oilrig" then return design and design.helicopter==true or false end
+    if field.layout=="oilrig" or field.layout=="heliport" then
+      return design and design.helicopter==true or false
+    end
     return not (design and design.small==false) or field.layout=="city"
   end
   local function layout(field)
     return Network.layout and assert(Network.layout(field.layout),"Unrecognized saved airport") or Small
   end
   function R.route_stop(s,field,engine,except)
-    if not R.fits(field,engine) then return false,"LARGER_AIRFIELD_REQUIRED" end
+    if not R.fits(field,engine) then
+      return false,field and field.layout=="heliport" and "HELIPORT_HELICOPTERS_ONLY" or "LARGER_AIRFIELD_REQUIRED"
+    end
     if field.layout=="city" then
       -- 3D limitation, not stock FTA: two Darwin bodies can physically
       -- overlap between stands 2 and 3. Leave both source paths intact.
@@ -75,6 +79,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     if not a or not b or a==b or a.owner~=owner or b.owner~=owner and not neutral then
       return nil,"SELECT_YOUR_HANGAR_AND_COMPATIBLE_AIRFIELD"
     end
+    if not layout(a).hangar then return nil,"AIRPORT_HAS_NO_HANGAR" end
     for _,field in ipairs({a,b}) do
       local ok,why=R.route_stop(s,field,owned and owned.stock_id)
       if not ok then return nil,why end
@@ -91,8 +96,8 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       p.finance={annual_fp=owned.annual_fp,ticks=0,charged_ticks=0,expense=0}
     end
     local engine=R.engine_for(p)
-    p.vehicle=layout(a).new(a,{owner=owner,order={kind="station",id=second},
-      max_speed=engine.max_speed,acceleration=engine.acceleration,helicopter=engine.helicopter})
+    p.vehicle=assert(layout(a).new(a,{owner=owner,order={kind="station",id=second},
+      max_speed=engine.max_speed,acceleration=engine.acceleration,helicopter=engine.helicopter}))
     if s.air_paid_service then
       p.paid_clock=in_fleet and owned.serial or s.next_paid_air_run or 1
       p.paid_built_day=owned and owned.day or s.day

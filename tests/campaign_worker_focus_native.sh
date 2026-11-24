@@ -136,7 +136,9 @@ await_log() {
     kill -0 "$client" 2>/dev/null || break
     sleep .25
   done
-  tail -n 60 "$log"; return 1
+  echo "Timed out awaiting $1 in $log" >&2
+  grep -Ev 'FOCUS_NATIVE_POSITION' "$log" | tail -n 45 || true
+  return 1
 }
 open() {
   log="$out/$1.log"

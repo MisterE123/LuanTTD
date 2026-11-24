@@ -249,7 +249,7 @@ jobs:
       - name: Install comparison tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends lua5.1 g++
+          sudo apt-get install -y --no-install-recommends lua5.1 g++ python3-pil
       - name: Compare direct ports to the verified upstream tag
         env:
           OPENTTD_RC1_REV: 07b339c0aaeb0a87be9490b2f1c3f17c6b00b837
@@ -281,7 +281,11 @@ jobs:
           lua5.1 tests/ship_facilities.lua
           lua5.1 tests/ship_water_world.lua
           lua5.1 tests/ship_preview_run.lua rocks
-          python3 tests/stock_rocky_water_art.py
+          /usr/bin/python3 tests/stock_rocky_water_art.py
+          /usr/bin/python3 tests/heliport_art.py
+          python3 tests/airport_heliport_rc1.py "$src" --lua lua5.1
+          lua5.1 tests/oil_rig_helicopter.lua heliport
+          lua5.1 tests/airport_heliport_paid.lua
           python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"
           python3 tests/stock_tim_art.py --upstream-engines "$src/src/table/engines.h"
           python3 tests/stock_tim_art.py --variant asiastar --upstream-engines "$src/src/table/engines.h"

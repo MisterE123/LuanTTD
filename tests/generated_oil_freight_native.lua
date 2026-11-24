@@ -12,7 +12,8 @@ core.after(0,function()
   for _,r in ipairs(profile.industries) do
     if r.kind=="oil_refinery" then refinery=r elseif r.kind=="oil_well" then wells=r end
   end
-  assert(refinery and refinery.tile==at(26,30) and wells and wells.tile==at(48,35))
+  assert(refinery and refinery.tile==at(48,35) and wells and wells.tile==at(24,28),
+    "Default seed oil geography changed; update the planned road corridor")
   assert(core.settings:get("bayline_scenario")==nil)
   local saved=S.generated_oil_freight_test
   if not saved then
@@ -20,23 +21,26 @@ core.after(0,function()
       local ok,note=Sim.build(S,owner,"road",Sim.line(at(x,z),at(u,v)))
       assert(ok,("Road at (%d, %d) to (%d, %d): %s"):format(x,z,u,v,tostring(note)))
     end
-    for _,r in ipairs({{47,34,47,38},{47,34,46,34},{46,34,46,37},{25,37,47,37},
-        {24,37,24,28},{24,28,25,28},{25,28,25,33},{25,33,24,33},{24,37,25,37},
-        {16,23,24,23},{24,23,24,28}}) do road(unpack(r)) end
+    -- An ordinary paved circuit by the wells leads across the ridge,
+    -- then down the coast past the refinery to the new town's north side.
+    for _,r in ipairs({{25,29,52,29},{25,29,25,30},{25,30,28,30},{28,30,28,29},
+        {52,29,52,39},{52,39,50,39},{50,39,50,42},{50,42,51,42}}) do road(unpack(r)) end
     local function stop(x,z)
       local id=at(x,z)
-      assert(Sim.build_truck_stop(S,owner,id))
+      local built,why=Sim.build_truck_stop(S,owner,id)
+      assert(built,("Loading stop (%d,%d): %s"):format(x,z,tostring(why)))
       return assert(S.stations[S.tiles[id].station])
     end
-    local a,b,c=stop(47,35),stop(25,31),stop(16,17)
-    local depot=at(23,30)
+    local a,b,c=stop(26,29),stop(52,38),stop(52,43)
+    local depot=at(40,30)
     assert(Sim.build(S,owner,"road_depot",{depot}))
     local _,well_catch=Sim.oil_stop_status(S,a,"oil")
     local _,crude_catch=Sim.oil_stop_status(S,b,"oil")
     local _,refinery_catch=Sim.oil_stop_status(S,b,"goods")
     local _,town=Sim.oil_stop_status(S,c,"goods")
     assert(well_catch.sources[1]==wells.industry and crude_catch.accepts and crude_catch.eighths>=8 and
-      refinery_catch.sources[1]==refinery.industry and town.accepts)
+      #refinery_catch.sources==1 and refinery_catch.sources[1]==refinery.industry and town.accepts,
+      core.serialize({well_catch,crude_catch,refinery_catch,town}))
     local function buy(engine,cargo,a,b)
       local id=assert(Sim.purchase(S,owner,engine,cargo,nil,depot))
       local v=S.fleet[id]
