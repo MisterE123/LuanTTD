@@ -16,5 +16,13 @@ return function(core,mod)
     city=city and files[("bl_city_airport_%d_%d.obj"):format(x,z)]
   end end
   local heliport=files["bl_heliport_0_0.obj"] and files["bl_heliport_atlas.png"] and files["bl_dispatch_heliport.png"]
-  return assets,not not city,not not heliport
+  local ground={}
+  if files["bl_dispatch_rotary_airfields.png"] then
+    for name,width in pairs({helidepot=2,helistation=4}) do
+      local ready=files["bl_"..name.."_atlas.png"] and files["bl_dispatch_"..name..".png"]
+      for z=0,1 do for x=0,width-1 do ready=ready and files[("bl_%s_%d_%d.obj"):format(name,x,z)] end end
+      ground[name]=not not ready
+    end
+  end
+  return assets,not not city,not not heliport,ground
 end

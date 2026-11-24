@@ -147,7 +147,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [startup, stock-rail, industry-air-and-water, rail-dispatch]
+        suite: [startup, stock-rail, industry-air-and-water, rail-dispatch, airport-rotor]
     defaults:
       run:
         shell: bash
@@ -286,6 +286,10 @@ jobs:
           python3 tests/airport_heliport_rc1.py "$src" --lua lua5.1
           lua5.1 tests/oil_rig_helicopter.lua heliport
           lua5.1 tests/airport_heliport_paid.lua
+          /usr/bin/python3 tests/rotary_airfield_art.py
+          python3 tools/build_rotary_ground_airports.py "$src/src/table"
+          lua5.1 tests/airport_rotary_ground_motion.lua
+          lua5.1 tests/airport_rotary_ground_paid.lua
           python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"
           python3 tests/stock_tim_art.py --upstream-engines "$src/src/table/engines.h"
           python3 tests/stock_tim_art.py --variant asiastar --upstream-engines "$src/src/table/engines.h"

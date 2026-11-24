@@ -27,10 +27,18 @@ printf '\n' >>"$game/mods/luanttd_core/init.lua"
 fixture=tests/stock_city_airport_native.lua
 pass_mark='PASS NATIVE CITY:'
 restart_mark='PASS NATIVE CITY RESTART'
-if [[ ${LUANTTD_QA_AIR_LAYOUT:-city} == heliport ]]; then
+pass_limit=360
+restart_limit=220
+if [[ ${LUANTTD_QA_AIR_LAYOUT:-city} == heliport || ${LUANTTD_QA_AIR_LAYOUT:-city} == ground_rotary ]]; then
   fixture=tests/stock_heliport_native.lua
   pass_mark='PASS NATIVE HELIPORT:'
   restart_mark='PASS NATIVE HELIPORT RESTART'
+  if [[ ${LUANTTD_QA_AIR_LAYOUT:-city} == ground_rotary ]]; then
+    pass_mark='PASS NATIVE GROUND ROTARY:'
+    restart_mark='PASS NATIVE GROUND ROTARY RESTART'
+    pass_limit=720
+    restart_limit=600
+  fi
 fi
 cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
@@ -77,7 +85,7 @@ for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 xdpyinfo > /dev/null || { cat "$out/xvfb.log"; exit 1; }
 luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/server.log" 2>&1 &
 server=$!
-mark(){ for _ in {1..360}; do grep -q "$1" "$out/server.log" && return; kill -0 "$server" 2>/dev/null || break; sleep .25; done; tail -70 "$out/server.log"; return 1; }
+mark(){ for ((i=0; i<${2:-360}; i++)); do grep -q "$1" "$out/server.log" && return; kill -0 "$server" 2>/dev/null || break; sleep .25; done; tail -70 "$out/server.log"; return 1; }
 mark 'listening on'
 luanti --go --address 127.0.0.1 --port "$port" --name CityReview --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
@@ -94,7 +102,7 @@ case "$airframe" in
     mark 'NATIVE AIR AIRBORNE'
     ;;
 esac
-mark "$pass_mark"
+mark "$pass_mark" "$pass_limit"
 sleep .15
 capture city.jpg
 grep "$pass_mark" "$out/server.log"
@@ -110,7 +118,7 @@ if [[ ${LUANTTD_QA_AIR_RESTART:-0} == 1 ]]; then
   grep -q 'listening on' "$out/restart-server.log"
   luanti --go --address 127.0.0.1 --port "$port" --name CityReview --password '' --config "$out/client.conf" --logfile '' >"$out/restart-client.log" 2>&1 &
   client=$!
-  for _ in {1..220}; do grep -q "$restart_mark" "$out/restart-server.log" && break; sleep .25; done
+  for ((i=0; i<restart_limit; i++)); do grep -q "$restart_mark" "$out/restart-server.log" && break; sleep .25; done
   grep "$restart_mark" "$out/restart-server.log" || { tail -60 "$out/restart-server.log"; exit 1; }
   capture restart.jpg
   if grep -E 'ERROR\[' "$out/"restart-{server,client}.log; then exit 1; fi

@@ -66,6 +66,19 @@ return function(api)
       -- Never place waiting passengers on the operating flight deck.
       return {rect(st.origin,level+.537,-.180,.967,.49,.038,east)}
     end
+    if st.layout=="helidepot" or st.layout=="helistation" then
+      local big=st.layout=="helistation"
+      for _,part in ipairs(st.tiles) do
+        if part.z==0 and part.x==(big and 1 or 0) then
+          local t=S.tiles[part.id]
+          if not (t and t.airfield and t.airfield.airport==id) then return end
+          local _,level=terrain(part.id)
+          -- Plaza in front of the low terminal, not the rotor or taxi envelope.
+          return {rect(part.id,level+(big and .529 or .538),-.427,big and .848 or .648,big and .56 or .61,.077,east)}
+        end
+      end
+      return
+    end
     if st.layout=="city" then
       local t=st.origin and S.tiles[st.origin]
       if not (t and t.airfield and t.airfield.airport==id) then return end

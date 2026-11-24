@@ -39,11 +39,11 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     return R.engine
   end
   function R.fits(field,engine)
-    if not field or not (Network.layout and Network.layout(field.layout) or not field.layout) then
-      return false
-    end
+    if not field then return false end
+    local profile=Network.layout and Network.layout(field.layout) or not field.layout and Small
+    if not profile then return false end
     local design=engine and Roster and Roster.entry(engine)
-    if field.layout=="oilrig" or field.layout=="heliport" then
+    if profile.airplanes==false then
       return design and design.helicopter==true or false
     end
     return not (design and design.small==false) or field.layout=="city"
@@ -53,7 +53,8 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
   end
   function R.route_stop(s,field,engine,except)
     if not R.fits(field,engine) then
-      return false,field and field.layout=="heliport" and "HELIPORT_HELICOPTERS_ONLY" or "LARGER_AIRFIELD_REQUIRED"
+      return false,field and field.layout~="oilrig" and Network.layout and Network.layout(field.layout)
+        and Network.layout(field.layout).airplanes==false and "HELIPORT_HELICOPTERS_ONLY" or "LARGER_AIRFIELD_REQUIRED"
     end
     if field.layout=="city" then
       -- 3D limitation, not stock FTA: two Darwin bodies can physically

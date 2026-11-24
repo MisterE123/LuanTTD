@@ -338,6 +338,9 @@ return function(api)
     airport_media("country","small_airport",4,3)
     if api.capabilities and api.capabilities.city_airport then airport_media("city","city_airport",6,6) end
     if api.capabilities and api.capabilities.heliport then airport_media("heliport","heliport",1,1) end
+    local rotary=api.capabilities and api.capabilities.ground_rotary
+    if rotary and rotary.helidepot then airport_media("helidepot","helidepot",2,2) end
+    if rotary and rotary.helistation then airport_media("helistation","helistation",4,2) end
   end
   local ship_docks,ship_piers,ship_depots={},{},{}
   local aqueduct_head,aqueduct_span,aqueduct_pier_head,aqueduct_pier={},{},{},{}

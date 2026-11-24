@@ -56,7 +56,7 @@ return function(Sim,mod,s,cap)
     end,function(n) run.tick(s,n) end)
   end
   if s.air_paid_service then
-    local net,run,owned,roster=B.air(s,Slope,function(id) return cap.air[id]==true end,cap.city_airport,cap.heliport)
+    local net,run,owned,roster=B.air(s,Slope,function(id) return cap.air[id]==true end,cap.city_airport,cap.heliport,cap.ground_rotary)
     N.air={network=net,run=run,owned=owned,roster=roster}
     pilot(function()
       local r=run.current(s)

@@ -74,7 +74,7 @@ H.menus={
 }
 local function build_utilities()
   for _,id in ipairs({"roads","road_direction","road_stops","terrain","structures","tramway",
-      "harbor","waterworks","airfields","freight","railworks","railengineering","railpieces","railsignals","railtypes","railwaypoints"}) do
+      "harbor","waterworks","airfields","rotary_airfields","freight","railworks","railengineering","railpieces","railsignals","railtypes","railwaypoints"}) do
     if H.menus[id] then H.menus[id][9]=bulldoze end
   end
 end
@@ -145,12 +145,19 @@ function H.enable_ships()
     [7]=item("ship_buoy_remove","Remove buoy, keep water","ship_buoy_remove"),[8]=back}
   sync_sections()
 end
-function H.enable_airfields(owned,city,heliport)
+function H.enable_airfields(owned,city,heliport,ground)
+  local rooftop=heliport and item("heliport_build","Build Heliport","heliport") or nil
+  H.menus.rotary_airfields=ground and (ground.helidepot or ground.helistation) and {
+    title="Helicopter Facilities",[1]=inspect,[2]=rooftop,
+    [3]=ground.helidepot and item("helidepot_build","Build Helidepot","helidepot") or nil,
+    [4]=ground.helistation and item("helistation_build","Build Helistation","helistation") or nil,
+    [5]=item("airfield_remove","Dismantle airfield","airfield_remove"),[8]=back,
+  } or nil
   H.menus.airfields={title="Airfields",[1]=inspect,[2]=item("airfield_build","Build country airfield","airfield"),
     [3]=item("airfield_order",owned and "Order aircraft" or "Order trimotor","trimotor"),
     [4]=city and item("city_airport_build","Build City Airport","city_airport") or nil,
     [5]=item("airfield_remove","Dismantle airfield","airfield_remove"),
-    [6]=heliport and item("heliport_build","Build Heliport","heliport") or nil,
+    [6]=H.menus.rotary_airfields and section("rotary_airfields","Helicopter Facilities","rotary_airfields") or rooftop,
     [7]=not owned and item("airfield_clear","Clear flight pilot","airfield_clear") or nil,[8]=back}
   sync_sections()
 end

@@ -117,7 +117,12 @@ case "${1:-}" in
     python3 tests/bakewell_luckett_art.py
     python3 tests/stock_airliners_g_art.py
     python3 tests/city_airport_art.py
+    ;;
+  airport-rotor)
+    export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/cache"
+    python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
     LUANTTD_QA_AIR_LAYOUT=heliport LUANTTD_QA_AIR_YEAR=1963 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
+    LUANTTD_QA_AIR_LAYOUT=ground_rotary LUANTTD_QA_AIR_YEAR=1980 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
     ;;
   rail-dispatch)
     python3 tests/rail_early_diesel_art.py

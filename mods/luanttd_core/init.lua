@@ -243,7 +243,8 @@ api.road_bay_tools=Sim.road_stock_service_active(S)
 api.structure_tools,api.tram_tools,api.ship_tools,api.airport_tools=true,true,true,true
 S.tram_enabled,S.ship_enabled,S.airport_enabled=true,true,true
 S.air_fleet_preview,S.air_owned_preview=true,true
-api.airframe_art,api.capabilities.city_airport,api.capabilities.heliport=dofile(mod.."/airport_manifest.lua")(core,mod)
+api.airframe_art,api.capabilities.city_airport,api.capabilities.heliport,api.capabilities.ground_rotary=
+  dofile(mod.."/airport_manifest.lua")(core,mod)
 api.rail_owned_tools=true
 do
   local files={}
@@ -487,7 +488,7 @@ if api.airport_tools then
   local art=api.airframe_art
   for id in pairs(art) do api.capabilities.air[id]=true end
   local Network,Run,Owned,Roster=simulation_bindings.air(S,api.slope,function(id) return art[id]~=nil end,
-    api.capabilities.city_airport,api.capabilities.heliport)
+    api.capabilities.city_airport,api.capabilities.heliport,api.capabilities.ground_rotary)
   air_order_run=Run
   api.airport_view=dofile(mod.."/airport_preview_view.lua")(api,Run,dofile(mod.."/road_motion.lua"),art)
   pilot_clock(function()
