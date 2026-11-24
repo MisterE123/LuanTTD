@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Static footprint, atlas, loading space and detailed finished geometry."""
 from argparse import ArgumentParser
-from math import isclose
+from math import cos, hypot, isclose, sin, tau
 from pathlib import Path
 import re
 import struct
@@ -22,12 +22,12 @@ LAYOUT={
                (1,2):41,(1,3):42,(2,1):39,(2,2):40,(3,1):41,(3,2):42},
 }
 REQUIRED={
-    33:("Stocking_and_sorting_corral","Orchard_forked_ash_trunk", "Livestock_modeled_cow"),
+    33:("Stocking_and_sorting_corral","Orchard_forked_ash_trunk"),
     34:("Single-storey_farmhouse","Farmhouse_chimney"),
     35:("Threshing_barn","Side-by-side_cart_shed"),
     36:("Light_slate_grain_annex_open_pass-through_concrete_floor",),
     37:("Corrugated_vertical_grain_silo_weathered_turned_shell","Corrugated_vertical_grain_silo_silvery_roof_cone"),
-    38:("paddock_galvanized_gate_bar","Galvanized_livestock_water_trough_hull","Livestock_modeled_cow"),
+    38:("paddock_galvanized_gate_bar","Galvanized_livestock_water_trough_hull"),
     39:("masonry_freight_elevator_tower","folded_standing_seam_blue_steel_weather_canopy"),
     40:("Side_goods_warehouse_open_door_jamb_lintel","Side_goods_warehouse_glazed_window_pane"),
     41:("Factory_pair_of_tapering_brick_chimneys_visibly_open_chimney_crown","Boiler_and_wash_powerhouse"),
@@ -121,6 +121,67 @@ def duplicate_surface(f):
                             return (normal,level,original-surviving)
             planes[normal,int(level*50000)].append((level,box,face))
 
+def livestock(materials):
+    assets=[]
+    bounds_by_kind=defaultdict(list)
+    for kind in ("brown","cream","pig"):
+        poses={}
+        for variant in ("idle","step_a","step_b"):
+            f=MODELS/f"bl_farm_animal_{kind}_{variant}.obj"
+            assets.append(f)
+            vertices=[];objects={};name="";uv=normals=faces=0
+            for line in f.read_text().splitlines():
+                k,*v=line.split()
+                if line.startswith("# o "):
+                    name=line[4:];objects[name]=[]
+                elif k=="v":
+                    xyz=tuple(map(float,v))
+                    assert abs(xyz[0])<1.3 and abs(xyz[2])<2.7 and -.02<xyz[1]<3.1,xyz
+                    vertices.append(xyz);objects[name].append(xyz)
+                elif k=="vt": uv+=1
+                elif k=="vn": normals+=1
+                elif k=="f":
+                    assert all(1<=a<=len(vertices) and 1<=b<=uv and 1<=n<=normals
+                               for a,b,n in (map(int,x.split('/')) for x in v))
+                    faces+=1
+            assert uv==materials and faces>180 and len(objects)>=6
+            assert min(v[1] for v in vertices)<.2
+            front="Pig_defined_snout" if kind=="pig" else "Livestock_pale_square_muzzle"
+            assert min(z for _,_,z in objects[front])>.4
+            poses[variant]=objects
+            bounds_by_kind[kind].extend((-x/10,z/10) for x,_,z in vertices)
+        legs="Pig_articulated_feet" if kind=="pig" else "Livestock_dark_hooves"
+        assert len({tuple(p[legs]) for p in poses.values()})==3,"poses don't animate the feet"
+        assert len({tuple(p[front]) for p in poses.values()})==1,"gait distorts the head"
+    # Validate authored lane placement from the actual exported silhouettes;
+    # end positions alone wouldn't catch the front or hindquarters clipping
+    # a trough as the cow turns. A 3-cm inset covers posts and rail width.
+    module=(ROOT/"mods/luanttd_core/farm_livestock_view.lua").read_text()
+    paths=re.findall(r'kind="(\w+)",x=([.\d]+),z=([.\d]+),rx=([.\d]+),rz=([.\d]+)',module)
+    assert len(paths)==5
+    envelopes=[]
+    for i,(kind,*fields) in enumerate(paths):
+        x0,z0,rx,rz=map(float,fields)
+        north=i<2
+        xlo,zlo,xhi,zhi=(3.64,1.71,5.33,3.35) if north else (3.64,3.68,5.33,5.34)
+        wx,tz=(5.075,2.06) if north else (5.07,4.02)
+        all_x,all_z=[],[]
+        for step in range(180):
+            a=tau*step/180
+            x,z=x0+rx*cos(a),z0+rz*sin(a)
+            dx,dz=-rx*sin(a),rz*cos(a)
+            d=hypot(dx,dz);dx,dz=dx/d,dz/d
+            for u,v in bounds_by_kind[kind]:
+                a_x,a_z=x+dz*u+dx*v,z-dx*u+dz*v
+                assert xlo+.03<a_x<xhi-.03 and zlo+.03<a_z<zhi-.03,(kind,a_x,a_z)
+                assert abs(wx-a_x)>.18 or abs(tz-a_z)>.09,(kind,"trough",a_x,a_z)
+                all_x.append(a_x);all_z.append(a_z)
+        envelopes.append((min(all_x),min(all_z),max(all_x),max(all_z)))
+    for i,(a,b,c,d) in enumerate(envelopes):
+        for x,z,u,v in envelopes[:i]:
+            assert c<x or u<a or d<z or v<b,"animated animal paths overlap"
+    return assets
+
 def test(args):
     upstream(args.upstream_layout,args.upstream_art)
     names=[]
@@ -137,10 +198,14 @@ def test(args):
             f=MODELS/f"bl_industry_{label}_{x}_{z}.obj";names.append(f)
             faces+=mesh(f,width//8,gfx)
             if label=="farm":
+                animal=r"^o (Livestock_(?:modeled|shoulder|lowered|pale|turned|short|shaped|dark|curved)|Pig_)"
+                assert not re.search(animal,f.read_text(),re.M),"static duplicate of animated livestock"
                 overlap=duplicate_surface(f)
                 assert not overlap,(f,"overlapping coplanar render surfaces",overlap)
         assert (ROOT/"art"/f"stock_temperate_{label}.blend").stat().st_size>120000
         print(f"Stock {label}: {len(cells)} exact named cells, {faces:,} valid faces, {width//8} original material swatches")
+        if label=="farm":
+            names.extend(livestock(width//8))
     records=BytesIO()
     with ZipFile(records,"w",compression=ZIP_DEFLATED,compresslevel=9) as z:
         for f in names:z.write(f,f.name)

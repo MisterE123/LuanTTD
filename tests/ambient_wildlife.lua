@@ -71,3 +71,27 @@ end
 V.step(.2,{})
 assert(V.count()==0,"scenic actors remain without viewers")
 print("PASS species habitats, nonpersistent local actors, bounded activity and independent /candy observers")
+
+-- Own the next encounter while the camera is following it. A nominal
+-- lifetime is only a retirement request, not a reason to pop a model.
+spawned={}
+V=dofile("mods/luanttd_core/ambient_wildlife.lua")(core,Sim,view,media)
+local lookback=false
+local whale
+local eye=player("whale_watch",42,90)
+players={eye}
+for _=1,80 do
+  V.step(.25,players)
+  for _,r in ipairs(spawned) do if r.pos and r.kind:find("whale",1,true) then whale=r;break end end
+  if whale then break end
+end
+assert(whale,"deterministic sea never spawned a whale")
+eye.get_pos=function() return whale.pos and {x=whale.pos.x-17,y=5,z=whale.pos.z} or {x=42,y=5,z=90} end
+eye.get_look_dir=function() return {x=lookback and -1 or 1,y=0,z=0} end
+for _=1,390 do V.step(.25,players);assert(whale.pos,"whale vanished from a following camera at its lifetime") end
+assert(V.count()<=7)
+lookback=true
+for _=1,3 do V.step(.25,players);assert(whale.pos,"single glance removed the whale") end
+V.step(.25,players)
+assert(not whale.pos,"unobserved expired whale did not retire")
+print("PASS a visible stock wildlife encounter lives past its timer and retires after the camera turns away")

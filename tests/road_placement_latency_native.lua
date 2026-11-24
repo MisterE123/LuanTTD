@@ -10,13 +10,13 @@ local id=function(x,z) return (z-1)*64+x end
 local s=Sim.new(1751)
 Sim.W,Sim.H=64,64
 local coast=core.settings:get_bool("luanttd_coast_road",false)
-s.corner_grid=T.new(64,64,function(x)return (not coast or x>12) and 1 or 0 end)
+s.corner_grid=T.new(64,64,function(x)return (not coast or x>12 and (x<=25 or x>=31)) and 1 or 0 end)
 s.tiles,s.sites={},{}
 for i=1,4096 do
   local x=(i-1)%64+1
-  local water=coast and x<=12
+  local water=coast and (x<=12 or x>=25 and x<=30)
   s.tiles[i]={terrain=water and "water" or "grass",variant=1,h=water and 0 or 1,
-    water_class=water and "sea" or nil,coastal_water=coast and x==12 or nil}
+    water_class=water and "sea" or nil,coastal_water=coast and (x==12 or x==25 or x==30) or nil}
 end
 s.road_stock_clock,s.road_economy=true,true
 s.speed=0
@@ -27,7 +27,9 @@ local remove=core.settings:get_bool("luanttd_bench_remove",false)
 local shore={tool="bend",first=id(12,8),last=id(15,13)}
 local sea={tool="bend",first=id(11,8),last=id(15,13)}
 local coast_run="preview"
-local quote
+local quote,bridge_quote
+local a,b,middle=id(25,8),id(30,8),id(27,8)
+local bridge={mode="road",operation="bridge",tile=a,last=b,style=0}
 local function coastal(view)
   local t=view.terrain(12,8)
   if not t then return end
@@ -53,9 +55,26 @@ local function coastal(view)
       assert(state.companies[owner].cash==1000000-quote.cost)
       assert(state.tiles[id(12,8)].build=="road" and not state.tiles[id(12,8)].coastal_water)
       assert(state.tiles[id(11,8)].terrain=="water" and not state.tiles[id(11,8)].build)
-      core.log("action","ROAD_PLACEMENT_NATIVE_PASS mode=coast preview, receipt, projected pavement and durable ledger agree; real sea rejected")
-      core.request_shutdown("Coast road verified.",false,0)
+      coast_run="bridge_placing"
+      assert(Build.commit(owner,"transport",bridge,function(ok,note,prior,result)
+        assert(ok,note)
+        assert(result.deck==1 and #result.tiles==6)
+        bridge_quote=prior
+        coast_run="bridge_projected"
+      end))
     end))
+  elseif coast_run=="bridge_projected" then
+    local first,last=view.terrain(25,8),view.terrain(30,8)
+    if not first or not last or first.build~="stock_road_bridge" or last.build~="stock_road_bridge" then return end
+    assert(first.ground=="grass" and last.ground=="grass")
+    assert(not first.surface.coastal_water and not last.surface.coastal_water)
+    assert(view.terrain(27,8).ground=="water")
+    local state=assert(cp.read())
+    assert(state.companies[owner].cash==1000000-quote.cost-bridge_quote.cost)
+    assert(state.tiles[a].road_bridge_id==state.tiles[b].road_bridge_id)
+    assert(state.bridge_above[middle] and state.tiles[middle].terrain=="water")
+    core.log("action","ROAD_PLACEMENT_NATIVE_PASS mode=coast bend and bank-to-bank bridge: priced receipts, projection, and saved state match; real sea rejected")
+    core.request_shutdown("Coast road and bridge verified.",false,0)
   end
 end
 local finish_seen

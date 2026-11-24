@@ -643,15 +643,22 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
       -- CheckBuildAbove_Rail admits stock plain rail, including signals.
       -- The ordinary rail and its dispatch state remain independent.
       kind="plain_rail"
-    elseif t.terrain=="water" then kind="water"
+    elseif t.terrain=="water" then kind=t.coastal_water and "coast" or "water"
     elseif t.build=="road" then kind="road"
     elseif t.site or t.wood or t.house or t.build then kind="obstruction"
     else kind="clear" end
     return {slope=slope,base=base,max_z=top,kind=kind,owner=t.owner,
       overhead=existing and {axis=existing.axis,deck=existing.deck}}
   end
-  board.clear_quote=function(_,t,role)
+  board.clear_quote=function(id,t,role)
     if t.kind=="clear" and (not t.owner or t.owner==owner) then return 0 end
+    if role=="head" and t.kind=="coast" then
+      -- RC1 CmdBuildBridge clears either ramp with LandscapeClear
+      -- (Auto|NoWater); an actual water square refuses but coast can clear.
+      local cost,why=quote_water_clear(s,owner,id)
+      if cost then return cost end
+      return nil,water_clear_errors[why] or why
+    end
     return nil,role=="head" and "BRIDGEHEAD_NEEDS_CLEAR_LAND" or "BRIDGE_MIDDLE_OBSTRUCTED"
   end
   local road_clear={clear=function(t)
@@ -667,6 +674,9 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
   if not plan then
     local x,z
     if id then x,z=M.xy(id) end
+    if why=="BRIDGEHEAD_NEEDS_CLEAR_LAND" then
+      why="Place the ramp on a clear bank tile, not open water or an occupied tile."
+    end
     return false,why..(x and (" (%d,%d)"):format(x,z) or "")
   end
   if M.crossing_protected(s,plan.start) or M.crossing_protected(s,plan["end"]) then
@@ -692,6 +702,7 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
   local dirty={plan.start,plan["end"]}
   for _,head in ipairs(dirty) do
     local t=s.tiles[head]
+    if not plan.replacement and t.coastal_water then coastal_world.clear_apply(s,head) end
     t.build="stock_road_bridge";t.owner=plan.owner;t.road_bridge_id=bridge
   end
   for _,tile in ipairs(plan.middle) do s.bridge_above[tile]=bridge;dirty[#dirty+1]=tile end

@@ -61,3 +61,35 @@ near={real}
 V.step(.24,{observer})
 assert(not visible.pos,"scenic car stayed when a working vehicle entered its guard radius")
 print("PASS scenic car moves only inside its visual system, then yields completely to a real vehicle")
+
+near={}
+V.step(.24,{})
+local function find_live()
+  for _,o in ipairs(created) do if o.pos then return o end end
+end
+for _=1,45 do V.step(.24,{observer});if find_live() then break end end
+local c=assert(find_live(),"route did not spawn a new visual car")
+local lookback,other_back=false,false
+-- Keep the camera twelve nodes behind the car, then turn away without
+-- changing the road or camera distance. The same actor must stay parked
+-- while watched, even after a second spectator turns away.
+observer.get_pos=function() return c.pos and {x=c.pos.x-12,y=c.pos.y+1,z=c.pos.z} or origin end
+observer.get_look_dir=function() return {x=lookback and -1 or 1,y=0,z=0} end
+local other={get_pos=observer.get_pos,get_player_name=function()return "Other" end,
+  get_look_dir=function()return {x=other_back and -1 or 1,y=0,z=0} end}
+local start_x=c.pos.x
+for _=1,120 do V.step(.24,{observer});assert(c.pos,"looked-at car popped during the trip or while parked") end
+local parked=c.pos
+assert(math.abs(parked.x-start_x)>4)
+V.step(.24,{observer})
+assert(c.pos==parked,"car did not remain at the shop after arriving")
+lookback=true
+for _=1,8 do V.step(.24,{observer,other});assert(c.pos and c.viewers.Other,"first user cannot hide the car from a second watcher") end
+other_back=true
+for _=1,3 do V.step(.24,{observer,other});assert(c.pos,"one glance removed the car too early") end
+lookback=false
+V.step(.24,{observer,other});assert(c.pos)
+lookback=true
+for _=1,4 do V.step(.24,{observer,other}) end
+assert(not c.pos,"parked car did not retire after leaving view")
+print("PASS ambient car completes a slower trip, pulls over and despawns after a sustained look-away")

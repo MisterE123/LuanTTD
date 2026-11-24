@@ -267,7 +267,7 @@ def flora(m):
             F(m,"Three-dimensional grass tufts","verge",[(xx+.013,z,.007),(xx-.01,z,.007),(xx+.012,z+.016,rng.uniform(.043,.087))])
 
 
-def bovine(m,x,z,turn,hue):
+def bovine(m,x,z,turn,hue,stride=0):
     def p(a,b,h):
         return x+a*cos(turn)-b*sin(turn),z+a*sin(turn)+b*cos(turn),h
     def shape(n,c,a,b,h,rx,rz,ry,j=8):
@@ -281,26 +281,69 @@ def bovine(m,x,z,turn,hue):
         shape("Livestock turned ears","brown_hide",.167,s*.055,.271,.031,.019,.012,6)
         T(m,"Livestock short shaped poll horn","goat_horn",p(.171,s*.031,.275),p(.165,s*.062,.298),.009,.004,5)
         for xx in (-.122,.107):
-            T(m,"Livestock shaped leg and hock",hue,p(xx,s*.040,.195),p(xx-.005,s*.050,.043),.021,.012,6)
-            T(m,"Livestock dark hooves","black_hide",p(xx-.004,s*.050,.045),p(xx+.006,s*.053,.007),.015,.014,6)
+            shift=stride*(1 if xx>0 else -1)*s
+            lift=.023 if shift>0 else 0
+            T(m,"Livestock shaped leg and hock",hue,p(xx,s*.040,.195),p(xx-.005+.043*shift,s*.050,.043+lift),.021,.012,6)
+            T(m,"Livestock dark hooves","black_hide",p(xx-.004+.043*shift,s*.050,.045+lift),p(xx+.006+.043*shift,s*.053,.007+lift),.015,.014,6)
     T(m,"Livestock curved hanging tail","black_hide",p(-.164,0,.254),p(-.211,.025,.117),.011,.006,6)
 
 
-def husbandry(m):
-    for x,z,a,c in ((4.2,2.35,.8,"black_hide"),(4.88,2.76,2.72,"brown_hide"),
-                     (4.53,3.01,1.42,"black_hide"),(2.87,.332,2.44,"brown_hide"),(4.76,4.70,2.02,"black_hide")):
-        bovine(m,x,z,a,c)
-    for x,z in ((4.28,4.18),(4.28,4.85)):
-        ellipse(m,"Pig shaped barrel","pig",x,z,.121,.113,.056,.062,8)
-        ellipse(m,"Pig defined snout","pig_light",x+.104,z,.107,.048,.036,.036,8)
+def pig(m,x,z,stride=0):
+    ellipse(m,"Pig shaped barrel","pig",x,z,.121,.113,.056,.062,8)
+    ellipse(m,"Pig defined snout","pig_light",x+.104,z,.107,.048,.036,.036,8)
+    for s in (-1,1):
+        ellipse(m,"Pig raised ear","pig_light",x+.056,z+s*.038,.161,.017,.014,.019,6)
         for a in (-.061,.051):
-            for s in (-1,1):
-                T(m,"Pig grounded feet","pig", (x+a,z+s*.029,.107),(x+a+.005,z+s*.035,.014),.015,.011,5)
+            shift=stride*(1 if a>0 else -1)*s
+            T(m,"Pig articulated feet","pig",(x+a,z+s*.029,.107),
+              (x+a+.005+.026*shift,z+s*.035,.014+(.016 if shift>0 else 0)),.015,.011,5)
+    T(m,"Pig curled tail base","pig",(x-.099,z,.133),(x-.127,z,.153),.008,.006,6)
+    T(m,"Pig curled tail tip","pig_light",(x-.127,z,.153),(x-.124,z+.012,.174),.006,.003,6)
+
+
+def troughs(m):
     for x,z in ((5.075,2.06),(5.07,4.02)):
         B(m,"Galvanized livestock water trough hull","zinc_edge",x,z,.316,.151,.03,.105,.024)
         B(m,"Livestock trough deliberately inset water","ruralglass",x,z,.260,.113,.099,.108,.013)
         for a in (-.106,.107):
             B(m,"Trough carriage legs","dark_slate",x+a,z,.046,.123,.009,.048,.007)
+
+
+def export_livestock(scene,mats):
+    """Reuse the farm's own cattle and pigs as standing and walking meshes."""
+    poses=(("idle",0),("step_a",1),("step_b",-1))
+    for name,hue in (("cream", "black_hide"),("brown","brown_hide"),("pig",None)):
+        for suffix,stride in poses:
+            native=A.mesh()
+            if hue: bovine(native,0,0,0,hue,stride)
+            else: pig(native,0,0,stride)
+            collection=bpy.data.collections.new(f"{name.title()} livestock | {suffix}")
+            R.to_blender(native,collection,mats)
+            collection.use_fake_user=True
+            # Original animal points along +X in Blender; entities face +Z.
+            # Entity OBJ units are 10 per node; use the old exporter but
+            # undo its separate half-tile offsets for architecture.
+            entity=A.mesh()
+            for part,items in native.parts.items():
+                for ids,color in items:
+                    entity.face(part,color,[(-z*10-.5,x*10-.5,y*10) for x,z,y in
+                                             (native.vertices[part][i] for i in ids)])
+            path=R.MODELS/f"bl_farm_animal_{name}_{suffix}.obj"
+            partial=path.with_suffix(".tmp")
+            R.export_obj(partial,entity,0,"build_stock_farm_art.py")
+            raw=partial.read_text().splitlines()
+            partial.write_text("\n".join(["# Original LuanTTD farm livestock; +Z forward, 10 OBJ units/node",
+                                        "g Livestock",*(f"# {l}" if l.startswith("o ") else l for l in raw[1:])])+"\n")
+            partial.replace(path)
+            if suffix=="idle":
+                staging={"cream":((4.2,2.25,.8),(4.79,4.75,2.02)),
+                         "brown":((4.80,2.94,2.72),),
+                         "pig":((4.22,4.18,0),(4.23,4.91,.62))}
+                for i,(x,z,yaw) in enumerate(staging[name],1):
+                    ob=bpy.data.objects.new(f"{name.title()} livestock | preview {i}",None)
+                    ob.instance_type="COLLECTION";ob.instance_collection=collection
+                    ob.location=(x,z,0);ob.rotation_euler.z=yaw
+                    scene.collection.objects.link(ob)
 
 
 def clip(m,x,z,layout):
@@ -322,9 +365,12 @@ def atlas(name,pal):
     def chunk(tag,n):
         return struct.pack(">I",len(n))+tag+n+struct.pack(">I",zlib.crc32(tag+n))
     row=b"".join(bytes.fromhex(c)*8 for c in pal.values())
-    (R.TEXTURES/f"bl_{name}_atlas.png").write_bytes(
+    p=R.TEXTURES/f"bl_{name}_atlas.png"
+    q=p.with_suffix(".tmp")
+    q.write_bytes(
        b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",len(pal)*8,8,8,2,0,0,0))+
        chunk(b"IDAT",zlib.compress((b"\0"+row)*8,9))+chunk(b"IEND",b""))
+    q.replace(p)
 
 
 def build(name,layout,groups,title,blend,look,cam,scale,pal,render):
@@ -371,10 +417,14 @@ def build(name,layout,groups,title,blend,look,cam,scale,pal,render):
         place_grp(full,[f for _,f in groups])
     for (x,z),gfx in layout.items():
         p=R.MODELS/f"bl_{name}_{x}_{z}.obj"
-        R.export_obj(p,clip(full,x,z,layout))
-        raw=p.read_text()
-        p.write_text(raw.replace(raw.splitlines()[0],f"# {title}; layout 0 ({x},{z}) GFX {gfx}; original Blender art",1))
+        q=p.with_suffix(".tmp")
+        R.export_obj(q,clip(full,x,z,layout))
+        raw=q.read_text()
+        # Shared hardlinked test copies must not be modified in place.
+        q.write_text(raw.replace(raw.splitlines()[0],f"# {title}; layout 0 ({x},{z}) GFX {gfx}; original Blender art",1))
+        q.replace(p)
     atlas(name,pal)
+    if name==NAME:export_livestock(sc,mats)
     rot=(Vector(look)-Vector(cam)).to_track_quat("-Z","Y")
     for screen in bpy.data.screens:
         for area in screen.areas:
@@ -398,5 +448,5 @@ def build(name,layout,groups,title,blend,look,cam,scale,pal,render):
 if __name__=="__main__":
     build(NAME,LAYOUT,(("Swept route, farm roads and fenced fields",land),("Farmhouse, barn, annexes",architecture),
       ("Twin corrugated silo banks, grain transfer and hay",storage),("Ash and orchard trees, planted grass",flora),
-      ("Paddock livestock and water",husbandry)),"Highfield Farm","stock_temperate_farm.blend",
+      ("Paddock water troughs",troughs)),"Highfield Farm","stock_temperate_farm.blend",
       (2.38,2.47,.57),(9.6,11.4,8.6),8.20,PAL,os.getenv("STOCK_FARM_RENDER"))

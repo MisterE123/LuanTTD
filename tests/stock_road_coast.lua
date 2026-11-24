@@ -95,3 +95,61 @@ do
   assert(w.tiles[shore].build=="road" and not w.tiles[shore].coastal_water)
 end
 print("PASS pinned coastal-road rule: two-way bend and straight previews, atomic failed stale quotes, exact clearance price, real ocean/river/canal and vessel rejection")
+
+-- Put the two ramps on complementary coast slopes right at the water's
+-- edge. Both source command flags allow coast, but not a true water tile.
+local function crossing()
+  local w,c=fixture()
+  w.corner_grid=Terrain.new(Sim.W,Sim.H,function(x) return (x<=10 or x>=16) and 1 or 0 end)
+  for id in ipairs(w.tiles) do
+    local x,z=Sim.xy(id)
+    local wet=x>=10 and x<=15
+    w.tiles[id]={terrain=wet and "water" or "grass",variant=1,h=select(2,Terrain.tile(w.corner_grid,x,z)),
+      coastal_water=(x==10 or x==15) or nil,water_class=wet and "sea" or nil}
+  end
+  return w,c
+end
+do
+  local s,c=crossing()
+  local a,b=Sim.id(10,8),Sim.id(15,8)
+  local d=crossing()
+  for _,id in ipairs({a,b}) do
+    d.tiles[id].terrain,d.tiles[id].coastal_water,d.tiles[id].water_class="grass",nil,nil
+  end
+  local dry,dry_cost=Sim.road_bridge(d,owner,a,b,0,true)
+  assert(dry,dry_cost)
+  local commands=load("campaign_transport_commands")(Sim,{world=s})
+  local request={mode="road",operation="bridge",tile=b,last=a,style=0}
+  local offer=assert(commands.quote(owner,request))
+  local cash,rev=c.cash,s.topology
+  assert(offer.price==dry_cost+80 and s.tiles[a].coastal_water and s.tiles[b].coastal_water)
+  assert(c.cash==cash and s.topology==rev)
+  s.tiles[a].coastal_water=nil
+  local ok,why=commands.commit(owner,offer)
+  assert(not ok and why:find("clear bank tile",1,true) and c.cash==cash)
+  s.tiles[a].coastal_water=true
+  s.stock_coal_ship_run={vehicle={tile=b,path={}}}
+  ok,why=commands.commit(owner,offer)
+  assert(not ok and why:find("vessel",1,true) and c.cash==cash)
+  s.stock_coal_ship_run=nil
+  local note,result
+  ok,note,result=commands.commit(owner,offer)
+  assert(ok,note)
+  assert(result.deck==1 and c.cash==cash-offer.price and s.topology==rev+1)
+  assert(s.tiles[a].build=="stock_road_bridge" and s.tiles[b].build=="stock_road_bridge")
+  assert(Sim.road_bits(s,a)==8 and Sim.road_bits(s,b)==2,"ramp mouths must point out toward their approaches")
+  for _,at in ipairs({a,b}) do
+    local t=s.tiles[at]
+    assert(t.terrain=="grass" and not t.coastal_water and not t.water_class)
+  end
+  for x=11,14 do
+    local id=Sim.id(x,8)
+    assert(s.tiles[id].terrain=="water" and s.bridge_above[id])
+  end
+  assert(Terrain.corner(s.corner_grid,10,8)==1 and Terrain.corner(s.corner_grid,11,8)==0)
+  assert(Sim.remove_wood_bridge(s,owner,a))
+  assert(s.tiles[a].terrain=="grass" and s.tiles[b].terrain=="grass")
+  local bad,msg=Sim.road_bridge(s,owner,Sim.id(11,8),b,0,true)
+  assert(not bad and msg:find("clear bank tile",1,true))
+end
+print("PASS ordinary bridge starts and ends on eligible bank slopes, bills both shore clearances and preserves water underneath")

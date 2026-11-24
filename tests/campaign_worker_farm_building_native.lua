@@ -40,9 +40,41 @@ local function farm_building_native()
     end end
     return true
   end
+  local function pasture()
+    aim({"paddocks",7.0,1.45,3.75,4.47,.18,3.53})
+    core.log("action","FARM_BUILDING_QA paddocks")
+    local starts,moved,stepped={},{},{}
+    local function inspect(sample)
+      local count=0
+      for _,o in ipairs(core.get_objects_inside_radius({x=fx+4.4,y=level,z=fz+3.5},3)) do
+        local e=o:get_luaentity()
+        local kind=e and e.name:match("^luanttd_core:farm_livestock_(.+)$")
+        if kind then
+          local p=o:get_pos()
+          local x,z=p.x-fx,p.z-fz
+          local i=z<2.5 and 1 or z<3.5 and 2 or x>4.55 and 3 or z<4.55 and 4 or 5
+          assert(math.abs(p.y-level-.026)<.003 and x>3.88 and x<5.03)
+          assert(i<=3 and kind~="pig" or i>=4 and kind=="pig")
+          assert(z>1.98 and z<5.08 and not (z>3.35 and z<3.68),"escaped livestock")
+          if not starts[i] then starts[i]=p end
+          if vector.distance(p,starts[i])>.11 then moved[i]=true end
+          if (o:get_properties().mesh or ""):match("_step_[ab]%.obj$") then stepped[i]=true end
+          count=count+1
+        end
+      end
+      assert(count==5,"worker farm should show three cattle and two pigs")
+      if sample<19 then core.after(.24,function()inspect(sample+1)end)
+      else
+        for i=1,5 do assert(moved[i] and stepped[i],"livestock did not visibly wander and animate: "..i) end
+        core.log("action","PASS NATIVE FARM LIVESTOCK: three cattle and two pigs wandered within the two painted pens")
+        core.log("action","PASS NATIVE WORKER FARM BUILDINGS: all 9 stock pieces and five gameplay camera angles")
+      end
+    end
+    core.after(.55,function()inspect(1)end)
+  end
   local function walk(n)
     if n>#views then
-      core.log("action","PASS NATIVE WORKER FARM BUILDINGS: all 9 stock pieces and five gameplay camera angles")
+      pasture()
       return
     end
     assert(visible(),"Farm footprint unmaterialized")

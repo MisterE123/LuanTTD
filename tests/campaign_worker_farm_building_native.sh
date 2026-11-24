@@ -61,11 +61,11 @@ shot() {
   elif command -v magick-im7.q16 >/dev/null; then magick-im7.q16 import -window root -quality 97 "$out/$1.jpg"
   fi
 }
-for view in survey barn silos farmhouse rear; do
+for view in survey barn silos farmhouse rear paddocks; do
   mark "FARM_BUILDING_QA $view"
   sleep 1.2
   shot "$view"
 done
 mark 'PASS NATIVE WORKER FARM BUILDINGS'
-grep -E 'FARM_BUILDING_QA|PASS NATIVE WORKER FARM BUILDINGS' "$out/server.log"
+grep -E 'FARM_BUILDING_QA|PASS NATIVE (WORKER FARM BUILDINGS|FARM LIVESTOCK)' "$out/server.log"
 ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"

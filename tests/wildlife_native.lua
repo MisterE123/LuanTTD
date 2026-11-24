@@ -26,6 +26,7 @@ function view.host_record(name,id)
 end
 function view.surface(id) return view.host_tile(id).h+.5 end
 local V=Vfile(core,Sim,view,media)
+local Audience=dofile(mod.."/ambient_audience.lua")
 for _,entry in ipairs({{"sea","bl_water0.png"},{"grass","bl_grass1.png"},{"soil","bl_grass3.png"}}) do
   core.register_node(":".."wqa:"..entry[1],{description=entry[1],tiles={entry[2]},pointable=false,walkable=false})
 end
@@ -73,6 +74,18 @@ core.register_on_joinplayer(function(p)
   end
   p:override_day_night_ratio(1)
   p:set_pos(origins[1])
+  -- Use the real connected player's camera API rather than a synthetic
+  -- view vector. A turn should defer then permit the same actor's exit.
+  local target={x=origins[1].x+13,y=origins[1].y+1.5,z=origins[1].z}
+  local retiring={}
+  p:set_look_horizontal(-math.pi/2);p:set_look_vertical(0)
+  local watching=Audience.capture({p},V.enabled)
+  for _=1,20 do assert(not Audience.retire(retiring,watching,target,80,.20)) end
+  p:set_look_horizontal(math.pi/2)
+  local away=Audience.capture({p},V.enabled)
+  for _=1,4 do assert(not Audience.retire(retiring,away,target,80,.20)) end
+  assert(Audience.retire(retiring,away,target,80,.20))
+  core.log("action","WILDLIFE_NATIVE_VIEW_PASS signed camera direction, visible retirement deferred, exit after sustained look-away")
   core.emerge_area({x=28,y=-1,z=35},{x=167,y=20,z=158},function(_,_,remaining)
     if remaining~=0 then return end
     place()

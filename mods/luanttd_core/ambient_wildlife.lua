@@ -3,6 +3,9 @@
 -- doesn't own a terrain subscription, touch the clock, or draw sim RNG.
 return function(core,Sim,view,media)
   local V={}
+  local path=debug and debug.getinfo(1,"S").source:match("^@(.*/)ambient_wildlife%.lua$")
+  local Audience=dofile((path or (core.get_modpath and core.get_modpath("luanttd_core").."/")
+    or "mods/luanttd_core/").."ambient_audience.lua")
   local pi,sin,cos=math.pi,math.sin,math.cos
   local tau=2*pi
   local defs={
@@ -243,28 +246,22 @@ return function(core,Sim,view,media)
     if update<.16 then return end
     local step=math.min(.4,update)
     update=0
-    local viewers,active={},{}
-    for _,p in ipairs(players) do
-      local at=p:get_pos()
-      if at and V.enabled(p) then viewers[#viewers+1]={player=p,at=at};active[p:get_player_name()]=true end
-    end
-    local changed=false
-    for n in pairs(active) do if not observers[n] then changed=true;break end end
-    if not changed then
-      for n in pairs(observers) do if not active[n] then changed=true;break end end
-    end
-    if changed then
+    local viewers,active=Audience.capture(players,V.enabled)
+    if not Audience.same_set(observers,active) then
       observers=active
       for _,a in ipairs(animals) do if a.ref:get_pos() and a.ref.set_observers then a.ref:set_observers(observers) end end
     end
     for n in pairs(cursors) do if not active[n] then cursors[n]=nil end end
     for i=#animals,1,-1 do
-      local a=animals[i];local seen=false
+      local a=animals[i];local near=false
       local d=defs[a.kind]
       for _,p in ipairs(viewers) do
-        if distance(p.at,a.x,a.z)<(d.view+9)^2 and math.abs(p.at.y-a.y)<60 then seen=true;break end
+        if distance(p.at,a.x,a.z)<(d.view+9)^2 and math.abs(p.at.y-a.y)<60 then near=true;break end
       end
-      if not seen or not a.ref:get_pos() or age-a.created>d.lifetime or not render(a,step) then remove(i) end
+      local at=a.ref:get_pos()
+      local retiring=not near or age-a.created>d.lifetime
+      if not retiring then a.ambient_unseen=0 end
+      if not at or retiring and Audience.retire(a,viewers,at,d.view+38,step) or not render(a,step) then remove(i) end
     end
     if scans<1.15 or #viewers==0 then return end
     scans=0

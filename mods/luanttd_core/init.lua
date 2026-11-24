@@ -349,8 +349,10 @@ end
 api.wildlife=dofile(mod.."/ambient_wildlife.lua")(core,Sim,render,wildlife_media)
 api.shop_scenery=dofile(mod.."/ambient_shop_traffic.lua")(core,Sim,render,dofile(mod.."/road_lanes.lua"),
   dofile(mod.."/road_motion.lua"),api.wildlife.enabled)
+local livestock=api.farm_world and dofile(mod.."/farm_livestock_view.lua")(core,Sim,render)
 local function scenic_step(dt,players)
   api.wildlife.step(dt,players);api.shop_scenery.step(dt,players)
+  if livestock then livestock.step(dt,players) end
 end
 api.cinematic=dofile(mod.."/cinematic_view.lua")(core,function(p)
   world.cinematic_hide(p);ui.cinematic(p,true)

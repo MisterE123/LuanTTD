@@ -36,8 +36,12 @@ Farm #9 / layout 0      Factory #6 / layout 0
   `bl_industry_farm_atlas.png`, `art/stock_temperate_farm.blend`.
   Open-sided annexes, double barn and farmhouse, two zinc silo banks with
   inspection ladders and grain spouts, cattle sorting corral, and fenced
-  paddocks with water and individually modeled stock. Animals are static
-  scenery. A swept cart approach touches the north and south edges without
+  paddocks with water and individually modeled stock. Three cattle and two
+  pigs wander and pause separately inside the pens in the nearby native
+  view. Their standing and walking poses are editable in the same Blender
+  source, and are exported separately from the fixed farm mesh. They
+  don't affect livestock cargo or the industry's simulation.
+  A swept cart approach touches the north and south edges without
   placing road tiles outside the stock footprint.
 - Factory: `bl_industry_factory_{x}_{z}.obj`,
   `bl_industry_factory_atlas.png`, `art/stock_temperate_factory.blend`.
@@ -55,6 +59,7 @@ Farm #9 / layout 0      Factory #6 / layout 0
 blender -b --python-exit-code 1 --python tools/build_stock_farm_art.py
 blender -b --python-exit-code 1 --python tools/build_stock_factory_art.py
 python3 tests/stock_farm_factory_art.py
+lua5.1 tests/farm_livestock_view.lua
 tests/stock_farm_factory_native.sh
 ```
 

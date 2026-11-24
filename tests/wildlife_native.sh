@@ -9,7 +9,7 @@ mkdir -p "$mod/"{models,textures} "$out/"{home,world,cache}
 printf 'title = LuanTTD Wildlife QA\n' > "$game/game.conf"
 printf 'name = luanttd_core\n' > "$mod/mod.conf"
 cp tests/wildlife_native.lua "$mod/init.lua"
-cp mods/luanttd_core/ambient_wildlife.lua "$mod/"
+cp mods/luanttd_core/{ambient_wildlife,ambient_audience}.lua "$mod/"
 cp -l mods/luanttd_core/models/bl_wildlife_*.obj "$mod/models/" 2>/dev/null ||
   cp mods/luanttd_core/models/bl_wildlife_*.obj "$mod/models/"
 cp mods/luanttd_core/textures/{bl_wildlife_atlas,bl_grass1,bl_grass3,bl_water0,bl_fountain_droplet}.png "$mod/textures/"
@@ -44,6 +44,7 @@ for animal in whale porpoise seagull eagle fox; do
 done
 for _ in {1..40}; do grep -q WILDLIFE_NATIVE_PASS "$out/server.log" && break; sleep .22; done
 grep WILDLIFE_NATIVE_PASS "$out/server.log"
+grep WILDLIFE_NATIVE_VIEW_PASS "$out/server.log"
 ! grep -E 'ERROR\[' "$out/"{server,client}.log
 if grep -Eq 'Model bl_wildlife_.* is missing [0-9]+ more texture' "$out/client.log"; then
   echo "Wildlife unexpectedly allocated extra material sections" >&2; exit 1
