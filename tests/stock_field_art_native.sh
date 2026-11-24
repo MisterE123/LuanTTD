@@ -24,9 +24,9 @@ mkdir -p "$mod/"{models,textures} "$out/"{world,home,cache}
 printf 'title = LuanTTD Crop fields art fixture\n' > "$out/games/goods_art/game.conf"
 printf 'name = goodsart\n' > "$mod/mod.conf"
 cp tests/stock_field_art_native.lua "$mod/init.lua"
-cp mods/luanttd_core/models/{bl_farm_land_*.obj,bl_farm_fence_*.obj,bl_farm_field_detail_*.obj} "$mod/models/"
+cp mods/luanttd_core/models/{bl_farm_land_*.obj,bl_farm_fence_*.obj,bl_crop_growth_*.obj} "$mod/models/"
 cp mods/luanttd_core/openttd/slope.lua "$mod/slope.lua"
-cp mods/luanttd_core/textures/{bl_farm_field_?,bl_farm_fence_atlas,bl_grass*}.png "$mod/textures/"
+cp mods/luanttd_core/textures/{bl_farm_field_?,bl_farm_fence_atlas,bl_crop_growth_atlas,bl_grass*}.png "$mod/textures/"
 printf 'gameid = goods_art\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
 port = $port
@@ -44,7 +44,7 @@ fps_max = 30
 EOF
 export HOME="$out/home" XDG_CACHE_HOME="$out/cache" XDG_CONFIG_HOME="$out/home/.config" \
   LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games" \
-  LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
+  LP_NUM_THREADS=2 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
 export DISPLAY=":$disp" XAUTHORITY="$out/Xauthority"
 opts=(-nolisten tcp)
 lib=()
@@ -76,7 +76,7 @@ xdotool mousemove 650 430
 sleep 3
 xdotool key F2
 sleep 2
-for shot in survey field-edge steep; do
+for shot in survey field-edge steep through-crops; do
   xdotool key t; sleep .2; xdotool type "/fieldview $shot"; xdotool key Return
   sleep 2.6
   import -window root "$out/field-$shot.png"
@@ -92,5 +92,10 @@ for name in ("survey","field-edge","steep"):
     timber=sum(88<r<220 and 65<g<195 and 30<b<131 and r>g+8 and g>b+14 for r,g,b in pixels)
     assert timber>1500,(name,timber)
     print(f"{name}: {timber} original warm farm material pixels")
+i=Image.open(Path(sys.argv[1])/"field-through-crops.png").convert("RGB").crop((0,85,1300,450))
+pixels=i.get_flattened_data() if hasattr(i,"get_flattened_data") else i.getdata()
+gold=sum(155<r<228 and 123<g<194 and 30<b<105 and r>g+13 and g>b+48 for r,g,b in pixels)
+assert gold>12000,gold
+print(f"through-crops: {gold} ripe-head material pixels above eye horizon")
 print("FIELD_NATIVE_ART_PASS")
 PYQA

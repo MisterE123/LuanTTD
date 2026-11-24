@@ -24,25 +24,28 @@ for q=0,3 do
   core.register_node("goodsart:g"..q,{description="Meadow",pointable=false,
     tiles={"bl_grass"..q..".png","bl_grass0.png","bl_grass_side.png"}})
 end
-local function entity(name)
+local function entity(name,crop)
   core.register_entity("goodsart:"..name,{
     initial_properties={static_save=false,physical=false,pointable=false,visual="mesh",
-      mesh="bl_"..name..".obj",textures={"bl_farm_fence_atlas.png"},
-      shaded=true,backface_culling=true,visual_size={x=1,y=1,z=1}},
+      mesh="bl_"..name..".obj",textures={crop and "bl_crop_growth_atlas.png" or "bl_farm_fence_atlas.png"},
+      shaded=not crop,backface_culling=not crop,visual_size={x=1,y=1,z=1}},
   })
 end
 for style=1,6 do for grade=0,1 do entity("farm_fence_"..style.."_"..grade) end end
-for _,stage in ipairs({5,6,8}) do entity("farm_field_detail_"..stage) end
+for stage=2,8 do entity("crop_growth_"..stage,true); entity("crop_growth_"..stage.."_patch",true) end
 
 local views={
+  ["through-crops"]={from={x=6.5,y=.505,z=8.8},at={x=7.2,y=.76,z=10.8},walk=true},
   survey={from={x=15.72,y=8.10,z=14.56},at={x=10.0,y=1.16,z=7.95}},
   ["field-edge"]={from={x=7.82,y=1.56,z=12.70},at={x=7.96,y=.95,z=8.70}},
   steep={from={x=14.27,y=1.68,z=11.67},at={x=10.6,y=1.20,z=7.9}},
 }
 local function node(x,y,z,n) core.set_node({x=x,y=y,z=z},{name="goodsart:"..n}) end
 local function view(p,v)
+  local eye=v.walk and .262 or 1.47
+  p:set_properties({eye_height=eye})
   p:set_pos(v.from)
-  local d=vector.subtract(v.at,{x=v.from.x,y=v.from.y+1.47,z=v.from.z})
+  local d=vector.subtract(v.at,{x=v.from.x,y=v.from.y+eye,z=v.from.z})
   p:set_look_horizontal(math.atan2(-d.x,d.z))
   p:set_look_vertical(math.atan2(-d.y,math.sqrt(d.x*d.x+d.z*d.z)))
 end
@@ -62,7 +65,7 @@ end
 local function build()
   for j=-5,13 do for i=-6,13 do
     local crop=i>=0 and i<=4 and j>=0 and j<=3
-    local stage=(j==2 and i==1) and 8 or (j>=2 and i<3) and (j==2 and 6 or 8) or (j*5+i)%9
+    local stage=(j==2 and i<=2) and 6 or (j==3 and i<=2) and 8 or (j*5+i)%9
     local n,w,e,s=height(i,j),height(i+1,j),height(i,j+1),height(i+1,j+1)
     assert(terrain.valid(n,w,e,s))
     local mask,base=terrain.classify(n,w,e,s)
@@ -78,8 +81,16 @@ local function build()
     if j==0 then fence(i%6+1,x0,z0,x1,z0,n,w) end
     if j==3 then fence(i%6+2,x0,z1,x1,z1,e,s) end
     if j==1 and i>=2 then fence(i+1,x0,z1,x1,z1,e,s) end
-    if mask==0 and (stage==5 or stage==6 or stage==8) then
-      assert(core.add_entity({x=x+.5,y=base+.5,z=z+.5},"goodsart:farm_field_detail_"..stage))
+    if stage>=2 then
+      if mask==0 then
+        assert(core.add_entity({x=x+.5,y=base+.504,z=z+.5},"goodsart:crop_growth_"..stage))
+      elseif stage~=8 then
+        for a=0,3 do
+          local dx,dz=a%2-.5,math.floor(a/2)-.5
+          local y=base+.504+terrain.surface(.5+dx/2,.5+dz/2,mask)
+          assert(core.add_entity({x=x+.5+dx,y=y,z=z+.5+dz},"goodsart:crop_growth_"..stage.."_patch"))
+        end
+      end
     end
     end
   end end

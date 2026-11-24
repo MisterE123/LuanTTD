@@ -112,18 +112,28 @@ def test():
         assert min(h for x,h,z in a)<.05 and .17<max(h for x,h,z in a)<.361
         widths[style]=max(abs(z) for x,h,z in a)
     assert widths[4]>1.35*widths[1]>1.8*widths[5]
-    for stage in (5,6,8):
-        path=M/f"bl_farm_field_detail_{stage}.obj";items.append(path)
-        a,l=mesh(path,w//8)
-        assert min(h for x,h,z in a)>=0
-        assert all(max(abs(x),abs(z))<.971 and h<.17 for x,h,z in a)
-        label="straw_bale" if stage==8 else "mature_barley_seed_heads"
-        assert any(label in k for k in l)
-    assert (ROOT/"art/stock_temperate_field_boundaries.blend").stat().st_size>100000
+    atlas=T/"bl_crop_growth_atlas.png";items.append(atlas)
+    assert load(atlas)[:2]==(96,8)
+    heights={}
+    crop_bytes=atlas.stat().st_size
+    for stage in range(2,9):
+        for suffix in ("","_patch"):
+            path=M/f"bl_crop_growth_{stage}{suffix}.obj";items.append(path)
+            lines=path.read_text().splitlines()
+            pts=[tuple(float(x)*.1 for x in row.split()[1:]) for row in lines if row.startswith("v ")]
+            faces=[row for row in lines if row.startswith("f ")]
+            assert len(faces)<=700 and len(pts)<=2800
+            assert max(max(abs(x),abs(z)) for x,y,z in pts)<(.5 if suffix else .99)
+            assert min(y for x,y,z in pts)>=(-.43 if suffix else -.013)
+            if not suffix: heights[stage]=max(y for x,y,z in pts)
+            crop_bytes+=path.stat().st_size
+    assert list(sorted(heights,key=heights.get))==[7,2,8,3,4,5,6],heights
+    assert heights[6]>.42 and heights[4]>.26 and crop_bytes<220*1024
+    assert (ROOT/"tools/build_crop_growth_art.py").is_file()
     buf=BytesIO()
     with ZipFile(buf,"w",compression=ZIP_DEFLATED,compresslevel=9) as z:
         for path in items:z.write(path,path.name)
-    print(f"STOCK_FIELD_ART_PASS: 9 seamless diagonal textures, 19 exact raised stock masks, 12 slope-fit fence meshes, 3 sparse physical crops; {len(buf.getvalue())/1024:.1f} KiB runtime compressed.")
+    print(f"STOCK_FIELD_ART_PASS: 9 seamless diagonal textures, 19 exact raised stock masks, 12 slope-fit fence meshes, 7 original 3D growth phases; {len(buf.getvalue())/1024:.1f} KiB runtime compressed.")
 
 
 if __name__=="__main__":test()

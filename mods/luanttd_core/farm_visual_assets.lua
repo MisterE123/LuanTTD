@@ -31,10 +31,11 @@ function A.missing(core,path)
     local x="bl_farm_field_"..i..".png"
     if not names[x] then return x end
   end
-  for _,i in ipairs({5,6,8}) do
-    local x="bl_farm_field_detail_"..i..".obj"
+  if not names["bl_crop_growth_atlas.png"] then return "bl_crop_growth_atlas.png" end
+  for i=2,8 do for _,suffix in ipairs({"","_patch"}) do
+    local x=("bl_crop_growth_%d%s.obj"):format(i,suffix)
     if not names[x] then return x end
-  end
+  end end
   for style=1,6 do for rise=0,1 do
     local x=("bl_farm_fence_%d_%d.obj"):format(style,rise)
     if not names[x] then return x end

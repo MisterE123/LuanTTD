@@ -20,7 +20,7 @@ return function(api)
       coastal_water=water and mask~=0 or nil,h=base,variant=0}
     dirty[#dirty+1]=id
     if z==17 then
-      S.stock_farm_fields[id]={slope=mask,base=base,variant=3}
+      S.stock_farm_fields[id]={slope=mask,base=base,variant=6}
     else S.stock_farm_fields[id]=nil end
   end end
   S.stock_farm_fields[Sim.id(9,19)]={slope=0,base=1,variant=3,fences={[2]=3}}

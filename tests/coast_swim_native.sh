@@ -109,7 +109,7 @@ sleep .45
 say "/swimprobe float"
 capture swim
 xdotool key c; sleep .4; capture swimming-avatar
-xdotool key c c; sleep .4
+xdotool key c; sleep .15; xdotool key c; sleep .25
 hold 3.5 s space
 sleep .25
 say "/swimprobe climb"
