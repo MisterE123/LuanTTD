@@ -1,5 +1,4 @@
--- Shared stock tile graphics keep the same original City assets.
--- Only the three Metropolitan-only roles require new meshes.
+-- Stock tile artwork is shared by graphic role, not by layout footprint.
 return function(profile,layout)
   local A={}
   local art={
@@ -26,10 +25,23 @@ return function(profile,layout)
     [46]="metro_runway_5", -- APT_RUNWAY_5
     [52]="metro_radar_fence_ne", -- APT_RADAR_FENCE_NE
   }
-  if layout=="commuter" then
+  if layout=="commuter" or layout=="international" or layout=="intercontinental" then
     art[48]="commuter_apron_fence_ne"
     art[47]="commuter_tower"
     art[54]="commuter_helipad_2_fence_nw"
+  end
+  if layout=="international" or layout=="intercontinental" then
+    local hub={
+      [0]="apron", [1]="apron_fence_nw", [2]="apron_fence_sw",
+      [3]="stand", [48]="apron_fence_ne",
+      [29]="grass", [49]="runway_end_fence_nw", [50]="runway_fence_nw",
+      [51]="radar_fence_sw", [53]="helipad_1", [55]="helipad_2", [56]="apron_fence_ne_sw",
+      [57]="runway_end_fence_nw_sw", [58]="runway_end_fence_se_sw", [59]="runway_end_fence_ne_nw",
+      [60]="runway_end_fence_ne_se", [65]="apron_fence_se", [69]="low_building",
+      [71]="apron_half_east", [72]="apron_half_west", [73]="flag_perimeter",
+    }
+    for role,asset in pairs(hub) do art[role]="hub_"..asset end
+    art[32]="city_airport_0_3"
   end
   local rows={}
   for _,t in ipairs(profile.tiles) do
@@ -38,7 +50,7 @@ return function(profile,layout)
     -- The two ends of the arrival runway have different threshold numerals.
     if asset=="city_airport_0_5" and x==profile.W-1 then asset="city_airport_5_5" end
     rows[z]=rows[z] or {}
-    rows[z][x]={asset=asset,atlas=asset:match("^metro_") and "metropolitan_airport_atlas" or asset:match("^commuter_") and "commuter_airport_atlas" or "city_airport_atlas",role=role}
+    rows[z][x]={asset=asset,atlas=asset:match("^metro_") and "metropolitan_airport_atlas" or asset:match("^commuter_") and "commuter_airport_atlas" or asset:match("^hub_") and "hub_airport_atlas" or "city_airport_atlas",role=role}
   end
   A.rows=rows
   function A.missing(files)

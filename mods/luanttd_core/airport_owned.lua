@@ -8,21 +8,31 @@ return function(Sim,Run,Roster,model_ready)
     for _ in pairs(s.stock_owned_air_fleet or {}) do n=n+1 end
     return n
   end
-  function O.status(s,field)
+  function O.status(s,field,index)
     local p=s.stock_owned_aircraft
-    if p and (not field or field==p.hangar) then return p end
+    if p and (not field or field==p.hangar) and (index==nil or (p.hangar_index or 0)==index) then return p end
     if not field then return end
     for _,unit in pairs(s.stock_owned_air_fleet or {}) do
-      if unit.hangar==field then return unit end
+      if unit.hangar==field and (index==nil or (unit.hangar_index or 0)==index) then return unit end
     end
   end
-  function O.quote(s,owner,field,engine)
+  function O.hangar(s,owner,field,cell)
+    local airport=s.stock_small_airports and s.stock_small_airports[field]
+    if not airport or airport.owner~=owner then return nil,"OWN_COUNTRY_HANGAR_REQUIRED" end
+    if airport.layout=="heliport" then return nil,"AIRPORT_HAS_NO_HANGAR" end
+    local index=Run.hangar_index and Run.hangar_index(s,airport,cell)
+    if index==nil and Run.hangar_index then return nil,"SELECT_PHYSICAL_HANGAR" end
+    return index or 0
+  end
+  function O.quote(s,owner,field,engine,cell)
     if not (s.air_owned_preview and s.air_paid_service and s.road_stock_house_supply) then
       return nil,"PURCHASED_AIRCRAFT_DISABLED"
     end
+    local index,err=O.hangar(s,owner,field,cell)
+    if index==nil then return nil,err end
     if s.air_fleet_preview then
       if s.stock_owned_aircraft or s.airport_pilot then return nil,"START_FRESH_AIR_FLEET_WORLD" end
-      if O.status(s,field) then return nil,"HANGAR_ALREADY_HAS_AIRCRAFT" end
+      if O.status(s,field,index) then return nil,"HANGAR_ALREADY_HAS_AIRCRAFT" end
       if plane_count(s)>=2 then return nil,"TWO_OWNED_PLANES_ONLY" end
       -- Every mounted airframe can operate solo. Only the modeled
       -- Sampson pair has cleared the shared runway/taxi envelope.
@@ -30,22 +40,20 @@ return function(Sim,Run,Roster,model_ready)
         if engine~=215 or unit.stock_id~=215 then return nil,"SAMPSON_ONLY_FOR_SHARED_AIRFIELDS" end
       end
     elseif plane_count(s)>0 or Run.current(s) then return nil,"ONE_OWNED_PLANE_ONLY" end
-    local airport=s.stock_small_airports and s.stock_small_airports[field]
-    if not airport or airport.owner~=owner then return nil,"OWN_COUNTRY_HANGAR_REQUIRED" end
-    if airport.layout=="heliport" then return nil,"AIRPORT_HAS_NO_HANGAR" end
+    local airport=s.stock_small_airports[field]
     if Run.fits and not Run.fits(airport,engine) then return nil,"LARGER_AIRFIELD_REQUIRED" end
     if Roster.available and not Roster.available(Sim,s,engine) then return nil,"AIRCRAFT_NOT_INTRODUCED" end
     local quote,why=Roster.quote(engine,s.stock_air_purchase_base,s.stock_air_running_base)
     if not quote then return nil,why end
     if not model_ready(engine) then return nil,"NATIVE_AIRCRAFT_MODEL_UNAVAILABLE" end
-    quote.hangar,quote.owner=field,owner
+    quote.hangar,quote.owner,quote.hangar_index,quote.hangar_tile=field,owner,index,cell
     return quote
   end
   function O.commit(s,owner,quote)
     if not quote or quote.owner~=owner then return nil,"OWN_COUNTRY_HANGAR_REQUIRED" end
-    local fresh,why=O.quote(s,owner,quote.hangar,quote.stock_id)
+    local fresh,why=O.quote(s,owner,quote.hangar,quote.stock_id,quote.hangar_tile)
     if not fresh then return nil,why end
-    if fresh.price~=quote.price or fresh.annual_fp~=quote.annual_fp then
+    if fresh.price~=quote.price or fresh.annual_fp~=quote.annual_fp or fresh.hangar_index~=quote.hangar_index then
       return nil,"AIRCRAFT_QUOTE_CHANGED"
     end
     local c=Sim.company(s,owner)
@@ -64,12 +72,18 @@ return function(Sim,Run,Roster,model_ready)
   function O.owns_hangar(s,id)
     return O.status(s,id)~=nil
   end
-  function O.start(s,owner,first,second)
+  function O.start(s,owner,first,second,aircraft)
     if not (s.air_owned_preview and s.air_paid_service and s.road_stock_house_supply) then
       return nil,"PURCHASED_AIRCRAFT_DISABLED"
     end
-    local unit=O.status(s,first)
-    if not unit or unit.owner~=owner or unit.status~="hangar" then
+    local unit
+    if aircraft~=nil then
+      unit=(s.stock_owned_air_fleet or {})[aircraft]
+      if not unit and s.stock_owned_aircraft and s.stock_owned_aircraft.id==aircraft then unit=s.stock_owned_aircraft end
+    else
+      unit=O.status(s,first)
+    end
+    if not unit or unit.hangar~=first or unit.owner~=owner or unit.status~="hangar" then
       return nil,"FIRST_AIRFIELD_MUST_BE_YOUR_PURCHASE_HANGAR"
     end
     if not model_ready(unit.stock_id) then return nil,"NATIVE_AIRCRAFT_MODEL_UNAVAILABLE" end

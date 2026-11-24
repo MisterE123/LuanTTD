@@ -39,7 +39,7 @@ return function(Sim,mod)
       local profiles=dofile(source.."airport_rotary_ground_profiles.lua")
       for name,r in pairs(profiles) do if ground_ready[name] then ground[name]=r end end
     end
-    for _,name in ipairs({"metropolitan","commuter"}) do
+    for _,name in ipairs({"metropolitan","commuter","international","intercontinental"}) do
       if expansion_ready and expansion_ready[name] then ground[name]=dofile(source.."airport_"..name..".lua") end
     end
     local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small,city or nil,rig,heliport or nil,ground)

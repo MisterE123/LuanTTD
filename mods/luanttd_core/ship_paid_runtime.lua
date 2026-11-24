@@ -262,7 +262,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         for _,part in ipairs(p.tiles) do
           local ref=s.tiles[part.id] and s.tiles[part.id].airfield
           if ref and ref.airport==id then
-            local kind=p.layout=="city" and "airport_city" or p.layout=="metropolitan" and "airport_metropolitan" or "airport"
+            local kind=p.layout=="city" and "airport_city" or p.layout=="metropolitan" and "airport_metropolitan"
+              or p.layout=="international" and "airport_international"
+              or p.layout=="intercontinental" and "airport_intercontinental" or "airport"
             tiles[#tiles+1]=at(kind,part.id)
             valid[#valid+1]=part.id
           end

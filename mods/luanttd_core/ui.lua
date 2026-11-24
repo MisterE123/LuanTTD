@@ -1782,6 +1782,8 @@ function U.clear_ship_run(p)
 end
 local airfield_tools={airfield_build={name="Build country airfield"},city_airport_build={name="Build City Airport",layout="city"},
   commuter_airport_build={name="Build Commuter Airport",layout="commuter"},
+  international_airport_build={name="Build International Airport",layout="international"},
+  intercontinental_airport_build={name="Build Intercontinental Airport",layout="intercontinental"},
   metropolitan_airport_build={name="Build Metropolitan Airport",layout="metropolitan"},
   heliport_build={name="Build Heliport",layout="heliport"},helidepot_build={name="Build Helidepot",layout="helidepot"},
   helistation_build={name="Build Helistation",layout="helistation"},airfield_remove={name="Dismantle airfield"}}
@@ -3336,7 +3338,7 @@ function U.context(p,tile,hit)
       elseif t.ship and t.ship.kind=="ship_depot" then mode,key="ship",t.ship.depot
       elseif t.airfield then mode,key="air",t.airfield.airport end
       if mode then
-        return api.worker_depot.open(p,mode,key,nil,function(kind,id,back) return api.vehicle_ui.open(p,kind,id,back) end)
+        return api.worker_depot.open(p,mode,key,nil,function(kind,id,back) return api.vehicle_ui.open(p,kind,id,back) end,nil,nil,mode=="air" and tile or nil)
       end
     end
   end
@@ -3822,7 +3824,7 @@ function U.service(p,kind,id)
     local field=S.stock_small_airports and S.stock_small_airports[id]
     if not field then return end
     local heliport=field.layout=="heliport"
-    local title=({city="City Airport",metropolitan="Metropolitan Airport",commuter="Commuter Airport",heliport="Heliport",helidepot="Helidepot",helistation="Helistation"})[field.layout] or "Country airfield"
+    local title=({city="City Airport",metropolitan="Metropolitan Airport",commuter="Commuter Airport",international="International Airport",intercontinental="Intercontinental Airport",heliport="Heliport",helidepot="Helidepot",helistation="Helistation"})[field.layout] or "Country airfield"
     label(.4,.45,("%s #%d  ·  %s"):format(title,id,field.owner))
     if heliport or field.layout=="helidepot" or field.layout=="helistation" then label(.4,1.20,field.flags~=0 and "Helicopter facilities reserved." or "Helicopter facilities clear.")
     else label(.4,1.20,math.floor(field.flags/256)%2==1 and "Runway reserved." or "Runway clear.") end

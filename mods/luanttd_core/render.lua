@@ -371,7 +371,7 @@ return function(api)
     airport_media("country","small_airport",4,3)
     if api.capabilities and api.capabilities.city_airport then airport_media("city","city_airport",6,6) end
     local expanded=api.capabilities and api.capabilities.expansion_airports
-    for _,layout in ipairs({"metropolitan","commuter"}) do
+    for _,layout in ipairs({"metropolitan","commuter","international","intercontinental"}) do
       if expanded and expanded[layout] then
         local data=dofile(modpath.."/openttd/airport_expansion_data.lua")[layout]
         local stock=dofile(modpath.."/airport_metropolitan_art.lua")(data,layout)

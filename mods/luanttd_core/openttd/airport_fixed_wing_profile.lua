@@ -7,7 +7,9 @@ local flag={NOSPDCLAMP=1,TAKEOFF=2,SLOWTURN=4,LAND=8,EXACTPOS=16,BRAKE=32,HELI_R
 
 return function(data,path)
   local hangar=data.hangars[1]
-  assert(#data.hangars==1,"multiple source hangars require a departure selection adapter")
+  if #data.hangars>1 then
+    data.hangar_geometry=dofile(path.."airport_hangar_geometry.lua")(data)
+  end
   data.TILE,data.hangar=16,{x=hangar[1],z=hangar[2],dir=hangar[3],id=hangar[4]}
   data.catchment_radius=data.catchment
   data.state,data.block,data.flag=state,block,flag

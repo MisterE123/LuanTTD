@@ -114,8 +114,16 @@ return function(A)
   function A.new(a,opts)
     if not A.hangar then return nil,"AIRPORT_HAS_NO_HANGAR" end
     opts=opts or {}
-    local x,z,_,d=A.point(0,a.rotation,a.width,a.height)
-    return {pos=0,previous_pos=0,state=S.HANGAR,x=a.x+x,z=a.z+z,y=(a.ground or 0)+1,direction=d,
+    local pos=opts.hangar_index or 0
+    local x,z,d
+    if A.hangar_geometry then
+      x,z,d=A.hangar_geometry.spawn(pos)
+    else
+      local _
+      x,z,_,d=A.point(pos,a.rotation,a.width,a.height)
+    end
+    if not x or not A.layout[pos] or A.layout[pos][1][1]~=S.HANGAR then return nil,"INVALID_AIRCRAFT_HANGAR" end
+    return {pos=pos,previous_pos=pos,state=S.HANGAR,x=a.x+x,z=a.z+z,y=(a.ground or 0)+1,direction=d,
       owner=opts.owner,target=a.id,hidden=true,order=opts.order,speed=0,subspeed=0,progress=0,
       acceleration=opts.acceleration or 24,max_speed=opts.max_speed or 320,
       helicopter=opts.helicopter or nil,rotor_speed=opts.helicopter and 0 or nil,rotor_hidden=opts.helicopter or nil}
@@ -153,7 +161,8 @@ return function(A)
         if order.id~=a.id or A.free_terminal(a,v) then
           if order.id~=a.id then v.state=v.helicopter and S.HELITAKEOFF or S.TAKEOFF end
           if v.helicopter then v.rotor_hidden=nil;v.rotor_speed=80 end
-          v.direction=(A.hangar.dir+(a.rotation or 0))%8
+          local dir=A.hangar_geometry and A.hangar_geometry.exit(v.pos) or A.hangar.dir
+          v.direction=(dir+(a.rotation or 0))%8
           v.speed,v.subspeed,v.progress,v.hidden=0,0,0,nil
           event=ordinary(a,v)
         else

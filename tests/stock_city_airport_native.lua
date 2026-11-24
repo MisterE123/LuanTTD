@@ -21,13 +21,19 @@ local model=assert(models[stock])
 local layout=core.settings:get("luanttd_qa_air_layout") or "city"
 local metro=layout=="metropolitan"
 local commuter=layout=="commuter"
-local city=layout=="city" or metro or commuter
+local international=layout=="international"
+local intercontinental=layout=="intercontinental"
+local hub=international or intercontinental
+local expanded=metro or commuter or hub
+local city=layout=="city" or expanded
 assert(city or ((stock==221 or stock==237 or stock==238 or stock==239) and layout=="country"))
-local w,d=commuter and 5 or city and 6 or 4,commuter and 4 or city and 6 or 3
+local w=intercontinental and 9 or international and 7 or commuter and 5 or city and 6 or 4
+local d=intercontinental and 11 or international and 7 or commuter and 4 or city and 6 or 3
+local hx,hz=intercontinental and 8 or 6,intercontinental and 4 or 1
 local airport_cost=w*d*600
 local function scene(viewer)
   assert((not city or api.capabilities.city_airport) and api.capabilities.air[stock],"Complete stock media required")
-  assert(not metro or api.capabilities.expansion_airports.metropolitan)
+  assert(not expanded or api.capabilities.expansion_airports[layout])
   local owner=viewer:get_player_name()
   local function inspect(center,radius,accept)
     for _,ref in ipairs(core.get_objects_inside_radius(center,radius)) do
@@ -87,13 +93,13 @@ local function scene(viewer)
   end
   assert(#positions==2)
   local focus=positions[1]
-  viewer:set_pos({x=2*focus.x+5,y=focus.h+9,z=2*focus.z-10})
+  viewer:set_pos({x=2*focus.x+w-1,y=focus.h+(hub and 15 or 9),z=2*focus.z-10})
   viewer:set_look_horizontal(0)
-  viewer:set_look_vertical(.55)
+  viewer:set_look_vertical(hub and .71 or .55)
   assert(world.go_menu(viewer,"airfields"))
-  if metro or commuter then assert(world.go_menu(viewer,"fixed_wing_airports")) end
+  if expanded then assert(world.go_menu(viewer,"fixed_wing_airports")) end
   local has=false
-  local expected=(metro or commuter) and "luanttd_core:menu_"..layout.."_airport_build" or nil
+  local expected=expanded and "luanttd_core:menu_"..layout.."_airport_build" or nil
   for i,slot in ipairs(world.hotbar_layout(viewer)) do
     if expected and viewer:get_inventory():get_stack("main",i):get_name()==expected or not expected and slot==4 then has=true end
   end
@@ -130,7 +136,7 @@ local function scene(viewer)
         end)
       end
     elseif approach then
-      local landed=inspect({x=target.x*2+5,y=target.h+1,z=target.z*2+5},10,function(pos,mesh)
+      local landed=inspect({x=target.x*2+5,y=target.h+1,z=target.z*2+5},hub and 26 or 10,function(pos,mesh)
         return pos.y<target.h+1.03 and mesh==ground and pos.x>target.x*2-1 and
           pos.x<target.x*2+w*2+1 and pos.z>target.z*2-1 and pos.z<target.z*2+d*2+1
       end)
@@ -142,7 +148,7 @@ local function scene(viewer)
     core.after(.10,watch_flight)
   end
   local function observe()
-    if metro or commuter then
+    if expanded then
       for z=0,d-1 do for x=0,w-1 do
         local node=core.get_node({x=2*(focus.x+x),y=focus.h+1,z=2*(focus.z+z)})
         if node.name~=string.format("luanttd_core:%s_airport_%d_%d",layout,x,z) then
@@ -151,9 +157,9 @@ local function scene(viewer)
       end end
     end
     local paint=core.get_node({x=focus.x*2+(w-1)*2,y=focus.h+1,z=focus.z*2})
-    if paint.name~=("luanttd_core:"..((metro or commuter) and layout or city and "city" or "small").."_airport_"..(w-1).."_0") then core.after(.18,observe);return end
-    local taxi=inspect({x=focus.x*2+5,y=focus.h+2,z=focus.z*2+5},12,function(pos,mesh)
-      return pos.z>focus.z*2+2.6 and pos.y<focus.h+1.1 and mesh==ground
+    if paint.name~=("luanttd_core:"..(expanded and layout or city and "city" or "small").."_airport_"..(w-1).."_0") then core.after(.18,observe);return end
+    local taxi=inspect({x=focus.x*2+5,y=focus.h+2,z=focus.z*2+5},hub and 24 or 12,function(pos,mesh)
+      return (hub or pos.z>focus.z*2+2.6) and pos.y<focus.h+1.1 and mesh==ground
     end)
     if taxi then
       if model.flight then
@@ -170,15 +176,18 @@ local function scene(viewer)
     use({mode="air",operation="build",layout=layout,tile=positions[1].id},function(one)
       use({mode="air",operation="build",layout=layout,tile=positions[2].id},function(two)
         local first,second=one.value.id,two.value.id
-        ask({kind="depot",mode="air",depot=first},function(q)
+        local cell=hub and Sim.id(focus.x+hx,focus.z+hz) or nil
+        ask({kind="depot",mode="air",depot=first,hangar_tile=cell},function(q)
+          if hub then assert(q.value.hangar_label=="Airport #"..first.." · Hangar 2") end
           local chosen
           for _,entry in ipairs(q.value.offers) do if entry.request.engine==stock then chosen=entry end end
-          assert(chosen and chosen.price==model.price)
+          assert(chosen and chosen.price==model.price and chosen.request.hangar_tile==cell)
           use(chosen.request,function(bought)
-            ask({kind="command",command={kind="transport_start",mode="air",first=first,second=second,
+            ask({kind="command",command={kind="transport_start",mode="air",vehicle=bought.value.id,first=first,second=second,
                 revision=bought.revision}},function()
               local disk=assert(OwnerCheckpoint.read())
               assert((disk.stock_small_airports[first].layout or "country")==layout and disk.stock_owned_air_fleet[bought.value.id].stock_id==stock)
+              if hub then assert(disk.stock_owned_air_fleet[bought.value.id].hangar_index==1) end
               assert(disk.companies[owner].cash==starting_cash+loans*10000-2*airport_cost-model.price)
               core.after(.22,observe)
             end)

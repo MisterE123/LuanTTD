@@ -55,6 +55,14 @@ return function(api)
     -- shelter, bench and bollards. The inclined land ramp is not a queue.
     return {rect(st.water,level+.673,-a.z*.08,a.x*.08,1.48,.32,a)}
   end
+  -- Forecourts at terminal façades; exclude the expansion runways,
+  -- stand centerlines, helicopter pads and hangar doors.
+  local terminal_fronts={
+    metropolitan={{0,0},{0,1},{0,2}},
+    commuter={{1,0}},
+    international={{3,2},{3,3}},
+    intercontinental={{4,4},{4,5},{4,6},{4,7}},
+  }
   function Z.air(id)
     local st=S.stock_small_airports[id]
     if not st then return end
@@ -78,6 +86,20 @@ return function(api)
         end
       end
       return
+    end
+    local fronts=terminal_fronts[st.layout]
+    if fronts then
+      local out={}
+      local ox,oz=Sim.xy(st.origin)
+      for _,front in ipairs(fronts) do
+        local cell=Sim.id(ox+front[1],oz+front[2])
+        local t=cell and S.tiles[cell]
+        if t and t.airfield and t.airfield.airport==id then
+          local _,level=terrain(cell)
+          out[#out+1]=rect(cell,level+.524,.48,1.32,1.22,.17,east)
+        end
+      end
+      return out
     end
     if st.layout=="city" then
       local t=st.origin and S.tiles[st.origin]

@@ -242,9 +242,9 @@ return function(Sim,R,max_days)
     if not Sim.road_stop_has(st,"truck") or Sim.road_stop_tile_kind(st,id,s.tiles[id])~="truck" then return reply(false,"There is no truck stop on this tile.") end
     return reply(true,nil,{name=st.name,cargo=Sim.truck_stop_cargo(s,st)})
   end
-  function A.depot(name,mode,id)
+  function A.depot(name,mode,id,hangar_tile)
     if not owner(name) or not R.transport then return reply(false,"DEPOT_UNAVAILABLE") end
-    local data,why=R.transport.depot(name,mode,id)
+    local data,why=R.transport.depot(name,mode,id,hangar_tile)
     return reply(data~=nil,why,data)
   end
   function A.depot_order_sources(name,mode,id,depot)

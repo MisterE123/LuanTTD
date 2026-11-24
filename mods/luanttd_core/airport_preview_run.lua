@@ -67,6 +67,13 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     end
     return true
   end
+  function R.hangar_index(s,airport,cell)
+    local profile=layout(airport)
+    if not profile.hangar_geometry then return 0 end
+    local t=cell and s.tiles[cell]
+    local ref=t and t.airfield
+    if ref and ref.airport==airport.id then return profile.hangar_geometry.index(ref.x,ref.z) end
+  end
   function R.start(s,owner,first,second,owned)
     if s.air_owned_preview and not owned then return nil,"PURCHASED_AIRCRAFT_REQUIRED" end
     local in_fleet=owned and owned.serial~=nil
@@ -98,7 +105,8 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     end
     local engine=R.engine_for(p)
     p.vehicle=assert(layout(a).new(a,{owner=owner,order={kind="station",id=second},
-      max_speed=engine.max_speed,acceleration=engine.acceleration,helicopter=engine.helicopter}))
+      max_speed=engine.max_speed,acceleration=engine.acceleration,helicopter=engine.helicopter,
+      hangar_index=owned and owned.hangar_index}))
     if s.air_paid_service then
       p.paid_clock=in_fleet and owned.serial or s.next_paid_air_run or 1
       p.paid_built_day=owned and owned.day or s.day

@@ -127,9 +127,10 @@ return function(Sim,R)
       if not q then return nil,why end
       return {request={mode=mode,operation=op,depot=cmd.depot,engine=cmd.engine},price=q.price,tiles={}}
     elseif op=="buy" and mode=="air" and R.air and id(cmd.depot) and integer(cmd.engine,215,255) then
-      local q,why=R.air.owned.quote(s,owner,cmd.depot,cmd.engine)
+      if cmd.hangar_tile~=nil and not tile(cmd.hangar_tile) then return nil,"SELECT_PHYSICAL_HANGAR" end
+      local q,why=R.air.owned.quote(s,owner,cmd.depot,cmd.engine,cmd.hangar_tile)
       if not q then return nil,why end
-      return {request={mode=mode,operation=op,depot=cmd.depot,engine=cmd.engine},price=q.price,tiles={}}
+      return {request={mode=mode,operation=op,depot=cmd.depot,engine=cmd.engine,hangar_tile=q.hangar_tile},price=q.price,tiles={}}
     end
     return nil,"UNSUPPORTED_TRANSPORT_COMMAND"
   end
@@ -177,16 +178,16 @@ return function(Sim,R)
         unit,msg=depot_model.buy(s,owner,req.depot,req.engine)
       end
     else
-      local q,e=R.air.owned.quote(s,owner,req.depot,req.engine)
+      local q,e=R.air.owned.quote(s,owner,req.depot,req.engine,req.hangar_tile)
       if not q then return false,e end
       unit,msg=R.air.owned.commit(s,owner,q)
     end
     if not unit then return false,msg end
     return true,type(msg)=="string" and msg or nil,{id=unit.id or req.mode=="ship" and "ferry",tiles=current.tiles}
   end
-  function T.depot(owner,mode,key)
+  function T.depot(owner,mode,key,hangar_tile)
     local offers,vehicles,targets={},{},{}
-    local airframe
+    local airframe,hangar_label
     local function add(name,cmd,help)
       local q=T.quote(owner,cmd)
       if q then offers[#offers+1]={name=name,price=q.price,request=q.request,help=help} end
@@ -206,7 +207,7 @@ return function(Sim,R)
       entry=entry or {}
       return Help.describe("air",entry.mail and entry.mail>0 and "mixed" or nil,entry.name,{capacity=entry.passengers,
         capacity_unit="seats",mail_capacity=entry.mail,speed=entry.max_speed,
-        runway=entry.helicopter and "Can serve Heliports and Oil Rigs; buy at your airport" or entry.jet and "use City Airports"})
+        runway=entry.helicopter and "Can serve Heliports and Oil Rigs; buy at your airport" or entry.jet and "Requires a long runway"})
     end
     if mode=="road" and tile(key) then
       local t=s.tiles[key]
@@ -363,10 +364,16 @@ return function(Sim,R)
       local t=s.stock_small_airports and s.stock_small_airports[key]
       if not t or t.owner~=owner then return nil,"Choose an airfield you own." end
       if t.layout=="heliport" then return nil,"This Heliport does not have a hangar." end
-      for _,engine in ipairs(R.air.roster.catalog(true)) do
-        add(engine.name,{mode=mode,operation="buy",depot=key,engine=engine.stock_id},air_help(engine))
+      if hangar_tile~=nil and not tile(hangar_tile) then return nil,"Aim at one of the airport’s hangar buildings." end
+      local index,why=R.air.owned.hangar(s,owner,key,hangar_tile)
+      if index==nil then return nil,why=="SELECT_PHYSICAL_HANGAR" and "Aim at one of the airport’s hangar buildings." or why end
+      if t.layout=="international" or t.layout=="intercontinental" then
+        hangar_label=("Airport #%d · Hangar %d"):format(key,index+1)
       end
-      local unit=R.air.owned.status(s,key)
+      for _,engine in ipairs(R.air.roster.catalog(true)) do
+        add(engine.name,{mode=mode,operation="buy",depot=key,engine=engine.stock_id,hangar_tile=hangar_tile},air_help(engine))
+      end
+      local unit=R.air.owned.status(s,key,index)
       if unit then
         airframe=unit.stock_id
         local d=R.air.roster.entry(unit.stock_id)
@@ -383,7 +390,7 @@ return function(Sim,R)
         local x,z
         if cell then x,z=Sim.xy(cell) end
         local cargo=Freight.role(r)
-        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(rig and rig.name or mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or r.layout=="commuter" and "Commuter Airport" or r.layout=="metropolitan" and "Metropolitan Airport" or r.layout=="heliport" and "Heliport" or r.layout=="helidepot" and "Helidepot" or r.layout=="helistation" and "Helistation" or "Airfield") or "Dock")
+        targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(rig and rig.name or mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or r.layout=="international" and "International Airport" or r.layout=="intercontinental" and "Intercontinental Airport" or r.layout=="commuter" and "Commuter Airport" or r.layout=="metropolitan" and "Metropolitan Airport" or r.layout=="heliport" and "Heliport" or r.layout=="helidepot" and "Helidepot" or r.layout=="helistation" and "Helistation" or "Airfield") or "Dock")
           .." "..key_..(x and (" (%d, %d)"):format(x,z) or "")}
         if mode=="ship" and R.water.coal then
           local report=R.water.coal.order_report(s,key_)
@@ -405,7 +412,7 @@ return function(Sim,R)
     while #targets>96 do targets[#targets]=nil end
     table.sort(offers,function(a,b) return a.name<b.name end)
     table.sort(vehicles,function(a,b) return a.id<b.id end)
-    return {offers=offers,vehicles=vehicles,targets=targets,railtype=mode=="rail" and s.tiles[key].rail_type or nil}
+    return {offers=offers,vehicles=vehicles,targets=targets,hangar_label=hangar_label,railtype=mode=="rail" and s.tiles[key].rail_type or nil}
   end
   function T.start(owner,req)
     if req.mode=="rail_pilot" and R.rail then
@@ -482,7 +489,8 @@ return function(Sim,R)
       local run,why=R.water.depot.start(s,owner,req.depot,req.first,req.second,req.via)
       return run~=nil,why
     elseif req.mode=="air" and R.air then
-      local run,why=R.air.owned.start(s,owner,req.first,req.second)
+      if req.vehicle~=nil and not id(req.vehicle) then return false,"Choose an aircraft you own." end
+      local run,why=R.air.owned.start(s,owner,req.first,req.second,req.vehicle)
       return run~=nil,why
     end
     return false,"UNSUPPORTED_ROUTE"

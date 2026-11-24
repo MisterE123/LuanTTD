@@ -158,11 +158,13 @@ function H.enable_airfields(owned,city,heliport,ground,expansion)
     [6]=H.menus.rotary_airfields and section("rotary_airfields","Helicopter Facilities","rotary_airfields") or rooftop,
     [7]=not owned and item("airfield_clear","Clear flight pilot","airfield_clear") or nil,[8]=back,
     [10]=expansion and expansion.metropolitan and
-      section("fixed_wing_airports","Metro & commuter airports","fixed_wing_airports") or nil}
+      section("fixed_wing_airports","Fixed-wing airports","fixed_wing_airports") or nil}
   H.menus.fixed_wing_airports=expansion and expansion.metropolitan and {
-    title="Metro & Commuter Airports",
+    title="Fixed-wing Airports",
     [2]=item("metropolitan_airport_build","Build Metropolitan Airport","metropolitan_airport"),
     [3]=expansion.commuter and item("commuter_airport_build","Build Commuter Airport","commuter_airport") or nil,
+    [4]=expansion.international and item("international_airport_build","Build International Airport","international_airport") or nil,
+    [5]=expansion.intercontinental and item("intercontinental_airport_build","Build Intercontinental Airport","intercontinental_airport") or nil,
     [8]=back,[9]=bulldoze} or nil
   sync_sections()
 end

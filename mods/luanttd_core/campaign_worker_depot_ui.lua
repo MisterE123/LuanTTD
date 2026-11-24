@@ -20,9 +20,9 @@ return function(core,client,build,money,assembly)
     for i,t in ipairs(last) do to[i]=core.formspec_escape(t.label) end
     local stem="d"..p.serial.."_"
     local title=p.mode=="rail" and (data.railtype==3 and "Maglev depot" or data.railtype==2 and "Monorail depot")
-      or ({rail="Rail depot",air="Airport hangar",ship="Ship depot",road="Road depot"})[p.mode] or "Company depot"
+      or data.hangar_label or ({rail="Rail depot",air="Airport hangar",ship="Ship depot",road="Road depot"})[p.mode] or "Company depot"
     local b={"formspec_version[7]size[11.4,10.03]bgcolor[#152334;false]",
-      "label[.45,.42;"..title.."]", "label[.45,.86;Hover for vehicle details, or tap or click a row.]",
+      "label[.45,.42;"..esc(title).."]", "label[.45,.86;Hover for vehicle details, or tap or click a row.]",
       "label[.45,1.30;Purchase offers]","label[5.82,1.30;Owned vehicles]"}
     local function info(row)
       local req=row.request or {}
@@ -80,13 +80,13 @@ return function(core,client,build,money,assembly)
     b[#b+1]="button_exit[5.82,9.09;5.12,.58;close;Back to world]"
     core.show_formspec(n,D.form,table.concat(b))
   end
-  function D.open(player,mode,depot,note,vehicle_handler,selected_vehicle,prior)
+  function D.open(player,mode,depot,note,vehicle_handler,selected_vehicle,prior,hangar_tile)
     local name=player:get_player_name()
     serial=serial+1
-    local p={serial=serial,mode=mode,depot=depot,vehicle_handler=vehicle_handler,focus="offer"}
+    local p={serial=serial,mode=mode,depot=depot,hangar_tile=hangar_tile,vehicle_handler=vehicle_handler,focus="offer"}
     panels[name]=p
     draw(name,p,note or "Reading the depot…")
-    local sent,why=client.query({kind="depot",player=name,mode=mode,depot=depot},function(reply)
+    local sent,why=client.query({kind="depot",player=name,mode=mode,depot=depot,hangar_tile=hangar_tile},function(reply)
       if panels[name]~=p then return end
       if reply.ok then
         p.data,p.revision=reply.value,reply.revision
@@ -232,7 +232,7 @@ return function(core,client,build,money,assembly)
         local back={depot=p.depot,initial=Route.context(client,player,p.mode,p.depot,u,p.data,p.from,p.to)}
         function back.return_(selection)
           if selection then prior.first,prior.second=selection.first,selection.second end
-          return D.open(player,p.mode,p.depot,nil,p.vehicle_handler,u.id,prior)
+          return D.open(player,p.mode,p.depot,nil,p.vehicle_handler,u.id,prior,p.hangar_tile)
         end
         panels[n]=nil
         return p.vehicle_handler(p.mode,u.id,back)
@@ -246,7 +246,7 @@ return function(core,client,build,money,assembly)
       local sent,why=client.query({kind="command",player=n,command={kind="transport_start",mode="rail",
         vehicle=u.id,depot=p.depot,copied=true,draft_revision=u.draft_revision,revision=p.revision}},
         function(r)
-          if panels[n]==p then return D.open(player,p.mode,p.depot,r.why,p.vehicle_handler,u.id) end
+          if panels[n]==p then return D.open(player,p.mode,p.depot,r.why,p.vehicle_handler,u.id,nil,p.hangar_tile) end
         end)
       if not sent then p.pending=nil;draw(n,p,why) end
       return true
@@ -265,7 +265,7 @@ return function(core,client,build,money,assembly)
         vehicle=unit.id,depot=p.depot,first=p.mode=="air" and p.depot or first.id,second=last.id,cargo=cargo,
         revision=p.revision}},
         function(r) if panels[n]==p then D.open(player,p.mode,p.depot,r.why or (r.ok and "Service dispatched." or
-          "Service could not start."),p.vehicle_handler) end end)
+          "Service could not start."),p.vehicle_handler,nil,nil,p.hangar_tile) end end)
       if not sent then p.pending=nil;draw(n,p,why) end
       return true
     end
@@ -278,7 +278,7 @@ return function(core,client,build,money,assembly)
     p.pending=true
     local function bought(ok,note)
       local applied=q.request.operation=="refit" and "Refit applied." or "Vehicle purchased."
-      if panels[n]==p then D.open(player,p.mode,p.depot,note or (ok and applied or "Depot action did not go through."),p.vehicle_handler) end
+      if panels[n]==p then D.open(player,p.mode,p.depot,note or (ok and applied or "Depot action did not go through."),p.vehicle_handler,nil,nil,p.hangar_tile) end
     end
     local sent,why
     if q.request.kind=="road_buy" then
