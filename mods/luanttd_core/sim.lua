@@ -378,6 +378,7 @@ local function one_way_edit(s,id,removed)
 end
 local road_remove_world,town_road_authority
 local road_removal_errors={
+  ROAD_STOP_IN_ORDERS="Remove this station from road vehicle orders before removing pavement.",
   NO_ROAD="No road to remove on that line.",
   NO_ROAD_PIECES="No road on the selected side of the tile.",
   WRONG_SLOPE="The remaining road cannot sit on this slope.",
@@ -409,6 +410,21 @@ function M.road_remove_plan(s,owner,first,last,axis,start_half,end_half)
       context=function(state) return auto_oneway.ground_occupancy(state) end,
       occupied=function(_,id,ground) return ground[id]==true end,
       special=function(state,company,id,tile,wanted,ground)
+        local part=tile.tram
+        if part and part.tram_shelter and part.shared_station==tile.station then
+          if tile.owner~=company then return nil,"OWNED_BY" end
+          local sid=tile.station
+          local st=state.stations[sid]
+          if not st or st.road_members then return nil,"NOT_PLAIN_ROAD" end
+          if ground[id] then return nil,"VEHICLE_IN_THE_WAY" end
+          local half=assert(tile.stop_axis)/5
+          if math.floor(wanted/half)%2==0 and math.floor(wanted/(4*half))%2==0 then return nil,"NO_ROAD" end
+          -- RC1 RemoveRoad on a two-way-type drive-through: both
+          -- pavement bits are cleared; the still-used tram station and
+          -- all queues remain. Make road order removal explicit first.
+          if M.road_station_in_use(state,sid) then return nil,"ROAD_STOP_IN_ORDERS" end
+          return {id=id,cost=80,tool="remove_tram_platform_road",build="land",road_bits=0,joined_tram_station=sid}
+        end
         if not tile.level_crossing then return nil,"NOT_PLAIN_ROAD" end
         local c=crossing_bindings[state]
         if not c then return nil,"NOT_PLAIN_ROAD" end
@@ -432,6 +448,14 @@ function M.apply_road_removal(s,owner,q)
     if edit.tool=="remove_crossing" then
       crossing_bindings[s].runtime.world.road_remove_apply(s,edit)
       crossing_changed=true
+    elseif edit.tool=="remove_tram_platform_road" then
+      local t=s.tiles[edit.id]
+      local part=t.tram
+      local st=assert(s.stations[edit.joined_tram_station])
+      part.tram_station,part.shared_station,part.tram_shelter=st.id,nil,nil
+      t.build,t.owner,t.station,t.stop_axis,t.road_terminal_level,t.road_bits,t.road_stop_type=nil,nil,nil,nil,nil,nil
+      t.road_disallowed,t.disallowed=nil,nil
+      st.tram_only=true
     else
       road_remove_world.apply_plain(s,edit)
     end
@@ -953,8 +977,8 @@ end
 -- Snapshot positions at the first guarded tile, not once per piece;
 -- unoccupied terrain, no-ops and cheap edits never need the fleet.
 function M.road_piece_occupancy(s)
-  local occupied,pilot_path
-  return function(id,with_tram)
+  local occupied,pilot_path,tram_ground
+  return function(id,with_tram,actual_tram_only)
     if not occupied then
       occupied={}
       for _,v in pairs(s.fleet) do
@@ -963,6 +987,16 @@ function M.road_piece_occupancy(s)
       end
     end
     if occupied[id] then return true end
+    if actual_tram_only then
+      if not tram_ground then
+        tram_ground={}
+        TramIndex.each(s,function(p)
+          local f=TramIndex.frame(p)
+          if f and not f[10] then tram_ground[f[4]]=true end
+        end)
+      end
+      return tram_ground[id]==true
+    end
     if not with_tram then return false end
     -- The pilot depends on an exclusive tram route, even when its
     -- mesh is out of range. Index that path only for shared-layer work.
@@ -1001,7 +1035,20 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
   end
   if t.airfield then return nil,"That tile is part of the country airfield." end
   if t.ship then return nil,"That tile is part of a ship facility." end
-  if t.tram and t.tram.kind~="road" then
+  local tram=t.tram
+  if tram and tram.kind=="drive_stop" and tram.tram_station and not t.build then
+    -- RC1 road_cmd.cpp CmdBuildRoad, TileType::Station. The existing
+    -- through axis is the only legal road. A half request buys both
+    -- halves, adds no foundation, and doesn't touch station ownership.
+    local _,off_axis=new_pieces(request,tram.tram_bits)
+    if off_axis>0 then return nil,"Through stops need straight road. Join on an adjacent tile." end
+    if not M.tram_stop_station(s,id) then return nil,"No active tram platform." end
+    if occupied(id,false,true) then return nil,"Wait for the vehicle to clear that tile." end
+    return {id=id,tool="road_station",build="road_station",h=t.h,road_bits=tram.tram_bits,
+      stop_axis=tram.tram_bits,road_terminal_level=tram.terminal_level,
+      joined_tram_station=tram.tram_station,owner=owner},2*M.road_piece_price
+  end
+  if tram and tram.kind~="road" and not tram.shared_station then
     return nil,"That tile has a dedicated tramway or tram facility."
   end
   if t.stock_landmark then return nil,"This landmark is protected." end
@@ -1282,6 +1329,25 @@ function M.tram_stop_station(s,id,owner)
       (not st.tram_only and sid==tile.station)) then
     return st
   end
+end
+function M.road_station_in_use(s,sid)
+  for _,v in pairs(s.fleet) do
+    if v.dest==sid or v.station==sid then return true end
+    for _,o in ipairs(v.orders or {}) do if o.station==sid then return true end end
+  end
+  return false
+end
+function M.activate_tram_road_stop(s,id,road_owner)
+  local t=s.tiles[id]
+  local st=assert(M.tram_stop_station(s,id))
+  assert(st.tram_only)
+  local p=t.tram
+  t.build,t.owner,t.station="road_station",road_owner,st.id
+  t.stop_axis,t.road_bits,t.road_terminal_level=p.tram_bits,p.tram_bits,p.terminal_level
+  t.road_stop_type="bus"
+  t.road_disallowed,t.disallowed=nil,nil
+  p.tram_station,p.shared_station,p.tram_shelter=nil,st.id,true
+  st.tram_only=nil
 end
 local overhead_road_layers={
   {"bridge_above","stock_road_bridges"},
@@ -2018,6 +2084,10 @@ local function apply_build(s,owner,changes,cost)
     if item.crossing_quote then
       M.apply_crossing_construction(s,item.crossing_quote)
       crossing_changed=true
+    elseif item.joined_tram_station then
+      local st=assert(M.tram_stop_station(s,id))
+      assert(st.id==item.joined_tram_station and st.tram_only)
+      M.activate_tram_road_stop(s,id,owner)
     elseif item.water_clear then
       coastal_world.clear_apply(s,id)
     elseif k=="clear" then

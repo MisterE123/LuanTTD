@@ -3,6 +3,8 @@
 local native_paid_form=core.show_formspec
 local offers=0
 local dedicated=core.settings:get_bool("luanttd_native_tram_dedicated",false)
+local paved=core.settings:get_bool("luanttd_native_tram_road_access",false)
+assert(not paved or dedicated)
 local fleet_case=core.settings:get_bool("luanttd_native_tram_fleet",false)
 core.show_formspec=function(owner,form,spec)
   if form=="luanttd_core:tram_service_offer" then
@@ -53,7 +55,9 @@ core.register_on_joinplayer(function(player)
       local sid=assert(Sim.tram_stop_id(cell))
       local st=assert(api.render.host_record("stations",sid))
       if dedicated then
-        assert(st.tram_only and not cell.station and cell.tram.tram_station==sid)
+        if paved then
+          assert(not st.tram_only and cell.station==sid and cell.tram.shared_station==sid and cell.tram.tram_shelter)
+        else assert(st.tram_only and not cell.station and cell.tram.tram_station==sid) end
         local strips=assert(api.render.tram_platforms(st))
         assert(#strips==2 and (strips[1].x~=strips[2].x or strips[1].z~=strips[2].z))
       else assert(cell.tram.shared_station==sid and not st.tram_only) end
@@ -105,6 +109,13 @@ core.register_on_joinplayer(function(player)
     if not dedicated then
       list={function(done) command({kind="road_build",first=Sim.id(x-2,z),last=Sim.id(x+9,z)},done) end, stop(a),stop(b)}
     end
+    if paved then
+      -- The second platform is built the other way around. Pave the
+      -- dry ground before using the tram facility command.
+      list[#list+1]=function(done)
+        road({tool="drag",axis=0,first=b,last=b,start_half=false,end_half=true},done)
+      end
+    end
     list[#list+1]=function(done) road({tool="tram_lay",axis=0,first=first,last=last},done) end
     if dedicated then
       for _,tile in ipairs({a,b}) do
@@ -113,21 +124,53 @@ core.register_on_joinplayer(function(player)
     end
     list[#list+1]=function(done) road({tool="tram_facility",kind="depot",first=depot,direction=1},done) end
     chain(list,1,function()
-      assert(world.go_menu(player,"tram_operations"))
-      local slot
-      for i,j in ipairs(world.hotbar_layout(player)) do if j==2 then slot=i end end
-      assert(slot and slot<=9)
-      aim(depot)
-      core.log("action","TRAM_PAID_NATIVE_SLOT "..slot)
+      local function ready()
+        assert(world.go_menu(player,"tram_operations"))
+        local slot
+        for i,j in ipairs(world.hotbar_layout(player)) do if j==2 then slot=i end end
+        assert(slot and slot<=9)
+        aim(depot)
+        core.log("action","TRAM_PAID_NATIVE_SLOT "..slot)
+      end
+      if not paved then ready() end
       core.log("action","FOCUS_NATIVE_POSITION native paid route ready in the normal worker")
       local seen
+      local expected={}
       local function poll()
         local f=io.open(path.."/native-focus-step","r")
         if f then
           local step=f:read("*l");f:close()
           if step~=seen then
             seen=step
-            if step:match("^depot%-") then aim(depot)
+            if paved and step=="ready-to-buy" then ready()
+            elseif paved and step=="inspect-direct" then
+              local cell=assert(api.render.host_tile(b))
+              assert(cell.tram.tram_shelter and cell.tram.shared_station==cell.station and cell.station)
+              assert(Sim.road_bits(api.render.host_state(),b)==10)
+              aim(b)
+              core.log("action","TRAM_ROAD_NATIVE_DIRECT "..cell.station)
+            elseif paved and step:match("^pave%-") then
+              local stop=step:match("-(.*)")
+              local id=stop=="first" and a or b
+              local cell=assert(api.render.host_tile(id))
+              expected[stop]=assert(cell.tram.tram_station)
+              assert(world.go_menu(player,"road_direction"))
+              aim(id)
+              for i,j in ipairs(world.hotbar_layout(player)) do
+                if j==5 then core.log("action","TRAM_ROAD_NATIVE_SLOT "..stop.." "..i) end
+              end
+            elseif paved and step:match("^check%-") then
+              local stop=step:match("-(.*)")
+              local id=stop=="first" and a or b
+              local function verify_paving()
+                local cell=api.render.host_tile(id)
+                if not cell or not cell.station then core.after(.16,verify_paving);return end
+                assert(cell.station==expected[stop] and cell.tram.shared_station==expected[stop])
+                assert(cell.tram.tram_shelter and cell.build=="road_station")
+                core.log("action","TRAM_ROAD_NATIVE_PAVED "..stop.." "..cell.station)
+              end
+              verify_paving()
+            elseif step:match("^depot%-") then aim(depot)
             elseif step:match("^first%-") then aim(a)
             elseif step:match("^second%-") then
               aim(b)

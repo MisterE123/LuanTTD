@@ -110,3 +110,63 @@ local rebuilt=A.road_place(owner,request)
 assert(rebuilt.ok and Sim.tram_stop_station(s,west,owner).id==sid,rebuilt.why)
 print("PASS paid "..(mixed and "mixed tram and bus-platform" or "tram-only")..
   " itineraries: canonical catching/loading, bus exclusion, fares, projection, save/reload and safe removal/rebuild")
+
+if os.getenv("LUANTTD_TEST_TRAM_ROAD_ACCESS")=="1" then
+  local street_owner="Paving QA"
+  local street=Sim.company(s,street_owner)
+  local owned=assert(s.stations[sid])
+  local wrong={tool="drag",first=west,last=west,axis=1,start_half=false,end_half=false}
+  assert(not A.road_quote(street_owner,wrong).ok)
+  local pave={tool="drag",first=west,last=west,axis=0,start_half=false,end_half=false}
+  local before=street.cash
+  local next_id=s.next_station
+  local quote=A.road_quote(street_owner,pave)
+  assert(quote.ok and quote.value.cost==190,quote.why)
+  assert(s.stations[sid].tram_only and not s.tiles[west].station)
+  local paved=A.road_place(street_owner,pave,quote.value)
+  assert(paved.ok,paved.why)
+  local t=s.tiles[west]
+  assert(street.cash==before-190 and s.next_station==next_id and t.owner==street_owner and t.tram.tram_owner==owner)
+  assert(t.tram.kind=="drive_stop" and t.tram.tram_shelter and t.tram.shared_station==sid and t.station==sid)
+  assert(owned==s.stations[sid] and not owned.tram_only and owned.owner==owner and Sim.tram_stop_station(s,west,owner)==owned)
+  assert(Sim.add_order(s,owner,bus,sid),"station owner can now order its bus to the same pavement")
+  assert(not A.road_quote(street_owner,pave).ok,"stock already built is not an extra charge")
+  local remove={tool="remove",first=west,last=west,axis=0,start_half=false,end_half=true}
+  assert(not A.road_quote(street_owner,remove).ok,"cannot strand an existing road order")
+  if mixed then
+    for _,x in ipairs({10,12,13}) do
+      local plan={tool="drag",first=at(x,12),axis=0,start_half=false,end_half=true}
+      local put=A.road_place(owner,plan)
+      assert(put.ok,put.why)
+    end
+    assert(Sim.add_order(s,owner,bus,second))
+    assert(Sim.toggle(s,owner,bus))
+    assert(command(owner,req).ok)
+    local active=assert(R.tram.run.current(s)).carrier
+    for _=1,100 do
+      if active.delivered>0 and s.fleet[bus].delivered>0 then break end
+      assert(A.advance(1).ok)
+    end
+    assert(active.delivered>0 and s.fleet[bus].delivered>0,"both modes must earn live fares on the same platform ID")
+  else
+    assert(Sim.edit_order(s,owner,bus,1,"remove"))
+    assert(not A.road_quote(owner,remove).ok,"station ownership does not grant the separately owned pavement")
+    local cash_remove=street.cash
+    local menu=assert(A.demolition(street_owner,west).value)
+    local layer
+    for _,row in ipairs(menu.options) do if row.key=="tram_platform_pavement" then layer=row end end
+    assert(layer and layer.ok)
+    assert(command(street_owner,{kind="demolition",layer=layer.key,token=menu.token}).ok)
+    assert(street.cash==cash_remove-80 and not t.station and Sim.road_bits(s,west)==0)
+    assert(owned==s.stations[sid] and owned.tram_only and t.tram.tram_station==sid and t.tram.tram_owner==owner)
+    assert(A.road_place(street_owner,pave).ok)
+    local m2=assert(A.demolition(owner,west).value)
+    local platform
+    for _,row in ipairs(m2.options) do if row.key=="tram_combined_facility" then platform=row end end
+    assert(platform and platform.ok)
+    assert(command(owner,{kind="demolition",layer=platform.key,token=m2.token}).ok)
+    assert(not s.stations[sid] and t.build=="road" and t.owner==street_owner and Sim.road_bits(s,west)==10)
+    assert(t.tram.kind=="road" and t.tram.tram_owner==owner)
+  end
+  print("PASS RC1 station axis road addition buys two bits, keeps station identity, and connects or removes bus access without deleting the tram stop")
+end

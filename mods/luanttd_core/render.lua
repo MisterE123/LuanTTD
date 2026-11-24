@@ -568,9 +568,10 @@ return function(api)
   -- Positions against the two raised waiting strips in the Blender tram
   -- shelter, outside the posts, glazing and rail stopping envelope.
   function R.tram_platforms(st)
-    local at=st and st.tram_only and st.tile
+    local at=st and (st.bus_tile or st.tile)
     local t=at and S.tiles[at]
-    if not t or Sim.tram_stop_id(t)~=st.id or not R.tram_surface then return end
+    if not t or Sim.tram_stop_id(t)~=st.id or not (st.tram_only or t.tram.tram_shelter) or
+        not R.tram_surface then return end
     local level=R.tram_surface(at)
     if not level then return end
     local tx,tz=Sim.xy(at)
@@ -962,7 +963,7 @@ return function(api)
       local _,ground=terrain.tile(id)
       local level=track and track.base or ground
       local slope=track and track.grade or 0
-      if p.shared_station then
+      if p.shared_station and not p.tram_shelter then
         if x%2==0 and z%2==0 and y==level+2 then
           return R.tram_crossing_node({tramtype=p.tramtype,top=level,road_axis=p.dir},x,y,z)
         end

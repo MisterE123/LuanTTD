@@ -207,6 +207,17 @@ their own station and catchment; bus services cannot order them. Existing
 bus platforms retain their shelter, name, passenger queue, catchment and
 bus ownership. A streetcar can use either kind on the same route.
 
+A **Tram Platform** placed on compatible straight pavement keeps its
+road and tram owners and opens one platform to both vehicles. You can
+also add the road later: click the existing platform with the matching
+fixed-axis road tool. Either half buys both pavement bits; the
+platform, station ID and queue stay put. **Remove road pavement** or
+the layered **Bulldozer** can remove that pavement from a standalone
+tram-built platform when the tile and bus orders are clear. The tram
+station stays. The same layer menu can remove just the platform,
+leaving both ways in place. These tools do not remove other joined
+platforms or alter the municipal street network.
+
 Build a tram depot and connect the approaches. In **Tram Operations →
 Streetcar orders**, select the depot and two different platforms, then
 choose **Buy and dispatch**. The original

@@ -104,7 +104,7 @@ return function(api)
     for id,st in pairs(S.stations) do
       local count=waiting("road",id)
       if count>0 then
-        local rectangles=st.tram_only and api.render.tram_platforms(st) or {api.render.platform(st)}
+        local rectangles=api.render.tram_platforms and api.render.tram_platforms(st) or {api.render.platform(st)}
         add("road",id,rectangles,count)
       end
     end

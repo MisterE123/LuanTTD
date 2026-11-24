@@ -105,6 +105,9 @@ fi
 if [[ ${LUANTTD_NATIVE_ROAD_REBUILD:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_road_rebuild = true' >> "$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_TRAM_ROAD_ACCESS:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_tram_road_access = true' >> "$out/native.conf"
+fi
 if [[ ${LUANTTD_NATIVE_TRAM_DEDICATED:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_tram_dedicated = true' >> "$out/native.conf"
 fi
@@ -167,6 +170,23 @@ if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
     xdotool mousemove "${LUANTTD_NATIVE_TRAM_BUY_X:-455}" "${LUANTTD_NATIVE_TRAM_BUY_Y:-428}" click 1
     sleep 1.1; import -window root -resize 840x541 "$out/after-buy-$run.jpg"
   }
+  if [[ ${LUANTTD_NATIVE_TRAM_ROAD_ACCESS:-0} == 1 ]]; then
+    stop=first
+    printf 'pave-%s\n' "$stop" > "$out/world/native-focus-step"
+    await_log "TRAM_ROAD_NATIVE_SLOT $stop "
+    slot=$(sed -n "s/.*TRAM_ROAD_NATIVE_SLOT $stop //p" "$log" | tail -1)
+    xdotool mousemove 590 380 key "$slot"; sleep .6
+    xdotool mousedown 1; sleep .38; xdotool mouseup 1
+    printf 'check-%s\n' "$stop" > "$out/world/native-focus-step"
+    await_log "TRAM_ROAD_NATIVE_PAVED $stop"
+    import -window root -resize 840x541 "$out/paved-platform-$stop.jpg"
+    printf '%s\n' inspect-direct > "$out/world/native-focus-step"
+    await_log TRAM_ROAD_NATIVE_DIRECT
+    sleep .45
+    import -window root -resize 840x541 "$out/platform-on-existing-pavement.jpg"
+    printf '%s\n' ready-to-buy > "$out/world/native-focus-step"
+    await_log TRAM_PAID_NATIVE_SLOT
+  fi
   buy_streetcar 1
   if [[ ${LUANTTD_NATIVE_TRAM_FLEET:-0} == 1 ]]; then
     printf '%s

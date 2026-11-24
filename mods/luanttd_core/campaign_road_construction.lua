@@ -135,7 +135,7 @@ return function(Sim,s,oneway,Bank,host)
       parts[i]=table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
         tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation),tostring(c.rail_tracks),tostring(c.railtype),
         c.rail_owner and ("%q"):format(c.rail_owner) or "-",tostring(c.depot_dir),tostring(c.stop_axis),
-        tostring(c.road_terminal_level),tostring(c.tram_bits),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint),tostring(c.join_stop),tostring(c.clear_road_site),tostring(c.road_site_cost),tostring(c.road_tree_town)},":")
+        tostring(c.road_terminal_level),tostring(c.tram_bits),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint),tostring(c.join_stop),tostring(c.joined_tram_station),tostring(c.clear_road_site),tostring(c.road_site_cost),tostring(c.road_tree_town)},":")
     end
     if q.span then
       local span=q.span
@@ -174,7 +174,9 @@ return function(Sim,s,oneway,Bank,host)
     local area=q.picker_area
     local board={id=Sim.id,xy=Sim.xy,deleted={}}
     for _,st in ipairs(Sim.road_station_retirement().list(s,waypoint and "waypoint" or "station",player)) do
-      board.deleted[#board.deleted+1]={id=st.id,name="Rebuild "..st.name,tile=st.tile,owner=st.owner,eligible=true}
+      if not st.tram_only then
+        board.deleted[#board.deleted+1]={id=st.id,name="Rebuild "..st.name,tile=st.tile,owner=st.owner,eligible=true}
+      end
     end
     function board.station_at(id)
       local t=s.tiles[id]

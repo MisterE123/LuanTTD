@@ -84,6 +84,7 @@ return function(Sim,T,Terrain,Span)
     local p,why
     local policy=s.stock_road_town_policy or {}
     local opts=options(owner,policy.build_on_slopes~=false)
+    opts.on_town_road=policy.stop_on_town_road
     if kind=="road" and (t.kind=="road" or t.kind=="clear" or t.kind=="drive_stop") then
       p,why=T.lay(t,arg,ELRL,opts)
     elseif kind=="depot" and (t.kind=="clear" or t.kind=="depot") then
@@ -108,7 +109,8 @@ return function(Sim,T,Terrain,Span)
       terminal_level=(kind=="depot" or kind=="drive_stop") and p.base or t.terminal_level,
       station=(p.kind=="drive_stop") and id or nil,stop_type=(p.kind=="drive_stop") and "bus" or nil,
       shared_station=(p.kind=="drive_stop") and t.shared_station or nil,
-      tram_station=(p.kind=="drive_stop") and t.tram_station or nil},
+      tram_station=(p.kind=="drive_stop") and t.tram_station or nil,
+      tram_shelter=(p.kind=="drive_stop") and t.tram_shelter or nil},
       p.cost
   end
 
@@ -199,7 +201,13 @@ return function(Sim,T,Terrain,Span)
             (not part or part.tram_station~=previous.tram_station) then
           Sim.retire_road_station(s,previous.tram_station)
         end
-        s.tiles[p.id].tram=part
+        local tile=s.tiles[p.id]
+        tile.tram=part
+        if part and part.tram_station and tile.build=="road" then
+          -- CmdBuildRoadStop preserves each existing way and its owner.
+          -- Whether road or tram is added first, this is one station.
+          Sim.activate_tram_road_stop(s,p.id,tile.owner)
+        end
       end
       dirty[i]=p.id
     end
@@ -328,18 +336,22 @@ return function(Sim,T,Terrain,Span)
     local company=s.companies[owner]
     if not company or not part or part.tramtype~=ELRL or
         (part.kind~="depot" and part.kind~="drive_stop") then return nil,"NO_TRAM_FACILITY" end
-    if part.shared_station then return nil,"SHARED_BUS_PLATFORM" end
+    if part.shared_station then
+      local st=s.stations[part.shared_station]
+      if not st or not part.tram_shelter or st.road_members then return nil,"SHARED_BUS_PLATFORM" end
+      if Sim.road_station_in_use(s,st.id) then return nil,"STOP_IN_ORDERS" end
+    end
     if part.owner~=owner then return nil,"OWNED_BY_ANOTHER" end
     if not busy or busy(id) then return nil,"VEHICLE_IN_THE_WAY" end
     local price=part.kind=="depot" and 80 or 50
     if price>company.cash then return nil,"NOT_ENOUGH_MONEY" end
     return {id=id,cost=price,kind=part.kind,dir=part.dir,terminal_level=part.terminal_level,
-      bits=part.tram_bits,tram_owner=part.tram_owner,tramtype=part.tramtype,tram_station=part.tram_station}
+      bits=part.tram_bits,tram_owner=part.tram_owner,tramtype=part.tramtype,tram_station=part.tram_station,shared_station=part.shared_station}
   end
   function N.apply_facility_removal(s,owner,prior,busy)
     local q,why=N.facility_removal_plan(s,owner,prior.id,busy)
     if not q then return false,why end
-    for _,field in ipairs{"cost","kind","dir","terminal_level","bits","tram_owner","tramtype","tram_station"} do
+    for _,field in ipairs{"cost","kind","dir","terminal_level","bits","tram_owner","tramtype","tram_station","shared_station"} do
       if q[field]~=prior[field] then return false,"STALE_QUOTE" end
     end
     local items={{id=q.id}}
@@ -348,6 +360,11 @@ return function(Sim,T,Terrain,Span)
     end
     local dirty,price=apply(s,owner,items,q.cost)
     if not dirty then return false,price end
+    if q.shared_station then
+      local t=s.tiles[q.id]
+      Sim.retire_road_station(s,q.shared_station)
+      t.build,t.station,t.stop_axis,t.road_terminal_level,t.road_stop_type="road",nil,nil,nil,nil
+    end
     local label=q.kind=="drive_stop" and "Removed tram platform, kept the tracks" or "Removed tram depot"
     return true,("%s for $%d."):format(label,price),dirty
   end
