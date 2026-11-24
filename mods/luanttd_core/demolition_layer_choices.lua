@@ -25,6 +25,19 @@ return function(api,clear_structure)
     span(S.aqueduct_above,S.stock_aqueducts,"Remove overhead aqueduct, keep surface","aqueduct")
     span(S.tunnel_below,S.stock_road_tunnels,"Remove road tunnel below, keep surface","road_tunnel")
     span(S.rail_tunnel_below,S.stock_rail_spans,"Remove rail tunnel below, keep surface","rail_tunnel")
+    if api.tram and api.tram.span_busy then
+      local tr=api.tram
+      local span=tr.network.span_at(S,id,true)
+      if span and span.tramtype~=nil then
+        local quote,why=tr.network.span_plan(S,n,span.id,span.axis,"remove",tr.span_busy)
+        local detail=quote and (quote.cost<0 and "Refund: "..money(-quote.cost) or "Cost: "..money(quote.cost))
+          or why=="VEHICLE_IN_THE_WAY" and "Clear the span and stop any tram route using it first." or tostring(why)
+        add("tram_span","Remove tramway from "..span.kind..", keep road pavement",quote,detail,function()
+          local ok,note,tiles=tr.network.apply_span(S,n,quote,tr.span_busy)
+          return true,ok and tiles or nil,note
+        end)
+      end
+    end
     if t.tram then
       local tr=api.tram
       if (t.tram.kind=="depot" or t.tram.kind=="drive_stop") and tr and tr.network and tr.network.facility_removal_plan then

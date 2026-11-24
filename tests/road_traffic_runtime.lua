@@ -50,3 +50,52 @@ s.fleet[2]=nil
 R.day(s,{1})
 assert(frame(approach)[4]==4)
 print("PASS: following bus stops and resumes, opposite lanes, depot separation, exclusive bay entrance")
+
+-- Wormhole candidates follow the logical tiles as the visible pixel
+-- crosses terrain not owned by this span. This also admits a future
+-- tram record to the exact same classifier as any other road vehicle.
+local function xy(id) return id%100,math.floor(id/100) end
+local U=dofile(root.."road_speed_runtime.lua")(Speed,Prox,function(s,f)return f.alt or 8 end,
+  function() return false end,function() return false end,nil,nil,nil,nil,nil,nil,xy)
+local function portal(start,finish)
+  return {start=start,["end"]=finish,head={inside_direction=2},tail={inside_direction=0}}
+end
+local S={stock_road_bridges={[1]=portal(103,108),[2]=portal(104,109)},
+  stock_road_tunnels={[1]=portal(103,108)}}
+local function moving(id)
+  return {id=id,first=id,type="road"}
+end
+local function span(x,id,span_id,d,alt,tunnel)
+  return {x,25,d,id,1,255,nil,nil,nil,not tunnel and span_id or nil,nil,true,tunnel,
+    tunnel and span_id or nil,alt=alt}
+end
+for _,tunnel in ipairs({false,true}) do
+  local W=U.traffic_world(S)
+  local a,b,c,traffic=moving(1),moving(2),moving(3),moving(4)
+  local same=span(86,105,1,5,8,tunnel)
+  W.put(a,{51,25,5,103,1})
+  W.put(a,span(81,105,1,5,8,tunnel)) -- entering still uses the old logical tile
+  W.put(b,same)
+  W.put(c,span(82,105,2,5,8,false)) -- adjacent pixels, not the same pair of portals
+  W.put(traffic,{83,25,5,105,1,0,alt=8}) -- same height, not on the wormhole's logical portals
+  assert(a.stock_tile==103 and a.opposite_portal==108 and a.stock_x==3)
+  assert(W.find(a,{},82,25,5)==b)
+  assert(#W.stock_vehicles_at(103)==2 and #W.stock_vehicles_at(105)==1)
+  assert(W.find(traffic,{},85,25,5)==nil,"ground candidate scan must not see an interior at the wrong logical tile")
+  W.erase(b)
+  assert(W.find(a,{},82,25,5)==nil and #W.stock_vehicles_at(103)==1)
+  W.put(a,{131,25,5,108,1})
+  assert(#W.stock_vehicles_at(103)==0 and #W.stock_vehicles_at(108)==1)
+  W.put(a,span(132,108,1,1,8,tunnel))
+  assert(a.stock_tile==108 and a.opposite_portal==103)
+  W.erase(a)
+  assert(#W.stock_vehicles_at(108)==0)
+end
+do
+  local W=U.traffic_world(S)
+  local a,b=moving(1),moving(2)
+  W.put(a,{10,25,5,100,1})
+  W.put(b,{18,25,5,101,1})
+  assert(W.find(a,{},11,25,5)==b,"seven pixels away in the adjacent tile")
+end
+print("PASS: shared stock portal buckets, physical-vs-logical positions, unrelated-span separation, full RC1 proximity window")

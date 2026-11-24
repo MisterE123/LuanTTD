@@ -202,7 +202,7 @@ return function(api)
     end,"Buy two supported Sampsons in distinct hangars. Give them distinct orders with a common country airfield and watch the stock runway and terminal blocks sequence them.",
       nil,"Use separate real hangars and the supported fixed-wing country-airfield layout."},
     {"tram","Electric tram pilot","tramway",native("tram_tools"),
-      "Build a dedicated tram line, one depot and two through stops. Select Order test streetcar (0), then click the depot and both stops.",
+      "Build a tram line, one depot and two through stops. Normal streetcars can share pavement with buses. Select Order test streetcar (0), then click the depot and both stops.",
       nil,"Clear test streetcar (7) keeps your infrastructure. This runs a test vehicle, not a paid commercial tram fleet."},
   })
 

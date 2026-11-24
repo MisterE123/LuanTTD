@@ -1,14 +1,15 @@
 -- Bridge the saved shared-corner world to OpenTTD ELRL construction and
 -- traversal. Track, platform and depot use the stock surface at tile edges.
 -- Tram and road bits/owners are independent even where they share a tile.
-return function(Sim,T,Terrain)
+return function(Sim,T,Terrain,Span)
   local N={}
   local ELRL,ROAD=1,0
   local path=debug and debug.getinfo(1,"S").source
   local mod=path and path:match("^@(.*/)tram_network%.lua$")
   mod=mod or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+  local Slope=dofile(mod.."openttd/slope.lua")
   local Grade=dofile(mod.."openttd/tram_grade_surface.lua")(
-    dofile(mod.."openttd/road_slope.lua"),dofile(mod.."openttd/slope.lua"))
+    dofile(mod.."openttd/road_slope.lua"),Slope)
   local function shape(s,id)
     if not s.corner_grid or not s.tiles[id] then return end
     local x,z=Sim.xy(id)
@@ -196,8 +197,36 @@ return function(Sim,T,Terrain)
     local name=q.facility=="depot" and "Tram depot" or q.facility=="drive_stop" and "Tram platform" or "Tram half-piece"
     return true,("%s built for $%d."):format(name,price),ids
   end
+  function N.span_at(s,id,include_above)
+    if not Span then return end
+    local t=Span.get(s,id)
+    if t or not include_above then return t end
+    local b=s.bridge_above and s.bridge_above[id]
+    local span=b and s.stock_road_bridges and s.stock_road_bridges[b]
+    return span and Span.get(s,span.start)
+  end
+  function N.span_plan(s,owner,id,bits,action,busy)
+    local q,why=Span.quote(s,owner,id,bits,action,busy)
+    if not q then return nil,why end
+    local model=assert(Span.get(s,id))
+    local changes={}
+    for i,at in ipairs(q.dirty) do
+      changes[i]={id=at,build=s.tiles[at].build,tool="tram_span_"..action,
+        road_bits=Sim.road_bits(s,at),tram_bits=action=="lay" and model.axis or 0}
+    end
+    return {span=q,changes=changes,cost=q.cost}
+  end
+  function N.apply_span(s,owner,plan,busy)
+    local ids,price=Span.apply(s,owner,plan.span,busy)
+    if not ids then return false,price end
+    if plan.span.action=="lay" then
+      return true,("Electrified both ends and the full %s for $%d."):format(plan.span.kind,price),ids
+    end
+    return true,("Removed tramway from the %s; pavement stays. %s $%d."):format(
+      plan.span.kind,price<0 and "Recovered" or "Cost",math.abs(price)),ids
+  end
   local stock_sweep
-  function N.drag_plan(s,owner,req,busy)
+  function N.drag_plan(s,owner,req,busy,span_busy)
     local company=s.companies[owner]
     local first,last=req.first,req.last or req.first
     if not company or not s.corner_grid or not s.tiles[first] or not s.tiles[last] or not busy then
@@ -226,6 +255,9 @@ return function(Sim,T,Terrain)
     local gesture,why=stock_sweep.drag(board,first,last,req.axis,{toggle=0,
       start_half=req.start_half==true,end_half=req.end_half==true})
     if not gesture then return nil,why end
+    if first==last and span_busy and N.span_at(s,first) then
+      return N.span_plan(s,owner,first,gesture.requests[1].bits,"lay",span_busy)
+    end
     local q,reason=stock_sweep.sweep(gesture,function(row)
       if row.bits==0 then return nil,"NO_TRAM_PIECE" end
       local record,cost=propose(s,owner,"road",row.tile,row.bits,busy)
@@ -246,7 +278,14 @@ return function(Sim,T,Terrain)
     return true,note,ids
   end
   local removal
-  function N.remove_plan(s,owner,request,busy)
+  function N.remove_plan(s,owner,request,busy,span_busy)
+    local id=request.first
+    local p=span_busy and (not request.last or request.last==id) and N.span_at(s,id)
+    if p then
+      local bits=request.axis==0 and 10 or request.axis==1 and 5
+      if not bits then return nil,"INVALID_PARAMETER" end
+      return N.span_plan(s,owner,id,bits,"remove",span_busy)
+    end
     if not removal then
       local path=debug and debug.getinfo(1,"S").source
       local mod=path and path:match("^@(.*/)tram_network%.lua$")
@@ -296,6 +335,11 @@ return function(Sim,T,Terrain)
     return commit()
   end
   function N.surface(s,id)
+    local portal=Span and Span.get(s,id)
+    if portal and portal.tramtype~=nil then
+      local slope,height,foundation=Sim.road_surface(s,id)
+      if slope~=nil then return {grade=slope,base=height,foundation=foundation} end
+    end
     local t=load(s,id)
     if not t or not t.tramtype then return end
     return Grade.for_tile(t.slope,t.base,t,t.road_bits)
@@ -306,10 +350,20 @@ return function(Sim,T,Terrain)
     local u,v=Sim.xy(id)
     return Grade.at(p,(x-2*u+.5)/2,(z-2*v+.5)/2)
   end
+  function N.frame_z(s,f)
+    local span=Span and (f[10] or f[14])
+    if span then return Sim.stock_road_frame_z(s,f) end
+    local surface=N.surface(s,f[4])
+    if not surface then
+      local _,base=shape(s,f[4])
+      return (base or 0)*8
+    end
+    return surface.base*8+Slope.pixel(f[1]%16,f[2]%16,surface.grade)
+  end
   function N.board(s,occupancy)
     local B={xy=Sim.xy,tile_at=Sim.id}
     function B.tile(id)
-      local p=load(s,id)
+      local p=Span and Span.get(s,id) or load(s,id)
       if p and p.tramtype then return p end
     end
     function B.tram_bits(id) return T.effective_bits(B.tile(id),false) end
@@ -331,7 +385,10 @@ return function(Sim,T,Terrain)
     end
     function B.edge_available(from,to,dir)
       local a,b=B.tile(from),B.tile(to)
-      if not playable(s,from,a) or not playable(s,to,b) then return false end
+      local function supported(id,t)
+        return t and (t.kind=="bridge" or t.kind=="tunnel" or playable(s,id,t))
+      end
+      if not supported(from,a) or not supported(to,b) then return false end
       local left,right=B.surface(from),B.surface(to)
       if not left or not right then return false end
       if dir~=nil then return Grade.match(left,right,4-dir) end

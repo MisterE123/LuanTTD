@@ -384,6 +384,18 @@ return function(api)
       local asset="tramway_crossing_"..axis
       tram_crossing[axis]=architecture(asset,asset,"tram_palette")
     end
+    function R.tram_span_node(class,axis,head,height,x,y,z)
+      if x%2~=0 or z%2~=0 then return end
+      if class=="bridge" and y==height+1 then
+        if head and not head.flat_ramp then return tramway.grade[head.road_slope] end
+        return tramway[axis==0 and 10 or 5]
+      end
+      -- The portal sculpture is at base+1. Reuse the one-voxel
+      -- translated, flat track/contact wire overlay at base+2.
+      if class=="tunnel" and y==height+2 then
+        return tram_crossing[axis]
+      end
+    end
     function R.tram_crossing_node(c,x,y,z)
       if c.tramtype==1 and y==c.top+2 and x%2==0 and z%2==0 then
         return tram_crossing[c.road_axis]
@@ -1013,6 +1025,10 @@ return function(api)
       local wood_bridge=bridges[span.bridge_type or 0]
       local head=span.start==id and span.head or span["end"]==id and span.tail
       local native_anchor=x%2==0 and z%2==0
+      if span.tramtype==1 and R.tram_span_node then
+        local overhead=R.tram_span_node("bridge",span.axis,head,span.deck,x,y,z)
+        if overhead then return overhead end
+      end
       local clear=not head and wood_bridge.clear_span.under(t)
       if y==span.deck and native_anchor then
         if head then return wood_bridge[head.flat_ramp and "head_flat" or "head_ramp"][head.inside_direction] end
@@ -1041,6 +1057,10 @@ return function(api)
     if t.road_tunnel_id then
       local tunnel=S.stock_road_tunnels[t.road_tunnel_id]
       local head=tunnel.start==id and tunnel.head or tunnel.tail
+      if tunnel.tramtype==1 and R.tram_span_node then
+        local overhead=R.tram_span_node("tunnel",head.inside_direction%2,head,tunnel.base,x,y,z)
+        if overhead then return overhead end
+      end
       if y<=tunnel.base then return gnames.grass[t.variant] end
       if y==tunnel.base+1 and x%2==0 and z%2==0 then return tunnel_portal[head.inside_direction] end
       return "air"

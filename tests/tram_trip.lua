@@ -137,7 +137,7 @@ print("PASS: stock tram depot/stop trip, real junction motion, one-half YAPF rev
 -- Same trip through the actual construction and save-tile ingress adapter.
 local Sim=dofile(root.."sim.lua")
 local Terrain=dofile(upstream.."terrain.lua")
-local N=dofile(root.."tram_network.lua")(Sim,Construction,Terrain,F)
+local N=dofile(root.."tram_network.lua")(Sim,Construction,Terrain)
 local s=Sim.new(1751)
 s.corner_grid=Terrain.new(Sim.W,Sim.H)
 for x=8,15 do for z=7,16 do

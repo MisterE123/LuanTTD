@@ -45,10 +45,12 @@ return function(Sim,s,oneway,Bank,host)
       if not tr then return nil,"Tramway tools are unavailable in this campaign." end
       local planner=op=="tram_lay" and tr.net.drag_plan or tr.net.remove_plan
       local busy=tr.busy_probe and tr.busy_probe() or tr.busy
-      local q,why=planner(s,player,request,busy)
+      local q,why=planner(s,player,request,busy,tr.span_busy)
       if not q then
         local messages={TRAM_FACILITY_PROTECTED="Use the Bulldozer to review the platform or depot.",
           NO_TRAM="No electric tram track was selected.",
+          NO_TRAMWAY="There is no tramway in the selected direction.",
+          OUTSIDE_PORTAL_BIT_REQUIRED="Click the outside half of the ramp or portal, away from the span.",
           TRAM_NEEDS_FLAT_CLEARANCE="A tram platform or depot needs flat ground.",
           TRAM_SITE_CLEARANCE="Choose a clear site away from overhead or underground structures.",
           PROTECTED_TILE="The requested tile has a protected structure.",
@@ -135,6 +137,10 @@ return function(Sim,s,oneway,Bank,host)
         c.rail_owner and ("%q"):format(c.rail_owner) or "-",tostring(c.depot_dir),tostring(c.stop_axis),
         tostring(c.road_terminal_level),tostring(c.tram_bits),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint),tostring(c.join_stop),tostring(c.clear_road_site),tostring(c.road_site_cost),tostring(c.road_tree_town)},":")
     end
+    if q.span then
+      local span=q.span
+      parts[#parts+1]=table.concat({span.kind,span.key,span.id,span.other,span.requested,span.action},":")
+    end
     if q.ratings then
       local keys={}
       for id in pairs(q.ratings) do keys[#keys+1]=id end
@@ -220,6 +226,8 @@ return function(Sim,s,oneway,Bank,host)
       return Sim.apply_road_stop_remove(s,player,q)
     elseif request.tool=="road_waypoint" then
       return Sim.apply_road_waypoint(s,player,q)
+    elseif q.span and (request.tool=="tram_lay" or request.tool=="tram_remove") then
+      return host.tram.net.apply_span(s,player,q,host.tram.span_busy)
     elseif request.tool=="tram_lay" then
       return host.tram.net.apply_drag(s,player,q)
     elseif request.tool=="tram_facility" then

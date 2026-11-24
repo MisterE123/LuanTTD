@@ -1,5 +1,5 @@
--- Dedicated test streetcar controller, shared by the hotbar and chat.
--- Orders run repeatedly on a dedicated line; no passenger fares.
+-- Test streetcar controller, shared by the hotbar and chat.
+-- The authoritative campaign can share pavement; no tram passenger fares.
 return function(api,N,Run)
   local Sim,S=api.Sim,api.s
   local errors={
@@ -9,8 +9,8 @@ return function(api,N,Run)
     PROTECTED_TILE="The tile is protected or has incompatible infrastructure.",
     VEHICLE_IN_THE_WAY="A vehicle occupies that tile.",
     ALREADY_BUILT="Those tram pieces are already built.",
-    no_path="No complete dedicated tram route; continue the one-half track beyond the stop for a reversal.",
-    mixed_traffic_not_enabled="The running pilot needs a dedicated line. Street tram and bus arbitration is not enabled.",
+    no_path="No complete tram route; continue the one-half track beyond the stop for a reversal.",
+    mixed_traffic_not_enabled="This session does not share a road traffic clock. Lay separate tram track.",
     depot_and_two_stops_required="Choose a tram depot and two distinct through stops.",
     terminal_owner="Choose your company's depot and stops.",
     pilot_already_exists="Only one test streetcar can run at once. Clear the current one first.",
@@ -80,7 +80,7 @@ return function(api,N,Run)
   })
   core.register_chatcommand("trampilot",{
     params="DEPOT_X DEPOT_Z FIRST_X FIRST_Z SECOND_X SECOND_Z | status | clear",
-    description="Dispatch a single test streetcar on a dedicated line",
+    description="Dispatch a single test streetcar",
     func=function(name,params)
       if params=="" or params=="status" then return status(name) end
       if params=="clear" then return clear(name) end

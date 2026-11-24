@@ -3,7 +3,8 @@
 local source=debug and debug.getinfo(1,"S").source
 local base=source and source:match("^@(.*/)road_speed_runtime%.lua$")
 base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
-return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,crossing_step,oneway_guard,oneway_replan,Bay,Junction)
+local Wormhole=dofile(base.."road_bridge_motion.lua")
+return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,crossing_step,oneway_guard,oneway_replan,Bay,Junction,tile_xy)
   local R={bay=Bay}
   local Pass
   if make_overtake_board then
@@ -40,10 +41,10 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     v.road_speed_state=c
     return c
   end
-  -- The stock candidate scan is tile-hash bounds around ±6 pixels;
-  -- the predicate then applies direction-specific stricter distances.
+  -- RC1 queries within ±8 pixels, using the logical tile hash. While
+  -- inside a bridge or tunnel, query only its two logical portals.
   local function world(s)
-    local buckets,bay,by_tile,exposed={},{},{},0
+    local buckets,bay,by_tile,wormholes,exposed={},{},{},{},0
     local W={}
     local function at(x,y) return x..":"..y end
     local function bin(x,y) return at(floor(x/16),floor(y/16)) end
@@ -61,6 +62,18 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         record.bucket=k
       end
       local tile=f[4]
+      local stock_tile,opposite_portal=Wormhole.frame_bucket(s,f)
+      if record.opposite_portal and (not opposite_portal or record.stock_tile~=stock_tile) then
+        wormholes[record.stock_tile][record.id]=nil
+      end
+      if opposite_portal and (not record.opposite_portal or record.stock_tile~=stock_tile) then
+        wormholes[stock_tile]=wormholes[stock_tile] or {}
+        wormholes[stock_tile][record.id]=record
+      end
+      if opposite_portal and tile_xy and (not record.opposite_portal or record.stock_tile~=stock_tile) then
+        record.stock_x,record.stock_y=tile_xy(stock_tile)
+      end
+      record.stock_tile,record.opposite_portal=stock_tile,opposite_portal
       if record.tile~=tile then
         if bay[record.tile]==record.id then bay[record.tile]=nil end
         if record.tile and by_tile[record.tile] then by_tile[record.tile][record.id]=nil end
@@ -76,6 +89,8 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       if record.bucket then buckets[record.bucket][record.id]=nil end
       if record.tile and by_tile[record.tile] then by_tile[record.tile][record.id]=nil end
       if bay[record.tile]==record.id then bay[record.tile]=nil end
+      if record.opposite_portal then wormholes[record.stock_tile][record.id]=nil end
+      record.stock_tile,record.opposite_portal,record.stock_x,record.stock_y=nil,nil,nil,nil
       if record.opposite_lane then exposed=exposed-1 end
       record.bucket,record.tile,record.frame,record.opposite_lane=nil,nil,nil,nil
     end
@@ -92,20 +107,45 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       end
       return false
     end
+    function W.stock_vehicles_at(tile)
+      local out={}
+      for _,item in pairs(by_tile[tile] or {}) do
+        if not item.opposite_portal then out[#out+1]=item end
+      end
+      for _,item in pairs(wormholes[tile] or {}) do out[#out+1]=item end
+      return out
+    end
     function W.find(record,c,x,y,dir,update)
       local list={}
-      W.near(x,y,6,function(item) list[#list+1]=item end)
+      if record.opposite_portal then
+        for _,id in ipairs({record.stock_tile,record.opposite_portal}) do
+          for _,item in ipairs(W.stock_vehicles_at(id)) do list[#list+1]=item end
+        end
+      else
+        W.near(x,y,8,function(item)
+          if not item.opposite_portal or not tile_xy or
+              item.stock_x>=floor((x-8)/16) and item.stock_x<=floor((x+8)/16) and
+              item.stock_y>=floor((y-8)/16) and item.stock_y<=floor((y+8)/16) then
+            list[#list+1]=item
+          end
+        end)
+      end
       return Proximity.find(record,c,x,y,dir,list,update)
     end
     return W
   end
 
+  R.traffic_world=world
+
   local function record_for(v,c)
     return {id=v.id,first=v.id,type="road",clock=c,max_speed=limit[v.engine],stopped=v.running==false}
   end
   local function leader_speed(s,leader)
+    if leader.companion then
+      return not leader.stopped and leader.clock and leader.clock.speed or 0
+    end
     local v=s.fleet[leader.id]
-    local moving=not leader.stopped and leader.clock and
+    local moving=v and not leader.stopped and leader.clock and
       leader.clock.index<#(v.road_motion_frames or {})
     return moving and leader.clock.speed or 0
   end
@@ -340,6 +380,8 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         records[id]=rec
         if f then W.put(rec,f,c and c.lane_pose~=nil) end
       end
+      local companion=hooks.companion
+      local external=companion and companion.seed(s,W,tick,k)
       k=k+1
       for _,id in ipairs(ids) do
         local v=s.fleet[id]
@@ -372,6 +414,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         hooks.age(v,tick)
         sample(id,k)
       end
+      if external then companion.advance(s,W,tick,external,k) end
     end)
     return worked,timelines
   end

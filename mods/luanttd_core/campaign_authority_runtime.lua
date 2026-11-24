@@ -237,6 +237,26 @@ return function(Sim,mod,s,cap)
     N.tram={run=run,net=net}
     local tram_occupancy=dofile(mod.."/tram_occupancy.lua")
     function N.tram.busy_probe() return tram_occupancy(Sim,run,s) end
+    local wormhole=dofile(mod.."/road_bridge_motion.lua")
+    function N.tram.span_busy(lo,hi,plan,removing)
+      -- The stock check uses committed logical endpoint occupancy, not
+      -- the visual coordinate under the bridge. Keep the existing live
+      -- tram's precompiled itinerary intact when removing a layer.
+      if removing and (run.uses(s,lo) or run.uses(s,hi)) then return true end
+      local p=run.current(s)
+      local frame=p and run.frame(p)
+      local at=wormhole.frame_bucket(s,frame)
+      if at==lo or at==hi then return true end
+      for _,v in pairs(s.fleet) do
+        local mode=Sim.vehicles[v.engine] and Sim.vehicles[v.engine].mode
+        if mode=="road" or mode=="rail" or mode=="ship" then
+          frame=mode=="road" and Sim.road_motion_frame(s,v)
+          at=frame and wormhole.frame_bucket(s,frame) or Sim.position(s,v)
+          if at==lo or at==hi then return true end
+        end
+      end
+      return false
+    end
     function N.tram.facility(owner,id,kind)
       local tile=s.tiles[id]
       return tile and tile.tram and tile.tram.owner==owner and tile.tram.kind==kind
@@ -249,14 +269,24 @@ return function(Sim,mod,s,cap)
     end
     local tram_motion=dofile(mod.."/road_motion_presentation.lua")(dofile(mod.."/road_lanes.lua"))
     local pose_source=dofile(mod.."/road_source_pose.lua")(Sim,tram_motion)
-    function N.tram.pose(frame)
-      return pose_source.sample(s,{frame},1,1,function(id,x,z)
-        local h=net.surface_at(s,id,x,z)
-        local _,level=tile(id)
-        return (h or level)+.512
-      end)
+    local function tram_surface(id,x,z)
+      local h=net.surface_at(s,id,x,z)
+      local _,level=tile(id)
+      return (h or level)+.512
     end
-    Clock=function() clock(interval) end
+    function N.tram.pose(frame)
+      return pose_source.sample(s,{frame},1,1,tram_surface)
+    end
+    function N.tram.pose_at(fraction)
+      local a,b,t=run.pose_frames(s,fraction)
+      if not a then return end
+      local pos,yaw,pitch=pose_source.sample(s,{a,b},2,1+t,tram_surface)
+      return (t<.5 and a or b),pos,yaw,pitch
+    end
+    Sim.mount_shared_road_tram(s,run.traffic(net.frame_z))
+    Clock=function()
+      if not Sim.shared_road_tram_active(s) then clock(interval) end
+    end
   end
   N.orders=dofile(mod.."/road_vehicle_orders.lua")({s=s,Sim=Sim,tram=N.tram})
   local motions=dofile(mod.."/road_motion_presentation.lua")(dofile(mod.."/road_lanes.lua"))

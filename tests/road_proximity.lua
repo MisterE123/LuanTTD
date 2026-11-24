@@ -18,3 +18,6 @@ assert(not P.find(bus,front,12,12,5,{b}) and front.blocked_ctr==1481)
 front.reverse_ctr=5
 assert(not P.find(bus,front,12,12,5,{b}) and front.blocked_ctr==1481)
 print("PASS: stock leading vehicle, directional range, ownership-chain exclusion, ties and blocked timeout")
+front.reverse_ctr,front.blocked_ctr=0,0
+assert(P.find(bus,front,12,12,5,{other(2,19,12,0)})~=nil,"seventh pixel ahead must be visible")
+assert(P.find(bus,front,65531,12,5,{other(2,1,12,0)})==nil,"opposite edges of the stock 4096-tile map must not wrap")

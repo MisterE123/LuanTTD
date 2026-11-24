@@ -118,12 +118,14 @@ return function(Sim,R,x,z,w,h,fraction,frame)
   end
   if R.tram then
     local run=R.tram.run.current(s)
-    local f=run and R.tram.run.frame(run)
-    if f then
-      local pos,yaw,pitch=R.tram.pose(f)
-      if point(pos) then
-        add("tram",1,{owner=run.owner,tile=f[4],frame={f[1],f[2],f[3],f[4],f[5]},pos=pos,yaw=yaw,pitch=pitch})
-      end
+    local f,pos,yaw,pitch
+    if run and R.tram.pose_at then f,pos,yaw,pitch=R.tram.pose_at(fraction)
+    elseif run then
+      f=R.tram.run.frame(run)
+      if f then pos,yaw,pitch=R.tram.pose(f) end
+    end
+    if f and point(pos) then
+      add("tram",1,{owner=run.owner,tile=f[4],frame={f[1],f[2],f[3],f[4],f[5]},pos=pos,yaw=yaw,pitch=pitch})
     end
   end
   table.sort(out,function(a,b) return a.key<b.key end)

@@ -1,15 +1,18 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Non-articulated OpenTTD 14.1 tram trip adapter. YAPF chooses
+-- Non-articulated tram trip adapter. YAPF chooses
 -- all routing and legal one-bit reversals; TramMotion owns pixels and
--- the controller's long/short turn decisions. No map/vehicle mutation.
-return function(F,Cost,Search,Motion)
+-- the controller's long/short turn decisions. Optional paired spans use
+-- RC1 VehicleEnter_TunnelBridge/IndividualRoadVehicleController through
+-- the same wormhole helper as road vehicles. No map/vehicle mutation.
+return function(F,Cost,Search,Motion,SpanMotion)
   local M={}
   local dirs={[0]=8,4,2,1}
   local function one(bits) return bits==1 or bits==2 or bits==4 or bits==8 end
   local function depot(t) return t and t.kind=="depot" end
+  local function portal(t) return t and (t.kind=="bridge" or t.kind=="tunnel") end
   local function stop(t) return t and t.kind=="drive_stop" end
   local function end_state(t,td) return stop(t) and 64+td or td end
-  local function driving(t) return t and (t.kind=="road" or t.kind=="crossing" or depot(t) or stop(t)) end
+  local function driving(t) return t and (t.kind=="road" or t.kind=="crossing" or depot(t) or stop(t) or SpanMotion and portal(t)) end
   local function tram_type(v,t)
     if not driving(t) or t.tramtype==nil then return false end
     if v.compatible then return v.compatible[t.tramtype]==true end
@@ -62,6 +65,7 @@ return function(F,Cost,Search,Motion)
       return nil,"terminal_required"
     end
     local height=board.center_z(first.tile)
+    local frame_limit=#trace*96
     for i,p in ipairs(trace) do
       local t=board.tile(p.tile)
       if not tram_type(vehicle,t) then return nil,"unsupported_surface" end
@@ -69,9 +73,17 @@ return function(F,Cost,Search,Motion)
       if board.surface then
         if not board.surface(p.tile) then return nil,"unsupported_surface" end
         local prev=trace[i-1]
-        if prev and prev.tile~=p.tile and
-            not board.edge_available(prev.tile,p.tile,F.exit_direction(prev.td),vehicle) then
-          return nil,"unsupported_surface"
+        if prev and prev.tile~=p.tile then
+          local a=board.tile(prev.tile)
+          local d=F.exit_direction(prev.td)
+          local enters_span=SpanMotion and portal(a) and a.dir==d
+          if enters_span then
+            if a.other~=p.tile or t.kind~=a.kind or t.other~=prev.tile or
+                t.dir~=(d+2)%4 or p.td~=F.direction_trackdir(d) then return nil,"broken_span" end
+            frame_limit=frame_limit+16*(a.skip or 0)
+          elseif not board.edge_available(prev.tile,p.tile,d,vehicle) then
+            return nil,"unsupported_surface"
+          end
         end
       elseif (t.slope or 0)~=0 or board.center_z(p.tile)~=height then return nil,"unsupported_surface" end
     end
@@ -86,9 +98,15 @@ return function(F,Cost,Search,Motion)
     v.x,v.y=16*sx+dx,16*sy+dy
     local p=1
     local frames,turn_mode={}
-    local function append(x,y,entered)
-      frames[#frames+1]={v.x,v.y,v.direction,v.tile,projection(trace[p].td,v.state,v.frame,side),
-        v.state,x,y,entered}
+    local function append(x,y,entered,physical)
+      local t=board.tile(v.tile)
+      local raised=t.kind=="bridge" and t or nil
+      local underground=t.kind=="tunnel" and t or nil
+      local wormhole=SpanMotion and v.state==SpanMotion.WORMHOLE or nil
+      frames[#frames+1]={v.x,v.y,v.direction,physical or v.tile,projection(trace[p].td,v.state,v.frame,side),
+        v.state,x,y,entered,raised and raised.span,
+        raised and raised.bridge_speed and raised.bridge_speed*2,wormhole,
+        underground and wormhole,underground and underground.tunnel,v.frame}
     end
     local function enter(id,state,frame)
       local tx,ty=board.xy(id)
@@ -106,51 +124,68 @@ return function(F,Cost,Search,Motion)
       return true
     end
     append()
-    for _=1,#trace*96 do
+    for _=1,frame_limit do
       local tile=board.tile(v.tile)
       if p==#trace and at_end(v.state,tile,v.frame) then return frames end
-      local event,x,y,d,f,cx,cy=Motion.step(v,side)
-      if event=="move" or event=="rotate" then
-        v.x,v.y,v.direction,v.frame=x,y,d,f
-        append(cx,cy)
-      elseif event=="next_tile" then
-        local target=board.adjacent(v.tile,x)
-        local nextp=trace[p+1]
-        if not nextp then return nil,"trace_ends_in_motion" end
-        if nextp.tile==v.tile then
-          -- The short turn is performed at the current tile's far edge;
-          -- trace advances only when the TURNED marker is consumed.
-          if turn_mode then return nil,"overlapping_turn" end
-          local ok,reason=start_turn(target,x,"short")
-          if not ok then return nil,reason end
-          append()
+      if SpanMotion and v.state==SpanMotion.WORMHOLE then
+        local event,x,y,target,f=SpanMotion.step(board,tile,v)
+        if not event then return nil,"broken_span" end
+        v.x,v.y=x,y
+        if event=="exit" then
+          if not trace[p+1] or target~=trace[p+1].tile then return nil,"broken_span_exit" end
+          p=p+1
+          v.tile,v.state,v.frame=target,trace[p].td,f or Motion.DEFAULT_START
+          append(nil,nil,true)
         else
-          if target~=nextp.tile or turn_mode=="short" then return nil,"discontinuous_trace" end
-          local nextt=board.tile(target)
-          if not tram_type(v,nextt) then return nil,"unavailable_track" end
-          local after=trace[p+2]
-          if nextt.kind=="road" and nextt.tram_bits==dirs[F.reverse_direction(x)] and
-              after and after.tile==target and after.td==F.reverse_trackdir(nextp.td) then
-            if not one(effective(board,target,nextt)) then return nil,"invalid_one_bit_endpoint" end
-            local ok,reason=start_turn(target,x,"long")
-            if not ok then return nil,reason end
-          else
-            turn_mode=nil
-            if not enter(target,end_state(nextt,nextp.td),Motion.DEFAULT_START) then return nil,"bad_tile_entry" end
+          append(nil,nil,nil,target)
+        end
+      else
+        local event,x,y,d,f,cx,cy=Motion.step(v,side)
+        if event=="move" or event=="rotate" then
+          v.x,v.y,v.direction,v.frame=x,y,d,f
+          if event=="move" and SpanMotion and portal(tile) and SpanMotion.enters(tile,d,x,y) then
+            v.state=SpanMotion.WORMHOLE
           end
+          append(cx,cy)
+        elseif event=="next_tile" then
+          local target=board.adjacent(v.tile,x)
+          local nextp=trace[p+1]
+          if not nextp then return nil,"trace_ends_in_motion" end
+          if nextp.tile==v.tile then
+            -- The short turn is performed at the current tile's far edge;
+            -- trace advances only when the TURNED marker is consumed.
+            if turn_mode then return nil,"overlapping_turn" end
+            local ok,reason=start_turn(target,x,"short")
+            if not ok then return nil,reason end
+            append()
+          else
+            if target~=nextp.tile or turn_mode=="short" then return nil,"discontinuous_trace" end
+            local nextt=board.tile(target)
+            if not tram_type(v,nextt) then return nil,"unavailable_track" end
+            local after=trace[p+2]
+            if nextt.kind=="road" and nextt.tram_bits==dirs[F.reverse_direction(x)] and
+                after and after.tile==target and after.td==F.reverse_trackdir(nextp.td) then
+              if not one(effective(board,target,nextt)) then return nil,"invalid_one_bit_endpoint" end
+              local ok,reason=start_turn(target,x,"long")
+              if not ok then return nil,reason end
+            else
+              turn_mode=nil
+              if not enter(target,end_state(nextt,nextp.td),Motion.DEFAULT_START) then return nil,"bad_tile_entry" end
+            end
+            p=p+1
+            append(nil,nil,true)
+          end
+        elseif event=="turned" then
+          local nextp=trace[p+1]
+          if not turn_mode or not nextp or nextp.tile~=v.tile then return nil,"missing_turn_trace" end
+          local td,frame=Motion.turned(tile,effective(board,v.tile,tile),x,nextp.td)
+          if not td or not enter(v.tile,td,frame) then return nil,"bad_turn_continuation" end
+          turn_mode=nil
           p=p+1
           append(nil,nil,true)
+        else
+          return nil,"invalid_drive_table"
         end
-      elseif event=="turned" then
-        local nextp=trace[p+1]
-        if not turn_mode or not nextp or nextp.tile~=v.tile then return nil,"missing_turn_trace" end
-        local td,frame=Motion.turned(tile,effective(board,v.tile,tile),x,nextp.td)
-        if not td or not enter(v.tile,td,frame) then return nil,"bad_turn_continuation" end
-        turn_mode=nil
-        p=p+1
-        append(nil,nil,true)
-      else
-        return nil,"invalid_drive_table"
       end
     end
     return nil,"excessive_trip"

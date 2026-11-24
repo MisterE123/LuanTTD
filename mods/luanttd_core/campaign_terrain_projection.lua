@@ -59,7 +59,7 @@ function M.corners(terrain,grid,x,z,w,h)
   end
   return table.concat(rows)
 end
-local span_fields={"start","end","head","tail","middle","middle_by_tile","axis","owner","base","deck","bridge_type","railtype","kind"}
+local span_fields={"start","end","head","tail","middle","middle_by_tile","axis","owner","base","deck","bridge_type","railtype","kind","roadtype","tramtype","road_owner","tram_owner"}
 local station_fields={"owner","id","tile","mode","name","tiles","stop_axis","stop_type","bus_tile","truck_tile","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror","oil_role","goods_role","iron_ore_role","steel_role","valuables_role","livestock_role","grain_role","wood_role"}
 local industry_fields={"id","removed","kind","x","z","tiles"}
 local farm_fields={"variant","slope","base","fences"}

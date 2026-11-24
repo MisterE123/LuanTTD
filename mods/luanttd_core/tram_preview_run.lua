@@ -1,6 +1,6 @@
--- One electric streetcar pilot, opt-in. It does not pretend to dispatch
--- paid trips, load passengers, or implement shared-lane fleet arbitration.
-return function(Network,Trip,Speed)
+-- One electric streetcar service. A shared road-clock adapter may drive
+-- this same saved state; the standalone caller keeps dedicated tracks only.
+return function(Network,Trip,Speed,shared)
   local R={VERSION=1}
   local speed_cap=96 -- Pilot presentation vehicle uses 48 km/h.
   local function compile(s,owner,a,b,td,wants)
@@ -9,8 +9,10 @@ return function(Network,Trip,Speed)
       {owner=owner,tram_arrival_td=td,display_max_speed=speed_cap,cargo="passenger"})
     if not path then return nil,last end
     if not frames then return nil,"ordered_stop_must_differ" end
-    for _,id in ipairs(path) do
-      if board.tile(id).roadtype~=nil then return nil,"mixed_traffic_not_enabled" end
+    if not (shared and shared(s)) then
+      for _,id in ipairs(path) do
+        if board.tile(id).roadtype~=nil then return nil,"mixed_traffic_not_enabled" end
+      end
     end
     if wants then
       local first=frames[1]
@@ -113,7 +115,46 @@ return function(Network,Trip,Speed)
     end
     return false
   end
-  function R.advance(s,n,observe)
+  -- The registered road vehicles are visited in increasing ID order.
+  -- The separate streetcar slot comes after them, sharing the *same*
+  -- candidate set; it is not a time-delayed visual collision detector.
+  local timelines=setmetatable({},{__mode="k"})
+  function R.pose_frames(s,fraction)
+    local p=R.current(s)
+    if not p then return end
+    local sample=timelines[s]
+    if not sample or sample.pilot~=p or not fraction then
+      local f=R.frame(p)
+      return f,f,0
+    end
+    local at=1+math.max(0,math.min(1,fraction))*(#sample.frames-1)
+    local i=math.floor(at)
+    local a=sample.frames[i]
+    if not a then return end
+    local b=sample.frames[i+1] or a
+    return a,b,at-i
+  end
+  function R.traffic(z)
+    local C={}
+    function C.seed(s,W,_,k)
+      local p=R.current(s)
+      if not p then return end
+      if k==1 then timelines[s]={pilot=p,frames={R.frame(p) or false}} end
+      local record={id=9007199254740991,first=9007199254740991,type="road",companion=true,
+        clock=p,max_speed=speed_cap,stopped=p.phase~="running"}
+      local f=R.frame(p)
+      if f then W.put(record,f,false,z(s,f)) end
+      return record
+    end
+    function C.advance(s,W,_,record,k)
+      local p=R.advance(s,1,nil,W,record,z)
+      local sample=timelines[s]
+      if sample and k then sample.frames[k]=R.frame(p) or false end
+      return p
+    end
+    return C
+  end
+  function R.advance(s,n,observe,W,record,z)
     local p=R.current(s)
     if not p then return end
     for _=1,n do
@@ -128,14 +169,43 @@ return function(Network,Trip,Speed)
             local following=p.loop and (p.leg<#p.legs and p.leg+1 or p.loop) or ({[1]=2,[2]=3,[3]=4,[4]=3})[p.leg]
             p.leg,p.index=following,1
           end
-          p.phase,p.speed,p.subspeed,p.progress="running",0,0,0
-          p.heading=p.legs[p.leg].frames[1][3]
+          local front=p.legs[p.leg].frames[1]
+          local height=W and z(s,front)
+          if W and p.phase=="depot" then
+            record.z=height
+            if W.find(record,p,front[1],front[2],front[3],false) then
+              p.wait,p.traffic_wait=1,"depot"
+            end
+          end
+          if p.wait==0 then
+            p.phase,p.speed,p.subspeed,p.progress="running",0,0,0
+            p.heading,p.traffic_wait=front[3],nil
+            if W then record.stopped=false;W.put(record,front,false,height) end
+          end
         end
       else
-        Speed.tick(p,speed_cap,false,function(c)
+        local here=leg.frames[p.index]
+        local span=here[10] and s.stock_road_bridges and s.stock_road_bridges[here[10]]
+        local cap=span and math.min(speed_cap,span.spec.speed*2) or speed_cap
+        Speed.tick(p,cap,false,function(c)
+          local previous=leg.frames[c.index]
           local f=leg.frames[c.index+1]
           if not f then return false end
+          local new_z
+          if W then
+            new_z=z(s,f)
+            local lead=W.find(record,c,f[7] or f[1],f[8] or f[2],f[3])
+            if lead then
+              c.speed,c.traffic_wait=not lead.stopped and lead.clock and lead.clock.speed or 0,"road"
+              return false
+            end
+          end
           local function commit()
+            c.traffic_wait=nil
+            if W then
+              Speed.grade(c,record.z,new_z,cap)
+              W.put(record,f,false,new_z)
+            end
             c.crossing_wait=nil
             if c.heading~=f[3] then c.heading=f[3];Speed.turn(c) end
             c.index=c.index+1
@@ -145,11 +215,12 @@ return function(Network,Trip,Speed)
               local serviced=not c.loop or leg.order_index~=nil
               if serviced then c.arrivals=c.arrivals+1 end
               c.phase,c.wait,c.speed,c.subspeed,c.progress="stopped",serviced and 30 or 1,0,0,0
+              if record then record.stopped=true end
             end
             return true
           end
-          if not Network.move or leg.frames[c.index][4]==f[4] then return commit() end
-          local moved,why=Network.move(s,leg.frames[c.index],f,commit)
+          if not Network.move or previous[4]==f[4] then return commit() end
+          local moved,why=Network.move(s,previous,f,commit)
           if not moved then c.speed,c.crossing_wait=0,why end
           return moved
         end)

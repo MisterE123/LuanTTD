@@ -65,3 +65,41 @@ for arrival=2,6 do
 end
 assert(Run.clear(s,company) and not Run.frame(Run.current(s)))
 print("PASS: saved dedicated streetcar moves at stock rate, makes repeat stops, follows both one-half reversals, and rejects mixed running")
+
+-- The same saved streetcar uses the road clock's stock spatial buckets in
+-- either direction. There is only one owning scheduler and no ObjectRef.
+local Runtime=dofile(root.."road_speed_runtime.lua")(upstream("road_speed"),upstream("road_proximity"),
+  function() return 0 end,function() return false end,function() return false end)
+local Traffic=Run.traffic(function() return 0 end)
+run=assert(Run.start(s,company,depot,first,second))
+local f=run.legs[1].frames[1]
+local leader={id=91,first=91,type="road",stopped=true}
+local parked={f[1]+4,f[2],f[3],f[4],1}
+local Clock=function(callback) for i=1,74 do callback(i) end end
+local function noop() end
+local function day()
+  return Runtime.live_day(s,Clock,{economy=function()return {} end,before=noop,
+    arrive=noop,age=noop,companion=Traffic})
+end
+s.fleet[91]={id=91,engine="bus",road_stop_pose=parked}
+day()
+assert(run.phase=="depot" and run.traffic_wait=="depot" and run.ticks==74)
+s.fleet[91]=nil
+day()
+assert(run.phase=="running" and not run.traffic_wait and run.steps>0 and run.ticks==148)
+-- Put an ordinary road vehicle directly ahead on the first straight
+-- segment; the tram does not go through it or change lane.
+local W=Runtime.traffic_world(s)
+local rec=Traffic.seed(s,W)
+local now=Run.frame(run)
+local dx=now[3]==5 and 1 or now[3]==1 and -1 or 0
+local dy=now[3]==3 and 1 or now[3]==7 and -1 or 0
+assert(dx~=0 or dy~=0)
+W.put(leader,{now[1]+4*dx,now[2]+4*dy,now[3],now[4],1})
+local initial=run.index
+Run.advance(s,35,nil,W,rec,function()return 0 end)
+assert(run.index==initial and run.traffic_wait=="road")
+W.erase(leader)
+Run.advance(s,12,nil,W,rec,function()return 0 end)
+assert(run.index>initial and not run.traffic_wait)
+print("PASS: road clock visits the saved tram once per tick; stock depot queue and normal lane stop/resume behind an actual road record")

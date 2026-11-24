@@ -673,11 +673,22 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
     dirty,plan.deck
 end
 function M.wood_bridge(s,owner,first,last) return M.road_bridge(s,owner,first,last,0) end
+local function tram_uses_road_span(s,span)
+  local p=s.tram_pilot
+  if not p or span.tramtype==nil then return false end
+  for _,leg in ipairs(p.legs or {}) do
+    for _,id in ipairs(leg.path or {}) do
+      if id==span.start or id==span["end"] then return true end
+    end
+  end
+  return false
+end
 function M.remove_wood_bridge(s,owner,id,quote_only)
   local t=s.tiles[id]
   local bridge=t and t.road_bridge_id
   local span=bridge and s.stock_road_bridges[bridge]
   if not span or span.owner~=owner then return false,"Select an end of your road bridge." end
+  if tram_uses_road_span(s,span) then return false,"Stop the tram route using this bridge first." end
   for _,v in pairs(s.fleet) do
     for _,route_tile in ipairs(v.route or {}) do
       if route_tile==span.start or route_tile==span["end"] then
@@ -763,6 +774,7 @@ function M.remove_road_tunnel(s,owner,id)
   local key=t and t.road_tunnel_id
   local span=key and s.stock_road_tunnels[key]
   if not span or span.owner~=owner then return false,"Select one of your tunnel portals." end
+  if tram_uses_road_span(s,span) then return false,"Stop the tram route using this tunnel first." end
   for _,v in pairs(s.fleet) do for _,tile in ipairs(v.route or {}) do
     if tile==span.start or tile==span["end"] then return false,"Wait for vehicles using the tunnel." end
   end end
@@ -2169,6 +2181,20 @@ function M.road_motion_frame(s,v)
   end
   return v.road_stop_pose
 end
+local shared_tram_clock=setmetatable({},{__mode="k"})
+function M.mount_shared_road_tram(s,companion) shared_tram_clock[s]=companion end
+function M.shared_road_tram_active(s)
+  return shared_tram_clock[s]~=nil and M.road_stock_service_active(s)
+end
+function M.stock_road_frame_z(state,frame)
+  load_road_rules()
+  local tile=state.tiles[frame[4]]
+  if frame[14] then return state.stock_road_tunnels[frame[14]].base*8 end
+  local span=frame[10] and state.stock_road_bridges[frame[10]]
+  if span and (frame[12] or span.middle_by_tile[frame[4]]) then return span.deck*8 end
+  local shape,base=road_shape(state,frame[4],tile)
+  return (base or tile.h)*8+(shape and slope_rules.pixel(frame[1]%16,frame[2]%16,shape) or 0)
+end
 local function road_clock()
   if not source_speed then
     load_road_rules()
@@ -2184,21 +2210,14 @@ local function road_clock()
     local Bay=dofile(base.."road_bay_runtime.lua")(Occupancy)
     local presentation=dofile(base.."road_motion_presentation.lua")(dofile(base.."road_lanes.lua"))
     local Junction=dofile(base.."road_junction_guard.lua")(M,presentation)
-    source_speed=dofile(base.."road_speed_runtime.lua")(Speed,Proximity,function(state,frame)
-      local tile=state.tiles[frame[4]]
-      if frame[14] then return state.stock_road_tunnels[frame[14]].base*8 end
-      local span=frame[10] and state.stock_road_bridges[frame[10]]
-      if span and (frame[12] or span.middle_by_tile[frame[4]]) then return span.deck*8 end
-      local shape,base=road_shape(state,frame[4],tile)
-      return (base or tile.h)*8+(shape and slope_rules.pixel(frame[1]%16,frame[2]%16,shape) or 0)
-    end,function(state,id)
+    source_speed=dofile(base.."road_speed_runtime.lua")(Speed,Proximity,M.stock_road_frame_z,function(state,id)
       local t=id and state.tiles[id]
       if not t or t.build~="road_station" then return false end
       local axis=t.stop_axis or M.road_bits(state,id)
       return axis~=5 and axis~=10
     end,function(state,id) return state.tiles[id].build=="road_depot" end,
       function(state) return road_traffic_board(state,Board(M,state,Follow)) end,crossing_road_step,
-      one_way_pose,function(...) return road_replan(...) end,Bay,Junction)
+      one_way_pose,function(...) return road_replan(...) end,Bay,Junction,M.xy)
   end
   return source_speed
 end
@@ -4179,6 +4198,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
     end
   end
   local worked,samples=road_clock().live_day(s,clock,{
+    companion=shared_tram_clock[s],
     economy=function(tick)
       local ready={}
       local ids=station_service.tick(s,tick)

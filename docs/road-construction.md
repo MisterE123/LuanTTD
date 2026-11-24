@@ -177,6 +177,24 @@ The reconstruction rules are ported from 16.0-RC1 `TownActionRoadRebuild`, `Tile
 
 ### Tram level crossings
 
-Lay tramway across straight, perpendicular ordinary rail, or lay ordinary rail across existing straight tramway. The tram sees the same physical gate and rail reservation. A crossing can also carry separately priced standard road pavement. Use Remove Road, Remove Tram Track, or choose the surface layer in Bulldozer; removing the final surface layer preserves the railway and any outstanding reservation. Bulldozer can also remove the ordinary railway and leave both surface layers in place; if there is an outstanding rail reservation, release it first. The single dedicated streetcar pilot does not operate on crossings that also carry regular road traffic.
+Lay tramway across straight, perpendicular ordinary rail, or lay ordinary rail across existing straight tramway. The tram sees the same physical gate and rail reservation. A crossing can also carry separately priced standard road pavement. Use Remove Road, Remove Tram Track, or choose the surface layer in Bulldozer; removing the final surface layer preserves the railway and any outstanding reservation. Bulldozer can also remove the ordinary railway and leave both surface layers in place; if there is an outstanding rail reservation, release it first. The test streetcar follows regular road traffic on shared pavement in the normal campaign, including mixed crossings. The paid road fleet and the streetcar share the same movement clock and the same local occupancy checks. The test streetcar itself does not carry paying passengers.
 
 To remove a tram depot or platform, click it with **Bulldozer** and select the facility layer. Removing a drive-through platform keeps its tram track and any ordinary pavement; removing a depot leaves the approach tracks outside its door in place. Stop any tram service using the site first.
+
+### Tramways on road bridges and tunnels
+
+Select **Tram Track** and click the outside half of an existing road bridge
+ramp or tunnel portal, in line with the road and away from the crossing.
+The one purchase adds track to both approaches within the structure and
+to the entire span. The stock rules charge two ELRL half pieces per tile
+and require no vehicle on either approach or in the span. Connect normal
+tram track to each outside ramp afterward. A tunnel keeps the hill above
+untouched; a bridge carries continuous rails and overhead wire on its deck
+and ramps.
+
+Remove Tram Track can remove the overlay at a portal, or use **Bulldozer**
+and choose **Remove tramway … keep road pavement**. A running tram
+itinerary must be stopped before this layer can be removed. The existing
+road and its owner stay in place. Removing only the tramway returns the
+material refund. Existing trams use the real bridge ramps and tunnel
+bore, with the same road-vehicle separation checks as a bus.

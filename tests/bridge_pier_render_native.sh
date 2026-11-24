@@ -52,6 +52,12 @@ if [[ ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then
   view_mark=TRAM_CROSSING_NATIVE_VIEW
   views=(tram_barred tram_crossing tram_modal tram_remove_rail)
 fi
+if [[ ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
+  fixture=tram_span_render_native
+  ready_mark=TRAM_SPAN_NATIVE_READY
+  view_mark=TRAM_SPAN_NATIVE_VIEW
+  views=(tram_bridge tram_tunnel)
+fi
 cat "tests/$fixture.lua" >> "$game/mods/luanttd_core/init.lua"
 # The terrain and companies in this graphics fixture are deliberately
 # seeded in the renderer's local world, not in the campaign worker.
@@ -79,7 +85,7 @@ water_wave_height = 2.0
 enable_dynamic_shadows = true
 enable_water_reflections = true
 EOF
-if [[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 || ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 || ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then
+if [[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 || ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 || ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 || ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
   # Keep this geometry screenshot readable in software-rendered CI.
   sed -i -e 's/enable_dynamic_shadows = true/enable_dynamic_shadows = false/' \
     -e 's/enable_water_reflections = true/enable_water_reflections = false/' "$out/client.conf"
@@ -149,7 +155,9 @@ for view in "${views[@]}"; do
   fi
 done
 ! grep -Ei 'ERROR\[|could not load' "$out/client.log" "$out/server.log"
-if [[ ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then
+if [[ ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
+  echo "PASS: native road bridge and tunnel retain their original mesh under electrified tramway: $out"
+elif [[ ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then
   echo "PASS: native tram stops at reserved rails and crosses only on release: $out"
 elif [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   echo "PASS: native graded terminal foundations, rails, wire and moving tram: $out"
