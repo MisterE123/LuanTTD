@@ -522,7 +522,7 @@ local function coastal_visit(s)
     coastal_world.visit(s,u,v,board)
     stock_rail_ground.visit(s,u,v)
     if trees and tick then trees.visit(s,u,v,tick,random) end
-  end
+  end,trees and function(tick) return trees.global_tick(s,tick,random) end
 end
 local function coastal_tile_occupied(s,id)
   local extra=coastal_occupied[s]
@@ -4302,7 +4302,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
   local freight_ready,ship_ready,industry_ready,tanker_ready
   local growth=town_growth_mount[s]
   local growth_random=growth and function() return rating_runtime.random_u32(s) end
-  local tide=coastal_visit(s)
+  local tide,plant_trees=coastal_visit(s)
   if s.road_stock_house_supply then
     town_passengers.start(s)
     clock=function(callback)
@@ -4336,6 +4336,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if freighter then freighter.after(tick,ship_ready) end
         if tanker then tanker.after(tick,tanker_ready) end
         if growth and growth.new then growth.world.tick(s,tick,growth_random) end
+        if plant_trees then plant_trees(tick) end
         if finish_rating then finish_rating() end
         if coal then
           for _,view in ipairs(coal.road_stations) do

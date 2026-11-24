@@ -4,7 +4,7 @@ return function(Sim,Terrain,Rules)
   local dx,dz={[0]=-1,-1,-1,0,1,1,1,0},{[0]=-1,0,1,1,1,0,-1,-1}
   local function clean(t)
     return t and not (t.stock_void or t.wood or t.build or t.house or t.site or t.stock_industry or t.rail_tracks
-      or t.stock_landmark or t.ship or t.tram or t.airfield or t.owner or (t.road_bits or 0)~=0)
+      or t.stock_landmark or t.station or t.ship or t.tram or t.airfield or t.owner or (t.road_bits or 0)~=0)
   end
   local function tile(s,x,z,id)
     local t=s.tiles[id]
@@ -52,6 +52,20 @@ return function(Sim,Terrain,Rules)
       t.stock_clear_density=event.ground==0 and event.density<3 and event.density or nil
     end
     return event
+  end
+  function W.global_tick(s,tick,random)
+    local next_counter,i,tree=Rules.global_tick(s.stock_tree_tick_counter or 0,Sim.W*Sim.H,tick,
+      s.stock_extra_tree_placement,random,function(i)
+        local x,z=Sim.xy(i+1)
+        return tile(s,x,z,i+1)
+      end)
+    s.stock_tree_tick_counter=next_counter
+    if tree then
+      local t=s.tiles[i+1]
+      t.stock_clear_density=nil
+      t.wood=tree
+    end
+    return i and i+1,tree
   end
   return W
 end

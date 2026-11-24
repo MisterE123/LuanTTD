@@ -54,5 +54,24 @@ return function(Worldgen)
     end
     return new
   end
+  -- OnTick_Trees / DecrementTreeCounter / PlantRandomTree. Map area is the
+  -- stock power-of-two product (axes 64–4096); ScaleBySize uses ceil.
+  -- A rejected destination still consumes the single draw that chose it.
+  function T.global_tick(counter,area,tick,setting,random,tile)
+    setting=setting or T.SPREAD_ALL
+    if setting==T.NO_SPREAD or setting==T.NO_GROWTH then return counter end
+    local skip=math.ceil(area/4096)
+    if skip<16 and tick%(16/skip)~=0 then return counter end
+    local next_counter=(counter-math.ceil(area/65536))%256
+    if counter>next_counter or setting==T.RAINFOREST_ONLY then return next_counter end
+    local r=random()
+    local i=r%area
+    local t=tile(i)
+    if not Worldgen.can_plant(t,false) then return next_counter end
+    local g=t.class==6 and SHORE or t.ground==1 and ROUGH or GRASS
+    return next_counter,i,{class=4,type=math.floor(math.floor(r/16777216)*12/256),
+      count=1,growth=0,ground=g,density=g==GRASS and t.density or 3,
+      water_class=g==SHORE and "sea" or nil}
+  end
   return T
 end

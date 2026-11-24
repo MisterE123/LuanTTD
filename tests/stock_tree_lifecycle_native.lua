@@ -6,13 +6,17 @@ local function scene()
   if not (p and authority and authority.status()=="owned") then core.after(.24,scene);return end
   local s=assert(OwnerCheckpoint.read())
   if not baseline then
-    baseline={day=s.day,groves={}}
+    baseline={day=s.day,groves={},clock=s.stock_tree_tick_counter}
     for id,t in ipairs(s.tiles) do
       local w=t.wood
       if type(w)=="table" then
         baseline.groves[id]={type=w.type,stage=w.growth,count=w.count}
       end
     end
+  end
+  local born=0
+  for id,t in ipairs(s.tiles) do
+    if type(t.wood)=="table" and not baseline.groves[id] then born=born+1 end
   end
   local changed=0
   for id,old in pairs(baseline.groves) do
@@ -24,7 +28,8 @@ local function scene()
     core.after(5,scene)
     return
   end
-  if s.day<baseline.day+3 or changed==0 then core.after(.3,scene);return end
+  if s.day<baseline.day+3 or changed==0 or born==0 or not s.stock_tree_tick_counter
+      or s.stock_tree_tick_counter==baseline.clock then core.after(.3,scene);return end
   if not cam_id then
     for id,t in ipairs(s.tiles) do
       local w=t.wood
@@ -62,7 +67,7 @@ local function scene()
       if not registered or registered.mesh~=mesh..".obj" then core.after(.24,scene);return end
     end
   end
-  core.log("action",("PASS NATIVE STOCK TREE LIFE: real worker day %d→%d advanced %d groves; final stem phase %d, earlier stems mature")
-    :format(baseline.day,s.day,changed,old.growth))
+  core.log("action",("PASS NATIVE STOCK TREE LIFE: real worker day %d→%d advanced %d groves and added %d; global clock %s→%d; final stem phase %d, earlier stems mature")
+    :format(baseline.day,s.day,changed,born,tostring(baseline.clock),s.stock_tree_tick_counter,old.growth))
 end
 core.after(.24,scene)

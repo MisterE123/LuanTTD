@@ -73,3 +73,29 @@ local preserve=at(7,8,{terrain="water",water_class="sea",coastal_water=true,h=1,
 assert(Adapter.visit(s,7,8,due(7,8),fail).kind=="clear")
 assert(not preserve.wood and preserve.coastal_water and preserve.water_class=="sea")
 print("PASS native tree lifecycle adapter: immature clearance, actual neighbor planting, projected and packed stage, shore restoration")
+
+-- The global throw can grow on bare grass (unlike neighboring spread),
+-- but it cannot plant through a facility or replace an existing tree.
+Sim.W,Sim.H=64,64
+s=Sim.new(23)
+s.corner_grid=Terrain.new(Sim.W,Sim.H,function()return 1 end)
+s.stock_tree_tick_counter=0
+local bare,area_id=at(9,9,{terrain="hill",h=1,stock_clear_density=1})
+local roll=255*16777216+area_id-1
+local function fixed() return roll end
+local id,tree=Adapter.global_tick(s,0,fixed)
+local step=math.ceil(Sim.W*Sim.H/65536)
+assert(id==area_id and tree.type==11 and tree.density==1 and tree.growth==0)
+assert(bare.wood==tree and bare.stock_clear_density==nil)
+local saved=assert(packed.decode(packed.encode(s)))
+assert(saved.stock_tree_tick_counter==256-step and saved.tiles[area_id].wood.density==1)
+if step<256 then
+  assert(not Adapter.global_tick(saved,16,fail))
+  assert(saved.stock_tree_tick_counter==256-2*step)
+end
+s.stock_tree_tick_counter=0
+bare.wood=nil;bare.station=73
+local draws=0
+assert(not Adapter.global_tick(s,0,function() draws=draws+1;return roll end))
+assert(not bare.wood and draws==1)
+print("PASS global tree clock: immature clear grass, facility exclusion, checkpoint continuation and single stock RNG draw")
