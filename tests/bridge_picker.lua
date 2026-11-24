@@ -19,7 +19,7 @@ local picker=load("bridge_picker")({s=s,Sim=Sim,structure_tools=true,
 local seen=nil
 local function capture(yes,msg) seen={yes,msg} end
 local q=assert(picker.quote("road","Bridge Builder",a,b))
-assert(q.minimum==2447 and #q.ids==7 and #q.offers==5) -- Ordinary concrete and the fast girder are too short.
+assert(q.minimum==2447 and #q.ids==7 and #q.offers==8) -- Ordinary concrete and the fast girder are too short.
 assert(q.offers[2].name=="Steel girder" and q.offers[2].speed==64)
 assert(picker.open(p,"road",a,b,capture) and form.s:find("Timber",1,true) and form.s:find("$2,447",1,true))
 assert(c.cash==funds and not s.stock_road_bridges and applied==0 and saves==0)

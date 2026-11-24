@@ -65,6 +65,9 @@ return function(engine,mod,callbacks)
     end
     return false
   end
+  function H.refresh_scene()
+    if state=="owned" then interest.refresh_scene() end
+  end
   function H.solar_clock()
     if state=="owned" then return client.solar_clock() end
   end

@@ -1444,6 +1444,11 @@ function M.remove_through_road_stop(s,owner,id,preview)
   changes[1].keep_road=true
   return apply_build(s,owner,changes,cost)
 end
+-- Only the owning VM calls this with a plan it just validated. No
+-- mailbox or stale preview can provide the terrain edit itself.
+function M.apply_road_construction(s,owner,plan)
+  return apply_build(s,owner,plan.changes,plan.cost)
+end
 function M.autoroad_bend_build(s,owner,start,last)
   local q,why=M.autoroad_bend_plan(s,owner,start,last)
   if not q then return false,why end

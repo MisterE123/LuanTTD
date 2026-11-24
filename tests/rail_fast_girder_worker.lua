@@ -9,8 +9,10 @@ local owner="Bridge Railway"
 local phase=core.settings:get("luanttd_qa_bridge_phase")
 local function id(x,z)return (z-1)*64+x end
 local upgrade=tonumber(core.settings:get("luanttd_qa_bridge_style")) or 9
-local speed=({[3]=80,[4]=96,[5]=112,[9]=256})[upgrade]
-local a,b,depot=id(21,27),id((upgrade==4 or upgrade==5) and 25 or 24,27),id(8,27)
+local bridge_specs=m("openttd/road_bridge")(m("openttd/slope")).catalog
+local spec=assert(bridge_specs[upgrade])
+local speed=spec.speed
+local a,b,depot=id(21,27),id(22+math.max(2,spec.min_length),27),id(8,27)
 local west,east=id(13,27),id(32,27)
 local cap={road={start_year=1950,breakdowns=0,service_interval=0},ferry={},air={},
   rail=m("rail_dispatch_manifest").scan(mod,false,false),durable_actions=true}

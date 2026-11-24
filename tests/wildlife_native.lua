@@ -78,24 +78,57 @@ core.register_on_joinplayer(function(p)
     place()
     -- Sample all three habitats deterministically, with the real viewer
     -- identity, then pause the scene for five separate camera elevations.
-    local found={}
-    for _=1,28 do
-      for _,origin in ipairs(origins) do
-        local viewer={get_pos=function()return origin end,get_player_name=function()return n end,
-          get_meta=function()return p:get_meta() end}
-        V.step(1.20,{viewer})
-        for kind,ref in pairs(actors()) do found[kind]=ref end
+    local viewers={}
+    for _,origin in ipairs(origins) do
+      viewers[#viewers+1]={get_pos=function()return origin end,get_player_name=function()return n end,
+        get_meta=function()return p:get_meta() end}
+    end
+    local snapshots,observed={},{}
+    local function remember(kind,o)
+      snapshots[kind]={at=o:get_pos(),rot=o:get_rotation()}
+    end
+    for _=1,500 do
+      V.step(.20,viewers)
+      for kind,o in pairs(actors()) do
+        local at=o:get_pos()
+        local r=o:get_rotation()
+        if kind=="whale" then
+          if at.y<-.44 then observed.whale_dive=true end
+          if at.y>.36 and at.y<.42 and math.abs(r.x)<.07 then remember(kind,o) end
+          if at.y>1.30 then observed.whale_breach=true end
+        elseif kind=="porpoise" then
+          if at.y<.09 then observed.porpoise_swim=true end
+          if at.y>1.13 then remember(kind,o) end
+        else
+          if kind=="fox" then
+            local size=o:get_properties().visual_size
+            assert(size.x==.5 and size.y==.5)
+          end
+          remember(kind,o)
+        end
       end
       local complete=true
-      for _,kind in ipairs(species) do if not (found[kind] and found[kind]:get_pos()) then complete=false end end
-      if complete then break end
+      for _,kind in ipairs(species) do if not snapshots[kind] then complete=false end end
+      if complete and observed.whale_dive and observed.whale_breach and observed.porpoise_swim then break end
     end
-    for _,kind in ipairs(species) do assert(found[kind] and found[kind]:get_pos(),"missing native "..kind) end
+    assert(observed.whale_dive and observed.whale_breach and observed.porpoise_swim,"missing native swim poses")
+    local found,still={},{}
+    for _,kind in ipairs(species) do
+      local shot=assert(snapshots[kind],"missing native "..kind)
+      -- The original may have completed its complete encounter before
+      -- all five views were captured. Replay its measured pose using
+      -- the same real registered mesh, outside the production actor list.
+      local o=assert(core.add_entity(shot.at,"luanttd_core:wildlife_"..kind))
+      found[kind]=o
+      still[#still+1]=o
+    end
     local function aim(i)
       local kind=species[i]
       if not kind or not core.get_player_by_name(n) then return end
-      local at=found[kind]:get_pos()
-      if kind=="whale" or kind=="porpoise" then at.y=.51;found[kind]:set_pos(at) end
+      local shot=snapshots[kind]
+      local at=shot.at
+      found[kind]:set_pos(at)
+      found[kind]:set_rotation(shot.rot)
       local d=kind=="whale" and 5 or kind=="porpoise" and 2.1 or 1.8
       local dx,dz=d,-.8*d
       local up=kind=="whale" and 2.8 or kind=="porpoise" and .8 or -.15
@@ -108,9 +141,10 @@ core.register_on_joinplayer(function(p)
     end
     for i=1,#species do core.after(4.2*(i-1),aim,i) end
     core.after(4.2*#species,function()
+      for _,o in ipairs(still) do o:remove() end
       assert(core.registered_chatcommands.candy.func(n) and not V.enabled(p))
       assert(V.count()==0)
-      core.log("action","WILDLIFE_NATIVE_PASS five real meshes; /candy removed scenic actors for the only viewer")
+      core.log("action","WILDLIFE_NATIVE_PASS five real meshes, natural swim and leap poses, half-size fox; /candy hides the scene")
     end)
   end)
 end)

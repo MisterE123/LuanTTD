@@ -50,8 +50,9 @@ def drain(m,h,side,v):
     m.poly("Cast drain shade","Drain opening",*bore)
 
 
-def deck(m,h,is_head):
-    common.running_surface(m,h)
+def deck(m,h,is_head,*,road_surface=True):
+    if road_surface:
+        common.running_surface(m,h)
     m.box("Continuous cast roadway slab","Concrete warm",-.463,.463,-1,1,
           lambda v:h(v)-.105,lambda v:h(v)-.004,end_faces=False,
           face_colors={"under":"Concrete soffit"})

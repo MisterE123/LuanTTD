@@ -9,8 +9,10 @@ local cp=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campai
 local owner="Ordinary Bridge Construction"
 local function id(x,z) return (z-1)*64+x end
 local upgrade=tonumber(core.settings:get("luanttd_qa_bridge_style")) or 9
-local speed=({[3]=80,[4]=96,[5]=112,[9]=256})[upgrade]
-local a,b,water=id(18,22),id((upgrade==4 or upgrade==5) and 22 or 21,22),id(19,22)
+local bridge_specs=m("openttd/road_bridge")(m("openttd/slope")).catalog
+local spec=assert(bridge_specs[upgrade])
+local speed=spec.speed
+local a,b,water=id(18,22),id(19+math.max(2,spec.min_length),22),id(19,22)
 local rails=id(20,22)
 local depot,west,east=id(9,21),id(12,22),id(29,22)
 local phase=core.settings:get("luanttd_qa_bridge_phase")

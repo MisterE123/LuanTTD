@@ -32,7 +32,7 @@ jobs:
       - name: Check Lua syntax and run focused tests
         run: |
           find mods/luanttd_core -type f -name '*.lua' -print0 | xargs -0 -r -n 1 luac5.1 -p
-          for t in sim pedestrian avatar_car player_return cinematic_view ambient_wildlife ambient_shop_traffic survey_sightseeing campaign_landscape_async campaign_simulation_bindings campaign_company_guide campaign_authority_endpoint campaign_authority_projection campaign_authority_interest campaign_projection_painter campaign_paint_tops campaign_snapshot_scene campaign_authority_host campaign_build_proxy campaign_projected_actors campaign_passenger_projection campaign_worker_finance_ui campaign_news_road campaign_worker_depot_ui campaign_worker_fleet_ui authority_terrain_view campaign_transport_commands presentation_interest world_setup generated_world_dimensions packed_campaign workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere industry_smoke_view hotbar vehicle_ui road_live_order_edit tram_live_order_edit water_air_orders ordinary_level_crossing \
+          for t in sim pedestrian avatar_car player_return cinematic_view ambient_wildlife wildlife_motion world_place_labels ambient_shop_traffic survey_sightseeing campaign_landscape_async campaign_simulation_bindings campaign_company_guide campaign_authority_endpoint campaign_authority_projection campaign_authority_interest campaign_projection_painter campaign_paint_tops campaign_snapshot_scene campaign_authority_host campaign_build_proxy campaign_projected_actors campaign_passenger_projection campaign_worker_finance_ui campaign_news_road campaign_worker_depot_ui campaign_worker_fleet_ui authority_terrain_view campaign_transport_commands presentation_interest world_setup generated_world_dimensions packed_campaign workbench_index business_tutorials original_terrain_explorer_gate jump_map atmosphere industry_smoke_view hotbar vehicle_ui road_live_order_edit tram_live_order_edit water_air_orders ordinary_level_crossing \
             bridge_picker bridge_underlay bridge_piece_art road_bridge_upgrade rail_span rail_span_run rail_bridge_catenary_selector generated_coast_dock \
             coastal_corridor_seed coastal_corridor_freight generated_oil_placement mixed_freight_live farm_field_view rail_owned_default \
             rail_depot_fleet rail_depot_construction rail_loose_wagons rail_order_cargo rail_owned_ui rail_goods_owned_ui rail_oil_world_ui rail_grade_signals \
@@ -48,6 +48,8 @@ jobs:
           lua5.1 tests/monorail_owned_runtime.lua spans
           python3 tests/fast_girder_art.py
           python3 tests/concrete_suspension_art.py
+          python3 tests/steel_cantilever_art.py
+          python3 tests/short_rail_bridge_art.py
           python3 tests/advanced_guideway_art.py
           python3 tests/advanced_rail_facility_art.py
           python3 tests/stock_x2001_art.py
@@ -268,11 +270,47 @@ jobs:
           trap 'rm -rf -- "$TMPDIR"' EXIT
           export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/cache"
           python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
+          bash tests/road_placement_latency_native.sh
+          bash tests/place_labels_worker_native.sh
+          BAYLINE_NATIVE_DISPLAY=313 bash tests/place_labels_graphical.sh
           BAYLINE_NATIVE_DISPLAY=307 timeout 220 bash tests/campaign_worker_focus_native.sh
           BAYLINE_NATIVE_DISPLAY=309 BAYLINE_FOCUS_DEAD_END=1 timeout 220 bash tests/campaign_worker_focus_native.sh
           BAYLINE_NATIVE_DISPLAY=306 BAYLINE_FOCUS_DEAD_END=depot timeout 220 bash tests/campaign_worker_focus_native.sh
           BAYLINE_NATIVE_DISPLAY=308 BAYLINE_NATIVE_PORT=46708 timeout 220 bash tests/campaign_worker_ride_native.sh
           BAYLINE_NATIVE_DISPLAY=311 BAYLINE_NATIVE_PORT=46711 timeout 140 bash tests/wildlife_native.sh
+
+  native-opening-bridges:
+    name: Opening bridge family and paid service
+    runs-on: ubuntu-24.04
+    container: debian:13
+    timeout-minutes: 8
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        style: [1, 2, 6, 7, 8]
+    steps:
+      - name: Install native test tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git gcc libc6-dev luanti luanti-server python3 xvfb x11-utils xauth xdotool imagemagick
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run occupied replacement, restart, fare and graphical replay
+        env:
+          BAYLINE_TEST_BRIDGE_STYLE: ${{ matrix.style }}
+        run: |
+          export PATH="/usr/games:$PATH"
+          export TMPDIR="$(mktemp -d "$GITHUB_WORKSPACE/.opening-bridge.XXXXXX")"
+          trap 'rm -rf -- "$TMPDIR"' EXIT
+          if ((BAYLINE_TEST_BRIDGE_STYLE >= 6)); then
+            bash tests/road_bridge_upgrade_native.sh
+          fi
+          bash tests/rail_fast_girder_worker.sh
+          bash tests/fast_girder_graphical.sh
 
   rc1-parity:
     name: Compiled OpenTTD 16.0-RC1 comparisons

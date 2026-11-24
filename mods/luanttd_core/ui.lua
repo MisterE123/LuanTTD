@@ -1900,9 +1900,14 @@ local function authority_preview(p,id,hit)
   if request.railtype==2 or request.railtype==3 then
     label=(request.railtype==3 and "Maglev" or "Monorail").." · "..label
   end
-  local q,why=client.preview(n,kind,request,core.get_us_time())
+  local q,why,pending=client.preview(n,kind,request,core.get_us_time())
   if tool=="rail_autotrack" then V.rail_ghost=q and {id=id,pieces=q.pieces} or nil end
-  if not q then return ids,false,why end
+  -- A new hover is neither approved nor obstructed. Don't flash red
+  -- while the worker validates the shape the player just selected.
+  if not q then
+    if kind=="road" and pending then return ids,nil,why end
+    return ids,false,why
+  end
   return q.tiles or ids,true,("%s  |  %s  ·  %d tiles"):format(label,dollars(q.cost or 0),#(q.tiles or ids))
 end
 function U.preview(p,id,hit)

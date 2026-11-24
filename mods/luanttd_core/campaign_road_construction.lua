@@ -58,23 +58,30 @@ return function(Sim,s,oneway,Bank)
     if not q then return nil,why end
     return summary(q)
   end
-  function M.commit(player,request,published)
+  function M.commit(player,request,published,direct)
     local q,why=plan(player,request)
     if not q then return false,why end
     local current=summary(q)
-    if type(published)~="table" or published.topology~=current.topology or published.terrain~=current.terrain or published.cost~=current.cost or published.ticket~=current.ticket
-      or published.stopped_at~=current.stopped_at then return false,"ROAD_QUOTE_CHANGED" end
-    local first,last=request.first,request.last or request.first
+    -- A deliberate placement can arrive before a speculative preview.
+    -- Recompute inside the owner; if the player saw a price/footprint,
+    -- never silently replace it. Unrelated changes do not spoil an
+    -- otherwise identical direct action.
+    if not (direct and published==nil) then
+      if type(published)~="table" or published.cost~=current.cost or published.ticket~=current.ticket
+        or published.stopped_at~=current.stopped_at or (not direct and
+          (published.topology~=current.topology or published.terrain~=current.terrain)) then
+        return false,"ROAD_QUOTE_CHANGED"
+      end
+    end
+    local first=request.first
     if request.tool=="oneway" then
       local ok,cost,ids=oneway.commit(s,player,q)
       if not ok then return false,cost end
       local note=("%d road tiles updated for $%d."):format(#ids,cost)
       if #q.skipped>0 then note=note..(" %d skipped."):format(#q.skipped) end
       return true,note,ids
-    elseif request.tool=="drag" then
-      return Sim.autoroad_build(s,player,first,last,request.axis,request.start_half,request.end_half)
-    elseif request.tool=="bend" then
-      return Sim.autoroad_bend_build(s,player,first,last)
+    elseif request.tool=="drag" or request.tool=="bend" then
+      return Sim.apply_road_construction(s,player,q)
     elseif request.tool=="fund_bank" then
       local bank,ids=Bank.execute(s,player,first,q.bank)
       if not bank then return false,Bank.reason(ids) end
@@ -88,7 +95,7 @@ return function(Sim,s,oneway,Bank)
       end
       return ok,note,ids
     end
-    return Sim.build(s,player,request.tool,{first})
+    return Sim.apply_road_construction(s,player,q)
   end
   return M
 end

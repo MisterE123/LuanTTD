@@ -329,3 +329,29 @@ do
   assert(not A.command(john,command).ok,"outdated native confirmation cannot overwrite newer orders")
 end
 print("PASS worker depot order copy preserves sequence and flags, source identity and receiving cursor; stale, foreign and incompatible copies fail atomically")
+do
+  local r=Sim.new(1731)
+  r.corner_grid=T.new(Sim.W,Sim.H,function()return 1 end)
+  for _,t in ipairs(r.tiles) do
+    t.terrain,t.h="grass",1
+    t.build,t.station,t.road_bits,t.wood,t.house,t.site,t.stock_industry=nil,nil,nil,nil,nil,nil,nil
+  end
+  local rules=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,r,{road={start_year=1950,breakdowns=0,service_interval=0}})
+  local R=dofile(mod.."/campaign_authority_endpoint.lua")(Sim,rules)
+  local selected={tool="drag",first=Sim.id(3,9),last=Sim.id(10,9),axis=0,start_half=false,end_half=true}
+  assert(R.road_place("Unknown",selected).why=="COMPANY_NOT_OPEN")
+  assert(R.command(john,{kind="company_open"}).ok)
+  local quote=assert(R.road_quote(john,selected).value)
+  local cash=r.companies[john].cash
+  quote.cost=quote.cost-1
+  assert(R.road_place(john,selected,quote).why=="ROAD_QUOTE_CHANGED" and cash==r.companies[john].cash)
+  quote.cost=quote.cost+1
+  r.topology=r.topology+1 -- unrelated owner-side work; the shown price and footprint stay valid
+  local accepted=R.road_place(john,selected,quote)
+  assert(accepted.ok and #accepted.value==#quote.tiles and r.companies[john].cash==cash-quote.cost)
+  local again=R.road_place(john,selected,quote)
+  assert(not again.ok and r.companies[john].cash==cash-quote.cost)
+  local fresh={tool="drag",first=Sim.id(4,16),last=Sim.id(8,16),axis=0,start_half=true,end_half=false}
+  assert(R.road_place(john,fresh).ok)
+  print("PASS one owner turn applies exact visible roads, rejects stale price without spending, and safely quotes a fresh placement")
+end

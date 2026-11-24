@@ -116,8 +116,8 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
   end
   function Session.solar_clock() return H.solar_clock() end
   function Session.status() return H.status() end
-  function Session.place_labels(name,x,z,done)
-    return H.observe({kind="place_labels",player=name,x=x,z=z},done)
+  function Session.place_labels(name,x,z,range,done)
+    return H.observe({kind="place_labels",player=name,x=x,z=z,range=range},done)
   end
   function Session.query(request,done) return H.query(request,done) end
   return Session

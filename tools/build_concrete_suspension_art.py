@@ -37,7 +37,19 @@ def pipe(m,name,u,points,r):
 
 
 def block(m,group,col,cx,v0,v1,width,y0,y1):
-    m.box(group,col,cx-width/2,cx+width/2,v0,v1,y0,y1,end_faces=False)
+    a,b=cx-width/2,cx+width/2
+    m.box(group,col,a,b,v0,v1,y0,y1,end_faces=False)
+    # A tower or pier can face open air when only one of the two
+    # neighbouring terrain columns needs a pier course. The inner end
+    # also faces along the deck, so it cannot borrow the next tile's mesh.
+    # Recess seam caps slightly to avoid coincident faces on paired
+    # halves (and on layered sleeves/collars). Keep the visible outer
+    # faces and the structural bearing footprint at their exact seams.
+    inset=.0007+width*.001
+    front=v0+inset if v0==-1 else v0
+    back=v1-inset if v1==1 else v1
+    m.poly(group,col,(a,front,y0),(b,front,y0),(b,front,y1),(a,front,y1))
+    m.poly(group,col,(b,back,y0),(a,back,y0),(a,back,y1),(b,back,y1))
 
 
 def towers(m,ends):
@@ -69,6 +81,10 @@ def roadway(m,h,mode,head):
         v0=-.79 if head else -1.
         m.box("Low precast safety railing","Concrete satin",mid-.027,mid+.027,v0,1,
               lambda v:h(v)+.099,lambda v:h(v)+.132,end_faces=False)
+        if head:
+            m.poly("Low precast safety railing","Concrete satin",
+                   (mid-.027,v0,h(v0)+.099),(mid+.027,v0,h(v0)+.099),
+                   (mid+.027,v0,h(v0)+.132),(mid-.027,v0,h(v0)+.132))
         for v in (-.69,-.31,.07,.45,.83):
             m.box("Clear baluster slots","Concrete pearl",mid-.036,mid+.036,v-.023,v+.023,
                   lambda q:h(q)+.012,lambda q:h(q)+.143)

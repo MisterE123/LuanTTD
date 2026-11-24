@@ -6,11 +6,11 @@ return function(core,Sim,view,media)
   local pi,sin,cos=math.pi,math.sin,math.cos
   local tau=2*pi
   local defs={
-    whale={max=1,radius=6.5,velocity=.83,lifetime=84,view=56,min=11},
-    porpoise={max=4,radius=3.4,velocity=1.35,lifetime=52,view=52,min=8},
-    seagull={max=5,radius=4.8,velocity=2.9,lifetime=58,view=53,min=8,variants={"wing_up","wing_down"}},
-    eagle={max=1,radius=7.5,velocity=3.8,lifetime=72,view=62,min=12,variants={"wing_up","wing_down"}},
-    fox={max=2,radius=.69,velocity=.55,lifetime=52,view=36,min=5,variants={"stride"}},
+    whale={radius=6.5,velocity=.83,lifetime=84,view=56,min=11,rest=3*84},
+    porpoise={radius=3.4,velocity=1.35,lifetime=52,view=52,min=8},
+    seagull={radius=4.8,velocity=2.9,lifetime=58,view=53,min=8,variants={"wing_up","wing_down"}},
+    eagle={radius=7.5,velocity=3.8,lifetime=72,view=62,min=12,rest=3*72,variants={"wing_up","wing_down"}},
+    fox={scale=.5,radius=.69,velocity=.55,lifetime=52,view=36,min=5,rest=52,variants={"stride"}},
   }
   local ordered={"whale","porpoise","seagull","eagle","fox"}
   local texture="bl_wildlife_atlas.png"
@@ -23,11 +23,11 @@ return function(core,Sim,view,media)
       core.register_entity(name(kind),{initial_properties={
         physical=false,collide_with_objects=false,pointable=false,static_save=false,
         visual="mesh",mesh=mesh(kind),textures={texture},shaded=true,backface_culling=true,
-        visual_size={x=1,y=1,z=1},
+        visual_size={x=d.scale or 1,y=d.scale or 1,z=d.scale or 1},
       }})
     end
   end
-  local animals,cursors,observers={},{},{}
+  local animals,cursors,observers,encounters={},{},{},{}
   local age,update,scans=0,0,1
   local sector_cursor=0
   local function tile(x,z)
@@ -78,7 +78,65 @@ return function(core,Sim,view,media)
     return t and not t.stock_void and ((view.uses_slope and view.uses_slope(id) and view.surface(id,x,z)) or
       (t.h or 0)+.5) or fallback
   end
-  local function render(a,dt)
+  local function ramp(t,span,first,last)
+    local u=t/span
+    return first+(last-first)*u*u*(3-2*u),(last-first)*6*u*(1-u)/span
+  end
+  local function arch(t,span,deep,peak)
+    local f=pi*t/span
+    return deep+(peak-deep)*sin(f)^2,(peak-deep)*pi*sin(2*f)/span
+  end
+  -- Measured from the sea plane, not the animal's spawning height.
+  -- Nose follows the tangent of the breach; approach and re-entry are
+  -- continuous with underwater travel, not repeated shallow bobbing.
+  local function swim(kind,elapsed,phase,d)
+    local seed=phase/tau
+    local whale=kind=="whale"
+    local period=(whale and 21 or 6.7)+seed*(whale and 5.3 or 2.4)
+    local full=elapsed+seed*period
+    local t=full%period
+    local y,speed,surfaced
+    if whale then
+      local rare=math.floor(full/period)%5==math.floor(seed*10)%5
+      if rare then
+        y,speed=-1.12,0
+        if t>=4 and t<8.5 then y,speed=arch(t-4,4.5,-1.12,1.04) end
+      elseif t>=4 and t<7.5 then
+        y,speed=ramp(t-4,3.5,-1.12,-.097)
+      elseif t>=7.5 and t<10.3 then
+        y,speed=ramp(t-7.5,2.8,-.097,-.135)
+        surfaced=true
+      elseif t>=10.3 and t<14.5 then
+        y,speed=ramp(t-10.3,4.2,-.135,-1.12)
+      else y,speed=-1.12,0 end
+    elseif t<2.18 then
+      y,speed=arch(t,2.18,-.49,.73)
+    else y,speed=-.49,0 end
+    local limit=whale and .48 or .76
+    local pitch=math.max(-limit,math.min(limit,-math.atan2(speed,d.velocity)))
+    return y,pitch,surfaced
+  end
+  local function blow(x,y,z,yaw,pitch,d)
+    if not core.add_particlespawner then return end
+    -- Local blowholes are .825 forward and .18 above the model's
+    -- origin, with the model pitching around its lateral axis.
+    local forward=.825*cos(pitch)+.18*sin(pitch)
+    y=y-.825*sin(pitch)+.18*cos(pitch)
+    x,z=x-forward*sin(yaw),z+forward*cos(yaw)
+    for watcher in pairs(observers) do
+      local p=core.get_player_by_name(watcher)
+      local viewer=p and p:get_pos()
+      if viewer and distance(viewer,x,z)<d.view^2 then
+        core.add_particlespawner({playername=watcher,amount=9,time=.17,collisiondetection=false,
+          pos={min={x=x-.12,y=y+.045,z=z-.12},max={x=x+.12,y=y+.095,z=z+.12}},
+          vel={min={x=-.2,y=.56,z=-.2},max={x=.2,y=1.1,z=.2}},
+          acc={min={x=0,y=-1.8,z=0},max={x=0,y=-1.4,z=0}},
+          exptime={min=.35,max=.65},size={min=.8,max=1.5},
+          texture={name="bl_fountain_droplet.png",alpha_tween={.8,0}}})
+      end
+    end
+  end
+  local function render(a,dt,initial)
     local d=defs[a.kind]
     local elapsed=age-a.created
     local t=a.phase+elapsed*d.velocity/d.radius
@@ -87,26 +145,12 @@ return function(core,Sim,view,media)
     local x,z=a.x+radius*cos(t),a.z+radius*sin(t)
     local y,pitch,roll,variant=a.y,0,0,nil
     if a.kind=="whale" or a.kind=="porpoise" then
-      if not sea(tile(x,z),true) then return false end
-      local whale=a.kind=="whale"
-      local f=elapsed*(whale and .31 or 1.26)+a.phase
-      y=y+(whale and -.17+.31*cos(f) or -.09+.20*cos(f))
-      pitch=(whale and .20 or .50)*sin(f)
-      local surfaced=cos(f)>.92
-      if whale and surfaced and not a.surfaced and core.add_particlespawner then
-        for watcher in pairs(observers) do
-          local p=core.get_player_by_name(watcher)
-          local viewer=p and p:get_pos()
-          if viewer and distance(viewer,x,z)<d.view^2 then
-          core.add_particlespawner({playername=watcher,amount=9,time=.17,collisiondetection=false,
-          pos={min={x=x-.12,y=y+.27,z=z-.12},max={x=x+.12,y=y+.32,z=z+.12}},
-          vel={min={x=-.2,y=.56,z=-.2},max={x=.2,y=1.1,z=.2}},
-          acc={min={x=0,y=-1.8,z=0},max={x=0,y=-1.4,z=0}},
-          exptime={min=.35,max=.65},size={min=.8,max=1.5},
-          texture={name="bl_fountain_droplet.png",alpha_tween={.8,0}}})
-          end
-        end
-      end
+      local sea_tile=tile(x,z)
+      if not sea(sea_tile,true) then return false end
+      local offset,surfaced
+      offset,pitch,surfaced=swim(a.kind,elapsed,a.phase,d)
+      y=(sea_tile.h or 0)+.5+offset
+      if surfaced and not a.surfaced then blow(x,y,z,yaw,pitch,d) end
       a.surfaced=surfaced
     elseif a.kind=="fox" then
       local ground,id=tile(x,z)
@@ -129,7 +173,7 @@ return function(core,Sim,view,media)
     if variant and not media[mesh(a.kind,variant)] then variant=nil end
     if variant~=a.variant then a.ref:set_properties({mesh=mesh(a.kind,variant)});a.variant=variant end
     a.ref:set_rotation({x=pitch,y=-yaw,z=roll})
-    a.ref:move_to({x=x,y=y,z=z},true)
+    a.ref:move_to({x=x,y=y,z=z},not initial)
     return true
   end
   local function spawn(kind,x,z,phase)
@@ -148,7 +192,26 @@ return function(core,Sim,view,media)
     if not ref then return end
     if ref.set_observers then ref:set_observers(observers) end
     local a={ref=ref,x=x,z=z,y=base,kind=kind,created=age,phase=phase}
-    if render(a,.2) then animals[#animals+1]=a else ref:remove() end
+    if render(a,.2,true) then
+      animals[#animals+1]=a
+      local d=defs[kind]
+      if d.rest then
+        -- Longer pauses for individually scarce animals. Keep the
+        -- cooldown local to where the encounter occurred, not the save
+        -- or the viewer: sailing to new waters can reveal another one.
+        encounters[#encounters+1]={x=x,z=z,kind=kind,until_=age+d.lifetime+d.rest}
+        if #encounters>64 then table.remove(encounters,1) end
+      end
+      return true
+    end
+    ref:remove()
+  end
+  local function resting(kind,x,z,at,d)
+    if not d.rest then return false end
+    for _,e in ipairs(encounters) do
+      if e.kind==kind and (distance(e,x,z)<d.view^2 or distance(e,at.x,at.z)<d.view^2) then return true end
+    end
+    return false
   end
   local function find(player,at)
     local n=player:get_player_name()
@@ -168,14 +231,9 @@ return function(core,Sim,view,media)
       local r=d.min+(d.view-d.min-9)*(((k*131)%89)/89)
       local theta=k*2.3999632297
       local x,z=at.x+r*cos(theta),at.z+r*sin(theta)
-      local gap=(kind=="whale" and 24 or kind=="eagle" and 23 or kind=="fox" and 3 or 6)^2
-      if d.ready and #animals<28 and (local_counts[kind] or 0)<d.max and
-          habitat(kind,x,z) then
-        local near=false
-        for _,a in ipairs(animals) do
-          if a.kind==kind and distance(a,x,z)<gap then near=true;break end
-        end
-        if not near then spawn(kind,x,z,theta%tau);local_counts[kind]=(local_counts[kind] or 0)+1 end
+      if d.ready and #animals<7 and not local_counts[kind] and
+          not resting(kind,x,z,at,d) and habitat(kind,x,z) and spawn(kind,x,z,theta%tau) then
+        local_counts[kind]=1
       end
     end
     cursors[n]=(cursor+15)%445
@@ -210,6 +268,9 @@ return function(core,Sim,view,media)
     end
     if scans<1.15 or #viewers==0 then return end
     scans=0
+    for i=#encounters,1,-1 do
+      if encounters[i].until_<=age then table.remove(encounters,i) end
+    end
     for i=1,math.min(6,#viewers) do
       local p=viewers[(sector_cursor+i-1)%#viewers+1]
       find(p.player,p.at)

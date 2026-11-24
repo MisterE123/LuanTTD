@@ -23,14 +23,17 @@ local passed
 core.register_on_mods_loaded(function()
   assert(Client.start(cap,function(r)
     assert(r.ready)
-    assert(Client.query({kind="place_labels",player=owner,x=6,z=62},function(first)
+    assert(Client.query({kind="place_labels",player=owner,x=6,z=62,range=120},function(first)
       assert(first.ok and #first.value==1)
       local d=first.value[1]
       assert(d.tile==far and d.id==1 and d.name=="Unloaded Ridge" and type(d.population)=="number" and d.y==23,core.write_json(d))
-      assert(Client.query({kind="place_labels",player=owner,x=999999,z=62},function(bad)
-        assert(not bad.ok and bad.why=="Place names unavailable.")
-        passed=true
-        assert(Client.query({kind="stop"},function() end))
+      assert(Client.query({kind="place_labels",player=owner,x=6,z=62,range=100},function(short)
+        assert(short.ok and #short.value==0,"label beyond requested range returned")
+        assert(Client.query({kind="place_labels",player=owner,x=6,z=62,range=385},function(bad)
+          assert(not bad.ok and bad.why=="Place names unavailable.")
+          passed=true
+          assert(Client.query({kind="stop"},function() end))
+        end))
       end))
     end))
   end,function(why,_,_,detail)

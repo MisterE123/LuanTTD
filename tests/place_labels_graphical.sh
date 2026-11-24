@@ -12,7 +12,7 @@ cp tests/qa_layout.lua "$mod/qa_layout.lua"
 (cat "$mod/init.lua";printf '\n';cat tests/place_labels_graphical.lua) > "$out/init.lua"
 mv "$out/init.lua" "$mod/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
-printf 'luanttd_qa_plain_layout = true\nscreen_w = 1180\nscreen_h = 760\nenable_sound = false\nviewing_range = 96\n' > "$out/native.conf"
+printf 'luanttd_qa_plain_layout = true\nscreen_w = 1180\nscreen_h = 760\nenable_sound = false\nviewing_range = 64\n' > "$out/native.conf"
 printf 'luanttd_qa_bridge_style = %s\n' "${BAYLINE_TEST_BRIDGE_STYLE:-9}" >> "$out/native.conf"
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=1 ALSOFT_DRIVERS=null

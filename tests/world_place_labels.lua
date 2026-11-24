@@ -27,3 +27,18 @@ end
 rows=L.describe(Sim,board,20,18,peek)
 assert(#rows==L.max_places and #rows==64 and rows[1].name=="10")
 print("PASS labels follow terrain/roof height, far sites do not require visible terrain, stops stay local, payload capped")
+assert(L.radius(64,185,192)==70)
+assert(L.radius("80",185,192)==88)
+assert(L.radius(300,185,192)==201)
+assert(L.radius(300,185,96)==106)
+assert(L.radius(300,-1,500)==316)
+assert(L.radius(1000,-1,500)==L.place_radius)
+assert(L.visible(69,2,0,{x=0,y=0,z=0},70))
+assert(not L.visible(69,16,0,{x=0,y=0,z=0},70))
+assert(L.viewer_range({settings={get=function(_,k)return k=="viewing_range" and "128" or "20" end}},
+  {get_sky=function()return{fog={fog_distance=75}}end})==83)
+local shortened=L.describe(Sim,board,20,18,peek,30)
+for _,r in ipairs(shortened) do
+  assert(r.name~="Distant Mill" and r.name~="Outside")
+end
+print("PASS one small margin beyond effective view, fog and send caps, 3D cutoff, and matching worker query radius")

@@ -316,16 +316,16 @@ return function(Sim,R,max_days)
     local step,fare,warning=R.lesson(name,lesson)
     return reply(true,nil,{step=step,fare=fare,warning=warning})
   end
-  function A.place_labels(name,x,z)
+  function A.place_labels(name,x,z,range)
     if not owner(name) or not s.companies[name] or not integer(x,-512,2*Sim.W+512)
-        or not integer(z,-512,2*Sim.H+512) then
+        or not integer(z,-512,2*Sim.H+512) or not integer(range,1,place_labels.place_radius) then
       return reply(false,"Place names unavailable.")
     end
     local function top(_,u,v)
       local _,_,y=R.terrain.tile(s.corner_grid,u,v)
       return y
     end
-    return reply(true,nil,place_labels.describe(Sim,s,x,z,top))
+    return reply(true,nil,place_labels.describe(Sim,s,x,z,top,range))
   end
   function A.jump_map(name,zoom,here,focus)
     if not owner(name) or not s.companies[name] or here~=nil and not tile_id(here)
@@ -511,8 +511,9 @@ return function(Sim,R,max_days)
       if c.cost~=e.cost then return reply(false,"VEHICLE_PRICE_CHANGED") end
       value,note=Sim.purchase(s,name,c.engine,c.cargo,nil,c.depot)
       ok=value~=nil
-    elseif c.kind=="road_commit" and R.road_construction then
-      ok,note,value=R.road_construction.commit(name,c.request,c.quote)
+    elseif (c.kind=="road_commit" or c.kind=="road_place") and R.road_construction then
+      if not s.companies[name] then return reply(false,"COMPANY_NOT_OPEN") end
+      ok,note,value=R.road_construction.commit(name,c.request,c.quote,c.kind=="road_place")
     elseif c.kind=="road_build" and tile_id(c.first) and tile_id(c.last) then
       local x,z=Sim.xy(c.first)
       local u,v=Sim.xy(c.last)
@@ -583,6 +584,10 @@ return function(Sim,R,max_days)
       s.authority_revision=authority_revision
     end
     return reply(ok,note,value)
+  end
+  -- Keep the validation and mutation under the same owner turn.
+  function A.road_place(name,request,quote)
+    return A.command(name,{kind="road_place",request=request,quote=quote,revision=authority_revision})
   end
   -- Keep an exact, bounded scene cache in the worker. Topology alone
   -- misses houses, fields, wet corners and signal changes.

@@ -45,7 +45,7 @@ Two new worlds with seeds 1751 and 42 agreed on these availability counts.
 | Road | 1 bus, 10 freight vehicles and one ordinary road type | Test the day-one native orders and paid service for the entire list, including native farm, wood, ore, steel and valuables routes. |
 | Water | 3 vessels: the MPS ferry, MPS oil tanker and Yate cargo ship | Check the common ship build, cargo selection, depot and dock flow against stock, and genuine ordinary service for all starter cargo configurations. |
 | Air | Sampson U52, Coleman Count, Bakewell Cotswald LB-3; the 4×3 Country Airport | Close any remaining runway, loading, purchase offer, and save/restart gaps before 1955’s City Airport. |
-| Bridges | **10 styles**, IDs 0–9 | The source rule table already has all 13 dated styles. The player-facing host exposes 7 road styles and 5 conventional rail styles. This is the first verified opening-era system/asset gap to close. |
+| Bridges | **10 styles**, IDs 0–9 | The source rule table already has all 13 dated styles. All ten [opening styles](OPENING_BRIDGES.md) are usable with road and conventional rail, subject to the stock length, price and construction restrictions. |
 | Cargo and industry | 11 cargo types. In seed 1751, 10 stock onshore industry types were generated. | Compare climate files and generation, all onshore supply chains, funding/openings/changes, rates and cargo handling; bank/city conditions vary. Oil rigs are not a generation-time industry and can open from 1960 onward. |
 
 Additional live regression points: the 1930 Temperate opening had 17
@@ -66,13 +66,15 @@ available. These are reference observations, not claims of port completion.
   The native bulldozer quotes and charges the stock road demolition cost
   without disturbing an existing road below; construction and replacement
   also preserve existing plain rail beneath the span. Rail replacement
-  preserves the active consist and both reservations. Four additional
-  styles met the road/conventional-rail gate: [concrete suspension](CONCRETE_SUSPENSION.md),
-  both [steel suspension finishes](STEEL_SUSPENSION.md), and the
-  [high-speed steel girder](FAST_GIRDER.md). Both modes finished paid
-  service after live upgrades and server restarts for each of these styles.
-  Remaining: road styles 6–8, conventional rail 1–2 and 6–8, other rail
-  types later in the timeline, and remaining native underlay handlers.
+  preserves the active consist and both reservations. All ten normal opening bridge styles are
+  available for roads and conventional rail, including [both short
+  conventional rail bridges and all three cantilevers](OPENING_BRIDGES.md),
+  [concrete suspension](CONCRETE_SUSPENSION.md),
+  [both steel suspension finishes](STEEL_SUSPENSION.md), and the
+  [high-speed steel girder](FAST_GIRDER.md). Native sessions verified
+  paid service after restart and occupied-span replacement.
+  Remaining: later tubular styles, other rail types and remaining
+  native underlay handlers.
 
 ## Reproduce
 

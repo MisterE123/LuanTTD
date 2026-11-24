@@ -7,7 +7,7 @@ core.register_on_joinplayer(function(p)
   local name=p:get_player_name()
   local T=dofile(mod.."/openttd/terrain.lua")
   local Sim=api.Sim
-  local close,far=Sim.id(15,18),Sim.id(43,18)
+  local close,far,outside=Sim.id(15,18),Sim.id(43,18),assert(Sim.id(47,18))
   for z=1,Sim.H+1 do for x=1,Sim.W+1 do
     S.corner_grid.levels[(z-1)*(Sim.W+1)+x]=math.max(0,math.min(12,x-13))
   end end
@@ -20,6 +20,8 @@ core.register_on_joinplayer(function(p)
   S.tiles[far].site=505
   S.sites[506]={id=506,tile=close,kind="factory",name="Lower Works",population=0,stock={},produced={},received={},service=0}
   S.tiles[close].site=506
+  S.sites[507]={id=507,tile=outside,kind="town",name="Out of Range",population=440,stock={},produced={},received={},service=0}
+  S.tiles[outside].site=507
   local camera={x=17,y=19,z=35.5}
   core.emerge_area({x=12,y=0,z=23},{x=93,y=19,z=47},function(_,action,left)
     assert(action~=core.EMERGE_CANCELLED and action~=core.EMERGE_ERRORED)
@@ -37,6 +39,8 @@ core.register_on_joinplayer(function(p)
         for id,row in pairs(real:hud_get_all()) do
           if row.name and row.world_pos then shown[row.name]={id=id,at=row.world_pos} end
         end
+        assert(tonumber(core.settings:get("viewing_range"))==64)
+        assert(not shown["Out of Range  (440)"],"an offscreen label exceeded the view distance margin")
         local first=assert(shown["Far Ridge  (440)"])
         assert(first.at.y==17 and first.at.x==86.5)
         assert((first.at.x-camera.x)>42,"Fixture must be outside the old visibility radius")

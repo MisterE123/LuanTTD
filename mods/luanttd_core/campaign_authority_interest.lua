@@ -49,6 +49,7 @@ return function(client,projection,width,depth,changed)
     elapsed=.2
     changed(projection)
   end
+  function I.refresh_scene() elapsed=.2 end
   function I.step(dt,fraction)
     elapsed=math.min(.2,elapsed+dt)
     motion_elapsed=math.min(.09,motion_elapsed+dt)

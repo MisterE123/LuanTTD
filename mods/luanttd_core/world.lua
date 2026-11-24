@@ -736,7 +736,7 @@ return function(api,ui)
     end
     local shade="inspect"
     local anchor=ui.anchor(p)
-    if ids then shade=valid and tool~="clear" and "valid" or "invalid" end
+    if ids and valid~=nil then shade=valid and tool~="clear" and "valid" or "invalid" end
     if api.selector then
       local rail=world_tool and ui.rail_overlay and ui.rail_overlay(p,t)
       api.selector.show(p,t,shade)
@@ -811,9 +811,11 @@ return function(api,ui)
     local keep={}
     local names=state.label_names or {}
     local heights=state.label_heights or {}
+    local place_range=place_labels.viewer_range(core,p)
+    local eye={x=pos.x,y=pos.y+1.625,z=pos.z}
     local function visit(k,id,name,color,height,range)
       local x,z=Sim.xy(id);x,z=x*2+.5,z*2+.5
-      if not place_labels.within(x,z,pos.x,pos.z,range or place_labels.stop_radius) then return end
+      if not place_labels.visible(x,height,z,eye,range or math.min(place_labels.stop_radius,place_range)) then return end
       local at={x=x,y=height,z=z}
       keep[k]=true
       if not ids[k] then
@@ -839,22 +841,26 @@ return function(api,ui)
       end
     end
     if worker and api.worker_place_labels and not state.place_wait and
-        (not state.last_place_request or core.get_us_time()-state.last_place_request>1350000) then
+        (not state.last_place_request or state.last_place_range~=place_range or
+          core.get_us_time()-state.last_place_request>1350000) then
       local owner=p:get_player_name()
       state.place_wait=true
-      local queued=api.worker_place_labels(owner,math.floor(pos.x),math.floor(pos.z),function(result)
+      -- Cover quantization at the mailbox boundary. The camera-side
+      -- distance check remains the exact, current display cutoff.
+      local reach=math.min(place_labels.place_radius,place_range+2)
+      local queued=api.worker_place_labels(owner,math.floor(pos.x+.5),math.floor(pos.z+.5),reach,function(result)
         if controls[owner]~=state then return end
         state.place_wait=nil
         if result.ok then state.remote_places=result.value end
       end)
-      state.last_place_request=core.get_us_time()
+      state.last_place_request,state.last_place_range=core.get_us_time(),place_range
       if not queued then state.place_wait=nil end
     end
-    local spots=worker and state.remote_places or place_labels.describe(Sim,board,pos.x,pos.z,roof)
+    local spots=worker and state.remote_places or place_labels.describe(Sim,board,pos.x,pos.z,roof,place_range)
     for _,site in ipairs(spots) do
       local name=site.name
       if api.road_first and site.kind=="town" then name=name.."  ("..(site.population or 0)..")" end
-      visit("f"..site.id,site.tile,name,0xffebaf,site.y,place_labels.place_radius)
+      visit("f"..site.id,site.tile,name,0xffebaf,site.y,place_range)
     end
     if api.road_first and not api.generated_world and not worker then
       local phase=ui.phase(p)

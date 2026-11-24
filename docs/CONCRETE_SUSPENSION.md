@@ -36,3 +36,12 @@ roles and allowed span lengths use the stock reference.
   layers, retained route and railway reservations, restart and paid trips.
 - `blender -b --python-exit-code 1 --python tools/build_concrete_suspension_art.py`
   regenerates the source library and matching meshes.
+
+The original pier courses had open faces along the bridge axis, visible
+as dark holes at tower and water-level joints. The road and rail kits
+now have outward-facing end caps on tower blocks, pier courses and
+land approach details. Tile-boundary caps sit just inside the mesh
+so that adjoining exposed faces do not flicker. Both axes retain the
+original pier footprint, roadway/rail joints and cable profiles.
+Run `BAYLINE_TEST_BRIDGE_STYLE=3 BAYLINE_TEST_BRIDGE_CAMERA=pier bash tests/fast_girder_graphical.sh`
+to inspect the repaired faces from water level in Luanti.

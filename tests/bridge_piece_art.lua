@@ -45,3 +45,16 @@ assert(called[under]=="native_suspension_span_1_outer_s_road_clear")
 assert(called[pier]=="native_suspension_pier_1_outer_s")
 assert(called[feet.water]=="native_suspension_foot_1_outer_s_water")
 print("PASS palette variants share original deck, clear span, pier, and foot geometry")
+local styles=dofile("mods/luanttd_core/bridge_style_assets.lua")
+for _,mode in ipairs{"road","rail"} do
+  local list=styles.list(mode,0)
+  assert(#list==10)
+  for i=0,9 do assert(list[i+1]==i) end
+  for i=6,8 do
+    assert(styles.mesh_stem(mode,i)==mode.."_bridge_cantilever")
+    local map=styles.pieces[i]
+    assert(map.choices[0]=="clear" and not map.bearing.clear and map.bearing.minus)
+    for j=1,5 do assert(map.choices[j]=="minus") end
+  end
+end
+print("PASS both normal modes mount all ten opening-era offers; all cantilevers share stock bearing classes")

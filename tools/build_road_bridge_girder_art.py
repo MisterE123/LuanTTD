@@ -63,8 +63,9 @@ def bevel_footprint(width,depth,c):
     return ((-x+c,-z),(x-c,-z),(x,-z+c),(x,z-c),(x-c,z),(-x+c,z),(-x,z-c),(-x,-z+c))
 
 
-def continuous(m,h,is_head):
-    tooling.running_surface(m,h)
+def continuous(m,h,is_head,*,road_surface=True):
+    if road_surface:
+        tooling.running_surface(m,h)
     m.box("Composite deck slab","Concrete slab",-.426,.426,-1,1,
           lambda v:h(v)-.112,lambda v:h(v)-.007,end_faces=False,
           face_colors={"under":"Concrete shade"})

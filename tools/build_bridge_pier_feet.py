@@ -15,6 +15,9 @@ COLUMNS = {
     "rail_bridge_wood": "Trestle_twin_king_posts",
 }
 
+for family in ("concrete","girder"):
+    COLUMNS["rail_bridge_"+family]=COLUMNS["road_bridge_"+family]
+
 
 def write_feet(family, group, axis, depth, *, variant=None):
     suffix = f"_{variant}" if variant else ""

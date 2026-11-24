@@ -86,13 +86,17 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         elseif q.kind=="actor_frames" then r=A.actor_frames(q.windows,fraction or q.fraction)
         elseif q.kind=="orders" then r=A.orders(q.player,q.mode,q.vehicle,q.page)
         elseif q.kind=="road_quote" then r=A.road_quote(q.player,q.request)
+        elseif q.kind=="road_place" then
+          local before=s.authority_revision or 0
+          r=A.road_place(q.player,q.request,q.quote)
+          if r.ok and cap.durable_actions and r.revision~=before then checkpoint() end
         elseif q.kind=="rail_quote" then r=A.rail_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="transport_quote" then r=A.transport_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="terrain_quote" then r=A.terrain_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="company" then r=A.company(q.player)
         elseif q.kind=="news" then r=A.news(q.player,q.page,q.after,q)
         elseif q.kind=="lesson_progress" then r=A.lesson_progress(q.player,q.lesson)
-        elseif q.kind=="place_labels" then r=A.place_labels(q.player,q.x,q.z)
+        elseif q.kind=="place_labels" then r=A.place_labels(q.player,q.x,q.z,q.range)
         elseif q.kind=="jump_map" then r=A.jump_map(q.player,q.zoom,q.here,q.focus)
         elseif q.kind=="jump_tile" then r=A.jump_tile(q.player,q.tile,q.x,q.z)
         elseif q.kind=="rail_assembly" then r=A.rail_assembly(q.player,q.depot)

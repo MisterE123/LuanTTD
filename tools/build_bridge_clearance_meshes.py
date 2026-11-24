@@ -13,6 +13,9 @@ BEARING_GROUPS = {
                         "Cross_cap_lower_sole", "Bearing_cap_carriage_bolts"},
 }
 
+for family in ("concrete","girder"):
+    BEARING_GROUPS["rail_bridge_"+family]=BEARING_GROUPS["road_bridge_"+family]
+
 
 def clear_span(path, groups):
     lines = ["# Center bearing omitted; tools/build_bridge_clearance_meshes.py"]

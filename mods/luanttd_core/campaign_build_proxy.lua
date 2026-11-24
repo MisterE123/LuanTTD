@@ -12,8 +12,9 @@ return function(client)
     table.sort(parts)
     return "{"..table.concat(parts,",").."}"
   end
+  local function signature(kind,gesture) return kind..":"..key(gesture) end
   function B.preview(player,kind,gesture,now)
-    local signature=kind..":"..key(gesture)
+    local signature=signature(kind,gesture)
     local prior=hovers[player]
     if prior and prior.signature==signature and prior.at and now-prior.at<650000 then
       return prior.value,prior.why
@@ -27,7 +28,7 @@ return function(client)
       end)
       if not accepted then hovers[player]=nil end
     end
-    return nil,"Checking construction…"
+    return nil,"Checking construction…",true
   end
   function B.leave(player) hovers[player]=nil;requests[player]=nil end
   function B.commit(player,kind,gesture,done)
@@ -39,10 +40,20 @@ return function(client)
       requests[player]=nil
       done(ok,why,quote,changed)
     end
+    if kind=="road" then
+      local old=hovers[player]
+      local prior=old and old.signature==signature(kind,gesture) and old.value or nil
+      local ok,why=client.query({kind="road_place",player=player,request=gesture,quote=prior},function(r)
+        hovers[player]=nil
+        if r.ok and client.refresh_scene then client.refresh_scene() end
+        finish(r.ok,r.why,prior,r.value)
+      end)
+      if not ok then requests[player]=nil;return nil,why end
+      return true
+    end
     local ok,error_=client.query({kind=kind.."_quote",player=player,request=gesture},function(offer)
       if not offer.ok then return finish(false,offer.why) end
       local cmd={kind=kind.."_commit",revision=offer.revision,token=offer.value.token}
-      if kind=="road" then cmd.request,cmd.quote=gesture,offer.value end
       local sent,msg=client.query({kind="command",player=player,command=cmd},function(receipt)
         finish(receipt.ok,receipt.why,offer.value,receipt.value)
       end)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """All legal RC1 concrete suspension sequences meet at the correct seams."""
 from itertools import product
-from fast_girder_art import ROOT, TEXTURES, read, profile, flip
+from fast_girder_art import ROOT, TEXTURES, DIR, read, profile, flip
 
 END = {"plus":(False,True),"minus":(True,False),"double":(True,True),"clear":(False,False)}
 BASE = ["Concrete_deck_diaphragm","Cast_fascia_band","Cast_coping",
@@ -55,7 +55,45 @@ def check(family, base, bearings, core, skirt, min_len, max_len):
     print(f"PASS {family} suspension: both axes and transport modes, {count} cable joins across every native RC1 length")
 
 
+def check_closed_v(shape,d,group,first,last,blocks):
+    """Both ends have outward winding, including the recessed tile seam."""
+    dx,dz=DIR[d]
+    for v,sign in ((first,1),(last,-1)):
+        faces=[]
+        for tri in shape[group]:
+            if all(abs(dx*x+dz*z-v)<.002 for x,z,y in tri):
+                a,b,c=[(dz*x-dx*z,y) for x,z,y in tri]
+                oriented=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])
+                assert oriented*sign>0,(group,v,d,oriented)
+                faces.append(tri)
+        assert len(faces)==2*blocks,(group,v,d,len(faces))
+    return 4*blocks
+
+
+def closed_cast_pieces():
+    # Original bridge pieces could be seen through head-on. Recessed
+    # seam caps are needed even when a neighbouring terrain column
+    # stops supporting the pier one course earlier.
+    checked=0
+    for mode,axis in product(("road","rail"),(0,1)):
+        stem=f"bl_{mode}_bridge_suspension_concrete"
+        d=2 if axis==0 else 1
+        for key,sign in (("plus",1),("minus",-1)):
+            span=read(stem,f"span_{axis}_{key}")
+            pier=read(stem,f"pier_{axis}_{key}")
+            for group,end,n in (
+                    ("Buttressed_half-tower",.83,2),("Struck_formwork_outer_chamfer",.782,2),
+                    ("Saddle_sleeve",.782,2),("Cast_saddle_roof",.782,2),
+                    ("Suspension_support_skirt",.83,2),("Suspension_bearing_ledge",.83,2),
+                    ("Pier_bridge_portal_bar",.782,1),("Horizontal_cast_band",.782,1)):
+                checked+=check_closed_v(span,d,group,*sorted((sign,sign*end)),n)
+            for group in ("Concrete_suspension_core","Lift_seam"):
+                checked+=check_closed_v(pier,d,group,*sorted((sign,sign*.83)),2)
+    print(f"PASS {checked} outward concrete end-cap triangles in both orientations and transport modes")
+
+
 def main():
+    closed_cast_pieces()
     check("concrete", BASE, BEARINGS, "Concrete_suspension_core", "Suspension_support_skirt", 2, 10)
     check("steel", ["Riveted_slab_diaphragms","Continuous_steel_deck_joists","Double_rolled_flange",
                     "Bridge_angle_guardbar"], {"Steel_lattice_column_base","Cast_web_seat"},
