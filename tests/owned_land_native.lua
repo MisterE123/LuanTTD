@@ -61,7 +61,15 @@ local function check()
     core.log("action","NATIVE LAND SELL SLOT "..sell)
   end
   if not settled and p:get_wielded_item():get_name()=="luanttd_core:menu_landscape_purchase_land" then
-    settled=true;core.log("action","NATIVE LAND SELECTED")
+    local selected,hit=api.world.target(p)
+    if selected==plot then
+      api.world.hud(p)
+      local status,_,ids,valid=ui.world_status(p,plot,true,hit)
+      if ids and #ids==1 and ids[1]==plot and valid and status:find("420",1,true) then
+        assert(ui.is_world_tool("landscape_purchase_land"))
+        settled=true;core.log("action","NATIVE LAND SELECTED")
+      end
+    end
   end
   local pos={x=x*2,y=base+2,z=z*2}
   local post=core.get_node(pos).name

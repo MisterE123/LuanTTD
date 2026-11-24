@@ -928,7 +928,7 @@ end
 function U.status(p,text) view(p:get_player_name()).status=text end
 function U.anchor(p)
   local V=view(p:get_player_name())
-  return V.demolition_anchor or (V.road_press and V.road_press.id) or (V.rail_press and V.rail_press.id) or V.anchor
+  return V.demolition_anchor or (V.road_press and V.road_press.id) or (V.rail_press and V.rail_press.id) or V.tree_press or V.anchor
 end
 function U.road_action(p,key)
   local V=view(p:get_player_name())
@@ -2194,6 +2194,24 @@ local function authority_preview(p,id,hit)
   elseif U.tree_gesture(tool) then
     kind,request="terrain",tree_request(p,V,id)
     label=tool=="landscape_purchase_land" and "Buy land" or tree_species_name(V.tree_species)
+    if request.first~=id then
+      local ax,az=Sim.xy(request.first)
+      local bx,bz=Sim.xy(id)
+      -- Use the stock area iterator for the immediate, neutral gesture
+      -- preview. The worker still decides which tiles can be purchased.
+      if (math.abs(bx-ax)+1)*(math.abs(bz-az)+1)<=256 then
+        if not U.tree_area_geometry then
+          U.tree_area_geometry=dofile(core.get_modpath("luanttd_core").."/openttd/landscaping.lua")({
+            corner=function(_,x,z) return Sim.id(x,z) end,
+          })
+        end
+        -- Owned-land and tree commands iterate from the release tile.
+        ids={}
+        for x,z in U.tree_area_geometry.points({},bx,bz,ax,az,request.diagonal) do
+          ids[#ids+1]=Sim.id(x,z)
+        end
+      end
+    end
   elseif land then
     label=land.name
     if land.area and not V.anchor then return ids,true,"Mark the first terrain corner." end
@@ -2579,7 +2597,7 @@ function U.is_world_tool(tool)
   return not not (Sim.tools[tool] or rail_orders[tool] or rail_tool_labels[tool] or waypoint_tools[tool] or rail_spans[tool] or coal_stage_tools[tool] or
     (api.rail_oil_tools and oil_stage_tools[tool]) or (api.rail_goods_tools and goods_stage_tools[tool]) or profile_stage_tools[tool] or airfield_tools[tool] or ship_mode[tool] or buoy_tools[tool] or tram_mode[tool] or
     tool=="fund_bank" or tool=="teleport_tile" or tool=="tram_order" or tool=="airfield_order" or tool=="ship_order" or tool=="ship_coal_order" or tool=="truck_stop_tool" or tool=="rail_crossing_tool" or tool=="oneway_drag" or
-    fixed_road_labels[tool] or landscape_tools[tool] or bridge_tool(tool) or tool:match("^structure_"))
+    fixed_road_labels[tool] or U.tree_gesture(tool) or landscape_tools[tool] or bridge_tool(tool) or tool:match("^structure_"))
 end
 function U.stop_label(st)
   if st.freight_art and (api.timber_tools or api.farm_tools or api.oil_tools) then return "Truck stop #"..st.id end
@@ -2603,6 +2621,9 @@ function U.world_status(p,tile,show_preview,hit)
     (V.tool=="teleport_tile" and {name="Teleport to tile"}) or
     (fixed_road_labels[V.tool] and {name=fixed_road_labels[V.tool]}) or
     (bridge_tool(V.tool) and {name=bridge_label(bridge_tool(V.tool))}) or Sim.tools.inspect
+  if U.tree_gesture(V.tool) then
+    tool={name=V.tool=="landscape_purchase_land" and "Buy land" or "Plant trees"}
+  end
   local target="Aim at the ground"
   if tile and api.authority_handoff and R.host_tile then
     local a=R.host_tile(tile)

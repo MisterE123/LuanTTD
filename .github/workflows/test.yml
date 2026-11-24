@@ -276,6 +276,7 @@ jobs:
           python3 tests/farm_clear_rc1_upstream.py "$src/src/clear_cmd.cpp" --lua lua5.1
           python3 tests/terragenesis_clear_rc1_upstream.py "$src" --lua lua5.1
           lua5.1 tests/rocky_water_tiles.lua
+          lua5.1 tests/river_rapid_particles.lua
           python3 tests/scenery_object_rc1_upstream.py "$src" --lua lua5.1
           lua5.1 tests/scenery_rocky_coast.lua
           lua5.1 tests/ship_facilities.lua

@@ -53,7 +53,25 @@ return function(api)
   end
   viewpoint("rocky-shore",shore,-4.4,-2.0,2.65)
   viewpoint("open-rocks",skerry,-3.7,2.1,3.2)
-  viewpoint("rapids",rapid,4.1,-3.0,3.35)
+  local flow=({[3]={-1,0},[6]={0,-1},[9]={0,1},[12]={1,0}})[rapid.mask]
+  viewpoint("rapids",rapid,flow[1]*4.2-flow[2]*1.75,flow[2]*4.2+flow[1]*1.75,2.6)
+  viewpoint("rapids-back",rapid,-flow[1]*4.3+flow[2]*1.65,-flow[2]*4.3-flow[1]*1.65,2.95)
+  local original_spray=core.add_particlespawner
+  local spray=false
+  core.add_particlespawner=function(spec)
+    if spec.playername=="ShoreQA" and type(spec.texture)=="table" and spec.texture.name=="bl_river_foam.png" then
+      local x,z=spec.pos.min.x, spec.pos.min.z
+      if math.abs(x-(2*rapid.x+.5))<1 and math.abs(z-(2*rapid.z+.5))<1 and not spray then
+        assert(spec.amount==5 and spec.exptime.max<.5)
+        local mid=vector.multiply(vector.add(spec.vel.min,spec.vel.max),.5)
+        assert(math.abs(mid.x*flow[1]+mid.z*flow[2]-.84)<.001,"foam doesn't travel downhill")
+        assert(spec.texture.alpha_tween[2]==0)
+        spray=true
+        core.log("action","COAST_SHEET_RAPID_FOAM")
+      end
+    end
+    return original_spray(spec)
+  end
   local function aim(p,v)
     p:set_pos(v.from)
     local d=vector.subtract(v.at,{x=v.from.x,y=v.from.y+1.47,z=v.from.z})
@@ -88,7 +106,7 @@ return function(api)
       assert(not (a.mesh or ""):match("rapid_rocks") and not (b.mesh or ""):match("rapid_rocks"))
     end
     local player=core.get_player_by_name("ShoreQA")
-    if player then aim(player,views["rocky-shore"]) end
+    if player then api.cinematic.toggle(player);aim(player,views["rocky-shore"]) end
     core.log("action",("COAST_SHEET_READY stock CoastRocks mask %d, ClearRocks, native flowing rapids mask %d"):format(shore.mask,rapid.mask))
   end
   core.register_on_joinplayer(function(p)

@@ -899,6 +899,7 @@ return function(api)
   if S.stock_generated_profile and S.stock_generated_profile.river_stats then
     river_view=dofile(modpath.."/river_presentation.lua")(Sim)
     stock_scenery.river={}
+    R.rapid_particles=dofile(modpath.."/river_rapid_particles.lua")(core,Sim)
     local function register_surface(mask)
       local prefix="stock_river_"..(mask==0 and "flat" or mask)
       local mesh=mask~=0 and "bl_land_"..mask..".obj" or nil
@@ -909,12 +910,11 @@ return function(api)
       for _,dir in ipairs({"north","south","east","west"}) do
         local top=water_tile(files[dir],2.4,not mesh and 2 or nil)
         local definition=water_definition(mesh)
-        -- The waterfall shares the exact projected slope with both banks.
-        -- Luanti's liquid shader only displaces vertices downwards, exposing
-        -- the bank underside and the ground fill through the river edge.
-        -- Keep the incline fixed and let the directional texture carry the
-        -- motion. Flat reaches and the open sea still use native waves.
-        if mesh then definition.waving=0 end
+        -- Native waves lower the entire mesh, which opens a gap wherever
+        -- a lowered flat reach meets a fixed incline. The connected river
+        -- uses a single continuous water grade and animated directional
+        -- textures; the ordinary ocean still uses native waving liquids.
+        definition.waving=0
         family[dir]=reg(prefix..(dir=="north" and "" or "_"..dir),
           mesh and {top} or {top,water_side,water_side},definition)
       end
@@ -970,6 +970,7 @@ return function(api)
     end
     fountains.step(dt,S,viewers)
     if smoke then smoke.step(dt,S,viewers) end
+    if river_view and terrain then R.rapid_particles.step(dt,S,terrain,viewers) end
   end
   function R.leave_ambient_particles(name)
     fountains.leave(name)
@@ -1443,9 +1444,8 @@ return function(api)
       if mask~=0 and y==base then return slope_fill end
       if y<=base then return gnames.grass[t.variant] end
       if mask~=0 and y==base+1 and x%2==0 and z%2==0 then return assert(stock_scenery.river[mask])[river_direction(id)] end
-      -- Source rapids are ordinary directed inclines. Put stone and
-      -- whitewater detail next to the engine water mesh, not in the
-      -- simulation record or on top of the bank.
+      -- The neighboring render slot leaves the water sheet independent.
+      -- The closed volumes extend into the riverbed below that sheet.
       if rapids[mask] and y==base+1 and x%2==1 and z%2==0 then return rapids[mask] end
       return "air"
     end

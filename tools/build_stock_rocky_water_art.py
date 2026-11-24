@@ -15,7 +15,7 @@ from random import Random
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_coastal_sheet import APRON, MASKS, SEA, SHINGLE, bank, source
+from build_coastal_sheet import MASKS, SEA, bank, source
 
 REPO = Path(__file__).resolve().parents[1]
 MOD = REPO / "mods" / "luanttd_core"
@@ -27,8 +27,6 @@ SWATCHES = (
     ("Dry silicate", "74776b"),
     ("Pale weathered cap", "8d8c7b"),
     ("Bedded light seam", "aaa38c"),
-    ("Broken wake green", "abc5b6"),
-    ("Foam highlight", "d4e5d5"),
 )
 
 
@@ -62,22 +60,22 @@ def cross(a,b,c):
     return uy*vz-uz*vy,uz*vx-ux*vz,ux*vy-uy*vx
 
 
-def stone(name, x,z,rx,rz,rise, angle, support, rng, mode):
+def stone(name, x,z,rx,rz,rise, angle, support, rng, mode, depth=None, emerge=0):
     """Closed hand-faceted stone form. Roots remain attached to bed/shore."""
+    depths={"lake":.35, "shore":.19, "bed":.38, "rapid":.31}
+    thickness=depth if depth is not None else depths[mode]
     def footing(floor):
-        if mode=="lake" or mode=="shore" and floor<=SEA+.008:
-            return SEA-APRON-.08 # no detached skerries at maximum native wave dip
-        return floor-(.20 if mode=="shore" else .105)
+        return floor-thickness
 
     p = Part(name)
-    count = 7
+    count = 5 if mode=="bed" else 7
     angles = [tau*i/count+rng.uniform(-.095,.095) for i in range(count)]
     radial = [rng.uniform(.88,1.11) for _ in angles]
     crest = [rng.uniform(.78,1.08) for _ in angles]
     # The contact ring follows the exact slope (or flat water level).
     # Upper rings narrow unequally to give the split stone real planes.
     for layer,(size,lift,shift_x,shift_z) in enumerate((
-        (.73,None,0,0),(.97,.045,0,0),(1.00,.43,-.04,.04),(.58,.91,.08,-.07)
+        (.53,None,-.03,.04),(.94,emerge,0,0),(1.00,emerge+.43,-.04,.04),(.56,emerge+.91,.08,-.07)
     )):
         for i,a in enumerate(angles):
             u=rx*(radial[i]*size*cos(a)+shift_x)
@@ -86,7 +84,7 @@ def stone(name, x,z,rx,rz,rise, angle, support, rng, mode):
             floor=support(xx,zz)
             yy=footing(floor) if layer==0 else floor+rise*lift*(crest[i] if layer>=2 else 1)
             p.points.append((xx,yy,zz))
-    p.points += [(x,footing(support(x,z)),z),(x,support(x,z)+rise*1.03,z)]
+    p.points += [(x,footing(support(x,z)),z),(x,support(x,z)+rise*(emerge+1.03),z)]
     for k in range(3):
         for i in range(count):
             j=(i+1)%count
@@ -127,57 +125,48 @@ def shoreline(mask):
         for _ in range(550):
             x,z=rng.uniform(-1.5+room,.5-room),rng.uniform(-.5+room,1.5-room)
             at=ground(x,z)
-            lower=min(ground(x+rx*.66*cos(a),z+rx*.66*sin(a))
-                      for a in (0,pi/2,pi,3*pi/2))
+            edge=[ground(x+rx*.85*cos(a),z+rx*.85*sin(a)) for a in (0,pi/2,pi,3*pi/2)]
+            lower,upper=min(edge),max(edge)
             # Keep stone along the shore, not on top of the grass crest or on
             # the distant flat part of a tile with one raised corner.
-            if at==SEA and max(ground(x+rx*.65*cos(a),z+rx*.65*sin(a))
-                               for a in (0,pi/2,pi,3*pi/2))==SEA:
+            if upper<=SEA+1e-6:
                 continue
             if any(hypot(x-a,z-b)<.71*(rx+c) for a,b,c in centers): continue
             if at>SEA+.75: continue
-            near=abs(at-(SEA+.22))+.19*max(0,lower-SEA-.20)
+            desired=SEA+(.056 if i<3 else .114)
+            near=1.7*abs(at-desired)+1.3*max(0,lower-SEA-.093)
             # Space the big blocks somewhat evenly, with small loose toes.
             crowd=sum(max(0,.63-hypot(x-a,z-b)) for a,b,_ in centers)*(.5 if i<3 else .10)
             candidates.append((near+crowd+rng.uniform(0,.19),x,z))
         if not candidates: continue
         _,x,z=min(candidates)
         centers.append((x,z,rx))
-        parts.append(stone(f"Shore split rock {i+1}",x,z,rx,rz,rise,rng.uniform(0,tau),ground,rng,"shore"))
+        parts.append(stone(f"Shore split rock {i+1}",x,z,rx,rz,rise,rng.uniform(0,tau),ground,rng,"shore",
+                           max(.19,min(.50,ground(x,z)-SEA+.18)) if i<3 else .19))
     assert len(parts)>=4, mask
     return parts
 
 
 def open_water():
     rng=Random(0xC1EA)
-    return [stone(f"Open-sea skerry block {i+1}",x,z,rx,rz,h,a,lambda x,z:SEA,rng,"lake")
-            for i,(x,z,rx,rz,h,a) in enumerate((
-                (-.91,.62,.383,.26,.415,.32),(-.51,.53,.258,.21,.285,.85),
-                (-1.14,.92,.19,.16,.236,.78),(-.17,.26,.18,.124,.169,-.15),
-                (.18,.93,.145,.13,.186,-.54),(-.68,1.25,.114,.087,.125,.55),
-            ))]
-
-
-def wake(name,x,z,forward,length,width,height,rng):
-    """Flat painted froth in the outgoing water plane, not buoy geometry."""
-    fx,fz=forward
-    sx,sz=-fz,fx
-    vertices=[]
-    for t,w in ((0,.19),(.22,1),(.63,.74),(1,0)):
-        cx=x+fx*length*t + sx*sin(pi*t)*width*.8
-        cz=z+fz*length*t + sz*sin(pi*t)*width*.8
-        for sign in (-1,1):
-            xx,zz=cx+sx*width*w*sign,cz+sz*width*w*sign
-            if not (-1.475 < xx < .475 and -.475 < zz < 1.475): return
-            vertices.append((xx,height(xx,zz)+.0135,zz))
-    p=Part(name,vertices)
-    for k in range(3):
-        for inds in ((2*k,2*k+1,2*k+2),(2*k+1,2*k+3,2*k+2)):
-            a,b,c=[vertices[i] for i in inds]
-            normal=cross(a,b,c)[1]
-            if abs(normal)>1e-9:
-                p.faces.append((inds if normal>0 else inds[::-1], rng.choice((6,6,7))))
-    return p
+    # Boulders overlap lower, broken ledges instead of standing on posts.
+    block=((-.82,.64,.41,.29,.42,.32),(-.51,.50,.29,.24,.29,.85),
+           (-1.14,.90,.24,.20,.23,.78),(-.14,.20,.16,.139,.145,-.15),
+           (.19,.96,.16,.15,.17,-.54))
+    parts = [stone(f"Wave-worn skerry {i+1}",x,z,rx,rz,h,a,lambda x,z:SEA,rng,"lake",.36)
+             for i,(x,z,rx,rz,h,a) in enumerate(block)]
+    # Crests entirely underwater at nominal height. A falling wave uncovers
+    # the shallow rocks first and the lower shelves only near the trough.
+    bed=((-1.14,.52,.28,.25,.13),(-.79,.91,.36,.27,.21),(-.47,.31,.32,.24,.16),
+         (-1.11,1.20,.29,.21,.36),(-.41,.83,.34,.32,.27),(-.68,1.16,.32,.24,.46),
+         (-.17,.53,.29,.24,.36),(.10,.77,.25,.27,.21),(.10,.34,.27,.20,.49),
+         (.13,1.18,.24,.23,.61),(-.28,1.10,.32,.26,.55))
+    for i,(x,z,rx,rz,depth) in enumerate(bed):
+        rise=rng.uniform(.24,.37)
+        level=SEA-depth-rise*1.03
+        parts.append(stone(f"Submerged crest {i+1}",x,z,rx,rz,rise,rng.uniform(-.31,.31),
+                           lambda x,z:level,rng,"bed",.22))
+    return parts
 
 
 def waterfall(mask):
@@ -189,21 +178,17 @@ def waterfall(mask):
     fx,fz=-gx/norm,-gz/norm
     sx,sz=-fz,fx
     parts=[]
-    for i,(side,along,rx,rz,h) in enumerate((
-        (-.68,-.19,.225,.16,.23),(-.75,-.44,.133,.118,.131),
-        (.69,.15,.22,.176,.22),(.73,-.09,.11,.102,.14),
+    for i,(side,along,rx,rz,h,dip) in enumerate((
+        (-.68,-.19,.23,.18,.26,.46),(-.74,-.44,.16,.15,.12,.33),
+        (.69,.15,.24,.19,.22,.41),(.72,-.085,.15,.12,.10,.33),
+        (-.16,.18,.21,.18,.16,.47),(.24,-.40,.155,.15,.105,.32),
     )):
         x,z=-.5+sx*side+fx*along,.5+sz*side+fz*along
-        parts.append(stone(f"Rapid side stone {i+1}",x,z,rx,rz,h,rng.uniform(0,tau),height,rng,"rapid"))
-        for j,(off,down,l,w) in enumerate(((-.075,.14,.32,.014),(.057,.24,.28,.020),(.093,.32,.19,.015))):
-            p=wake(f"Downstream foam {i+1}-{j+1}",x+sx*off+fx*down,z+sz*off+fz*down,
-                   (fx,fz),l,w,height,rng)
-            if p:parts.append(p)
-    crest=-.28
-    for j,(side,along) in enumerate(((-.25,.15),(.045,.20),(.25,.19),(-.33,.54),(.09,.50),(.32,.46))):
-        p=wake(f"Froth sheen {j+1}",-.5+sx*side+fx*(along+crest),.5+sz*side+fz*(along+crest),
-               (fx,fz),rng.uniform(.20,.37),rng.uniform(.012,.025),height,rng)
-        if p:parts.append(p)
+        # Embed solid, closed stones in the riverbed. The flowing sheet
+        # intersects them partway up their flanks on all viewing sides.
+        level=height(x,z)-.035
+        parts.append(stone(f"Riverbed block {i+1}",x,z,rx,rz,h,rng.uniform(0,tau),
+                           lambda _x,_z:level,rng,"rapid",dip))
     return parts
 
 
@@ -257,6 +242,13 @@ def atlases():
     for i,(_,rgb) in enumerate(SWATCHES):
         palette.paste(tuple(bytes.fromhex(rgb)),(i*4,0,i*4+4,32))
     yield "bl_stock_water_rocks_atlas.png",png(palette)
+    foam=Image.new("RGBA",(16,16))
+    for y in range(16):
+        for x in range(16):
+            d=hypot((x-7.5)/7.5,(y-7.5)/6.5)
+            alpha=round(220*max(0,1-d)**1.28)
+            foam.putpixel((x,y),(223,239,233,alpha))
+    yield "bl_river_foam.png",png(foam)
     for v in range(4):
         original=Image.open(MOD/"textures"/f"bl_original_coast_{v}.png").convert("RGB")
         assert original.size==(96,32)
@@ -282,7 +274,7 @@ def create_blend():
     scene=bpy.context.scene
     scene.name="LuanTTD | rocky coast, sea and rapids"
     scene["Floor"]="Existing OpenTTD-derived LuanTTD planar shore. Level sea stays independent and waved."
-    scene["Provenance"]="Original rock facets and foam accents; OpenTTD 16.0-RC1 rocky-water drawing state, no sprite reused."
+    scene["Provenance"]="Original closed rock volumes and riverbed blocks; OpenTTD 16.0-RC1 rocky-water drawing state, no sprite reused."
 
     def mat(name,hex):
         m=bpy.data.materials.new(name)

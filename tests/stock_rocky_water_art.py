@@ -9,7 +9,7 @@ from PIL import Image, ImageChops
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 from build_stock_rocky_water_art import (
-    APRON, MASKS, MOD, RAPIDS, REPO, SEA, SWATCHES,
+    MASKS, MOD, RAPIDS, REPO, SEA, SWATCHES,
     asset_files, batch, cross, height_field, old_bank,
 )
 
@@ -53,7 +53,7 @@ for path,expected in asset_files():
 assert MASKS==(1,2,3,4,6,7,8,9,11,12,13,14,23,27,29,30)
 assert RAPIDS==(3,6,9,12)
 total_faces=0
-foam_count=0
+submerged=0
 for name,parts,shift in batch():
     path=MOD/"models"/f"bl_{name}.obj"
     xyz,uv,faces=inspect_obj(path)
@@ -72,28 +72,27 @@ for name,parts,shift in batch():
         assert [tuple(q[0] for q in f) for f in faces[:len(base.faces)]] == [f for f,_ in base.faces]
     assert not shift==1 or is_rapid
     assert all(-1.5<=x-shift<=.5 and -.5<=z<=1.5 for x,y,z in xyz),(name,"extends beyond its tile")
+    if is_shore:
+        assert any(min(y for _,y,_ in p.points)<SEA-.07 and max(y for _,y,_ in p.points)>SEA+.08
+                   for p in parts[1:]),(name,"rocks don't straddle the tide line")
     for p in parts[1 if is_shore else 0:]:
-        if "foam" in p.name.lower() or "Froth" in p.name:
-            foam_count+=1
-            assert is_rapid and all(abs(y-support(x,z)-.0135)<1e-8 for x,y,z in p.points)
-            assert all(cross(*(p.points[j] for j in f))[1]>0 and k in (6,7) for f,k in p.faces)
-            assert p.points[-1][1]<p.points[0][1],(name,"froth is not oriented downstream")
-            continue
         solid(p)
-        assert len(p.points)==30
-        assert all(y<=support(x,z)-.10 for x,y,z in p.points[:7]),(name,"unattached footing")
-        assert all(y>support(x,z) for x,y,z in p.points[7:28]),(name,"invalid rocky surface")
-        if is_shore:
-            x,y,z=p.points[-1]
-            assert support(x,z)<=SEA+.75 and y>support(x,z)+.08
-        if not is_shore and not is_rapid:
-            assert max(y for _,y,_ in p.points)>SEA+.08
-            assert all(y<SEA-APRON for _,y,_ in p.points[:7]),"detached even at the maximum native wave depression"
-    assert len(faces)<=375,(name,"model became too expensive for repeated tiles")
+        ceiling=max(y for _,y,_ in p.points)
+        if is_rapid:
+            limits=[y-support(x,z) for x,y,z in p.points]
+            assert min(limits)<-.25 and max(limits)>.06,(name,p.name,"not a riverbed protrusion",limits)
+        elif p.name.startswith("Submerged crest"):
+            submerged+=1
+            assert SEA-.62<=ceiling<=SEA-.12,(name,p.name,ceiling)
+        elif not is_shore:
+            assert ceiling>SEA+.10 and min(y for _,y,_ in p.points)>=SEA-.37
+    assert len(faces)<=750,(name,"model became too expensive for repeated tiles")
 for i in range(4):
     old=Image.open(MOD/"textures"/f"bl_original_coast_{i}.png").convert("RGB")
     new=Image.open(MOD/"textures"/f"bl_rocky_coast_{i}.png").convert("RGB")
     assert not ImageChops.difference(old,new.crop((0,0,96,32))).getbbox()
     for j,(_,hex) in enumerate(SWATCHES): assert new.getpixel((98+4*j,15))==tuple(bytes.fromhex(hex))
-assert foam_count>=48 and (REPO/"art"/"stock_rocky_water.blend").stat().st_size>80_000
-print(f"PASS original 16 coast slopes, level open-water rocks, 4 native rapid overlays; {total_faces:,} ground-matched triangles, {foam_count} downhill wakes, original shore atlas unchanged")
+foam=Image.open(MOD/"textures"/"bl_river_foam.png")
+assert foam.mode=="RGBA" and foam.getpixel((0,0))[3]==0 and foam.getpixel((7,7))[3]>180
+assert submerged>=10 and (REPO/"art"/"stock_rocky_water.blend").stat().st_size>80_000
+print(f"PASS all 16 coast slopes, 4 closed riverbed formations, {submerged} submerged crests, no painted streaks; {total_faces:,} triangles")

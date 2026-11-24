@@ -128,6 +128,7 @@ if [[ ${LUANTTD_QA_OWNED_LAND:-0} == 1 ]]; then
   wait_land 'NATIVE LAND BUY SLOT'
   press_native_slot 'NATIVE LAND BUY SLOT'
   wait_land 'NATIVE LAND SELECTED'
+  if command -v import >/dev/null; then sleep .35; import -window root -quality 91 "$out/company-land-preview.jpg"; fi
   sleep .3; xdotool mousedown 1; sleep .4; xdotool mouseup 1
   wait_land 'NATIVE LAND BOUGHT'
   sleep .7

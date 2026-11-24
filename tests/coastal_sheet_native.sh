@@ -23,7 +23,7 @@ probe=coastal_sheet_native
 views=(overview near open)
 if [[ ${BAYLINE_NATIVE_ROCKY_WATER:-0} == 1 ]]; then
   probe=rocky_water_native
-  views=(rocky-shore open-rocks rapids)
+  views=(rocky-shore open-rocks rapids rapids-back)
   # Only this disposable fixture edits two local tile records.
   printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 fi
@@ -65,6 +65,9 @@ enable_dynamic_shadows = true
 shadow_map_quality = 1
 enable_water_reflections = true
 GAME
+if [[ ${BAYLINE_NATIVE_WAVES:-1} == 0 ]]; then
+  sed -i 's/enable_waving_water = true/enable_waving_water = false/' "$out/client.conf"
+fi
 opts=(-nolisten tcp)
 lib=()
 if [[ ${BAYLINE_NATIVE_TCP:-0} == 1 ]]; then
@@ -103,4 +106,7 @@ for v in "${views[@]}"; do
   sleep 1.4
   import -window root "$out/$v-next.png"
 done
+if [[ $probe == rocky_water_native ]]; then
+  grep -q COAST_SHEET_RAPID_FOAM "$out/server.log"
+fi
 ! grep -Ei 'error|could not load' "$out/client.log"
