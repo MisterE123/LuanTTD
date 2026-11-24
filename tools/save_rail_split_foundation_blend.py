@@ -9,7 +9,7 @@ import bpy
 root = Path(__file__).resolve().parents[1]
 mod = root / "mods/luanttd_core"
 files = sorted((mod / "models").glob("bl_rail_foundation_split_*.obj"))
-assert len(files) == 32
+assert len(files) == 36
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.unit_settings.system = "METRIC"
@@ -35,5 +35,5 @@ for i, f in enumerate(files):
     obj.data.materials.append(material)
     obj.location.x = i % 8 * 2.7
     obj.location.y = i // 8 * 2.7
-assert len(base.objects) == 32
+assert len(base.objects) == 36
 bpy.ops.wm.save_as_mainfile(filepath=str(root / "art/stock_rail_split_foundations.blend"), compress=True)

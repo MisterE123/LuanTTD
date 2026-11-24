@@ -1,9 +1,35 @@
--- Native adapter for ordinary stock clear ground, sea, shore and trees.
--- Infrastructure/vehicle effects remain outside this mounted slice.
-return function(Sim,Terrain,Flood)
+-- Native adapter for ordinary stock clear ground, sea, shore, trees and
+-- the mounted standard railway half. Protected live routes aren't cut.
+return function(Sim,Terrain,Flood,Track,Slope,RailWater)
   local W={}
   local adjacent_layers={"level_crossing_tiles","bridge_above","aqueduct_above","tunnel_below",
     "rail_bridge_above","rail_tunnel_below"}
+  local function rail_ok(s,id,t)
+    if not (RailWater and t.build=="stock_rail" and t.rail_tracks and (t.rail_type or 0)==0) then return false end
+    if t.ship or t.tram or t.airfield or t.level_crossing or t.rail_station_id or t.rail_waypoint_id or
+        t.rail_depot_dir~=nil or t.rail_span_id then return false end
+    for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return false end end
+    local x,z=Sim.xy(id)
+    local shape=Terrain.tile(s.corner_grid,x,z)
+    return Flood.one_raised(shape)
+  end
+  local function rail_remove_safe(s,id)
+    local t=s.tiles[id]
+    if t.signal or t.rail_reserved and t.rail_reserved~=0 or t.reserved_rail and t.reserved_rail~=0
+        or s.stock_rail_run or s.stock_rail_platform_run then return false end
+    local d=s.stock_rail_dispatch
+    if not d then return true end
+    if d.signals and d.signals.records and d.signals.records[id] or
+        d.life and d.life.claims and d.life.claims[id] then return false end
+    for _,r in ipairs(d.runs or {}) do
+      for _,p in ipairs(r.consist and r.consist.parts or {}) do if p.tile==id then return false end end
+      if not r.crashed then
+        if r.ordered_tiles and r.ordered_tiles[id] then return false end
+        for _,p in ipairs(r.route or {}) do if p.tile==id then return false end end
+      end
+    end
+    return true
+  end
   local function protected(s,id,t)
     if t.ship or t.tram or t.airfield or t.station or t.house or t.site or t.stock_industry or t.stock_landmark or t.road_town or
       t.signal or t.rail_tracks or t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or t.level_crossing then return true end
@@ -14,6 +40,7 @@ return function(Sim,Terrain,Flood)
     if not t then return end
     if t.stock_void then return "void" end
     if t.ship and t.ship.water_ground and t.ship.water_class=="sea" then return "station" end
+    if rail_ok(s,id,t) then return "rail" end
     if protected(s,id,t) then return "protected" end
     if t.build and t.build~="canal" then return "protected" end
     if t.build=="canal" or t.stock_canal then return "canal" end
@@ -38,9 +65,21 @@ return function(Sim,Terrain,Flood)
       local kind=class(s,id,t)
       if kind=="protected" or kind=="canal" or kind=="river" then return {kind=kind} end
       local slope,base=Terrain.tile(s.corner_grid,x,z)
+      if kind=="rail" then
+        local f,c=Track.foundation(slope,t.rail_tracks)
+        if f=="invalid" then return {kind="protected"} end
+        local adjusted,rise=Slope.foundation(slope,f,c)
+        return {kind=kind,id=id,slope=slope,base=base,foundation_slope=adjusted,
+          foundation_base=base+rise,tracks=t.rail_tracks,ground=t.rail_ground or 0,water_ground=t.rail_ground==13}
+      end
       return {kind=kind,slope=slope,base=base,water_class=kind=="station" and "sea" or t.water_class,
         rocks=t.stock_water_rocks or (kind=="clear" and t.stock_clear_ground==2) or nil,
         water_ground=kind=="trees" and t.wood.ground==3 or nil}
+    end
+    if RailWater then
+      function B.flood_rail(_,_,t)
+        return RailWater.flood(t.slope,t.tracks,t.ground,function() return rail_remove_safe(s,t.id) end)
+      end
     end
     return B
   end
@@ -62,8 +101,10 @@ return function(Sim,Terrain,Flood)
     if not s.corner_grid then return 0 end
     local source=Sim.id(x,z)
     local tile=source and s.tiles[source]
-    if not tile or tile.terrain~="water" or not tile.coastal_water and (tile.stock_canal or
-       tile.water_class=="river" or tile.water_class=="canal" or tile.build=="canal") then return 0 end
+    if not tile then return 0 end
+    if not (tile.rail_ground==13 and rail_ok(s,source,tile)) and
+        (tile.terrain~="water" or not tile.coastal_water and (tile.stock_canal or
+         tile.water_class=="river" or tile.water_class=="canal" or tile.build=="canal")) then return 0 end
     local B=board or W.board(s)
     local changes=Flood.visit(B,x,z)
     if #changes==0 then return 0 end
@@ -73,7 +114,15 @@ return function(Sim,Terrain,Flood)
       local t=assert(s.tiles[id])
       assert(class(s,id,t)==change.from)
       local _,base=Terrain.tile(s.corner_grid,change.x,change.z)
-      if change.kind=="shore_trees" then
+      if change.from=="rail" then
+        local q=change.rail
+        if q.kind=="coast" then
+          t.rail_tracks,t.rail_ground,t.rail_type,t.build,t.owner=nil,nil,nil,nil,nil
+          apply(t,"coast",base)
+        else
+          t.rail_tracks,t.rail_ground=q.tracks,q.ground
+        end
+      elseif change.kind=="shore_trees" then
         apply(t,"coast",base)
         t.wood.ground,t.wood.density,t.wood.water_class=3,3,"sea"
       elseif change.kind=="dry_trees" then

@@ -47,12 +47,17 @@ function F.visit(board,x,z)
     for dir=0,7 do
       local u,v=neighbor(dir)
       local t=u and board.tile(u,v)
-      if t and (t.kind=="clear" or t.kind=="trees" and not t.water_ground)
+      if t and (t.kind=="clear" or t.kind=="trees" and not t.water_ground or t.kind=="rail" and not t.water_ground and board.flood_rail)
           and (t.foundation_base or t.base)==0 and has(directions(t),opposite(dir)) then
-        local keep_tree=t.kind=="trees" and t.slope~=0 and not raised[t.slope]
-        if keep_tree or not board.can_clear or board.can_clear(u,v,t) then
-          changes[#changes+1]={x=u,z=v,from=t.kind,kind=keep_tree and "shore_trees"
-            or t.slope==0 and "sea" or "coast",rocks=t.slope~=0 and t.rocks or nil}
+        if t.kind=="rail" then
+          local q=board.flood_rail(u,v,t)
+          if q then changes[#changes+1]={x=u,z=v,from="rail",kind=q.kind,rail=q} end
+        else
+          local keep_tree=t.kind=="trees" and t.slope~=0 and not raised[t.slope]
+          if keep_tree or not board.can_clear or board.can_clear(u,v,t) then
+            changes[#changes+1]={x=u,z=v,from=t.kind,kind=keep_tree and "shore_trees"
+              or t.slope==0 and "sea" or "coast",rocks=t.slope~=0 and t.rocks or nil}
+          end
         end
       end
     end

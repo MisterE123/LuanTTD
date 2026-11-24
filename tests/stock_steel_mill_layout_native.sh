@@ -30,6 +30,11 @@ if [[ ${LUANTTD_QA_SPLIT_RAIL:-0} == 1 ]]; then
   fixture=tests/rail_split_native.lua
   marker='PASS NATIVE SPLIT RAIL'
 fi
+if [[ ${LUANTTD_QA_WET_RAIL:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/rail_wet_native.lua
+  marker='PASS NATIVE WET RAIL'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -93,6 +98,12 @@ if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 ]]; then
   grep -q 'NATIVE SHORE GROVE WET' "$out/server.log" || { tail -75 "$out/"{server,client}.log; exit 1; }
   sleep .6
   if command -v import >/dev/null; then import -window root -quality 91 "$out/shore-wet.jpg"; fi
+fi
+if [[ ${LUANTTD_QA_WET_RAIL:-0} == 1 ]]; then
+  for _ in {1..240}; do grep -q 'NATIVE WET RAIL BUILT' "$out/server.log" && break; sleep .25; done
+  grep -q 'NATIVE WET RAIL BUILT' "$out/server.log" || { tail -75 "$out/"{server,client}.log; exit 1; }
+  sleep .7
+  if command -v import >/dev/null; then import -window root -quality 91 "$out/wet-rail.jpg"; fi
 fi
 for _ in {1..360}; do grep -q "$marker" "$out/server.log" && break; kill -0 "$server" 2>/dev/null || break; sleep .25; done
 grep "$marker" "$out/server.log" || { tail -75 "$out/"{server,client}.log; exit 1; }

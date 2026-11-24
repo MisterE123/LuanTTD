@@ -654,7 +654,7 @@ return function(api)
     check("aqueduct_above","stock_aqueducts")
     return level
   end
-  local split_nodes={}
+  local split_nodes,split_wet_nodes={},{}
   if terrain and api.trackworks and api.trackworks.split_surface then
     local roots=api.trackworks.split_surface
     for _,raw in ipairs({1,2,3,4,5,6,7,8,9,10,11,12,13,14,23,27,29,30}) do
@@ -673,6 +673,12 @@ return function(api)
             drawtype="mesh",mesh="bl_rail_foundation_split_"..key..".obj",
             paramtype="light",sunlight_propagates=true,pointable=false,
             collision_box={type="fixed",fixed=fixed}})
+          if p.foundation=="half" and (raw==1 or raw==2 or raw==4 or raw==8) then
+            split_wet_nodes[key]=reg("rail_foundation_split_"..key.."_wet",{png("rail_split_foundation_atlas")},{
+              drawtype="mesh",mesh="bl_rail_foundation_split_"..key.."_wet.obj",
+              paramtype="light",sunlight_propagates=true,pointable=false,
+              collision_box={type="fixed",fixed=fixed}})
+          end
         end
       end
     end
@@ -686,9 +692,10 @@ return function(api)
   function R.split_rail_node(id,t,x,y,z,shape,base)
     local split=split_rail(id,t,shape,base)
     if not split then return end
+    local wet=t.rail_ground==13 and split_wet_nodes[split.mesh_key]
     if y<base then return gnames.grass[t.variant] end
-    if y==base then return slope_fill end
-    if x%2==1 and z%2==0 and y==base+1 then return assert(split_nodes[split.mesh_key]) end
+    if y==base then return wet and ocean(x,z) or slope_fill end
+    if x%2==1 and z%2==0 and y==base+1 then return wet or assert(split_nodes[split.mesh_key]) end
     local pieces=split.groups[y-1]
     if x%2==0 and z%2==0 and pieces then return stock_rail.visual(id,pieces,0) end
     return "air"

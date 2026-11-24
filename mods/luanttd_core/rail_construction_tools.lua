@@ -61,13 +61,14 @@ return function(api,Lab,Track,Run,prices)
         r.kind="trees"
         r.tree_count=type(t.wood)=="table" and t.wood.count or 1
       end
-      if t.terrain=="water" and not t.stock_void then r.kind="water" end
+      if t.terrain=="water" and not t.stock_void then r.kind,r.coast="water",t.coastal_water==true and not t.wood end
     end
     if r.kind=="rail" and signed(id) then
       r.kind="signals"
       for k,v in pairs(S.stock_rail_dispatch.signals.records[id]) do r[k]=v end
     end
-    r.slope,r.base_level=shape,base
+    r.slope,r.base_level,r.flooding=shape,base,t.rail_ground==13
+    if r.coast and Sim.coastal_in_use then r.occupied=Sim.coastal_in_use(S,id) end
     r.id=id
     r.overhead=S.bridge_above and S.bridge_above[id]~=nil or S.aqueduct_above and S.aqueduct_above[id]~=nil or false
     if S.tunnel_below and S.tunnel_below[id] then r.subsurface=true end
@@ -160,7 +161,10 @@ return function(api,Lab,Track,Run,prices)
         -- Normal quotes preserve an existing rail type when no
         -- conversion is needed. Explicit advanced quotes use the
         -- returned type, never the player's requested type blindly.
-        if quote then p.result_railtype=quote.railtype
+        if p.shore and (not quote or quote.water_ground~=true or not p.split_foundation) then
+          return nil,"Only the raised half of this shore supports ordinary rail."
+        end
+        if quote then p.result_railtype,p.water_ground=quote.railtype,quote.water_ground
         elseif gauge~=Types.RAIL and not remove then return nil,"No builder for this rail type." end
         if p.remove_signal then value=value+prices.clear_signal() end
         if not remove and tile.kind=="trees" then out.tree_count=out.tree_count+tile.tree_count end

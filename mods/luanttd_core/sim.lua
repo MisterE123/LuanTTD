@@ -232,7 +232,10 @@ local function load_road_rules()
   long_road_rules=dofile(base.."openttd/road_oneway.lua")(road_rules)
   landscape_rules=dofile(base.."openttd/landscaping.lua")(terrain_rules)
   clear_area_rules=dofile(base.."openttd/clear_area.lua")
-  coastal_world=dofile(base.."water_flood_world.lua")(M,terrain_rules,dofile(base.."openttd/water_flood.lua"))
+  local rail_track=dofile(base.."openttd/rail_track.lua")
+  local rail_water=dofile(base.."openttd/rail_half_water.lua")(rail_track,slope_rules)
+  coastal_world=dofile(base.."water_flood_world.lua")(M,terrain_rules,dofile(base.."openttd/water_flood.lua"),
+    rail_track,slope_rules,rail_water)
   bridge_rules=dofile(base.."openttd/road_bridge.lua")(slope_rules)
   bridge_underlay=dofile(base.."openttd/bridge_underlay.lua")
   bridge_assets=dofile(base.."bridge_style_assets.lua")
@@ -546,6 +549,7 @@ local function coastal_tile_occupied(s,id)
   end
   return false
 end
+function M.coastal_in_use(s,id) return coastal_tile_occupied(s,id) end
 local water_clear_errors={
   OUTSIDE_MAP="Outside the playable map.",
   TOO_CLOSE_TO_EDGE_OF_MAP="Too close to the map edge.",

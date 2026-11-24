@@ -15,6 +15,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       s.rail_tunnel_below and s.rail_tunnel_below[id]~=nil or false
   end
   local protected="That tile is protected railway infrastructure."
+  local coast_corner={[1]=true,[2]=true,[4]=true,[8]=true}
 
   local grades={[3]=1,[12]=2,[6]=3,[9]=4}
   function Lab.surface(shape,base,bits)
@@ -289,7 +290,8 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     if Lab.span_protected(s,id) then return false,protected end
     local t=s.tiles[id]
     if not t then return false,"That tile is outside the region." end
-    if shape==nil or t.stock_void or t.terrain=="water" or t.site or t.house or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or
+    local shore=coast_corner[shape] and t.h==0 and t.terrain=="water" and t.coastal_water and not t.wood
+    if shape==nil or t.stock_void or t.terrain=="water" and not shore or t.site or t.house or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or
         (t.build and t.build~="stock_rail") or (t.owner and t.owner~=owner) or t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir then
       return false,"Trackworks currently needs clear, dry ground in your company."
     end
@@ -306,16 +308,26 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     if new>0 and not split and not Lab.surface(shape,0,new) then
       return false,"This piece needs a stock-compatible foundation. Try a different curve or align a straight track with the slope."
     end
-    return true,{id=id,tracks=new,prior=old,shape=shape,track=track,remove=remove,split_foundation=not not split}
+    return true,{id=id,tracks=new,prior=old,shape=shape,track=track,remove=remove,
+      split_foundation=not not split,shore=not not shore}
   end
   function Lab.commit_piece(s,owner,plan)
     if Lab.span_protected(s,plan.id) then return false,protected end
     local t=s.tiles[plan.id]
     local new=plan.tracks
+    local existing_wet=t.rail_ground==13
+    if plan.shore and plan.water_ground then
+      t.terrain,t.water_class,t.coastal_water,t.stock_water_rocks="grass",nil,nil,nil
+      t.rail_ground=13
+    elseif existing_wet and new==0 then
+      if coast_corner[plan.shape] then
+        t.terrain,t.water_class,t.coastal_water="water","sea",true
+      end
+    end
     t.build=new>0 and "stock_rail" or nil
     t.owner=new>0 and owner or nil
     t.rail_tracks=new>0 and new or nil
-    if new==0 then t.rail_ground=nil elseif not plan.remove then t.rail_ground=0 end
+    if new==0 then t.rail_ground=nil elseif not plan.remove and t.rail_ground~=13 then t.rail_ground=0 end
     if new==0 then t.rail_type=nil
     elseif plan.result_railtype and plan.result_railtype~=0 then t.rail_type=plan.result_railtype end
     t.wood=nil

@@ -17,6 +17,10 @@ return function(Sim,Terrain,Water,Facilities)
       for k,v in pairs(t.ship) do out[k]=v end
       return out
     end
+    if t.rail_tracks and t.rail_ground==13 and not (t.level_crossing or t.rail_station_id or t.rail_depot_dir~=nil or t.rail_waypoint_id) then
+      out.kind,out.rail_bits,out.plain="shore_rail",t.rail_tracks,true
+      return out
+    end
     if t.coastal_water then
       out.kind,out.water_class,out.is_coast="coast","sea",true
       out.water_ground,out.is_water_tile=false,false
