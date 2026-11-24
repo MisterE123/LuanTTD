@@ -39,6 +39,15 @@ return function(Sim,mod,R,cap)
       "The first "..kind.." has reached the "..place..".",
       {owner=owner,tile=tile,icon=kind,ref_mode=mode,ref_station=id})
   end
+  -- OpenTTD 16.0-RC1 TownActionRoadRebuild publishes general news.
+  function W.road_reconstruction(id)
+    local town=s.sites[id]
+    if town and town.kind=="town" then
+      return publish("general","normal","Road reconstruction in "..town.name,
+        ("A transport company is funding six months of street repairs in %s."):format(town.name),
+        {tile=town.tile,icon="industry"})
+    end
+  end
   function W.rail_collision(tile,victims)
     if type(victims)~="number" or victims<=0 then return end
     -- train_cmd.cpp CheckTrainCollision publishes a tile accident, not

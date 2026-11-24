@@ -31,6 +31,12 @@ color swatches rather than imported OpenTTD art. Run
 `blender -b -t 2 --python tools/build_road_art.py` to regenerate the native
 Luanti meshes (three shelter layouts and four depot orientations).
 
+`road_reconstruction.blend` contains original editable steel barriers,
+reflective stripes, beacons, cones and resurfacing gravel. Regenerate the
+two native OBJ orientations and original palette with
+`blender -b --factory-startup --python tools/build_road_reconstruction_art.py`.
+No upstream assets or textures are included.
+
 ## Towns and industries
 
 `tools/build_scenery_art.py` regenerates 13 original editable models:

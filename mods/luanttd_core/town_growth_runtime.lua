@@ -4,6 +4,9 @@ local path=(core and core.get_modpath and core.get_modpath("luanttd_core") and c
   or assert(source and source:sub(2):match("^(.+[\\/])"),"Cannot locate stock town assets")
 return function(Sim,Terrain,G,B,H)
   local W={}
+  W.reconstruction=dofile(path.."road_reconstruction_world.lua")(Sim,Terrain,G,
+    dofile(path.."openttd/road_reconstruction.lua"),dofile(path.."openttd/road_slope.lua"),
+    dofile(path.."openttd/rail_track.lua"),dofile(path.."openttd/slope.lua"))
   local names=dofile(path.."stock_town_art.lua")
   local authority=dofile(path.."town_road_authority.lua")(Sim,dofile(path.."openttd/road_town_permission.lua"))
   local function at(layer,id) return layer and layer[id] end
@@ -123,7 +126,9 @@ return function(Sim,Terrain,G,B,H)
       local ratings=authority.station_view(s)
       for _,id in ipairs(state.order) do
         local t=state.towns[id]
+        local was_funded=t.road_build_months==1
         local _,reason=G.month(t,views,2,random)
+        if was_funded then W.reconstruction.expired(s,t) end
         t.reason=reason
         t.last_active=G.active_stations(t,views)
         authority.month(s,t,ratings)

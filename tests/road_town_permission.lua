@@ -119,3 +119,4 @@ do
   assert(c.stock_town_authority_ratings[1]==430)
   print("PASS source road clearance applies one local authority penalty per wooded tile, only on paid commits, within the strict radius")
 end
+dofile("tests/road_reconstruction.lua")

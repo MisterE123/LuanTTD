@@ -508,11 +508,29 @@ return function(api)
     if ns>0 then return "quarter" end
     return "straight"
   end
+  local rebuild_art={}
+  for axis=0,1 do
+    local asset="road_reconstruction_"..axis
+    rebuild_art[axis]=architecture(asset,asset,"road_reconstruction_atlas")
+  end
   local function road_surface(id)
     local t=S.tiles[id]
     local name=t and t.build
     if S.corner_grid and (name=="road" or name=="road_station" or name=="road_depot" or name=="stock_road_bridge" or name=="stock_road_tunnel") and Sim.road_surface then
       return Sim.road_surface(S,id)
+    end
+  end
+  function R.road_reconstruction_node(t,id,x,y,z)
+    if not t.roadworks or x%2~=0 or z%2~=0 then return end
+    local slope,base=road_surface(id)
+    if slope==nil and t.tram and R.tram_surface then
+      local surface=R.tram_surface(id)
+      if surface then slope,base=surface.grade,surface.base end
+    end
+    if slope==0 and y==base+2 then
+      local bits=Sim.road_bits(S,id)
+      if bits==0 and t.tram then bits=t.tram.tram_bits end
+      return rebuild_art[bits==5 and 1 or 0]
     end
   end
   if api.tram_tools and terrain then
@@ -967,6 +985,10 @@ return function(api)
         return crossing_mesh[c.rail_axis][gate]
       end
       return "air"
+    end
+    if t.roadworks then
+      local works=R.road_reconstruction_node(t,id,x,y,z)
+      if works then return works end
     end
     if api.oneway and (t.road_disallowed or t.disallowed) and x%2==0 and z%2==0 then
       local mark=one_way_node(id,y)

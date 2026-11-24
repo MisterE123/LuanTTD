@@ -167,8 +167,9 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       if oneway_guard then
         local ok,why,tile=oneway_guard(s,old,b)
         if not ok then
-          state.waiting,state.speed,state.oneway_reason,state.oneway_tile="oneway",0,why,tile
-          v.status="Waiting at one-way road"
+          local works=why=="ROADWORKS_IN_PROGRESS"
+          state.waiting,state.speed,state.oneway_reason,state.oneway_tile=works and "roadworks" or "oneway",0,why,tile
+          v.status=works and "Waiting for roadworks" or "Waiting at one-way road"
           return false
         end
       end
@@ -217,7 +218,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       local function commit()
         if bay_commit then Bay.commit(s,v,old,b,bay_commit,frames,state.index+1) end
         state.waiting,state.oneway_reason,state.oneway_tile=nil,nil,nil
-        if v.status=="Waiting at one-way road" or v.status=="Waiting for junction clearance" then v.status="En route" end
+        if v.status=="Waiting at one-way road" or v.status=="Waiting for roadworks" or v.status=="Waiting for junction clearance" then v.status="En route" end
         local span_limit=bridge_limit(s,b)
         local permitted=math.min(limit[v.engine],span_limit or math.huge)
         if span_limit then state.speed=math.min(state.speed,permitted) end

@@ -315,6 +315,10 @@ local function road_sign(t)
   return t and t.build=="road" and (t.road_disallowed or t.disallowed or 0) or 0
 end
 local function one_way_pose(s,from,to)
+  if from and to and from[4]~=to[4] and not (to[12] or to[13] or to[14]) then
+    local t=s.tiles[to[4]]
+    if t and t.roadworks then return false,"ROADWORKS_IN_PROGRESS",to[4] end
+  end
   local w=oneway_world(s)
   if w then
     local ok,why,at=w.guard(s,from,to)
@@ -930,6 +934,7 @@ function M.road_piece_occupancy(s)
   end
 end
 local function road_piece_plan(s,owner,id,t,request,occupied)
+  if t.roadworks then return nil,"Road works block that tile." end
   if t.level_crossing then
     local q=t.level_crossing
     local _,added=new_pieces(request,q.road_bits)
@@ -2189,15 +2194,16 @@ local function road_departure(s,a,b,owner,vehicle,waypoints)
   return source_route.route(s,a,b,owner,vehicle,r.occupancy(M,s),waypoints)
 end
 road_replan=function(s,v,state,frames,current,vehicle_limit)
-  local revision=s.road_oneway_revision
-  if not revision or state.oneway_checked_rev==revision then return end
+  local revision,works=s.road_oneway_revision,s.roadworks_revision
+  if (not revision and not works) or (state.oneway_checked_rev==revision and state.roadworks_checked_rev==works) then return end
+  local works_changed=state.roadworks_checked_rev~=works
   if state.depot_wait or state.lane_pose or (state.overtaking or 0)~=0 then return end
   local t=s.tiles[current[4]]
   if not current[15] or current[10] or current[12] or current[13] or current[14] or not t or
       t.build~="road" or t.level_crossing then return end
-  state.oneway_checked_rev=revision
+  state.oneway_checked_rev,state.roadworks_checked_rev=revision,works
   local w=oneway_world(s)
-  if not w then return end
+  if not (w or works_changed) then return end
   local bad=false
   for i=state.index+1,#frames do
     if not one_way_pose(s,frames[i-1],frames[i]) then bad=true;break end
@@ -2205,12 +2211,12 @@ road_replan=function(s,v,state,frames,current,vehicle_limit)
   if not bad then return end
   local r=road_routing()
   local path,td,cost,new,bays
-  if v.road_via_pending and v.dest then
+  if v.dest and (v.road_via_pending or works_changed) then
     local _
     path,_,td,cost,new,bays=source_route.from_live_frame(s,v,current,v.dest,r.occupancy(M,s),v.road_via_pending)
   else
     local base=crossing_road_board(s,r.board(M,s,r.follow,r.occupancy(M,s)))
-    local alternate=w.reroute(s,v,current,base,r.search,r.cost,{display_max_speed=vehicle_limit,compatible={[0]=true}})
+    local alternate=w and w.reroute(s,v,current,base,r.search,r.cost,{display_max_speed=vehicle_limit,compatible={[0]=true}})
     if not alternate then return end
     new,bays=source_route.frames(w.path_board(s,base),alternate.trace,alternate.origin_frame)
     td,cost=alternate.last_td,alternate.cost
@@ -2229,7 +2235,7 @@ road_replan=function(s,v,state,frames,current,vehicle_limit)
   v.road_bay_branch=bays
   state.index,state.waiting,state.oneway_tile=1,nil,nil
   state.oneway_reroutes=(state.oneway_reroutes or 0)+1
-  if v.status=="Waiting at one-way road" then v.status="En route" end
+  if v.status=="Waiting at one-way road" or v.status=="Waiting for roadworks" then v.status="En route" end
   return new
 end
 function M.path(s,a,b,mode,owner,avoid,vehicle,waypoints)
@@ -3368,6 +3374,19 @@ function M.fund_town_buildings(s,owner,id,seen)
   debit(s.companies[owner],q.cost)
   return true,"Funded town growth for three months.",{town=id,months=town.fund_buildings_months}
 end
+function M.quote_road_reconstruction(s,owner,id)
+  local growth=town_growth_mount[s]
+  return growth and growth.world.reconstruction and growth.world.reconstruction.view(s,id,owner)
+end
+function M.fund_road_reconstruction(s,owner,id,seen)
+  local q=M.quote_road_reconstruction(s,owner,id)
+  if not q then return false,"Road reconstruction is unavailable." end
+  if q.cost~=seen then return false,"The road reconstruction price changed." end
+  if not q.affordable then return false,"Not enough cash to fund road reconstruction." end
+  local town=assert(town_growth_mount[s].world.reconstruction.fund(s,id))
+  debit(s.companies[owner],q.cost)
+  return true,"Funded local road reconstruction for six months.",{town=id,months=town.road_build_months}
+end
 function M.road_stock_service_active(s)
   return s.road_stock_loading and s.road_stock_clock and s.road_economy and s.corner_grid~=nil
 end
@@ -4039,7 +4058,18 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
     town_passengers.start(s)
     clock=function(callback)
       if not commercial and not coal and not timber and not growth and not tide then return town_passengers.day(s,callback,{traverse=traverse}) end
+      local works=growth and growth.world.reconstruction
+      local work_state=works and s.stock_town_growth.reconstruction
+      local road_ground,road_tick
+      local function ground_available(id)
+        if not road_ground then road_ground=default_oneway().ground_occupancy(s) end
+        return not road_ground[id]
+      end
       local function landscape(x,z,tick)
+        if work_state and (work_state.funded>0 or work_state.active>0) then
+          if tick~=road_tick then road_ground=nil;road_tick=tick end
+          works.visit(s,x+1,z+1,growth_random,ground_available)
+        end
         if tide then tide(x,z) end
         if coal then coal.tile_visit(x,z,tick) end
         if timber then timber.tile_visit(x,z,tick,commercial and commercial.offer_rig_passengers) end
@@ -4483,7 +4513,7 @@ function M.daily(s,traverse)
       local waiting=v.road_speed_state and v.road_speed_state.waiting
       v.status=blocked and "Road crossing needs a stock motion route" or
         oneway_blocked and "One-way road needs a stock motion route" or
-        waiting=="oneway" and "Waiting at one-way road" or waiting=="crossing" and "Waiting at level crossing" or
+        waiting=="roadworks" and "Waiting for roadworks" or waiting=="oneway" and "Waiting at one-way road" or waiting=="crossing" and "Waiting at level crossing" or
         waiting=="depot" and "Waiting in depot" or waiting=="bay" and "Waiting for a free bay"
         or waiting=="junction" and "Waiting for junction clearance"
         or waiting=="road" and "Following traffic" or "En route"

@@ -120,6 +120,18 @@ core.register_on_joinplayer(function(p)
         assert(t.growing and t.fund_buildings_months>=1 and t.fund_buildings_months<=3)
         core.log("action","FOCUS_NATIVE_FUND_REOPEN_PASS town funding and paid service restored")
       end
+      if label=="reopen" and core.settings:get_bool("luanttd_native_road_rebuild",false) then
+        local f=assert(io.open(path.."/native-focus-roadworks-town","r"))
+        local id=f:read("*n");f:close()
+        assert(s.stock_town_growth.towns[id].road_build_months>0)
+        assert(s.stock_town_growth.reconstruction.started>0)
+        local event
+        for _,row in ipairs(s.stock_news_journal.items) do
+          if row.headline=="Road reconstruction in "..s.sites[id].name then event=row; break end
+        end
+        assert(event and event.kind=="general" and event.style=="normal")
+        core.log("action","FOCUS_NATIVE_ROAD_REBUILD_REOPEN_PASS live program and source news persisted")
+      end
       core.log("action",("FOCUS_NATIVE_RECEIPT %s day=%d cash=%d bus=%d delivered=%d revenue=%d")
         :format(label,r.day,r.value.cash,stat_id,delivered,revenue))
     end)
@@ -331,7 +343,8 @@ core.register_on_joinplayer(function(p)
     elseif label=="town-fund-loans" then
       local function borrow()
         ask({kind="company"},function(r)
-          if r.value.cash>=212000 then
+          local target=core.settings:get_bool("luanttd_native_road_rebuild",false) and 142000 or 212000
+          if r.value.cash>=target then
             -- Freeze the in-game clock just for the receipt comparison,
             -- so the bus cannot add a daily operating cost between reads.
             ask({kind="command",command={kind="speed",speed=0,revision=r.revision}},function()
@@ -352,6 +365,53 @@ core.register_on_joinplayer(function(p)
           core.log("action","NATIVE_ROAD_GESTURE_TOWN_FUND_PASS paid $207031 and funded real town growth")
         end)
       end)
+    elseif label=="town-rebuild-done" then
+      local state=assert(OwnerCheckpoint.read())
+      assert(q.rebuild and state.stock_town_growth.towns[q.tree_town].road_build_months==6)
+      assert(core.safe_file_write(path.."/native-focus-roadworks-town",tostring(q.tree_town)))
+      ask({kind="company"},function(r)
+        ask({kind="command",command={kind="speed",speed=4,revision=r.revision}},function()
+          core.log("action","NATIVE_ROAD_GESTURE_ROAD_REBUILD_PAID stock funding $136718")
+        end)
+      end)
+    elseif label=="town-rebuild-view" then
+      local function view_works()
+        local state=assert(OwnerCheckpoint.read())
+        if q.works_tile then
+          local x,z=Sim.xy(q.works_tile)
+          local grade,h=Sim.road_surface(state,q.works_tile)
+          local node=grade==0 and core.get_node({x=2*x,y=h+2,z=2*z}).name
+          if node and node:find("luanttd_core:road_reconstruction_",1,true) then
+            core.log("action","NATIVE_ROAD_GESTURE_ROAD_REBUILD_NATIVE actual stock closure, original barricades and cones at "..x..","..z)
+            return
+          end
+          if not state.tiles[q.works_tile].roadworks then q.works_tile=nil end
+        end
+        if not q.works_tile then
+          for id,t in pairs(state.tiles) do
+            if t.roadworks then
+              q.works_tile=id
+              local x,z=Sim.xy(id)
+              aim(x,z,.5)
+              break
+            end
+          end
+        end
+        core.after(.18,view_works)
+      end
+      view_works()
+    elseif label=="town-rebuild-close" then
+      local snap=assert(OwnerCheckpoint.read())
+      local tile=assert(q.works_tile)
+      local x,z=Sim.xy(tile)
+      local grade,h=Sim.road_surface(snap,tile)
+      assert(grade==0 and snap.tiles[tile].roadworks)
+      local target={x=x*2+.5,y=h+.67,z=z*2+.5}
+      local camera={x=target.x+4,y=h+2.25,z=target.z+3.3}
+      player:set_pos(camera)
+      player:set_look_horizontal(math.atan2(camera.x-target.x,target.z-camera.z))
+      player:set_look_vertical(math.atan2(camera.y+1.625-target.y,math.sqrt(4^2+3.3^2)))
+      core.log("action","NATIVE_ROAD_GESTURE_ROAD_REBUILD_CLOSE")
     elseif label=="town-authority" then
       assert(q.tree_town and world.go_menu(player,"survey"))
       local state=assert(OwnerCheckpoint.read())
@@ -362,19 +422,26 @@ core.register_on_joinplayer(function(p)
       assert(found,"No town street for the authority inspection")
       local x,z=Sim.xy(found)
       aim(x,z,.5)
-      if core.settings:get_bool("luanttd_native_town_fund",false) then
+      local rebuild=core.settings:get_bool("luanttd_native_road_rebuild",false)
+      if rebuild or core.settings:get_bool("luanttd_native_town_fund",false) then
         local client=assert(api.worker_bridge_client)
         local query=client.query
         client.query=function(req,done)
-          if req.kind=="command" and req.command.kind=="town_fund_buildings" then
+          if req.kind=="command" and req.command.kind==(rebuild and "town_fund_roads" or "town_fund_buildings") then
             local before=assert(OwnerCheckpoint.read()).companies[name].expense
             return query(req,function(result)
               assert(result.ok,result.why)
               local after=assert(OwnerCheckpoint.read())
-              assert(after.companies[name].expense==before+207031,("Expected $207031 expense; got $%d"):format(after.companies[name].expense-before))
+              local cost=rebuild and 136718 or 207031
+              assert(after.companies[name].expense==before+cost,("Expected $%d expense; got $%d"):format(cost,after.companies[name].expense-before))
               local town=after.stock_town_growth.towns[q.tree_town]
-              assert(town.fund_buildings_months==3 and town.growing)
-              q.funded=true
+              if rebuild then
+                assert(town.road_build_months==6 and after.stock_town_growth.reconstruction.funded==1)
+                q.rebuild=true
+              else
+                assert(town.fund_buildings_months==3 and town.growing)
+                q.funded=true
+              end
               return done(result)
             end)
           end
@@ -386,7 +453,9 @@ core.register_on_joinplayer(function(p)
         if who==name and form=="luanttd_core:town_authority" then
           assert(body:find("Very good (+465)",1,true),body)
           assert(body:find(state.sites[q.tree_town].name,1,true),body)
-          if core.settings:get_bool("luanttd_native_town_fund",false) then
+          if rebuild then
+            assert(body:find("fund_roads;",1,true) and body:find(core.formspec_escape("$136,718"),1,true),body)
+          elseif core.settings:get_bool("luanttd_native_town_fund",false) then
             assert(body:find("fund_buildings;",1,true) and body:find(core.formspec_escape("$207,031"),1,true),body)
           end
           core.log("action","NATIVE_ROAD_GESTURE_TOWN_PANEL_PASS authoritative rating 465 shown through Inspect")

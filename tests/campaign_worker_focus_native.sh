@@ -97,6 +97,9 @@ fi
 if [[ ${LUANTTD_NATIVE_TOWN_FUND:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_town_fund = true' >> "$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_ROAD_REBUILD:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_road_rebuild = true' >> "$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}
@@ -230,7 +233,7 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
     do_road tree-road-done TREE_ROAD_PASS
   fi
   if [[ ${LUANTTD_NATIVE_TOWN_PANEL:-0} == 1 ]]; then
-    if [[ ${LUANTTD_NATIVE_TOWN_FUND:-0} == 1 ]]; then
+    if [[ ${LUANTTD_NATIVE_TOWN_FUND:-0} == 1 || ${LUANTTD_NATIVE_ROAD_REBUILD:-0} == 1 ]]; then
       do_road town-fund-loans TOWN_FUND_LOANS
     fi
     do_road town-authority TOWN_PANEL
@@ -238,12 +241,23 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
     await_log NATIVE_ROAD_GESTURE_TOWN_PANEL_PASS
     sleep .55; import -window root -resize 960x600 "$out/town-authority.jpg"
     if [[ ${LUANTTD_NATIVE_TOWN_FUND:-0} == 1 ]]; then
-      xdotool mousemove 590 456 click 1
+      xdotool mousemove 590 420 click 1
       sleep 1.2
       import -window root -resize 960x600 "$out/town-funding.jpg"
       do_road town-fund-done TOWN_FUND_PASS
+    elif [[ ${LUANTTD_NATIVE_ROAD_REBUILD:-0} == 1 ]]; then
+      xdotool mousemove 590 491 click 1
+      sleep 1.05
+      do_road town-rebuild-done ROAD_REBUILD_PAID
+      xdotool key Escape
+      do_road town-rebuild-view ROAD_REBUILD_NATIVE
+      sleep .55
+      import -window root -resize 960x600 "$out/road-rebuild-active.jpg"
+      do_road town-rebuild-close ROAD_REBUILD_CLOSE
+      sleep .65
+      import -window root -resize 960x600 "$out/road-rebuild-close.jpg"
     fi
-    xdotool key Escape
+    if [[ ${LUANTTD_NATIVE_ROAD_REBUILD:-0} != 1 ]]; then xdotool key Escape; fi
   fi
   do_road remove-start REMOVE
   slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_REMOVE slot=//p' "$log" | tail -1)

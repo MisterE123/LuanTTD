@@ -459,9 +459,9 @@ local function pick(fields,id,a,prior)
 end
 function U.fields(p,formname,f)
   if formname=="luanttd_core:town_authority" then
-    if f.fund_buildings then U.fund_town_from_panel(p)
+    if f.fund_buildings or f.fund_roads then U.fund_town_from_panel(p,f.fund_roads and "roads" or "buildings")
     else
-      local v=view(p:get_player_name());v.town_funding=nil;v.authority_context=nil
+      local v=view(p:get_player_name());v.town_funding=nil;v.road_funding=nil;v.authority_context=nil
     end
     return true
   end
@@ -3024,7 +3024,7 @@ function U.open_town_authority(p,town)
   if not client then return false end
   local token={}
   v.authority_context=token
-  v.town_funding=nil
+  v.town_funding,v.road_funding=nil,nil
   local queued=client.query({kind="town_authority",player=n,town=town},function(result)
     if v.authority_context~=token or not core.get_player_by_name(n) then return end
     if not result.ok then U.status(p,"Town authority information is unavailable.");return end
@@ -3049,8 +3049,24 @@ function U.open_town_authority(p,town)
         action=action.."label[.45,4.30;"..esc("Fund new buildings · "..dollars(funding.cost).." required").."]"
       end
     end
-    local size=funding and 5.9 or 4.7
     local exit=funding and 4.99 or 3.78
+    local rebuild=row.reconstruction
+    if rebuild then
+      local y=funding and 4.92 or 3.63
+      local status=rebuild.months>0 and ("Street reconstruction: %d month%s left."):format(
+        rebuild.months,rebuild.months==1 and "" or "s") or "No street reconstruction is active."
+      action=action..("label[.45,%g;%s]"):format(y,esc(status))
+      if rebuild.affordable then
+        v.road_funding={town=row.id,cost=rebuild.cost,revision=result.revision,token=token}
+        action=action..("button[.45,%g;9.7,.57;fund_roads;%s]"):format(y+.41,
+          esc("Fund road reconstruction for 6 months · "..dollars(rebuild.cost)))
+      else
+        action=action..("label[.45,%g;%s]"):format(y+.67,
+          esc("Fund road reconstruction · "..dollars(rebuild.cost).." required"))
+      end
+      exit=y+1.36
+    end
+    local size=exit+.92
     core.show_formspec(n,"luanttd_core:town_authority",
       ("formspec_version[7]size[10.6,%g]bgcolor[#152334;false]"):format(size)..
       "label[.45,.48;LOCAL AUTHORITY]label[.45,.98;"..esc(row.town).."]"..
@@ -3061,15 +3077,15 @@ function U.open_town_authority(p,town)
   end)
   return not not queued
 end
-function U.fund_town_from_panel(p)
+function U.fund_town_from_panel(p,action)
   local name=p:get_player_name()
   local v=view(name)
-  local q=v.town_funding
+  local q=action=="roads" and v.road_funding or action=="buildings" and v.town_funding
   local client=api.worker_bridge_client
   if not q or q.token~=v.authority_context or not client then return end
-  v.town_funding=nil
+  v.town_funding,v.road_funding=nil,nil
   local ok,why=client.query({kind="command",player=name,command={
-    kind="town_fund_buildings",town=q.town,cost=q.cost,revision=q.revision}},function(result)
+    kind="town_fund_"..action,town=q.town,cost=q.cost,revision=q.revision}},function(result)
     if v.authority_context~=q.token or not core.get_player_by_name(name) then return end
     U.status(p,result.why=="STALE_COMMAND" and "The town changed. Review the latest funding offer." or result.why)
     U.open_town_authority(p,q.town)
@@ -3078,7 +3094,7 @@ function U.fund_town_from_panel(p)
 end
 function U.context(p,tile,hit)
   local n=p:get_player_name();local V=view(n)
-  V.authority_context=nil;V.town_funding=nil
+  V.authority_context=nil;V.town_funding=nil;V.road_funding=nil
   if V.pick_order then U.finish_order_pick(p);return end
   if api.authority_handoff and company_projection and api.worker_depot and tile then
     local x,z=Sim.xy(tile)
