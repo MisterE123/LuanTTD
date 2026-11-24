@@ -441,6 +441,8 @@ try:
             s["water_fx"].get("river","").startswith("luanttd_core:stock_river_flat") and
             s["water_fx"].get("slope","").startswith("luanttd_core:stock_river_3"))["water_fx"]
         assert proof["waving"]==3 and abs(proof["fog"]["fog_start"]-.65)<.02,proof
+        assert proof["river_waving"]==3 and proof["fall_waving"]==0,proof
+        assert proof["fall_mesh"]=="bl_land_3.obj" and proof["fall_animation"]=="vertical_frames",proof
         time.sleep(.8)
         screenshot("01-river-animated-with-haze")
         crop=(350,500,620,630)

@@ -35,7 +35,12 @@ return function(api,qa_ui)
       local river=core.get_node({x=30,y=1,z=36}).name
       local slope=core.get_node({x=18,y=1,z=36}).name
       local ocean=core.registered_nodes[plain] or {}
+      local flat=core.registered_nodes[river] or {}
+      local graded=core.registered_nodes[slope] or {}
+      local anim=graded.tiles and graded.tiles[1] and graded.tiles[1].animation
       return {plain=plain,river=river,slope=slope,waving=ocean.waving,
+        river_waving=flat.waving,fall_waving=graded.waving,fall_mesh=graded.mesh,
+        fall_animation=anim and anim.type,
         alpha=ocean.use_texture_alpha,fog=player:get_sky(true).fog}
     end
   end

@@ -202,6 +202,7 @@ jobs:
           BAYLINE_NATIVE_DISPLAY=308 BAYLINE_NATIVE_PORT=46708 timeout 220 bash tests/campaign_worker_ride_native.sh
           BAYLINE_NATIVE_DISPLAY=311 BAYLINE_NATIVE_PORT=46711 timeout 140 bash tests/wildlife_native.sh
           BAYLINE_NATIVE_DISPLAY=318 BAYLINE_NATIVE_PORT=46718 timeout 130 bash tests/campaign_worker_farm_building_native.sh
+          BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=319 BAYLINE_NATIVE_PORT=46719 LUANTTD_NATIVE_BANK_HEADS=1 timeout 130 bash tests/bridge_pier_render_native.sh
 
   native-opening-bridges:
     name: Opening bridge family and paid service

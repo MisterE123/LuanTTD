@@ -28,4 +28,16 @@ for mask=0,30 do
     file:close()
   end
 end
+-- A bridge deck uses the normal even/even mesh node. Put its bank in
+-- the adjacent +X column without changing the terrain's world position.
+-- OBJ X is inverted at import, so moving the anchor east adds one to X.
+for _,mask in ipairs{3,6,9,12} do
+  local dst=assert(io.open(out.."bridge_bank_"..mask..".obj","w"))
+  for line in io.lines(out..mask..".obj") do
+    local x,tail=line:match("^v ([^ ]+)( .+)$")
+    if x then line=("v %g%s"):format(tonumber(x)+1,tail) end
+    dst:write(line,"\n")
+  end
+  dst:close()
+end
 print("PASS: all 19 OpenTTD terrain meshes match the slope sampler")

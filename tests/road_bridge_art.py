@@ -24,7 +24,7 @@ def read(file):
         if tag=="v":
             ox,y,z=map(float,data.split())
             v=(-ox-.5,z-.5,y)
-            assert -.870001<=y<=.820001 and abs(v[0])<=1.000001 and abs(v[1])<=1.000001, (file,v)
+            assert -1.57<=y<=.820001 and abs(v[0])<=1.000001 and abs(v[1])<=1.000001, (file,v)
             vertices.append(v)
         elif tag=="vt":
             uv.append(tuple(map(float,data.split())))
@@ -81,6 +81,17 @@ def main():
         assert all(y==.5 for f in SURFACE for edge in inner.get(f,[]) for _,y in edge)
         assert all(y==(-.5 if kind=="ramp" else .5) for f in SURFACE for edge in outer.get(f,[]) for _,y in edge)
         assert not outer.get("Continuous_railings")  # guardrails stop before the ordinary street
+        def depth(name):
+            return {round(y-(.5+(v-1)/2 if kind=="ramp" else .5),6)
+                    for vs,_,_ in shapes[name] for u,v,y in (coords(p,d) for p in vs)}
+        wall=depth("Head_ashlar_abutment")
+        facing=depth("Head_ashlar_facing")
+        sill=depth("Head_bearing_sill")
+        assert min(wall)<-1.0,"bridgehead masonry must reach below the low bank"
+        assert not (wall&facing or wall&sill or facing&sill),"coplanar retaining ledges"
+        front=max(v for vs,_,_ in shapes["Head_approach_rail_end"] for _,v,_ in (coords(p,d) for p in vs))
+        first=min(v for vs,_,_ in shapes["Guardrail_posts"] for _,v,_ in (coords(p,d) for p in vs))
+        assert front<first,"two coplanar post sides overlap at the approach"
         def surface_area(tris):
             return sum(abs((b[0]-a[0])*(c[1]-a[1])-(c[0]-a[0])*(b[1]-a[1]))/2
                        for (a,b,c),_,_ in tris)
@@ -97,6 +108,17 @@ def main():
                     assert isclose(y,.5+(v-1)/2 if kind=="ramp" else .5,abs_tol=1e-6)
         heads[kind,d]=inner
     comparisons=0
+    # Source bank variants occupy the neighboring +X engine node, yet
+    # all four grass triangles land on the exact same game corners.
+    for mask in (3,6,9,12):
+        source=(models/f"bl_land_{mask}.obj").read_text().splitlines()
+        shifted=(models/f"bl_land_bridge_bank_{mask}.obj").read_text().splitlines()
+        assert len(source)==len(shifted)
+        for a,b in zip(source,shifted):
+            if a.startswith("v "):
+                x,y,z=map(float,a.split()[1:]);s,t,w=map(float,b.split()[1:])
+                assert s==x+1 and t==y and w==z
+            else: assert a==b
     for axis,d in ((0,2),(1,1)):
         shapes=read(models/f"{P}_span_{axis}.obj")
         left,right=seam(shapes,d,False),seam(shapes,d,True)

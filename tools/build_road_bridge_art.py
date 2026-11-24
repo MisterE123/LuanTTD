@@ -148,7 +148,7 @@ def superstructure(m, h, head):
             # A capped, beveled first rail post and no wood sitting on the
             # adjoining road. The final section's rails start below lane edge.
             a,b=sorted((side*.390,side*.475))
-            m.box("Head approach rail end","Timber — cut ends",a,b,-.836,-.799,
+            m.box("Head approach rail end","Timber — cut ends",a,b,-.836,-.823,
                   lambda v:h(v)+.108,lambda v:h(v)+.315)
 
     # Visible structural ends on the outside. Duplicating the seam geometry
@@ -163,16 +163,19 @@ def superstructure(m, h, head):
         for i in range(3):
             v=-.48+i*.24
             a=.50-i*.021
-            bottom=lambda q, k=i:h(q)-.55-k*.014
-            top=lambda q:h(q)-.263
+            # On a natural bank the low edge is one level beneath the
+            # deck. Seat the masonry there rather than hanging from it.
+            bottom=lambda q, k=i:h(q)-1.035-k*.014
+            top=lambda q:h(q)-.274
             m.box("Head ashlar abutment","Ashlar — dark",-a,a,v-.111,v+.111,bottom,top)
             for j in (-1,1):
                 u0,u1=sorted((j*(a-.018),j*(a+.012)))
                 shade="Ashlar — warm" if (i+j)%2 else "Ashlar — cold"
-                m.box("Head ashlar facing",shade,u0,u1,v-.104,v+.104,bottom,top,
+                m.box("Head ashlar facing",shade,u0,u1,v-.104,v+.104,
+                      lambda q,k=i:h(q)-.981-k*.014,lambda q:h(q)-.282,
                       face_colors={"top":"Ashlar — cap"})
         m.box("Head bearing sill","Ashlar — cap",-.50,.50,-.63,.16,
-              lambda q:h(q)-.312,lambda q:h(q)-.263)
+              lambda q:h(q)-.312,lambda q:h(q)-.259)
     else:
         # First drop to the stackable bent, below the deck at local y=.5.
         m.box("Pier cap timber","Timber — upper edge",-.445,.445,-.123,.123,

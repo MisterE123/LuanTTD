@@ -37,6 +37,12 @@ if [[ ${BAYLINE_NATIVE_BRIDGE_ROAD_CLEAR:-0} == 1 ]]; then fixture=bridge_road_c
 ready_mark=BRIDGE_PIER_RENDER_NATIVE_READY
 view_mark=BRIDGE_PIER_VIEW
 views=(wood rail water)
+if [[ ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 ]]; then
+  fixture=bridge_bank_render_native
+  ready_mark=BRIDGE_BANK_NATIVE_READY
+  view_mark=BRIDGE_BANK_NATIVE_VIEW
+  views=(left_bank right_bank)
+fi
 if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   fixture=tram_grade_render_native
   ready_mark=TRAM_GRADE_NATIVE_READY
@@ -85,7 +91,7 @@ water_wave_height = 2.0
 enable_dynamic_shadows = true
 enable_water_reflections = true
 EOF
-if [[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 || ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 || ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 || ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
+if [[ ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 || ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 || ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 || ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 || ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
   # Keep this geometry screenshot readable in software-rendered CI.
   sed -i -e 's/enable_dynamic_shadows = true/enable_dynamic_shadows = false/' \
     -e 's/enable_water_reflections = true/enable_water_reflections = false/' "$out/client.conf"
@@ -155,7 +161,9 @@ for view in "${views[@]}"; do
   fi
 done
 ! grep -Ei 'ERROR\[|could not load' "$out/client.log" "$out/server.log"
-if [[ ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
+if [[ ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 ]]; then
+  echo "PASS: native stock coastal ramps retain full bank slopes beneath their timber deck: $out"
+elif [[ ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
   echo "PASS: native road bridge and tunnel retain their original mesh under electrified tramway: $out"
 elif [[ ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 ]]; then
   echo "PASS: native tram stops at reserved rails and crosses only on release: $out"

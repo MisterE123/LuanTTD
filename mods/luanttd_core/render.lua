@@ -510,9 +510,22 @@ return function(api)
     end
   end
   local road_slope_mesh,road_foundation_mesh={},{}
+  local bridge_bank_mesh={}
   local retaining=reg("road_retaining",{png("grass0"),png("hill0"),png("road_surface_retaining")})
   if terrain then
     for shape,mask in pairs({[3]=10,[6]=5,[9]=5,[12]=10}) do
+      -- Deck and bank share a height, not an engine node. Match the
+      -- bank mesh's compensated +X anchor with the same collider offset.
+      local shifted={type="fixed",fixed={}}
+      for i,a in ipairs(slope_collision(shape).fixed) do
+        shifted.fixed[i]={a[1]-1,a[2],a[3],a[4]-1,a[5],a[6]}
+      end
+      bridge_bank_mesh[shape]={}
+      for variant=0,3 do
+        bridge_bank_mesh[shape][variant]=reg("bridge_bank_"..shape.."_"..variant,{png("grass"..variant)},
+          {drawtype="mesh",mesh="bl_land_bridge_bank_"..shape..".obj",paramtype="light",
+           sunlight_propagates=true,collision_box=shifted,pointable=false})
+      end
       road_slope_mesh[shape]=reg("road_grade_"..shape,{png("road_surface_"..mask)},
         {drawtype="mesh",mesh="bl_land_"..shape..".obj",paramtype="light",
          sunlight_propagates=true,collision_box=slope_collision(shape),pointable=false})
@@ -786,8 +799,15 @@ return function(api)
         east="bl_water_river_east_anim.png",west="bl_water_river_west_anim.png"}
       for _,dir in ipairs({"north","south","east","west"}) do
         local top=water_tile(files[dir],2.4,not mesh and 2 or nil)
+        local definition=water_definition(mesh)
+        -- The waterfall shares the exact projected slope with both banks.
+        -- Luanti's liquid shader only displaces vertices downwards, exposing
+        -- the bank underside and the ground fill through the river edge.
+        -- Keep the incline fixed and let the directional texture carry the
+        -- motion. Flat reaches and the open sea still use native waves.
+        if mesh then definition.waving=0 end
         family[dir]=reg(prefix..(dir=="north" and "" or "_"..dir),
-          mesh and {top} or {top,water_side,water_side},water_definition(mesh))
+          mesh and {top} or {top,water_side,water_side},definition)
       end
       stock_scenery.river[mask]=family
     end
@@ -1074,8 +1094,14 @@ return function(api)
         end
       end
       if head then
-        if y<=head.base then
-          return head.foundation~="none" and retaining or gnames.grass[t.variant]
+        local wall=head.foundation~="none" and retaining or gnames.grass[t.variant]
+        local bank=bridge_bank_mesh[head.foundation_slope]
+        if bank then
+          if y==head.base then return slope_fill end
+          if y==head.base+1 and x%2==1 and z%2==0 then return bank[t.variant] end
+        end
+        if y<head.base or not bank and y==head.base then
+          return wall
         end
         return "air"
       end
