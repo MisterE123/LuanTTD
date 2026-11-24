@@ -76,6 +76,9 @@ fi
 if [[ ${LUANTTD_NATIVE_STOP_AREA:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_road_stop_area = true' >> "$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_STOP_JOIN:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_road_stop_join = true' >> "$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}
@@ -182,6 +185,19 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
     xdotool mousedown 1; sleep .4; xdotool mouseup 1
     sleep 1.05
     do_road stop-erase-done STOP_ERASE_PASS
+    if [[ ${LUANTTD_NATIVE_STOP_JOIN:-0} == 1 ]]; then
+      do_road stop-join STOP_JOIN
+      slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_STOP_JOIN slot=//p' "$log" | tail -1)
+      xdotool key "$slot"; sleep .4
+      xdotool keydown e; xdotool mousedown 1; sleep .4; xdotool mouseup 1
+      await_log NATIVE_ROAD_GESTURE_STOP_JOIN_OPEN
+      xdotool keyup e; sleep .55
+      import -window root "$out/road-stop-join-picker.jpg"
+      xdotool mousemove 425 323 click 1
+      xdotool mousemove 778 529 click 1
+      sleep 1.1
+      do_road stop-join-done STOP_JOIN_PASS
+    fi
   fi
   if [[ ${LUANTTD_NATIVE_ROAD_MUNICIPAL:-0} == 1 ]]; then
     do_road town-start TOWN

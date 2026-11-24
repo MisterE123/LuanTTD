@@ -469,6 +469,7 @@ function U.fields(p,formname,f)
   if formname=="luanttd_core:station_layout" then return U.station_layout_fields(p,f) end
   if formname=="luanttd_core:rail_depot_direction" then return U.depot_direction_fields(p,f) end
   if formname=="luanttd_core:road_terminal_layout" then return U.road_terminal_fields(p,f) end
+  if formname=="luanttd_core:road_join_picker" then return U.road_join_picker_fields(p,f) end
   if U.signal_ui and formname==U.signal_ui.form then
     return U.signal_ui.fields(p,f,U.layer_bulldozer.open)
   end
@@ -1159,7 +1160,7 @@ function U.open_road_terminal(p,tool)
   local form={"formspec_version[7]size[9.6,5.35]bgcolor[#152334;false]",
     "label[.46,.38;"..road_terminal_title[kind].." layout]",
     kind=="depot" and "label[.46,.91;Choose an entrance, then click a tile in the world.]" or
-      "label[.46,.91;Choose a layout, then click or drag in the world. Hold E to keep it separate.]"}
+      "label[.46,.91;Choose a layout, then click or drag in the world. Hold E for join choices.]"}
   local coords={[0]={.5,2.13},[1]={3.57,2.94},[2]={6.65,2.13},[3]={3.57,1.39}}
   local function button(key,text,x,y,active)
     if active then form[#form+1]="style["..key..";bgimg=bl_button_active.png]" end
@@ -1465,6 +1466,54 @@ local function worker_build(n,V,kind,request)
     if built and api.on_worker_build then api.on_worker_build(n,tiles,quote) end
   end)
   if not ok then V.status=why end
+  return true
+end
+-- OpenTTD 16.0-RC1 ShowSelectBaseStationIfNeeded. The survey
+-- auxiliary key fills the role of Ctrl without taking over movement.
+function U.open_road_join_picker(p,V,request)
+  local n=p:get_player_name()
+  local client=api.worker_bridge_client
+  if not client then V.status="The campaign worker is not ready.";return end
+  local pending={request=request,tool=V.tool,selected=1}
+  V.road_join_picker=pending
+  V.status="Finding stations that can join…"
+  local sent,why=client.query({kind="road_join_choices",player=n,request=request},function(r)
+    if session[n]~=V or V.road_join_picker~=pending then return end
+    if V.tool~=pending.tool then V.road_join_picker=nil;return end
+    if not r.ok then V.road_join_picker=nil;V.status=r.why;return end
+    pending.choices,pending.cost=r.value.choices,r.value.cost
+    local labels={}
+    for _,choice in ipairs(pending.choices) do labels[#labels+1]=esc(choice.name) end
+    local title=request.tool=="road_waypoint" and "Join a road waypoint" or "Join a road station"
+    V.status="Choose a station or build separately."
+    core.show_formspec(n,"luanttd_core:road_join_picker",
+      "formspec_version[7]size[9,6.4]bgcolor[#152334;false]"..
+      "label[.45,.40;"..title.."]label[.45,1.02;Construction: "..dollars(pending.cost).."]"..
+      "textlist[.44,1.53;8.12,3.95;target;"..table.concat(labels,",")..";1;false]"..
+      "button[4.68,5.61;1.73,.55;cancel;Cancel]button[6.79,5.61;1.73,.55;place;Build]")
+  end)
+  if not sent then V.road_join_picker=nil;V.status=why end
+end
+function U.road_join_picker_fields(p,f)
+  local n=p:get_player_name()
+  local V=view(n)
+  local pending=V.road_join_picker
+  if not pending or not pending.choices then return true end
+  if f.quit or f.cancel then
+    V.road_join_picker=nil;V.status="Construction canceled."
+    if f.cancel then core.close_formspec(n,"luanttd_core:road_join_picker") end
+    return true
+  end
+  local e=f.target and core.explode_textlist_event(f.target)
+  if e and pending.choices[e.index] then pending.selected=e.index end
+  if not (f.place or e and e.type=="DCL") then return true end
+  local choice=pending.choices[pending.selected]
+  if V.tool~=pending.tool or not choice then return true end
+  V.road_join_picker=nil
+  core.close_formspec(n,"luanttd_core:road_join_picker")
+  local r=pending.request
+  r.join,r.join_picker_cost=choice.id,pending.cost
+  worker_build(n,V,"road",r)
   return true
 end
 function U.end_autorail(p,id,hit)
@@ -1837,13 +1886,19 @@ function U.end_autoroad(p,id,hit)
   local first=V.road_press.id
   if U.road_stop_gesture(p,V.tool) then
     V.road_press=nil
-    worker_build(n,V,"road",U.road_stop_request(p,V,first,id))
+    local req=U.road_stop_request(p,V,first,id)
+    if req.adjacent then U.open_road_join_picker(p,V,req)
+    else worker_build(n,V,"road",req) end
     return
   end
   if U.waypoint_tool(V.tool) then
     local req=U.waypoint_request(p,V.tool,first,id)
     V.road_press=nil
-    if api.authority_handoff then worker_build(n,V,"road",req);return end
+    if api.authority_handoff then
+      if req.separate and not req.remove then U.open_road_join_picker(p,V,req)
+      else worker_build(n,V,"road",req) end
+      return
+    end
     local q,why=Sim.road_waypoint_plan(S,n,req)
     if not q then V.status=why;return end
     local ok,note,tiles=Sim.apply_road_waypoint(S,n,q)

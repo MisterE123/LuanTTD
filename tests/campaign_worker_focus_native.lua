@@ -245,6 +245,31 @@ core.register_on_joinplayer(function(p)
         assert(st.tile==q.first+2 and not st.road_members[q.first+1])
         core.log("action","NATIVE_ROAD_GESTURE_STOP_ERASE_PASS")
       end
+    elseif label=="stop-join" then
+      assert(world.go_menu(player,"road_stops"))
+      local slot
+      for i,j in ipairs(world.hotbar_layout(player)) do if j==2 then slot=i end end
+      assert(slot and slot<=9)
+      aim(q.x+4,q.z,.25)
+      local snapshot=assert(OwnerCheckpoint.read())
+      local joining=assert(snapshot.stations[snapshot.tiles[q.first+2].station])
+      local show=core.show_formspec
+      core.show_formspec=function(user,form,body)
+        if user==name and form=="luanttd_core:road_join_picker" then
+          assert(body:find("New station",1,true) and body:find(core.formspec_escape(joining.name),1,true))
+          core.log("action","NATIVE_ROAD_GESTURE_STOP_JOIN_OPEN")
+          core.show_formspec=show
+        end
+        return show(user,form,body)
+      end
+      core.log("action","NATIVE_ROAD_GESTURE_STOP_JOIN slot="..slot)
+    elseif label=="stop-join-done" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      local base=assert(snapshot.tiles[q.first+2].station)
+      local dest=Sim.id(q.x+4,q.z)
+      assert(snapshot.tiles[dest].station==base,"The separate road platform should have joined the selected station")
+      assert(snapshot.stations[base].road_members[dest]=="bus")
+      core.log("action","NATIVE_ROAD_GESTURE_STOP_JOIN_PASS")
     elseif label=="town-start" then ready("TOWN",7,q.tx,q.tz,.12)
     elseif label=="town-end" then
       aim(q.tx+2,q.tz,.75)
@@ -269,6 +294,11 @@ core.register_on_joinplayer(function(p)
         local a,b=snapshot.tiles[q.first+1],snapshot.tiles[q.first+2]
         local st=assert(snapshot.stations[b.station])
         assert(not a.station and a.road_bits==10 and st.tile==q.first+2 and st.road_members[q.first+2]=="bus")
+        if core.settings:get_bool("luanttd_native_road_stop_join",false) then
+          local dest=Sim.id(q.x+4,q.z)
+          assert(snapshot.tiles[dest].station==b.station and st.road_members[dest]=="bus")
+          core.log("action","NATIVE_ROAD_GESTURE_STOP_JOIN_REOPEN_PASS")
+        end
         core.log("action","NATIVE_ROAD_GESTURE_STOP_REOPEN_PASS")
       end
       if fixed and core.settings:get_bool("luanttd_native_explicit_road_ui",false) then

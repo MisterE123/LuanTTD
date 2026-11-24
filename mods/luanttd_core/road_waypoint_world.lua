@@ -86,6 +86,7 @@ return function(Sim,Terrain,Stock,Underlay,rules)
       piece_price=function()return 95 end})
     if not q then return nil,why end
     local picked=q.existing
+    if picked and req.separate and picked~=req.join then return nil,"MUST_REMOVE_ROAD_STOP_FIRST" end
     if req.join and picked and req.join~=picked then return nil,"ADJOINS_MULTIPLE_WAYPOINTS" end
     if req.join then
       if not groups[req.join] then return nil,"NO_CLEAR_WAYPOINT" end
@@ -122,7 +123,7 @@ return function(Sim,Terrain,Stock,Underlay,rules)
       end
     end
     if #edits==0 then return nil,"ALREADY_BUILT" end
-    return {cost=q.cost,changes=edits,road_waypoint=true,id=id,axis=direction,area=extent}
+    return {cost=q.cost,changes=edits,road_waypoint=true,id=id,axis=direction,area=extent,picker_area=span(q.ids)}
   end
   function W.apply(s,owner,q)
     s.stock_road_waypoints=s.stock_road_waypoints or {}

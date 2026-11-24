@@ -1217,6 +1217,14 @@ local function stop_geometry(st)
   return record
 end
 function M.road_stop_tiles(st) return stop_geometry(st).physical end
+function M.road_stop_anchor(st,kind)
+  if not st.road_members then return st.tile end
+  if st.road_members[st.tile]==kind then return st.tile end
+  local rec=stop_geometry(st)
+  for _,id in ipairs(rec.ids) do
+    if st.road_members[id]==kind then return id end
+  end
+end
 function M.road_stop_catchment(s,st,r)
   local rec=stop_geometry(st)
   r=s.stock_modified_catchment==false and 4 or r
@@ -1312,7 +1320,7 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
     cost=cost+stock_road_terminals.frontage(s,owner,edit,req,company.cash-cost,fronts,excluded)
   end
   for _,edit in ipairs(fronts) do changes[#changes+1]=edit end
-  return {cost=cost,changes=changes,stop_members=result,join_stop=sid}
+  return {cost=cost,changes=changes,stop_members=result,join_stop=sid,picker_area=area}
 end
 function M.stock_road_stop_remove_plan(s,owner,first,last)
   local company=s.companies[owner]

@@ -61,21 +61,22 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
   end
   function R.route(s,a,b,owner,vehicle,occupancy,waypoints)
     local board=Board(Sim,s,F,occupancy)
-    local from=a.tile
+    local bus=vehicle==nil or vehicle.cargo=="passenger"
+    local facility=bus and "bus" or "truck"
+    local from=Sim.road_stop_anchor(a,facility)
+    local target=Sim.road_stop_anchor(b,facility)
     local pose=vehicle and vehicle.road_stop_pose
     if pose and a.id then
       local t=board.tile(pose[4])
-      if t and t.station==a.id and not t.waypoint then from=pose[4] end
+      if t and t.station==a.id and t.stop_type==facility and not t.waypoint then from=pose[4] end
     end
-    local source,dest=board.tile(from),board.tile(b.tile)
+    local source,dest=from and board.tile(from),target and board.tile(target)
     if not source or not dest or not dest.station then return nil end
-    local bus=vehicle==nil or vehicle.cargo=="passenger"
     if (source.pair or dest.pair) and vehicle and vehicle.engine~="bus" and
         vehicle.engine~="leopard_bus" and vehicle.engine~="foster_bus" and vehicle.engine~="foster_mk2_bus" then return nil end
     local v={owner=owner,bus=bus,tile=from,display_max_speed=speed[vehicle and vehicle.engine or "bus"]}
-    local facility=bus and "bus" or "truck"
     if dest.stop_type~=facility and not board.station_area(dest.station,facility) then return nil end
-    if (a.id~=nil and a.id==b.id or from==b.tile) and not (waypoints and #waypoints>0) then return {from},vehicle and vehicle.road_arrival_td end
+    if (a.id~=nil and a.id==b.id or from==target) and not (waypoints and #waypoints>0) then return {from},vehicle and vehicle.road_arrival_td end
     local mask
     if source.kind=="depot" or source.kind=="bay_stop" then
       -- Stock depot departure or the outward-facing phase after leaving

@@ -81,3 +81,25 @@ assert(two.stop_type=="truck" and two.spread.w==1 and two.spread.h==2)
 assert(two.road_members[id(22,23)]=="truck" and not two.road_members[id(21,22)])
 assert(s.tiles[id(21,22)].road_bits==10 and s.tiles[id(21,23)].road_bits==10)
 print("PASS stock-catchment geometry updates after each edit, and multi-bay frontage stays separate from the station")
+
+local gap={tool="stock_stop_area",kind="truck",direction=0,first=id(22,27),last=id(22,28)}
+local found=assert(C.join_choices(own,gap))
+assert(#found.choices==2 and found.choices[1].name=="New station" and found.choices[2].id==two.id)
+assert(found.area.tile==id(22,27) and found.area.h==2)
+gap.adjacent,gap.join,gap.join_picker_cost=true,two.id,found.cost+1
+assert(not C.commit(own,gap,nil,true) and not s.tiles[gap.first].station)
+gap.join_picker_cost=found.cost
+assert(C.commit(own,gap,nil,true))
+assert(s.tiles[gap.first].station==two.id and two.spread.h==7)
+assert(not C.join_choices(own,gap),"Station on the exact footprint requires a normal extension gesture.")
+
+for z=2,10,4 do assert(S.build(s,own,"road",S.line(id(5,z),id(15,z)))) end
+assert(C.commit(own,{tool="road_waypoint",first=id(9,2)},nil,true))
+local wp=assert(s.tiles[id(9,2)].road_waypoint_id)
+local distant={tool="road_waypoint",first=id(9,10),separate=true}
+found=assert(C.join_choices(own,distant))
+assert(#found.choices==2 and found.choices[1].name=="New waypoint" and found.choices[2].id==wp)
+distant.join,distant.join_picker_cost=wp,found.cost
+assert(C.commit(own,distant,nil,true))
+assert(s.tiles[id(9,10)].road_waypoint_id==wp)
+print("PASS isolated chooser returns only eligible stations and road waypoints, validates price, and joins by ID")

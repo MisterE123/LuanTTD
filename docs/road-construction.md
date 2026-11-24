@@ -35,7 +35,9 @@ stops, an explicit layout also enables click-and-drag. Bays size along
 a single strip; **east–west** and **north–south through** stops size
 a rectangle. The whole footprint needs matching platform heights.
 Adjacent compatible stops join into one station with a shared cargo
-queue and orders. Hold **E** while releasing to build separately.
+queue and orders. Hold **E** while releasing to choose **New station**
+or join an eligible owned station across a gap. The original spread
+limit applies to the combined footprint.
 **Auto orientation** retains the default quick-placement behavior.
 Explicitly oriented depots can be placed
 before the connecting road; they also try to complete the missing
@@ -52,15 +54,15 @@ Orders remain valid while at least one usable platform remains; the
 tool won't remove a final platform that is still in vehicle orders.
 The tools protect unrelated facilities and competitor roads. Mixing
 bus, truck, tram or other transport facilities into one station and
-choosing a distant station to join are still separate work.
+reusing the identity of a deleted station are still separate work.
 
 ## Route a vehicle through a waypoint
 
 Open **Roadworks → Stops & Waypoints → Road waypoint**. Click an
 existing straight road. Drag across parallel streets to make a wider
 waypoint; the worker locks the drag perpendicular to the first road
-and checks the whole footprint. Hold **E** to create a separate
-waypoint instead of joining an adjacent one.
+and checks the whole footprint. Hold **E** while releasing to choose
+**New waypoint** or join an eligible waypoint across a gap.
 
 In a bus or truck's **Orders**, add the waypoint from the destination
 list or **Pick in world**. The order is labeled **Go via**. Vehicles
@@ -70,8 +72,8 @@ removing pavement. Clear an active approach first and remove the
 waypoint's orders before removing its last remaining tile.
 
 The shipped path is for ordinary roads. Mixed tram facilities,
-distant joining through the game UI, recently deleted ID reuse and
-the less common ownership cases remain separate.
+recently deleted ID reuse, mixed waypoint axes and the less common
+ownership cases remain separate.
 
 The regression tests include an off-route waypoint that diverts an
 otherwise shorter route, a paid bus service through the marker, and
@@ -122,7 +124,12 @@ a different drag never inherits the old quote.
   facing East. Both persist on reopen; the operating service paid for
   31 passengers.
 
+- `tests/station_join_picker.lua` checks source picker ordering,
+  type and ownership, and joining distance. The graphical focus run
+  with `LUANTTD_NATIVE_STOP_JOIN=1` picks a nonadjacent existing station
+  and verifies the joined ID after reopening.
+
 Remaining: road and tram facility and bridge/tunnel removal through
-this tool, advanced waypoint joins,
-distant and cross-mode road stop joining, and road-type conversion. The current
+this tool, recently deleted station and waypoint reuse, cross-mode
+road stop joining, and road-type conversion. The current
 tool protects game facilities where those rules are not yet mounted.

@@ -110,10 +110,49 @@ return function(Sim,s,oneway,Bank)
     if not q then return nil,why end
     return summary(q)
   end
+  local picker
+  function M.join_choices(player,request)
+    if type(request)~="table" then return nil,"INVALID_ROAD_GESTURE" end
+    local waypoint=request.tool=="road_waypoint" and not request.remove
+    if not waypoint and request.tool~="stock_stop_area" then return nil,"INVALID_ROAD_GESTURE" end
+    local separate={tool=request.tool,first=request.first,last=request.last,kind=request.kind,
+      direction=request.direction,axis=request.axis,through=request.through,adjacent=true,separate=true}
+    local q,why=plan(player,separate)
+    if not q then return nil,why end
+    if not picker then
+      local path=debug and debug.getinfo(1,"S").source
+      local base=path and path:match("^@(.*/)campaign_road_construction%.lua$")
+      base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+      picker=dofile(base.."openttd/station_join_picker.lua")
+    end
+    local area=q.picker_area
+    local board={id=Sim.id,xy=Sim.xy}
+    function board.station_at(id)
+      local t=s.tiles[id]
+      if not t then return end
+      local st=waypoint and s.stock_road_waypoints and s.stock_road_waypoints[t.road_waypoint_id]
+        or not waypoint and s.stations[t.station]
+      if not st then return end
+      return {id=st.id,name=st.name,tile=st.tile,owner=st.owner,
+        spread=st.spread or st.area or {tile=st.tile,w=1,h=1},
+        eligible=waypoint and st.axis==q.axis or not waypoint and st.mode=="road"
+          and (st.stop_type or "bus")==request.kind and not s.tiles[st.tile].road_stop_pair}
+    end
+    function board.matches(st) return st.eligible end
+    local rows={}
+    for _,st in ipairs(picker.find(board,area,player,12,true)) do
+      rows[#rows+1]=st.new and {name=waypoint and "New waypoint" or "New station"} or
+        {id=st.id,name=st.name,tile=st.tile}
+    end
+    return {choices=rows,cost=q.cost,area=q.picker_area}
+  end
   function M.commit(player,request,published,direct)
     local q,why=plan(player,request)
     if not q then return false,why end
     local current=summary(q)
+    if request.join_picker_cost~=nil and request.join_picker_cost~=q.cost then
+      return false,"ROAD_QUOTE_CHANGED"
+    end
     -- A deliberate placement can arrive before a speculative preview.
     -- Recompute inside the owner; if the player saw a price/footprint,
     -- never silently replace it. Unrelated changes do not spoil an

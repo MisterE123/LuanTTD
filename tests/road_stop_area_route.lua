@@ -31,3 +31,23 @@ local route,_,_,frames=S.path(s,station,finish,"road",own,nil,v)
 assert(route and route[1]==alt and route[#route]==destination)
 for _,axis in ipairs{1,2,3,4,6,15} do assert(frames[1][axis]==v.road_stop_pose[axis]) end
 print("PASS joined road station reaches its closest connected tile and departs from the exact physical pose, not the sign")
+
+-- OpenTTD's sign is inside the spread, not necessarily on a station
+-- tile. When the sign tile is removed from a corner of a ragged station
+-- the remaining tiles are both practical YAPF order destinations.
+local far=id(11,12)
+assert(S.build(s,own,"road_station",{far}))
+s.stations[s.tiles[far].station]=nil
+s.tiles[far].station=h
+local members=dofile(mod.."road_stop_members.lua")(S)
+members.structural_apply(station,members.preview(station,{{id=alt,kind="bus"},{id=far,kind="bus"},{id=hub}}))
+assert(station.tile==hub and not station.road_members[hub])
+s.tiles[hub].build,s.tiles[hub].station="road",nil
+assert(S.road_stop_anchor(station,"bus")==far)
+v.road_stop_pose,v.road_arrival_td=nil,nil
+a,td,_,f=S.path(s,{owner=own,mode="road",tile=depot},station,"road",own,nil,v)
+assert(a and a[#a]==alt and f[#f][4]==alt)
+v.road_stop_pose,v.road_arrival_td=f[#f],td
+route,_,_,frames=S.path(s,station,finish,"road",own,nil,v)
+assert(route and route[1]==alt and route[#route]==destination)
+print("PASS road routing uses real platforms after removal leaves a station sign on plain pavement")
