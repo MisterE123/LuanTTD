@@ -31,9 +31,13 @@ return function(Sim,R)
       if not v then return end
       local field=S.stock_small_airports and S.stock_small_airports[v.hangar]
       return row(mode,id,v,n,(v.name or "Aircraft").." #"..id,field and field.origin,v.hangar)
-    elseif mode=="tram" and id==1 then
-      local v=S.tram_pilot
-      return row(mode,id,v,n,"Streetcar",v and (v.depot or v.legs and v.legs[1] and v.legs[1].source))
+    elseif mode=="tram" then
+      local service=R.tram and R.tram.run
+      local v=service and service.by_ui and service.by_ui(S,id) or id==1 and S.tram_pilot
+      local label=v and v.carrier and "Streetcar #"..v.carrier.id or "Test streetcar"
+      local out=row(mode,id,v,n,label,v and (v.depot or v.legs and v.legs[1] and v.legs[1].source))
+      if out and service and service.retirement_key then out.retirement=service.retirement_key(v) end
+      return out
     end
   end
   function C.locate(n,mode,id)
@@ -81,7 +85,8 @@ return function(Sim,R)
         end
       end
     elseif mode=="tram" and R.tram then
-      local run=R.tram.run.current(S)
+      local service=R.tram.run
+      local run=service.by_ui and service.by_ui(S,id) or id==1 and service.current(S)
       local frame=run and R.tram.run.frame(run)
       away=run and run.phase~="depot"
       if frame then p=R.tram.pose(frame) end
@@ -93,19 +98,24 @@ return function(Sim,R)
     end
     if p then return {x=p.x,y=p.y,z=p.z} end
   end
-  function C.page(n,page)
+  function C.page(n,page,filter)
     local rows={}
     local function add(mode,id)
+      if filter and mode~=filter then return end
       local r=C.vehicle(n,mode,id)
       if r then rows[#rows+1]=r end
     end
-    for id in pairs(S.fleet) do add("road",id) end
-    if R.rail and R.rail.owned then
-      for _,v in ipairs(R.rail.owned.list(S,n)) do add("rail",v.id) end
+    if not filter then
+      for id in pairs(S.fleet) do add("road",id) end
+      if R.rail and R.rail.owned then
+        for _,v in ipairs(R.rail.owned.list(S,n)) do add("rail",v.id) end
+      end
+      for id in pairs(S.stock_owned_air_fleet or {}) do add("air",id) end
+      if S.stock_owned_aircraft and not (S.stock_owned_air_fleet or {})[1] then add("air",1) end
+      add("ship","ferry");add("ship","coal");add("ship","oil")
     end
-    for id in pairs(S.stock_owned_air_fleet or {}) do add("air",id) end
-    if S.stock_owned_aircraft and not (S.stock_owned_air_fleet or {})[1] then add("air",1) end
-    add("ship","ferry");add("ship","coal");add("ship","oil");add("tram",1)
+    add("tram",1)
+    for id in pairs(S.stock_tram_fleet or {}) do add("tram",id) end
     table.sort(rows,function(a,b) return a.mode==b.mode and a.id<b.id or a.mode<b.mode end)
     local count=math.max(1,math.ceil(#rows/20))
     page=math.min(page,count)

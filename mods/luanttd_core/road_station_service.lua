@@ -136,12 +136,10 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
   -- Stock reservation removes units from AvailableCount. It must not make
   -- our visible figures disappear: they are still waiting for physical
   -- boarding. Queue pressure/rating continues to use unreserved units.
-  local function tram_carrier(s)
-    return s.tram_pilot and s.tram_pilot.carrier
-  end
   local function loading_vehicle(s,id)
-    local tram=tram_carrier(s)
-    return s.fleet[id] or tram and tram.id==id and tram or nil
+    local run=s.stock_tram_fleet and s.stock_tram_fleet[id]
+    local carrier=(run or s.tram_pilot) and (run or s.tram_pilot).carrier
+    return s.fleet[id] or carrier and carrier.id==id and carrier or nil
   end
   function M.display_waiting(s,st,cargo)
     if cargo=="coal" then
@@ -379,8 +377,9 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     end
     table.sort(ids)
     local api=opts(s,tick)
-    local tram=tram_carrier(s)
-    local carriers=tram and setmetatable({[tram.id]=tram},{__index=s.fleet}) or s.fleet
+    local parked_tram=s.tram_pilot and s.tram_pilot.carrier
+    local carriers=(parked_tram or s.stock_tram_fleet and next(s.stock_tram_fleet)) and
+      setmetatable({},{__index=function(_,id)return loading_vehicle(s,id)end}) or s.fleet
     for _,sid in ipairs(ids) do
       local st=s.stations[sid]
       local aliases={}

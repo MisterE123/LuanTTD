@@ -18,7 +18,7 @@ return function(Sim,Authority)
   local overlays={level_crossing_tiles=true,bridge_above=true,aqueduct_above=true,tunnel_below=true,
     rail_bridge_above=true,rail_tunnel_below=true,road_oneway_removed=true,stock_farm_fields=true}
   local routed={"fleet","stock_owned_air_fleet","stock_rail_fleet","stock_rail_run","stock_coal_ship_run",
-    "ship_pilot","tram_pilot"}
+    "ship_pilot","tram_pilot","stock_tram_fleet"}
   local function active(v) return type(v)=="table" and next(v)~=nil or v~=nil and v~=false and type(v)~="table" end
   local function unreviewed(k)
     return type(k)=="string" and (k:match("^tile_") or k:match("_tile$") or k:match("_tiles$") or

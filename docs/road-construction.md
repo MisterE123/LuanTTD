@@ -211,5 +211,8 @@ cost. A free test is still available and carries no passengers.
 
 Buses and the paid streetcar board from the same waiting queue and yield
 to one another on shared pavement. Fares appear in the streetcar’s
-Orders panel. **Remove streetcar** keeps all facilities and clears
-its loading reservation; it does not refund the vehicle purchase.
+Orders panel. Repeat **Streetcar orders** to buy another streetcar. Each runs its own
+orders and can queue at the same depot. Use **Manage streetcars** to open
+a vehicle’s orders, or select it and confirm retirement. Retirement
+keeps all facilities and clears that vehicle’s loading reservation; it
+does not refund the vehicle purchase.

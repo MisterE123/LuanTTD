@@ -203,7 +203,7 @@ return function(api)
       nil,"Use separate real hangars and the supported fixed-wing country-airfield layout."},
     {"tram","Electric streetcar service","tramway",native("tram_tools"),
       "Build a tramway and depot, then pick Streetcar orders. Select the depot and two through stops. Electrify two bus through-stops to buy and run a fare-earning streetcar; a free test is still available.",
-      nil,"One original streetcar per campaign. Removing it keeps your infrastructure."},
+      nil,"Buy additional streetcars through the same order setup. Manage Streetcars retires only the selected vehicle and keeps your infrastructure."},
   })
 
   rows("scenarios",{

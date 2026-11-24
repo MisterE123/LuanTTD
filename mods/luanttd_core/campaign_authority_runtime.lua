@@ -243,10 +243,11 @@ return function(Sim,mod,s,cap)
       -- the visual coordinate under the bridge. Keep the existing live
       -- tram's precompiled itinerary intact when removing a layer.
       if removing and (run.uses(s,lo) or run.uses(s,hi)) then return true end
-      local p=run.current(s)
-      local frame=p and run.frame(p)
-      local at=wormhole.frame_bucket(s,frame)
-      if at==lo or at==hi then return true end
+      if Sim.each_tram(s,function(p)
+        local at=wormhole.frame_bucket(s,run.frame(p))
+        return at==lo or at==hi
+      end) then return true end
+      local frame,at
       for _,v in pairs(s.fleet) do
         local mode=Sim.vehicles[v.engine] and Sim.vehicles[v.engine].mode
         if mode=="road" or mode=="rail" or mode=="ship" then
@@ -277,8 +278,8 @@ return function(Sim,mod,s,cap)
     function N.tram.pose(frame)
       return pose_source.sample(s,{frame},1,1,tram_surface)
     end
-    function N.tram.pose_at(fraction)
-      local a,b,t=run.pose_frames(s,fraction)
+    function N.tram.pose_at(fraction,serial)
+      local a,b,t=run.pose_frames(s,fraction,serial)
       if not a then return end
       local pos,yaw,pitch=pose_source.sample(s,{a,b},2,1+t,tram_surface)
       return (t<.5 and a or b),pos,yaw,pitch

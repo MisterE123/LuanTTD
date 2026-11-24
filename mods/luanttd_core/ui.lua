@@ -1023,9 +1023,8 @@ function U.clear_tram_run(p)
   if not api.tram then return end
   local V=view(p:get_player_name())
   if api.authority_handoff then
-    worker_action(p:get_player_name(),V,{kind="transport_start",mode="tram",clear=true},function(ok)
-      if ok then V.anchor,V.tram_first=nil,nil end
-    end)
+    if api.worker_fleet then return api.worker_fleet.open(p,1,"tram") end
+    V.status="The streetcar roster is not ready."
     return
   end
   local ok,msg=api.tram.clear(p:get_player_name())

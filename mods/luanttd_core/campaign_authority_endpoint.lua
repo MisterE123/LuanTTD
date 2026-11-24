@@ -364,11 +364,12 @@ return function(Sim,R,max_days)
     height(s.aqueduct_above,s.stock_aqueducts)
     return reply(true,nil,{tile=id,x=2*x+.5,z=2*z+.5,y=h+8})
   end
-  function A.company_fleet(name,page)
+  function A.company_fleet(name,page,mode)
     if not owner(name) or not s.companies[name] or not integer(page,1,1000000) then
       return reply(false,"COMPANY_FLEET_UNAVAILABLE")
     end
-    return reply(true,nil,R.company_fleet.page(name,page))
+    if mode~=nil and mode~="tram" then return reply(false,"UNSUPPORTED_FLEET_FILTER") end
+    return reply(true,nil,R.company_fleet.page(name,page,mode))
   end
   function A.vehicle(name,mode,id,locate)
     if not owner(name) or not s.companies[name] or not (index(id) or id=="ferry" or id=="coal" or id=="oil") then

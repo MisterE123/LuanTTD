@@ -105,6 +105,10 @@ fi
 if [[ ${LUANTTD_NATIVE_ROAD_REBUILD:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_road_rebuild = true' >> "$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_TRAM_FLEET:-0} == 1 ]]; then
+  printf '%s
+' 'luanttd_native_tram_fleet = true' >> "$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}
@@ -138,24 +142,35 @@ open() {
 }
 open first
 if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
-  slot=$(sed -n 's/.*TRAM_PAID_NATIVE_SLOT //p' "$log" | tail -1)
-  xdotool mousemove 590 380 key "$slot"; sleep .7
-  xdotool mousedown 1; sleep .32; xdotool mouseup 1
-  sleep .55
-  xdotool mousedown 1; sleep .32; xdotool mouseup 1 # explicitly pick depot after changing tools
-  for stage in first second; do
-    printf '%s\n' "$stage" > "$out/world/native-focus-step"
-    await_log "TRAM_PAID_NATIVE_STAGE $stage"
-    sleep .6
+  buy_streetcar() {
+    local run=$1 slot dispatch stage
+    slot=$(sed -n 's/.*TRAM_PAID_NATIVE_SLOT //p' "$log" | tail -1)
+    xdotool mousemove 590 380 key "$slot"; sleep .7
     xdotool mousedown 1; sleep .32; xdotool mouseup 1
-  done
-  dispatch=$(sed -n 's/.*TRAM_PAID_NATIVE_DISPATCH //p' "$log" | tail -1)
-  xdotool key "$dispatch"; sleep .55
-  xdotool mousedown 1; sleep .32; xdotool mouseup 1
-  await_log TRAM_PAID_NATIVE_OFFER
-  import -window root -resize 840x541 "$out/streetcar-offer.jpg"
-  xdotool mousemove "${LUANTTD_NATIVE_TRAM_BUY_X:-455}" "${LUANTTD_NATIVE_TRAM_BUY_Y:-428}" click 1
-  sleep .85; import -window root -resize 840x541 "$out/after-buy.jpg"
+    sleep .55
+    xdotool mousedown 1; sleep .32; xdotool mouseup 1
+    for stage in first second; do
+      printf '%s
+' "$stage-$run" > "$out/world/native-focus-step"
+      await_log "TRAM_PAID_NATIVE_STAGE $stage-$run"
+      sleep .6
+      xdotool mousedown 1; sleep .32; xdotool mouseup 1
+    done
+    dispatch=$(sed -n 's/.*TRAM_PAID_NATIVE_DISPATCH //p' "$log" | tail -1)
+    xdotool key "$dispatch"; sleep .55
+    xdotool mousedown 1; sleep .32; xdotool mouseup 1
+    await_log "TRAM_PAID_NATIVE_OFFER $run "
+    import -window root -resize 840x541 "$out/streetcar-offer-$run.jpg"
+    xdotool mousemove "${LUANTTD_NATIVE_TRAM_BUY_X:-455}" "${LUANTTD_NATIVE_TRAM_BUY_Y:-428}" click 1
+    sleep 1.1; import -window root -resize 840x541 "$out/after-buy-$run.jpg"
+  }
+  buy_streetcar 1
+  if [[ ${LUANTTD_NATIVE_TRAM_FLEET:-0} == 1 ]]; then
+    printf '%s
+' depot-2 > "$out/world/native-focus-step"
+    await_log 'TRAM_PAID_NATIVE_STAGE depot-2'
+    buy_streetcar 2
+  fi
   await_log TRAM_PAID_NATIVE_FARE 480
   sleep .8
   import -window root -resize 840x541 "$out/shared-platform.jpg"
@@ -165,9 +180,29 @@ if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
   open reopen
   await_log TRAM_PAID_NATIVE_REOPEN
   grep TRAM_PAID_NATIVE_REOPEN "$log"
+  if [[ ${LUANTTD_NATIVE_TRAM_FLEET:-0} == 1 ]]; then
+    await_log TRAM_FLEET_NATIVE_REOPEN
+    await_log TRAM_FLEET_NATIVE_MANAGE
+    manage=$(sed -n 's/.*TRAM_FLEET_NATIVE_MANAGE //p' "$log" | tail -1)
+    xdotool mousemove 590 380 key "$manage";sleep .65
+    xdotool mousedown 1;sleep .25;xdotool mouseup 1
+    await_log TRAM_FLEET_NATIVE_ROSTER
+    sleep .5
+    import -window root -resize 840x541 "$out/streetcar-roster.jpg"
+    xdotool mousemove "${LUANTTD_TRAM_ROW_X:-416}" "${LUANTTD_TRAM_ROW_Y:-283}" click 1; sleep .28
+    xdotool mousemove "${LUANTTD_TRAM_RETIRE_X:-763}" "${LUANTTD_TRAM_RETIRE_Y:-487}" click 1
+    second=$(sed -n 's/.*TRAM_FLEET_NATIVE_REOPEN primary #[0-9]*, second #\([0-9]*\).*/\1/p' "$log" | tail -1)
+    test -n "$second"
+    await_log "TRAM_FLEET_NATIVE_CONFIRM.*Retire Streetcar #$second?"
+    sleep .38
+    import -window root -resize 840x541 "$out/streetcar-retirement.jpg"
+    xdotool mousemove "${LUANTTD_TRAM_CONFIRM_X:-438}" "${LUANTTD_TRAM_CONFIRM_Y:-369}" click 1
+    await_log TRAM_FLEET_NATIVE_RETIRED
+    grep TRAM_FLEET_NATIVE_RETIRED "$log"
+  fi
   kill -TERM "$client";wait "$client" || true
   client=
-  ! grep -Ei 'ERROR\[|could not load' "$out/"{first,reopen}.log
+  ! grep -Ei 'ERROR\[|could not load' "$out/"*.log
   rm -rf -- "$out/games" "$out/cache"
   echo "PASS: real native Streetcar Orders, paid modal, stock fare, and reopen: $out"
   exit

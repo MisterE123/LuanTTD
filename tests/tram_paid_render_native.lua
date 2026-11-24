@@ -1,9 +1,15 @@
 -- Appended only in the disposable graphical singleplayer fixture. Terrain
 -- is the stock QA corridor; construction, dispatch, and fares use the worker.
 local native_paid_form=core.show_formspec
+local offers=0
+local fleet_case=core.settings:get_bool("luanttd_native_tram_fleet",false)
 core.show_formspec=function(owner,form,spec)
   if form=="luanttd_core:tram_service_offer" then
-    core.log("action","TRAM_PAID_NATIVE_OFFER "..spec)
+    offers=offers+1
+    core.log("action","TRAM_PAID_NATIVE_OFFER "..offers.." "..spec)
+  elseif fleet_case and form=="luanttd_core:worker_fleet" and spec:find("Company streetcars",1,true) then
+    if spec:find("Retire Streetcar",1,true) then core.log("action","TRAM_FLEET_NATIVE_CONFIRM "..spec)
+    elseif spec:find("Streetcar #",1,true) then core.log("action","TRAM_FLEET_NATIVE_ROSTER "..spec) end
   end
   return native_paid_form(owner,form,spec)
 end
@@ -58,6 +64,29 @@ core.register_on_joinplayer(function(player)
   if loaded and loaded.tram_pilot and loaded.tram_pilot.carrier then
     local carrier=loaded.tram_pilot.carrier
     assert(carrier.delivered>0 and carrier.revenue>0)
+    if fleet_case then
+      local id,other=next(loaded.stock_tram_fleet)
+      assert(id==other.carrier.id and id~=carrier.id and other.carrier.delivered>0 and other.carrier.revenue>0)
+      core.log("action",("TRAM_FLEET_NATIVE_REOPEN primary #%d, second #%d with %d riders, $%d"):format(
+        carrier.id,id,other.carrier.delivered,other.carrier.revenue))
+      core.after(.45,function()
+        local slot
+        assert(world.go_menu(player,"tram_operations"))
+        for i,j in ipairs(world.hotbar_layout(player)) do if j==3 then slot=i end end
+        assert(slot)
+        core.log("action","TRAM_FLEET_NATIVE_MANAGE "..slot)
+        local function wait_retirement()
+          local saved=assert(OwnerCheckpoint.read())
+          if not saved.stock_tram_fleet or not saved.stock_tram_fleet[id] then
+            assert(saved.tram_pilot and saved.tram_pilot.carrier.id==carrier.id,
+              "retirement of the selected second car must not retire the primary")
+            assert(saved.tiles[a].tram and saved.tiles[b].tram)
+            core.log("action",("TRAM_FLEET_NATIVE_RETIRED #%d; #%d and both platforms retained"):format(id,carrier.id))
+          else core.after(.32,wait_retirement) end
+        end
+        wait_retirement()
+      end)
+    end
     aim(a,true)
     core.log("action","FOCUS_NATIVE_POSITION returning paid tram")
     core.log("action",("TRAM_PAID_NATIVE_REOPEN %d riders, $%d"):format(carrier.delivered,carrier.revenue))
@@ -84,8 +113,9 @@ core.register_on_joinplayer(function(player)
           local step=f:read("*l");f:close()
           if step~=seen then
             seen=step
-            if step=="first" then aim(a)
-            elseif step=="second" then
+            if step:match("^depot%-") then aim(depot)
+            elseif step:match("^first%-") then aim(a)
+            elseif step:match("^second%-") then
               aim(b)
               for i,j in ipairs(world.hotbar_layout(player)) do
                 if j==8 then core.log("action","TRAM_PAID_NATIVE_DISPATCH "..i) end
@@ -99,7 +129,15 @@ core.register_on_joinplayer(function(player)
         end
         local snapshot=OwnerCheckpoint.read()
         local p=snapshot and snapshot.tram_pilot
-        if p and p.carrier and p.carrier.delivered>0 and p.carrier.revenue>0 then
+        local _,other=next(snapshot and snapshot.stock_tram_fleet or {})
+        local second=other and other.carrier
+        if p and p.carrier and p.carrier.delivered>0 and p.carrier.revenue>0 and
+            (not fleet_case or second and second.delivered>0 and second.revenue>0) then
+          if fleet_case then
+            assert(second.id~=p.carrier.id)
+            core.log("action",("TRAM_FLEET_NATIVE_FARE second #%d, %d riders, $%d"):format(
+              second.id,second.delivered,second.revenue))
+          end
           geom({a,b})
           local leg=p.legs[p.leg]
           local frame=leg and leg.frames[p.index]

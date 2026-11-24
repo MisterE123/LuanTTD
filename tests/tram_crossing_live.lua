@@ -56,7 +56,7 @@ for _=1,1200 do
 end
 assert(on and not run.crossing_wait)
 local seen=Runtime.context(s,base).vehicles_at(crossing)
-assert(#seen==1 and seen[1].type=="road" and seen[1].id==-1)
+assert(#seen==1 and seen[1].type=="road" and seen[1].id==Sim.tram_serial(run))
 assert(not Runtime.quote(s,owner,crossing,{kind="road",pieces=10},base))
 local entered=false
 local permitted=Runtime.train_move(s,base,{{old_tile=at(12,11),tile=crossing,td=1}},owner,function()entered=true;return true end)

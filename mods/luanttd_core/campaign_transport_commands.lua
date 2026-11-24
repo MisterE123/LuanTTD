@@ -426,8 +426,23 @@ return function(Sim,R)
       return ok,ok and "Flight pilot cleared." or why
     end
     if req.mode=="tram" and R.tram and req.clear==true then
-      local active=R.tram.run.current(s)
-      local ok,why=R.tram.run.clear(s,owner)
+      local run=R.tram.run
+      local active,serial
+      if req.vehicle~=nil then
+        if not id(req.vehicle) or type(req.retirement)~="string" or #req.retirement>32 then
+          return false,"Choose a streetcar from your fleet."
+        end
+        active=run.by_ui(s,req.vehicle)
+        if not active or active.owner~=owner or run.retirement_key(active)~=req.retirement then
+          return false,"This streetcar changed. Review your roster again."
+        end
+        serial=run.serial(active)
+      else
+        local all=run.all(s)
+        if #all~=1 then return false,"Choose a streetcar from your fleet." end
+        active=all[1];serial=run.serial(active)
+      end
+      local ok,why=run.clear(s,owner,serial)
       local note=active and active.carrier and "Streetcar retired. Your tramway and stops remain."
         or "Test streetcar removed. Your tramway and stops remain."
       return ok,ok and note or why
@@ -439,7 +454,8 @@ return function(Sim,R)
     if not (id(req.first) and id(req.second)) or req.first==req.second then return false,"INVALID_DESTINATIONS" end
     if req.mode=="tram" and R.tram and tile(req.depot) and tile(req.first) and tile(req.second) then
       if req.paid==true then
-        local run,why=R.tram.run.start_paid(s,owner,req.depot,req.first,req.second,req.cost)
+        local run,why=R.tram.run.start_paid(s,owner,req.depot,req.first,req.second,req.cost,
+          R.tram.run.current(s)~=nil)
         return run~=nil,run and "Streetcar bought and dispatched to both shared platforms." or why
       end
       local run,why=R.tram.run.start(s,owner,req.depot,req.first,req.second)

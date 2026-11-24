@@ -26,14 +26,12 @@ return function(Sim,World)
           end
         end
       end
-      local tram=s.tram_pilot
-      if tram and tram.phase~="depot" then
-        local leg=tram.legs[tram.leg]
-        local f=leg and leg.frames[tram.index]
-        if f and f[4]==id then
-          a[#a+1]={type="road",id=-1,tile=id,x=f[1],y=f[2],direction=f[3]}
+      Sim.each_tram(s,function(tram)
+        local f=Sim.tram_frame(tram)
+        if f and f[4]==id and not (f[12] or f[14]) then
+          a[#a+1]={type="road",id=Sim.tram_serial(tram),tile=id,x=f[1],y=f[2],direction=f[3]}
         end
-      end
+      end)
       -- Before the first physical movement a new frame may live in the
       -- road loop's authoritative hash but not yet in saved fleet state.
       -- Merge it with saved stationary/stop records without duplicates.

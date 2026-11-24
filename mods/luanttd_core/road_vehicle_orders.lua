@@ -89,7 +89,12 @@ return function(api)
   end
   local function tram_info(owner,id)
     if not api.tram or not api.tram.run then return end
-    local a,b,p=api.tram.run.orders(S,owner)
+    local service=api.tram.run
+    if service.by_ui and type(id)=="number" then
+      local p=service.by_ui(S,id)
+      if p and p.owner==owner then return service.orders(S,owner,service.serial(p)) end
+    end
+    local a,b,p=service.orders(S,owner)
     if p and (id=="pilot" or id==1 or id==p.depot) then return a,b,p end
   end
   function Tram.read(owner,id)
@@ -154,7 +159,9 @@ return function(api)
         next_order=active and active%#orders+1 or next_order==index and i or next_order==i and index or next_order
       else return false,"Unsupported tram order operation." end
     end
-    local ok,why=api.tram.run.replace_orders(S,owner,orders,next_order,active)
+    local _,_,p=tram_info(owner,id)
+    local serial=api.tram.run.serial and api.tram.run.serial(p)
+    local ok,why=api.tram.run.replace_orders(S,owner,orders,next_order,active,serial)
     return ok,ok and why or api.tram.reason(why)
   end
   return {road=Road,tram=Tram}

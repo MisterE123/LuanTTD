@@ -1,5 +1,11 @@
 -- Bayline's simulation does not depend on Luanti. The game adapter owns UI and storage.
 local M = {}
+local module_src=debug and debug.getinfo(1,"S").source
+local module_root=module_src and module_src:match("^@(.*/)sim%.lua$") or
+  (core and core.get_modpath and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+local TramIndex=dofile(module_root.."tram_fleet_index.lua")
+M.each_tram,M.tram_frame,M.tram_serial=TramIndex.each,TramIndex.frame,TramIndex.serial
+
 M.W,M.H = 48,36
 M.modes = {"rail","road","water","air"}
 M.dir = {{0,-1},{1,0},{0,1},{-1,0}}
@@ -674,14 +680,7 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
 end
 function M.wood_bridge(s,owner,first,last) return M.road_bridge(s,owner,first,last,0) end
 local function tram_uses_road_span(s,span)
-  local p=s.tram_pilot
-  if not p or span.tramtype==nil then return false end
-  for _,leg in ipairs(p.legs or {}) do
-    for _,id in ipairs(leg.path or {}) do
-      if id==span.start or id==span["end"] then return true end
-    end
-  end
-  return false
+  return span.tramtype~=nil and (TramIndex.uses(s,span.start) or TramIndex.uses(s,span["end"]))
 end
 function M.remove_wood_bridge(s,owner,id,quote_only)
   local t=s.tiles[id]
@@ -969,12 +968,11 @@ function M.road_piece_occupancy(s)
     -- mesh is out of range. Index that path only for shared-layer work.
     if not pilot_path then
       pilot_path={}
-      local tram=s.tram_pilot
-      if tram and tram.version==1 then
-        for _,leg in ipairs(tram.legs) do
-          for _,at in ipairs(leg.path) do pilot_path[at]=true end
+      TramIndex.each(s,function(tram)
+        for _,leg in ipairs(tram.legs or {}) do
+          for _,at in ipairs(leg.path or {}) do pilot_path[at]=true end
         end
-      end
+      end)
     end
     return pilot_path[id]==true
   end

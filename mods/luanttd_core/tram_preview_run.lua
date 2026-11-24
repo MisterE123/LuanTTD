@@ -2,6 +2,7 @@
 -- this same saved state; the standalone caller keeps dedicated tracks only.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local body=dofile(mod.."/tram_market.lua")
+local Index=dofile(mod.."/tram_fleet_index.lua")
 return function(Network,Trip,Speed,shared,Passenger)
   local R={VERSION=1}
   local speed_cap=body.speed
@@ -33,12 +34,11 @@ return function(Network,Trip,Speed,shared,Passenger)
     end
     return {path=path,last=last,source=a,target=b,cost=cost,frames=frames,trace=trace}
   end
-  function R.current(s)
-    local p=s.tram_pilot
+  function R.current(s,id)
+    local p=Index.get(s,id)
     return p and p.version==R.VERSION and p or nil
   end
-  function R.start(s,owner,depot,first,second)
-    if R.current(s) then return nil,"pilot_already_exists" end
+  local function compile_loop(s,owner,depot,first,second)
     local board=Network.board(s)
     local d,a,b=board.tile(depot),board.tile(first),board.tile(second)
     if not d or d.kind~="depot" or not a or not b or
@@ -62,17 +62,27 @@ return function(Network,Trip,Speed,shared,Passenger)
       legs={lead,leg1,leg2,loop},leg=1,index=1,
       heading=lead.frames[1][3],speed=0,subspeed=0,progress=0,arrivals=0,phase="depot",
       wait=18,ticks=0,steps=0}
-    s.tram_pilot=active
     return active
   end
-  function R.start_paid(s,owner,depot,first,second,quoted_price)
+  function R.start(s,owner,depot,first,second)
+    if R.current(s) then return nil,"pilot_already_exists" end
+    local p,why=compile_loop(s,owner,depot,first,second)
+    if not p then return nil,why end
+    s.tram_test_generation=(s.tram_test_generation or 0)+1
+    p.test_generation=s.tram_test_generation
+    s.tram_pilot=p
+    return p
+  end
+  function R.start_paid(s,owner,depot,first,second,quoted_price,additional)
+    if additional and s.next_vehicle==1 then additional=false end
     if not Passenger or not shared or not shared(s) then return nil,"TRAM_SERVICE_UNAVAILABLE" end
     if quoted_price~=body.price then return nil,"TRAM_PRICE_CHANGED" end
     local a,b=paid_stop(s,first,owner),paid_stop(s,second,owner)
     if not a or not b or a==b then return nil,"TWO_SHARED_BUS_PLATFORMS_REQUIRED" end
     local c=s.companies[owner]
     if not c or c.cash<body.price then return nil,"NOT_ENOUGH_MONEY" end
-    local p,why=R.start(s,owner,depot,first,second)
+    if not additional and R.current(s) then return nil,"pilot_already_exists" end
+    local p,why=compile_loop(s,owner,depot,first,second)
     if not p then return nil,why end
     local id=s.next_vehicle
     s.next_vehicle=id+1
@@ -80,10 +90,14 @@ return function(Network,Trip,Speed,shared,Passenger)
       stock_tram={capacity=body.capacity,slice=body.slice,aging=body.aging,speed=body.speed},
       running=true,batches={},units=0,revenue=0,delivered=0,bought=s.day}
     c.cash,c.expense,c.month_exp=c.cash-body.price,c.expense+body.price,c.month_exp+body.price
+    if additional then
+      s.stock_tram_fleet=s.stock_tram_fleet or {}
+      s.stock_tram_fleet[id]=p
+    else s.tram_pilot=p end
     return p
   end
-  function R.orders(s,owner)
-    local p=R.current(s)
+  function R.orders(s,owner,id)
+    local p=R.current(s,id)
     if not p or p.owner~=owner then return end
     return p.orders or {p.legs[1].target,p.legs[2].target}, p.order_revision or 0, p
   end
@@ -91,8 +105,8 @@ return function(Network,Trip,Speed,shared,Passenger)
   -- Keep the active physical leg, then enter the edited order sequence
   -- from its legal through-stop approach. Verify the entire directed
   -- loop before changing anything, including the seam at wraparound.
-  function R.replace_orders(s,owner,orders,next_order,retained)
-    local _,_,p=R.orders(s,owner)
+  function R.replace_orders(s,owner,orders,next_order,retained,id)
+    local _,_,p=R.orders(s,owner,id)
     if not p or #orders<2 or #orders>254 then return false,"Choose at least two tram stops." end
     if p.carrier then
       local ids={}
@@ -135,37 +149,38 @@ return function(Network,Trip,Speed,shared,Passenger)
     end
     return false,"unstable_arrival_orientation"
   end
-  function R.clear(s,owner)
-    local p=R.current(s)
+  function R.clear(s,owner,id)
+    local p=R.current(s,id)
     if not p or p.owner~=owner then return nil,"no_owned_pilot" end
     if p.carrier and p.carrier.load_state and not Passenger.depart(s,p.carrier,s.stock_load_tick,true) then
       return nil,"TRAM_LOADING_NOT_SETTLED"
     end
-    s.tram_pilot=nil
+    if p==s.tram_pilot then s.tram_pilot=nil
+    else s.stock_tram_fleet[id]=nil end
     return true
   end
-  function R.frame(p)
-    if not p or p.phase=="depot" then return end
-    return p.legs[p.leg].frames[p.index]
+  function R.frame(p) return p and Index.frame(p) end
+  R.uses=Index.uses
+  R.all=Index.sorted
+  function R.ui_id(s,p) return p==s.tram_pilot and 1 or Index.serial(p) end
+  function R.by_ui(s,id)
+    if id==1 then return R.current(s) end
+    local p=R.current(s,id)
+    if p and p~=s.tram_pilot then return p end
   end
-  function R.uses(s,id)
-    local p=R.current(s)
-    if p then
-      for _,leg in ipairs(p.legs) do
-        for _,tile in ipairs(leg.path) do if tile==id then return true end end
-      end
-    end
-    return false
+  R.serial=Index.serial
+  function R.retirement_key(p)
+    return p.carrier and ("paid:"..p.carrier.id) or ("test:"..(p.test_generation or 0))
   end
   -- The registered road vehicles are visited in increasing ID order.
   -- The separate streetcar slot comes after them, sharing the *same*
   -- candidate set; it is not a time-delayed visual collision detector.
   local timelines=setmetatable({},{__mode="k"})
-  function R.pose_frames(s,fraction)
-    local p=R.current(s)
+  function R.pose_frames(s,fraction,id)
+    local p=R.current(s,id)
     if not p then return end
-    local sample=timelines[s]
-    if not sample or sample.pilot~=p or not fraction then
+    local sample=timelines[p]
+    if not sample or not fraction then
       local f=R.frame(p)
       return f,f,0
     end
@@ -178,27 +193,32 @@ return function(Network,Trip,Speed,shared,Passenger)
   end
   function R.traffic(z)
     local C={}
+    local ordered={}
     function C.seed(s,W,_,k)
-      local p=R.current(s)
-      if not p then return end
-      if k==1 then timelines[s]={pilot=p,frames={R.frame(p) or false}} end
-      local id=p.carrier and p.carrier.id or 9007199254740991
-      local record={id=id,first=id,type="road",companion=true,
-        clock=p,max_speed=speed_cap,stopped=p.phase~="running"}
-      local f=R.frame(p)
-      if f then W.put(record,f,false,z(s,f)) end
-      return record
+      if k==1 or ordered.world~=s then ordered={world=s,runs=R.all(s)} end
+      if #ordered.runs==0 then return end
+      local records={}
+      for _,p in ipairs(ordered.runs) do
+        if k==1 then timelines[p]={frames={R.frame(p) or false}} end
+        local id=Index.serial(p)
+        local record={id=id,first=id,type="road",companion=true,
+          clock=p,max_speed=speed_cap,stopped=p.phase~="running"}
+        local f=R.frame(p)
+        if f then W.put(record,f,false,z(s,f)) end
+        records[#records+1]=record
+      end
+      return records
     end
     function C.advance(s,W,tick,record,k,ready)
-      local p=R.advance(s,1,nil,W,record,z,tick,ready)
-      local sample=timelines[s]
+      local p=R.advance(s,1,nil,W,record,z,tick,ready,record.clock)
+      local sample=timelines[p]
       if sample and k then sample.frames[k]=R.frame(p) or false end
       return p
     end
     return C
   end
-  function R.advance(s,n,observe,W,record,z,tick,ready)
-    local p=R.current(s)
+  function R.advance(s,n,observe,W,record,z,tick,ready,run)
+    local p=run or R.current(s)
     if not p then return end
     if p.carrier then assert(n==1 and tick and ready,"Commercial tram requires the owner road clock") end
     for _=1,n do

@@ -90,7 +90,7 @@ assert(run.phase=="running" and not run.traffic_wait and run.steps>0 and run.tic
 -- Put an ordinary road vehicle directly ahead on the first straight
 -- segment; the tram does not go through it or change lane.
 local W=Runtime.traffic_world(s)
-local rec=Traffic.seed(s,W)
+local rec=Traffic.seed(s,W)[1]
 local now=Run.frame(run)
 local dx=now[3]==5 and 1 or now[3]==1 and -1 or 0
 local dy=now[3]==3 and 1 or now[3]==7 and -1 or 0

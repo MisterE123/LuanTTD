@@ -127,7 +127,7 @@ function H.enable_trams()
     [10]=item("tram_remove","Remove tram track")}
   H.menus.tram_operations={title="Tram Operations",[1]=inspect,
     [2]=item("tram_order","Streetcar orders","tram_order"),
-    [3]=item("tram_clear","Remove streetcar","tram_clear"),[8]=back}
+    [3]=item("tram_clear","Manage streetcars","tram_clear"),[8]=back}
   sync_sections()
 end
 function H.enable_ships()

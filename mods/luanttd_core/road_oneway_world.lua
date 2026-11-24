@@ -59,12 +59,10 @@ return function(Sim,Terrain,Follow,OneWay,settings)
         end
       end
     end
-    local tram=s.tram_pilot
-    if tram and tram.phase~="depot" then
-      local leg=tram.legs and tram.legs[tram.leg]
-      local f=leg and leg.frames and leg.frames[tram.index]
+    Sim.each_tram(s,function(tram)
+      local f=Sim.tram_frame(tram)
       if f and f[4] and not below_or_above(s,f) then ground[f[4]]=true end
-    end
+    end)
     return ground
   end
 
@@ -216,7 +214,7 @@ return function(Sim,Terrain,Follow,OneWay,settings)
       if e.added~=0 and (t.road_town or t.owner and t.owner~=owner) then
         return nil,"OWNED_BY",e.tile
       end
-      if e.added~=0 and t.tram and s.tram_pilot and occupied(e.tile,true) then
+      if e.added~=0 and t.tram and occupied(e.tile,true) then
         return nil,"VEHICLE_IN_THE_WAY",e.tile
       end
       if e.added~=0 and not t.build and t.wood and not t.tram then
