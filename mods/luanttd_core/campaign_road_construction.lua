@@ -134,7 +134,10 @@ return function(Sim,s,oneway,Bank)
       picker=dofile(base.."openttd/station_join_picker.lua")
     end
     local area=q.picker_area
-    local board={id=Sim.id,xy=Sim.xy}
+    local board={id=Sim.id,xy=Sim.xy,deleted={}}
+    for _,st in ipairs(Sim.road_station_retirement().list(s,waypoint and "waypoint" or "station",player)) do
+      board.deleted[#board.deleted+1]={id=st.id,name="Rebuild "..st.name,tile=st.tile,owner=st.owner,eligible=true}
+    end
     function board.station_at(id)
       local t=s.tiles[id]
       if not t then return end
@@ -143,7 +146,7 @@ return function(Sim,s,oneway,Bank)
       if not st then return end
       return {id=st.id,name=st.name,tile=st.tile,owner=st.owner,
         spread=st.spread or st.area or {tile=st.tile,w=1,h=1},
-        eligible=waypoint and st.axis==q.axis or not waypoint and st.mode=="road"
+        eligible=waypoint or not waypoint and st.mode=="road"
           and not s.tiles[st.tile].road_stop_pair}
     end
     function board.matches(st) return st.eligible end

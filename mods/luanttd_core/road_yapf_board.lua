@@ -50,7 +50,9 @@ return function(Sim,s,F,occupancy)
     elseif t.build=="road" and t.road_waypoint_id then
       local wp=s.stock_road_waypoints and s.stock_road_waypoints[t.road_waypoint_id]
       if not wp or not wp.tiles[id] then return nil end
-      out.kind,out.dir,out.station,out.stop_type="drive_stop",wp.axis,wp.id,"road_waypoint"
+      local bits=Sim.road_bits(s,id)
+      if bits~=10 and bits~=5 then return nil end
+      out.kind,out.dir,out.station,out.stop_type="drive_stop",bits==10 and 0 or 1,wp.id,"road_waypoint"
       out.waypoint=true
     elseif t.build=="road" then
       out.kind="road"

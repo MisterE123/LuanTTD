@@ -57,9 +57,11 @@ In **Roadworks → Stops & Waypoints → Remove road stop**, click or
 drag to remove owned platforms without removing their through road.
 Orders remain valid while at least one usable platform remains; the
 tool won't remove a final platform that is still in vehicle orders.
-The tools protect unrelated facilities and competitor roads. Using
-one station across tram or other transport modes, and reusing the
-identity of a deleted station, are still separate work.
+The tools protect unrelated facilities and competitor roads. A recently
+removed station can keep its name and identity if rebuilt nearby.
+The join picker also lists those stations; choose **New station** to
+avoid reuse. Using one station across tram or other transport modes
+is still separate work.
 
 ## Route a vehicle through a waypoint
 
@@ -76,9 +78,11 @@ real stop. Use **Remove road waypoint** to take down the signs without
 removing pavement. Clear an active approach first and remove the
 waypoint's orders before removing its last remaining tile.
 
-The shipped path is for ordinary roads. Mixed tram facilities,
-recently deleted ID reuse, mixed waypoint axes and the less common
-ownership cases remain separate.
+A single road waypoint can cover different street directions; each
+tile keeps its own axis. Rebuilding nearby can recover a recently
+removed waypoint's identity, or choose **New waypoint** for a fresh
+marker. The shipped path is for ordinary roads; shared tram stops and
+unusual road-ownership cases remain separate.
 
 The regression tests include an off-route waypoint that diverts an
 otherwise shorter route, a paid bus service through the marker, and
@@ -140,6 +144,5 @@ a different drag never inherits the old quote.
   verifies the platform meshes and reopens the mixed station.
 
 Remaining: road and tram facility and bridge/tunnel removal through
-this tool, recently deleted station and waypoint reuse, cross-mode
-road stop joining, and road-type conversion. The current
+this tool, cross-mode road stop joining, and road-type conversion. The current
 tool protects game facilities where those rules are not yet mounted.

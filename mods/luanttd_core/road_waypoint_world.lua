@@ -11,6 +11,10 @@ return function(Sim,Terrain,Stock,Underlay,rules)
     for id in pairs(other or {}) do add(id) end
     return {tile=Sim.id(x0,z0),w=x1-x0+1,h=z1-z0+1}
   end
+  local function road_axis(s,id)
+    local bits=Sim.road_bits(s,id)
+    return (bits==10 and 0) or (bits==5 and 1) or nil
+  end
   function W.quote(s,owner,req)
     local company=s.companies[owner]
     if not company or not s.corner_grid then return nil,"PARAMETERS" end
@@ -30,10 +34,10 @@ return function(Sim,Terrain,Stock,Underlay,rules)
       local above,deck=rules.bridge(s,id)
       local bridge_forbidden=above and not deck
       if deck then
-        local axis=mark and mark.axis or Stock.axis({kind="road",road={bits=Sim.road_bits(s,id)}}) or req.axis
+        local axis=mark and road_axis(s,id) or Stock.axis({kind="road",road={bits=Sim.road_bits(s,id)}}) or req.axis
         bridge_forbidden=not Underlay.quote({kind="station",station_type="road_waypoint",layout=4+(axis or 0),max_z=top},0,deck)
       end
-      return {kind=mark and "station" or "road",station=mark and mark.id,axis=mark and mark.axis,
+      return {kind=mark and "station" or "road",station=mark and mark.id,axis=mark and road_axis(s,id),
         stop_type=mark and "road_waypoint",through=mark~=nil,slope=slope,base=base,
         occupied=ground[id]==true,bridge_forbidden=bridge_forbidden,
         road={bits=Sim.road_bits(s,id),roadtype=t.roadtype or 0,owner=t.road_town and "town" or t.owner,
@@ -49,7 +53,7 @@ return function(Sim,Terrain,Stock,Underlay,rules)
         local t=s.tiles[id]
         local mark=t and groups[t.road_waypoint_id]
         if mark and mark.owner==owner and not ground[id] then
-          local bits=mark.axis==0 and 10 or 5
+          local bits=Sim.road_bits(s,id)
           changes[#changes+1]={id=id,waypoint=mark.id,road_bits=bits,build="road",tool="road_waypoint_remove"}
           affected[mark.id]=(affected[mark.id] or 0)+1
           priced=priced+50
@@ -89,7 +93,7 @@ return function(Sim,Terrain,Stock,Underlay,rules)
     if picked and req.separate and picked~=req.join then return nil,"MUST_REMOVE_ROAD_STOP_FIRST" end
     if req.join and picked and req.join~=picked then return nil,"ADJOINS_MULTIPLE_WAYPOINTS" end
     if req.join then
-      if not groups[req.join] then return nil,"NO_CLEAR_WAYPOINT" end
+      if not groups[req.join] and not Sim.road_station_retirement().get(s,"waypoint",req.join) then return nil,"NO_CLEAR_WAYPOINT" end
       picked=req.join
     elseif not picked and not req.separate then
       local seen={}
@@ -98,7 +102,8 @@ return function(Sim,Terrain,Stock,Underlay,rules)
         for dz=-1,1 do for dx=-1,1 do
           local n=Sim.id(x+dx,z+dz)
           local t=n and s.tiles[n]
-          if t and groups[t.road_waypoint_id] then seen[t.road_waypoint_id]=true end
+          local adjacent=t and groups[t.road_waypoint_id]
+          if adjacent and adjacent.owner==owner then seen[t.road_waypoint_id]=true end
         end end
       end
       for id in pairs(seen) do
@@ -106,11 +111,15 @@ return function(Sim,Terrain,Stock,Underlay,rules)
         picked=id
       end
     end
-    local existing=picked and groups[picked]
+    if not picked and not req.separate and not req.join then
+      local x,z=Sim.xy(q.ids[1])
+      local shift=math.floor(#q.ids/2)
+      local middle=direction==0 and Sim.id(x,z+shift) or Sim.id(x+shift,z)
+      local retired=Sim.road_station_retirement().closest(s,"waypoint",owner,middle)
+      if retired then picked=retired.id end
+    end
+    local existing=picked and (groups[picked] or Sim.road_station_retirement().get(s,"waypoint",picked))
     if existing and existing.owner~=owner then return nil,"OWNED_BY" end
-    -- A present region has one axis for all parts. Existing bridge and
-    -- intersection adapters require this invariant.
-    if existing and existing.axis~=direction then return nil,"NO_VALID_ROAD_WAYPOINT_AXIS" end
     local extent=span(q.ids,existing and existing.tiles)
     if math.max(extent.w,extent.h)>limit then return nil,"STATION_SPREAD" end
     if q.cost>company.cash then return nil,"NOT_ENOUGH_CASH" end
@@ -132,8 +141,12 @@ return function(Sim,Terrain,Stock,Underlay,rules)
     if q.id then
       local mark=all[q.id]
       if not mark then
-        s.next_stock_road_waypoint=q.id+1
-        mark={id=q.id,owner=owner,axis=q.axis,tile=q.changes[1].id,tiles={},name="Road waypoint #"..q.id}
+        mark=Sim.road_station_retirement().take(s,"waypoint",q.id)
+        if mark then mark.tile=q.picker_area.tile
+        else
+          s.next_stock_road_waypoint=q.id+1
+          mark={id=q.id,owner=owner,tile=q.changes[1].id,tiles={},name="Road waypoint #"..q.id}
+        end
         all[q.id]=mark
       end
       mark.area=q.area
@@ -157,12 +170,16 @@ return function(Sim,Terrain,Stock,Underlay,rules)
       for id in pairs(groups) do
         local mark=all[id]
         if not next(mark.tiles) then
-          -- A deleted waypoint is not a routable location. Orders and
-          -- recent reuse have a separate adapter when mounted.
+          mark.area=nil
+          Sim.road_station_retirement().retire(s,"waypoint",mark)
           all[id]=nil
         else
           mark.area=span({},mark.tiles)
-          if not mark.tiles[mark.tile] then mark.tile=mark.area.tile end
+          if not mark.tiles[mark.tile] then
+            local chosen
+            for tile in pairs(mark.tiles) do if not chosen or tile<chosen then chosen=tile end end
+            mark.tile=chosen
+          end
         end
       end
     end

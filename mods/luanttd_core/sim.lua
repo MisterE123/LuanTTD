@@ -1267,6 +1267,15 @@ function M.road_stop_covers(s,st,x,z,r)
   local id=M.id(x,z)
   return id and M.road_stop_catchment(s,st,r)[id]==true or false
 end
+function M.road_station_retirement()
+  if not M.road_retirement_kernel then
+    local path=debug and debug.getinfo(1,"S").source
+    local base=path and path:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    M.road_retirement_kernel=dofile(base.."openttd/road_station_retirement.lua")(M)
+  end
+  return M.road_retirement_kernel
+end
 local road_stop_area,road_stop_members
 function M.stock_road_stop_area_plan(s,owner,first,last,req)
   if req.kind~="bus" and req.kind~="truck" then return nil,"PARAMETERS" end
@@ -1295,7 +1304,7 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
     -- have their own construction registries.
     return st and st.mode=="road" and not s.tiles[st.tile].road_stop_pair
   end
-  function board.station(id) return s.stations[id] end
+  function board.station(id) return s.stations[id] or M.road_station_retirement().get(s,"station",id) end
   function board.surrounding(rect)
     local x,z=M.xy(rect.tile)
     local found,seen={},{}
@@ -1327,7 +1336,10 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
   end
   local join,why=road_stop_area.find_join(board,area,over,owner,req.join,req.adjacent,true)
   if why then return nil,why end
-  if join and not compatible(join) then return nil,"INCOMPATIBLE_STATION_TILE" end
+  if not join and not req.adjacent and not req.join then
+    join=M.road_station_retirement().closest(s,"station",owner,area.tile)
+  end
+  if join and s.stations[join.id] and not compatible(join) then return nil,"INCOMPATIBLE_STATION_TILE" end
   local result=road_stop_members.preview(join,parts)
   if not result.spread or #changes==0 then return nil,"ALREADY_BUILT" end
   if result.spread.w>12 or result.spread.h>12 then return nil,"STATION_SPREAD" end
@@ -1449,6 +1461,15 @@ local function refresh_road_station_sites(s,st)
   end
   table.sort(served);st.served,st.site=served,primary
 end
+function M.retire_road_station(s,id)
+  local st=s.stations[id]
+  if st and st.mode=="road" then
+    st.road_members,st.road_stop_areas,st.spread={},nil,nil
+    st.bus_tile,st.truck_tile=nil,nil
+    M.road_station_retirement().retire(s,"station",st)
+  end
+  s.stations[id]=nil
+end
 function M.apply_road_stop_remove(s,owner,plan)
   local ids={}
   for _,row in ipairs(plan.changes) do
@@ -1463,7 +1484,8 @@ function M.apply_road_stop_remove(s,owner,plan)
     ids[#ids+1]=row.id
   end
   for id,result in pairs(plan.remove_stop_parts) do
-    if not result.spread then s.stations[id]=nil
+    if not result.spread then
+      M.retire_road_station(s,id)
     else
       local st=s.stations[id]
       road_stop_members.structural_apply(st,result)
@@ -1830,7 +1852,7 @@ local function apply_build(s,owner,changes,cost)
         end
         tile.road_stop_pair=nil
       end
-      if tile.station then s.stations[tile.station]=nil end
+      if tile.station then M.retire_road_station(s,tile.station) end
       if tile.house then
         local growth=town_growth_mount[s]
         if item.house_parts then
@@ -1877,9 +1899,14 @@ local function apply_build(s,owner,changes,cost)
         local site=s.sites[best]
         local label=tile.road_stop_pair and "Bus terminus" or M.tools[k].name
         if not s.stations[sid] then
-          s.next_station=s.next_station+1
-          s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,
-            name=(site and site.name.." " or "")..label.." #"..sid,site=best,served=served,stock={},last_service={}}
+          local reused=item.join_stop and M.road_station_retirement().take(s,"station",sid)
+          if reused then
+            s.stations[sid]=reused
+          else
+            s.next_station=s.next_station+1
+            s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,
+              name=(site and site.name.." " or "")..label.." #"..sid,site=best,served=served,stock={},last_service={}}
+          end
         end
         tile.station=sid
         tile.road_stop_type=item.stop_type
@@ -4122,6 +4149,7 @@ function M.position(s,v)
 end
 function M.daily(s,traverse)
   s.day=s.day+1
+  if s.retired_road_stations or s.retired_road_waypoints then M.road_station_retirement().expire(s) end
   local faults=road_faults_mount[s]
   if faults and M.road_stock_service_active(s) then
     faults.daily(faults.auto and function(v,f,diff,date,rnd)

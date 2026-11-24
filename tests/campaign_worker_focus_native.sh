@@ -151,16 +151,35 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
   xdotool mouseup 1; sleep .85
   do_road check-x X_PASS
   if [[ ${LUANTTD_NATIVE_WAYPOINT:-0} == 1 ]]; then
-    for spec in "waypoint WAYPOINT" "erase-waypoint ERASE_WAYPOINT"; do
+    sequences=("waypoint WAYPOINT" "erase-waypoint ERASE_WAYPOINT")
+    if [[ ${LUANTTD_NATIVE_WAYPOINT_REUSE:-0} == 1 ]]; then
+      sequences+=("waypoint WAYPOINT" "erase-waypoint ERASE_WAYPOINT")
+    fi
+    for spec in "${sequences[@]}"; do
       read -r stage key <<<"$spec"
+      local_seen=$(grep -Fc "NATIVE_ROAD_GESTURE_$key slot=" "$log" || true)
       do_road "$stage" "$key"
+      for _ in {1..100}; do
+        [[ $(grep -Fc "NATIVE_ROAD_GESTURE_$key slot=" "$log" || true) -gt $local_seen ]] && break
+        sleep .1
+      done
+      [[ $(grep -Fc "NATIVE_ROAD_GESTURE_$key slot=" "$log" || true) -gt $local_seen ]]
       slot=$(sed -n "s/.*NATIVE_ROAD_GESTURE_$key slot=//p" "$log" | tail -1)
       xdotool key "$slot"; sleep .4
       xdotool mousedown 1; sleep .55; xdotool mouseup 1
       sleep 1.05
       import -window root -resize 960x600 "$out/$stage.jpg"
+      local_seen=$(grep -Fc "NATIVE_ROAD_GESTURE_${key}_PASS" "$log" || true)
       do_road "$stage-done" "${key}_PASS"
+      for _ in {1..100}; do
+        [[ $(grep -Fc "NATIVE_ROAD_GESTURE_${key}_PASS" "$log" || true) -gt $local_seen ]] && break
+        sleep .1
+      done
+      [[ $(grep -Fc "NATIVE_ROAD_GESTURE_${key}_PASS" "$log" || true) -gt $local_seen ]]
     done
+    if [[ ${LUANTTD_NATIVE_WAYPOINT_REUSE:-0} == 1 ]]; then
+      await_log NATIVE_ROAD_GESTURE_WAYPOINT_REBUILD_PASS
+    fi
   fi
   do_road remove-start REMOVE
   slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_REMOVE slot=//p' "$log" | tail -1)

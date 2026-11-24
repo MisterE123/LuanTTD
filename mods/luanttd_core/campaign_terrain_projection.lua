@@ -102,7 +102,7 @@ function M.registries(s,ids)
     add(out,s,"sites",t.site,site_fields)
     add(out,s,"sites",t.road_town,site_fields)
     add(out,s,"stations",t.station,station_fields)
-    add(out,s,"stock_road_waypoints",t.road_waypoint_id,{"id","name","owner","tile","axis"})
+    add(out,s,"stock_road_waypoints",t.road_waypoint_id,{"id","name","owner","tile"})
     add(out,s,"stock_rail_stations",t.rail_station_id,station_fields)
     if t.ship and (t.ship.kind=="dock" or t.ship.kind=="oilrig") then
       add(out,s,"stock_ship_stations",t.ship.station,port_fields)

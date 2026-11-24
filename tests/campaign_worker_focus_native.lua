@@ -169,6 +169,14 @@ core.register_on_joinplayer(function(p)
       assert((snapshot.tiles[tile].road_waypoint_id~=nil)==(label=="waypoint-done"),
         ("wanted %d, hit %s, tool %s, status %s"):format(tile,tostring(target),tostring(desc),tostring(note)))
       assert(snapshot.tiles[tile].road_bits==10)
+      if label=="waypoint-done" then
+        local id=snapshot.tiles[tile].road_waypoint_id
+        if q.was_waypoint then
+          assert(id==q.was_waypoint,"Rebuilding the nearby recently removed waypoint must preserve its identity")
+          core.log("action","NATIVE_ROAD_GESTURE_WAYPOINT_REBUILD_PASS")
+        end
+        q.was_waypoint=id
+      end
       core.log("action","NATIVE_ROAD_GESTURE_"..(label=="waypoint-done" and "WAYPOINT_PASS" or "ERASE_WAYPOINT_PASS"))
     elseif label=="remove-start" then ready("REMOVE",7,q.x,q.z,.12)
     elseif label=="remove-end" then
