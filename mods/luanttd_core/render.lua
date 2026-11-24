@@ -941,7 +941,8 @@ return function(api)
       generated_ground[class]=family
     end
   end
-  local shore={}
+  local shore,rocky_shore,rapids={},{},{}
+  local water_rocks
   local show_shore=S.stock_coastal_flood
   if terrain and not show_shore then
     for _,tile in ipairs(S.tiles) do if tile.coastal_water then show_shore=true;break end end
@@ -949,10 +950,18 @@ return function(api)
   if terrain and show_shore then
     for _,mask in ipairs{1,2,3,4,6,7,8,9,11,12,13,14,23,27,29,30} do
       local asset="coastal_bank_"..mask
-      shore[mask]={}
+      shore[mask],rocky_shore[mask]={},{}
       for variant=0,3 do
         shore[mask][variant]=architecture("stock_shore_"..mask.."_"..variant,asset,"original_coast_"..variant)
+        rocky_shore[mask][variant]=architecture("stock_rocky_shore_"..mask.."_"..variant,
+          "rocky_coastal_bank_"..mask,"rocky_coast_"..variant)
       end
+    end
+  end
+  if terrain then
+    water_rocks=architecture("stock_open_water_rocks","rocky_water_flat","stock_water_rocks_atlas")
+    for _,mask in ipairs{3,6,9,12} do
+      rapids[mask]=architecture("stock_river_rapid_rocks_"..mask,"river_rapid_rocks_"..mask,"stock_water_rocks_atlas")
     end
   end
   local function source_road_node(t,id,x,y,z,grade,base,foundation)
@@ -1020,7 +1029,9 @@ return function(api)
       local mask,base=terrain.tile(id)
       if y==base then return ocean(x,z) end
       if y<base then return gnames.grass[t.variant] end
-      if mask~=0 and y==base+1 and x%2==0 and z%2==0 then return assert(shore[mask][t.variant]) end
+      if mask~=0 and y==base+1 and x%2==0 and z%2==0 then
+        return assert((t.stock_water_rocks and rocky_shore or shore)[mask][t.variant])
+      end
       return "air"
     end
     if t.terrain=="water" and not t.coastal_water and not t.build and not t.ship and
@@ -1220,6 +1231,10 @@ return function(api)
       local node=coastal_node(t,id,x,y,z)
       if node then return node end
     end
+    if water_rocks and t.stock_water_rocks and t.terrain=="water" and not t.coastal_water and not t.build and not t.ship
+      and y==t.h+1 and x%2==0 and z%2==0 then
+      return water_rocks
+    end
     if api.ship_tools and t.stock_canal then
       local _,level=terrain.tile(id)
       if y==level then return gnames.water[3] end
@@ -1232,6 +1247,10 @@ return function(api)
       if mask~=0 and y==base then return slope_fill end
       if y<=base then return gnames.grass[t.variant] end
       if mask~=0 and y==base+1 and x%2==0 and z%2==0 then return assert(stock_scenery.river[mask])[river_direction(id)] end
+      -- Source rapids are ordinary directed inclines. Put stone and
+      -- whitewater detail next to the engine water mesh, not in the
+      -- simulation record or on top of the bank.
+      if rapids[mask] and y==base+1 and x%2==1 and z%2==0 then return rapids[mask] end
       return "air"
     end
     if t.rail_tracks then

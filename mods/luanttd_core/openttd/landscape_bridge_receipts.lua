@@ -5,7 +5,7 @@ return function(Sim,Authority)
   local M={}
   local max_changes=66 -- stock 64 middle tiles plus two ramps
   local fields={terrain=true,h=true,variant=true,stock_clear_ground=true,coastal_water=true,
-    water_class=true,stock_river_bits=true,build=true,owner=true,road_bits=true,
+    water_class=true,stock_river_bits=true,stock_water_rocks=true,build=true,owner=true,road_bits=true,
     road_bridge_id=true}
   local untracked_maps={"level_crossing_tiles","aqueduct_above","tunnel_below","rail_bridge_above",
     "rail_tunnel_below","stock_farm_fields","road_oneway_removed"}

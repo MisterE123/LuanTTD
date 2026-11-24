@@ -15,7 +15,7 @@ local terrain_codes={grass=1,hill=2,water=3}
 local waters={"sea","river"}
 local water_codes={sea=1,river=2}
 local tile_fields={h=true,variant=true,terrain=true,water_class=true,stock_void=true,coastal_water=true,
-  stock_clear_ground=true,stock_river_bits=true}
+  stock_clear_ground=true,stock_river_bits=true,stock_water_rocks=true}
 local function tiny_int(n,high)
   return type(n)=="number" and n>=0 and n<=high and n==floor(n)
 end
@@ -27,11 +27,11 @@ local function tile_bytes(t)
   if not (g and tiny_int(h,255) and tiny_int(v,3)) or w~=nil and not water_codes[w] then return end
   local c,r=t.stock_clear_ground,t.stock_river_bits
   if c~=nil and not tiny_int(c,255) or r~=nil and not tiny_int(r,255) then return end
-  local a,b=t.stock_void,t.coastal_water
-  if a~=nil and a~=true or b~=nil and b~=true then return end
+  local a,b,k=t.stock_void,t.coastal_water,t.stock_water_rocks
+  if a~=nil and a~=true or b~=nil and b~=true or k~=nil and k~=true then return end
   for k in next,t do if not tile_fields[k] then return end end
   local flags=g-1+4*v+16*(water_codes[w] or 0)+64*(a and 1 or 0)+128*(b and 1 or 0)
-  local presence=(c~=nil and 1 or 0)+(r~=nil and 2 or 0)
+  local presence=(c~=nil and 1 or 0)+(r~=nil and 2 or 0)+(k and 4 or 0)
   return char(TILE,h,flags,presence,c or 0,r or 0)
 end
 
@@ -177,7 +177,7 @@ function M.decode(source)
       end
     elseif tag==TILE then
       local h,flags,presence,c,r=byte(source,at,at+4)
-      assert(r and presence<=3,"Invalid packed campaign ground")
+      assert(r and presence<=7,"Invalid packed campaign ground")
       at=at+5
       local t={h=h,variant=floor(flags/4)%4,terrain=assert(terrains[flags%4+1],"Unknown packed terrain")}
       local w=floor(flags/16)%4
@@ -185,7 +185,8 @@ function M.decode(source)
       if floor(flags/64)%2==1 then t.stock_void=true end
       if flags>=128 then t.coastal_water=true end
       if presence%2==1 then t.stock_clear_ground=c end
-      if presence>=2 then t.stock_river_bits=r end
+      if floor(presence/2)%2==1 then t.stock_river_bits=r end
+      if presence>=4 then t.stock_water_rocks=true end
       tables[#tables+1]=t
       return t
     elseif tag==STR then

@@ -91,7 +91,8 @@ function R.quote(board,x,z,opts)
   end
   for _,q in ipairs(water) do
     local t=read(x+q[1],z+q[2])
-    if not t or t.kind~="water" or t.slope~=0 then return nil,"OIL_RIG_WATER_BUFFER" end
+    -- Industry special water-check tiles require plain, flat water in RC1.
+    if not t or t.kind~="water" or t.slope~=0 or t.is_water_tile==false then return nil,"OIL_RIG_WATER_BUFFER" end
   end
   if not (opts.editor and opts.ignore_industry_restrictions) and
       (start.base~=0 or not R.edge(x,z,board,opts.oil_refinery_limit)) then

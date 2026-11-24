@@ -35,20 +35,23 @@ return function(Sim,Terrain,Flood)
       local kind=class(s,id,t)
       if kind=="protected" or kind=="canal" or kind=="river" then return {kind=kind} end
       local slope,base=Terrain.tile(s.corner_grid,x,z)
-      return {kind=kind,slope=slope,base=base,water_class=kind=="station" and "sea" or t.water_class}
+      return {kind=kind,slope=slope,base=base,water_class=kind=="station" and "sea" or t.water_class,
+        rocks=t.stock_water_rocks or (kind=="clear" and t.stock_clear_ground==2) or nil}
     end
     return B
   end
-  local function apply(t,kind,base)
+  local function apply(t,kind,base,rocks)
     t.h=base
-    t.stock_river_bits,t.stock_clear_ground=nil,nil
+    t.stock_river_bits,t.stock_clear_ground,t.stock_water_rocks=nil,nil,nil
     if kind=="clear" then
       t.terrain,t.water_class,t.coastal_water="grass",nil,nil
       t.owner=nil
       if t.build=="canal" then t.build=nil end
       t.stock_canal=nil
+      if rocks then t.stock_clear_ground=2 end
     else
       t.terrain,t.water_class,t.coastal_water="water","sea",kind=="coast" and true or nil
+      if rocks and kind=="coast" then t.stock_water_rocks=true end
     end
   end
   function W.visit(s,x,z,board)
@@ -66,7 +69,7 @@ return function(Sim,Terrain,Flood)
       local t=assert(s.tiles[id])
       assert(class(s,id,t)==change.from)
       local _,base=Terrain.tile(s.corner_grid,change.x,change.z)
-      apply(t,change.kind,base)
+      apply(t,change.kind,base,change.rocks)
       s.changed[#s.changed+1]=id
     end
     s.topology=(s.topology or 0)+1

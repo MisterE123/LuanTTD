@@ -42,7 +42,7 @@ return function(Track,Water)
   -- structures, bay wet tiles and station ownership are adapter territory;
   -- don't silently destroy them as part of a purchase.
   local function default_clear(board,id,t,opts)
-    if plain(t) then
+    if plain(t) or t.rocks and not t.is_coast then
       if opts.no_water then return nil,"CAN_T_BUILD_ON_WATER" end
       if opts.freeform_edges==false and board.water_clear_allowed and not board.water_clear_allowed(id) then
         return nil,"TOO_CLOSE_TO_EDGE_OF_MAP"

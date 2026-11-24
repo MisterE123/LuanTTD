@@ -34,7 +34,7 @@ return function(Sim,Terrain,Rig,Oil)
       local cls=water(t)
       local kind=(t.ship and (t.ship.kind=="lock" or t.ship.kind=="ship_depot") or not t.ship and cls and not blocked(t))
         and "water" or t.ship and "station" or t.stock_industry and "industry" or "land"
-      return {id=id,kind=kind,base=h,slope=slope,water_class=cls,
+      return {id=id,kind=kind,base=h,slope=slope,water_class=cls,is_water_tile=not t.stock_water_rocks,
         bridge=(s.bridge_above and s.bridge_above[id]~=nil) or (s.rail_bridge_above and s.rail_bridge_above[id]~=nil)
           or (s.aqueduct_above and s.aqueduct_above[id]~=nil),
         vehicle=ctx.vehicle_on_ground and ctx.vehicle_on_ground(id)}

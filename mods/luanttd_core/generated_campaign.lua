@@ -27,12 +27,13 @@ function M.landscape(Sim,Terrain,Generator,settings)
   for z=1,Sim.H do
     if settings.host_progress and (z-1)%16==0 then settings.host_progress((z-1)/Sim.H) end
     for x=1,Sim.W do
-      local kind,ground,clear_ground=Generator.describe(map.tile(x,z))
+      local kind,ground,clear_ground,water_rocks=Generator.describe(map.tile(x,z))
       local _,base=Terrain.tile(corner,x,z)
       local t={h=base,variant=(3*x+5*z+math.floor(x*z/16))%4}
       if kind==7 then t.terrain="water";t.stock_void=true
       elseif kind==6 then
         t.terrain="water";t.water_class=ground==3 and "river" or "sea";t.coastal_water=ground==2 or nil
+        t.stock_water_rocks=water_rocks or nil
         if t.water_class=="river" then t.stock_river_bits=assert(map.river_bits(x,z)) end
       else
         assert(kind==0,"Unexpected stock landscape class")

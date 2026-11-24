@@ -47,7 +47,8 @@ function F.visit(board,x,z)
       local t=u and board.tile(u,v)
       if t and t.kind=="clear" and (t.foundation_base or t.base)==0 and has(directions(t),opposite(dir)) and
          (not board.can_clear or board.can_clear(u,v,t)) then
-        changes[#changes+1]={x=u,z=v,from="clear",kind=t.slope==0 and "sea" or "coast"}
+        changes[#changes+1]={x=u,z=v,from="clear",kind=t.slope==0 and "sea" or "coast",
+          rocks=t.slope~=0 and t.rocks or nil}
       end
     end
   elseif behaviour=="dryup" and source.kind=="coast" then
@@ -60,7 +61,7 @@ function F.visit(board,x,z)
       end
     end
     if not board.can_clear or board.can_clear(x,z,source) then
-      changes[1]={x=x,z=z,from="coast",kind="clear"}
+      changes[1]={x=x,z=z,from="coast",kind="clear",rocks=source.rocks}
     end
   end
   return changes

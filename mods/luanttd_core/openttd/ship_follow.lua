@@ -18,7 +18,8 @@ return function(Track)
   -- Kinds "sea"/"canal"/"river" are shorthand for plain water.
   -- A lock/depot's direction controls passage on all its tiles.
   function W.status(t,x,z,side)
-    if not t then return 0 end
+    -- RC1 GetTileTrackStatus_Water has no tracks for ClearRocks/CoastRocks.
+    if not t or t.rocks then return 0 end
     local k=t.kind
     local bits,is_water=0,water_types[k] or k=="buoy"
     if k=="water" or k=="sea" or k=="canal" or k=="river" then

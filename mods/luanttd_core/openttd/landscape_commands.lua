@@ -13,7 +13,7 @@ return function(Sim,Authority)
   local command_tile={tool=true,ids=true}
   local command_corner={tool=true,x=true,z=true}
   local physical={terrain=true,h=true,variant=true,wood=true,stock_clear_ground=true,coastal_water=true,
-    water_class=true,stock_river_bits=true,parcel=true,house=true,source_house=true,build=true,owner=true,road_bits=true,
+    water_class=true,stock_river_bits=true,stock_water_rocks=true,parcel=true,house=true,source_house=true,build=true,owner=true,road_bits=true,
     road_town=true} -- town road allowed only as a road-planner read
   local overlays={level_crossing_tiles=true,bridge_above=true,aqueduct_above=true,tunnel_below=true,
     rail_bridge_above=true,rail_tunnel_below=true,road_oneway_removed=true,stock_farm_fields=true}

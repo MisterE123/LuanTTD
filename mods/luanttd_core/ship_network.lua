@@ -20,6 +20,7 @@ return function(Sim,Terrain,Water,Facilities)
     if t.coastal_water then
       out.kind,out.water_class,out.is_coast="coast","sea",true
       out.water_ground,out.is_water_tile=false,false
+      out.rocks=t.stock_water_rocks
       return out
     end
     local cls=water_class(t)
@@ -31,7 +32,8 @@ return function(Sim,Terrain,Water,Facilities)
       return out -- preserve underlying water class, never permit sailing through a platform
     end
     if cls and (not t.build or t.build=="canal") then
-      out.kind,out.water_class,out.water_ground,out.is_water_tile=cls,cls,true,true
+      out.kind,out.water_class,out.water_ground,out.is_water_tile=cls,cls,true,not t.stock_water_rocks
+      out.rocks=t.stock_water_rocks
       return out
     end
     if t.house or t.wood or t.site or t.build or t.tram or t.airfield or t.stock_industry or t.stock_landmark or t.owner then
@@ -140,6 +142,7 @@ return function(Sim,Terrain,Water,Facilities)
       s.next_stock_ship_station=next_+1
       s.stock_ship_stations[next_]={id=next_,owner=owner,land=p.land,water=p.water,dir=p.dir,
         station_area=p.station_area,approach=p.approach,water_class=p.water_class}
+      s.tiles[p.land].stock_water_rocks=nil
       s.tiles[p.land].ship={kind="dock",station=next_,owner=owner,dir=p.dir,water_part=false}
       s.tiles[p.water].ship={kind="dock",station=next_,owner=owner,dir=p.dir,
         water_part=true,water_class=p.water_class,water_ground=true}

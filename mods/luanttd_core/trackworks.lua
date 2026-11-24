@@ -168,7 +168,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     if not t then return false,"Choose an in-map depot tile." end
     local rotating=t.rail_depot_dir~=nil
     if clear_coast then
-      t.terrain,t.water_class,t.coastal_water,t.stock_river_bits="grass",nil,nil,nil
+      t.terrain,t.water_class,t.coastal_water,t.stock_river_bits,t.stock_water_rocks="grass",nil,nil,nil,nil
     end
     t.build,t.owner,t.rail_tracks,t.rail_depot_dir,t.wood="stock_rail",owner,2^(dir%2),dir,nil
     t.rail_type=railtype or t.rail_type or 0

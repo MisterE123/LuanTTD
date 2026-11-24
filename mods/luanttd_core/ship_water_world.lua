@@ -16,8 +16,8 @@ return function(Sim,Network,Construction)
         return nil,"LANDSCAPE_CLEAR_REQUIRED"
       end
       if t.kind=="clear" then return 0 end
-      if t.is_water_tile then
-        if tile.owner and tile.owner~=opts.owner then return nil,"OWNED_BY_ANOTHER" end
+      if t.is_water_tile or t.rocks and not t.is_coast then
+        if tile.owner and tile.owner~="water" and tile.owner~=opts.owner then return nil,"OWNED_BY_ANOTHER" end
         return t.water_class=="canal" and Construction.CLEAR_CANAL or Construction.CLEAR_WATER
       end
       return nil,"LANDSCAPE_CLEAR_REQUIRED"
@@ -57,6 +57,7 @@ return function(Sim,Network,Construction)
         -- The ground remains at its shared corner elevation. Store the
         -- WaterClass independently of its neighbors.
         t.build,t.owner,t.terrain,t.water_class,t.stock_canal="canal",r.owner,"water",r.water_class,true
+        t.stock_water_rocks=nil
       end
       finance(s,owner,plan)
       return true
@@ -92,6 +93,7 @@ return function(Sim,Network,Construction)
       for cell,record in pairs(plan.records) do
         local tile=s.tiles[cell]
         tile.ship=record
+        tile.stock_water_rocks=nil
         if record.part~="middle" and record.water_class=="canal" and tile.build~="canal" then
           tile.terrain,tile.build,tile.water_class,tile.owner,tile.stock_canal=
             "water","canal","canal",record.owner,true

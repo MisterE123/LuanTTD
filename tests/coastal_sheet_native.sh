@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Real stock Luanti camera views for the same generated coastline.
 # Set BAYLINE_NATIVE_COAST_REFERENCE=1 with the reference application for A/B.
+# BAYLINE_NATIVE_ROCKY_WATER=1 checks rocky shore, sea rocks and a stock rapid.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
@@ -18,11 +19,19 @@ if [[ -n ${BAYLINE_NATIVE_CACHE_SEED:-} && -d $BAYLINE_NATIVE_CACHE_SEED/minetes
   mkdir -p "$out/cache/minetest"
   cp -al "$BAYLINE_NATIVE_CACHE_SEED/minetest/media" "$out/cache/minetest/"
 fi
-cp tests/coastal_sheet_native.lua "$game/mods/luanttd_core/"
+probe=coastal_sheet_native
+views=(overview near open)
+if [[ ${BAYLINE_NATIVE_ROCKY_WATER:-0} == 1 ]]; then
+  probe=rocky_water_native
+  views=(rocky-shore open-rocks rapids)
+  # Only this disposable fixture edits two local tile records.
+  printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
+fi
+cp "tests/$probe.lua" "$game/mods/luanttd_core/"
 cat "$src/mods/luanttd_core/init.lua" >"$out/init.lua"
-printf '\ndofile(mod.."/coastal_sheet_native.lua")(api)\n' >>"$out/init.lua"
+printf '\ndofile(mod.."/%s.lua")(api)\n' "$probe" >>"$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
-export HOME="$out/home" XDG_CACHE_HOME="$out/cache" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
+export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
 port=${BAYLINE_NATIVE_PORT:-42820}
 display=${BAYLINE_NATIVE_DISPLAY:-120}
@@ -38,6 +47,9 @@ bind_address = 127.0.0.1
 time_speed = 0
 bayline_coastal_sheet_reference = $([[ ${BAYLINE_NATIVE_COAST_REFERENCE:-0} == 1 ]] && echo true || echo false)
 GAME
+if [[ $probe == rocky_water_native ]]; then
+  printf 'bayline_generated_rivers = 3\nbayline_generated_min_river_length = 2\n' >> "$out/native.conf"
+fi
 cat >"$out/client.conf" <<'GAME'
 screen_w = 1100
 screen_h = 740
@@ -82,7 +94,7 @@ grep COAST_SHEET_READY "$out/server.log" || { cat "$out/"{server,client}.log; ex
 win=$(xdotool search --sync --onlyvisible --pid "${pids[2]}" | tail -1)
 xdotool windowfocus --sync "$win"
 xdotool mousemove 550 370
-for v in overview near open; do
+for v in "${views[@]}"; do
   printf '%s\n' "$v" > "$out/world/coastal-view.txt"
   for _ in {1..30}; do grep -q "COAST_SHEET_VIEW $v" "$out/server.log" && break; sleep .2; done
   grep -q "COAST_SHEET_VIEW $v" "$out/server.log" || { cat "$out/server.log"; exit 1; }
