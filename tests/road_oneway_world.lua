@@ -195,3 +195,17 @@ vertical.rail_tunnel_below={[id(17,12)]=1}
 rejected=World.quote(vertical,owner,id(17,12),id(17,12),1,whole)
 assert(not rejected and World.read(vertical.tiles[id(17,12)])==2)
 print("PASS one-way world quote/atomic finance, ground occupancy, save fields, guard and real directed detour")
+
+do
+  local s=world()
+  local at=id(9,13)
+  local land=s.tiles[at]
+  land.wood={count=3}
+  local q=assert(World.quote(s,owner,at,at,0,{start_half=false,end_half=true}))
+  assert(q.cost==2*95+3*20 and land.wood.count==3)
+  local before=cash(s)
+  local yes,amount,changed=World.commit(s,owner,q)
+  assert(yes and amount==250 and changed[1]==at and cash(s)==before-250)
+  assert(not land.wood and land.build=="road" and land.road_bits==10)
+  print("PASS one-way clears the same three individual trees at stock prices and touches only the road layer")
+end

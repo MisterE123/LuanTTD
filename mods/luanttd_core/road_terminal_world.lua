@@ -11,17 +11,6 @@ return function(Sim,Terrain,Stop,Underlay,rules)
   local function district(t)
     return t.stock_landmark or t.stock_industry or t.site or t.house
   end
-  local function quote_clear(t)
-    -- ClearTile_Clear in stock has zero price only for bare dirt; the
-    -- ordinary generator's grass starts with full density and costs 20.
-    if t.wood then
-      local stands=type(t.wood)=="table" and (t.wood.count or 1) or 1
-      return stands*20
-    end
-    local kind=t.stock_clear_ground or 0
-    if kind==0 then return t.stock_clear_density==0 and 0 or 20 end
-    return ({[1]=40,[2]=200,[3]=500,[5]=40})[kind]
-  end
   -- ConnectRoadToStructure only extends a neighboring normal road.
   -- The caller may exclude all tiles in the proposed station rectangle.
   function W.frontage(s,owner,edit,selected,budget,edits,excluded,occupied)
@@ -91,7 +80,7 @@ return function(Sim,Terrain,Stop,Underlay,rules)
       piece_price=function() return 95 end,
       clear=function()
         if record.occupied then return nil,"VEHICLE_IN_THE_WAY" end
-        return quote_clear(t),"PROTECTED_TERMINAL_TILE"
+        return Sim.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[id]),"PROTECTED_TERMINAL_TILE"
       end}
     local pen=s.stock_road_town_policy
     if pen then settings.on_town_road=pen.stop_on_town_road end

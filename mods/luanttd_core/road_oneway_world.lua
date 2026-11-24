@@ -98,11 +98,11 @@ return function(Sim,Terrain,Follow,OneWay,settings)
       out.kind,out.roadtype,out.road_bits,out.disallowed="road",t.roadtype or 0,bits,d
       out.owner=t.road_town and town_owner or t.owner
       out.tram_bits=t.tram and t.tram.tram_bits or t.tram_bits
-    elseif not t.build and not (t.owner or t.station or t.site or t.house or t.wood or t.stock_industry or
+    elseif not t.build and not (t.owner or t.station or t.site or t.house or t.stock_industry or
         t.source_house or t.level_crossing or t.rail_tracks or t.rail_span_id or t.tram or t.ship or t.airfield or
         t.stock_canal or t.water_class or t.tunnel_id or t.road_tunnel_id or t.road_bridge_id or t.terrain=="water") then
-      -- Ordinary bare grass/soil only. Do not send a generic clearing
-      -- command through the normal-road adapter on natural/owned assets.
+      -- Natural terrain has an exact source clearing charge. Other
+      -- structures and occupied facilities remain outside this adapter.
       out.kind="clear"
     end
     return out
@@ -197,9 +197,11 @@ return function(Sim,Terrain,Follow,OneWay,settings)
     ctx=ctx or {ground=W.ground_occupancy(s)}
     local p,reason,id=OneWay.plan(W.board(s),start,last,axis,{
       start_half=q.start_half,end_half=q.end_half,ai=q.ai,toggle=q.toggle,company=owner,
-      build_on_slopes=settings.build_on_slopes~=false, piece_cost=settings.piece_cost or 95,
-      foundation_cost=settings.foundation_cost or 250,
-      clear=function() return settings.clear_cost or 20 end,
+      build_on_slopes=settings.build_on_slopes~=false, piece_cost=settings.piece_cost or Sim.road_piece_price,
+      foundation_cost=settings.foundation_cost or Sim.road_foundation_price,
+      clear=function(_,id)
+        return settings.clear_cost or Sim.road_site_clear_cost(s.tiles[id],s.stock_farm_fields and s.stock_farm_fields[id])
+      end,
       occupied=function(_,i) return W.occupied(s,i,ctx) end,
     })
     if not p then return nil,reason,id end
@@ -258,6 +260,10 @@ return function(Sim,Terrain,Follow,OneWay,settings)
     local dirty={}
     for _,e in ipairs(p.changes) do
       local t,patch=s.tiles[e.tile],patches[e.tile]
+      if t.build==nil and not t.tram and e.added~=0 then
+        t.wood,t.stock_clear_ground,t.stock_clear_density=nil,nil,nil
+        if s.stock_farm_fields then s.stock_farm_fields[e.tile]=nil end
+      end
       t.build,t.road_bits,t.owner=patch.build,patch.road_bits,patch.owner
       t.disallowed,t.road_disallowed=patch.disallowed,patch.road_disallowed
       if s.road_oneway_removed and s.road_oneway_removed[e.tile]==true then s.road_oneway_removed[e.tile]=nil end

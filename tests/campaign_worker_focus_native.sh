@@ -91,6 +91,9 @@ fi
 if [[ ${LUANTTD_NATIVE_TRAM_FACILITY_INPUT:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_tram_facility_input = true' >> "$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_STOCK_ROAD_PRICE:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_stock_road_price = true' >> "$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}

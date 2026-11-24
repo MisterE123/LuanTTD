@@ -72,7 +72,7 @@ a,b,hill=id(10,11),id(15,11),id(12,11)
 drag=M.line(a,b)
 local changes,fare=M.plan(s,"A","road",drag)
 assert(changes and fare==math.ceil(M.tools.road.price/2)*2+
-  (#drag-2)*M.tools.road.price+2*M.road_foundation_price, fare)
+  (#drag-2)*M.tools.road.price+2*M.road_foundation_price+20*#drag, fare)
 command(s,"road",drag)
 shape,base,foundation=M.road_surface(s,hill)
 assert(shape==3 and base==0 and foundation=="x")
@@ -89,3 +89,29 @@ s.tiles[w].build="road";s.tiles[w].owner="A";s.tiles[w].road_bits=4
 assert(M.road_edge(s,v,1) and M.road_edge(s,w,3))
 assert(not M.road_connected(s,v,1) and not path(s,v,w))
 print("PASS: slope/foundation road construction and costs, reciprocal grades, junctions, stations and depot service")
+
+-- OpenTTD 16.0-RC1 table/pricebase.h and ClearTile_{Clear,Trees}:
+-- a new half costs 95; clean bare dirt is free to clear; one never pays
+-- to clear the original land again when adding pieces to the road.
+do
+  local s,c=fresh()
+  local targets={id(10,22),id(12,22),id(14,22),id(16,22),id(18,22)}
+  local a,b,d,e,f=unpack(targets)
+  s.tiles[a].stock_clear_density=0
+  s.tiles[b].stock_clear_ground=1
+  s.tiles[d].stock_clear_ground=2
+  s.tiles[e].wood={count=3}
+  s.stock_farm_fields={[f]={owner="Farm"}}
+  for i,clear in ipairs{0,40,200,60,500} do
+    local at=targets[i]
+    local q=assert(M.autoroad_plan(s,"A",at,at,0,true,true))
+    assert(#q.changes==1 and q.cost==95+clear and q.changes[1].road_site_cost==clear)
+    local money=c.cash
+    assert(M.apply_road_construction(s,"A",q))
+    assert(c.cash==money-q.cost and s.tiles[at].road_bits==2)
+    assert(not s.tiles[at].stock_clear_ground and not s.tiles[at].wood and not s.stock_farm_fields[at])
+    local whole=assert(M.autoroad_plan(s,"A",at,at,0,false,true))
+    assert(whole.cost==95 and not whole.changes[1].clear_road_site)
+  end
+  print("PASS source ROAD clears bare dirt, rough, rock, trees or fields once and charges 95 per half")
+end

@@ -156,7 +156,7 @@ local bad_road,denied=S.autoroad_plan(s,paving,overlay,overlay,0,false,true)
 assert(not bad_road and denied:find("sloped",1,true))
 assert(not s.tiles[overlay].build and s.tiles[overlay].tram.tram_owner==owner)
 local road_quote=assert(S.autoroad_plan(s,paving,overlay,overlay,1,false,true))
-assert(#road_quote.changes==1 and road_quote.changes[1].road_bits==5)
+assert(road_quote.cost==190 and #road_quote.changes==1 and road_quote.changes[1].road_bits==5)
 local cash_before=paving_company.cash
 assert(S.apply_road_construction(s,paving,road_quote))
 local ground=s.tiles[overlay]

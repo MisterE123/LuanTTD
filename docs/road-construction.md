@@ -164,3 +164,7 @@ a different drag never inherits the old quote.
 Remaining: layered tram facilities and bridge/tunnel removal through
 this tool, cross-mode road stop joining, and road-type conversion. The current
 tool protects game facilities where those rules are not yet mounted.
+
+### Base construction prices
+
+Regular and one-way roads use the OpenTTD 16.0-RC1 base prices from `src/table/pricebase.h`: $95 per newly laid half and $250 when the stock slope rule requires a new foundation. In Temperate, clearing new sites adds $20 for grass, $40 for rough land, $200 for rock, $500 for fields, or $20 per tree. Bare dirt has no clearing fee. This is not the inflation model or unrestricted removal of buildings. Road extensions do not repay clearance, and paving over compatible tram track does not pay for its existing foundation.

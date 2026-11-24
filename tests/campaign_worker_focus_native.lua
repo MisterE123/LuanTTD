@@ -153,7 +153,35 @@ core.register_on_joinplayer(function(p)
       aim(x,z,offset)
       core.log("action","NATIVE_ROAD_GESTURE_"..which.." slot="..slot)
     end
-    if label=="x-start" then ready("X",5,q.x,q.z,.12)
+    if label=="x-start" then
+      if core.settings:get_bool("luanttd_native_stock_road_price",false) then
+        local snapshot=assert(OwnerCheckpoint.read())
+        local expected=6*95
+        for id=q.first,q.last do
+          local t=snapshot.tiles[id]
+          assert(not (t.build or t.house or t.site or t.tram) and t.terrain~="water")
+          if t.wood then expected=expected+20*(type(t.wood)=="table" and t.wood.count or 1)
+          elseif t.stock_clear_ground==2 then expected=expected+200
+          elseif t.stock_clear_ground==3 or snapshot.stock_farm_fields and snapshot.stock_farm_fields[id] then
+            expected=expected+500
+          elseif (t.stock_clear_ground or 0)>0 then expected=expected+40
+          elseif t.stock_clear_density~=0 then expected=expected+20 end
+        end
+        local client=assert(api.worker_bridge_client)
+        local query=client.query
+        client.query=function(req,done)
+          if req.kind=="road_place" and req.request.tool=="drag" and req.request.first==q.first then
+            return query(req,function(result)
+              assert(result.ok,result.why)
+              assert((result.why or ""):find("$"..expected.." spent on 4 tiles",1,true),result.why)
+              q.stock_cost=expected
+              return done(result)
+            end)
+          end
+          return query(req,done)
+        end
+      end
+      ready("X",5,q.x,q.z,.12)
     elseif label=="x-end" then
       aim(q.x+3,q.z+1,.75) -- aim outside the locked row
       core.log("action","NATIVE_ROAD_GESTURE_X_RELEASE")
@@ -162,6 +190,10 @@ core.register_on_joinplayer(function(p)
       for id=q.first,q.last do assert(snapshot.tiles[id].build=="road") end
       assert(not snapshot.tiles[Sim.id(q.x+3,q.z+1)].build)
       assert(snapshot.tiles[q.first+1].road_bits==10)
+      if core.settings:get_bool("luanttd_native_stock_road_price",false) then
+        assert(q.stock_cost)
+        core.log("action","NATIVE_ROAD_GESTURE_X_PRICE_PASS stock base cost $"..q.stock_cost)
+      end
       core.log("action","NATIVE_ROAD_GESTURE_X_PASS")
     elseif label=="waypoint" or label=="erase-waypoint" then
       assert(world.go_menu(player,"road_stops"))

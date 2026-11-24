@@ -62,7 +62,7 @@ do
   end
   assert(#quote(21).changes==96 and count==0,"no fleet inspection on a fresh, empty roadbed")
   local q=quote(20)
-  assert(#q.changes==96 and q.cost==11876 and count==4000)
+  assert(#q.changes==96 and q.cost==18050 and count==4000)
   count=0
   s.fleet[4000].at=at(83,20)
   local blocked=quote(20)

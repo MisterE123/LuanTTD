@@ -53,14 +53,14 @@ local original=s.tiles[crossing].level_crossing
 local phase,revisions=s.topology,s.level_crossing_tiles
 local before=money.cash
 local plan,quote=Sim.plan(s,owner,"road",{approach,crossing})
-assert(plan and #plan==1 and plan[1].id==approach and quote==63,quote)
+assert(plan and #plan==1 and plan[1].id==approach and quote==95,quote)
 assert(not Sim.road_connected(s,approach,2))
 assert(s.tiles[crossing].level_crossing==original and s.topology==phase and money.cash==before)
-local ids=charged(function()return road(approach,crossing)end,63)
+local ids=charged(function()return road(approach,crossing)end,95)
 assert(#ids==1 and ids[1]==approach and Sim.road_connected(s,approach,2))
 assert(Sim.road_bits(s,approach)==10 and Sim.road_bits(s,crossing)==10)
 assert(s.tiles[crossing].level_crossing==original and s.level_crossing_tiles==revisions)
-ids=charged(function()return road(at(7,8),at(11,8))end,188)
+ids=charged(function()return road(at(7,8),at(11,8))end,3*95+2*20)
 assert(#ids==2 and ids[1]==at(10,8) and ids[2]==at(11,8))
 assert(s.tiles[crossing].level_crossing==original and Sim.road_connected(s,crossing,2))
 charged(function()return road(at(7,8),at(11,8))end,0)
@@ -75,8 +75,8 @@ s.level_crossing_enabled=true
 local cross2=rail(11,13,Track.X)
 local r_ids=Sim.line(at(11,12),at(11,14))
 plan,quote=Sim.plan(s,owner,"road",r_ids)
-assert(plan and #plan==3 and quote==316 and plan[2].crossing_quote.price==190)
-charged(function()return Sim.build(s,owner,"road",r_ids)end,316)
+assert(plan and #plan==3 and quote==190+2*(95+20) and plan[2].crossing_quote.price==190)
+charged(function()return Sim.build(s,owner,"road",r_ids)end,190+2*(95+20))
 local c=s.tiles[cross2].level_crossing
 assert(c.road_axis==1 and c.rail_axis==0 and c.phase=="open")
 assert(Sim.road_connected(s,cross2,1) and Sim.road_connected(s,cross2,3))
@@ -218,7 +218,7 @@ assert(id==at(40,32) and axis==1 and h0 and h1)
 id,axis,h0,h1=Sim.autoroad_selection(at(40,31),point(40,31,2,7),at(40,31),point(40,31,2,7))
 assert(id==at(40,31) and axis==0 and not h0 and not h1)
 q=assert(Sim.autoroad_plan(s,owner,id,id,axis,h0,h1))
-assert(q.changes[1].road_bits==8 and q.cost==63)
+assert(q.changes[1].road_bits==8 and q.cost==95+20)
 print("PASS AutoRoad axis/halves, reciprocal outside crossing, obstacle sweep order and cash quote")
 
 -- OpenTTD 14.1 CmdRailTrackHelper: skip starting obstructions until a
@@ -251,7 +251,7 @@ local elbow=at(8,32)
 local plan,why,path=Sim.autoroad_bend_plan(s,owner,from,to)
 assert(plan,why)
 assert(#path==9 and path[1]==from and path[6]==elbow and path[9]==to)
-assert(plan.cost==1001) -- 7 full tiles and 2 priced half ends
+assert(plan.cost==16*95+9*20) -- 7 full tiles, 2 half ends and 9 clearances
 assert(not s.tiles[elbow].build)
 s.tiles[elbow].house=true
 local cash=money.cash

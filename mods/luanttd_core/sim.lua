@@ -70,7 +70,7 @@ M.tools={
   tram_depot={name="Tram depot"},tram_bit={name="Tramway half-piece"},
   ship_dock={name="Build dock"},ship_depot={name="Ship depot"},ship_aqueduct={name="Aqueduct"},ship_canal={name="Canal"},ship_lock={name="Ship lock"},ship_remove={name="Dismantle facility"}, landscape_raise={name="Raise corner"},
   landscape_lower={name="Lower corner"}, landscape_level={name="Level area"},
-  structure_wood={name="Timber bridge"}, structure_concrete={name="Concrete bridge"}, structure_steel={name="Steel girder"}, structure_tunnel={name="Road tunnel"}, stock_rail={name="Trackworks",price=220}, stock_road_bridge={name="Road bridge",price=1200,mode="road"}, stock_road_tunnel={name="Road tunnel",price=450,mode="road"}, rail={name="Track",price=220,mode="rail"}, road={name="Road",price=125,mode="road"},
+  structure_wood={name="Timber bridge"}, structure_concrete={name="Concrete bridge"}, structure_steel={name="Steel girder"}, structure_tunnel={name="Road tunnel"}, stock_rail={name="Trackworks",price=220}, stock_road_bridge={name="Road bridge",price=1200,mode="road"}, stock_road_tunnel={name="Road tunnel",price=450,mode="road"}, rail={name="Track",price=220,mode="rail"}, road={name="Road",price=190,mode="road"},
   rail_bridge={name="Rail bridge",price=620,mode="rail"}, road_bridge={name="Road bridge",price=440,mode="road"},
   rail_tunnel={name="Rail tunnel",price=680,mode="rail"}, road_tunnel={name="Road tunnel",price=510,mode="road"},
   rail_station={name="Rail station",price=1400,mode="rail"}, road_station={name="Road stop",price=550,mode="road"},
@@ -851,7 +851,18 @@ end
 function M.road_connected(s,id,d)
   return road_flags[d] and connected(s,id,d) or false
 end
-M.road_foundation_price=150
+-- OpenTTD 16.0-RC1 table/pricebase.h and ClearTile_Clear / Trees.
+-- Use the base (pre-inflation) prices for the ordinary stock ROAD type.
+M.road_foundation_price=250
+M.road_piece_price=95
+function M.road_site_clear_cost(t,farm_field)
+  if t.wood then return 20*(type(t.wood)=="table" and t.wood.count or 1) end
+  local kind=farm_field and 3 or t.stock_clear_ground or 0
+  if kind==0 then return t.stock_clear_density==0 and 0 or 20 end
+  if kind==2 then return 200 end
+  if kind==3 then return 500 end
+  return 40
+end
 local function new_pieces(pieces,existing)
   local added,n=existing,0
   for d=1,4 do
@@ -987,10 +998,12 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
   if other~=0 and count>0 and road_rules.foundation(mask,combined)~=road_rules.foundation(mask,other) then
     return nil,"The road and tram tracks must share the same foundation."
   end
-  local cost=math.ceil(M.tools.road.price*count/2)+(foundation==true and M.road_foundation_price or 0)
+  local clear_site=count>0 and t.build==nil and other==0
+  local clearing=clear_site and M.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[id]) or 0
+  local cost=count*M.road_piece_price+(foundation==true and M.road_foundation_price or 0)+clearing
   local proposed={id=id,tool=t.build or "road",build=t.build or "road",
     road_bits=combined,owner=(not t.road_town and owner or nil),
-    road_town=t.road_town,depot_dir=t.depot_dir,h=t.h}
+    road_town=t.road_town,depot_dir=t.depot_dir,h=t.h,clear_road_site=clear_site,road_site_cost=clearing}
   -- A change of foundation must not be made under a vehicle.
   if cost>0 and (other~=0 or t.build and (t.road_town or
       road_rules.foundation(mask,existing)~=road_rules.foundation(mask,combined))) then
@@ -1244,10 +1257,7 @@ function M.stock_road_terminal_plan(s,owner,id,req)
         local wanted=road_flags[opposite(dir)]
         local proposed,cost=road_piece_plan(s,owner,id,t,wanted,occupied)
         if not proposed or cost<=0 or not profiles_match(s,terminal.id,terminal,id,proposed,dir) then return end
-        local existing=M.road_bits(s,id)
-        local _,pieces=new_pieces(proposed.road_bits,existing)
-        local foundation=cost-math.ceil(M.tools.road.price*pieces/2)
-        return proposed,pieces*95+foundation
+        return proposed,cost
       end,
     })
   end
@@ -1893,6 +1903,10 @@ local function apply_build(s,owner,changes,cost)
     local id,k=item.id,item.tool
     local tile=s.tiles[id]
     local had_sign=road_sign(tile)~=0
+    if item.clear_road_site then
+      tile.stock_clear_ground,tile.stock_clear_density=nil,nil
+      if s.stock_farm_fields then s.stock_farm_fields[id]=nil end
+    end
     if item.crossing_quote then
       M.apply_crossing_construction(s,item.crossing_quote)
       crossing_changed=true
