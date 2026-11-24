@@ -510,14 +510,15 @@ return function(api)
     end
   end
   function R.platform(st)
-    local t=st and st.tile and S.tiles[st.tile]
-    if not t or st.stop_type=="truck" or t.build~="road_station" then return end
-    local tx,tz=Sim.xy(st.tile)
+    local at=st and (st.bus_tile or (st.stop_type~="truck" and st.tile))
+    local t=at and S.tiles[at]
+    if not t or t.station~=st.id or Sim.road_stop_tile_kind(st,at,t)~="bus" or t.build~="road_station" then return end
+    local tx,tz=Sim.xy(at)
     local x,z=tx*2+.5,tz*2+.5
-    local _,base=road_surface(st.tile)
-    local y=(base or S.tiles[st.tile].h)+.56
-    if S.tiles[st.tile].road_stop_pair then
-      local d=bay_dir[Sim.road_bits(S,st.tile)]
+    local _,base=road_surface(at)
+    local y=(base or t.h)+.56
+    if t.road_stop_pair then
+      local d=bay_dir[Sim.road_bits(S,at)]
       if not d then return end
       local function rotate(a,b)
         for _=1,d do a,b=b,-a end
@@ -529,7 +530,7 @@ return function(api)
       return {x=x+dx,y=y-.005,z=z+dz,side={x=bx,z=bz},along={x=ax,z=az},
         width=.143,length=1.24,slot_ok=function(f) return math.abs(f-.099)>.081 end}
     end
-    local layout=shelter_layout(st.tile)
+    local layout=shelter_layout(at)
     -- Use the exposed curbside strip, not under the opaque roof. The
     -- strip stays inside the platform and outside either asphalt lane.
     if layout=="quarter" then
@@ -1147,13 +1148,14 @@ return function(api)
       elseif t.build=="road_station" then
         local st=S.stations[t.station]
         if t.road_stop_pair then return assert(road_bay_pairs[bay_dir[Sim.road_bits(S,id)]]) end
-        if st and st.stop_type=="truck" and (st.coal_art or st.freight_art) and freight_straight[0] then
+        local role=Sim.road_stop_tile_kind(st,id,t)
+        if role=="truck" and (st.coal_art or st.freight_art) and freight_straight[0] then
           local bits=Sim.road_bits(S,id)
           local bay=({[8]=0,[4]=1,[2]=2,[1]=3})[bits]
           return (bits==5 and freight_straight[1]) or (bits==10 and freight_straight[0])
             or (bay and freight_bay[bay]) or freight_straight[0]
         end
-        if S.road_mail and st and st.stop_type=="truck" then
+        if S.road_mail and role=="truck" then
           local bits=Sim.road_bits(S,id)
           local bay=({[8]=0,[4]=1,[2]=2,[1]=3})[bits]
           return (bits==5 and mail_stop_straight[1]) or (bits==10 and mail_stop_straight[0])

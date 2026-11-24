@@ -1217,6 +1217,16 @@ local function stop_geometry(st)
   return record
 end
 function M.road_stop_tiles(st) return stop_geometry(st).physical end
+function M.road_stop_has(st,kind)
+  if not st or st.mode~="road" then return false end
+  if st.road_stop_areas then return st.road_stop_areas[kind]~=nil end
+  return (st.stop_type or "bus")==kind
+end
+function M.road_stop_tile_kind(st,id,t)
+  if not st or st.mode~="road" then return nil end
+  if st.road_members then return st.road_members[id] end
+  return t and t.road_stop_type or st.stop_type or "bus"
+end
 function M.road_stop_anchor(st,kind)
   if not st.road_members then return st.tile end
   if st.road_members[st.tile]==kind then return st.tile end
@@ -1224,6 +1234,15 @@ function M.road_stop_anchor(st,kind)
   for _,id in ipairs(rec.ids) do
     if st.road_members[id]==kind then return id end
   end
+end
+-- economy.cpp uses the current vehicle tile when moving and settling
+-- cargo; the BaseStation sign is neither a loading nor delivery point.
+function M.road_loading_tile(s,st,v)
+  local f=v.road_stop_pose
+  local id=f and f[4]
+  local t=id and s.tiles[id]
+  if t and t.station==st.id then return id end
+  return M.road_stop_anchor(st,v.cargo=="passenger" and "bus" or "truck") or st.tile
 end
 function M.road_stop_catchment(s,st,r)
   local rec=stop_geometry(st)
@@ -1272,8 +1291,9 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
     return nil,"LOCAL_AUTHORITY_REFUSES"
   end
   local function compatible(st)
-    -- Mixed-mode station catchments need their own native integration.
-    return st and st.mode=="road" and (st.stop_type or "bus")==req.kind and not s.tiles[st.tile].road_stop_pair
+    -- Road bus and truck facilities share the station; other modes
+    -- have their own construction registries.
+    return st and st.mode=="road" and not s.tiles[st.tile].road_stop_pair
   end
   function board.station(id) return s.stations[id] end
   function board.surrounding(rect)
@@ -1355,10 +1375,14 @@ function M.stock_road_stop_remove_plan(s,owner,first,last)
     local result=road_stop_members.preview(st,parts)
     results[id]=result
     for _,v in pairs(s.fleet) do
-      if v.station==id and v.load_state or v.dest==id and v.route and selected[v.route[#v.route]] then
+      local role=v.cargo=="passenger" and "bus" or "truck"
+      local was=M.road_stop_has(st,role)
+      local lacks=not result.road_stop_areas[role]
+      local occupied=v.road_stop_pose and selected[v.road_stop_pose[4]]
+      if v.station==id and v.load_state and (occupied or lacks) or v.dest==id and v.route and selected[v.route[#v.route]] then
         return nil,"ACTIVE_STOP_ROUTE"
       end
-      if not result.spread then
+      if not result.spread or was and lacks then
         for _,order in ipairs(v.orders or {}) do
           if order.station==id then return nil,"STOP_IN_ORDERS" end
         end
@@ -1372,7 +1396,8 @@ end
 local function refresh_road_station_sites(s,st)
   local known,served={},{}
   local primary=road_stop_site(s,st.tile)
-  for id in pairs(st.road_members) do
+  for id,kind in pairs(st.road_members) do
+    s.tiles[id].road_stop_type=kind
     local _,sites=road_stop_site(s,id)
     for _,site in ipairs(sites or {}) do
       if not known[site] then known[site]=true;served[#served+1]=site end
@@ -2383,9 +2408,8 @@ local function can_use_road_order(s,v,o)
   if waypoint then return st~=nil and st.owner==v.owner and M.road_stock_service_active(s) end
   if not st or st.owner~=v.owner or st.mode~="road" then return false end
   if not s.road_economy then return true end
-  local truck=st.stop_type=="truck"
-  if v.cargo=="passenger" then return not truck end
-  if mail_engine(v.engine) or coal_engine(v.engine) or industry_truck(v.engine) then return truck end
+  if v.cargo=="passenger" then return M.road_stop_has(st,"bus") end
+  if mail_engine(v.engine) or coal_engine(v.engine) or industry_truck(v.engine) then return M.road_stop_has(st,"truck") end
   return true
 end
 local abort_stock_stop
@@ -3195,7 +3219,7 @@ function M.road_oil_active(s)
     M.road_stock_service_active(s))
 end
 function M.oil_stop_status(s,st,cargo)
-  if not M.road_oil_active(s) or not st or st.mode~="road" or st.stop_type~="truck" or
+  if not M.road_oil_active(s) or not M.road_stop_has(st,"truck") or
       (cargo~="oil" and cargo~="goods") then return end
   local b=timber_day_bindings[s]
   if not b then
@@ -3209,7 +3233,7 @@ function M.oil_stop_status(s,st,cargo)
   return b.display_waiting(st,cargo),b.report(st,cargo)
 end
 function M.farm_stop_status(s,st,cargo)
-  if not M.road_farm_active(s) or not st or st.mode~="road" or st.stop_type~="truck" or
+  if not M.road_farm_active(s) or not M.road_stop_has(st,"truck") or
       not (cargo=="grain" or cargo=="livestock" or cargo=="goods") then return end
   local b=timber_binding(s)
   return b.display_waiting(st,cargo),b.report(st,cargo)
@@ -3219,7 +3243,7 @@ function M.timber_rules()
   return timber_rules
 end
 function M.timber_stop_status(s,st,cargo)
-  if not M.road_timber_active(s) or not st or st.mode~="road" or st.stop_type~="truck" or
+  if not M.road_timber_active(s) or not M.road_stop_has(st,"truck") or
       not (cargo=="wood" or cargo=="goods") then return end
   passenger_modules()
   town_passengers.start(s)
@@ -3227,7 +3251,7 @@ function M.timber_stop_status(s,st,cargo)
   return b.display_waiting(st,cargo),b.report(st,cargo)
 end
 function M.coal_stop_status(s,st)
-  if not M.road_coal_active(s) or not st or st.mode~="road" or st.stop_type~="truck" then return end
+  if not M.road_coal_active(s) or not M.road_stop_has(st,"truck") then return end
   passenger_modules()
   local b=coal_binding(s)
   local acceptance=b.report(st)
@@ -3299,7 +3323,7 @@ local function road_mail(s,v)
   return s.road_economy and s.road_mail and v.cargo=="mail" and mail_engine(v.engine)
 end
 function M.mail_stop_status(s,st)
-  if not s.road_mail or not st or st.stop_type~="truck" then return end
+  if not s.road_mail or not M.road_stop_has(st,"truck") then return end
   passenger_modules()
   town_passengers.start(s)
   local waiting=M.road_stock_service_active(s) and station_service.display_waiting(s,st,"mail") or mail_runtime.waiting(st)

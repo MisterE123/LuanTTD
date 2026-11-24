@@ -1952,10 +1952,10 @@ local function order_stop_target(n,V,id)
     return nil,engine.mode=="road" and v.cargo=="passenger" and "Choose one of your bus stops." or
       "Choose one of your compatible stops."
   end
-  if S.road_economy and engine.mode=="road" and v.cargo=="passenger" and st.stop_type=="truck" then
+  if S.road_economy and engine.mode=="road" and v.cargo=="passenger" and not Sim.road_stop_has(st,"bus") then
     return nil,"Buses need passenger stops, not loading stops."
   end
-  if S.road_economy and engine.mode=="road" and Sim.road_freight_cargo(v.engine) and st.stop_type~="truck" then
+  if S.road_economy and engine.mode=="road" and Sim.road_freight_cargo(v.engine) and not Sim.road_stop_has(st,"truck") then
     return nil,"This vehicle needs a truck loading stop."
   end
   if #v.orders>=16 then return nil,"Limit of 16 orders." end
@@ -2977,7 +2977,7 @@ function U.context(p,tile,hit)
       local x,z=Sim.xy(tile)
       local site=R.host_record and R.host_record("sites",t.site)
       local st=R.host_record and R.host_record("stations",t.station)
-      if st and st.mode=="road" and st.stop_type=="truck" and api.worker_truck_stop then
+      if Sim.road_stop_tile_kind(st,tile,t)=="truck" and api.worker_truck_stop then
         return api.worker_truck_stop.open(p,tile)
       end
       if t.rail_station_id and api.rail_mail_tools and api.worker_rail_mail_station then
@@ -2986,7 +2986,7 @@ function U.context(p,tile,hit)
       end
       local name=st and st.name or site and site.name or t.terrain or "Tile"
       label=("%s · %d,%d"):format(name,x,z)
-      if st and st.mode=="road" and st.stop_type~="truck" and R.waiting_at then
+      if Sim.road_stop_tile_kind(st,tile,t)=="bus" and R.waiting_at then
         label=label..(" · %d waiting"):format(R.waiting_at("road",st.id) or 0)
       end
     end

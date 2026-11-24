@@ -7,7 +7,7 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
   local floor,max=math.floor,math.max
 
   function R.truck_stop(st)
-    return st and st.mode=="road" and st.stop_type=="truck"
+    return Sim.road_stop_has(st,"truck")
   end
   function R.supported_vehicle(v)
     return v and Sim.road_freight_cargo(v.engine)=="coal" and v.cargo=="coal"
@@ -202,11 +202,11 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
           event("transfer",st,v,{units=p.units,source_industry=p.source})
         end,
         unloaded=function(st) Station.unloaded(st) end,
-        transfer_income=function(st,_,p)
-          return payment_base(p,Packets.distance(p,st.tile,xy))
+        transfer_income=function(st,v,p)
+          return payment_base(p,Packets.distance(p,Sim.road_loading_tile(s,st,v),xy))
         end,
         deliver=function(st,v,p)
-          local distance=Packets.distance(p,st.tile,xy)
+          local distance=Packets.distance(p,Sim.road_loading_tile(s,st,v),xy)
           local result=Coal.delivery(st,B.report(st),p,{
             distance=distance,date=option("economy_date",tick) or s.day,
             current_payment=option("current_payment",tick),refused=ctx.refused,

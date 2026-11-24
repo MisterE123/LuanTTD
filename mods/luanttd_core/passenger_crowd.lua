@@ -61,7 +61,8 @@ return function(api)
     if worker_projection then return worker_projection.waiting(mode,id) end
     if mode=="road" then
       local st=S.stations[id]
-      local tile=st and S.tiles[st.tile]
+      local at=st and (st.bus_tile or st.tile)
+      local tile=at and S.tiles[at]
       if st and st.mode=="road" and st.stop_type~="truck" and tile and tile.build=="road_station" and tile.station==id then
         return Sim.waiting_passengers(S,st)
       end

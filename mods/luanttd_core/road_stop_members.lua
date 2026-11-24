@@ -39,6 +39,15 @@ return function(Sim)
   function M.structural_apply(st,q)
     st.road_members,st.road_stop_areas,st.spread=q.road_members,q.road_stop_areas,q.spread
     st.tile=q.sign
+    local function anchor(kind)
+      if q.road_members[q.sign]==kind then return q.sign end
+      local found
+      for id,t in pairs(q.road_members) do
+        if t==kind and (not found or id<found) then found=id end
+      end
+      return found
+    end
+    st.bus_tile,st.truck_tile=anchor("bus"),anchor("truck")
     st.stop_type=q.road_stop_areas.truck and not q.road_stop_areas.bus and "truck" or nil
   end
   return M

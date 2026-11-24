@@ -270,6 +270,36 @@ core.register_on_joinplayer(function(p)
       assert(snapshot.tiles[dest].station==base,"The separate road platform should have joined the selected station")
       assert(snapshot.stations[base].road_members[dest]=="bus")
       core.log("action","NATIVE_ROAD_GESTURE_STOP_JOIN_PASS")
+    elseif label=="stop-mix" then
+      assert(world.go_menu(player,"freight"))
+      local slot
+      for i,j in ipairs(world.hotbar_layout(player)) do if j==3 then slot=i end end
+      assert(slot and slot<=9)
+      aim(q.x+5,q.z,.25)
+      local show=core.show_formspec
+      core.show_formspec=function(user,form,body)
+        if user==name and form=="luanttd_core:road_terminal_layout" then
+          assert(body:find("Truck stop layout",1,true))
+          core.log("action","NATIVE_ROAD_GESTURE_STOP_MIX_OPEN")
+          core.show_formspec=show
+        end
+        return show(user,form,body)
+      end
+      core.log("action","NATIVE_ROAD_GESTURE_STOP_MIX slot="..slot)
+    elseif label=="stop-mix-done" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      local bus,truck=Sim.id(q.x+4,q.z),Sim.id(q.x+5,q.z)
+      local st=assert(snapshot.stations[snapshot.tiles[bus].station])
+      assert(snapshot.tiles[truck].station==st.id and st.road_members[truck]=="truck" and st.road_members[bus]=="bus")
+      assert(st.truck_tile==truck and st.road_stop_areas.bus and st.road_stop_areas.truck)
+      local function model(i)
+        local x,z=Sim.xy(i)
+        local t=snapshot.tiles[i]
+        return core.get_node({x=x*2,y=t.road_terminal_level+1,z=z*2}).name
+      end
+      local aa,bb=model(bus),model(truck)
+      assert(aa~=bb and not aa:find("freight",1,true) and bb:find("freight",1,true),aa.." and "..bb)
+      core.log("action","NATIVE_ROAD_GESTURE_STOP_MIX_PASS "..aa.." + "..bb)
     elseif label=="town-start" then ready("TOWN",7,q.tx,q.tz,.12)
     elseif label=="town-end" then
       aim(q.tx+2,q.tz,.75)
@@ -297,6 +327,11 @@ core.register_on_joinplayer(function(p)
         if core.settings:get_bool("luanttd_native_road_stop_join",false) then
           local dest=Sim.id(q.x+4,q.z)
           assert(snapshot.tiles[dest].station==b.station and st.road_members[dest]=="bus")
+          if core.settings:get_bool("luanttd_native_road_stop_mix",false) then
+            local truck=Sim.id(q.x+5,q.z)
+            assert(snapshot.tiles[truck].station==b.station and st.truck_tile==truck and st.road_members[truck]=="truck")
+            core.log("action","NATIVE_ROAD_GESTURE_STOP_MIX_REOPEN_PASS")
+          end
           core.log("action","NATIVE_ROAD_GESTURE_STOP_JOIN_REOPEN_PASS")
         end
         core.log("action","NATIVE_ROAD_GESTURE_STOP_REOPEN_PASS")

@@ -73,7 +73,7 @@ return function(Sim,Terrain,Stop,Underlay,rules)
     elseif kind=="station" then
       local st=s.stations[t.station]
       if not st or st.owner~=owner or t.road_stop_pair then return nil,"PROTECTED_TERMINAL_TILE" end
-      record.station,record.stop_type=st.id,st.stop_type or "bus"
+      record.station,record.stop_type=st.id,Sim.road_stop_tile_kind(st,id,t)
       record.through=t.stop_axis~=nil
       record.axis=t.stop_axis==5 and 1 or t.stop_axis==10 and 0 or nil
       -- Until multi-tile station edit/order placement is mounted, only

@@ -16,7 +16,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
     return v and pairs_by_cargo[v.cargo]~=nil and (pairs_by_cargo[v.cargo]==v.engine or
       Sim.road_freight_cargo(v.engine)==v.cargo) or false
   end
-  function R.truck_stop(st) return st and st.mode=="road" and st.stop_type=="truck" end
+  function R.truck_stop(st) return Sim.road_stop_has(st,"truck") end
   function R.bind(s,options)
     options=options or {}
     local xy=options.xy or Sim.xy

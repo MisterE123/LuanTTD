@@ -37,7 +37,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
   end
   local function compatible(st,v)
     return st and st.mode=="road" and
-      ((v.cargo=="passenger" and st.stop_type~="truck")
+      ((v.cargo=="passenger" and Sim.road_stop_has(st,"bus"))
         or ((v.cargo=="mail" or v.cargo=="coal" or timber_cargo(v.cargo)) and Mail.truck_stop(st)))
   end
 
@@ -94,12 +94,20 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     for _,id in ipairs(st.served or {}) do if eligible(s.sites[id]) then return s.sites[id] end end
   end
 
+  local function stop_tile(s,st,v)
+    return Sim.road_loading_tile(s,st,v)
+  end
+  local function cargo_stop(s,st,v)
+    local tile=stop_tile(s,st,v)
+    return tile==st.tile and st or {id=st.id,tile=tile}
+  end
+
   -- Public existing snapshot fields persist on vehicles for save/UI. Keep
   -- a transient ordered FIFO too, so a 74-tick visual frame doesn't drop
   -- two separate boarding slices before the renderer sees one.
   local frames=setmetatable({},{__mode="k"})
   local function push(s,v,kind,st,tick,rec)
-    rec.tile,rec.day,rec.tick=st.tile,s.day,tick
+    rec.tile,rec.day,rec.tick=stop_tile(s,st,v),s.day,tick
     local frame=frames[s]
     if not frame or ((frame[#frame] and frame[#frame].data.day or s.day)<s.day-16) then
       frame={};frames[s]=frame
@@ -152,9 +160,9 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     company.revenue=(company.revenue or 0)+amount
     company.month_rev=(company.month_rev or 0)+amount
   end
-  local function base_fare(st,v,p)
+  local function base_fare(s,st,v,p)
     if not p.origin_tile then return 0 end
-    local dist=Packets.distance(p,st.tile,Sim.xy)
+    local dist=Packets.distance(p,stop_tile(s,st,v),Sim.xy)
     return Income.regular(p.units,dist,p.age or 0,unpack(Income.temperate[v.cargo]))
   end
   local function apply_subsidy(s,v,p,site,money)
@@ -219,12 +227,12 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
       end,
       pickup=function(st,v,p)
         if timber_cargo(v.cargo) and timber and timber.pickup then return timber.pickup(st,v,p) end
-        return Packets.pickup(p,st,Sim.xy)
+        return Packets.pickup(p,cargo_stop(s,st,v),Sim.xy)
       end,
       drop=function(st,v,p)
         if not p.origin_tile then return end
         if timber_cargo(v.cargo) and timber and timber.drop then return timber.drop(st,v,p) end
-        return Packets.drop(p,st,Sim.xy)
+        return Packets.drop(p,cargo_stop(s,st,v),Sim.xy)
       end,
       station_done=(coal or timber) and function(st)
         if coal then coal.station_done() end
@@ -265,12 +273,12 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
             by_site[site.id]=(by_site[site.id] or 0)+p.units
           end
         end
-        return apply_subsidy(s,v,p,site,base_fare(st,v,p))
+        return apply_subsidy(s,v,p,site,base_fare(s,st,v,p))
       end,
       transfer_income=function(st,v,p)
         if v.cargo=="coal" then return coal.transfer_income(st,v,p) end
         if timber_cargo(v.cargo) then return timber.transfer_income(st,v,p) end
-        return base_fare(st,v,p)
+        return base_fare(s,st,v,p)
       end,
       payment=function(st,v,payment)
         if v.cargo=="coal" then return coal.payment(st,v,payment) end

@@ -45,7 +45,7 @@ return function(Sim,s,F,occupancy)
         out.kind,out.dir="bay_stop",dir
       end
       out.station=t.station
-      out.stop_type=t.road_stop_type or st.stop_type or "bus"
+      out.stop_type=Sim.road_stop_tile_kind(st,id,t)
       out.pair=t.road_stop_pair==true and out.kind=="bay_stop" and out.stop_type=="bus"
     elseif t.build=="road" and t.road_waypoint_id then
       local wp=s.stock_road_waypoints and s.stock_road_waypoints[t.road_waypoint_id]

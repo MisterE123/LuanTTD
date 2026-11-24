@@ -34,8 +34,10 @@ entrance direction and left-click the tile to build. At bus and truck
 stops, an explicit layout also enables click-and-drag. Bays size along
 a single strip; **east–west** and **north–south through** stops size
 a rectangle. The whole footprint needs matching platform heights.
-Adjacent compatible stops join into one station with a shared cargo
-queue and orders. Hold **E** while releasing to choose **New station**
+Adjacent compatible stops join into one station with shared orders.
+Bus and truck facilities can coexist at one station; buses call at
+passenger platforms, while mail vans and freight trucks use their
+loading platforms. Each cargo keeps its own queue. Hold **E** while releasing to choose **New station**
 or join an eligible owned station across a gap. The original spread
 limit applies to the combined footprint.
 **Auto orientation** retains the default quick-placement behavior.
@@ -52,9 +54,9 @@ In **Roadworks → Stops & Waypoints → Remove road stop**, click or
 drag to remove owned platforms without removing their through road.
 Orders remain valid while at least one usable platform remains; the
 tool won't remove a final platform that is still in vehicle orders.
-The tools protect unrelated facilities and competitor roads. Mixing
-bus, truck, tram or other transport facilities into one station and
-reusing the identity of a deleted station are still separate work.
+The tools protect unrelated facilities and competitor roads. Using
+one station across tram or other transport modes, and reusing the
+identity of a deleted station, are still separate work.
 
 ## Route a vehicle through a waypoint
 
@@ -128,6 +130,11 @@ a different drag never inherits the old quote.
   type and ownership, and joining distance. The graphical focus run
   with `LUANTTD_NATIVE_STOP_JOIN=1` picks a nonadjacent existing station
   and verifies the joined ID after reopening.
+- `tests/road_mixed_station.lua` runs a paid bus and mail van through
+  different physical parts of the same station IDs and tests removing
+  the last compatible platform. The graphical focus run with
+  `LUANTTD_NATIVE_STOP_MIX=1` uses the regular truck layout selector,
+  verifies the platform meshes and reopens the mixed station.
 
 Remaining: road and tram facility and bridge/tunnel removal through
 this tool, recently deleted station and waypoint reuse, cross-mode

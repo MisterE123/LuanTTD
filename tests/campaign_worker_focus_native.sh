@@ -79,6 +79,9 @@ fi
 if [[ ${LUANTTD_NATIVE_STOP_JOIN:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_road_stop_join = true' >> "$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_STOP_MIX:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_road_stop_mix = true' >> "$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}
@@ -197,6 +200,17 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
       xdotool mousemove 778 529 click 1
       sleep 1.1
       do_road stop-join-done STOP_JOIN_PASS
+      if [[ ${LUANTTD_NATIVE_STOP_MIX:-0} == 1 ]]; then
+        do_road stop-mix STOP_MIX
+        slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_STOP_MIX slot=//p' "$log" | tail -1)
+        xdotool key "$slot"; sleep .4; xdotool click 3
+        await_log NATIVE_ROAD_GESTURE_STOP_MIX_OPEN
+        sleep .45; xdotool mousemove 403 449 click 1
+        sleep .45; xdotool mousedown 1; sleep .4; xdotool mouseup 1
+        sleep 1.35
+        do_road stop-mix-done STOP_MIX_PASS
+        import -window root "$out/road-stop-joined-mix.jpg"
+      fi
     fi
   fi
   if [[ ${LUANTTD_NATIVE_ROAD_MUNICIPAL:-0} == 1 ]]; then

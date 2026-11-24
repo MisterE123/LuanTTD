@@ -30,7 +30,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   function M.house_acceptance(id) return house_accept[id] end
 
   function M.truck_stop(st)
-    return st and st.mode=="road" and st.stop_type=="truck"
+    return Sim.road_stop_has(st,"truck")
   end
 
   function M.supported_vehicle(v)

@@ -136,7 +136,7 @@ return function(Sim,s,oneway,Bank)
       return {id=st.id,name=st.name,tile=st.tile,owner=st.owner,
         spread=st.spread or st.area or {tile=st.tile,w=1,h=1},
         eligible=waypoint and st.axis==q.axis or not waypoint and st.mode=="road"
-          and (st.stop_type or "bus")==request.kind and not s.tiles[st.tile].road_stop_pair}
+          and not s.tiles[st.tile].road_stop_pair}
     end
     function board.matches(st) return st.eligible end
     local rows={}
