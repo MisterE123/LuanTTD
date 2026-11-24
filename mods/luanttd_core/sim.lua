@@ -1053,11 +1053,21 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
   end
   if t.stock_landmark then return nil,"This landmark is protected." end
   if t.site or t.stock_industry then return nil,"Cannot build on a town centre or industry." end
-  if t.owner and t.owner~=owner and not t.road_town then
+  local coast=s.corner_grid and t.terrain=="water" and t.coastal_water and not t.build
+  if t.owner and t.owner~=owner and not t.road_town and not coast then
     return nil,"Another company owns that tile."
   end
   if t.house then return nil,"Bulldoze that building first." end
-  if wet(s,id) then return nil,"Use a bridge over open water." end
+  local coast_cost
+  if wet(s,id) then
+    if not coast then return nil,"Use a bridge over open water." end
+    -- RC1 CmdBuildRoad calls LandscapeClear with NoWater. That flag
+    -- rejects real water, not Coast/CoastRocks (ClearTile_Water).
+    -- Clearing changes the tile type, not its corner heights.
+    local why
+    coast_cost,why=quote_water_clear(s,owner,id)
+    if not coast_cost then return nil,water_clear_errors[why] or why end
+  end
   local existing=bits_for(s,id,t)
   if t.road_waypoint_id then
     local _,added=new_pieces(request,existing)
@@ -1111,11 +1121,12 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
     return nil,"The road and tram tracks must share the same foundation."
   end
   local clear_site=count>0 and t.build==nil and other==0
-  local clearing=clear_site and M.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[id]) or 0
+  local clearing=coast_cost or (clear_site and M.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[id]) or 0)
   local cost=count*M.road_piece_price+(foundation==true and M.road_foundation_price or 0)+clearing
   local proposed={id=id,tool=t.build or "road",build=t.build or "road",
     road_bits=combined,owner=(not t.road_town and owner or nil),
-    road_town=t.road_town,depot_dir=t.depot_dir,h=t.h,clear_road_site=clear_site,road_site_cost=clearing,
+    road_town=t.road_town,depot_dir=t.depot_dir,h=t.h,clear_road_site=clear_site,
+    clear_road_coast=coast_cost~=nil or nil,road_site_cost=clearing,
     road_tree_town=clear_site and t.wood and M.road_tree_authority().tree_town(s,id) or nil}
   -- A change of foundation must not be made under a vehicle.
   if cost>0 and (other~=0 or t.build and (t.road_town or
@@ -2081,6 +2092,7 @@ local function apply_build(s,owner,changes,cost)
       tile.stock_clear_ground,tile.stock_clear_density=nil,nil
       if s.stock_farm_fields then s.stock_farm_fields[id]=nil end
     end
+    if item.clear_road_coast then coastal_world.clear_apply(s,id) end
     if item.crossing_quote then
       M.apply_crossing_construction(s,item.crossing_quote)
       crossing_changed=true

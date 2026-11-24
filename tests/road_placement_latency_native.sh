@@ -23,6 +23,9 @@ printf 'port = %s\nprometheus_listener_address = 127.0.0.1:%s\nbind_address = 12
 if [[ ${LUANTTD_NATIVE_BENCH_REMOVE:-0} == 1 ]]; then
   printf "luanttd_bench_remove = true\n" >> "$out/server.conf"
 fi
+if [[ ${LUANTTD_NATIVE_COAST_ROAD:-0} == 1 ]]; then
+  printf "luanttd_coast_road = true\n" >> "$out/server.conf"
+fi
 timeout 100 luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' > "$out/server.log" 2>&1 || {
   tail -80 "$out/server.log"
   exit 1

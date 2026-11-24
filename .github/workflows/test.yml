@@ -43,6 +43,7 @@ jobs:
             lua5.1 "tests/$t.lua"
           done
           lua5.1 tests/road_proximity.lua
+          lua5.1 tests/stock_road_coast.lua
           lua5.1 tests/road_traffic_runtime.lua
           lua5.1 tests/tram_preview_run.lua
           lua5.1 tests/tram_shared_road_live.lua
@@ -187,6 +188,7 @@ jobs:
           python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
           bash tests/road_placement_latency_native.sh
           LUANTTD_NATIVE_BENCH_REMOVE=1 bash tests/road_placement_latency_native.sh
+          LUANTTD_NATIVE_COAST_ROAD=1 bash tests/road_placement_latency_native.sh
           bash tests/place_labels_worker_native.sh
           BAYLINE_NATIVE_DISPLAY=313 bash tests/place_labels_graphical.sh
           BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=312 BAYLINE_NATIVE_PORT=46712 BAYLINE_NATIVE_BRIDGE_ROAD_CLEAR=1 LUANTTD_NATIVE_BRIDGE_GROUND_STOP=1 timeout 190 bash tests/bridge_pier_render_native.sh

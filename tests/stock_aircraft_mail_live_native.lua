@@ -242,8 +242,9 @@ local function work()
       -- packets belong to the town receipt, not the aircraft payout.
       local road_pending=0
       for _,truck in pairs(s.fleet) do
-        if truck.owner==road_owner and truck.cargo=="mail" and truck.load_state then
-          road_pending=road_pending+truck.load_state.payment.delivered
+        local payment=truck.load_state and truck.load_state.payment
+        if truck.owner==road_owner and truck.cargo=="mail" and payment then
+          road_pending=road_pending+payment.delivered
         end
       end
       assert((s.sites[1].received.mail or 0)+s.sites[2].received.mail==

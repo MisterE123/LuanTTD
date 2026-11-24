@@ -9,15 +9,55 @@ local step,trial,running=0,0,nil
 local id=function(x,z) return (z-1)*64+x end
 local s=Sim.new(1751)
 Sim.W,Sim.H=64,64
-s.corner_grid=T.new(64,64,function()return 1 end)
+local coast=core.settings:get_bool("luanttd_coast_road",false)
+s.corner_grid=T.new(64,64,function(x)return (not coast or x>12) and 1 or 0 end)
 s.tiles,s.sites={},{}
-for i=1,4096 do s.tiles[i]={terrain="grass",variant=1,h=1} end
+for i=1,4096 do
+  local x=(i-1)%64+1
+  local water=coast and x<=12
+  s.tiles[i]={terrain=water and "water" or "grass",variant=1,h=water and 0 or 1,
+    water_class=water and "sea" or nil,coastal_water=coast and x==12 or nil}
+end
 s.road_stock_clock,s.road_economy=true,true
 s.speed=0
 Sim.company(s,owner).cash=1000000
 local cp=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
 local receipts,projection={},{}
 local remove=core.settings:get_bool("luanttd_bench_remove",false)
+local shore={tool="bend",first=id(12,8),last=id(15,13)}
+local sea={tool="bend",first=id(11,8),last=id(15,13)}
+local coast_run="preview"
+local quote
+local function coastal(view)
+  local t=view.terrain(12,8)
+  if not t then return end
+  if coast_run=="preview" then
+    assert(t.surface.coastal_water==true and t.ground=="water")
+    local q,why,pending=Build.preview(owner,"road",shore,core.get_us_time())
+    if pending then return end
+    assert(q,why);assert(#q.tiles==9 and q.cost>240)
+    quote=q
+    coast_run="placing"
+    assert(Build.commit(owner,"road",shore,function(ok,note,prior,tiles)
+      assert(ok,note)
+      assert(prior.ticket==quote.ticket and #tiles==#q.tiles)
+      coast_run="projected"
+    end))
+  elseif coast_run=="projected" and t.build=="road" then
+    assert(t.ground=="grass" and not t.surface.coastal_water and not t.water)
+    assert(view.terrain(11,8).ground=="water")
+    coast_run="blocking"
+    assert(Build.commit(owner,"road",sea,function(ok,why)
+      assert(not ok and tostring(why):find("bridge over open water",1,true),why)
+      local state=assert(cp.read())
+      assert(state.companies[owner].cash==1000000-quote.cost)
+      assert(state.tiles[id(12,8)].build=="road" and not state.tiles[id(12,8)].coastal_water)
+      assert(state.tiles[id(11,8)].terrain=="water" and not state.tiles[id(11,8)].build)
+      core.log("action","ROAD_PLACEMENT_NATIVE_PASS mode=coast preview, receipt, projected pavement and durable ledger agree; real sea rejected")
+      core.request_shutdown("Coast road verified.",false,0)
+    end))
+  end
+end
 local finish_seen
 if remove then
   for k=1,8 do
@@ -68,6 +108,7 @@ H=m("campaign_authority_host")(core,path,{
   stopped=function(why,_,_,detail) error(tostring(detail or why)) end,
   present=function(view,motion)
     if motion or not Build then return end
+    if coast then coastal(view);return end
     if trial==0 and view.terrain(8,24) then
       trial=-1
       core.after(.031,function()trial=0;place()end)
@@ -88,5 +129,5 @@ core.register_on_mods_loaded(function()
   assert(H.start({road={start_year=1950,breakdowns=0,service_interval=0},autoplay=false,durable_actions=true},64,64))
 end)
 core.register_globalstep(function(dt)
-  H.step(dt,{{name=owner,x=64,y=4,z=64}},1)
+  H.step(dt,{{name=owner,x=coast and 24 or 64,y=4,z=coast and 24 or 64}},1)
 end)
