@@ -100,6 +100,7 @@ return function(Sim,Terrain,Stop,Underlay,rules)
     edit.build=edit.tool
     if kind=="clear" then
       edit.clear_road_site=true
+      edit.clear_owned_land=Sim.is_owned_land and Sim.is_owned_land(t) or nil
       edit.road_tree_town=t.wood and Sim.road_tree_authority().tree_town(s,id) or nil
     end
     if rules.facility then

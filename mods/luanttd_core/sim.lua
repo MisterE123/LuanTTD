@@ -493,7 +493,7 @@ function M.rail_span_protected(s,id)
     or s.rail_tunnel_below and s.rail_tunnel_below[id])
 end
 local coastal_occupied=setmetatable({},{__mode="k"})
-local stock_rail_ground,stock_tree_lifecycle,stock_tree_plant
+local stock_rail_ground,stock_tree_lifecycle,stock_tree_plant,stock_land_rules
 function M.mount_coastal_flood(s,occupied)
   assert(s.corner_grid and s.road_economy and s.road_stock_house_supply,
     "Stock coastal flooding requires shared corners and the source landscape clock.")
@@ -659,6 +659,74 @@ function M.plant_tree(s,owner,first,last,diagonal,species,execute)
   s.topology=(s.topology or 0)+1
   return plan
 end
+local function land_rules()
+  if not stock_land_rules then
+    load_road_rules()
+    stock_land_rules=dofile(module_root.."openttd/owned_land.lua")(landscape_rules)
+  end
+  return stock_land_rules
+end
+function M.is_owned_land(t) return t and t.stock_object and t.stock_object.kind=="owned_land" or false end
+function M.owned_land_resale() return land_rules().resale() end
+function M.purchase_land(s,owner,first,last,diagonal,execute)
+  local company=s.companies[owner]
+  if not (s.stock_generated_profile and s.corner_grid and company) then return nil,"LAND_PURCHASE_UNAVAILABLE" end
+  local K=land_rules()
+  local towns=s.stock_town_growth and s.stock_town_growth.towns
+  local reserve=clear_area_rules.replenish(company.clear_limit,0)
+  local function tile(x,z)
+    local id=M.id(x,z)
+    local t=id and s.tiles[id]
+    if not t or t.stock_void then return nil,"TOO_CLOSE_TO_EDGE_OF_MAP" end
+    if M.is_owned_land(t) then return {kind="owned_land",owner=t.owner,id=id} end
+    if t.owner and t.owner~=owner then return nil,"OWNED_BY_ANOTHER" end
+    if t.build or t.site or t.house or t.station or t.stock_industry or t.stock_landmark or t.stock_object or
+        t.ship or t.airfield or t.tram or t.rail_tracks or t.level_crossing or t.rail_span_id
+        or s.tunnel_below and s.tunnel_below[id] or s.rail_tunnel_below and s.rail_tunnel_below[id] then
+      return nil,"SITE_UNSUITABLE"
+    end
+    return {id=id,kind=t.terrain=="water" and "water" or "clear",
+      bridge_above=s.bridge_above and s.bridge_above[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
+        s.aqueduct_above and s.aqueduct_above[id]}
+  end
+  local x,z=M.xy(first)
+  local u,v=M.xy(last)
+  local p,why=K.quote(s.corner_grid,x,z,u,v,diagonal,{towns=towns and next(towns)~=nil,tile=tile,
+    owner=owner,cash=company.cash,allowance=company.stock_object_limit,clear_allowance=reserve,
+    clear=function(cell)
+      local t=s.tiles[cell.id]
+      if cell.kind=="water" then
+        if t.wood then return nil,"SITE_UNSUITABLE" end
+        return quote_water_clear(s,owner,cell.id)
+      end
+      return M.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[cell.id])
+    end})
+  if not p then return nil,why end
+  local ids={}
+  for _,a in ipairs(p.items) do
+    local cell=a.tile
+    ids[#ids+1]=cell.id
+    if execute then
+      local t=s.tiles[cell.id]
+      if cell.kind=="water" then coastal_world.clear_apply(s,cell.id) end
+      if t.wood then
+        local authority=M.road_tree_authority()
+        authority.clear_road_trees(company,authority.tree_town(s,cell.id))
+      end
+      if s.stock_farm_fields then s.stock_farm_fields[cell.id]=nil end
+      t.wood,t.stock_clear_ground,t.stock_clear_density=nil,nil,0
+      t.owner=owner
+      t.stock_object={kind="owned_land"}
+    end
+  end
+  p.ids=ids
+  if execute then
+    company.stock_object_limit,company.clear_limit=p.allowance,p.clear_allowance
+    debit(company,p.cost)
+    s.topology=(s.topology or 0)+1
+  end
+  return p
+end
 function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
   if not s.corner_grid then return false,"Enable shared-corner terrain first." end
   load_road_rules()
@@ -751,6 +819,7 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
     local kind
     if t.stock_void or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or M.rail_span_protected(s,id) then
       kind="obstruction"
+    elseif M.is_owned_land(t) then kind="owned_land"
     elseif t.rail_tracks and not t.rail_station_id and t.rail_depot_dir==nil then
       -- CheckBuildAbove_Rail admits stock plain rail, including signals.
       -- The ordinary rail and its dispatch state remain independent.
@@ -763,6 +832,10 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
       overhead=existing and {axis=existing.axis,deck=existing.deck}}
   end
   board.clear_quote=function(id,t,role)
+    if t.kind=="owned_land" then
+      if t.owner==owner then return -M.owned_land_resale() end
+      return nil,"OWNED_BY_ANOTHER"
+    end
     if t.kind=="clear" and (not t.owner or t.owner==owner) then return 0 end
     if role=="head" and t.kind=="coast" then
       -- RC1 CmdBuildBridge clears either ramp with LandscapeClear
@@ -777,6 +850,10 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
     -- This native adapter still lacks stock barren/rough ground mutation;
     -- only existing clean ground is admitted by its limited quote.
     if t.kind=="clear" then return 0 end
+    if t.kind=="owned_land" then
+      if t.owner==owner then return -M.owned_land_resale(),nil,true end
+      return nil,"OWNED_BY_ANOTHER"
+    end
     return nil,"BRIDGE_MIDDLE_OBSTRUCTED"
   end}
   function board.check_build_above(_,t,axis,deck)
@@ -811,6 +888,11 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
   s.stock_road_bridges=s.stock_road_bridges or {}
   s.bridge_above=s.bridge_above or {}
   s.stock_road_bridges[bridge]=plan
+  -- Stock objects with no AllowUnderBridge flag are sold by LandscapeClear.
+  for _,id in ipairs(plan.clears) do
+    local t=s.tiles[id]
+    if M.is_owned_land(t) then t.owner,t.stock_object=nil,nil end
+  end
   local dirty={plan.start,plan["end"]}
   for _,head in ipairs(dirty) do
     local t=s.tiles[head]
@@ -876,6 +958,10 @@ function M.road_tunnel(s,owner,start,quote_only)
   end
   board.clear=function(id)
     local t=s.tiles[id]
+    if M.is_owned_land(t) and t.owner==owner and not (M.rail_span_protected(s,id) or
+        s.bridge_above and s.bridge_above[id] or s.tunnel_below and s.tunnel_below[id]) then
+      return -M.owned_land_resale()
+    end
     if t and not (t.owner or t.build or t.tram or t.ship or t.airfield or t.site or t.stock_industry or t.stock_landmark or t.house or t.wood or t.terrain=="water"
         or M.rail_span_protected(s,id)
         or s.bridge_above and s.bridge_above[id] or s.tunnel_below and s.tunnel_below[id]) then return 0 end
@@ -908,6 +994,7 @@ function M.road_tunnel(s,owner,start,quote_only)
   local dirty={plan.start,plan["end"]}
   for _,id in ipairs(dirty) do
     local t=s.tiles[id]
+    if M.is_owned_land(t) then t.stock_object=nil end
     t.build,t.owner,t.road_tunnel_id="stock_road_tunnel",owner,key
   end
   for _,id in ipairs(plan.middle) do keys[id]=key end
@@ -1061,6 +1148,7 @@ function M.road_tree_authority()
   return town_road_authority
 end
 function M.road_site_clear_cost(t,farm_field)
+  if M.is_owned_land(t) then return -M.owned_land_resale() end
   if t.wood then return 20*(type(t.wood)=="table" and t.wood.count or 1) end
   local kind=farm_field and 3 or t.stock_clear_ground or 0
   if kind==0 then return t.stock_clear_density==0 and 0 or 20 end
@@ -1244,12 +1332,14 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
     return nil,"The road and tram tracks must share the same foundation."
   end
   local clear_site=count>0 and t.build==nil and other==0
-  local clearing=coast_cost or (clear_site and M.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[id]) or 0)
+  local owned=clear_site and M.is_owned_land(t)
+  local clearing=coast_cost or (owned and -M.owned_land_resale()
+    or clear_site and M.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[id]) or 0)
   local cost=count*M.road_piece_price+(foundation==true and M.road_foundation_price or 0)+clearing
   local proposed={id=id,tool=t.build or "road",build=t.build or "road",
     road_bits=combined,owner=(not t.road_town and owner or nil),
     road_town=t.road_town,depot_dir=t.depot_dir,h=t.h,clear_road_site=clear_site,
-    clear_road_coast=coast_cost~=nil or nil,road_site_cost=clearing,
+    clear_road_coast=coast_cost~=nil or nil,road_site_cost=clearing,clear_owned_land=owned or nil,
     road_tree_town=clear_site and t.wood and M.road_tree_authority().tree_town(s,id) or nil}
   -- A change of foundation must not be made under a vehicle.
   if cost>0 and (other~=0 or t.build and (t.road_town or
@@ -2064,7 +2154,11 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
       end
       local water=tool=="clear" and s.corner_grid and not t.wood and
         (t.terrain=="water" or t.build=="canal" or t.stock_canal)
-      if water then
+      if M.is_owned_land(t) and tool=="clear" then
+        if t.owner~=owner then return nil,"Another company owns that tile." end
+        result[#result+1]={id=id,tool=tool,clear_owned_land=true}
+        total=total-M.owned_land_resale()
+      elseif water then
         local price,why=quote_water_clear(s,owner,id)
         if not price then return nil,water_clear_errors[why] or why end
         result[#result+1]={id=id,tool=tool,water_clear=true}
@@ -2211,6 +2305,7 @@ local function apply_build(s,owner,changes,cost)
     local id,k=item.id,item.tool
     local tile=s.tiles[id]
     local had_sign=road_sign(tile)~=0
+    if item.clear_owned_land then tile.stock_object,tile.owner=nil,nil end
     if item.road_tree_town and M.road_tree_authority().clear_road_trees(c,item.road_tree_town) then tree_rating_changed=true end
     if item.clear_road_site then
       tile.stock_clear_ground,tile.stock_clear_density=nil,nil
@@ -4644,6 +4739,7 @@ function M.daily(s,traverse)
       if c.terraform_limit then c.terraform_limit=landscape_rules.replenish(c.terraform_limit,74) end
       if c.clear_limit then c.clear_limit=clear_area_rules.replenish(c.clear_limit,74) end
       if c.stock_tree_plant_limit then c.stock_tree_plant_limit=stock_plant_rules().replenish(c.stock_tree_plant_limit,74) end
+      if c.stock_object_limit then c.stock_object_limit=land_rules().replenish(c.stock_object_limit,74) end
     end
   end
   local road_supply=s.road_economy and {}

@@ -52,7 +52,9 @@ return function(api,Lab,Track,Run,prices)
     local t=S.tiles[id]
     if not t then return end
     local shape,base=api.terrain.tile(id)
-    local r=Lab.board(S).tile(id)
+    local r
+    if Sim.is_owned_land and Sim.is_owned_land(t) then r={kind="owned_land",owner=t.owner,railtype=0}
+    else r=Lab.board(S).tile(id) end
     if not r then
       r={kind="clear",owner=t.owner,railtype=0}
       if t.stock_void or t.build or t.site or t.house or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or t.owner then
@@ -75,6 +77,7 @@ return function(api,Lab,Track,Run,prices)
     return r
   end
   local function clear_quote(t)
+    if t.kind=="owned_land" and not t.subsurface then return -Sim.owned_land_resale() end
     if t.kind=="clear" and not t.subsurface then return 20 end
     -- OpenTTD 16.0-RC1 ClearTile_Trees charges ClearTrees (20) per temperate stem.
     -- Tree removal is committed by the track piece itself, never by quoting.

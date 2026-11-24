@@ -18,6 +18,11 @@ return function(Sim,s)
       if (math.abs(u-x)+1)*(math.abs(v-z)+1)>256 then return nil,"TERRAIN_SELECTION_TOO_LARGE" end
     end
     local a={operation=op,first=first,last=last,diagonal=request.diagonal==true}
+    if op=="purchase_land" then
+      local plan,why=Sim.purchase_land(s,owner,first,last or first,a.diagonal,false)
+      if not plan then return nil,why end
+      return {request=a,cost=plan.cost,tiles=plan.ids,topology=s.topology,terrain=s.corner_grid.revision}
+    end
     if op=="plant_tree" then
       a.species=request.species
       local plan,why=Sim.plant_tree(s,owner,first,last or first,a.diagonal,a.species,false)
@@ -57,6 +62,11 @@ return function(Sim,s)
       return false,"TERRAIN_QUOTE_CHANGED"
     end
     local r=q.request
+    if r.operation=="purchase_land" then
+      local p,why=Sim.purchase_land(s,owner,r.first,r.last or r.first,r.diagonal,true)
+      if not p then return false,why end
+      return true,("Bought %d land %s for $%d."):format(#p.ids,#p.ids==1 and "tile" or "tiles",p.cost),p.ids
+    end
     if r.operation=="plant_tree" then
       local p,why=Sim.plant_tree(s,owner,r.first,r.last or r.first,r.diagonal,r.species,true)
       if not p then return false,why end
@@ -65,7 +75,10 @@ return function(Sim,s)
     if r.operation=="bulldoze" then
       local changed,why=Sim.clear_area(s,owner,r.first,r.last or r.first,r.diagonal,true)
       if not changed then return false,why end
-      return true,("Bulldozed %d tile(s) for $%d."):format(#changed.ids,changed.cost),changed.dirty
+      local note
+      if changed.cost<0 then note=("Cleared %d tile(s), receiving $%d."):format(#changed.ids,-changed.cost)
+      else note=("Bulldozed %d tile(s) for $%d."):format(#changed.ids,changed.cost) end
+      return true,note,changed.dirty
     end
     local x,z=Sim.xy(r.first)
     local u,v

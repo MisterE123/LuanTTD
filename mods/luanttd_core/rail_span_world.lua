@@ -136,6 +136,7 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
         if not dirt.deck then dirt.kind="obstructed" end
       elseif t.build=="road" then dirt.kind="road"
       elseif t.terrain=="water" and not (t.ship or t.build) then dirt.kind="water"
+      elseif Sim.is_owned_land and Sim.is_owned_land(t) then dirt.kind="owned_land"
       elseif t.wood or t.site or t.house or t.build or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or t.owner then
         dirt.kind="obstructed"
       end
@@ -147,7 +148,11 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
       if o then dirt.overhead={deck=o.deck,axis=o.axis} end
       return dirt
     end
-    function q.clear_quote(_,t)
+    function q.clear_quote(_,t,role,owner)
+      if t.kind=="owned_land" and not t.overhead and not t.underground then
+        if t.owner==owner then return -Sim.owned_land_resale() end
+        return nil,"OWNED_BY_ANOTHER"
+      end
       if t.kind~="clear" or t.owner or t.overhead or t.underground then
         return nil,"Choose a clear rail portal tile; the existing layer is protected."
       end
@@ -283,6 +288,10 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
     s.stock_rail_spans=s.stock_rail_spans or {}
     s.stock_rail_spans[key]=p
     local dirty={p.start,p["end"]}
+    for _,id in ipairs(p.clears or {}) do
+      local t=s.tiles[id]
+      if Sim.is_owned_land and Sim.is_owned_land(t) then t.owner,t.stock_object=nil,nil end
+    end
     for _,id in ipairs(dirty) do
       local t=s.tiles[id]
       t.build,t.owner,t.rail_span_id=p.kind=="bridge" and "stock_rail_bridge" or "stock_rail_tunnel",owner,key

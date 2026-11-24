@@ -85,6 +85,7 @@ return function(Track,Signal,Height)
       if occupied(tile) then return nil,"VEHICLE_IN_THE_WAY" end
       return cost(o,one_corner[shape] and "clear_water" or "clear_rough")
     end
+    if tile.kind=="owned_land" and not check_owner(tile,o) then return nil,"OWNED_BY_ANOTHER" end
     if plain(tile) or tile.kind=="depot" then
       if not check_owner(tile,o) then return nil,"OWNED_BY_ANOTHER" end
       return nil,plain(tile) and "MUST_REMOVE_RAILROAD_TRACK" or "BUILDING_MUST_BE_DEMOLISHED"

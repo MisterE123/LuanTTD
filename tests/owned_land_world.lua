@@ -1,0 +1,112 @@
+local m="mods/luanttd_core/"
+local function load(p) return dofile(m..p..".lua") end
+local Sim,Terrain=load("sim"),load("openttd/terrain")
+local Codec=load("packed_campaign")
+local Projection=load("campaign_terrain_projection")
+local K=load("openttd/owned_land")(load("openttd/landscaping")(Terrain))
+Sim.W,Sim.H=64,64
+local s=Sim.new(1950)
+s.tiles,s.sites={},{}
+s.stock_generated_profile={width=64,depth=64}
+s.stock_town_growth={towns={}}
+s.corner_grid=Terrain.new(64,64,function(x,z) return x==10 and z==9 and 1 or 0 end,{freeform_edges=true})
+for id=1,64*64 do s.tiles[id]={terrain="grass",h=0,variant=0} end
+local c=Sim.company(s,"Builder")
+local other=Sim.company(s,"Other")
+local Cmd=load("campaign_landscape_commands")(Sim,s)
+local a,b,d=Sim.id(6,8),Sim.id(7,8),Sim.id(9,8)
+local req={operation="purchase_land",first=a,last=b}
+local q,e=Cmd.quote("Builder",req)
+assert(not q and e=="MUST_FOUND_TOWN_FIRST")
+s.stock_town_growth.towns[1]={id=1,x=6,z=6}
+s.sites[1]={id=1,kind="town",tile=Sim.id(6,6)}
+q=assert(Cmd.quote("Builder",req))
+assert(q.cost==840 and q.tiles[1]==a and q.tiles[2]==b and c.cash==100000)
+local ok,msg=Cmd.commit("Builder",q);assert(ok,msg)
+assert(c.cash==99160 and c.stock_object_limit==(2048-2)*65536 and c.clear_limit==(4096-2)*65536)
+assert(Sim.is_owned_land(s.tiles[a]) and s.tiles[b].owner=="Builder")
+assert(Projection.tile(s.tiles[a]).stock_object.kind=="owned_land")
+local save=assert(Codec.decode(Codec.encode(s)))
+assert(save.tiles[a].stock_object.kind=="owned_land" and save.companies.Builder.stock_object_limit==c.stock_object_limit)
+q,e=Cmd.quote("Builder",{operation="purchase_land",first=a})
+assert(not q and e=="YOU_ALREADY_OWN_IT")
+q,e=Cmd.quote("Other",{operation="purchase_land",first=a})
+assert(not q and e=="OWNED_BY_ANOTHER")
+q,e=Cmd.quote("Other",{operation="bulldoze",first=a})
+assert(not q and other.cash==100000 and s.tiles[a].owner=="Builder")
+q=assert(Cmd.quote("Builder",{operation="bulldoze",first=a}))
+assert(q.cost==-80)
+ok,msg=Cmd.commit("Builder",q);assert(ok,msg)
+assert(c.cash==99240 and not Sim.is_owned_land(s.tiles[a]) and not s.tiles[a].owner)
+local rows,price=Sim.plan(s,"Builder","road",{b})
+assert(rows and rows[1].clear_owned_land and price==110,tostring(price))
+ok,msg=Sim.build(s,"Builder","road",{b})
+assert(ok and s.tiles[b].build=="road" and not Sim.is_owned_land(s.tiles[b]) and c.cash==99130,msg)
+-- No foundation is bought with a company stake, even on a slope.
+q=assert(Cmd.quote("Builder",{operation="purchase_land",first=d}))
+assert(q.cost==420 and Terrain.tile(s.corner_grid,9,8)~=0)
+ok,msg=Cmd.commit("Builder",q);assert(ok,msg)
+s.bridge_above={[a]=3}
+q,e=Cmd.quote("Builder",{operation="purchase_land",first=a})
+assert(not q and e=="MUST_DEMOLISH_BRIDGE_FIRST")
+local road_depot,track,rail_depot,platform,plain=Sim.id(15,16),Sim.id(18,17),Sim.id(20,18),Sim.id(23,19),Sim.id(28,20)
+local function buy(id)
+  local q=assert(Cmd.quote("Builder",{operation="purchase_land",first=id}))
+  local ok,msg=Cmd.commit("Builder",q);assert(ok,msg)
+end
+buy(road_depot)
+local plan=assert(Sim.stock_road_terminal_plan(s,"Builder",road_depot,{kind="depot",dir=0}))
+local blank=assert(Sim.stock_road_terminal_plan(s,"Builder",plain,{kind="depot",dir=0}))
+assert(plan.cost==blank.cost-100)
+assert(Sim.apply_road_construction(s,"Builder",plan))
+assert(not Sim.is_owned_land(s.tiles[road_depot]) and s.tiles[road_depot].build=="road_depot")
+local Track,Slope=load("openttd/rail_track"),load("openttd/slope")
+local function tile(id)
+  local x,z=Sim.xy(id)
+  return Terrain.tile(s.corner_grid,x,z)
+end
+local lab=load("trackworks")(Sim,Track,nil,Slope,nil,nil,tile)
+local rail=load("campaign_simulation_bindings")(Sim,m:gsub("/$","")).rail_build(
+  {Sim=Sim,s=s,terrain={tile=tile},trackworks=lab,render={update=function() end},save=function() end},
+  {lab=lab,track=Track,slope=Slope})
+local function replaces(id,quote)
+  buy(id)
+  assert(not quote("Other",id))
+  local q=assert(quote("Builder",id))
+  local empty=assert(quote("Builder",plain))
+  assert(q.price==empty.price-100,(q.price or "?").." vs "..(empty.price or "?"))
+  local before=c.cash
+  assert(rail.build("Builder",q))
+  assert(c.cash==before-q.price and s.tiles[id].rail_tracks and not Sim.is_owned_land(s.tiles[id]))
+end
+replaces(track,function(owner,id) return rail.quote_track(owner,id,id,0,false,0) end)
+replaces(rail_depot,function(owner,id) return rail.quote_depot(owner,id,2,0) end)
+replaces(platform,function(owner,id) return rail.quote_station(owner,id,id,{axis=0,tracks=1,length=1,railtype=0}) end)
+local corner=Sim.id(9,8)
+local ok,fee=Sim.landscape(s,"Builder","raise",9,8,nil,nil,false,true)
+assert(ok and fee==250,tostring(fee))
+assert(not Sim.landscape(s,"Other","raise",9,8))
+assert(Sim.landscape(s,"Builder","raise",9,8))
+assert(Sim.is_owned_land(s.tiles[corner]) and s.tiles[corner].owner=="Builder")
+
+local net=load("campaign_simulation_bindings")(Sim,m:gsub("/$","")).networks(s,Slope,tile)
+local ra,rb,rm=Sim.id(15,24),Sim.id(19,24),Sim.id(17,24)
+local _,empty_road_bridge=Sim.road_bridge(s,"Builder",ra,rb,0,true)
+buy(ra);buy(rm)
+assert(not Sim.road_bridge(s,"Other",ra,rb,0,true))
+local q_ok,road_bridge=Sim.road_bridge(s,"Builder",ra,rb,0,true)
+assert(q_ok and road_bridge==empty_road_bridge-160,tostring(road_bridge))
+assert(Sim.road_bridge(s,"Builder",ra,rb,0))
+assert(not s.tiles[ra].stock_object and not s.tiles[rm].stock_object and s.bridge_above[rm])
+
+local aa,bb,mm=Sim.id(15,30),Sim.id(19,30),Sim.id(17,30)
+local empty_rail=assert(net.spans.quote_bridge(s,"Builder",aa,bb))
+buy(aa);buy(mm)
+assert(not net.spans.quote_bridge(s,"Other",aa,bb))
+local rail_bridge=assert(net.spans.quote_bridge(s,"Builder",aa,bb))
+assert(rail_bridge.price==empty_rail.price-180,rail_bridge.price.." vs "..empty_rail.price)
+assert(net.spans.commit(s,"Builder",rail_bridge))
+assert(not s.tiles[aa].stock_object and not s.tiles[mm].stock_object and s.rail_bridge_above[mm])
+
+assert(K.price()==400 and K.resale()==80 and K.replenish(0,1)==32*65536)
+print("PASS owned land stake: real worker quote, fees/resale, independent construction, rivals, slopes and checkpoint")

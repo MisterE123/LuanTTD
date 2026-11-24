@@ -1086,6 +1086,32 @@ return function(api)
     local row=stock_scenery.rail_fence and stock_scenery.rail_fence[ground]
     return row and row[0]
   end
+  if terrain and api.generated_world then
+    local land=reg("owned_land_ground",{png("owned_land_ground"),png("hill0"),png("grass_side")})
+    local slopes,posts={},{}
+    for mask,name in pairs(ground_mesh) do
+      slopes[mask]=reg("owned_land_ground_"..mask,{png("owned_land_ground")},{
+        drawtype="mesh",mesh="bl_land_"..mask..".obj",paramtype="light",
+        sunlight_propagates=true,collision_box=slope_collision(mask),pointable=false})
+    end
+    for lift=0,2 do
+      local n="owned_land_"..lift
+      posts[lift]=architecture(n,n,"owned_land_atlas")
+    end
+    function R.owned_land_node(id,x,y,z,t)
+      local slope,base=terrain.tile(id)
+      if y<base then return gnames.grass[t.variant] end
+      if y==base then return slope==0 and land or slope_fill end
+      if x%2==0 and z%2==0 then
+        if y==base+1 and slopes[slope] then return slopes[slope] end
+        if y==base+2 then
+          local lift=math.floor(api.slope.surface(.5,.5,slope)*2+.00001)
+          return assert(posts[lift])
+        end
+      end
+      return "air"
+    end
+  end
   local function source_road_node(t,id,x,y,z,grade,base,foundation)
     if grade==0 then
       if y==base then
@@ -1254,6 +1280,10 @@ return function(api)
       if y<=tunnel.base then return gnames.grass[t.variant] end
       if y==tunnel.base+1 and x%2==0 and z%2==0 then return tunnel_portal[head.inside_direction] end
       return "air"
+    end
+    if t.stock_object and t.stock_object.kind=="owned_land" and R.owned_land_node and
+        not (t.build or t.tram or t.ship or t.airfield or t.rail_tracks or t.level_crossing or t.house or t.stock_industry) then
+      return R.owned_land_node(id,x,y,z,t)
     end
     if t.stock_industry and (api.stock_coal_scenery or api.stock_timber_scenery or api.farm_world or api.oil_world or api.heavy_world) then
       local b=t.stock_industry

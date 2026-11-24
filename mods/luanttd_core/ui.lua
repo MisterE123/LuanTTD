@@ -876,6 +876,7 @@ function U.guide(p,menu)
   end
   if menu=="terrain" then
     if V.tool=="landscape_plant_tree" then return "Click or drag to plant. Hold Aux1 (usually E) for diagonal planting. Right-click to change type." end
+    if V.tool=="landscape_purchase_land" then return "Click or drag to buy. Hold Aux1 for a diagonal area. Bulldoze your marker to sell." end
     return "Area tools take two corners. Hold Aux1 (usually E) on the second click for a diagonal selection."
   end
   if menu=="road_stops" then
@@ -962,6 +963,8 @@ local function asset_details(p,tile,hit)
       U.signal_ui.inspect(p,tile,hit) then return true end
   if t.rail_depot_dir~=nil and api.owned_rail_ui and api.owned_rail_ui.open(p,tile) then return true end
   if t.house and t.source_house and t.source_house.town_growth then U.service(p,"growth_house",tile)
+  elseif t.stock_object and t.stock_object.kind=="owned_land" then
+    U.status(p,("Company land · %s · Bulldoze to sell for $%d"):format(t.owner or "Unknown",Sim.owned_land_resale()))
   elseif t.stock_landmark then
     local record=t.stock_landmark
     local town=S.sites[record.town]
@@ -1527,7 +1530,13 @@ local tree_build_errors={
   SITE_UNSUITABLE="A structure, bridge, or unsuitable terrain blocks planting.",
   INVALID_TREE_TYPE="Choose a Temperate tree type.",
   TERRAIN_QUOTE_CHANGED="The landscape changed. Check the new planting area.",
-  NOT_ENOUGH_MONEY="Not enough money to plant this area.",
+  NOT_ENOUGH_MONEY="Not enough money for this construction.",
+  MUST_FOUND_TOWN_FIRST="A town must exist before buying land.",
+  BUILD_OBJECT_LIMIT_REACHED="Land-purchase limit reached. Let the game advance.",
+  YOU_ALREADY_OWN_IT="Your company already owns this land.",
+  OWNED_BY_ANOTHER="That land belongs to another company.",
+  MUST_DEMOLISH_BRIDGE_FIRST="Remove the bridge above before buying.",
+  TOO_CLOSE_TO_EDGE_OF_MAP="That land is beyond the playable map.",
 }
 local function worker_build(n,V,kind,request)
   if not api.authority_handoff then return false end
@@ -1536,7 +1545,7 @@ local function worker_build(n,V,kind,request)
   request=U.rail_gauge_request(V,kind,request)
   local ok,why=api.worker_build.commit(n,kind,request,function(built,note,quote,tiles)
     if not built and note and request.mode=="air" and api.airfield then note=api.airfield.reason(note) end
-    if not built and request.operation=="plant_tree" then note=tree_build_errors[note] or note end
+    if not built and (request.operation=="plant_tree" or request.operation=="purchase_land") then note=tree_build_errors[note] or note end
     V.status=note or (built and "Construction complete." or "That construction was not accepted.")
     if built and api.on_worker_build then api.on_worker_build(n,tiles,quote) end
   end)
@@ -1851,7 +1860,7 @@ local function clear_error(why)
   return why=="CLEARING_LIMIT_REACHED" and "Clearing limit reached. Let the game advance." or why
 end
 function U.tree_gesture(tool)
-  return api.authority_handoff and tool=="landscape_plant_tree"
+  return api.authority_handoff and (tool=="landscape_plant_tree" or tool=="landscape_purchase_land")
 end
 function U.begin_tree(p,id)
   local v=view(p:get_player_name())
@@ -1862,11 +1871,12 @@ end
 function U.cancel_tree(p)
   local v=view(p:get_player_name())
   v.tree_press=nil
-  v.status="Tree planting canceled."
+  v.status=v.tool=="landscape_purchase_land" and "Land purchase canceled." or "Tree planting canceled."
 end
 local function tree_request(p,v,id)
-  return {operation="plant_tree",first=v.tree_press or id,last=id,
-    species=v.tree_species or 255,diagonal=p:get_player_control().aux1==true}
+  local land=v.tool=="landscape_purchase_land"
+  return {operation=land and "purchase_land" or "plant_tree",first=v.tree_press or id,last=id,
+    species=not land and (v.tree_species or 255) or nil,diagonal=p:get_player_control().aux1==true}
 end
 function U.end_tree(p,id)
   local n=p:get_player_name()
@@ -2179,7 +2189,7 @@ local function authority_preview(p,id,hit)
     kind,request="rail",{tool=tool=="rail_crossing_tool" and "crossing" or "waypoint",first=id}
   elseif U.tree_gesture(tool) then
     kind,request="terrain",tree_request(p,V,id)
-    label=tree_species_name(V.tree_species)
+    label=tool=="landscape_purchase_land" and "Buy land" or tree_species_name(V.tree_species)
   elseif land then
     if land.area and not V.anchor then return ids,true,"Mark the first terrain corner." end
     kind,request="terrain",{operation=land.mode,first=V.anchor or id,last=land.area and id or nil,
@@ -2226,10 +2236,10 @@ local function authority_preview(p,id,hit)
   -- while the worker validates the shape the player just selected.
   if not q then
     local tram=request.mode=="tram" or request.tool=="tram_facility"
-    if (kind=="road" or tram or request.mode=="air" or request.operation=="plant_tree") and pending then return ids,nil,why end
+    if (kind=="road" or tram or request.mode=="air" or request.operation=="plant_tree" or request.operation=="purchase_land") and pending then return ids,nil,why end
     if tram and api.tram and why then why=api.tram.reason(why) end
     if request.mode=="air" and api.airfield and why then why=api.airfield.reason(why) end
-    if request.operation=="plant_tree" then why=tree_build_errors[why] or why end
+    if request.operation=="plant_tree" or request.operation=="purchase_land" then why=tree_build_errors[why] or why end
     return ids,false,why
   end
   local cells=q.tiles or ids
@@ -2601,9 +2611,10 @@ function U.world_status(p,tile,show_preview,hit)
     local facility=registry and registry[mark.id]
     local site=S.sites[facility and facility.site or a.site]
     local landmark=a.stock_landmark and (a.stock_landmark.kind=="lighthouse" and "Lighthouse" or "Radio transmitter")
+    local stake=a.stock_object and a.stock_object.kind=="owned_land" and ("Company land · "..(a.owner or "Unknown"))
     local channel=a.ship and a.ship.kind=="lock" and "Ship lock" or
       a.water_class=="river" and "River" or nil
-    target=("%d,%d  %s"):format(x,z,st and U.stop_label(st) or site and site.name or landmark or
+    target=("%d,%d  %s"):format(x,z,st and U.stop_label(st) or site and site.name or landmark or stake or
       a.road_town and (S.sites[a.road_town].name.." street") or build and build.name or channel or a.terrain)
     if api.oneway and a.road_disallowed then
       local m=api.oneway.marking(S,tile)

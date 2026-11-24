@@ -87,6 +87,8 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
   function Lab.commit_station(s,owner,group,axis,area,join,gauge)
     for _,tile in ipairs(group) do
       if Lab.span_protected(s,tile) then return false,protected end
+      local t=s.tiles[tile]
+      if Sim.is_owned_land and Sim.is_owned_land(t) and t.owner~=owner then return false,"Land owned by another company." end
     end
     s.stock_rail_stations=s.stock_rail_stations or {}
     local id=join or s.next_stock_rail_station or 1
@@ -108,6 +110,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     end
     for _,tile in ipairs(group) do
       local t=s.tiles[tile]
+      if Sim.is_owned_land and Sim.is_owned_land(t) then t.stock_object=nil end
       t.rail_station_id=id;t.rail_station_axis=axis
       if gauge~=nil then t.rail_type=gauge end
       t.build,t.owner,t.rail_tracks,t.wood="stock_rail",owner,2^axis,nil
@@ -170,6 +173,9 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       return false,protected
     end
     if not t then return false,"Choose an in-map depot tile." end
+    local stake=Sim.is_owned_land and Sim.is_owned_land(t)
+    if stake and t.owner~=owner then return false,"Land owned by another company." end
+    if stake then t.stock_object=nil end
     local rotating=t.rail_depot_dir~=nil
     if clear_coast then
       t.terrain,t.water_class,t.coastal_water,t.stock_river_bits,t.stock_water_rocks="grass",nil,nil,nil,nil
@@ -324,6 +330,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
         t.terrain,t.water_class,t.coastal_water="water","sea",true
       end
     end
+    if new>0 and not plan.remove and Sim.is_owned_land and Sim.is_owned_land(t) then t.stock_object=nil end
     t.build=new>0 and "stock_rail" or nil
     t.owner=new>0 and owner or nil
     t.rail_tracks=new>0 and new or nil

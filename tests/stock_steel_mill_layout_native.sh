@@ -45,6 +45,11 @@ if [[ ${LUANTTD_QA_ROADSIDE:-0} == 1 ]]; then
   fixture=tests/roadside_temperate_native.lua
   marker='PASS NATIVE ROADSIDE'
 fi
+if [[ ${LUANTTD_QA_OWNED_LAND:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/owned_land_native.lua
+  marker='PASS NATIVE OWNED LAND'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -82,6 +87,40 @@ for _ in {1..180}; do grep -q 'listening on' "$out/server.log" && break; sleep .
 grep -q 'listening on' "$out/server.log" || { cat "$out/server.log"; exit 1; }
 luanti --go --address 127.0.0.1 --port "$port" --name SteelReview --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
+if [[ ${LUANTTD_QA_OWNED_LAND:-0} == 1 ]]; then
+  wait_land() {
+    local pattern=$1
+    for _ in {1..280}; do
+      grep -q "$pattern" "$out/server.log" && return
+      kill -0 "$server" 2>/dev/null || break
+      sleep .25
+    done
+    tail -n 50 "$out/"{server,client}.log; exit 1
+  }
+  press_native_slot() {
+    local slot
+    slot=$(sed -n "s/.*$1 //p" "$out/server.log" | tail -1)
+    [[ -n "$slot" ]]
+    [[ "$slot" != 10 ]] || slot=0
+    xdotool key --repeat 3 --delay 140 "$slot"
+  }
+  wait_land 'NATIVE LAND READY'
+  win=$(timeout 10 xdotool search --sync --onlyvisible --pid "$client" | tail -1)
+  xdotool windowraise "$win" windowfocus --sync "$win"
+  sleep .8
+  press_native_slot 'NATIVE LAND HOME'
+  sleep .55; xdotool mousedown 1; sleep .30; xdotool mouseup 1
+  wait_land 'NATIVE LAND BUY SLOT'
+  press_native_slot 'NATIVE LAND BUY SLOT'
+  wait_land 'NATIVE LAND SELECTED'
+  sleep .3; xdotool mousedown 1; sleep .4; xdotool mouseup 1
+  wait_land 'NATIVE LAND BOUGHT'
+  sleep .7
+  if command -v import >/dev/null; then import -window root -quality 91 "$out/company-land.jpg"; fi
+  press_native_slot 'NATIVE LAND SELL SLOT'
+  wait_land 'NATIVE LAND SELL READY'
+  sleep .55; xdotool mousedown 1; sleep .30; xdotool mouseup 1
+fi
 if [[ ${LUANTTD_QA_PLANT_TREES:-0} == 1 ]]; then
   for _ in {1..280}; do grep -q 'NATIVE TREE QA READY' "$out/server.log" && break; sleep .25; done
   grep -q 'NATIVE TREE QA READY' "$out/server.log" || { tail -n 50 "$out/"{server,client}.log; exit 1; }
