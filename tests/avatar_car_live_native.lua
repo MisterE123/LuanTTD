@@ -32,7 +32,22 @@ return function(api)
         local e=o:get_luaentity()
         if e and e.name=="luanttd_core:sightseeing_car" then
           assert(not o:get_observers()[owner],"unattached exterior is visible to the driver")
-          core.log("action",("CAR_QA_ROTATION %.4f"):format(o:get_rotation().x))
+          local center,rot=o:get_pos(),o:get_rotation()
+          local nose=vector.rotate({x=0,y=0,z=1},rot)
+          local run=math.sqrt(nose.x^2+nose.z^2)
+          local function height(d)
+            local x,z=center.x+nose.x*(d/run),center.z+nose.z*(d/run)
+            local tid=Sim.id(math.floor((x+.5)/2),math.floor((z+.5)/2))
+            if tid and S.tiles[tid].build=="road" then return R.surface(tid,x,z) end
+          end
+          local rear,front=height(-.2075),height(.2075)
+          if rear and front and math.abs(front-rear)>.03 then
+            local expected=math.atan2(front-rear,.415)
+            assert(math.abs(rot.x-expected)<.014 and nose.y*(front-rear)>0,
+              ("nose tilts against the road: object %.5f, expected %.5f"):format(rot.x,expected))
+            assert(vector.distance(car:get_rotation(),rot)<.004,"private cabin disagrees with exterior")
+            core.log("action",("CAR_QA_GRADE rotation=%.4f road=%.4f"):format(rot.x,expected))
+          end
         elseif e and e.name=="luanttd_core:sightseeing_car_third_person" then
           assert(o:get_observers()[owner] and o:get_attach()==p,"chase shell is not local to driver")
         end

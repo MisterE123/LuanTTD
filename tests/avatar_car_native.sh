@@ -160,6 +160,7 @@ say "/carprobe returned"
 import -window root -quality 87 "$out/car-returned.jpg"
 grep "CAR_QA" "$out/server.log"
 ! grep -E 'ERROR\[' "$out/"{server,client}.log
+grep -q 'CAR_QA_GRADE' "$out/server.log"
 python3 - "$out/server.log" <<'LOG'
 import re, sys
 lines=open(sys.argv[1]).read().splitlines()

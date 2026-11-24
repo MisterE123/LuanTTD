@@ -161,9 +161,21 @@ C=dofile(mod.."/avatar_car.lua")({s=S,Sim=Sim,render=rendering},W)
 assert(C.toggle_at(p,target))
 tick({up=true},8)
 local grade=math.atan(.36)
-assert(math.abs(model.rotation.x+grade)<1e-8 and model.rotation.x==interior.rotation.x)
+-- The mesh nose is +Z: Luanti object rotation maps it upwards for
+-- positive X pitch. Player look pitch uses the opposite convention.
+assert(math.abs(model.rotation.x-grade)<1e-8 and model.rotation.x==interior.rotation.x,
+  "uphill front axle must be higher than the rear")
+assert(math.abs(player_pitch-(.07-grade))<1e-8)
 assert(math.abs(interior.pos.y-model.pos.y+.10*math.sin(grade))<1e-8)
 tick({down=true},20)
-assert(math.abs(model.rotation.x+grade)<1e-8,"reverse changed the slope of the chassis")
+assert(math.abs(model.rotation.x-grade)<1e-8,"reverse changed the slope of the chassis")
 C.leave("driver")
-print("PASS front and rear road contact pitch the full car and cabin together on grades")
+lookx,lookz=0,-1
+assert(C.toggle_at(p,target))
+tick({up=true},8)
+assert(math.abs(model.rotation.x+grade)<1e-8 and model.rotation.x==interior.rotation.x,
+  "downhill front axle must be lower than the rear")
+assert(math.abs(player_pitch-(.07+grade))<1e-8)
+assert(math.abs(interior.pos.y-model.pos.y-.10*math.sin(grade))<1e-8)
+C.leave("driver")
+print("PASS uphill and downhill front/rear contact: car, cabin, seat and view stay aligned; reverse keeps chassis heading")

@@ -191,7 +191,9 @@ return function(api,W)
     return {x=at.x+depth*x-.045*z,y=at.y-.10*math.sin(pitch),z=at.z+depth*z+.045*x}
   end
   local function mount_pose(q,pitch)
-    local rotation={x=-pitch,y=-q.look,z=0}
+    -- The car meshes point along local +Z. Positive Luanti object pitch
+    -- raises that axis; player-look pitch below uses the opposite sign.
+    local rotation={x=pitch,y=-q.look,z=0}
     q.object:set_rotation(rotation)
     q.interior:set_rotation(rotation)
   end
