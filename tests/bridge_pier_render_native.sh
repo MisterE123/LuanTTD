@@ -41,7 +41,7 @@ if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   fixture=tram_grade_render_native
   ready_mark=TRAM_GRADE_NATIVE_READY
   view_mark=TRAM_GRADE_NATIVE_VIEW
-  views=(tram)
+  views=(tram depot platform)
 fi
 cat "tests/$fixture.lua" >> "$game/mods/luanttd_core/init.lua"
 # The terrain and companies in this graphics fixture are deliberately
@@ -119,7 +119,7 @@ for view in "${views[@]}"; do
 done
 ! grep -Ei 'ERROR\[|could not load' "$out/client.log" "$out/server.log"
 if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
-  echo "PASS: native roadbed, rail, wire and moving tram conform to an uphill grade: $out"
+  echo "PASS: native graded terminal foundations, rails, wire and moving tram: $out"
 else
   echo "PASS: native submerged timber road and rail footings, dry slopes and animated ocean preserved: $out"
 fi

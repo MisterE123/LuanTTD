@@ -3,7 +3,8 @@
 return function(api,N,Run)
   local Sim,S=api.Sim,api.s
   local errors={
-    TRAM_NEEDS_FLAT_CLEARANCE="A tram platform or depot needs flat ground.",
+    FLAT_LAND_REQUIRED="Rotate this tram facility so its entrances meet level ground, or choose another tile.",
+    TRAM_STOP_ROAD_FOUNDATION="That road would need a different foundation for a level tram platform.",
     TRAM_SITE_CLEARANCE="Choose a clear site away from overhead or underground structures.",
     PROTECTED_TILE="The tile is protected or has incompatible infrastructure.",
     VEHICLE_IN_THE_WAY="A vehicle occupies that tile.",
@@ -50,7 +51,7 @@ return function(api,N,Run)
   function api.tram.busy_probe() return occupancy(Sim,Run,S) end
   core.register_chatcommand("tramway",{
     params="X Z END_X END_Z | bit X Z MASK | depot X Z east|west|north|south | stop X Z x|z",
-    description="Build independent flat electric tram track and facilities",
+    description="Build independent electric tram track and facilities",
     func=function(name,params)
       local x,z,u,v=params:match("^(%d+)%s+(%d+)%s+(%d+)%s+(%d+)$")
       local a,b=id(x,z),id(u,v)

@@ -2104,9 +2104,10 @@ local function authority_preview(p,id,hit)
   elseif tool=="structure_tunnel" or tool=="rail_span_tunnel" then
     kind,request="transport",{mode=tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id}
   else
-    local tram,cells,direction=tram_request(V,id)
+    local tram,cells,direction,face=tram_request(V,id)
     if tram then
       if tool=="tram_track" and not V.anchor then return ids,true,"Mark the first tramway tile." end
+      if face then label=label.." · "..face end
       kind,request="transport",{mode="tram",operation="build",kind=tram,cells=cells,direction=direction}
     end
   end
@@ -2120,7 +2121,9 @@ local function authority_preview(p,id,hit)
   -- A new hover is neither approved nor obstructed. Don't flash red
   -- while the worker validates the shape the player just selected.
   if not q then
-    if kind=="road" and pending then return ids,nil,why end
+    local tram=request.mode=="tram"
+    if (kind=="road" or tram) and pending then return ids,nil,why end
+    if tram and api.tram and why then why=api.tram.reason(why) end
     return ids,false,why
   end
   local cells=q.tiles or ids

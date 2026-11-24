@@ -91,6 +91,7 @@ return function(Road,types)
     end
     local plan={kind="depot",dir=dir,tramtype=rt,tram_bits=dirs[dir],
       tram_owner=o.owner,owner=o.owner,rotate=same,clearing=clearing,
+      base=(tile.base or 0)+(s==0 and 0 or s>=16 and 2 or 1),
       foundation=s~=0 and "leveled" or "none"}
     plan.cost=clearing+by_price(o,"depot",500)+(s~=0 and by_price(o,"foundation",250) or 0)
     return plan
@@ -214,7 +215,7 @@ return function(Road,types)
     if t.occupied then return nil,"VEHICLE_IN_THE_WAY" end
     local s=t.slope or 0
     local z=(t.base or 0)+(s==0 and 0 or s>=16 and 2 or 1)
-    if (s~=0 and (o.build_on_slopes==false or not T.can_depot_slope(axis,s) or
+    if s>=16 or (s~=0 and (o.build_on_slopes==false or not T.can_depot_slope(axis,s) or
                     not T.can_depot_slope(axis+2,s))) or (o.allowed_z and o.allowed_z~=z) then
       return nil,"FLAT_LAND_REQUIRED"
     end

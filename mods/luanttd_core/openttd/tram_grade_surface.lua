@@ -22,6 +22,16 @@ return function(Road,Slope)
     if shape~=0 and not planes[shape] then return nil,"UNSUPPORTED_TRAM_SURFACE" end
     return {grade=shape,base=base+rise,foundation=foundation}
   end
+  function G.for_tile(mask,base,part,road_bits)
+    if not part or type(base)~="number" then return end
+    if part.kind=="depot" or part.kind=="drive_stop" then
+      -- Existing flat terminals do not have a stored level. For those,
+      -- or source-imported station tiles, use the native flattening rule.
+      local level=part.terminal_level or base+(mask==0 and 0 or mask>=16 and 2 or 1)
+      return {grade=0,base=level,foundation=level>base and "leveled" or "none"}
+    end
+    return G.surface(mask,base,part.tram_bits,road_bits)
+  end
   function G.at(surface,u,v)
     return surface.base+Slope.surface(u,v,surface.grade)
   end

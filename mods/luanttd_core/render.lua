@@ -521,7 +521,7 @@ return function(api)
       local t=S.tiles[id]
       if not t or not t.tram then return end
       local shape,base=terrain.tile(id)
-      return sampler.surface(shape,base,t.tram.tram_bits,Sim.road_bits(S,id))
+      return sampler.for_tile(shape,base,t.tram,Sim.road_bits(S,id))
     end
   end
   function R.platform(st)

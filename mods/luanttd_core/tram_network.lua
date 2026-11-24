@@ -1,5 +1,5 @@
 -- Bridge the saved shared-corner world to OpenTTD ELRL construction and
--- traversal. Plain tracks use stock grades; terminals remain flat here.
+-- traversal. Track, platform and depot use the stock surface at tile edges.
 -- Tram and road bits/owners are independent even where they share a tile.
 return function(Sim,T,Terrain)
   local N={}
@@ -54,27 +54,32 @@ return function(Sim,T,Terrain)
   local function propose(s,owner,kind,id,arg,occupancy)
     local t=load(s,id)
     if not playable(s,id,t) then return nil,"TRAM_SITE_CLEARANCE" end
-    if kind~="road" and t.slope~=0 then return nil,"TRAM_NEEDS_FLAT_CLEARANCE" end
     if occupancy and occupancy(id) then t.occupied=true end
     local p,why
+    local policy=s.stock_road_town_policy or {}
+    local opts=options(owner,policy.build_on_slopes~=false)
     if kind=="road" and (t.kind=="road" or t.kind=="clear" or t.kind=="drive_stop") then
-      local policy=s.stock_road_town_policy or {}
-      p,why=T.lay(t,arg,ELRL,options(owner,policy.build_on_slopes~=false))
+      p,why=T.lay(t,arg,ELRL,opts)
     elseif kind=="depot" and (t.kind=="clear" or t.kind=="depot") then
-      p,why=T.depot(t,arg,ELRL,options(owner))
+      p,why=T.depot(t,arg,ELRL,opts)
     elseif kind=="drive_stop" and (t.kind=="clear" or t.kind=="road") then
       -- Do not silently replace/extend the shared road in this preview.
       -- Complete the through carriageway with the road tool first.
       local axis=arg==0 and 10 or arg==1 and 5
       if not axis then return nil,"INVALID_PARAMETER" end
       if t.roadtype~=nil and t.road_bits~=axis then return nil,"TRAM_STOP_NEEDS_THROUGH_ROAD" end
-      p,why=T.stop(t,arg,ELRL,options(owner))
+      p,why=T.stop(t,arg,ELRL,opts)
+      if p and t.roadtype~=nil then
+        local slope,level=Sim.road_surface(s,id)
+        if slope~=0 or level~=p.base then return nil,"TRAM_STOP_ROAD_FOUNDATION" end
+      end
     else
       return nil,"PROTECTED_TILE"
     end
     if not p then return nil,why end
     return {kind=p.kind,dir=p.dir or t.dir,tram_bits=p.tram_bits,tramtype=p.tramtype,
       owner=p.kind~="road" and (p.owner or t.owner) or nil,tram_owner=p.tram_owner,
+      terminal_level=(kind=="depot" or kind=="drive_stop") and p.base or t.terminal_level,
       station=(p.kind=="drive_stop") and id or nil,stop_type=(p.kind=="drive_stop") and "bus" or nil},
       p.cost
   end
@@ -206,7 +211,7 @@ return function(Sim,T,Terrain)
   function N.surface(s,id)
     local t=load(s,id)
     if not t or not t.tramtype then return end
-    return Grade.surface(t.slope,t.base,t.tram_bits,t.road_bits)
+    return Grade.for_tile(t.slope,t.base,t,t.road_bits)
   end
   function N.surface_at(s,id,x,z)
     local p=N.surface(s,id)

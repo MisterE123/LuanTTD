@@ -1,11 +1,14 @@
--- Isolated real Luanti rendering: build two flat platforms with a true
--- incline between them, run the stock pilot and inspect the body pose.
+-- Isolated real Luanti rendering: build raised terminal foundations and a
+-- true incline, run the stock pilot and inspect the body pose.
 local terrain_grade=dofile(mod.."/openttd/terrain.lua")
 local owner="PierQA"
 local depot_x,route_x,ramp_z=21,24,17
 local grid=S.corner_grid
 for z=1,Sim.H+1 do for x=1,Sim.W+1 do
-  grid.levels[(z-1)*(Sim.W+1)+x]=z>ramp_z and 2 or 1
+  local h=z>ramp_z and 2 or 1
+  if x==depot_x and z==15 then h=0 end
+  if x==route_x+1 and z==21 then h=1 end
+  grid.levels[(z-1)*(Sim.W+1)+x]=h
 end end
 for z=1,Sim.H do for x=1,Sim.W do
   local id=Sim.id(x,z)
@@ -46,6 +49,10 @@ core.register_on_joinplayer(function(p)
     local dirty={}
     for x=19,29 do for z=11,23 do dirty[#dirty+1]=at(x,z) end end
     api.render.update(dirty)
+    assert(S.tiles[depot].tram.terminal_level==1)
+    assert(S.tiles[last].tram.terminal_level==2)
+    assert(core.get_node({x=42,y=2,z=30}).name=="luanttd_core:tram_depot_2")
+    assert(core.get_node({x=48,y=3,z=42}).name=="luanttd_core:tram_stop_1")
     assert(core.get_node({x=48,y=2,z=34}).name=="luanttd_core:road_grade_6")
     assert(core.get_node({x=48,y=3,z=34}).name=="luanttd_core:tramway_grade_6")
     local function grade_object()
@@ -64,21 +71,31 @@ core.register_on_joinplayer(function(p)
         local pos,rot=ref:get_pos(),ref:get_rotation()
         assert(pos.y>1.75 and pos.y<2.28 and rot.x<-.3)
         ready=true
-        core.log("action","TRAM_GRADE_NATIVE_READY actually rendered graded rail, wire and streetcar pitch")
+        core.log("action","TRAM_GRADE_NATIVE_READY rendered terminal foundations, graded rail, wire and streetcar pitch")
         break
       end
     end
     assert(ready,"No actual native uphill pose")
   end)
 end)
-local seen=false
+local seen
 core.register_globalstep(function()
-  if seen or not ready then return end
+  if not ready then return end
   local f=io.open(core.get_worldpath().."/pier-view.txt","r")
   if not f then return end
+  local view=f:read("*l")
   f:close()
-  seen=true
+  if not view or view==seen then return end
+  seen=view
   local p=core.get_player_by_name(owner)
-  if p then place_camera(p) end
-  core.log("action","TRAM_GRADE_NATIVE_VIEW tram")
+  if p then
+    if view=="tram" then place_camera(p)
+    else
+      local x,z,y=2*route_x+.5,42.5,2.7
+      if view=="depot" then x,z,y=42.5,30.5,1.8 end
+      wanted,camera={x=x,y=y,z=z},{x=x+5,y=y+2.5,z=z+4}
+      place_camera(p)
+    end
+  end
+  core.log("action","TRAM_GRADE_NATIVE_VIEW "..view)
 end)
