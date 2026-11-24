@@ -51,7 +51,7 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
       -- is 0-based. Packet distances still get the original host tile ID.
       local view={id=st.id,tile=st.tile,x=x-1,z=z-1,town=st.town or st.site,
         owner=st.owner,stock=ctx.separate_queue and {coal=st.stock_coal_packets} or st.stock,
-        goods=st.goods,tiles={{x=x-1,y=z-1,kind="truck"}}}
+        goods=st.goods,tiles=Sim.road_stop_tiles(st)}
       station_list[#station_list+1]=view
       road_stations[#road_stations+1]=view
       by_id[st.id]=view

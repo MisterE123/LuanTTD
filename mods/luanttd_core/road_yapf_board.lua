@@ -45,7 +45,7 @@ return function(Sim,s,F,occupancy)
         out.kind,out.dir="bay_stop",dir
       end
       out.station=t.station
-      out.stop_type=st.stop_type or "bus"
+      out.stop_type=t.road_stop_type or st.stop_type or "bus"
       out.pair=t.road_stop_pair==true and out.kind=="bay_stop" and out.stop_type=="bus"
     elseif t.build=="road" and t.road_waypoint_id then
       local wp=s.stock_road_waypoints and s.stock_road_waypoints[t.road_waypoint_id]
@@ -115,6 +115,8 @@ return function(Sim,s,F,occupancy)
     end
     local st=s.stations[id]
     if not st then return nil,nil end
+    local area=st.road_stop_areas and st.road_stop_areas[facility]
+    if area then return area,st.tile end
     local t=B.tile(st.tile)
     if t and t.station==id and t.stop_type==facility then
       return {tile=st.tile,w=1,h=1},st.tile

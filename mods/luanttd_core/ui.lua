@@ -1129,6 +1129,19 @@ local function road_terminal_request(V,id)
   local spec=kind and V.road_terminal_layout and V.road_terminal_layout[kind]
   if spec then return {tool="stock_terminal",first=id,kind=kind,direction=spec.dir,through=spec.through} end
 end
+function U.road_stop_gesture(p,tool)
+  if not api.authority_handoff then return false end
+  if tool=="road_stop_remove" then return true end
+  if not p or tool~="road_station" and tool~="truck_stop_tool" then return false end
+  local V=view(p:get_player_name())
+  return V.road_terminal_layout and V.road_terminal_layout[road_terminal_kind[tool]]~=nil
+end
+function U.road_stop_request(p,V,first,last)
+  if V.tool=="road_stop_remove" then return {tool="stock_stop_remove",first=first,last=last} end
+  local r=road_terminal_request(V,first)
+  r.tool,r.last,r.adjacent="stock_stop_area",last,p:get_player_control().aux1==true
+  return r
+end
 local function road_terminal_label(req)
   local kind=req.kind
   local layout=req.through and (req.direction==0 and "east–west through" or "north–south through")
@@ -1145,7 +1158,8 @@ function U.open_road_terminal(p,tool)
   local spec=V.road_terminal_layout[kind]
   local form={"formspec_version[7]size[9.6,5.35]bgcolor[#152334;false]",
     "label[.46,.38;"..road_terminal_title[kind].." layout]",
-    "label[.46,.91;Choose an entrance, then click a tile in the world.]"}
+    kind=="depot" and "label[.46,.91;Choose an entrance, then click a tile in the world.]" or
+      "label[.46,.91;Choose a layout, then click or drag in the world. Hold E to keep it separate.]"}
   local coords={[0]={.5,2.13},[1]={3.57,2.94},[2]={6.65,2.13},[3]={3.57,1.39}}
   local function button(key,text,x,y,active)
     if active then form[#form+1]="style["..key..";bgimg=bl_button_active.png]" end
@@ -1761,7 +1775,7 @@ end
 -- OpenTTD 16.0-RC1 road_gui.cpp: dedicated sizing pins the axis after
 -- pointer-down, while AutoRoad chooses from the pointer coordinates.
 local fixed_road_axes={road_axis_x=0,road_axis_y=1}
-local fixed_road_labels={road_axis_x="East–west road",road_axis_y="North–south road",road_remove="Remove road",road_waypoint="Road waypoint",road_waypoint_remove="Remove road waypoint"}
+local fixed_road_labels={road_axis_x="East–west road",road_axis_y="North–south road",road_remove="Remove road",road_stop_remove="Remove road stop",road_waypoint="Road waypoint",road_waypoint_remove="Remove road waypoint"}
 local function road_gesture_op(tool)
   return tool=="oneway_drag" and "oneway" or tool=="road_remove" and "remove" or "drag"
 end
@@ -1774,12 +1788,12 @@ function U.waypoint_request(p,tool,first,last)
   return {tool="road_waypoint",first=first,last=last,remove=tool=="road_waypoint_remove",
     separate=p:get_player_control().aux1==true}
 end
-function U.road_gesture(tool)
-  return S.corner_grid and (tool=="road" or tool=="road_remove" or U.waypoint_tool(tool) or fixed_road_axes[tool]~=nil or tool=="oneway_drag" and api.oneway_tools)
+function U.road_gesture(tool,p)
+  return S.corner_grid and (U.road_stop_gesture(p,tool) or tool=="road" or tool=="road_remove" or U.waypoint_tool(tool) or fixed_road_axes[tool]~=nil or tool=="oneway_drag" and api.oneway_tools)
 end
 function U.begin_autoroad(p,id,hit)
   local V=view(p:get_player_name())
-  if V.pick_order or not U.road_gesture(V.tool) or not hit then return false end
+  if V.pick_order or not U.road_gesture(V.tool,p) or not hit then return false end
   V.road_press={id=id,hit=hit}
   return true
 end
@@ -1818,9 +1832,14 @@ end
 function U.end_autoroad(p,id,hit)
   local n=p:get_player_name()
   local V=view(n)
-  if not V.road_press or not U.road_gesture(V.tool) then return end
+  if not V.road_press or not U.road_gesture(V.tool,p) then return end
   if not hit then U.cancel_autoroad(p);return end
   local first=V.road_press.id
+  if U.road_stop_gesture(p,V.tool) then
+    V.road_press=nil
+    worker_build(n,V,"road",U.road_stop_request(p,V,first,id))
+    return
+  end
   if U.waypoint_tool(V.tool) then
     local req=U.waypoint_request(p,V.tool,first,id)
     V.road_press=nil
@@ -1940,12 +1959,17 @@ local function authority_preview(p,id,hit)
     local q,hint=U.signal_ui.preview(p,tool,id,hit)
     return {id},q~=nil,hint
   end
-  if U.waypoint_tool(tool) and hit then
+  if U.road_stop_gesture(p,tool) and hit then
+    local first=V.road_press and V.road_press.id or id
+    request=U.road_stop_request(p,V,first,id)
+    label=request.kind and road_terminal_label(request) or fixed_road_labels[tool]
+    ids=first==id and {id} or {first,id}
+  elseif U.waypoint_tool(tool) and hit then
     local first=V.road_press and V.road_press.id or id
     label=fixed_road_labels[tool]
     request=U.waypoint_request(p,tool,first,id)
     ids={first,request.last}
-  elseif U.road_gesture(tool) and hit then
+  elseif U.road_gesture(tool,p) and hit then
     label=fixed_road_labels[tool] or label
     local press=V.road_press or {id=id,hit=hit}
     if autoroad_bend(p,V,press.id,id) then request={tool="bend",first=press.id,last=id}
@@ -2042,7 +2066,7 @@ function U.preview(p,id,hit)
     for i,e in ipairs(q.changes) do ids[i]=e.id end
     return ids,true,fixed_road_labels[V.tool].."  |  "..dollars(q.cost)
   end
-  if api.road_first and U.road_gesture(V.tool) and hit then
+  if api.road_first and U.road_gesture(V.tool,p) and hit then
     local press=V.road_press or {id=id,hit=hit}
     if autoroad_bend(p,V,press.id,id) then
       local q,why,path=Sim.autoroad_bend_plan(S,n,press.id,id)
@@ -2406,6 +2430,7 @@ function U.build_world(p,id,hit)
     if ok then V.anchor=nil else V.status=why or "No bridge can join these heads." end
     return
   end
+  if U.road_stop_gesture(p,V.tool) then return end
   local oriented=road_terminal_request(V,id)
   if oriented then
     if api.authority_handoff then worker_build(n,V,"road",oriented);return end
@@ -2425,7 +2450,7 @@ function U.build_world(p,id,hit)
       if U.layer_bulldozer then U.layer_bulldozer.open(p,id) end
       return
     end
-    if U.rail_gesture(V.tool) or U.road_gesture(V.tool) then return end
+    if U.rail_gesture(V.tool) or U.road_gesture(V.tool,p) then return end
     local land=landscape_tools[V.tool]
     if land then
       if land.area and not V.anchor then V.anchor=id;V.status="Choose the opposite terrain corner.";return end

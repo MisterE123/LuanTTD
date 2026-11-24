@@ -32,7 +32,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
         st[queue_key]=st[queue_key] or {}
         st.goods=st.goods or {}
         local point={id=st.id,st=st,tile=st.tile,x=x-1,z=z-1,town=st.town or st.site,owner=st.owner,serve_neutral=s.stock_serve_neutral_industries~=false,
-          stock=st[queue_key],goods=st.goods,tiles={{x=x-1,y=z-1,kind="truck"}}}
+          stock=st[queue_key],goods=st.goods,tiles=Sim.road_stop_tiles(st)}
         stations[#stations+1]=point;by_id[st.id]=point
       end
     end

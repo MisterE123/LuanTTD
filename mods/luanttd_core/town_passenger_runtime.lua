@@ -55,8 +55,7 @@ return function(Sim,H,Packets,Rating,Mail)
       if hooks and hooks.passenger then return hooks.passenger(s,amount,x,z,record,tick) end
       local list={}
       for _,st in ipairs(stops) do
-        local a,b=Sim.xy(st.tile)
-        if H.single_tile_catchment(a-x-1,b-z-1,H.bus_catchment) then
+        if Sim.road_stop_covers(s,st,x+1,z+1,H.bus_catchment) then
           local rating=Rating.offer(s,st)
           if rating then list[#list+1]={st=st,rating=rating} end
         end

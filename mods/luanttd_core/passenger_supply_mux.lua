@@ -81,9 +81,9 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
   local function view_geometry(st,key,tiles,ctx)
     local c=geometry[st]
     if not c or c.global_key~=key or c.width~=ctx.width or c.height~=ctx.height or
-        c.modified~=ctx.modified or c.source_tiles~=st.tiles or c.road_tile~=st.tile then
+        c.modified~=ctx.modified or c.source_tiles~=(tiles or st.tiles) or c.road_tile~=st.tile then
       c=Catchment.build({id=st.id,tiles=tiles or st.tiles},ctx.width,ctx.height,ctx.modified)
-      c.source_tiles,c.road_tile,c.modified,c.global_key=st.tiles,st.tile,ctx.modified,key
+      c.source_tiles,c.road_tile,c.modified,c.global_key=tiles or st.tiles,st.tile,ctx.modified,key
       geometry[st]=c
     end
     return c
@@ -126,7 +126,7 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
           end
           assert(part,"Canonical station missing the aliased physical bus tile")
         else
-          add("road",st,{{x=x-1,y=y-1,kind="bus"}})
+          add("road",st,Sim.road_stop_tiles(st))
         end
       end
     end

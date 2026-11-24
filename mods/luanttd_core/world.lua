@@ -137,8 +137,8 @@ return function(api,ui)
       end,
     })
   end
-  local function drag_kind(tool)
-    if ui.road_gesture and ui.road_gesture(tool) then return "autoroad" end
+  local function drag_kind(tool,p)
+    if ui.road_gesture and ui.road_gesture(tool,p) then return "autoroad" end
     if ui.rail_gesture and ui.rail_gesture(tool) then return "autorail" end
     if ui.station_gesture and ui.station_gesture(tool) then return "station" end
   end
@@ -306,7 +306,7 @@ return function(api,ui)
         W.hud(p)
         return p:get_wielded_item()
       end
-      local kind=H and drag_kind(tool)
+      local kind=H and drag_kind(tool,p)
       if kind then
         local at,hit=W.target(p)
         if at and not state.build_drag and not state.build_drag_cancelled and ui["begin_"..kind](p,at,hit) then
@@ -738,7 +738,7 @@ return function(api,ui)
     local shade="inspect"
     local anchor=ui.anchor(p)
     if ids and valid~=nil then
-      shade=valid and tool~="clear" and ((tool=="road_remove" or tool=="road_waypoint_remove") and "removal" or "valid") or "invalid"
+      shade=valid and tool~="clear" and ((tool=="road_remove" or tool=="road_waypoint_remove" or tool=="road_stop_remove") and "removal" or "valid") or "invalid"
     end
     if api.selector then
       local rail=world_tool and ui.rail_overlay and ui.rail_overlay(p,t)

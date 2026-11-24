@@ -31,20 +31,28 @@ from OpenTTD, not a feature switch.
 Select **Bus stop**, **Freight loading stop**, or **Road depot** in the
 hotbar, then **right-click** to open its layout chooser. Pick the
 entrance direction and left-click the tile to build. At bus and truck
-stops, choose an **east–west** or **north–south through** layout to let
-traffic pass along that axis. **Auto orientation** retains the default
-quick-placement behavior. Explicitly oriented depots can be placed
+stops, an explicit layout also enables click-and-drag. Bays size along
+a single strip; **east–west** and **north–south through** stops size
+a rectangle. The whole footprint needs matching platform heights.
+Adjacent compatible stops join into one station with a shared cargo
+queue and orders. Hold **E** while releasing to build separately.
+**Auto orientation** retains the default quick-placement behavior.
+Explicitly oriented depots can be placed
 before the connecting road; they also try to complete the missing
 half of an existing street directly at the selected door. An empty
 owned depot can be turned in place, but an active route through it
 must finish first.
 
-Explicit stops and depots use the original stock single-tile slope
-checks, build prices and leveled foundations for supported sites.
-The current explicit tools protect existing unrelated facilities
-and do not replace a competitor's road. Joining multiple tiles, rail
-and aqueduct overpasses, and mixed tram facilities still need their
-own verified adapters.
+Explicit stops and depots use the stock slope, price, and foundation
+rules for supported sites. Vehicles route to a reachable platform, not
+the station sign. A stop's catchment comes from its actual platforms.
+In **Roadworks → Stops & Waypoints → Remove road stop**, click or
+drag to remove owned platforms without removing their through road.
+Orders remain valid while at least one usable platform remains; the
+tool won't remove a final platform that is still in vehicle orders.
+The tools protect unrelated facilities and competitor roads. Mixing
+bus, truck, tram or other transport facilities into one station and
+choosing a distant station to join are still separate work.
 
 ## Route a vehicle through a waypoint
 
@@ -116,5 +124,5 @@ a different drag never inherits the old quote.
 
 Remaining: road and tram facility and bridge/tunnel removal through
 this tool, advanced waypoint joins,
-stop drag/orientation/joining and road-type conversion. The current
+distant and cross-mode road stop joining, and road-type conversion. The current
 tool protects game facilities where those rules are not yet mounted.

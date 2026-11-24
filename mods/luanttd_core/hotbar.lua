@@ -324,7 +324,7 @@ function H.enable_bay_termini()
   H.menus.road_stops={title="Stops & Waypoints",[1]=inspect,
     [2]=item("road_station","Roadside bus stop","stop"),
     [3]=item("road_bay_pair","Two-bay bus terminus","bus_terminus"),
-    [5]=item("road_waypoint","Road waypoint"),[6]=item("road_waypoint_remove","Remove road waypoint"),[8]=back}
+    [4]=item("road_stop_remove","Remove road stop"),[5]=item("road_waypoint","Road waypoint"),[6]=item("road_waypoint_remove","Remove road waypoint"),[8]=back}
   build_utilities()
 end
 function H.enable_bank()
@@ -423,9 +423,12 @@ function H.legend(stack,slot,is_world_tool,visible)
       help[1]=H.sightseeing[id]
       help[2]="Right-click for details"
     elseif is_world_tool then
-      help[1]=(id=="road" or id=="road_axis_x" or id=="road_axis_y" or id=="road_remove" or id=="road_waypoint" or id=="road_waypoint_remove" or id=="clear" or id=="oneway_drag")
+      help[1]=(id=="road" or id=="road_axis_x" or id=="road_axis_y" or id=="road_remove" or id=="road_waypoint" or id=="road_waypoint_remove" or id=="road_stop_remove" or id=="clear" or id=="oneway_drag")
         and "Click or drag in the world" or "Left-click to use"
-      if id=="road_depot" or id=="road_station" or id=="truck_stop_tool" then
+      if id=="road_station" or id=="truck_stop_tool" then
+        help[1]="Click to build; drag with a layout"
+        help[#help+1]="Right-click for layout"
+      elseif id=="road_depot" then
         help[#help+1]="Right-click for layout"
       elseif id~="inspect" then help[#help+1]="Right-click to cancel" end
     else

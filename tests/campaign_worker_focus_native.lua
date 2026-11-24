@@ -200,6 +200,51 @@ core.register_on_joinplayer(function(p)
       local depot=snapshot.tiles[Sim.id(q.x,q.z+1)]
       assert(depot.build=="road_depot" and depot.depot_dir==2 and depot.road_terminal_level)
       core.log("action","NATIVE_ROAD_GESTURE_LAYOUT_PASS")
+    elseif label=="stop-layout" then
+      assert(world.go_menu(player,"road_stops"))
+      local slot
+      for i,j in ipairs(world.hotbar_layout(player)) do if j==2 then slot=i end end
+      assert(slot and slot<=9)
+      aim(q.x+1,q.z,.25)
+      local show=core.show_formspec
+      core.show_formspec=function(user,form,body)
+        if user==name and form=="luanttd_core:road_terminal_layout" then
+          assert(body:find("through_0;East",1,true))
+          core.log("action","NATIVE_ROAD_GESTURE_STOP_LAYOUT_OPEN")
+          core.show_formspec=show
+        end
+        return show(user,form,body)
+      end
+      core.log("action","NATIVE_ROAD_GESTURE_STOP_LAYOUT slot="..slot)
+    elseif label=="stop-end" then
+      aim(q.x+2,q.z,.25)
+      core.log("action","NATIVE_ROAD_GESTURE_STOP_RELEASE")
+    elseif label=="stop-preview" then
+      local target,hit=world.target(player)
+      local cells,ok,hint=ui.preview(player,target,hit)
+      assert(ok and #cells==2 and hint:find("2 tiles",1,true),tostring(hint))
+      assert(cells[1]==q.first+1 and cells[2]==q.first+2)
+      core.log("action","NATIVE_ROAD_GESTURE_STOP_PREVIEW_PASS "..hint)
+    elseif label=="stop-done" or label=="stop-erase-done" then
+      local s=assert(OwnerCheckpoint.read())
+      local a,b=s.tiles[q.first+1],s.tiles[q.first+2]
+      assert(b.station and b.build=="road_station" and b.stop_axis==10)
+      local st=assert(s.stations[b.station])
+      assert(st.road_members[q.first+2]=="bus")
+      if label=="stop-done" then
+        assert(a.station==b.station and st.road_members[q.first+1]=="bus")
+        assert(st.road_stop_areas.bus.w==2)
+        assert(world.go_menu(player,"road_stops"))
+        local slot
+        for i,j in ipairs(world.hotbar_layout(player)) do if j==4 then slot=i end end
+        assert(slot and slot<=9)
+        aim(q.x+1,q.z,.25)
+        core.log("action","NATIVE_ROAD_GESTURE_STOP_ERASE slot="..slot)
+      else
+        assert(not a.station and a.build=="road" and a.road_bits==10)
+        assert(st.tile==q.first+2 and not st.road_members[q.first+1])
+        core.log("action","NATIVE_ROAD_GESTURE_STOP_ERASE_PASS")
+      end
     elseif label=="town-start" then ready("TOWN",7,q.tx,q.tz,.12)
     elseif label=="town-end" then
       aim(q.tx+2,q.tz,.75)
@@ -216,7 +261,16 @@ core.register_on_joinplayer(function(p)
         for ix=q.tx,q.tx+2 do assert(snapshot.tiles[Sim.id(ix,q.tz)].road_town==nil) end
         assert(next(snapshot.companies[name].stock_town_authority_ratings))
       end
-      for id=q.first,q.last do assert(snapshot.tiles[id].build==nil) end
+      local area=core.settings:get_bool("luanttd_native_road_stop_area",false)
+      for id=q.first,q.last do
+        if not area or id~=q.first+1 and id~=q.first+2 then assert(snapshot.tiles[id].build==nil) end
+      end
+      if area then
+        local a,b=snapshot.tiles[q.first+1],snapshot.tiles[q.first+2]
+        local st=assert(snapshot.stations[b.station])
+        assert(not a.station and a.road_bits==10 and st.tile==q.first+2 and st.road_members[q.first+2]=="bus")
+        core.log("action","NATIVE_ROAD_GESTURE_STOP_REOPEN_PASS")
+      end
       if fixed and core.settings:get_bool("luanttd_native_explicit_road_ui",false) then
         local depot=snapshot.tiles[Sim.id(q.x,q.z+1)]
         assert(depot.build=="road_depot" and depot.depot_dir==2)

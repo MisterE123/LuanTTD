@@ -61,14 +61,21 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
   end
   function R.route(s,a,b,owner,vehicle,occupancy,waypoints)
     local board=Board(Sim,s,F,occupancy)
-    local source,dest=board.tile(a.tile),board.tile(b.tile)
+    local from=a.tile
+    local pose=vehicle and vehicle.road_stop_pose
+    if pose and a.id then
+      local t=board.tile(pose[4])
+      if t and t.station==a.id and not t.waypoint then from=pose[4] end
+    end
+    local source,dest=board.tile(from),board.tile(b.tile)
     if not source or not dest or not dest.station then return nil end
     local bus=vehicle==nil or vehicle.cargo=="passenger"
     if (source.pair or dest.pair) and vehicle and vehicle.engine~="bus" and
         vehicle.engine~="leopard_bus" and vehicle.engine~="foster_bus" and vehicle.engine~="foster_mk2_bus" then return nil end
-    local v={owner=owner,bus=bus,tile=a.tile,display_max_speed=speed[vehicle and vehicle.engine or "bus"]}
-    if dest.stop_type~=(bus and "bus" or "truck") then return nil end
-    if a.tile==b.tile and not (waypoints and #waypoints>0) then return {a.tile},vehicle and vehicle.road_arrival_td end
+    local v={owner=owner,bus=bus,tile=from,display_max_speed=speed[vehicle and vehicle.engine or "bus"]}
+    local facility=bus and "bus" or "truck"
+    if dest.stop_type~=facility and not board.station_area(dest.station,facility) then return nil end
+    if (a.id~=nil and a.id==b.id or from==b.tile) and not (waypoints and #waypoints>0) then return {from},vehicle and vehicle.road_arrival_td end
     local mask
     if source.kind=="depot" or source.kind=="bay_stop" then
       -- Stock depot departure or the outward-facing phase after leaving
@@ -83,7 +90,7 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     else
       return nil
     end
-    local trace,best,cost=through(board,v,a.tile,mask,waypoints,{kind="station",station=dest.station})
+    local trace,best,cost=through(board,v,from,mask,waypoints,{kind="station",station=dest.station})
     if not trace then return nil end
     local path,bridge={},false
     for _,piece in ipairs(trace) do
@@ -147,18 +154,19 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
   -- only accepts a settled stock road-stop pose, never a guessed one.
   function R.nearest_depot(s,stop,vehicle,occupancy)
     local board=Board(Sim,s,F,occupancy)
-    local source=board.tile(stop.tile)
     local frame=vehicle.road_stop_pose
-    if not source or not frame or frame[4]~=stop.tile then return end
+    local from=frame and frame[4]
+    local source=from and board.tile(from)
+    if not source or source.station~=stop.id or source.waypoint then return end
     local dir
     if source.kind=="bay_stop" then dir=source.dir
     elseif source.kind=="drive_stop" then dir=math.floor(frame[3]/2)
     else return end
     local td=F.direction_trackdir(dir)
     if not td or not F.has_trackdir(F.status(source,false),td) then return end
-    local v={owner=vehicle.owner,bus=vehicle.cargo=="passenger",tile=stop.tile,display_max_speed=speed[vehicle.engine]}
+    local v={owner=vehicle.owner,bus=vehicle.cargo=="passenger",tile=from,display_max_speed=speed[vehicle.engine]}
     local to=C.destination(board,v,{kind="any_depot"})
-    local found,best=Search.find(board,v,stop.tile,2^td,to)
+    local found,best=Search.find(board,v,from,2^td,to)
     if not found then return end
     local selected=Search.trace(board,v,to,best)
     if not selected or #selected<2 then return end

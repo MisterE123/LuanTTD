@@ -363,7 +363,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         select_goods=ctx.select_goods,neutral_owner=ctx.neutral_owner,town_rights=rights,
         station_town=function(st) return st.town or st.site end,
         modified=s.stock_modified_catchment,tiles=function(st)
-          if Mail.truck_stop(st) then return {at("truck",st.tile)} end
+          if Mail.truck_stop(st) then return Sim.road_stop_tiles(st) end
           return st.tiles
         end})
       hooks={passenger=hooks.passenger,mail=function(_,units,x,z,house)

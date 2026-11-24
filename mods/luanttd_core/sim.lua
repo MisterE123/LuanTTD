@@ -1142,7 +1142,14 @@ local terminal_errors={
   BRIDGE_TOO_LOW_FOR_ROADVEH_DEPOT="The road depot needs three levels below the bridge.",
   MUST_DEMOLISH_BRIDGE_FIRST="There isn't enough clearance below the bridge for this stop.",
   ALREADY_BUILT="That terminal is already built in this direction.",
+  ADJOINS_MULTIPLE_STATIONS="This selection touches more than one matching station. Hold E to build separately.",
+  STATION_SPREAD="A station can span at most 12 tiles in either direction. Hold E to build separately.",
+  LOCAL_AUTHORITY_REFUSES="The local council won't let your company build a station here.",
+  INCOMPATIBLE_STATION_TILE="That station does not accept this kind of stop.",
   ACTIVE_DEPOT_ROUTE="Wait for vehicles currently arriving at or leaving this depot.",
+  ACTIVE_STOP_ROUTE="Wait for the vehicle using this part of the stop.",
+  STOP_IN_ORDERS="Remove this stop from vehicle orders before clearing its last tile.",
+  NO_CLEAR_ROAD_STOP="Select an empty road stop that your company owns.",
   NOT_ENOUGH_CASH="Not enough cash.",
 }
 function M.stock_road_terminal_error(why)
@@ -1188,6 +1195,207 @@ function M.stock_road_terminal_plan(s,owner,id,req)
     })
   end
   return stock_road_terminals.quote(s,owner,id,req)
+end
+-- OpenTTD 16.0-RC1 Station::RecomputeCatchment: use the union of
+-- the squares around the physical station tiles, never around its sign.
+local road_stop_geometry=setmetatable({},{__mode="k"})
+local function stop_geometry(st)
+  local record=road_stop_geometry[st]
+  if record and record.members==st.road_members and record.sign==st.tile and record.kind==st.stop_type then
+    return record
+  end
+  local members=st.road_members or {[st.tile]=st.stop_type or "bus"}
+  local ids,physical={},{}
+  for id in pairs(members) do ids[#ids+1]=id end
+  table.sort(ids)
+  for i,id in ipairs(ids) do
+    local x,z=M.xy(id)
+    physical[i]={x=x-1,y=z-1,kind=members[id]}
+  end
+  record={members=st.road_members,sign=st.tile,kind=st.stop_type,ids=ids,physical=physical}
+  road_stop_geometry[st]=record
+  return record
+end
+function M.road_stop_tiles(st) return stop_geometry(st).physical end
+function M.road_stop_catchment(s,st,r)
+  local rec=stop_geometry(st)
+  r=s.stock_modified_catchment==false and 4 or r
+  if rec.catchment and rec.radius==r and rec.w==M.W and rec.h==M.H then return rec.catchment end
+  local cells={}
+  for _,id in ipairs(rec.ids) do
+    local x,z=M.xy(id)
+    for v=math.max(1,z-r),math.min(M.H,z+r) do
+      for u=math.max(1,x-r),math.min(M.W,x+r) do cells[M.id(u,v)]=true end
+    end
+  end
+  rec.catchment,rec.radius,rec.w,rec.h=cells,r,M.W,M.H
+  return cells
+end
+function M.road_stop_covers(s,st,x,z,r)
+  if not st.road_members then
+    local a,b=M.xy(st.tile)
+    r=s.stock_modified_catchment==false and 4 or r
+    return math.abs(a-x)<=r and math.abs(b-z)<=r
+  end
+  local id=M.id(x,z)
+  return id and M.road_stop_catchment(s,st,r)[id]==true or false
+end
+local road_stop_area,road_stop_members
+function M.stock_road_stop_area_plan(s,owner,first,last,req)
+  if req.kind~="bus" and req.kind~="truck" then return nil,"PARAMETERS" end
+  local company=s.companies[owner]
+  if not company then return nil,"PARAMETERS" end
+  if not road_stop_area then
+    local path=debug and debug.getinfo(1,"S").source
+    local base=path and path:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    road_stop_area=dofile(base.."openttd/road_stop_area.lua")(dofile(base.."openttd/road_stop_build.lua"))
+    road_stop_members=dofile(base.."road_stop_members.lua")(M)
+    town_road_authority=town_road_authority or
+      dofile(base.."town_road_authority.lua")(M,dofile(base.."openttd/road_town_permission.lua"))
+  end
+  local board={id=M.id,xy=M.xy}
+  local area,ids=road_stop_area.footprint(board,first,last,req.dir,req.through,12)
+  if not area then return nil,ids end
+  local policy=s.stock_road_town_policy or {}
+  local near=town_road_authority.nearest(s,area.tile)
+  if near and policy.tolerance~=3 and M.distance(near.tile,area.tile)<20 and
+      (company.stock_town_authority_ratings and company.stock_town_authority_ratings[near.id] or 500)<=-200 then
+    return nil,"LOCAL_AUTHORITY_REFUSES"
+  end
+  local function compatible(st)
+    -- Mixed-mode station catchments need their own native integration.
+    return st and st.mode=="road" and (st.stop_type or "bus")==req.kind and not s.tiles[st.tile].road_stop_pair
+  end
+  function board.station(id) return s.stations[id] end
+  function board.surrounding(rect)
+    local x,z=M.xy(rect.tile)
+    local found,seen={},{}
+    for v=z-1,z+rect.h do for u=x-1,x+rect.w do
+      local id=M.id(u,v)
+      local t=id and s.tiles[id]
+      if t and t.station and not seen[t.station] and compatible(s.stations[t.station]) then
+        seen[t.station]=true;found[#found+1]=t.station
+      end
+    end end
+    return found
+  end
+  local ground=default_oneway().ground_occupancy(s)
+  local changes,parts,cost,over,z={},{},0,nil,nil
+  for _,id in ipairs(ids) do
+    local q,why=M.stock_road_terminal_plan(s,owner,id,{kind=req.kind,dir=req.dir,through=req.through,ground=ground,area=true})
+    if not q then return nil,why end
+    if q.existing and over and q.existing~=over then return nil,"ADJOINS_MULTIPLE_STATIONS" end
+    over=over or q.existing
+    local edit=q.changes[1]
+    local ht=edit and edit.road_terminal_level or q.z
+    if z and z~=ht then return nil,"FLAT_LAND_REQUIRED" end
+    z=ht
+    if edit then
+      parts[#parts+1]={id=id,kind=req.kind}
+      changes[#changes+1]=edit
+    end
+    cost=cost+q.cost
+  end
+  local join,why=road_stop_area.find_join(board,area,over,owner,req.join,req.adjacent,true)
+  if why then return nil,why end
+  if join and not compatible(join) then return nil,"INCOMPATIBLE_STATION_TILE" end
+  local result=road_stop_members.preview(join,parts)
+  if not result.spread or #changes==0 then return nil,"ALREADY_BUILT" end
+  if result.spread.w>12 or result.spread.h>12 then return nil,"STATION_SPREAD" end
+  if cost>company.cash then return nil,"NOT_ENOUGH_CASH" end
+  local sid=join and join.id or s.next_station
+  local excluded,fronts={},{}
+  for _,id in ipairs(ids) do excluded[id]=true end
+  for _,edit in ipairs(changes) do
+    edit.join_stop=sid
+    cost=cost+stock_road_terminals.frontage(s,owner,edit,req,company.cash-cost,fronts,excluded)
+  end
+  for _,edit in ipairs(fronts) do changes[#changes+1]=edit end
+  return {cost=cost,changes=changes,stop_members=result,join_stop=sid}
+end
+function M.stock_road_stop_remove_plan(s,owner,first,last)
+  local company=s.companies[owner]
+  if not company then return nil,"PARAMETERS" end
+  if not road_stop_members then
+    local path=debug and debug.getinfo(1,"S").source
+    local base=path and path:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    road_stop_members=dofile(base.."road_stop_members.lua")(M)
+  end
+  local occupied=default_oneway().ground_occupancy(s)
+  local x,z=M.xy(first)
+  local u,v=M.xy(last)
+  local groups,changes={},{}
+  for b=math.min(z,v),math.max(z,v) do for a=math.min(x,u),math.max(x,u) do
+    local id=M.id(a,b)
+    local t=s.tiles[id]
+    local st=t.station and s.stations[t.station]
+    if st and st.owner==owner and t.build=="road_station" and not t.road_stop_pair and not occupied[id] then
+      local parts=groups[st.id] or {}
+      groups[st.id]=parts;parts[#parts+1]={id=id}
+      changes[#changes+1]={id=id,tool="remove_stop_part",build=t.stop_axis and "road" or "land",join_stop=st.id,
+        road_bits=t.stop_axis or 0}
+    end
+  end end
+  if #changes==0 then return nil,"NO_CLEAR_ROAD_STOP" end
+  local results={}
+  local selected={}
+  for _,row in ipairs(changes) do selected[row.id]=true end
+  for id,parts in pairs(groups) do
+    local st=s.stations[id]
+    local result=road_stop_members.preview(st,parts)
+    results[id]=result
+    for _,v in pairs(s.fleet) do
+      if v.station==id and v.load_state or v.dest==id and v.route and selected[v.route[#v.route]] then
+        return nil,"ACTIVE_STOP_ROUTE"
+      end
+      if not result.spread then
+        for _,order in ipairs(v.orders or {}) do
+          if order.station==id then return nil,"STOP_IN_ORDERS" end
+        end
+      end
+    end
+  end
+  local cost=#changes*50
+  if cost>company.cash then return nil,"NOT_ENOUGH_CASH" end
+  return {changes=changes,cost=cost,remove_stop_parts=results}
+end
+local function refresh_road_station_sites(s,st)
+  local known,served={},{}
+  local primary=road_stop_site(s,st.tile)
+  for id in pairs(st.road_members) do
+    local _,sites=road_stop_site(s,id)
+    for _,site in ipairs(sites or {}) do
+      if not known[site] then known[site]=true;served[#served+1]=site end
+    end
+  end
+  table.sort(served);st.served,st.site=served,primary
+end
+function M.apply_road_stop_remove(s,owner,plan)
+  local ids={}
+  for _,row in ipairs(plan.changes) do
+    local t=s.tiles[row.id]
+    if row.road_bits~=0 then
+      t.build,t.road_bits="road",row.road_bits
+      if t.road_town then t.owner=nil end
+    else
+      t.build,t.owner,t.road_bits=nil,nil,nil
+    end
+    t.station,t.stop_axis,t.road_terminal_level,t.road_stop_type=nil,nil,nil,nil
+    ids[#ids+1]=row.id
+  end
+  for id,result in pairs(plan.remove_stop_parts) do
+    if not result.spread then s.stations[id]=nil
+    else
+      local st=s.stations[id]
+      road_stop_members.structural_apply(st,result)
+      refresh_road_station_sites(s,st)
+    end
+  end
+  debit(s.companies[owner],plan.cost)
+  s.topology=s.topology+1
+  return true,("Removed %d road stop tile%s for $%d."):format(#ids,#ids==1 and "" or "s",plan.cost),ids
 end
 local road_waypoint_world
 function M.road_waypoint_plan(s,owner,req)
@@ -1341,6 +1549,16 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
     if s.tiles[id] and s.tiles[id].road_waypoint_id and tool~="road" then return nil,"Remove the road waypoint while keeping its pavement." end
     if M.crossing_protected(s,id) and tool~="road" then
       return nil,"That tile is a protected level crossing."
+    end
+  end
+  if tool=="clear" then
+    for _,id in ipairs(ids) do
+      local t=s.tiles[id]
+      local st=t and s.stations[t.station]
+      local first=st and st.road_members and next(st.road_members)
+      if first and next(st.road_members,first) then
+        return nil,"This is a joined road stop; remove its parts using the station removal tool."
+      end
     end
   end
   local w=M.tools[tool]
@@ -1576,14 +1794,18 @@ local function apply_build(s,owner,changes,cost)
         end
       end
       if station_tools[k] then
-        local sid=s.next_station;s.next_station=sid+1
+        local sid=item.join_stop or s.next_station
         local best,served=item.station_site,item.station_served
         if not served then best,served=site_radius(s,id) end
         local site=s.sites[best]
         local label=tile.road_stop_pair and "Bus terminus" or M.tools[k].name
-        s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,
-          name=(site and site.name.." " or "")..label.." #"..sid,site=best,served=served,stock={},last_service={}}
+        if not s.stations[sid] then
+          s.next_station=s.next_station+1
+          s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,
+            name=(site and site.name.." " or "")..label.." #"..sid,site=best,served=served,stock={},last_service={}}
+        end
         tile.station=sid
+        tile.road_stop_type=item.stop_type
         if item.stop_type=="truck" then
           local stop=s.stations[sid]
           stop.stop_type,stop.freight_art="truck",true
@@ -1626,7 +1848,13 @@ end
 -- Only the owning VM calls this with a plan it just validated. No
 -- mailbox or stale preview can provide the terrain edit itself.
 function M.apply_road_construction(s,owner,plan)
-  return apply_build(s,owner,plan.changes,plan.cost)
+  local ok,why,dirty=apply_build(s,owner,plan.changes,plan.cost)
+  if ok and plan.stop_members then
+    local st=assert(s.stations[plan.join_stop])
+    road_stop_members.structural_apply(st,plan.stop_members)
+    refresh_road_station_sites(s,st)
+  end
+  return ok,why,dirty
 end
 function M.autoroad_bend_build(s,owner,start,last)
   local q,why=M.autoroad_bend_plan(s,owner,start,last)

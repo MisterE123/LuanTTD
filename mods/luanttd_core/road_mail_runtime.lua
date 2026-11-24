@@ -37,20 +37,17 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     return v and v.cargo=="mail" and (v.engine=="mail_van" or Sim.road_freight_cargo and Sim.road_freight_cargo(v.engine)=="mail")
   end
 
-  -- The current game gives a truck stop one tile. Modified catchment, the
-  -- stock default, is the same square radius 3 as a single bus stop.
+  -- The default modified road-stop catchment is three tiles from each platform.
   local radius=3 -- station_type.h CA_TRUCK
   M.catchment=radius
   function M.acceptance(s,st)
     if not M.truck_stop(st) then return 0 end
-    local a,b=Sim.xy(st.tile)
     local total=0
-    for z=b-radius,b+radius do for x=a-radius,a+radius do
-      local id=Sim.id(x,z)
+    for id in pairs(Sim.road_stop_catchment(s,st,radius)) do
       local tile=id and s.tiles[id]
       local house=tile and tile.house and tile.source_house
       if house then total=total+assert(house_accept[house.id],"Unknown mail acceptance for house") end
-    end end
+    end
     return total
   end
   function M.accepts(s,st) return M.acceptance(s,st)>=8 end
@@ -173,8 +170,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     assert(record and record.town,"Mail origin requires the emitting house's town")
     local list={}
     for _,st in ipairs(stops or M.stops(s)) do
-      local a,b=Sim.xy(st.tile)
-      if H.single_tile_catchment(a-x-1,b-z-1,radius) then
+      if Sim.road_stop_covers(s,st,x+1,z+1,radius) then
         local rating=M.offer(st)
         if rating then list[#list+1]={st=st,rating=rating} end
       end

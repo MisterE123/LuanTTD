@@ -46,6 +46,18 @@ return function(Sim,s,oneway,Bank)
         return nil,errors[why] or Sim.stock_road_terminal_error(why)
       end
       return q
+    elseif op=="stock_stop_remove" then
+      local q,why=Sim.stock_road_stop_remove_plan(s,player,first,last)
+      if not q then return nil,Sim.stock_road_terminal_error(why) end
+      return q
+    elseif op=="stock_stop_area" then
+      if request.join~=nil and (type(request.join)~="number" or request.join<1 or request.join%1~=0) then
+        return nil,"INVALID_ROAD_GESTURE"
+      end
+      local q,why=Sim.stock_road_stop_area_plan(s,player,first,last,{kind=request.kind,dir=request.direction,
+        through=request.through==true,join=request.join,adjacent=request.adjacent==true})
+      if not q then return nil,Sim.stock_road_terminal_error(why) end
+      return q
     elseif op=="stock_terminal" and first==last then
       if request.kind~="depot" and request.kind~="truck" and request.kind~="bus" then
         return nil,"INVALID_ROAD_GESTURE"
@@ -82,7 +94,7 @@ return function(Sim,s,oneway,Bank)
       parts[i]=table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
         tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation),tostring(c.rail_tracks),tostring(c.railtype),
         c.rail_owner and ("%q"):format(c.rail_owner) or "-",tostring(c.depot_dir),tostring(c.stop_axis),
-        tostring(c.road_terminal_level),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint)},":")
+        tostring(c.road_terminal_level),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint),tostring(c.join_stop)},":")
     end
     if q.ratings then
       local keys={}
@@ -122,6 +134,8 @@ return function(Sim,s,oneway,Bank)
       return true,note,ids
     elseif request.tool=="drag" or request.tool=="bend" then
       return Sim.apply_road_construction(s,player,q)
+    elseif request.tool=="stock_stop_remove" then
+      return Sim.apply_road_stop_remove(s,player,q)
     elseif request.tool=="road_waypoint" then
       return Sim.apply_road_waypoint(s,player,q)
     elseif request.tool=="remove" then

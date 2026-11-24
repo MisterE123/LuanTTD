@@ -42,12 +42,10 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
   end
 
   local function accepted_house_totals(s,st,cargo)
-    local x,z=Sim.xy(st.tile)
     local per_town,sum={},0
     local radius=cargo=="mail" and Mail.catchment or 3
     local accepts=cargo=="mail" and Mail.house_acceptance or M.house_passenger_acceptance
-    for y=z-radius,z+radius do for u=x-radius,x+radius do
-      local id=Sim.id(u,y)
+    for id in pairs(Sim.road_stop_catchment(s,st,radius)) do
       local tile=id and s.tiles[id]
       local rec=tile and tile.house and tile.source_house
       if rec then
@@ -55,7 +53,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         sum=sum+value
         if rec.town and value>0 then per_town[rec.town]=(per_town[rec.town] or 0)+value end
       end
-    end end
+    end
     return sum,per_town
   end
   function M.acceptance(s,st,cargo)

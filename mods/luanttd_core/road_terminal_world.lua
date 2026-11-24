@@ -22,6 +22,26 @@ return function(Sim,Terrain,Stop,Underlay,rules)
     if kind==0 then return t.stock_clear_density==0 and 0 or 20 end
     return ({[1]=40,[2]=200,[3]=500,[5]=40})[kind]
   end
+  -- ConnectRoadToStructure only extends a neighboring normal road.
+  -- The caller may exclude all tiles in the proposed station rectangle.
+  function W.frontage(s,owner,edit,selected,budget,edits,excluded)
+    local price=0
+    local dir=4-selected.dir
+    if rules.connect then
+      for _,d in ipairs(selected.through and {dir,(dir+1)%4+1} or {dir}) do
+        local id=Sim.adjacent(edit.id,d)
+        local t=id and s.tiles[id]
+        if t and not (excluded and excluded[id]) and t.build=="road" and not t.level_crossing
+            and not t.roadworks and Sim.road_bits(s,id)~=0 then
+          local addition,cost=rules.connect(s,owner,id,d,edit)
+          if addition and cost>0 and price+cost<=budget then
+            edits[#edits+1]=addition;price=price+cost
+          end
+        end
+      end
+    end
+    return price
+  end
   function W.quote(s,owner,id,selected)
     local t=s.tiles[id]
     local c=s.companies[owner]
@@ -39,7 +59,7 @@ return function(Sim,Terrain,Stop,Underlay,rules)
         kind=="road" and not through then return nil,"PROTECTED_TERMINAL_TILE" end
     local tile_x,tile_z=Sim.xy(id)
     local slope,base,top=Terrain.tile(s.corner_grid,tile_x,tile_z)
-    local ground=rules.ground and rules.ground(s,id)
+    local ground=selected.ground or rules.ground and rules.ground(s,id)
     if not ground then return nil,"OCCUPANCY_UNKNOWN" end
     local deck,has_bridge
     if rules.deck then deck,has_bridge=rules.deck(s,id) end
@@ -78,6 +98,7 @@ return function(Sim,Terrain,Stop,Underlay,rules)
     if depot then leg,why=Stop.depot(record,{dir=dir,roadtype=0},settings)
     else leg,why=Stop.tile(record,{dir=dir,through=through,stop_type=selected.kind},settings) end
     if not leg then return nil,why end
+    if leg.station and selected.area then return {cost=0,changes={},existing=leg.station,z=leg.z} end
     if leg.unchanged or leg.station then return nil,"ALREADY_BUILT" end
     if leg.cost>c.cash then return nil,"NOT_ENOUGH_CASH" end
     local native_dir=4-dir
@@ -91,19 +112,8 @@ return function(Sim,Terrain,Stop,Underlay,rules)
       local ok,details=rules.facility(s,owner,edit,selected)
       if not ok then return nil,details end
     end
-    -- Stock callback: only add a missing half to existing, normal road.
-    -- A blocked neighbor doesn't invalidate the main build quote.
-    if rules.connect then
-      for _,d in ipairs(through and {native_dir,(native_dir+1)%4+1} or {native_dir}) do
-        local neighbor=Sim.adjacent(id,d)
-        local n=neighbor and s.tiles[neighbor]
-        if n and n.build=="road" and not n.level_crossing and not n.roadworks and Sim.road_bits(s,neighbor)~=0 then
-          local addition,cost=rules.connect(s,owner,neighbor,d,edit)
-          if addition and cost>0 and price+cost<=c.cash then
-            edits[#edits+1]=addition;price=price+cost
-          end
-        end
-      end
+    if not selected.area then
+      price=price+W.frontage(s,owner,edit,{dir=dir,through=through},c.cash-price,edits)
     end
     edits[#edits+1]=edit
     return {cost=price,changes=edits}
