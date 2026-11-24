@@ -3822,6 +3822,49 @@ function M.fund_road_reconstruction(s,owner,id,seen)
   debit(s.companies[owner],q.cost)
   return true,"Funded local road reconstruction for six months.",{town=id,months=town.road_build_months}
 end
+local statue_world
+local function statues()
+  if not statue_world then
+    load_road_rules()
+    local Spiral=dofile(module_root.."openttd/spiral_tile_rc1.lua")
+    local K=dofile(module_root.."openttd/town_statue_rc1.lua")(Spiral)
+    statue_world=dofile(module_root.."town_statue_world.lua")(M,terrain_rules,K)
+  end
+  return statue_world
+end
+function M.quote_town_statue(s,owner,id)
+  local mount=town_growth_mount[s]
+  if mount and s.stock_generated_profile then return statues().quote(s,owner,id,mount.world) end
+end
+function M.build_town_statue(s,owner,id,offer)
+  local mount=town_growth_mount[s]
+  if not (mount and s.stock_generated_profile) then return false,"Town statue is unavailable." end
+  local ids,cost=statues().apply(s,owner,id,offer,mount.world)
+  if not ids then return false,cost end
+  debit(s.companies[owner],cost)
+  return true,"Town statue commissioned.",ids
+end
+function M.town_statue_station_bonus(s,owner,town)
+  local t=s.stock_town_growth and s.stock_town_growth.towns[town]
+  return t and t.statues and t.statues[owner]~=nil or false
+end
+local statue_station_town=setmetatable({},{__mode="k"})
+function M.station_has_town_statue(s,st)
+  if not (s.stock_statue_count and s.stock_statue_count>0 and st.owner) then return false end
+  local t=type(st.town)=="number" and st.town or st.mode=="road" and st.site
+  if not t then
+    local tile=st.tile or st.tiles and st.tiles[1]
+    if type(tile)~="number" then return false end
+    local old=statue_station_town[st]
+    if not old or old.world~=s or old.tile~=tile then
+      local near=M.road_tree_authority().nearest(s,tile)
+      old={world=s,tile=tile,town=near and near.id}
+      statue_station_town[st]=old
+    end
+    t=old.town
+  end
+  return t and M.town_statue_station_bonus(s,st.owner,t) or false
+end
 function M.road_stock_service_active(s)
   return s.road_stock_loading and s.road_stock_clock and s.road_economy and s.corner_grid~=nil
 end

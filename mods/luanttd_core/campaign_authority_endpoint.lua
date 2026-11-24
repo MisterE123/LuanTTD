@@ -292,6 +292,7 @@ return function(Sim,R,max_days)
     local row=Sim.road_tree_authority().company_view(s,company,town)
     row.funding=Sim.quote_town_buildings(s,name,id)
     row.reconstruction=Sim.quote_road_reconstruction(s,name,id)
+    row.statue=Sim.quote_town_statue(s,name,id)
     return reply(true,nil,row)
   end
   function A.company(name)
@@ -524,6 +525,8 @@ return function(Sim,R,max_days)
     elseif c.kind=="town_fund_roads" and index(c.town) then
       ok,note,value=Sim.fund_road_reconstruction(s,name,c.town,c.cost)
       if ok and R.news then R.news.road_reconstruction(c.town) end
+    elseif c.kind=="town_build_statue" and index(c.town) and tile_id(c.tile) then
+      ok,note,value=Sim.build_town_statue(s,name,c.town,{tile=c.tile,cost=c.cost})
     elseif c.kind=="company_loan" and (c.amount==10000 or c.amount==-10000) then
       if not s.companies[name] then return reply(false,"COMPANY_NOT_OPEN") end
       ok,note=Sim.loan(s,name,c.amount)

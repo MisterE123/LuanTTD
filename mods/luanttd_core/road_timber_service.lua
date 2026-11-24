@@ -129,11 +129,12 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
       end
       return n
     end
-    local function rate(g,stock,cargo,dirty)
+    local function rate(st,g,stock,cargo,dirty)
       local n=0
       for _,p in ipairs(stock) do n=n+p.units end
       local p=Rating.step(g,{waiting=n,destinations=n>0 and 1 or 0,select_goods=s.stock_select_goods~=false,
-        random_u32=random,waiting_changed=dirty})
+        random_u32=random,waiting_changed=dirty,
+        statue=Sim.station_has_town_statue and Sim.station_has_town_statue(s,st)})
       for _,k in ipairs({"rating","has_rating","time_since_pickup","last_speed","last_age","max_waiting_cargo"}) do g[k]=p[k] end
       if p.drop>0 then
         for id,count in pairs(Station.truncate(stock,n,p.drop,random)) do
@@ -150,13 +151,13 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
     function B.step_rating(st,dirty)
       if not by_id[st.id] then return dirty end
       dirty=not not dirty
-      for _,cargo in ipairs(ordered) do dirty=rate(Rules.goods(st,cargo),queue(st,cargo),cargo,dirty) end
+      for _,cargo in ipairs(ordered) do dirty=rate(st,Rules.goods(st,cargo),queue(st,cargo),cargo,dirty) end
       return dirty
     end
     function B.step_rail_rating(st)
       local cargo=st.freight_cargo
       assert(Rules.cargo[cargo],"Unknown timber rail cargo")
-      return rate(Rules.goods(st,cargo),Rules.queue(st,cargo),cargo,false)
+      return rate(st,Rules.goods(st,cargo),Rules.queue(st,cargo),cargo,false)
     end
     function B.timing(v)
       local q=assert(Rules.trucks[v.cargo]);return q.load_amount,q.age_ticks

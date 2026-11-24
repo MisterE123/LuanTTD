@@ -127,7 +127,8 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
       local g=Coal.goods(st)
       local waiting=Coal.waiting(assert(by_id[st.id]))
       local r=Rating.step(g,{waiting=waiting,destinations=waiting>0 and 1 or 0,
-        select_goods=select_goods(),random_u32=random})
+        select_goods=select_goods(),random_u32=random,
+        statue=Sim.station_has_town_statue and Sim.station_has_town_statue(s,st)})
       for _,name in ipairs({"rating","has_rating","time_since_pickup","last_speed","last_age","max_waiting_cargo"}) do
         g[name]=r[name]
       end

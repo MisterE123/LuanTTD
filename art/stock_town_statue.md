@@ -1,0 +1,9 @@
+# Temperate town statue
+
+The [RC1 stock statue command](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/town_cmd.cpp#L3548-L3601) searches the town's 9×9 spiral, rejects steep slopes and bridges, and delegates whole-house removal when the selected tile needs it. A company may commission one statue per town. The quoted site and $187,500 base price are confirmed by the authority worker before charging. Stations of the same company associated with that town get the source +26 term in the normal cargo rating calculation, with the existing rate limit. The statue does not boost the separate Local Authority approval rating.
+
+- Right-click a town centre or its street to open **Local Authority → Commission a statue**. The council chooses where to build it.
+- LuanTTD's bronze railway figure, cap, coat, raised arm and engraved bands sit on an original granite plinth, with a stock flattening foundation on a slope.
+- Editable [Blender source](stock_town_statue.blend). Rebuild the mesh and palette using `python3 tools/build_town_statue_art.py`, then reassemble the Blender file with `blender -b --python tools/save_town_statue_blend.py`.
+- The [compiled comparison](../tests/town_statue_rc1_upstream.py) exercises exact RC1 plot selection on 96 maps, including clipped spirals. The [authority test](../tests/town_statue_world.lua) checks pricing, ownership, stale offers, the station bonus, save/load and the flat sea-level flood branch. The [native replay](../tests/town_statue_native.lua) opens the council by right-click, pays through the real dialog and verifies the painted statue and balance.
+- Protected from ordinary demolition. Natural flooding can remove a flat sea-level statue and its town bonus; it does not affect the raised foundations on slopes. Other company mergers/ownership transfer and all NewGRF statue variants are outside this integration.

@@ -243,6 +243,7 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
       if not coverage[st.id] then return end
       local common=(ctx.stationwide and ctx.stationwide(st)) or st
       return Coal.rating_tick(st,{select_goods=s.stock_select_goods,ship=common.last_vehicle_type=="ship",
+        statue=Sim.station_has_town_statue and Sim.station_has_town_statue(s,common),
         truncate=Station.truncate,random_u32=ctx.random_u32 or function() return Station.random_u32(s) end,
         station_at=function(i) return state.stations[i] or (ctx.station_at and ctx.station_at(i)) end})
     end

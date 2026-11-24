@@ -855,6 +855,7 @@ return function(api)
   if S.stock_generated_profile and S.stock_generated_profile.object_rng then
     stock_scenery.lighthouse=architecture("stock_lighthouse","stock_lighthouse","stock_landmarks_atlas")
     stock_scenery.transmitter=architecture("stock_transmitter","stock_transmitter","stock_landmarks_atlas")
+    stock_scenery.statue=architecture("stock_town_statue","stock_town_statue","stock_town_statue")
   end
   local lighthouse_beams=stock_scenery.lighthouse and dofile(modpath.."/lighthouse_beam_view.lua")(core,Sim)
   function R.step_lighthouse_beams(dt,viewers)
@@ -1199,6 +1200,13 @@ return function(api)
     end
     if y==-1 then return basement end
     if t.stock_landmark then
+      if t.stock_landmark.kind=="statue" then
+        local slope,base,top=terrain.tile(id)
+        if y<=base then return gnames.grass[t.variant] end
+        if y<=top then return slope==0 and gnames.grass[t.variant] or retaining end
+        if y==top+1 and x%2==0 and z%2==0 then return stock_scenery.statue end
+        return "air"
+      end
       if y<=t.h then return gnames[t.terrain][t.variant] end
       if y==t.h+1 and x%2==0 and z%2==0 then return assert(stock_scenery[t.stock_landmark.kind]) end
       return "air"

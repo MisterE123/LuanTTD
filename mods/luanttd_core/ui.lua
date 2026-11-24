@@ -508,9 +508,10 @@ function U.fields(p,formname,f)
     return true
   end
   if formname=="luanttd_core:town_authority" then
-    if f.fund_buildings or f.fund_roads then U.fund_town_from_panel(p,f.fund_roads and "roads" or "buildings")
+    if f.build_statue then U.fund_town_from_panel(p,"statue")
+    elseif f.fund_buildings or f.fund_roads then U.fund_town_from_panel(p,f.fund_roads and "roads" or "buildings")
     else
-      local v=view(p:get_player_name());v.town_funding=nil;v.road_funding=nil;v.authority_context=nil
+      local v=view(p:get_player_name());v.town_funding=nil;v.road_funding=nil;v.statue_offer=nil;v.authority_context=nil
     end
     return true
   end
@@ -968,7 +969,7 @@ local function asset_details(p,tile,hit)
   elseif t.stock_landmark then
     local record=t.stock_landmark
     local town=S.sites[record.town]
-    local label=record.kind=="lighthouse" and "Lighthouse" or "Radio transmitter"
+    local label=record.kind=="lighthouse" and "Lighthouse" or record.kind=="statue" and "Company statue" or "Radio transmitter"
     U.status(p,(town and (town.name.." · ") or "")..label.." · Protected landmark")
   elseif t.stock_industry then
     local chain=t.stock_industry.chain
@@ -2610,7 +2611,8 @@ function U.world_status(p,tile,show_preview,hit)
       mark.chain=="oil" and S.stock_oil_industries or S.stock_coal_industries)
     local facility=registry and registry[mark.id]
     local site=S.sites[facility and facility.site or a.site]
-    local landmark=a.stock_landmark and (a.stock_landmark.kind=="lighthouse" and "Lighthouse" or "Radio transmitter")
+    local landmark=a.stock_landmark and (a.stock_landmark.kind=="lighthouse" and "Lighthouse" or
+      a.stock_landmark.kind=="statue" and "Company statue" or "Radio transmitter")
     local stake=a.stock_object and a.stock_object.kind=="owned_land" and ("Company land · "..(a.owner or "Unknown"))
     local channel=a.ship and a.ship.kind=="lock" and "Ship lock" or
       a.water_class=="river" and "River" or nil
@@ -3147,7 +3149,7 @@ function U.open_town_authority(p,town)
   if not client then return false end
   local token={}
   v.authority_context=token
-  v.town_funding,v.road_funding=nil,nil
+  v.town_funding,v.road_funding,v.statue_offer=nil,nil,nil
   local queued=client.query({kind="town_authority",player=n,town=town},function(result)
     if v.authority_context~=token or not core.get_player_by_name(n) then return end
     if not result.ok then U.status(p,"Town authority information is unavailable.");return end
@@ -3189,6 +3191,22 @@ function U.open_town_authority(p,town)
       end
       exit=y+1.36
     end
+    local statue=row.statue
+    if statue then
+      local y=exit
+      if statue.existing then
+        action=action..("label[.45,%g;Your company already has a statue here.]"):format(y+.27)
+      elseif statue.affordable then
+        v.statue_offer={town=row.id,tile=statue.tile,cost=statue.cost,revision=result.revision,token=token}
+        action=action..("button[.45,%g;9.7,.57;build_statue;%s]"):format(y,
+          esc("Commission a statue · "..dollars(statue.cost)))..
+          "tooltip[build_statue;The council chooses the site. Your stations in this town get a cargo rating bonus.]"
+      else
+        action=action..("label[.45,%g;%s]"):format(y+.27,esc(statue.why or
+          ("Commission a statue · "..dollars(statue.cost).." required")))
+      end
+      exit=exit+.85
+    end
     local size=exit+.92
     core.show_formspec(n,"luanttd_core:town_authority",
       ("formspec_version[7]size[10.6,%g]bgcolor[#152334;false]"):format(size)..
@@ -3203,12 +3221,12 @@ end
 function U.fund_town_from_panel(p,action)
   local name=p:get_player_name()
   local v=view(name)
-  local q=action=="roads" and v.road_funding or action=="buildings" and v.town_funding
+  local q=action=="roads" and v.road_funding or action=="buildings" and v.town_funding or action=="statue" and v.statue_offer
   local client=api.worker_bridge_client
   if not q or q.token~=v.authority_context or not client then return end
-  v.town_funding,v.road_funding=nil,nil
+  v.town_funding,v.road_funding,v.statue_offer=nil,nil,nil
   local ok,why=client.query({kind="command",player=name,command={
-    kind="town_fund_"..action,town=q.town,cost=q.cost,revision=q.revision}},function(result)
+    kind=action=="statue" and "town_build_statue" or "town_fund_"..action,town=q.town,tile=q.tile,cost=q.cost,revision=q.revision}},function(result)
     if v.authority_context~=q.token or not core.get_player_by_name(name) then return end
     U.status(p,result.why=="STALE_COMMAND" and "The town changed. Review the latest funding offer." or result.why)
     U.open_town_authority(p,q.town)
@@ -3217,7 +3235,7 @@ function U.fund_town_from_panel(p,action)
 end
 function U.context(p,tile,hit)
   local n=p:get_player_name();local V=view(n)
-  V.authority_context=nil;V.town_funding=nil;V.road_funding=nil
+  V.authority_context=nil;V.town_funding=nil;V.road_funding=nil;V.statue_offer=nil
   if V.pick_order then U.finish_order_pick(p);return end
   if api.authority_handoff and company_projection and api.worker_depot and tile then
     local x,z=Sim.xy(tile)
@@ -3259,7 +3277,8 @@ function U.context(p,tile,hit)
         local platform=R.host_record and R.host_record("stock_rail_stations",t.rail_station_id)
         if platform and not Freight.role(platform) then return api.worker_rail_mail_station.open(p,tile) end
       end
-      local town=site and site.kind=="town" and t.site or t.road_town
+      local town=site and site.kind=="town" and t.site or t.road_town or
+        t.stock_landmark and t.stock_landmark.kind=="statue" and t.stock_landmark.town
       if town and U.open_town_authority(p,town) then return true end
       local name=st and st.name or site and site.name or t.terrain or "Tile"
       label=("%s · %d,%d"):format(name,x,z)

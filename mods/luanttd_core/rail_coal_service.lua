@@ -365,6 +365,7 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
         end
         if due then
           Coal.rating_tick(st,{select_goods=ctx.select_goods,random_u32=random,
+            statue=Sim.station_has_town_statue and Sim.station_has_town_statue(s,st),
             truncate=Station.truncate,station_at=function(id)
               return state.stations[id] or s.stations and s.stations[id]
             end})

@@ -151,11 +151,12 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       end
       return n
     end
-    local function step_rating(cargo,g,stock,dirty,rail_at)
+    local function step_rating(st,cargo,g,stock,dirty,rail_at)
       local n=0
       for _,p in ipairs(stock) do n=n+p.units end
       local next_rating=Rating.step(g,{waiting=n,destinations=n>0 and 1 or 0,select_goods=s.stock_select_goods~=false,
-        random_u32=random,waiting_changed=dirty})
+        random_u32=random,waiting_changed=dirty,
+        statue=Sim.station_has_town_statue and Sim.station_has_town_statue(s,st)})
       for _,k in ipairs({"rating","has_rating","time_since_pickup","last_speed","last_age","max_waiting_cargo"}) do
         g[k]=next_rating[k]
       end
@@ -176,13 +177,13 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       if not by_id[st.id] then return dirty end
       dirty=not not dirty
       for _,cargo in ipairs(ordered) do
-        dirty=step_rating(cargo,Rules.goods(st,cargo),queue(st,cargo),dirty,rail_at)
+        dirty=step_rating(st,cargo,Rules.goods(st,cargo),queue(st,cargo),dirty,rail_at)
       end
       return dirty
     end
     function B.step_rail_rating(st)
       local cargo=assert(st.freight_cargo)
-      return step_rating(cargo,Rules.goods(st,cargo),Rules.queue(st,cargo),false,rail_at)
+      return step_rating(st,cargo,Rules.goods(st,cargo),Rules.queue(st,cargo),false,rail_at)
     end
     function B.timing(v)
       local q=assert(Rules.trucks[v.cargo]);return q.load_amount,q.age_ticks

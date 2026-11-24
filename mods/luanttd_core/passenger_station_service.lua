@@ -315,7 +315,8 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
           return (ctx.random_u32 or Queue.random_u32)(state)
         end
         local r=Catchment.rating_step(st,g,{waiting=waiting,destinations=waiting>0 and 1 or 0,
-          select_goods=ctx.select_goods~=false,random_u32=random,waiting_changed=dirty})
+          select_goods=ctx.select_goods~=false,random_u32=random,waiting_changed=dirty,
+          statue=ctx.statue and ctx.statue(st)})
         for _,k in ipairs({"rating","has_rating","time_since_pickup","last_speed","last_age","max_waiting_cargo"}) do g[k]=r[k] end
         if r.drop>0 then
           for sid,retained in pairs(Queue.truncate(stock,waiting,r.drop,random)) do

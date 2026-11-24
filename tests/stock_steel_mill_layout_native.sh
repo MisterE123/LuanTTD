@@ -50,6 +50,11 @@ if [[ ${LUANTTD_QA_OWNED_LAND:-0} == 1 ]]; then
   fixture=tests/owned_land_native.lua
   marker='PASS NATIVE OWNED LAND'
 fi
+if [[ ${LUANTTD_QA_TOWN_STATUE:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/town_statue_native.lua
+  marker='PASS NATIVE TOWN STATUE'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -172,6 +177,25 @@ if [[ ${LUANTTD_QA_ROADSIDE:-0} == 1 ]]; then
   grep -q 'NATIVE ROADSIDE trees READY' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
   sleep 1
   if command -v import >/dev/null; then import -window root -quality 91 "$out/roadside-trees.jpg"; fi
+fi
+if [[ ${LUANTTD_QA_TOWN_STATUE:-0} == 1 ]]; then
+  wait_statue() {
+    for _ in {1..240}; do
+      grep -q "$1" "$out/server.log" && return
+      kill -0 "$server" 2>/dev/null || break
+      sleep .25
+    done
+    tail -n 55 "$out/"{server,client}.log; exit 1
+  }
+  wait_statue 'NATIVE STATUE READY'
+  win=$(timeout 10 xdotool search --sync --onlyvisible --pid "$client" | tail -1)
+  xdotool windowraise "$win" windowfocus --sync "$win"
+  sleep .8
+  xdotool mousedown 3; sleep .3; xdotool mouseup 3
+  wait_statue 'NATIVE STATUE OFFER'
+  sleep 1
+  if command -v import >/dev/null; then import -window root -quality 91 "$out/statue-offer.jpg"; fi
+  xdotool mousemove 600 519 click 1
 fi
 for _ in {1..360}; do grep -q "$marker" "$out/server.log" && break; kill -0 "$server" 2>/dev/null || break; sleep .25; done
 grep "$marker" "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }

@@ -3,6 +3,10 @@
 -- object_cmd.cpp TryBuildLighthouseNearTile through GenerateObjects,
 -- tilearea_spiral.cpp, newgrf_object.cpp WasEverAvailable and
 -- table/object_land.h. Only the two generated vanilla Temperate objects.
+local source=debug and debug.getinfo(1,"S").source
+local dir=source and source:match("^@(.*/)") or
+  (core and core.get_modpath("luanttd_core").."/openttd/") or "mods/luanttd_core/openttd/"
+local Spiral=dofile(dir.."spiral_tile_rc1.lua")
 return function(Clear,Calendar)
   local M={}
   local floor,ceil,sqrt,abs=math.floor,math.ceil,math.sqrt,math.abs
@@ -18,40 +22,6 @@ return function(Clear,Calendar)
     local out={}
     for k,v in pairs(t) do out[k]=v end
     return out
-  end
-
-  -- Translate the upstream iterator's initialized position and westward
-  -- ring jump. Off-map entries are skipped (not clamped/repeated).
-  local function spiral(w,h,x,z,radius,ew,eh,dir)
-    local at=0
-    local function start_side() return (dir%2==0 and ew or eh)+at*2+1 end
-    local remaining=dir>=0 and start_side() or 0
-    local function advance()
-      if dir==-1 then
-        x,z,dir=x+1,z-1,0
-      else
-        x,z=x+dx[dir],z+dz[dir]
-        remaining=remaining-1
-        if remaining>0 then return end
-        dir=dir+1
-        if dir==4 then x,z,at,dir=x+1,z-1,at+1,0 end
-      end
-      remaining=start_side()
-    end
-    return function()
-      while at~=radius or dir==-1 do
-        local x0,z0=x,z
-        advance()
-        if x0>=0 and x0<w and z0>=0 and z0<h then return x0+z0*w end
-      end
-    end
-  end
-  local function centered(w,h,i,diameter)
-    local half=diameter%2
-    return spiral(w,h,i%w+(1-half),floor(i/w),floor(diameter/2),half,half,half==1 and -1 or 0)
-  end
-  local function perimeter(w,h,i,radius,width,depth)
-    return spiral(w,h,i%w+width+1,floor(i/w),radius,width,depth,0)
   end
 
   function M.generate(board,start,next_random,opts)
@@ -94,7 +64,7 @@ return function(Clear,Calendar)
       rock_words[i]=v
     end)
     local function nearby(i,diameter,id)
-      for q in centered(w,h,i,diameter) do
+      for q in Spiral.centered(w,h,i,diameter) do
         local t=tile(q)
         if t and t.class==OBJECT and t.object_type==id then return true end
       end
@@ -124,12 +94,12 @@ return function(Clear,Calendar)
       if not valid(t) or t.class~=WATER or t.water~="coast" then return false end
       local _,_,_,rocky=Clear.describe(word(i))
       if rocky or nearby(i,33,LIGHTHOUSE) then return false end
-      for q in centered(w,h,i,3) do
+      for q in Spiral.centered(w,h,i,3) do
         local candidate=tile(q)
         if buildable(candidate) then
           build(q,LIGHTHOUSE,candidate)
           local r=random()
-          for k in centered(w,h,i,3) do
+          for k in Spiral.centered(w,h,i,3) do
             local n=tile(k)
             if n and (n.class==WATER and n.water=="coast" or n.class==TREES and n.water) then
               rocks(k,r%16+5)
@@ -151,7 +121,7 @@ return function(Clear,Calendar)
       if x<0 or z<0 or (free and (x==0 or z==0)) or x>=maxx or z>=maxz then return false end
       local i=x+z*w
       if not valid(tile(i)) then return false end
-      for q in perimeter(w,h,i,1,2*radius,2*radius) do
+      for q in Spiral.perimeter(w,h,i,1,2*radius,2*radius) do
         if lighthouse_near(q) then return true end
       end
       return false

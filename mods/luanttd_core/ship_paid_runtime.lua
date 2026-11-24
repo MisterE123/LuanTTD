@@ -90,6 +90,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local ctx={width=Sim.W,height=Sim.H,xy=Sim.xy,house_at=house_at,
       gradual=s.stock_gradual_loading~=false,feeder_percent=s.stock_feeder_percent,
       select_goods=s.stock_select_goods,
+      statue=Sim.station_has_town_statue and function(st) return Sim.station_has_town_statue(s,st) end,
       modified=s.stock_modified_catchment,
       neutral_owner=false,serve_neutral=s.stock_serve_neutral_industries~=false,
       mail_random_u32=MailRandom and function() return MailRandom(s) end,

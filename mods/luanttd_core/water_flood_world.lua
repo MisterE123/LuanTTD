@@ -30,6 +30,11 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     end
     return true
   end
+  local function floodable_object(t)
+    local k=t.stock_landmark and t.stock_landmark.kind
+    return k=="statue" or k=="lighthouse" or k=="transmitter" or
+      (t.stock_object and t.stock_object.kind=="owned_land")
+  end
   local function protected(s,id,t)
     if t.ship or t.tram or t.airfield or t.station or t.house or t.site or t.stock_industry or t.stock_landmark or t.road_town or
       t.signal or t.rail_tracks or t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or t.level_crossing then return true end
@@ -41,6 +46,10 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     if t.stock_void then return "void" end
     if t.ship and t.ship.water_ground and t.ship.water_class=="sea" then return "station" end
     if rail_ok(s,id,t) then return "rail" end
+    if floodable_object(t) and (t.terrain=="grass" or t.terrain=="hill") then
+      for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return "protected" end end
+      return "object"
+    end
     if protected(s,id,t) then return "protected" end
     if t.build and t.build~="canal" then return "protected" end
     if t.build=="canal" or t.stock_canal then return "canal" end
@@ -72,6 +81,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         return {kind=kind,id=id,slope=slope,base=base,foundation_slope=adjusted,
           foundation_base=base+rise,tracks=t.rail_tracks,ground=t.rail_ground or 0,water_ground=t.rail_ground==13}
       end
+      if kind=="object" then return {kind=kind,slope=slope,base=base,can_flood=true} end
       return {kind=kind,slope=slope,base=base,water_class=kind=="station" and "sea" or t.water_class,
         rocks=t.stock_water_rocks or (kind=="clear" and t.stock_clear_ground==2) or nil,
         water_ground=kind=="trees" and t.wood.ground==3 or nil}
@@ -133,6 +143,17 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         t.wood.ground,t.wood.density,t.wood.water_class=0,3,nil
       else
         if change.from=="trees" then t.wood=nil end
+        if change.from=="object" then
+          local st=t.stock_landmark
+          if st and st.kind=="statue" then
+            local town=s.stock_town_growth and s.stock_town_growth.towns[st.town]
+            if town and town.statues and town.statues[st.owner]==id then
+              town.statues[st.owner]=nil
+              s.stock_statue_count=math.max(0,(s.stock_statue_count or 1)-1)
+            end
+          end
+          t.stock_object,t.stock_landmark,t.owner=nil,nil,nil
+        end
         apply(t,change.kind,base,change.rocks)
       end
       s.changed[#s.changed+1]=id

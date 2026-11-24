@@ -47,7 +47,10 @@ function F.visit(board,x,z)
     for dir=0,7 do
       local u,v=neighbor(dir)
       local t=u and board.tile(u,v)
-      if t and (t.kind=="clear" or t.kind=="trees" and not t.water_ground or t.kind=="rail" and not t.water_ground and board.flood_rail)
+      -- RC1 DoFloodTile: for non-flat object tiles the TileType::Object
+      -- switch has no case; flat land delegates to LandscapeClear as WATER.
+      if t and (t.kind=="clear" or t.kind=="trees" and not t.water_ground or t.kind=="rail" and not t.water_ground and board.flood_rail
+          or t.kind=="object" and t.can_flood and t.slope==0)
           and (t.foundation_base or t.base)==0 and has(directions(t),opposite(dir)) then
         if t.kind=="rail" then
           local q=board.flood_rail(u,v,t)

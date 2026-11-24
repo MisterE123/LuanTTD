@@ -109,7 +109,8 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     local waiting=M.waiting(st)
     local random=function() return Station.random_u32(s) end
     local r=Kernel.step(g,{waiting=waiting,destinations=waiting>0 and 1 or 0,
-      select_goods=s.stock_select_goods~=false,random_u32=random})
+      select_goods=s.stock_select_goods~=false,random_u32=random,
+      statue=Sim.station_has_town_statue and Sim.station_has_town_statue(s,st)})
     g.rating,g.has_rating,g.time_since_pickup=r.rating,r.has_rating,r.time_since_pickup
     g.last_speed,g.last_age,g.max_waiting_cargo=r.last_speed,r.last_age,r.max_waiting_cargo
     if r.drop>0 then
