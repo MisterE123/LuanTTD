@@ -260,7 +260,7 @@ jobs:
       - name: Install graphical replay tools
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git gcc libc6-dev luanti luanti-server python3 xvfb x11-utils xauth xdotool imagemagick
+          apt-get install -y --no-install-recommends ca-certificates git gcc libc6-dev luanti luanti-server python3 python3-pil xvfb x11-utils xauth xdotool imagemagick
       - uses: actions/checkout@v4
         with:
           persist-credentials: false

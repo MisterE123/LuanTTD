@@ -49,7 +49,7 @@ f({wb_open=true});assert(launches==0)
 api.road_bay_tools=true
 f({wb_rows="CHG:2"});has("Setup needed  ·  Two-bay bus terminus") -- flag alone is not a menu
 H.enable_bay_termini()
-f({wb_rows="DCL:2"});has("Available  ·  Two-bay bus terminus");has("Open Bus Stops");assert(launches==0)
+f({wb_rows="DCL:2"});has("Available  ·  Two-bay bus terminus");has("Open Stops & Waypoints");assert(launches==0)
 waiting_orders=true;f({wb_open=true});has("Finish the current rail orders first.");assert(launches==0)
 waiting_orders=false;f({wb_open=true})
 assert(last_menu=="road_stops" and closed==form and launches==1)
