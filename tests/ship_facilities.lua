@@ -32,6 +32,13 @@ for dir=0,3 do
   assert(plan.dir==dir and plan.cost==350 and plan.water==pier and plan.approach==head and plan.water_class=="sea")
   assert(got[1]==land and got[2]==pier and #got==2)
   assert(plan.station_area.w==(dir%2==0 and 2 or 1))
+  tiles[head]={kind="sea",rocks=true,is_water_tile=false,slope=0}
+  assert(D.dock(B,land).approach==head and W.at(B,head)==0)
+  assert(#D.docking_neighbors(B,pier)==0)
+  tiles[pier].rocks,tiles[pier].is_water_tile=true,false
+  assert(D.dock(B,land).cost==950)
+  tiles[pier].rocks,tiles[pier].is_water_tile=nil,nil
+  tiles[head]={kind="river",slope=0}
   assert(plan.station_area.h==(dir%2==1 and 2 or 1))
   fails("NOT_ENOUGH_MONEY",D.dock,B,land,{budget=40})
   tiles[pier].overhead=true

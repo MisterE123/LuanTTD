@@ -271,7 +271,8 @@ function M.landmarks(Sim,Terrain,s,Generator,Objects,date)
   for _,site in ipairs(s.sites) do
     if site.kind=="town" then
       local x,z=Sim.xy(site.tile)
-      board.towns[#board.towns+1]={id=site.id,x=x,z=z}
+      local town=s.stock_town_growth and s.stock_town_growth.towns[site.id]
+      board.towns[#board.towns+1]={id=site.id,x=x,z=z,edge_radius_squared=town and town.radii[1]}
     end
   end
   function board.tile(x,z)
@@ -279,17 +280,29 @@ function M.landmarks(Sim,Terrain,s,Generator,Objects,date)
     local t=id and s.tiles[id]
     if not t then return end
     local slope,base=Terrain.tile(s.corner_grid,x,z)
-    local class=t.stock_void and 7 or t.stock_landmark and 10 or t.stock_industry and 8 or t.terrain=="water" and 6 or
+    local class=t.stock_void and 7 or t.stock_landmark and 10 or t.stock_industry and 8 or t.wood and 4 or t.terrain=="water" and 6 or
       t.house and 3 or t.build=="road" and 2 or (t.site or t.build) and 10 or 0
+    local field=s.stock_farm_fields and s.stock_farm_fields[id]
     return {class=class,slope=slope,height=base,bridge_above=s.bridge_above and s.bridge_above[id]~=nil or
       s.rail_bridge_above and s.rail_bridge_above[id]~=nil,
-      object_type=t.stock_landmark and t.stock_landmark.type}
+      object_type=t.stock_landmark and t.stock_landmark.type,ground=field and 3 or t.stock_clear_ground,
+      water=t.coastal_water and "coast" or t.water_class,rocky=t.stock_water_rocks}
   end
   local result=Objects.generate(board,profile.industry_rng,Generator.next_random,{date=date})
   result.each(function(x,z,record)
-    local t=s.tiles[Sim.id(x,z)]
+    local id=Sim.id(x,z)
+    local t=s.tiles[id]
     t.stock_landmark,t.stock_clear_ground=record,nil
+    if s.stock_farm_fields then s.stock_farm_fields[id]=nil end
   end)
+  if result.each_rock then
+    result.each_rock(function(x,z,ground,wet)
+      local id=Sim.id(x,z)
+      local t=s.tiles[id]
+      t.stock_clear_ground,t.stock_water_rocks=ground,wet
+      if ground and s.stock_farm_fields then s.stock_farm_fields[id]=nil end
+    end)
+  end
   profile.object_rng,profile.object_stats=copy(result.rng_after),result.stats
   return result
 end

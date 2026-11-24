@@ -15,6 +15,45 @@ function C.describe(word)
   return word%16,floor(word/16)%16,floor(word/256)%16,floor(word/ROCKY_WATER)%2==1
 end
 
+local function walk(tile,count,offsets,random,read,may_place,place)
+  while true do
+    place(tile,read(tile))
+    local next_tile
+    repeat
+      count=count-1
+      if count==0 then return end
+      -- RandomRange uses the high two bits (ScaleToLimit), not modulo.
+      next_tile=tile+offsets[floor(random()/1073741824)]
+    until may_place(read(next_tile),true)
+    tile=next_tile
+  end
+end
+
+local function may_have_rocks(word,allow_water)
+  if not word then return false end
+  local kind,water,_,rocky=C.describe(word)
+  if kind==CLEAR then return true end
+  if kind~=WATER then return false end
+  return water==COAST or allow_water and not rocky and (water==SEA or water==RIVER)
+end
+
+local function rock_walk(tile,count,offsets,random,read,write)
+  if may_have_rocks(read(tile),false) then
+    walk(tile,count,offsets,random,read,may_have_rocks,function(i,word)
+      local kind,water,_,rocky=C.describe(word)
+      if kind==CLEAR then write(i,word%256+256*ROCKS)
+      elseif water~=RIVER and not rocky then write(i,word+ROCKY_WATER) end
+    end)
+  end
+end
+
+-- A fresh RC1 landmark can request the same source walk on the live
+-- post-industry board, without re-running the global clear generation.
+function C.rock_walker(width,random,read,write)
+  local offsets={[0]=-1,width,1,-width}
+  return function(tile,count) rock_walk(tile,count,offsets,random,read,write) end
+end
+
 function C.generate(base,next_random,pulse)
   assert(type(base.tile)=="function" and base.rng_after and type(next_random)=="function",
     "Stock ground pass requires a terrain raster and RNG")
@@ -31,47 +70,23 @@ function C.generate(base,next_random,pulse)
   local function may_have_rough(word)
     return word and word%16==CLEAR and floor(word/256)%16~=DESERT
   end
-  local function may_have_rocks(word,allow_water)
-    if not word then return false end
-    local kind,water,_,rocky=C.describe(word)
-    if kind==CLEAR then return true end
-    if kind~=WATER then return false end
-    return water==COAST or allow_water and not rocky and (water==SEA or water==RIVER)
-  end
-  local function walk(tile,count,may_place,place)
-    while true do
-      place(tile,read(tile))
-      local next_tile
-      repeat
-        count=count-1
-        if count==0 then return end
-        -- RandomRange uses the high two bits (ScaleToLimit), not modulo.
-        next_tile=tile+offsets[floor(random()/1073741824)]
-      until may_place(read(next_tile),true)
-      tile=next_tile
-    end
-  end
   local function roughen(i,word)
     changed[i]=word%256+256*ROUGH
   end
-  local function add_rocks(i,word)
-    local kind,water,_,rocky=C.describe(word)
-    if kind==CLEAR then changed[i]=word%256+256*ROCKS
-    elseif water~=RIVER and not rocky then changed[i]=word+ROCKY_WATER end
-  end
+  local rocks=C.rock_walker(w,random,read,function(i,word) changed[i]=word end)
   local rough=scaled(random()%512+0x200)
   local rocky=scaled(random()%128+0x80)
   for j=1,rough do
     if pulse and j%4096==0 then pulse() end
     local r=random()
     local tile=r%area
-    if may_have_rough(read(tile)) then walk(tile,floor(r/16777216)%8+1,may_have_rough,roughen) end
+    if may_have_rough(read(tile)) then walk(tile,floor(r/16777216)%8+1,offsets,random,read,may_have_rough,roughen) end
   end
   for j=1,rocky do
     if pulse and j%512==0 then pulse() end
     local r=random()
     local tile=r%area
-    if may_have_rocks(read(tile),false) then walk(tile,floor(r/16777216)%16+5,may_have_rocks,add_rocks) end
+    rocks(tile,floor(r/16777216)%16+5)
   end
   local V={}
   for k,v in pairs(base) do V[k]=v end

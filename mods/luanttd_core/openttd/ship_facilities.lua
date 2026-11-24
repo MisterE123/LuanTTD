@@ -67,7 +67,12 @@ return function(Track,Water)
     if type_water(wet) then b=0 end
     local head=board.adjacent(pier,dir)
     local open=check(board,head)
-    if not type_water(open) or not flat(open) then return nil,"SITE_UNSUITABLE",head end
+    -- CmdBuildDock checks TileType::Water, not IsWaterTile or ship
+    -- track bits, for the third tile. A flat ClearRocks tile passes
+    -- this construction check without becoming a navigable berth.
+    if not flat(open) or not (type_water(open) or open.rocks and open.kind=="sea") then
+      return nil,"SITE_UNSUITABLE",head
+    end
     local x,z=board.xy(id)
     local u,v=board.xy(pier)
     local area={x=math.min(x,u),z=math.min(z,v),w=dir%2==0 and 2 or 1,h=dir%2==1 and 2 or 1}

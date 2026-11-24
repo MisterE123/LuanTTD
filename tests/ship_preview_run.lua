@@ -32,14 +32,27 @@ local a=assert(N.build(s,"Alice","dock",id(8,9)))
 local b=assert(N.build(s,"Alice","dock",id(8,16)))
 local d=assert(N.build(s,"Alice","depot",id(12,10),0))
 local buoy=arg[1]=="buoy" and assert(N.build(s,"Alice","buoy",id(19,12))) or nil
+local rocks=arg[1]=="rocks"
+if rocks then
+  for x=9,17 do s.tiles[id(x,12)].stock_water_rocks=true end
+end
 local p,why=R.start(s,"Alice",d.id,a.id,b.id,buoy and buoy.tile)
 assert(p,why)
 assert(not R.pose(p))
 local crossed,pending_hook=0
+local unique_detour=0
 local function wait(n)
   for _=1,2200 do
     R.tick(s,1)
     assert(p.phase~="blocked",p.failure)
+    if rocks and p.vehicle and p.vehicle.tile then
+      local x,z=S.xy(p.vehicle.tile)
+      assert(not s.tiles[p.vehicle.tile].stock_water_rocks)
+      if z==12 then
+        assert(x>=18,"Ferry entered the rocky band")
+        unique_detour=unique_detour+1
+      end
+    end
     if pending_hook then pending_hook() end
     if p.arrivals==n then break end
   end
@@ -79,5 +92,6 @@ wait(3)
 wait(4)
 assert(p.steps>180 and binds>4)
 if buoy then assert(crossed==3 and p.via.passes==3) end
+if rocks then assert(unique_detour>0,"Ferry never passed the outside edge of the rocky band") end
 assert(not R.clear(s,"Foreign") and R.clear(s,"Alice"))
 print("PASS: stock ferry depot departure, source ship navigation, adjacent berth stops and repeated service across reload")

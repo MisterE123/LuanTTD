@@ -1,5 +1,17 @@
 # Stock temperate landscape objects
 
+## OpenTTD 16.0-RC1 generated landmarks
+
+Ordinary Temperate campaigns use the pinned RC1 [generated transmitter and lighthouse pass](../mods/luanttd_core/openttd/scenery_object_rc1.lua). This is limited to the two stock natural landmarks; company HQs, statues, land purchase and NewGRF object generation are separate. The renderer continues to show the existing original 3D landmarks and rocky shore.
+
+- Transmitters begin on January 1, 1920 inclusive. They take the usual source map-area target and retry cap, and use the RC1 clipped spiral for spacing. The lighthouse is available from date zero.
+- Lighthouses start from each low town's actual squared edge radius, then try a fixed number of sites searched inward from the map perimeter. Only a plain coast tile can be an anchor. Candidate sites are rejected near another lighthouse or if the neighboring flat ground is bridged or occupied.
+- The 3×3 source spiral can send rock walkers inland and out to sea, in order. Source `BuildObject` uses separate color and tile-random draws before one additional word provides the initial walk lengths. The walker cannot replace a river, and visits skip out-of-map and Void tiles as upstream directs.
+
+The [compiled RC1 comparison](../tests/scenery_object_rc1_upstream.py) matches object order, positions, random fields, final map words and terminal RNG on 18 classic/freeform, square/rectangular, capacity-limited and date-boundary boards. The [native campaign integration fixture](../tests/scenery_rocky_coast.lua) verifies wet and dry halo records reach the same persistent map state used by ships. Object-to-town association retains the native Manhattan tie policy; full whole-map seed equivalence is not implied.
+
+## Historical 14.1 fixture reference
+
 `openttd/scenery_object_worldgen.lua` ports the stock OpenTTD 14.1 vanilla
 temperate object generation phase. It places the actual transmitter and
 lighthouse spec on eligible terrain. It does not add mandatory landmark

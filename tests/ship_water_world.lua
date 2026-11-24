@@ -14,6 +14,41 @@ local function at(x,z)return S.id(x,z)end
 for _,t in ipairs(s.tiles) do
   t.terrain="grass";t.owner=nil;t.site=nil;t.house=nil;t.build=nil;t.wood=nil
 end
+-- RC1 physical water sites are not the same thing as navigable tiles.
+-- Case includes both native ship construction and removal: rocks do not
+-- come back after the paid clear, while untouched approach rocks remain.
+do
+  local owner="Quarry QA"
+  local shore,pier,head=at(14,7),at(15,7),at(16,7)
+  local one,two=at(17,8),at(18,8)
+  local buoy=at(18,10)
+  for _,i in ipairs({pier,head,one,two,buoy}) do
+    s.tiles[i].terrain,s.tiles[i].water_class="water","sea"
+  end
+  for _,i in ipairs({pier,head,one,buoy}) do s.tiles[i].stock_water_rocks=true end
+  local board=N.board(s)
+  assert(Water.at(board,head)==0 and Water.at(board,buoy)==0)
+  local account=S.company(s,owner)
+  local opening=account.cash
+  local q=assert(N.quote(s,owner,"dock",shore))
+  assert(q.approach==head and q.cost==D.DOCK_BASE_COST+10000)
+  assert(s.tiles[pier].stock_water_rocks and account.cash==opening)
+  assert(N.build(s,owner,"dock",shore).cost==q.cost)
+  assert(not s.tiles[pier].stock_water_rocks and s.tiles[head].stock_water_rocks)
+  assert(not board.is_docking(head))
+  assert(N.remove(s,owner,shore))
+  assert(Water.at(board,pier)~=0 and Water.at(board,head)==0)
+  assert(N.build(s,owner,"depot",one,0).cost==D.DEPOT_BASE_COST+10000)
+  assert(N.remove(s,owner,one) and Water.at(board,one)~=0)
+  assert(N.build(s,owner,"buoy",buoy).cost==D.BUOY_BASE_COST+10000)
+  assert(N.remove(s,owner,buoy) and Water.at(board,buoy)~=0)
+  assert(account.cash==opening-q.cost-55-D.DEPOT_BASE_COST-10000-90-D.BUOY_BASE_COST-10000-D.BUOY_CLEAR_COST)
+  -- Reset only the isolated fixture before the existing canal assertions.
+  for _,i in ipairs({pier,head,one,two,buoy}) do
+    s.tiles[i].terrain,s.tiles[i].water_class,s.tiles[i].stock_water_rocks="grass",nil,nil
+  end
+  print("PASS: RC1 rock clearance for dock/depot/buoy, separate blocked approach and exact budget debit")
+end
 local a,b=at(5,8),at(9,8)
 local cash=S.company(s,"A").cash
 local q=assert(C.quote(s,"A",a,b))
@@ -30,7 +65,7 @@ assert(not no and why=="OWNED_BY_ANOTHER")
 local no,why=C.build(s,"A",at(11,8),at(16,8))
 assert(not no and why=="FLAT_LAND_REQUIRED" and not s.tiles[at(11,8)].stock_canal)
 local no,w=C.remove(s,"B",a)
-assert(not no and w=="SELECT_OWN_CANAL")
+assert(not no and w=="OWNED_BY_ANOTHER")
 assert(C.remove(s,"A",a))
 assert(B.tile(a).kind=="clear" and S.company(s,"A").water_infrastructure==4)
 assert(S.company(s,"A").cash==cash-30000)

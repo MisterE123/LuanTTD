@@ -75,7 +75,7 @@ return function(core,mod,Sim,Settings)
       dofile(mod.."/timber_world.lua")(Sim,Terrain,Timber),Oil,Farm,
       function(i,n) progress(72+math.floor(6*i/math.max(1,n)),"Placing industries",true) end,ready and heavy or nil)
     progress(79,"Adding landmarks and forests")
-    Campaign.landmarks(Sim,Terrain,S,Gen,dofile(src.."scenery_object_worldgen.lua"),Calendar.date(Sim.date(S)))
+    Campaign.landmarks(Sim,Terrain,S,Gen,dofile(src.."scenery_object_rc1.lua")(Clear,Calendar),Calendar.date(Sim.date(S)))
     Campaign.forests(Sim,Terrain,S,Gen,dofile(src.."tree_worldgen.lua"),option("trees","bayline_generated_tree_placer",2),
       function() progress(79,"Adding landmarks and forests",true) end)
     return S

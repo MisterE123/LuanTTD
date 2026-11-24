@@ -90,7 +90,7 @@ return function(Sim,Terrain,Water,Facilities)
     end
     return B
   end
-  local function clear(s,id,t)
+  local function clear(s,owner,id,t)
     if Sim.rail_span_protected and Sim.rail_span_protected(s,id) then return nil,"PROTECTED_TILE" end
     if s.tunnel_below and s.tunnel_below[id] then return nil,"SUBSURFACE_RESERVED" end
     local host=s.tiles[id]
@@ -98,6 +98,13 @@ return function(Sim,Terrain,Water,Facilities)
     if host.ship or host.house or host.site or host.tram or host.airfield or
         host.stock_industry or host.stock_landmark or host.build and host.build~="canal" then
       return nil,"PROTECTED_TILE"
+    end
+    -- RC1 ClearRocks isn't plain water. CmdBuildDock, CmdBuildShipDepot
+    -- and CmdBuildBuoy include its LandscapeClear cost before replacing it.
+    if t.rocks then
+      local cells,price=Sim.clear_water(s,owner,id,true)
+      if cells then return price end
+      return nil,price
     end
     -- OpenTTD 14.1 ClearTile_Water: a WATER_TILE_COAST on the
     -- two-raised-corner slope CmdBuildDock allows costs PR_CLEAR_ROUGH.
@@ -116,12 +123,12 @@ return function(Sim,Terrain,Water,Facilities)
         host.house or host.site or host.wood or host.build and host.build~="canal" then
       return "PROTECTED_TILE"
     end
-    if not t or not t.is_water_tile then return "BUOY_NEEDS_OPEN_WATER" end
+    if not t or not (t.is_water_tile or t.rocks and t.kind=="sea") then return "BUOY_NEEDS_OPEN_WATER" end
   end
   function N.quote(s,owner,kind,id,arg)
     if not s.corner_grid or not id or not s.tiles[id] then return nil,"INVALID_TILE" end
     local B=N.board(s)
-    local opts={clear=function(i,t) return clear(s,i,t) end,
+    local opts={clear=function(i,t) return clear(s,owner,i,t) end,
       budget=s.companies[owner] and s.companies[owner].cash or 100000}
     if kind=="dock" then return Facilities.dock(B,id,opts) end
     if kind=="depot" then return Facilities.depot(B,id,arg,opts) end
@@ -143,6 +150,7 @@ return function(Sim,Terrain,Water,Facilities)
       s.stock_ship_stations[next_]={id=next_,owner=owner,land=p.land,water=p.water,dir=p.dir,
         station_area=p.station_area,approach=p.approach,water_class=p.water_class}
       s.tiles[p.land].stock_water_rocks=nil
+      s.tiles[p.water].stock_water_rocks=nil
       s.tiles[p.land].ship={kind="dock",station=next_,owner=owner,dir=p.dir,water_part=false}
       s.tiles[p.water].ship={kind="dock",station=next_,owner=owner,dir=p.dir,
         water_part=true,water_class=p.water_class,water_ground=true}
@@ -152,6 +160,7 @@ return function(Sim,Terrain,Water,Facilities)
       local next_=s.next_stock_ship_station or 1
       s.next_stock_ship_station=next_+1
       s.stock_ship_buoys[next_]={id=next_,tile=id}
+      s.tiles[id].stock_water_rocks=nil
       s.tiles[id].ship={kind="buoy",station=next_,owner=p.water_owner,
         water_class=p.water_class,water_ground=true}
       p.id=next_
@@ -161,6 +170,7 @@ return function(Sim,Terrain,Water,Facilities)
       s.next_stock_ship_depot=next_+1
       s.stock_ship_depots[next_]={id=next_,owner=owner,tiles=p.tiles,axis=p.axis}
       for i,tile in ipairs(p.tiles) do
+        s.tiles[tile].stock_water_rocks=nil
         s.tiles[tile].ship={kind="ship_depot",owner=owner,depot=next_,axis=p.axis,
           part=i,water_class=p.water_classes[i],water_ground=true}
       end
