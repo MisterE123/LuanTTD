@@ -933,6 +933,36 @@ return function(api)
   function R.raise_bound(height) top_bound=math.max(top_bound,height+3) end
   function R.max_target_level() return top_bound end
   local generated_ground={}
+  -- The original stock ground byte selects the fence shape. Keep it in
+  -- the spare adjacent node, independently of the track and catenary.
+  if api.generated_world and core.get_dir_list then
+    local fence_media={}
+    for _,name in ipairs(core.get_dir_list(modpath.."/models",false)) do fence_media[name]=true end
+    stock_scenery.rail_fence={}
+    for g=2,11 do
+      local profiles=g<=4 and {0,3,12} or g<=7 and {0,6,9} or {0}
+      local family={}
+      for _,profile in ipairs(profiles) do
+        local name=("rail_ground_fence_%d_%d"):format(g,profile)
+        if fence_media["bl_"..name..".obj"] then
+          family[profile]=reg(name,{png("rail_ground_fence_atlas")},{
+            drawtype="mesh",mesh="bl_"..name..".obj",use_texture_alpha="clip",
+            paramtype="light",sunlight_propagates=true,walkable=false,pointable=false,
+          })
+        end
+      end
+      stock_scenery.rail_fence[g]=family
+    end
+    local soil=png("rail_barren")
+    stock_scenery.rail_barren={[0]=reg("stock_rail_barren",{soil,png("grass2"),png("grass_side")}),
+      retaining=reg("stock_rail_barren_retaining",{soil,png("grass2"),png("road_surface_retaining")})}
+    for _,profile in ipairs({3,6,9,12}) do
+      stock_scenery.rail_barren[profile]=reg("stock_rail_barren_"..profile,{soil},{
+        drawtype="mesh",mesh="bl_land_"..profile..".obj",paramtype="light",sunlight_propagates=true,
+        collision_box=slope_collision(profile),pointable=false,
+      })
+    end
+  end
   if api.generated_world then
     for class,name in ipairs({"clear_rough","clear_rocks"}) do
       local texture=png(name)
@@ -1264,6 +1294,13 @@ return function(api)
       if t.rail_depot_dir~=nil then grade,level,foundation=api.trackworks.depot_surface(shape,base)
       else grade,level,foundation,profile=api.trackworks.surface(shape,base,t.rail_tracks) end
       if grade then
+        local barren=t.rail_ground==0 and not (t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir) and stock_scenery.rail_barren
+        if barren and grade==0 and y==level then return foundation~="none" and barren.retaining or barren[0] end
+        if t.rail_ground and not (t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir)
+            and stock_scenery.rail_fence and y==level+1 and x%2==1 and z%2==0 then
+          local row=stock_scenery.rail_fence[t.rail_ground]
+          if row then return row[grade==0 and 0 or profile] or "air" end
+        end
         if t.rail_waypoint_id and grade==0 and y==level+1 and x%2==1 and z%2==1 then
           return stock_scenery.waypoint[t.rail_tracks==1 and 0 or 1]
         end
@@ -1295,7 +1332,7 @@ return function(api)
             return stock_rail.visual(id,t.rail_tracks,t.rail_type)
           end
           if grade>0 then
-            if y==level+1 then return ground_mesh[profile][t.variant] end
+            if y==level+1 then return barren and barren[profile] or ground_mesh[profile][t.variant] end
             if y==level+2 then return stock_rail.grade_art(grade,t.rail_type) end
           end
         end

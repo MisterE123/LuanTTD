@@ -490,6 +490,7 @@ function M.rail_span_protected(s,id)
     or s.rail_tunnel_below and s.rail_tunnel_below[id])
 end
 local coastal_occupied=setmetatable({},{__mode="k"})
+local stock_rail_ground
 function M.mount_coastal_flood(s,occupied)
   assert(s.corner_grid and s.road_economy and s.road_stock_house_supply,
     "Stock coastal flooding requires shared corners and the source landscape clock.")
@@ -503,8 +504,17 @@ end
 local function coastal_visit(s)
   if not coastal_active(s) then return end
   load_road_rules()
+  if not stock_rail_ground then
+    local track=dofile(module_root.."openttd/rail_track.lua")
+    local rules=dofile(module_root.."openttd/rail_ground_temperate.lua")(track)
+    stock_rail_ground=dofile(module_root.."rail_ground_world.lua")(M,rules)
+  end
   local board=coastal_world.board(s)
-  return function(x,z) coastal_world.visit(s,x+1,z+1,board) end
+  return function(x,z)
+    local u,v=x+1,z+1
+    coastal_world.visit(s,u,v,board)
+    stock_rail_ground.visit(s,u,v)
+  end
 end
 local function coastal_tile_occupied(s,id)
   local extra=coastal_occupied[s]

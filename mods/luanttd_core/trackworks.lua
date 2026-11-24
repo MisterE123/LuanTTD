@@ -310,6 +310,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     t.build=new>0 and "stock_rail" or nil
     t.owner=new>0 and owner or nil
     t.rail_tracks=new>0 and new or nil
+    if new==0 then t.rail_ground=nil elseif not plan.remove then t.rail_ground=0 end
     if new==0 then t.rail_type=nil
     elseif plan.result_railtype and plan.result_railtype~=0 then t.rail_type=plan.result_railtype end
     t.wood=nil

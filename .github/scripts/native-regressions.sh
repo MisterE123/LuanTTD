@@ -125,6 +125,8 @@ case "${1:-}" in
     LUANTTD_QA_AIR_LAYOUT=ground_rotary LUANTTD_QA_AIR_YEAR=1980 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
     LUANTTD_QA_STEEL_LAYOUT=1 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_STEEL_LAYOUT=0 bash tests/stock_steel_mill_layout_native.sh
+    LUANTTD_QA_RAIL_GROUND=1 bash tests/stock_steel_mill_layout_native.sh
+    LUANTTD_QA_RAIL_GROUND=2 bash tests/stock_steel_mill_layout_native.sh
     ;;
   rail-dispatch)
     python3 tests/rail_early_diesel_art.py
