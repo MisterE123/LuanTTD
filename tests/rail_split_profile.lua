@@ -36,5 +36,5 @@ for _,shape in ipairs({0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,23,27,29,30}) do
     end
   end
 end
-assert(total==36)
-print("PASS 36 special rail foundation profiles: stock curved geometry stays on the same railhead from port to port")
+assert(total==44)
+print("PASS 44 special rail foundation profiles: stock curved geometry stays on the same railhead from port to port")

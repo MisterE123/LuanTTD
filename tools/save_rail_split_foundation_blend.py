@@ -9,12 +9,14 @@ import bpy
 root = Path(__file__).resolve().parents[1]
 mod = root / "mods/luanttd_core"
 files = sorted((mod / "models").glob("bl_rail_foundation_split_*.obj"))
-assert len(files) == 36
+assert len(files) == 64
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
 scene.unit_settings.system = "METRIC"
-base = bpy.data.collections.new("OpenTTD RC1 • editable foundation variants")
-scene.collection.children.link(base)
+dry = bpy.data.collections.new("OpenTTD RC1 · dry terrain")
+wet = bpy.data.collections.new("OpenTTD RC1 · wet terrain")
+scene.collection.children.link(dry)
+scene.collection.children.link(wet)
 material = bpy.data.materials.new("Grass over cut stone")
 material.use_nodes = True
 texture = material.node_tree.nodes.new("ShaderNodeTexImage")
@@ -30,10 +32,10 @@ for i, f in enumerate(files):
     obj.data.name = obj.name
     for c in list(obj.users_collection):
         c.objects.unlink(obj)
-    base.objects.link(obj)
+    (wet if f.stem.endswith("_wet") else dry).objects.link(obj)
     obj.data.materials.clear()
     obj.data.materials.append(material)
     obj.location.x = i % 8 * 2.7
     obj.location.y = i // 8 * 2.7
-assert len(base.objects) == 36
+assert len(dry.objects) == 40 and len(wet.objects) == 24
 bpy.ops.wm.save_as_mainfile(filepath=str(root / "art/stock_rail_split_foundations.blend"), compress=True)

@@ -35,6 +35,11 @@ if [[ ${LUANTTD_QA_WET_RAIL:-0} == 1 ]]; then
   fixture=tests/rail_wet_native.lua
   marker='PASS NATIVE WET RAIL'
 fi
+if [[ ${LUANTTD_QA_MULTICOAST_RAIL:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/rail_multicoast_native.lua
+  marker='PASS NATIVE MULTICORNER RAIL'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -42,7 +47,7 @@ game="$out/games/luanttd"
 mkdir -p "$game" "$out/home" "$out/cache" "$out/world"
 cp "$src/game.conf" "$game/"
 cp -al "$src/mods" "$game/" 2>/dev/null || cp -a "$src/mods" "$game/"
-if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 ]]; then
+if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 || ${LUANTTD_QA_MULTICOAST_RAIL:-0} == 1 ]]; then
   printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 fi
 install -m 644 "$src/mods/luanttd_core/init.lua" "$out/init"
@@ -71,7 +76,7 @@ luanti --go --address 127.0.0.1 --port "$port" --name SteelReview --password '' 
 client=$!
 if [[ ${LUANTTD_QA_PLANT_TREES:-0} == 1 ]]; then
   for _ in {1..280}; do grep -q 'NATIVE TREE QA READY' "$out/server.log" && break; sleep .25; done
-  grep -q 'NATIVE TREE QA READY' "$out/server.log" || { tail -50 "$out/"{server,client}.log; exit 1; }
+  grep -q 'NATIVE TREE QA READY' "$out/server.log" || { tail -n 50 "$out/"{server,client}.log; exit 1; }
   win=$(timeout 10 xdotool search --sync --onlyvisible --pid "$client" | tail -1)
   xdotool windowraise "$win" windowfocus --sync "$win"
   home=$(sed -n 's/.*NATIVE TREE QA HOME //p' "$out/server.log" | tail -1)
@@ -81,32 +86,42 @@ if [[ ${LUANTTD_QA_PLANT_TREES:-0} == 1 ]]; then
   xdotool mousedown 1; sleep .30; xdotool mouseup 1
   for _ in {1..30}; do grep -q 'NATIVE TREE QA SLOT' "$out/server.log" && break; sleep .15; done
   slot=$(sed -n 's/.*NATIVE TREE QA SLOT //p' "$out/server.log" | tail -1)
-  [[ -n "$slot" ]] || { tail -50 "$out/server.log"; exit 1; }
+  [[ -n "$slot" ]] || { tail -n 50 "$out/server.log"; exit 1; }
   [[ "$slot" != 10 ]] || slot=0
   xdotool key --repeat 3 --delay 140 "$slot"
   for _ in {1..30}; do grep -q 'NATIVE TREE QA SELECTED' "$out/server.log" && break; sleep .15; done
   grep -q 'NATIVE TREE QA SELECTED' "$out/server.log"
   xdotool click 3; sleep .35
   if command -v import >/dev/null; then import -window root -quality 90 "$out/tree-palette.jpg"; fi
-  xdotool key Escape; sleep .3
+  xdotool key Escape
+  for _ in {1..32}; do grep -q 'NATIVE TREE QA PALETTE CLOSED' "$out/server.log" && break; sleep .15; done
+  grep -q 'NATIVE TREE QA PALETTE CLOSED' "$out/server.log" || { tail -n 60 "$out/"{server,client}.log; exit 1; }
+  sleep "${LUANTTD_QA_TREE_WAIT:-.4}"
   xdotool mousedown 1
   for _ in {1..40}; do grep -q 'NATIVE TREE QA DRAG END' "$out/server.log" && break; sleep .15; done
+  grep -q 'NATIVE TREE QA DRAG END' "$out/server.log" || { tail -n 60 "$out/"{server,client}.log; exit 1; }
   sleep .40; xdotool mouseup 1
 fi
 if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 ]]; then
   for _ in {1..180}; do grep -q 'NATIVE SHORE GROVE WET' "$out/server.log" && break; sleep .25; done
-  grep -q 'NATIVE SHORE GROVE WET' "$out/server.log" || { tail -75 "$out/"{server,client}.log; exit 1; }
+  grep -q 'NATIVE SHORE GROVE WET' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
   sleep .6
   if command -v import >/dev/null; then import -window root -quality 91 "$out/shore-wet.jpg"; fi
 fi
 if [[ ${LUANTTD_QA_WET_RAIL:-0} == 1 ]]; then
   for _ in {1..240}; do grep -q 'NATIVE WET RAIL BUILT' "$out/server.log" && break; sleep .25; done
-  grep -q 'NATIVE WET RAIL BUILT' "$out/server.log" || { tail -75 "$out/"{server,client}.log; exit 1; }
+  grep -q 'NATIVE WET RAIL BUILT' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
   sleep .7
   if command -v import >/dev/null; then import -window root -quality 91 "$out/wet-rail.jpg"; fi
 fi
+if [[ ${LUANTTD_QA_MULTICOAST_RAIL:-0} == 1 ]]; then
+  for _ in {1..240}; do grep -q 'NATIVE MULTICORNER RAIL WET' "$out/server.log" && break; sleep .25; done
+  grep -q 'NATIVE MULTICORNER RAIL WET' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
+  sleep .7
+  if command -v import >/dev/null; then import -window root -quality 91 "$out/wet-multicorner.jpg"; fi
+fi
 for _ in {1..360}; do grep -q "$marker" "$out/server.log" && break; kill -0 "$server" 2>/dev/null || break; sleep .25; done
-grep "$marker" "$out/server.log" || { tail -75 "$out/"{server,client}.log; exit 1; }
+grep "$marker" "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
 sleep 4
 if command -v import >/dev/null; then import -window root -quality 91 "$out/steel.jpg"; fi
 if grep -E 'ERROR\[|LuanTTD viewport placement:' "$out/"{server,client}.log; then exit 1; fi

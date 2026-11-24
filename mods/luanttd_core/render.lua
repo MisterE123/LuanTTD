@@ -657,6 +657,8 @@ return function(api)
   local split_nodes,split_wet_nodes={},{}
   if terrain and api.trackworks and api.trackworks.split_surface then
     local roots=api.trackworks.split_surface
+    local t=dofile(modpath.."/openttd/rail_track.lua")
+    local shore=dofile(modpath.."/openttd/rail_half_water.lua")(t,api.slope)
     for _,raw in ipairs({1,2,3,4,5,6,7,8,9,10,11,12,13,14,23,27,29,30}) do
       for bits=1,63 do
         local p=roots(raw,0,bits)
@@ -673,11 +675,14 @@ return function(api)
             drawtype="mesh",mesh="bl_rail_foundation_split_"..key..".obj",
             paramtype="light",sunlight_propagates=true,pointable=false,
             collision_box={type="fixed",fixed=fixed}})
-          if p.foundation=="half" and (raw==1 or raw==2 or raw==4 or raw==8) then
-            split_wet_nodes[key]=reg("rail_foundation_split_"..key.."_wet",{png("rail_split_foundation_atlas")},{
-              drawtype="mesh",mesh="bl_rail_foundation_split_"..key.."_wet.obj",
-              paramtype="light",sunlight_propagates=true,pointable=false,
-              collision_box={type="fixed",fixed=fixed}})
+          if p.foundation=="half" or p.foundation=="none" or p.foundation=="rail" then
+            local wet=shore.flood(raw,bits,0,function() return false end)
+            if wet and wet.ground==13 then
+              split_wet_nodes[key]=reg("rail_foundation_split_"..key.."_wet",{png("rail_split_foundation_atlas")},{
+                drawtype="mesh",mesh="bl_rail_foundation_split_"..key.."_wet.obj",
+                paramtype="light",sunlight_propagates=true,pointable=false,
+                collision_box={type="fixed",fixed=fixed}})
+            end
           end
         end
       end
@@ -698,6 +703,10 @@ return function(api)
     if x%2==1 and z%2==0 and y==base+1 then return wet or assert(split_nodes[split.mesh_key]) end
     local pieces=split.groups[y-1]
     if x%2==0 and z%2==0 and pieces then return stock_rail.visual(id,pieces,0) end
+    if x%2==1 and z%2==0 and R.split_rail_fence then
+      local fence=R.split_rail_fence(t,split,y)
+      if fence then return fence end
+    end
     return "air"
   end
   function R.host_signal(id)
@@ -1060,6 +1069,16 @@ return function(api)
     for _,mask in ipairs{3,6,9,12} do
       rapids[mask]=architecture("stock_river_rapid_rocks_"..mask,"river_rapid_rocks_"..mask,"stock_water_rocks_atlas")
     end
+  end
+  local fence_for_piece={[4]=10,[8]=11,[16]=8,[32]=9}
+  function R.split_rail_fence(t,profile,y)
+    local ground=t.rail_ground
+    if ground==13 then ground=fence_for_piece[t.rail_tracks] end
+    if not (ground and ground>=8 and ground<=11) then return end
+    local piece=profile.groups[y-1]
+    if not piece or fence_for_piece[piece]~=ground then return end
+    local row=stock_scenery.rail_fence and stock_scenery.rail_fence[ground]
+    return row and row[0]
   end
   local function source_road_node(t,id,x,y,z,grade,base,foundation)
     if grade==0 then

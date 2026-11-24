@@ -15,7 +15,8 @@ return function(Track,Slope)
     [Track.RIGHT]={.1464466094,.8535533906}}
   local split_families={half=true,rail=true,steep_lower=true,steep_both=true}
   function H.split(profile)
-    return profile and split_families[profile.foundation]==true or false
+    return profile and (split_families[profile.foundation]==true or profile.foundation=="none"
+      and profile.surface~=0 and profile.trackbits%4==0) or false
   end
   function H.curve_level(profile,track)
     if not H.split(profile) or not Track.has(profile.trackbits,track) then return end

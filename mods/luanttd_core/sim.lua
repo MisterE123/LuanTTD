@@ -522,8 +522,10 @@ local function coastal_visit(s)
   local random=trees and function() return M.stock_random_u32(s) end
   return function(x,z,tick)
     local u,v=x+1,z+1
+    local rail=s.tiles[M.id(u,v)]
+    local was_wet=rail and rail.rail_ground==13
     coastal_world.visit(s,u,v,board)
-    stock_rail_ground.visit(s,u,v)
+    if not was_wet then stock_rail_ground.visit(s,u,v) end
     if trees and tick then trees.visit(s,u,v,tick,random) end
   end,trees and function(tick) return trees.global_tick(s,tick,random) end
 end

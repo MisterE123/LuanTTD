@@ -61,7 +61,8 @@ function F.visit(board,x,z)
         end
       end
     end
-  elseif behaviour=="dryup" and (source.kind=="coast" or source.kind=="trees") then
+  elseif behaviour=="dryup" and (source.kind=="coast" or source.kind=="trees" or
+      source.kind=="rail" and board.dry_rail) then
     local allowed=directions(source)
     for dir=0,7 do
       if has(allowed,dir) then
@@ -70,7 +71,10 @@ function F.visit(board,x,z)
         if k=="active" then return changes end
       end
     end
-    if source.kind=="trees" or not board.can_clear or board.can_clear(x,z,source) then
+    if source.kind=="rail" then
+      local q=board.dry_rail(x,z,source)
+      if q then changes[1]={x=x,z=z,from="rail",kind="rail",rail=q} end
+    elseif source.kind=="trees" or not board.can_clear or board.can_clear(x,z,source) then
       changes[1]={x=x,z=z,from=source.kind,kind=source.kind=="trees" and "dry_trees" or "clear",rocks=source.rocks}
     end
   end

@@ -5,9 +5,10 @@ local Track=dofile(d.."openttd/rail_track.lua")
 local Slope=dofile(d.."openttd/slope.lua")
 local H=dofile(d.."openttd/rail_height.lua")(Track,Slope)
 local Split=dofile(d.."rail_split_profile.lua")(Track,H)
+local RailWater=dofile(d.."openttd/rail_half_water.lua")(Track,Slope)
 local check=arg[1]=="--check"
-local n=0
-local seen={}
+local n,wet_n=0,0
+local seen,wet_seen={},{}
 local corners={{0,0},{1,0},{1,1},{0,1},{.5,.5}}
 local function raw_height(mask,q)return Slope.surface(q[1],q[2],mask) end
 local function output(p,wet)
@@ -96,16 +97,18 @@ for _,shape in ipairs({0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,23,27,29,30}) do
         local f=assert(io.open(path,check and "r" or "w"))
         if check then assert(f:read("*a")==data,path) else f:write(data) end
         f:close()
-        if (shape==1 or shape==2 or shape==4 or shape==8) and p.foundation=="half" then
-          local wet_path=d.."models/bl_rail_foundation_split_"..key.."_wet.obj"
-          local wet_data=output(p,true)
-          local w=assert(io.open(wet_path,check and "r" or "w"))
-          if check then assert(w:read("*a")==wet_data,wet_path) else w:write(wet_data) end
-          w:close()
-        end
         n=n+1
+      end
+      local wet=RailWater.flood(shape,bits,0,function() return false end)
+      if wet and wet.ground==13 and not wet_seen[key] then
+        wet_seen[key]=true
+        local wet_path=d.."models/bl_rail_foundation_split_"..key.."_wet.obj"
+        local wet_data=output(p,true)
+        local w=assert(io.open(wet_path,check and "r" or "w"))
+        if check then assert(w:read("*a")==wet_data,wet_path) else w:write(wet_data) end
+        w:close();wet_n=wet_n+1
       end
     end
   end
 end
-print(("PASS %d original split rail foundation terrain meshes"):format(n))
+print(("PASS %d dry and %d wet original split rail foundation terrain meshes"):format(n,wet_n))

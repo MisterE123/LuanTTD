@@ -11,7 +11,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return false end end
     local x,z=Sim.xy(id)
     local shape=Terrain.tile(s.corner_grid,x,z)
-    return Flood.one_raised(shape)
+    return shape~=0
   end
   local function rail_remove_safe(s,id)
     local t=s.tiles[id]
@@ -79,6 +79,9 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     if RailWater then
       function B.flood_rail(_,_,t)
         return RailWater.flood(t.slope,t.tracks,t.ground,function() return rail_remove_safe(s,t.id) end)
+      end
+      function B.dry_rail(_,_,t)
+        return {tracks=t.tracks,ground=RailWater.dry_ground(t.tracks)}
       end
     end
     return B

@@ -1,11 +1,29 @@
 -- Ordinary generated campaign, real Luanti client keyboard and mouse.
 local patch,start_y,starting_cash,ready,moved,slot,home_slot,selected
+local pause_requested,paused,aim_end,settled_end
+core.register_on_player_receive_fields(function(p,form,fields)
+  if form=="luanttd_core:plant_tree_palette" and fields.quit and p:get_player_name()=="SteelReview" then
+    core.log("action","NATIVE TREE QA PALETTE CLOSED")
+  end
+end)
 local function native_tree_qa()
   local p=core.get_player_by_name("SteelReview")
   if not (p and authority and authority.status()=="owned") then core.after(.2,native_tree_qa);return end
   local s=assert(OwnerCheckpoint.read())
   local company=s.companies.SteelReview
   if not company then core.after(.2,native_tree_qa);return end
+  if not pause_requested then
+    pause_requested=true
+    local who=p:get_player_name()
+    assert(authority.query({kind="company",player=who},function(status)
+      assert(status.ok,tostring(status.why))
+      assert(authority.query({kind="command",player=who,
+        command={kind="speed",speed=0,revision=status.revision}},function(reply)
+          assert(reply.ok,tostring(reply.why));paused=true
+        end))
+    end))
+  end
+  if not paused or s.speed~=0 then core.after(.2,native_tree_qa);return end
   if not patch then
     local function clear(x,z)
       local id=Sim.id(x,z)
@@ -62,13 +80,20 @@ local function native_tree_qa()
   end
   local keys=p:get_player_control()
   if not moved and wield=="luanttd_core:menu_landscape_plant_tree" and (keys.dig or keys.LMB) then
+    assert(api.world.target(p)==patch[1],"Tree drag did not start on the selected clear tile")
     moved=true
-    core.after(.4,function()
+    core.after(.4,function() aim_end=true end)
+  end
+  if aim_end and not settled_end then
+    if api.world.target(p)==patch[3] then
+      settled_end=true
+      core.log("action","NATIVE TREE QA DRAG END")
+    else
       local x,z=Sim.xy(patch[3])
       p:set_pos({x=2*x+.5,y=start_y+7,z=2*z+.5})
+      p:set_look_horizontal(0)
       p:set_look_vertical(1.56)
-      core.log("action","NATIVE TREE QA DRAG END")
-    end)
+    end
   end
   if moved and company.cash==starting_cash-60 then
     for _,id in ipairs(patch) do
