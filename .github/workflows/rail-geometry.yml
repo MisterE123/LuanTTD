@@ -1,0 +1,60 @@
+name: Build and verify native rail geometry
+on:
+  push:
+    branches: [rail-geometry-staging]
+    paths:
+      - .github/workflows/rail-geometry.yml
+      - tools/build_parallel_rail_art.py
+      - tools/build_eased_rail_catenary_art.py
+      - tools/build_rail_catenary_art.py
+      - tools/build_rail_inclined_foundations.lua
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assets:
+    runs-on: ubuntu-24.04
+    if: github.ref == 'refs/heads/rail-geometry-staging'
+    permissions:
+      contents: write
+    timeout-minutes: 18
+    env:
+      OMP_NUM_THREADS: 2
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install open-source authoring tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends lua5.1 blender
+      - name: Build and test all rail layers
+        run: |
+          set -euo pipefail
+          python3 tools/build_parallel_rail_art.py
+          lua5.1 tools/build_rail_inclined_foundations.lua
+          blender -b -t 2 --python-exit-code 1 --python tools/build_eased_rail_catenary_art.py
+          python3 tools/build_parallel_rail_art.py --check
+          lua5.1 tools/build_rail_inclined_foundations.lua --check
+          python3 tests/rail_eased_catenary_art.py
+          lua5.1 tests/rail_preview.lua
+          lua5.1 tests/rail_catenary_selector.lua
+          lua5.1 tests/rail_shore_build.lua
+      - name: Publish generated assets to the staging branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git add -- art/rail_diagonal_catenary.blend mods/luanttd_core/models/bl_rail_dual_*.obj \
+            mods/luanttd_core/models/bl_rail_catenary_eased_*.obj mods/luanttd_core/models/bl_rail_inclined_*.obj
+          if git diff --cached --quiet; then exit 0; fi
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m 'Build verified native diagonal rails and raised formations'
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          git push origin HEAD:refs/heads/rail-geometry-staging

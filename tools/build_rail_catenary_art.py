@@ -179,7 +179,7 @@ def mats():
     return out
 
 
-def author(models):
+def author(models, source_name="rail_catenary.blend"):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.preferences.filepaths.save_version=0
     sc=bpy.context.scene
@@ -203,7 +203,7 @@ def author(models):
                 v.region_3d.view_location=(0,0,.68)
                 v.region_3d.view_rotation=Vector((5.4,-7.12,5.1)).to_track_quat("Z","Y")
                 v.region_3d.view_distance=13.0
-    bpy.ops.wm.save_as_mainfile(filepath=str(R.ROOT/"art/rail_catenary.blend"),compress=True)
+    bpy.ops.wm.save_as_mainfile(filepath=str(R.ROOT/"art"/source_name),compress=True)
 
 
 def main():

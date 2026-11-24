@@ -13,9 +13,10 @@ return function(api)
   local terrain_view=terrain and setmetatable({},{__index=function(_,k) return terrain[k] end})
   local projected=false
   local rail_track=dofile(modpath.."/openttd/rail_track.lua")
-  local diagonal=dofile(modpath.."/rail_diagonal.lua")(Sim,rail_track,terrain_view,api.trackworks and api.trackworks.surface)
+  local diagonal=dofile(modpath.."/rail_diagonal.lua")(Sim,rail_track,terrain_view,
+    api.trackworks and api.trackworks.surface,api.trackworks and api.trackworks.split_surface)
   function R.rail_diagonal_pose(id,td,f)
-    local mode=diagonal.mode(S,id)
+    local mode=diagonal.mode(S,id,2^rail_track.track(td))
     if mode~=0 then return diagonal.sample(td,f,mode) end
   end
   local ids={}
@@ -218,7 +219,14 @@ return function(api)
       rail_eased[part][mode]=architecture(name,name,"rail_atlas")
     end
   end
-  stock_rail.guideway={}
+  stock_rail.dual,stock_rail.guideway={},{}
+  for _,bits in ipairs({12,48}) do for a=0,3 do for b=0,3 do
+    if a+b>0 then
+      local key=("%d_%d_%d"):format(bits,a,b)
+      local name="rail_dual_"..key
+      stock_rail.dual[key]=architecture(name,name,"rail_atlas")
+    end
+  end end end
   for gauge,kind in pairs({[2]="mono",[3]="maglev"}) do
     local guideway={flat={},eased={},grade={},station={},depot={}}
     stock_rail.guideway[gauge]=guideway
@@ -241,8 +249,10 @@ return function(api)
   end
   function stock_rail.visual(id,bits,gauge)
     local art=stock_rail.guideway[gauge]
+    local pair=diagonal.dual_variant(S,id,bits)
+    if pair then return stock_rail.dual[pair] end
     local eased=art and art.eased[bits] or not art and rail_eased[bits]
-    return eased and eased[diagonal.mode(S,id)] or (art and art.flat[bits] or stock_rail[bits])
+    return eased and eased[diagonal.mode(S,id,bits)] or (art and art.flat[bits] or stock_rail[bits])
   end
   for grade=1,4 do rail_grade[grade]=architecture("stock_rail_grade_"..grade,"rail_grade_"..grade,"rail_atlas") end
   function stock_rail.grade_art(grade,gauge)
@@ -907,7 +917,17 @@ return function(api)
     stock_scenery.waypoint[axis]=architecture(name,name,"rail_waypoint_palette")
   end
   if api.electric_art then
-    stock_scenery.catenary={}
+    stock_scenery.catenary,stock_scenery.catenary_eased={},{}
+    function stock_scenery.rail_wire(id,t,x,z)
+      local mode=diagonal.mode(S,id)
+      local art=api.electric_art.overlay(t.rail_tracks,0,t.rail_station_id and "platform" or "plain",x/2,z/2,nil,mode)
+      if not art then return end
+      local d=S.stock_rail_dispatch
+      local signal=d and d.signals and d.signals.records[id]
+      local family=mode~=0 and stock_scenery.catenary_eased[t.rail_tracks][mode]
+        or stock_scenery.catenary[t.rail_tracks]
+      return family[art.pole and not signal and 1 or 0]
+    end
     for _,mask in ipairs({1,2,4,8,16,32}) do
       local family={}
       for pole=0,1 do
@@ -915,6 +935,17 @@ return function(api)
         family[pole]=architecture(name,name,"rail_catenary_atlas")
       end
       stock_scenery.catenary[mask]=family
+      if mask>2 then
+        stock_scenery.catenary_eased[mask]={}
+        for variant=1,3 do
+          local nodes={}
+          for pole=0,1 do
+            local name=("rail_catenary_eased_%d_%d_%d"):format(mask,variant,pole)
+            nodes[pole]=architecture(name,name,"rail_catenary_atlas")
+          end
+          stock_scenery.catenary_eased[mask][variant]=nodes
+        end
+      end
     end
   end
   if S.stock_generated_profile and S.stock_generated_profile.forest then
@@ -1139,6 +1170,28 @@ return function(api)
         drawtype="mesh",mesh="bl_land_"..profile..".obj",paramtype="light",sunlight_propagates=true,
         collision_box=slope_collision(profile),pointable=false,
       })
+    end
+  end
+  if terrain and api.trackworks then
+    stock_scenery.rail_inclined={}
+    for _,raw in ipairs({1,2,4,8,23,27,29,30}) do
+      for bits=1,2 do
+        local grade,_,kind,profile=api.trackworks.surface(raw,0,bits)
+        if grade and grade>0 and (kind=="x" or kind=="y") then
+          local stem=("rail_inclined_%d_%d"):format(raw,profile)
+          local family={}
+          for _,variant in ipairs({"grass","barren"}) do
+            local tex=variant=="barren" and "rail_split_foundation_barren_atlas" or "rail_split_foundation_atlas"
+            family[variant]=reg(stem.."_"..variant,{png(tex)},{drawtype="mesh",mesh="bl_"..stem..".obj",
+              paramtype="light",sunlight_propagates=true,collision_box=slope_collision(profile),pointable=false})
+          end
+          stock_scenery.rail_inclined[stem]=family
+        end
+      end
+    end
+    function stock_scenery.inclined_rail_ground(raw,profile,barren)
+      local family=stock_scenery.rail_inclined[("rail_inclined_%d_%d"):format(raw,profile)]
+      return family and family[barren and "barren" or "grass"]
     end
   end
   if api.generated_world then
@@ -1579,12 +1632,8 @@ return function(api)
         end
         if grade==0 and y==level+2 and x%2==0 and z%2==0 and t.rail_type==1
             and not t.rail_depot_dir and stock_scenery.catenary then
-          local art=api.electric_art.overlay(t.rail_tracks,0,t.rail_station_id and "platform" or "plain",x/2,z/2)
-          if art then
-            local d=S.stock_rail_dispatch
-            local signal=d and d.signals and d.signals.records[id]
-            return stock_scenery.catenary[t.rail_tracks][art.pole and not signal and 1 or 0]
-          end
+          local wire=stock_scenery.rail_wire(id,t,x,z)
+          if wire then return wire end
         end
         if y<=level then return foundation~="none" and retaining or gnames[t.terrain][t.variant] end
         if x%2==0 and z%2==0 then
@@ -1605,7 +1654,13 @@ return function(api)
             return stock_rail.visual(id,t.rail_tracks,t.rail_type)
           end
           if grade>0 then
-            if y==level+1 then return barren and barren[profile] or ground_mesh[profile][t.variant] end
+            if y==level+1 then
+              if foundation~="none" and stock_scenery.inclined_rail_ground then
+                local formed=stock_scenery.inclined_rail_ground(shape,profile,barren)
+                if formed then return formed end
+              end
+              return barren and barren[profile] or ground_mesh[profile][t.variant]
+            end
             if y==level+2 then return stock_rail.grade_art(grade,t.rail_type) end
           end
         end

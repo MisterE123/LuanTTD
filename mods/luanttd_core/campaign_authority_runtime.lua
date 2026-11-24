@@ -76,9 +76,10 @@ return function(Sim,mod,s,cap)
     end,function(n) rail.tick(s,n) end)
     local art=dofile(mod.."/rail_dispatch_manifest.lua")
     local pose=dofile(mod.."/rail_pose.lua")(network.track)
-    local diag=dofile(mod.."/rail_diagonal.lua")(Sim,network.track,{tile=tile},network.lab.surface)
+    local diag=dofile(mod.."/rail_diagonal.lua")(Sim,network.track,{tile=tile},
+      network.lab.surface,network.lab.split_surface)
     local function diagonal(id,td,f)
-      local mode=diag.mode(s,id)
+      local mode=diag.mode(s,id,2^network.track.track(td))
       if mode~=0 then return diag.sample(td,f,mode) end
     end
     local platforms=dofile(mod.."/rail_platform_run.lua")(Sim,network.track,network.motion,network.speed,network.lab)
@@ -91,6 +92,8 @@ return function(Sim,mod,s,cap)
       if x==nil then x,z,dx,dz=pose.sample(td,f) end
       local u,v=Sim.xy(id)
       local _,height=tile(id)
+      local railhead=profile(id)
+      if railhead then height=heights.render(railhead,td,f) or height end
       return {x=2*u+.5+x,y=height+.612,z=2*v+.5+z},math.pi-math.atan2(dx,dz),id
     end
     local function surface(id,td,f,part)

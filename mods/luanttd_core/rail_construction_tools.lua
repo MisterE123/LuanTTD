@@ -164,7 +164,7 @@ return function(api,Lab,Track,Run,prices)
         -- Normal quotes preserve an existing rail type when no
         -- conversion is needed. Explicit advanced quotes use the
         -- returned type, never the player's requested type blindly.
-        if p.shore and (not quote or quote.water_ground~=true or not p.split_foundation) then
+        if p.shore and (not quote or quote.water_ground and not p.split_foundation) then
           return nil,"Only the raised half of this shore supports ordinary rail."
         end
         if quote then p.result_railtype,p.water_ground=quote.railtype,quote.water_ground

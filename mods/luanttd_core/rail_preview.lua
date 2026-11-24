@@ -5,7 +5,7 @@ return function(api,root)
   local track=dofile(root.."openttd/rail_track.lua")
   local surface=api.trackworks.surface
   local terrain=api.terrain
-  local diagonal=dofile(root.."rail_diagonal.lua")(Sim,track,terrain,surface)
+  local diagonal=dofile(root.."rail_diagonal.lua")(Sim,track,terrain,surface,api.trackworks.split_surface)
   local limit=96
   local family={[2]="mono",[3]="maglev"}
   return function(pieces,owner,eye)
@@ -44,14 +44,19 @@ return function(api,root)
         for y=base,base+2 do
           local bits=split.groups[y]
           if bits then
-            out[#out+1]={id=p.id,mesh=("bl_rail_track_%d.obj"):format(bits),atlas="bl_rail_atlas.png",
+            local mode=diagonal.mode(projected,p.id,bits)
+            local mesh=mode>0 and ("bl_rail_eased_%d_%d.obj"):format(bits,mode)
+              or ("bl_rail_track_%d.obj"):format(bits)
+            out[#out+1]={id=p.id,mesh=mesh,atlas="bl_rail_atlas.png",
               pos={x=2*x,y=y+1.038,z=2*z}}
           end
         end
       elseif grade then
         local x,z=Sim.xy(p.id)
         local mode=grade==0 and diagonal.mode(projected,p.id) or 0
-        local mesh=mode>0 and ("bl_rail_eased_"..p.tracks.."_"..mode..".obj")
+        local dual=grade==0 and diagonal.dual_variant(projected,p.id,p.tracks)
+        local mesh=dual and ("bl_rail_dual_"..dual..".obj")
+          or mode>0 and ("bl_rail_eased_"..p.tracks.."_"..mode..".obj")
           or grade==0 and ("bl_rail_track_"..p.tracks..".obj")
           or ("bl_rail_grade_"..grade..".obj")
         local gauge=family[tiles[p.id].rail_type]

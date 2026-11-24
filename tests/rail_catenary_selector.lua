@@ -32,3 +32,15 @@ assert(eq(A.wire_edge(1,1,2,0),A.wire_edge(1,0,0,1)))
 assert(eq(A.wire_edge(2,3,1,0),A.wire_edge(2,0,3,1)))
 assert(A.wire_edge(32,0,2,7)==nil)
 print("RAIL_CATENARY_SELECTOR_PASS exact names, anchor, supported pieces, platform wire-only, grade edge continuity")
+
+for _,mask in ipairs({4,8,16,32}) do
+  for mode=1,3 do
+    local a=assert(A.overlay(mask,0,"plain",0,0,nil,mode))
+    local pole=mode~=3 or mask==4 or mask==16
+    assert(a.pole==pole and a.offset==2 and
+      a.mesh==("bl_rail_catenary_eased_%d_%d_%d.obj"):format(mask,mode,pole and 1 or 0))
+    assert(io.open("mods/luanttd_core/models/"..a.mesh,"rb")):close()
+    assert(A.overlay(mask,0,"plain",0,0,true,mode).pole)
+  end
+end
+print("RAIL_CATENARY_DIAGONAL_SELECTOR_PASS: 12 shapes with every-other mast on through diagonals")

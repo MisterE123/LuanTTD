@@ -1,44 +1,64 @@
 -- Presentation only: an alternating pair of OpenTTD's short tracks can
 -- represent one straight 45-degree line. Retain its tile-edge midpoints
 -- and choose smooth visual tangents only where another complementary
--- plain, level piece actually continues the line.
-return function(Sim,Track,terrain,surface)
+-- plain piece on the same railhead (including a slope foundation)
+-- actually continues the line.
+return function(Sim,Track,terrain,surface,split_surface)
   local D={}
   local displacements={[0]={-1,0},{0,1},{1,0},{0,-1}}
   local by_mask={[4]={0,3,8},[8]={2,1,4},[16]={2,3,32},[32]={0,1,16}}
+  local pairs_by_mask={[12]={4,8},[48]={16,32}}
   local sqrt2=math.sqrt(2)
   local function plain(tile)
     return tile and not (tile.rail_station_id or tile.rail_depot_dir~=nil or tile.rail_waypoint_id
-      or tile.rail_type==1 or tile.rail_span_id or tile.level_crossing)
+      or tile.rail_span_id or tile.level_crossing)
   end
-  local function flat(id,tile)
-    if terrain then
-      local slope,h=terrain.tile(id)
-      if surface then
-        local grade,level=surface(slope,h,tile.rail_tracks)
-        return grade==0 and level or nil
-      end
-      return slope==0 and h or nil
+  local function railhead(id,tile,bits)
+    if not plain(tile) or not by_mask[bits] then return end
+    -- Paired overhead and advanced guideways need their own native art.
+    local pair=(tile.rail_type or 0)==0 and pairs_by_mask[tile.rail_tracks]
+    local independent=tile.rail_tracks==bits or pair and (pair[1]==bits or pair[2]==bits)
+    if not independent then return end
+    if not terrain then return tile.h end
+    local shape,base=terrain.tile(id)
+    do
+      if not surface then return shape==0 and base or nil end
+      local grade,level=surface(shape,base,tile.rail_tracks)
+      if grade~=nil then return grade==0 and level or nil end
     end
-    return tile.h
+    if split_surface and (tile.rail_type or 0)==0 then
+      local split=split_surface(shape,base,tile.rail_tracks)
+      if not split then return end
+      -- A diagonally opposed half can be joined on its own elevation.
+      -- Never ease a combined junction or crossover on a shared bed.
+      for level,group in pairs(split.groups) do
+        if group==bits then return level end
+      end
+    end
   end
-  function D.mode(s,id)
+  function D.mode(s,id,bits)
     local tile=s.tiles[id]
-    local ports=tile and by_mask[tile.rail_tracks]
-    if not ports or not plain(tile) then return 0 end
-    local y=flat(id,tile)
-    if y==nil then return 0 end
+    bits=bits or (tile and tile.rail_tracks)
+    local ports=by_mask[bits]
+    if not ports then return 0 end
+    local level=railhead(id,tile,bits)
+    if level==nil then return 0 end
     local x,z=Sim.xy(id)
     local mode=0
     for i=1,2 do
       local side=displacements[ports[i]]
       local next_id=Sim.id(x+side[1],z+side[2])
-      local adjacent=next_id and s.tiles[next_id]
-      if plain(adjacent) and adjacent.owner==tile.owner and (adjacent.rail_type or 0)==(tile.rail_type or 0)
-          and adjacent.rail_tracks==ports[3]
-          and flat(next_id,adjacent)==y then mode=mode+2^(i-1) end
+      local other=next_id and s.tiles[next_id]
+      if other and other.owner==tile.owner and (other.rail_type or 0)==(tile.rail_type or 0)
+          and railhead(next_id,other,ports[3])==level then mode=mode+2^(i-1) end
     end
     return mode
+  end
+  function D.dual_variant(s,id,mask)
+    local pair=pairs_by_mask[mask]
+    if not pair then return end
+    local first,second=D.mode(s,id,pair[1]),D.mode(s,id,pair[2])
+    if first+second>0 then return ("%d_%d_%d"):format(mask,first,second) end
   end
   function D.sample(td,t,mode)
     local ports=by_mask[2^Track.track(td)]

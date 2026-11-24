@@ -17,7 +17,7 @@ function A.supports(mask,grade,kind)
   if kind~=nil and kind~="plain" then return false end
   return edges[mask]~=nil and (grade==0 or grades[grade]==mask)
 end
-function A.overlay(mask,grade,kind,x,z,force_mast)
+function A.overlay(mask,grade,kind,x,z,force_mast,diagonal_mode)
   grade=grade or 0
   if not A.supports(mask,grade,kind) then return nil end
   -- Similar to stock's every-other-level-straight rule, not its full
@@ -27,6 +27,12 @@ function A.overlay(mask,grade,kind,x,z,force_mast)
   local pole=kind~="platform" and
     (force_mast or grade~=0 or mask>2 or (axis_index or 0)%2==0)
   local suffix=grade~=0 and ("grade_"..grade) or tostring(mask)
+  if kind~="platform" and grade==0 and mask>2 and diagonal_mode and diagonal_mode>0 then
+    suffix=("eased_%d_%d"):format(mask,diagonal_mode)
+    -- A regular mast rhythm down a continuous diagonal; retain a
+    -- support where the contact wire bends into cardinal track.
+    pole=force_mast or diagonal_mode~=3 or mask==4 or mask==16
+  end
   local name="rail_catenary_"..suffix.."_"..(pole and "1" or "0")
   return {name=name,mesh="bl_"..name..".obj",texture=A.atlas,
           offset=grade~=0 and 3 or 2,pole=not not pole}

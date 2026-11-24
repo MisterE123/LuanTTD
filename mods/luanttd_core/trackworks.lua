@@ -296,7 +296,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     if Lab.span_protected(s,id) then return false,protected end
     local t=s.tiles[id]
     if not t then return false,"That tile is outside the region." end
-    local shore=coast_corner[shape] and t.h==0 and t.terrain=="water" and t.coastal_water and not t.wood
+    local shore=shape~=nil and shape~=0 and t.h==0 and t.terrain=="water" and t.coastal_water and not t.wood
     if shape==nil or t.stock_void or t.terrain=="water" and not shore or t.site or t.house or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or
         (t.build and t.build~="stock_rail") or (t.owner and t.owner~=owner) or t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir then
       return false,"Trackworks currently needs clear, dry ground in your company."
@@ -322,9 +322,12 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     local t=s.tiles[plan.id]
     local new=plan.tracks
     local existing_wet=t.rail_ground==13
-    if plan.shore and plan.water_ground then
+    if plan.shore then
+      -- CmdBuildSingleRail clears multi-corner coasts as rough ground.
+      -- Only a single raised corner retains the stock flooded lower half.
       t.terrain,t.water_class,t.coastal_water,t.stock_water_rocks="grass",nil,nil,nil
-      t.rail_ground=13
+      t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,nil,nil
+      if plan.water_ground then t.rail_ground=13 end
     elseif existing_wet and new==0 then
       if coast_corner[plan.shape] then
         t.terrain,t.water_class,t.coastal_water="water","sea",true

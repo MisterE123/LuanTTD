@@ -75,3 +75,120 @@ local split=Ghost({{id=a,tracks=12}},"QA")
 assert(#split==2 and split[1].mesh=="bl_rail_track_8.obj" and split[2].mesh=="bl_rail_track_4.obj")
 assert(math.abs(split[1].pos.y-3.038)<1e-9 and math.abs(split[2].pos.y-4.038)<1e-9 and not S.tiles[a].rail_tracks)
 print("PASS split-level preview shows both individual opposed railheads")
+
+-- Actual shared corners, not arbitrary per-tile masks: each drag
+-- alternates a single-corner split railhead with a leveled neighbor.
+-- Reverse the same two hillside courses to cover both track families
+-- and all four drag directions.
+local Stock=dofile(root.."openttd/rail_construction.lua")(Track)
+api.company_can_build_stock_railtype=function() return true end
+local native=dofile(root.."rail_construction_tools.lua")(api,Lab,Track,nil,{track=function(tile,plan,opts)
+  local q,why=Stock.piece(tile,plan.track,opts)
+  if q then return q.cost,nil,q end
+  return nil,why
+end})
+local projection=dofile(root.."rail_diagonal.lua")(Sim,Track,api.terrain,Lab.surface,Lab.split_surface)
+local shipped={[0]="bl_rail_eased_",[1]="bl_rail_eased_",[2]="bl_guideway_mono_eased_",[3]="bl_guideway_maglev_eased_"}
+for sign=1,-1,-2 do
+  for direction=1,-1,-2 do
+    local x,z=23,35
+    local stopx,stopz=x+direction*7,z+direction*7*sign
+    local anchor=x-sign*z
+    local offset=sign==1 and 0 or 1
+    local function h(u,v)
+      return u-sign*v-anchor>=offset and 5 or 4
+    end
+    for gx=13,33 do for gz=25,45 do
+      local slope,base=Slope.classify(h(gx,gz),h(gx+1,gz),h(gx,gz+1),h(gx+1,gz+1))
+      S.tiles[Sim.id(gx,gz)]={terrain="grass",h=base,slope=slope}
+    end end
+    local q=assert(native.quote_autotrack("QA",aim(x,z),aim(stopx,stopz),0))
+    local ghost=Ghost(q.pieces,"QA")
+    assert(#ghost==15 and #q.ids==15)
+    local split_count=0
+    for i,r in ipairs(ghost) do
+      local piece=q.pieces[i]
+      local shape,base=terrain(r.id)
+      if Lab.split_surface(shape,base,piece.tracks) then split_count=split_count+1 end
+      assert((i==1 or i==15) and r.mesh:match("^bl_rail_eased_")
+        or r.mesh==shipped[0]..piece.tracks.."_3.obj",
+        ("wrong hillside ghost %d: %s"):format(i,r.mesh))
+      assert(math.abs(r.pos.y-6.038)<1e-8,r.pos.y)
+      assert(S.tiles[r.id].rail_tracks==nil)
+    end
+    assert(split_count>=7)
+    assert(native.build("QA",q))
+    for i,piece in ipairs(q.pieces) do
+      local mode=projection.mode(S,piece.id,piece.tracks)
+      assert(mode>0 and (i==1 or i==15 or mode==3))
+      assert(ghost[i].mesh==shipped[0]..piece.tracks.."_"..mode..".obj")
+      if i>1 and i<15 then
+        local x,z,dx,dz=projection.sample(piece.track,.25,mode)
+        local w,y,ux,uz=projection.sample(piece.track,.75,mode)
+        assert(math.abs(w-x-.5*math.sqrt(2)*dx)<1e-7 and math.abs(y-z-.5*math.sqrt(2)*dz)<1e-7)
+        assert(dx==ux and dz==uz and math.abs(math.abs(dx)-math.sqrt(.5))<1e-7)
+      end
+    end
+  end
+end
+for gauge=0,3 do
+  local x,z=60,20+gauge*17
+  for u=x-2,x+9 do for v=z-2,z+9 do
+    S.tiles[Sim.id(u,v)]={terrain="grass",h=4}
+  end end
+  local q=assert(native.quote_autotrack("QA",aim(x,z),aim(x+7,z+7),gauge))
+  local g=Ghost(q.pieces,"QA")
+  assert(#g==15 and g[2].mesh==shipped[gauge]..q.pieces[2].tracks.."_3.obj")
+  assert(native.build("QA",q))
+  assert(projection.mode(S,q.pieces[2].id)==3)
+end
+print("PASS: four uphill-facing AutoRail drags across alternating raw slopes; matching ghost heights, track, and train vectors. All four gauges on level terrain.")
+
+-- A second drag one tile east of the first builds opposing half tracks
+-- in a common tile. Assert both independent railway lanes survive quote,
+-- commit, mesh choice and train-curve sampling without a crossover.
+for sign=1,-1,-2 do
+  for x=65,83 do for z=59,81 do
+    S.tiles[Sim.id(x,z)]={terrain="grass",h=4,slope=0}
+  end end
+  local a,b,c,d=71,70,78,70+7*sign
+  local first=assert(native.quote_autotrack("QA",aim(a,b),aim(c,d),0))
+  assert(native.build("QA",first))
+  local next=assert(native.quote_autotrack("QA",aim(a+1,b),aim(c+1,d),0))
+  local g=Ghost(next.pieces,"QA")
+  assert(native.build("QA",next))
+  local count=0
+  for i,piece in ipairs(next.pieces) do
+    local bits=piece.tracks
+    local lower=bits==12 and 4 or bits==48 and 16
+    if lower then
+      count=count+1
+      assert(g[i].mesh:match("^bl_rail_dual_"))
+      assert(g[i].mesh=="bl_rail_dual_"..projection.dual_variant(S,piece.id,bits)..".obj")
+      local f=assert(io.open(root.."models/"..g[i].mesh,"rb"));f:close()
+      local firstmask,secondmask=lower,lower*2
+      local mode=projection.mode(S,piece.id,firstmask)
+      local across=projection.mode(S,piece.id,secondmask)
+      assert(mode>0 and across>0)
+      local routes={}
+      for _,mask in ipairs({firstmask,secondmask}) do
+        local idx=math.floor(math.log(mask)/math.log(2)+.5)
+        for side=0,3 do
+          if Track.trackdir_for_entry(idx,side) then
+            assert(not routes[side])
+            routes[side]=idx
+          end
+        end
+        local selected=projection.mode(S,piece.id,mask)
+        if count>1 and count<7 then
+          assert(selected==3)
+          local x,z,dx,dz=projection.sample(idx,.5,selected)
+          assert(x~=0 and z~=0 and math.abs(math.abs(dx)-math.sqrt(.5))<1e-8)
+          assert(math.abs(math.abs(dz)-math.sqrt(.5))<1e-8)
+        end
+      end
+    end
+  end
+  assert(count==7,count)
+end
+print("PASS both stock parallel diagonal track pairs: quotes, commits, independent topology, native mesh assets, and train centerline")

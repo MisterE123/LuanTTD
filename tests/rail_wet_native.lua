@@ -47,11 +47,54 @@ local function run()
     return core.registered_nodes[core.get_node({x=2*x+dx,y=y,z=2*z}).name].mesh
   end
   local function checkpoint() return assert(OwnerCheckpoint.read()) end
+  local function check_multicoast()
+    local Price=dofile(mod.."/openttd/rail_construction.lua")(Track)
+    local next_,tx,tz,option,proposal
+    for i,t in ipairs(S.tiles) do
+      if t.terrain=="water" and t.coastal_water and not (t.wood or t.ship or t.build) then
+        local mask,base=api.terrain.tile(i)
+        if base==0 and mask~=0 and not upper[mask] then
+          for tr=2,5 do
+            local q=Price.piece({slope=mask,kind="water",coast=true,base_level=0},tr,{owner=n})
+            if q and not q.water_ground then
+              next_,option,proposal=i,tr,q;tx,tz=Sim.xy(i);break
+            end
+          end
+          if next_ then break end
+        end
+      end
+    end
+    assert(next_,"need one ordinary multi-corner coastal curve")
+    local request={kind="rail_quote",request={tool="track",first=next_,last=next_,track=option}}
+    local focus={x=2*tx+.5,y=1.25,z=2*tz+.5}
+    local camera={x=focus.x-3.1,y=3.3,z=focus.z+4.75}
+    p:set_pos(camera)
+    local d={x=focus.x-camera.x,y=focus.y-camera.y-1.47,z=focus.z-camera.z}
+    p:set_look_horizontal(math.atan2(-d.x,d.z))
+    p:set_look_vertical(math.atan2(-d.y,math.sqrt(d.x*d.x+d.z*d.z)))
+    ask(request,function(q)
+      assert(q.value.cost==proposal.cost)
+      ask({kind="command",command={kind="rail_commit",revision=q.revision,token=q.value.token}},function()
+        local function wait()
+          local t=checkpoint().tiles[next_]
+          local painted=false
+          for y=0,3 do
+            local node=core.get_node({x=2*tx,y=y,z=2*tz}).name
+            if node:find("rail_",1,true) then painted=true;break end
+          end
+          if not t.rail_tracks or not painted then core.after(.22,wait);return end
+          assert(t.build=="stock_rail" and t.rail_ground~=13 and not t.coastal_water and t.terrain=="grass")
+          core.log("action","PASS NATIVE WET RAIL: upper rail restored coast; paid multi-corner shore curve clears to dry ground")
+        end
+        wait()
+      end)
+    end)
+  end
   local function dry_watch()
     local state=checkpoint()
     local t=state.tiles[id]
     if t.rail_tracks or not t.coastal_water or mesh(0,1)~="bl_coastal_bank_"..shape..".obj" then core.after(.22,dry_watch);return end
-    core.log("action","PASS NATIVE WET RAIL: removed upper rail and restored the coastal bank")
+    check_multicoast()
   end
   local function watch()
     local state=checkpoint()
