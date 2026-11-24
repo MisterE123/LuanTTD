@@ -48,4 +48,21 @@ function R.prepare(mask,pieces,existing,other,build_on_slopes)
   end
   return nil,"WRONG_SLOPE"
 end
+-- OpenTTD 16.0-RC1 road_cmd.cpp RemoveRoad, normal-tile geometry. The
+-- orchestrator still owns the occupancy, town permission and payment.
+function R.remove(mask,pieces,present,other,build_on_slopes)
+  mask=high_corner[mask] or mask
+  local before=R.foundation(mask,present)
+  if ((other==5 or other==10) and intersects(other,invalid_level[mask]))
+      or (mask~=0 and not build_on_slopes) then
+    pieces=bor(pieces,(pieces%4)*4+math.floor(pieces/4))
+  end
+  pieces=combine(pieces,present,function(a,b)return a and b end)
+  if pieces==0 then return nil,"NO_ROAD_PIECES" end
+  local after=present-pieces
+  if mask~=0 and after~=0 and combine(invalid_level[mask],after,function(a,b)return a and b end)==after then
+    return nil,"WRONG_SLOPE"
+  end
+  return {removed=pieces,road_bits=after,foundation=before=="none" and R.foundation(mask,after)~="none"}
+end
 return R

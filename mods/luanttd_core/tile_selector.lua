@@ -14,7 +14,8 @@ return function(api)
   local entity_name="luanttd_core:tile_selector"
   local rail_entity="luanttd_core:rail_selector"
   local textures={inspect="bl_selector_inspect.png",valid="bl_selector_valid.png",
-    invalid="bl_selector_invalid.png",anchor="bl_selector_anchor.png"}
+    invalid="bl_selector_invalid.png",anchor="bl_selector_anchor.png",
+    removal="bl_selector_anchor.png^[colorize:#ffc365:121"}
 
   core.register_entity(entity_name,{
     initial_properties={visual="mesh",mesh="bl_selector_0.obj",textures={textures.inspect},

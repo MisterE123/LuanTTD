@@ -105,6 +105,34 @@ return function(Sim,Terrain,Crossing,Track)
       prior_build=t.build,prior_bits=base_record.road_bits or base_record.trackbits,
       crossing=out}
   end
+  -- RC1 RemoveRoad, RoadTileType::Crossing: the road's whole axis
+  -- goes away even when the drag selects a single half. The separate
+  -- rail claim lives in the dispatcher, not the road tile record.
+  function W.road_remove_quote(s,owner,id,wanted,ctx)
+    local a=W.record(s,id)
+    if not a or a.roadtype~=0 or a.tramtype~=nil then return nil,"NOT_PLAIN_ROAD" end
+    if a.road_owner~=owner then return nil,"OWNED_BY" end
+    if a.road_axis~=0 and a.road_axis~=1 or a.rail_axis~=1-a.road_axis then return nil,"INVALID_PARAMETER" end
+    for _,b in ipairs{1,2,4,8} do
+      if math.floor(wanted/b)%2==1 and math.floor(a.road_bits/b)%2==0 then return nil,"NO_ROAD_PIECES" end
+    end
+    local current=observe(ctx,id)
+    if not current then return nil,"OCCUPANCY_UNKNOWN" end
+    for _,v in ipairs(current) do if physical(v) then return nil,"VEHICLE_IN_THE_WAY" end end
+    local life=s.stock_rail_dispatch and s.stock_rail_dispatch.life
+    if a.reserved and not (life and life.bits) then return nil,"RESERVATION_UNKNOWN" end
+    return {id=id,tool="remove_crossing",build="stock_rail",road_bits=0,
+      rail_tracks=2^a.rail_axis,railtype=a.railtype,rail_owner=a.rail_owner,cost=80}
+  end
+  function W.road_remove_apply(s,edit)
+    local id=edit.id
+    local t=s.tiles[id]
+    assert(t.level_crossing and edit.rail_tracks)
+    t.build,t.owner,t.rail_tracks,t.rail_type=edit.build,edit.rail_owner,edit.rail_tracks,edit.railtype
+    t.road_bits,t.roadtype,t.road_town,t.road_disallowed,t.disallowed,t.level_crossing=nil,nil,nil,nil,nil,nil
+    s.level_crossing_tiles[id]=nil
+  end
+
   function W.revalidate(s,owner,p,ctx)
     if not p or p.owner~=owner or p.topology~=s.topology then return nil,"STALE_QUOTE" end
     local q,err=W.quote(s,owner,p.id,p.request,ctx)

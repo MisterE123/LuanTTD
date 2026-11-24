@@ -17,6 +17,14 @@ s.speed=0
 Sim.company(s,owner).cash=1000000
 local cp=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
 local receipts,projection={},{}
+local remove=core.settings:get_bool("luanttd_bench_remove",false)
+local finish_seen
+if remove then
+  for k=1,8 do
+    local z=23+k
+    assert(Sim.autoroad_build(s,owner,id(8,z),id(52,z),0,false,true))
+  end
+end
 local function median(values)
   table.sort(values)
   return (values[4]+values[5])*.5
@@ -24,18 +32,30 @@ end
 local function place()
   trial=trial+1
   if trial>8 then
-    core.log("action",("ROAD_PLACEMENT_NATIVE_PASS receipt=%.2fms projection=%.2fms"):format(
-      median(receipts)/1000,median(projection)/1000))
+    if remove then
+      local reopened=assert(cp.read())
+      assert(reopened.companies[owner].cash==finish_seen)
+      for k=1,8 do
+        for x=8,52 do assert(reopened.tiles[id(x,23+k)].build==nil) end
+      end
+    end
+    core.log("action",("ROAD_PLACEMENT_NATIVE_PASS mode=%s receipt=%.2fms projection=%.2fms"):format(
+      remove and "remove" or "build",median(receipts)/1000,median(projection)/1000))
     core.request_shutdown("Road timing complete.",false,0)
     return
   end
   local z=23+trial
   local first,last=id(8,z),id(52,z)
   running={z=z,start=core.get_us_time()}
-  local q={tool="drag",first=first,last=last,axis=0,start_half=false,end_half=true}
+  local q={tool=remove and "remove" or "drag",first=first,last=last,axis=0,start_half=false,end_half=true}
+  local prior=remove and assert(cp.read()).companies[owner].cash
   assert(Build.commit(owner,"road",q,function(ok,why,_,tiles)
     assert(ok,why)
-    assert(#tiles==45,"wrong number of painted road tiles")
+    assert(#tiles==45,"wrong number of edited road tiles")
+    if remove then
+      finish_seen=assert(cp.read()).companies[owner].cash
+      assert(finish_seen==prior-3520, ("cash %d to %d: %s"):format(prior,finish_seen,why))
+    end
     receipts[#receipts+1]=core.get_us_time()-running.start
   end))
 end
@@ -54,7 +74,8 @@ H=m("campaign_authority_host")(core,path,{
     elseif running and trial>0 then
       local first=view.terrain(8,running.z)
       local last=view.terrain(52,running.z)
-      if first and last and first.build=="road" and last.build=="road" then
+      local expected=not remove and "road" or nil
+      if first and last and first.build==expected and last.build==expected then
         projection[#projection+1]=core.get_us_time()-running.start
         running=nil
         core.after(.031,place)

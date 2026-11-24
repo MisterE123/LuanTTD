@@ -112,6 +112,28 @@ xdotool keydown d; sleep 1.1; xdotool keyup d
 sleep 1
 import -window root "$out/after-focus.png"
 await_log 'FOCUS_NATIVE_PAID'
+kill "$sink" 2>/dev/null || true
+sink=
+if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
+  do_road() {
+    printf '%s\n' "road-$1" > "$out/world/native-focus-step"
+    await_log "NATIVE_ROAD_GESTURE_$2"
+  }
+  do_road x-start X
+  slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_X slot=//p' "$log" | tail -1)
+  xdotool key "$slot"; sleep .4; xdotool mousedown 1; sleep .5
+  do_road x-end X_RELEASE
+  sleep .65; import -window root -resize 960x600 "$out/x-preview.jpg"
+  xdotool mouseup 1; sleep .85
+  do_road check-x X_PASS
+  do_road remove-start REMOVE
+  slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_REMOVE slot=//p' "$log" | tail -1)
+  xdotool key "$slot"; sleep .4; xdotool mousedown 1; sleep .5
+  do_road remove-end REMOVE_RELEASE
+  sleep .65; import -window root -resize 960x600 "$out/remove-preview.jpg"
+  xdotool mouseup 1; sleep .85
+  do_road check-remove REMOVE_PASS
+fi
 if [[ ${LUANTTD_NATIVE_REJOIN:-0} == 1 ]]; then
   printf '%s\n' set-rejoin > "$out/world/native-focus-step"
   await_log 'FOCUS_NATIVE_REJOIN_SET'
@@ -122,6 +144,10 @@ client=
 open reopened
 printf '%s\n' reopen > "$out/world/native-focus-step"
 await_log 'FOCUS_NATIVE_RECEIPT reopen'
+if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
+  do_road reopen REOPEN_PASS
+  grep 'NATIVE_ROAD_GESTURE_.*PASS' "$out/"{first,reopened}.log
+fi
 if [[ ${LUANTTD_NATIVE_REJOIN:-0} == 1 ]]; then
   sleep .6
   printf '%s\n' check-rejoin > "$out/world/native-focus-step"

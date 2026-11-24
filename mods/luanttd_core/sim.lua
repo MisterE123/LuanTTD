@@ -318,14 +318,7 @@ local function one_way_pose(s,from,to)
   if w then
     local ok,why,at=w.guard(s,from,to)
     if not ok then return false,why,at end
-    local removed=s.road_oneway_removed
-    local id=to and to[4]
-    if removed and id and removed[id] and not (to[10] or to[12] or to[13] or to[14]) then
-      local t=s.tiles[id]
-      if not (t and (t.build=="road" or t.build=="road_station" or t.build=="road_depot" or t.level_crossing)) then
-        return false,"ONEWAY_ROAD_LAYOUT_CHANGED",id
-      end
-    end
+    if s.road_oneway_removed and w.removal_blocks(s,to) then return false,"ONEWAY_ROAD_LAYOUT_CHANGED",to[4] end
   end
   return true
 end
@@ -337,6 +330,77 @@ local function one_way_edit(s,id,removed)
   elseif s.road_oneway_removed then
     s.road_oneway_removed[id]=nil
   end
+end
+local road_remove_world
+local road_removal_errors={
+  NO_ROAD="No road to remove on that line.",
+  NO_ROAD_PIECES="No road on the selected side of the tile.",
+  WRONG_SLOPE="The remaining road cannot sit on this slope.",
+  VEHICLE_IN_THE_WAY="Wait for traffic to clear the road.",
+  OWNED_BY="This road belongs to another company.",
+  TOWN_REFUSES="The local authority won't allow this road removal.",
+  NOT_PLAIN_ROAD="This tool removes pavement; use Bulldoze to review facility or crossing layers.",
+  ROAD_WORKS_IN_PROGRESS="Wait until the road works are complete.",
+  CLEAR_SURVEYED_TRAIN="Stop the surveyed train before changing the crossing.",
+  OCCUPANCY_UNKNOWN="Wait for traffic positions to be confirmed.",
+  RESERVATION_UNKNOWN="Wait for the crossing reservation to be confirmed.",
+  ROAD_DRAG_TOO_LONG="Drag across fewer than 128 tiles at a time.",
+}
+function M.road_removal_error(reason)
+  return road_removal_errors[reason] or ("Cannot remove this road: "..tostring(reason))
+end
+function M.road_remove_plan(s,owner,first,last,axis,start_half,end_half)
+  if not s.corner_grid then return nil,"PARAMETERS" end
+  load_road_rules()
+  if not road_remove_world then
+    local source=debug and debug.getinfo(1,"S").source
+    local base=source and source:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    local Follow=dofile(base.."openttd/yapf_road_follow.lua")
+    local OneWay=dofile(base.."openttd/road_oneway.lua")(road_rules,Follow)
+    auto_oneway=auto_oneway or dofile(base.."road_oneway_world.lua")(M,terrain_rules,Follow,OneWay)
+    road_remove_world=dofile(base.."road_remove_world.lua")(M,terrain_rules,{
+      context=function(state) return auto_oneway.ground_occupancy(state) end,
+      occupied=function(_,id,ground) return ground[id]==true end,
+      special=function(state,company,id,tile,wanted,ground)
+        if not tile.level_crossing then return nil,"NOT_PLAIN_ROAD" end
+        local c=crossing_bindings[state]
+        if not c then return nil,"NOT_PLAIN_ROAD" end
+        if state.stock_rail_run or (c.survey_clear and not c.survey_clear()) then return nil,"CLEAR_SURVEYED_TRAIN" end
+        local W=c.runtime.world
+        return W.road_remove_quote(state,company,id,wanted,{vehicles_at=function(i)
+          local a=W.dispatch_parts(state,i)
+          if ground[i] then a[#a+1]={type="road",tile=i} end
+          return a
+        end})
+      end,
+    })
+  end
+  return road_remove_world.plan(s,owner,first,last,axis,start_half,end_half)
+end
+function M.apply_road_removal(s,owner,q)
+  local c=s.companies[owner]
+  local ids,total,limited,crossing_changed={},0,false,false
+  for _,edit in ipairs(q.changes) do
+    if total+edit.cost>c.cash then limited=true;break end
+    if edit.tool=="remove_crossing" then
+      crossing_bindings[s].runtime.world.road_remove_apply(s,edit)
+      crossing_changed=true
+    else
+      road_remove_world.apply_plain(s,edit)
+    end
+    one_way_edit(s,edit.id,true)
+    -- Retain the sentinel when paving new halves. The stock path board
+    -- verifies the current tile's geometry before an old cursor enters.
+    s.road_oneway_removed[edit.id]=1
+    total=total+edit.cost;ids[#ids+1]=edit.id
+  end
+  if #ids==0 then return false,"Not enough cash to remove the first road piece." end
+  debit(c,total)
+  s.topology=s.topology+1
+  if crossing_changed then M.refresh_crossing_construction(s) end
+  return true,("Removed road on %d tile%s for $%d.%s"):format(#ids,#ids==1 and "" or "s",total,
+    limited and " Stopped when available cash ran out." or ""),ids
 end
 -- Shared clearance predicate for existing protected rail infrastructure.
 -- Other construction adapters use this historical name for immutable
@@ -946,7 +1010,7 @@ end
 -- The 3D selector maps the click to source fractional tile coordinates.
 -- Project onto one axis from the center of the pressed tile; a click on
 -- one tile uses the stock fractional-coordinate tests.
-function M.autoroad_selection(start,first,hover,last)
+function M.autoroad_selection(start,first,hover,last,fixed_axis)
   local x,z=M.xy(start)
   local u,v=M.xy(hover)
   local function fract(point,i,axis)
@@ -956,7 +1020,9 @@ function M.autoroad_selection(start,first,hover,last)
   local gx,gz=16*(u-x)+ex-8,16*(v-z)+ez-8
   local click=hover==start
   local along_x
-  if click then
+  if fixed_axis~=nil then
+    along_x=fixed_axis==0
+  elseif click then
     along_x=(ex<ez and ex+ez<=15) or (ex>ez and ex+ez>=15)
   else
     along_x=math.abs(gz)<math.abs(gx)
@@ -1416,7 +1482,7 @@ local function apply_build(s,owner,changes,cost)
     if tile.build~="road" then
       tile.road_disallowed,tile.disallowed=nil,nil
       if had_sign then one_way_edit(s,id,k=="clear") end
-    elseif s.road_oneway_removed and s.road_oneway_removed[id] then
+    elseif s.road_oneway_removed and s.road_oneway_removed[id]==true then
       one_way_edit(s,id,false)
     end
     changed[#changed+1]=id

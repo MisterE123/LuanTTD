@@ -39,6 +39,35 @@ return function(Sim,Terrain,Follow,OneWay,settings)
     return f[12] or false
   end
 
+  -- Reuse one exact ground-occupancy snapshot per construction sweep;
+  -- a long road drag must not walk the entire fleet once per tile.
+  function W.ground_occupancy(s)
+    local ground={}
+    for _,v in pairs(s.fleet or {}) do
+      if is_road(v) and not (Sim.road_hidden_depot and Sim.road_hidden_depot(v)) then
+        local f=Sim.road_motion_frame and Sim.road_motion_frame(s,v)
+        if f then
+          if f[4] and not below_or_above(s,f) then ground[f[4]]=true end
+        elseif v.route then
+          if type(v.progress)=="number" then
+            local id=Sim.position(s,v)
+            if id then ground[id]=true end
+          else
+            -- Missing cursor data cannot establish that the tile is clear.
+            for _,id in ipairs(v.route) do ground[id]=true end
+          end
+        end
+      end
+    end
+    local tram=s.tram_pilot
+    if tram and tram.phase~="depot" then
+      local leg=tram.legs and tram.legs[tram.leg]
+      local f=leg and leg.frames and leg.frames[tram.index]
+      if f and f[4] and not below_or_above(s,f) then ground[f[4]]=true end
+    end
+    return ground
+  end
+
   function W.occupied(s,id,ctx)
     if ctx and ctx.vehicles_at then
       local entries=ctx.vehicles_at(s,id)
@@ -49,30 +78,7 @@ return function(Sim,Terrain,Follow,OneWay,settings)
       end
       return false
     end
-    for _,v in pairs(s.fleet or {}) do
-      if is_road(v) then
-        local f=Sim.road_motion_frame and Sim.road_motion_frame(s,v)
-        if f then
-          if f[4]==id and not below_or_above(s,f) then return true end
-        elseif v.route then
-          if type(v.progress)=="number" then
-            if Sim.position(s,v)==id then return true end
-          else
-            -- Missing cursor data cannot establish that the tile is clear.
-            for _,route_tile in ipairs(v.route) do if route_tile==id then return true end end
-          end
-        end
-      end
-    end
-    local tram=s.tram_pilot
-    if tram and tram.phase~="depot" then
-      local leg=tram.legs and tram.legs[tram.leg]
-      local f=leg and leg.frames and leg.frames[tram.index]
-      if f and f[4]==id and not below_or_above(s,f) then return true end
-    end
-    -- Stock rails/aircraft cannot occupy an ordinary road ground layer in
-    -- the submitted map model. Supplemental host actors should use ctx.
-    return false
+    return (ctx and ctx.ground or W.ground_occupancy(s))[id]==true
   end
 
   local function snapshot(s,id)
@@ -187,6 +193,7 @@ return function(Sim,Terrain,Follow,OneWay,settings)
       return nil,"PARAMETERS"
     end
     if q.tram then return nil,"UNSUPPORTED_ROADTYPE" end
+    ctx=ctx or {ground=W.ground_occupancy(s)}
     local p,reason,id=OneWay.plan(W.board(s),start,last,axis,{
       start_half=q.start_half,end_half=q.end_half,ai=q.ai,toggle=q.toggle,company=owner,
       build_on_slopes=settings.build_on_slopes~=false, piece_cost=settings.piece_cost or 95,
@@ -248,7 +255,7 @@ return function(Sim,Terrain,Follow,OneWay,settings)
       local t,patch=s.tiles[e.tile],patches[e.tile]
       t.build,t.road_bits,t.owner=patch.build,patch.road_bits,patch.owner
       t.disallowed,t.road_disallowed=patch.disallowed,patch.road_disallowed
-      if s.road_oneway_removed then s.road_oneway_removed[e.tile]=nil end
+      if s.road_oneway_removed and s.road_oneway_removed[e.tile]==true then s.road_oneway_removed[e.tile]=nil end
       dirty[#dirty+1]=e.tile
     end
     if #dirty>0 then
@@ -327,6 +334,24 @@ return function(Sim,Terrain,Follow,OneWay,settings)
       return false,"WRONG_ONE_WAY_DIRECTION",wanted[4]
     end
     return true
+  end
+
+  function W.removal_blocks(s,f)
+    if not f or not f[4] or below_or_above(s,f) then return false end
+    local id=f[4]
+    if not (s.road_oneway_removed and s.road_oneway_removed[id]) then return false end
+    local t=s.tiles[id]
+    if not normal(t) then
+      return not (t and (t.build=="road_station" or t.build=="road_depot" or t.level_crossing))
+    end
+    local td=f[6]
+    -- Normal pavement only has TD 0..5, 8..13. The turnaround rows
+    -- require the straight approach on the same axis, as in the stock
+    -- follower. Other facility rows aren't valid on a repaved tile.
+    if td==6 or td==7 or td==14 or td==15 then td=(td-6)%2 end
+    if type(td)~="number" or td<0 or td>13 then return true end
+    local bits=Follow.status({kind="road",roadtype=t.roadtype or 0,road_bits=Sim.road_bits(s,id)},false)
+    return not Follow.has_trackdir(bits,td)
   end
 
   -- Optional route selection when the prior physical pose is on ordinary

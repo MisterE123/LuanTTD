@@ -132,6 +132,7 @@ s.tiles[id(16,13)].road_bits=9
 assert(Sim.build(s,owner,"road_station",{id(18,12)}))
 local stop=s.tiles[id(18,12)].station
 local original=RouteBoard(Sim,s,Follow)
+local prior_record=original.tile(id(12,12))
 local yboard=World.path_board(s,original)
 local vehicle={id=3,owner=owner,engine="bus",cargo="passenger",dest=stop,route={id(9,12),id(11,12),id(12,12),id(18,12)},
   road_motion_frames={step(11,12,8),step(12,12,8)},road_speed_state={index=1}}
@@ -141,7 +142,7 @@ assert(World.build(s,owner,id(14,12),id(12,12),0))
 local before,wanted=vehicle.road_motion_frames[1],vehicle.road_motion_frames[2]
 assert_eq(World.read(s.tiles[wanted[4]]),2)
 assert_eq(yboard.tile(wanted[4]).disallowed,2)
-assert(original.tile(wanted[4]).disallowed==nil)
+assert(prior_record.disallowed==0 and original.tile(wanted[4]).disallowed==0)
 assert_eq(closed(s,before,wanted,"WRONG_ONE_WAY_DIRECTION"),wanted[4])
 assert(World.guard(s,before,wanted,{tram=true}))
 assert(World.guard(s,step(13,12,0),step(12,12,0)))

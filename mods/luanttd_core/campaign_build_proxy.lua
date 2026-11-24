@@ -4,7 +4,7 @@ return function(client)
   local requests={}
   local B={}
   local observe=client.observe or client.query
-  local hovers={}
+  local hovers,shown={},{}
   local function key(value)
     if type(value)~="table" then return tostring(value) end
     local parts={}
@@ -15,22 +15,33 @@ return function(client)
   local function signature(kind,gesture) return kind..":"..key(gesture) end
   function B.preview(player,kind,gesture,now)
     local signature=signature(kind,gesture)
+    local function present(q)
+      shown[player]=kind=="road" and q.value and {signature=signature,value=q.value} or nil
+      return q.value,q.why
+    end
     local prior=hovers[player]
-    if prior and prior.signature==signature and prior.at and now-prior.at<650000 then
-      return prior.value,prior.why
+    local same=prior and prior.signature==signature
+    if same and prior.at and now-prior.at<650000 then
+      return present(prior)
     end
     if not prior or not prior.waiting then
-      local q={signature=signature,waiting=true}
+      local q=same and prior or {signature=signature}
+      q.waiting=true
       hovers[player]=q
       local accepted=observe({kind=kind.."_quote",player=player,request=gesture,peek=true},function(r)
         if hovers[player]~=q then return end
         q.waiting=nil;q.at=now;q.value=r.value;q.why=r.why
       end)
-      if not accepted then hovers[player]=nil end
+      if not accepted then q.waiting=nil end
     end
+    -- Retain a complete result only for the exact same gesture. This
+    -- keeps a stationary road ghost stable during an occupancy refresh.
+    -- A newer endpoint never borrows an older shape or price.
+    if kind=="road" and same and prior.at then return present(prior) end
+    shown[player]=nil
     return nil,"Checking construction…",true
   end
-  function B.leave(player) hovers[player]=nil;requests[player]=nil end
+  function B.leave(player) hovers[player]=nil;shown[player]=nil;requests[player]=nil end
   function B.commit(player,kind,gesture,done)
     if requests[player] then return nil,"Another build is being checked." end
     local id={}
@@ -41,10 +52,10 @@ return function(client)
       done(ok,why,quote,changed)
     end
     if kind=="road" then
-      local old=hovers[player]
+      local old=shown[player]
       local prior=old and old.signature==signature(kind,gesture) and old.value or nil
       local ok,why=client.query({kind="road_place",player=player,request=gesture,quote=prior},function(r)
-        hovers[player]=nil
+        hovers[player]=nil;shown[player]=nil
         if r.ok and client.refresh_scene then client.refresh_scene() end
         finish(r.ok,r.why,prior,r.value)
       end)

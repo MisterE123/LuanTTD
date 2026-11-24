@@ -59,7 +59,8 @@ H.menus={
     [3]=item("road_station","Bus stop","stop"),
     [4]=item("road_depot","Road depot","depot"),
     [7]=section("road_direction","Road Options","road_tools"),[8]=back},
-  road_direction={title="Road Options",[1]=inspect,[8]=back},
+  road_direction={title="Road Options",[1]=inspect,
+    [5]=item("road_axis_x","East–west road"),[7]=item("road_remove","Remove road pavement"),[10]=item("road_axis_y","North–south road"),[8]=back},
   terrain={title="Landscaping",[1]=inspect,[2]=item("landscape_raise","Raise corner","raise"),
     [3]=item("landscape_lower","Lower corner","lower"),
     [4]=item("landscape_level","Level area","level"),[5]=item("landscape_raise_area","Raise area","raise_area"),
@@ -103,7 +104,7 @@ local function sync_sections()
   menus.road_direction[3]=menus.structures and menus.roads[10][1]~="section_structures" and gates.structures or nil
   menus.road_direction[4]=menus.tramway and gates.tramway or nil
   menus.road_direction[6]=menus.tramway and item("bend","Switch tram bend") or nil
-  menus.roads[7]=(menus.road_direction[2] or menus.road_direction[3] or menus.road_direction[4])
+  menus.roads[7]=(menus.road_direction[2] or menus.road_direction[3] or menus.road_direction[4] or menus.road_direction[5])
     and section("road_direction","Road Options","road_tools") or nil
 end
 sync_sections()
@@ -421,7 +422,7 @@ function H.legend(stack,slot,is_world_tool,visible)
       help[1]=H.sightseeing[id]
       help[2]="Right-click for details"
     elseif is_world_tool then
-      help[1]=(id=="road" or id=="clear" or id=="oneway_drag")
+      help[1]=(id=="road" or id=="road_axis_x" or id=="road_axis_y" or id=="road_remove" or id=="clear" or id=="oneway_drag")
         and "Click or drag in the world" or "Left-click to use"
       if id~="inspect" then help[#help+1]="Right-click to cancel" end
     else

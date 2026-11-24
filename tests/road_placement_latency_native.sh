@@ -20,6 +20,9 @@ printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_back
 export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 port=${BAYLINE_NATIVE_PORT:-41190}
 printf 'port = %s\nprometheus_listener_address = 127.0.0.1:%s\nbind_address = 127.0.0.1\nserver_announce = false\ndedicated_server_step = 0.02\n' "$port" "$port" > "$out/server.conf"
+if [[ ${LUANTTD_NATIVE_BENCH_REMOVE:-0} == 1 ]]; then
+  printf "luanttd_bench_remove = true\n" >> "$out/server.conf"
+fi
 timeout 100 luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' > "$out/server.log" 2>&1 || {
   tail -80 "$out/server.log"
   exit 1

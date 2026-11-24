@@ -952,6 +952,31 @@ def survey_ride_vehicle(i):
     i.path([(20.8,33.6),(16.3,33.6),(14.7,38.1)],BRASS,2.85)
     i.path([(21.6,28.5),(18.4,30.5),(16.5,30.5)],CREAM,1.5)
 
+def road_axis(i, north_south=False):
+    # A straight road with both rail-free shoulders and opposite ends;
+    # the mirrored silhouettes remain distinct at minimum 32px scaling.
+    def p(x,y): return (48-x,y) if north_south else (x,y)
+    i.path([p(10,33),p(39,15)],SLATE,10)
+    i.path([p(9,30),p(37,12)],BLUE,1.4)
+    i.path([p(12,36),p(40,18)],BLUE,1.4)
+    for a,b in (((12,32),(17,29)),((21,26.4),(26,23.4)),((30,21),(35,18))):
+        i.path([p(*a),p(*b)],CREAM,1.8)
+    i.poly([p(7,35),p(14,34),p(11,28)],BRASS)
+    i.poly([p(42,13),p(35,13),p(39,20)],BRASS)
+
+
+def road_remove(i):
+    i.path([(10,35),(37,14)],SLATE,12)
+    i.path([(9,31),(34,11)],BLUE,1.5)
+    i.path([(13,39),(40,18)],BLUE,1.5)
+    i.path([(13,34),(19,29)],CREAM,1.65)
+    i.path([(30,21),(36,17)],CREAM,1.65)
+    i.round((18,18,32,32),3,BRICK,CREAM,1.1)
+    i.path([(21,25),(29,25)],CREAM,2.35)
+
+
+ART["road_remove"]=road_remove
+ART.update(road_axis_x=road_axis,road_axis_y=lambda i: road_axis(i,True))
 ART.update(survey_walk=survey_walk,survey_drive_car=survey_drive_car,
            survey_fly_plane=survey_fly_plane,survey_train_cab=survey_train_cab,
            survey_ride_vehicle=survey_ride_vehicle)

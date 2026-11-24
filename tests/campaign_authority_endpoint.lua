@@ -257,6 +257,27 @@ local cross=station_worker.rail_quote(john,{tool="crossing",first=crossing_at})
 assert(cross.ok and cross.value.cost>0,cross.why)
 assert(station_worker.command(john,{kind="rail_commit",revision=cross.revision,token=cross.value.token}).ok)
 assert(s2.tiles[crossing_at].level_crossing and s2.tiles[crossing_at].level_crossing.rail_axis==0)
+do
+  local t=s2.tiles[crossing_at]
+  local rm={tool="remove",first=crossing_at,axis=1,start_half=false,end_half=false}
+  local across={tool="remove",first=crossing_at,axis=0,start_half=false,end_half=true}
+  assert(not station_worker.road_quote(john,across).ok)
+  local p=assert(station_worker.road_quote(john,rm).value)
+  assert(p.cost==80 and #p.tiles==1 and p.tiles[1]==crossing_at)
+  local money=s2.companies[john].cash
+  local claims={example={tile=crossing_at,track=0}}
+  s2.stock_rail_dispatch={runs={},life={bits={[crossing_at]=1},claims=claims}}
+  s2.fleet[901]={id=901,owner=john,engine="bus",road_stop_pose={[4]=crossing_at}}
+  assert(not station_worker.road_place(john,rm,p).ok and t.level_crossing and s2.companies[john].cash==money)
+  s2.fleet[901]=nil
+  local receipt=station_worker.road_place(john,rm,p)
+  assert(receipt.ok,receipt.why)
+  assert(t.build=="stock_rail" and t.owner==john and t.rail_tracks==1 and t.rail_type==0 and t.road_bits==nil)
+  assert(not t.level_crossing and not s2.level_crossing_tiles[crossing_at] and s2.companies[john].cash==money-80)
+  assert(s2.stock_rail_dispatch.life.bits[crossing_at]==1 and s2.stock_rail_dispatch.life.claims==claims)
+  s2.stock_rail_dispatch=nil
+  print("PASS removing one road half of an empty crossing restores the same plain rail, including its untouched reservation")
+end
 s.road_mail,s.road_stock_house_supply=true,true
 local truck_at=Sim.id(12,7)
 local loading={tool="truck_stop",first=truck_at}
@@ -353,5 +374,22 @@ do
   assert(not again.ok and r.companies[john].cash==cash-quote.cost)
   local fresh={tool="drag",first=Sim.id(4,16),last=Sim.id(8,16),axis=0,start_half=true,end_half=false}
   assert(R.road_place(john,fresh).ok)
+  local removal={tool="remove",first=fresh.first,last=fresh.last,axis=0,start_half=true,end_half=true}
+  local rq=assert(R.road_quote(john,removal).value)
+  local budget=r.companies[john]
+  local full_cash,full_expense=budget.cash,budget.expense
+  assert(#rq.tiles==5 and rq.cost==320)
+  r.fleet[7]={id=7,engine="bus",owner=john,road_stop_pose={[4]=Sim.id(6,16)}}
+  assert(R.road_place(john,removal,rq).why=="ROAD_QUOTE_CHANGED")
+  assert(budget.cash==full_cash and budget.expense==full_expense)
+  r.fleet[7]=nil
+  budget.cash=120
+  local receipt=R.road_place(john,removal,rq)
+  assert(receipt.ok and #receipt.value==2 and receipt.why:find("cash ran out"))
+  assert(budget.cash==0 and budget.expense==full_expense+120)
+  assert(Sim.road_bits(r,fresh.first)==0 and Sim.road_bits(r,Sim.id(5,16))==0 and Sim.road_bits(r,Sim.id(6,16))==10)
+  local too_short={tool="remove",first=Sim.id(6,16),axis=0,start_half=false,end_half=true}
+  assert(not R.road_place(john,too_short).ok and Sim.road_bits(r,Sim.id(6,16))==10)
+  print("PASS road removal refuses stale occupancy changes, respects the affordable prefix, charges exact pieces, and reports the applied footprint")
   print("PASS one owner turn applies exact visible roads, rejects stale price without spending, and safely quotes a fresh placement")
 end

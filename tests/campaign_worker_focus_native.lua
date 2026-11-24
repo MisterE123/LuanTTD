@@ -90,6 +90,57 @@ core.register_on_joinplayer(function(p)
         :format(label,r.day,r.value.cash,stat_id,delivered,revenue))
     end)
   end
+  -- The fixture points the camera; only real client input selects and
+  -- releases the two tools. The road is separate from the paid service.
+  local road_qa
+  local function road_test(player,label)
+    if not road_qa then
+      local x,z=Sim.xy(bus_layout().station_a)
+      local first=Sim.id(x+3,z-3)
+      local last=Sim.id(x+6,z-3)
+      road_qa={x=x+3,z=z-3,first=first,last=last}
+    end
+    local q=road_qa
+    local function aim(x,z,offset)
+      local snapshot=assert(OwnerCheckpoint.read())
+      local t=snapshot.tiles[Sim.id(x,z)]
+      player:set_pos({x=x*2+offset,y=t.h+7.5,z=z*2+.5})
+      player:set_look_vertical(math.pi/2-.002)
+      player:set_look_horizontal(0)
+    end
+    local function ready(which,logical,x,z,offset)
+      assert(world.go_menu(player,"road_direction"))
+      local slot
+      for i,j in ipairs(world.hotbar_layout(player)) do if j==logical then slot=i end end
+      assert(slot and slot<=9)
+      aim(x,z,offset)
+      core.log("action","NATIVE_ROAD_GESTURE_"..which.." slot="..slot)
+    end
+    if label=="x-start" then ready("X",5,q.x,q.z,.12)
+    elseif label=="x-end" then
+      aim(q.x+3,q.z+1,.75) -- aim outside the locked row
+      core.log("action","NATIVE_ROAD_GESTURE_X_RELEASE")
+    elseif label=="check-x" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      for id=q.first,q.last do assert(snapshot.tiles[id].build=="road") end
+      assert(not snapshot.tiles[Sim.id(q.x+3,q.z+1)].build)
+      assert(snapshot.tiles[q.first+1].road_bits==10)
+      core.log("action","NATIVE_ROAD_GESTURE_X_PASS")
+    elseif label=="remove-start" then ready("REMOVE",7,q.x,q.z,.12)
+    elseif label=="remove-end" then
+      aim(q.x+3,q.z,.75)
+      core.log("action","NATIVE_ROAD_GESTURE_REMOVE_RELEASE")
+    elseif label=="check-remove" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      for id=q.first,q.last do assert(snapshot.tiles[id].build==nil) end
+      assert(snapshot.fleet[load_id()].running and snapshot.fleet[load_id()].revenue>0)
+      core.log("action","NATIVE_ROAD_GESTURE_REMOVE_PASS")
+    elseif label=="reopen" then
+      local snapshot=assert(OwnerCheckpoint.read())
+      for id=q.first,q.last do assert(snapshot.tiles[id].build==nil) end
+      core.log("action","NATIVE_ROAD_GESTURE_REOPEN_PASS")
+    end
+  end
   local function probe()
     local live=core.get_player_by_name(name)
     if not live then return end
@@ -100,7 +151,8 @@ core.register_on_joinplayer(function(p)
       local f=io.open(stage,"r")
       if f then
         local label=f:read("*l");f:close();os.remove(stage)
-        if label=="initial" then arm(function() receipt(label) end)
+        if label:sub(1,5)=="road-" then road_test(live,label:sub(6))
+        elseif label=="initial" then arm(function() receipt(label) end)
         elseif label=="focus-return" or label=="reopen" then receipt(label)
         elseif label=="set-rejoin" then
           core.log("action","FOCUS_NATIVE_REJOIN_MOVE")

@@ -196,7 +196,21 @@ for x=0,15 do for z=0,15 do
   local rc1_x=(x<z and z<=15-x) or (x>z and z>=15-x)
   assert(target==stock_click and axis==(rc1_x and 0 or 1))
   assert(first==last and last==((rc1_x and x or z)>=8))
+  for fixed=0,1 do
+    local t,d,a,b=Sim.autoroad_selection(stock_click,hit,stock_click,hit,fixed)
+    assert(t==stock_click and d==fixed and a==b and a==((fixed==0 and x or z)>=8))
+  end
 end end
+for fixed=0,1 do
+  local a,b=at(36,30),at(41,34)
+  local p,q=point(36,30,1,12),point(41,34,15,4)
+  local tile,d,x,z=Sim.autoroad_selection(a,p,b,q,fixed)
+  assert(d==fixed and tile==(fixed==0 and at(41,30) or at(36,34)))
+  assert(x==(fixed==1) and z==(fixed==0))
+  tile,d,x,z=Sim.autoroad_selection(b,q,a,p,fixed)
+  assert(d==fixed and tile==(fixed==0 and at(36,34) or at(41,30)))
+  assert(x==(fixed==0) and z==(fixed==1))
+end
 local id,axis,h0,h1=Sim.autoroad_selection(at(40,31),point(40,31,2,9),at(44,32),point(44,32,12,1))
 assert(id==at(44,31) and axis==0 and not h0 and h1)
 id,axis,h0,h1=Sim.autoroad_selection(at(40,31),point(40,31,7,12),at(41,32),point(41,32,8,8))

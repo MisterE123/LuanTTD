@@ -20,6 +20,10 @@ return function(Sim,s,oneway,Bank)
     elseif op=="drag" then
       if request.axis~=0 and request.axis~=1 then return nil,"INVALID_AXIS" end
       return Sim.autoroad_plan(s,player,first,last,request.axis,request.start_half,request.end_half)
+    elseif op=="remove" then
+      local q,why=Sim.road_remove_plan(s,player,first,last,request.axis,request.start_half==true,request.end_half==true)
+      if not q then return nil,Sim.road_removal_error(why) end
+      return q
     elseif op=="bend" then
       return Sim.autoroad_bend_plan(s,player,first,last)
     elseif op=="fund_bank" and first==last and Bank then
@@ -49,7 +53,8 @@ return function(Sim,s,oneway,Bank)
     for i,c in ipairs(q.changes) do
       ids[i]=c.id or c.tile
       parts[i]=table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
-        tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation)},":")
+        tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation),tostring(c.rail_tracks),tostring(c.railtype),
+        c.rail_owner and ("%q"):format(c.rail_owner) or "-"},":")
     end
     return {tiles=ids,cost=q.cost,topology=s.topology,terrain=s.corner_grid and s.corner_grid.revision,stopped_at=q.stopped_at,ticket=table.concat(parts,"/")}
   end
@@ -82,6 +87,8 @@ return function(Sim,s,oneway,Bank)
       return true,note,ids
     elseif request.tool=="drag" or request.tool=="bend" then
       return Sim.apply_road_construction(s,player,q)
+    elseif request.tool=="remove" then
+      return Sim.apply_road_removal(s,player,q)
     elseif request.tool=="fund_bank" then
       local bank,ids=Bank.execute(s,player,first,q.bank)
       if not bank then return false,Bank.reason(ids) end

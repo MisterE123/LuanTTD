@@ -1694,8 +1694,15 @@ function U.end_demolition(p,id,diagonal)
   if #q.dirty>0 then R.update(q.dirty) end
   if q.passed>0 then api.save() end
 end
+-- OpenTTD 16.0-RC1 road_gui.cpp: dedicated sizing pins the axis after
+-- pointer-down, while AutoRoad chooses from the pointer coordinates.
+local fixed_road_axes={road_axis_x=0,road_axis_y=1}
+local fixed_road_labels={road_axis_x="East–west road",road_axis_y="North–south road",road_remove="Remove road"}
+local function road_gesture_op(tool)
+  return tool=="oneway_drag" and "oneway" or tool=="road_remove" and "remove" or "drag"
+end
 function U.road_gesture(tool)
-  return S.corner_grid and (tool=="road" or tool=="oneway_drag" and api.oneway_tools)
+  return S.corner_grid and (tool=="road" or tool=="road_remove" or fixed_road_axes[tool]~=nil or tool=="oneway_drag" and api.oneway_tools)
 end
 function U.begin_autoroad(p,id,hit)
   local V=view(p:get_player_name())
@@ -1710,7 +1717,7 @@ function U.cancel_autoroad(p)
   V.status="Road drag canceled."
 end
 local function autoroad_args(V,id,hit)
-  return Sim.autoroad_selection(V.road_press.id,V.road_press.hit,id,hit)
+  return Sim.autoroad_selection(V.road_press.id,V.road_press.hit,id,hit,fixed_road_axes[V.tool])
 end
 local function autoroad_bend(p,V,start,last)
   if V.tool~="road" or not p:get_player_control().aux1 then return false end
@@ -1746,7 +1753,7 @@ function U.end_autoroad(p,id,hit)
   local bend=autoroad_bend(p,V,first,id)
   if api.authority_handoff then
     worker_build(n,V,"road",bend and {tool="bend",first=first,last=id} or
-      {tool=V.tool=="oneway_drag" and "oneway" or "drag",first=first,last=last,axis=axis,start_half=start_half,end_half=end_half})
+      {tool=road_gesture_op(V.tool),first=first,last=last,axis=axis,start_half=start_half,end_half=end_half})
     return
   end
   if bend then
@@ -1759,6 +1766,14 @@ function U.end_autoroad(p,id,hit)
     local q,why=api.oneway.quote(S,n,first,last,axis,{start_half=start_half,end_half=end_half})
     if not q then V.status=one_way_text(why);return end
     U.commit_oneway(n,V,id,q)
+    return
+  end
+  if V.tool=="road_remove" then
+    local q,why=Sim.road_remove_plan(S,n,first,last,axis,start_half,end_half)
+    if not q then V.status=Sim.road_removal_error(why);return end
+    local ok,note,ids=Sim.apply_road_removal(S,n,q)
+    V.status=note
+    if ok then R.update(ids);api.save() end
     return
   end
   local ok,note,ids,q=Sim.autoroad_build(S,n,first,last,axis,start_half,end_half)
@@ -1842,11 +1857,12 @@ local function authority_preview(p,id,hit)
     return {id},q~=nil,hint
   end
   if U.road_gesture(tool) and hit then
+    label=fixed_road_labels[tool] or label
     local press=V.road_press or {id=id,hit=hit}
     if autoroad_bend(p,V,press.id,id) then request={tool="bend",first=press.id,last=id}
     else
-      local last,axis,first_half,last_half=Sim.autoroad_selection(press.id,press.hit,id,hit)
-      request={tool=tool=="oneway_drag" and "oneway" or "drag",first=press.id,last=last,
+      local last,axis,first_half,last_half=Sim.autoroad_selection(press.id,press.hit,id,hit,fixed_road_axes[V.tool])
+      request={tool=road_gesture_op(tool),first=press.id,last=last,
         axis=axis,start_half=first_half,end_half=last_half}
     end
     ids=Sim.line(request.first,request.last)
@@ -1927,7 +1943,7 @@ function U.preview(p,id,hit)
       if not q then return path or {id},false,why end
       return q.path,true,("Road bend  |  %s  ·  %d new tiles  ·  Release to build"):format(dollars(q.cost),#q.changes)
     end
-    local last,axis,start_half,end_half=Sim.autoroad_selection(press.id,press.hit,id,hit)
+    local last,axis,start_half,end_half=Sim.autoroad_selection(press.id,press.hit,id,hit,fixed_road_axes[V.tool])
     if V.tool=="oneway_drag" then
       local q,why=api.oneway.quote(S,n,press.id,last,axis,{start_half=start_half,end_half=end_half})
       if not q then return Sim.line(press.id,last),false,one_way_text(why) end
@@ -1937,12 +1953,20 @@ function U.preview(p,id,hit)
         not V.road_press and "  ·  Hold and drag in travel direction" or
         q.stopped_at and "  ·  Stops at an obstruction" or "")
     end
+    if V.tool=="road_remove" then
+      local q,why=Sim.road_remove_plan(S,n,press.id,last,axis,start_half,end_half)
+      if not q then return Sim.line(press.id,last),false,Sim.road_removal_error(why) end
+      local ids={}
+      for i,edit in ipairs(q.changes) do ids[i]=edit.id end
+      return ids,true,("Remove road  |  %s  ·  %d tiles"):format(dollars(q.cost),#ids)
+    end
     local q,why=Sim.autoroad_plan(S,n,press.id,last,axis,start_half,end_half)
     local path=Sim.line(press.id,last)
     if not q then return path,false,why end
     local info=q.stopped_at and "  ·  Stops at an obstruction" or
-      not V.road_press and "  ·  Drag straight · E for a bend" or "  ·  Hold E for a bend"
-    return q.ids,true,("AutoRoad  |  %s  ·  %d tiles%s"):format(dollars(q.cost),#q.ids,info)
+      (fixed_road_labels[V.tool] and "  ·  Axis locked") or
+      (not V.road_press and "  ·  Drag straight · E for a bend" or "  ·  Hold E for a bend")
+    return q.ids,true,("%s  |  %s  ·  %d tiles%s"):format(fixed_road_labels[V.tool] or "AutoRoad",dollars(q.cost),#q.ids,info)
   end
   if api.road_first and V.tool=="clear" then
     if V.demolition_anchor and V.demolition_anchor~=id and Sim.clear_area then
@@ -2196,7 +2220,7 @@ function U.is_world_tool(tool)
   return not not (Sim.tools[tool] or rail_orders[tool] or rail_tool_labels[tool] or waypoint_tools[tool] or rail_spans[tool] or coal_stage_tools[tool] or
     (api.rail_oil_tools and oil_stage_tools[tool]) or (api.rail_goods_tools and goods_stage_tools[tool]) or profile_stage_tools[tool] or airfield_tools[tool] or ship_mode[tool] or buoy_tools[tool] or tram_mode[tool] or
     tool=="fund_bank" or tool=="teleport_tile" or tool=="tram_order" or tool=="airfield_order" or tool=="ship_order" or tool=="ship_coal_order" or tool=="truck_stop_tool" or tool=="rail_crossing_tool" or tool=="oneway_drag" or
-    landscape_tools[tool] or bridge_tool(tool) or tool:match("^structure_"))
+    fixed_road_labels[tool] or landscape_tools[tool] or bridge_tool(tool) or tool:match("^structure_"))
 end
 function U.stop_label(st)
   if st.freight_art and (api.timber_tools or api.farm_tools or api.oil_tools) then return "Truck stop #"..st.id end
@@ -2218,6 +2242,7 @@ function U.world_status(p,tile,show_preview,hit)
     (V.tool=="fund_bank" and {name="Fund Bank"}) or
     (V.tool=="truck_stop_tool" and {name="Freight loading stop"}) or
     (V.tool=="teleport_tile" and {name="Teleport to tile"}) or
+    (fixed_road_labels[V.tool] and {name=fixed_road_labels[V.tool]}) or
     (bridge_tool(V.tool) and {name=bridge_label(bridge_tool(V.tool))}) or Sim.tools.inspect
   local target="Aim at the ground"
   if tile and api.authority_handoff and R.host_tile then

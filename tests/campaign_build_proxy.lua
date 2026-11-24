@@ -30,6 +30,12 @@ do
   local unrelated={tool="drag",first=9,last=11,axis=0,start_half=true,end_half=false}
   assert(not R.preview("Owner","road",unrelated,2) and #observations==1)
   observations[1][2]({ok=true,value={cost=400,tiles={9,10,11,12,13},ticket="exact"}})
+  assert(R.preview("Owner","road",request,650050).cost==400 and #observations==2)
+  assert(R.preview("Owner","road",request,651010).cost==400 and #observations==2)
+  local fresh,_,checking=R.preview("Owner","road",unrelated,651020)
+  assert(not fresh and checking and #observations==2)
+  assert(R.preview("Owner","road",request,651022).cost==400)
+  observations[2][2]({ok=true,value={cost=999,tiles={9},ticket="not-shown"}})
   local receipt
   assert(R.commit("Owner","road",request,function(ok,_,ticket,tiles)
     assert(ok and ticket.cost==400 and #tiles==5);receipt=true
@@ -37,6 +43,7 @@ do
   assert(#commands==1 and commands[1][1].kind=="road_place" and commands[1][1].quote.ticket=="exact")
   commands[1][2]({ok=true,value={9,10,11,12,13}})
   assert(receipt and refreshed==1)
+  assert(not R.preview("Owner","road",request,651021) and #observations==3)
   assert(R.commit("Owner","road",unrelated,function(ok,why_)assert(not ok and why_=="ROAD_QUOTE_CHANGED")end))
   assert(#commands==2 and commands[2][1].quote==nil)
   commands[2][2]({ok=false,why="ROAD_QUOTE_CHANGED"})
