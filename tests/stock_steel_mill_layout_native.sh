@@ -40,6 +40,11 @@ if [[ ${LUANTTD_QA_MULTICOAST_RAIL:-0} == 1 ]]; then
   fixture=tests/rail_multicoast_native.lua
   marker='PASS NATIVE MULTICORNER RAIL'
 fi
+if [[ ${LUANTTD_QA_ROADSIDE:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/roadside_temperate_native.lua
+  marker='PASS NATIVE ROADSIDE'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -59,6 +64,9 @@ printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_back
 printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\nbayline_seed = %s\nluanttd_qa_steel_layout = %s\n' \
   "$port" "$seed" "${LUANTTD_QA_STEEL_LAYOUT:-1}" >"$out/server.conf"
 printf 'luanttd_qa_rail_ground = %s\n' "${LUANTTD_QA_RAIL_GROUND:-0}" >>"$out/server.conf"
+if [[ ${LUANTTD_QA_ROADSIDE:-0} == 1 ]]; then
+  printf 'bayline_generated_map_width = 128\nbayline_generated_map_depth = 128\nbayline_generated_relief = 0\nbayline_generated_coasts = 0\nbayline_generated_towns = 3\n' >>"$out/server.conf"
+fi
 printf 'screen_w = 1200\nscreen_h = 760\nenable_sound = false\nfps_max = 26\nviewing_range = 63\nenable_shaders = false\n' >"$out/client.conf"
 export DISPLAY="127.0.0.1:$display" HOME="$out/home" LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=2
 export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
@@ -119,6 +127,12 @@ if [[ ${LUANTTD_QA_MULTICOAST_RAIL:-0} == 1 ]]; then
   grep -q 'NATIVE MULTICORNER RAIL WET' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
   sleep .7
   if command -v import >/dev/null; then import -window root -quality 91 "$out/wet-multicorner.jpg"; fi
+fi
+if [[ ${LUANTTD_QA_ROADSIDE:-0} == 1 ]]; then
+  for _ in {1..240}; do grep -q 'NATIVE ROADSIDE trees READY' "$out/server.log" && break; sleep .25; done
+  grep -q 'NATIVE ROADSIDE trees READY' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
+  sleep 1
+  if command -v import >/dev/null; then import -window root -quality 91 "$out/roadside-trees.jpg"; fi
 fi
 for _ in {1..360}; do grep -q "$marker" "$out/server.log" && break; kill -0 "$server" 2>/dev/null || break; sleep .25; done
 grep "$marker" "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }

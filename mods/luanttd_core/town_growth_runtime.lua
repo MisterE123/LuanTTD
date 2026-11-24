@@ -6,7 +6,8 @@ return function(Sim,Terrain,G,B,H)
   local W={}
   W.reconstruction=dofile(path.."road_reconstruction_world.lua")(Sim,Terrain,G,
     dofile(path.."openttd/road_reconstruction.lua"),dofile(path.."openttd/road_slope.lua"),
-    dofile(path.."openttd/rail_track.lua"),dofile(path.."openttd/slope.lua"))
+    dofile(path.."openttd/rail_track.lua"),dofile(path.."openttd/slope.lua"),
+    dofile(path.."openttd/roadside_temperate.lua"))
   local names=dofile(path.."stock_town_art.lua")
   local authority=dofile(path.."town_road_authority.lua")(Sim,dofile(path.."openttd/road_town_permission.lua"))
   local function at(layer,id) return layer and layer[id] end

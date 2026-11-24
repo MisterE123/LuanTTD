@@ -1854,6 +1854,7 @@ function M.apply_road_stop_remove(s,owner,plan)
       if t.road_town then t.owner=nil end
     else
       t.build,t.owner,t.road_bits=nil,nil,nil
+      t.roadside,t.stock_roadside_town=nil,nil
     end
     t.station,t.stop_axis,t.road_terminal_level,t.road_stop_type=nil,nil,nil,nil
     ids[#ids+1]=row.id
@@ -2255,6 +2256,7 @@ local function apply_build(s,owner,changes,cost)
       else
         if type(tile.wood)=="table" and tile.terrain~="water" then tile.stock_clear_ground,tile.stock_clear_density=nil,0 end
         tile.build=nil;tile.rail_tracks=nil;tile.rail_type=nil;tile.station=nil;tile.signal=nil;tile.closed=nil;tile.owner=nil;tile.depot_dir=nil;tile.road_bits=nil;tile.stop_axis=nil;tile.house=nil;tile.source_house=nil;tile.wood=nil
+        tile.roadside,tile.stock_roadside_town=nil,nil
       end
     elseif k=="grade" then tile.h=tile.h-1;tile.terrain=tile.h==0 and "grass" or "hill"
     elseif k=="signal" then tile.signal=true
@@ -2264,6 +2266,9 @@ local function apply_build(s,owner,changes,cost)
       -- Lay additional halves without recreating terminal entities.
       tile.road_bits=item.road_bits
     else
+      if k=="road" and tile.build~="road" and not (tile.tram and tile.tram.kind=="road") then
+        tile.roadside,tile.stock_roadside_town=nil,nil
+      end
       tile.build=k; tile.owner=owner; tile.wood=nil
       tile.road_terminal_level=item.road_terminal_level
       tile.road_bits=item.road_bits;tile.road_town=item.road_town;tile.stop_axis=item.stop_axis
@@ -4401,10 +4406,12 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         return not road_ground[id]
       end
       local function landscape(x,z,tick)
+        local work
         if work_state and (work_state.funded>0 or work_state.active>0) then
           if tick~=road_tick then road_ground=nil;road_tick=tick end
-          works.visit(s,x+1,z+1,growth_random,ground_available)
+          work=works.visit(s,x+1,z+1,growth_random,ground_available)
         end
+        if works and not work then works.decorate(s,x+1,z+1) end
         if tide then tide(x,z,tick) end
         if coal then coal.tile_visit(x,z,tick) end
         if timber then timber.tile_visit(x,z,tick,commercial and commercial.offer_rig_passengers) end

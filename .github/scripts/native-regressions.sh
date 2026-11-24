@@ -133,6 +133,7 @@ case "${1:-}" in
     LUANTTD_QA_SPLIT_RAIL=1 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_WET_RAIL=1 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_MULTICOAST_RAIL=1 bash tests/stock_steel_mill_layout_native.sh
+    LUANTTD_QA_ROADSIDE=1 bash tests/stock_steel_mill_layout_native.sh
     ;;
   rail-dispatch)
     python3 tests/rail_early_diesel_art.py

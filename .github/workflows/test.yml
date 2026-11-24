@@ -308,6 +308,9 @@ jobs:
           lua5.1 tests/rail_half_water.lua
           lua5.1 tests/rail_half_water_world.lua
           lua5.1 tests/rail_multi_wet_world.lua
+          python3 tests/roadside_temperate_upstream.py "$src"
+          lua5.1 tests/roadside_temperate_world.lua
+          /usr/bin/python3 tools/build_roadside_temperate_art.py --check
           lua5.1 tools/build_rail_split_foundations.lua --check
           /usr/bin/python3 tools/build_rail_split_atlas.py --check
           lua5.1 tests/stock_rail_ground_fence_art_surface.lua

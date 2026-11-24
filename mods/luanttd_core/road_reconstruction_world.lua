@@ -1,7 +1,7 @@
 -- Native bridge to the 16.0-RC1 TileLoop_Road reconstruction states.
 -- The caller is the single simulation owner; no drawing or player object
 -- access, and no world scan on a landscape visit.
-return function(Sim,Terrain,G,Core,Slope,Rail,Surface)
+return function(Sim,Terrain,G,Core,Slope,Rail,Surface,Frontage)
   local W={}
   local function work_state(s)
     local towns=s.stock_town_growth
@@ -37,12 +37,27 @@ return function(Sim,Terrain,G,Core,Slope,Rail,Surface)
   end
   local function nearby(s,t,id)
     local state=s.stock_town_growth
-    local town=t.road_town and state.towns[t.road_town]
-    if not town then
-      local site=Sim.road_tree_authority().nearest(s,id)
-      town=site and state.towns[site.id]
-    end
+    local ref=t.road_town or t.stock_roadside_town
+    if ref~=nil then return ref~=false and state.towns[ref] or nil end
+    local site=Sim.road_tree_authority().nearest(s,id)
+    local town=site and state.towns[site.id]
+    if Frontage and s.stock_generated_profile then t.stock_roadside_town=town and town.id or false end
     return town
+  end
+  function W.decorate(s,x,z)
+    if not (Frontage and s.stock_generated_profile and s.stock_town_growth) then return end
+    local id=Sim.id(x,z)
+    local t=id and s.tiles[id]
+    if not t or t.stock_void or t.roadworks or not (normal(t) or t.level_crossing) then return end
+    local before=t.roadside or "barren"
+    local town=nearby(s,t,id)
+    local next_,changed=Frontage.visit(before,town and G.zone(town,x,z) or 0)
+    if not changed then return end
+    t.roadside=next_
+    s.changed=s.changed or {}
+    s.changed[#s.changed+1]=id
+    -- Appearance only: do not invalidate routes or construction tickets.
+    return next_
   end
   local function neighbor(s,id,d)
     local at=Sim.adjacent(id,d)
@@ -86,7 +101,9 @@ return function(Sim,Terrain,G,Core,Slope,Rail,Surface)
     s.road_oneway_removed=s.road_oneway_removed or {}
     s.road_oneway_removed[id]=true
     s.road_oneway_revision=(s.road_oneway_revision or 0)+1
-    if edit.road_bits==0 then t.build,t.owner,t.road_town,t.road_bits=nil,nil,nil,nil
+    if edit.road_bits==0 then
+      t.build,t.owner,t.road_town,t.road_bits=nil,nil,nil,nil
+      if not t.tram then t.roadside,t.stock_roadside_town=nil,nil end
     else t.road_bits=edit.road_bits end
   end
   function W.visit(s,x,z,random,ground)

@@ -559,6 +559,12 @@ return function(api)
       return Sim.road_surface(S,id)
     end
   end
+  local roadside_view=terrain and api.generated_world and dofile(modpath.."/roadside_temperate_view.lua")(
+    S,Sim,terrain,road_surface,reg,architecture,dofile(modpath.."/openttd/roadside_details.lua"),
+    dofile(modpath.."/openttd/rail_track.lua"),png,slope_collision)
+  function R.roadside_node(t,id,x,y,z)
+    return roadside_view and roadside_view.node(t,id,x,y,z)
+  end
   function R.road_reconstruction_node(t,id,x,y,z)
     if not t.roadworks or x%2~=0 or z%2~=0 then return end
     local slope,base=road_surface(id)
@@ -1085,7 +1091,9 @@ return function(api)
       if y==base then
         local mask=R.mask(id,"road")
         local quarter=x%2+2*(1-z%2)
-        if t.road_town then
+        local front=roadside_view and roadside_view.flat(t,mask,quarter,foundation)
+        if front then return front end
+        if roadside_view and roadside_view.is_paved(t) or not roadside_view and t.road_town then
           return (foundation~="none" and town_foundation_flat or town_streets)[mask][quarter]
         end
         if foundation~="none" then return road_foundation_flat[mask][quarter] end
@@ -1096,7 +1104,8 @@ return function(api)
     elseif road_slope_mesh[grade] then
       if y<=base then return foundation~="none" and retaining or gnames.grass[t.variant] end
       if y==base+1 and x%2==0 and z%2==0 then
-        return (foundation~="none" and road_foundation_mesh or road_slope_mesh)[grade]
+        local front=roadside_view and roadside_view.grade(t,grade,foundation)
+        return front or (foundation~="none" and road_foundation_mesh or road_slope_mesh)[grade]
       end
       return "air"
     end
@@ -1183,6 +1192,8 @@ return function(api)
       end
       return "air"
     end
+    local frontage_node=R.roadside_node(t,id,x,y,z)
+    if frontage_node then return frontage_node end
     if t.roadworks then
       local works=R.road_reconstruction_node(t,id,x,y,z)
       if works then return works end
