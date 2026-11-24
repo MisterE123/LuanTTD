@@ -57,7 +57,7 @@ UV = ((0,0),(0,1),(1,1),(1,0))
 TOP_UV = ((0,1),(0,0),(1,0),(1,1))
 
 
-def side_mesh(mode, axis, half, open_top):
+def side_mesh(mode, axis, half, open_top, lamp=False):
     width, spring, rise = PROFILE[mode]
     # Crosswise distance from the physical seam: positive toward the
     # outside of the tile. The ceiling is a true segmental vault.
@@ -85,17 +85,36 @@ def side_mesh(mode, axis, half, open_top):
         m.face([world(p,y,c) for p,y,c in ((-.5,h,u),(-.5,g,v),(.5,g,v),(.5,h,u))],
                ((0,.65-i*.055),(0,.65-(i+1)*.055),(1,.65-(i+1)*.055),(1,.65-i*.055)),
                n(0,-sin(b),-cos(b)))
+    if lamp:
+        # Bracketed wall luminaire. The solid enclosure is on the outer
+        # edge of the vault; the existing tunnel collision stays unchanged.
+        y=spring-.57
+        a,b,c,d=-.15,.15,y-.039,y+.039
+        inner,outer=width-.031,width+.008
+        m.group("lamp_housing")
+        m.face([world(p,h,inner) for p,h in ((a,c),(a,d),(b,d),(b,c))],UV,n(0,0,-1))
+        for h,direction in ((c,-1),(d,1)):
+            m.face([world(p,h,s) for p,s in ((a,inner),(a,outer),(b,outer),(b,inner))],UV,n(0,direction,0))
+        for p,direction in ((a,-1),(b,1)):
+            m.face([world(p,h,s) for h,s in ((c,inner),(d,inner),(d,outer),(c,outer))],UV,n(direction,0,0))
+        m.group("lamp_lens")
+        m.face([world(p,h,inner-.001) for p,h in ((a+.026,c+.014),(a+.026,d-.014),
+                    (b-.026,d-.014),(b-.026,c+.014))],UV,n(0,0,-1))
     return m
 
 
-def floor_pixel(mode,axis,side):
+def floor_pixel(mode,axis,side,lit=False):
     def pixel(x,y):
         cross,long=(63-y,x) if axis==0 else (x,63-y)
         distance=(side+1)*64-cross if side==0 else cross+1
         # Two halves share the centreline. Render raised rail profile as
         # a separate mesh slot; this texture is the sleepers and subbase.
         tone=((x*19+y*49+x*y*7)%23)-11
-        shade=lambda r,g,b:tuple(max(0,min(255,c+tone)) for c in (r,g,b))
+        # Warm pools fade to zero at the longitudinal unit boundaries.
+        across=(64-distance) if side==0 else (64+distance)
+        glow=sin(pi*(long+.5)/64)**2*max(0,1-across/118)**1.7 if lit else 0
+        shade=lambda r,g,b:tuple(max(0,min(255,int(c+tone+glow*light)))
+                                for c,light in zip((r,g,b),(80,55,28)))
         if mode=="road":
             if distance<=3 and 13<long<=45:return shade(186,169,115)
             if distance in range(21,24):return shade(146,140,120)
@@ -131,15 +150,32 @@ def brick(x,y):
     grain=((x*19+y*49+x*y)%11)
     return (103+phase+grain,80+phase+grain,64+phase+grain)
 
+def lit_brick(x,y):
+    heat=sin(pi*(x+.5)/64)**3*max(0,1-abs(y-46)/32)
+    return tuple(min(255,int(c+heat*d)) for c,d in zip(brick(x,y),(86,63,30)))
+
+def lens(x,y):
+    if x in (0,1,62,63) or y in (0,1,62,63):
+        return (173,131,74)
+    if x%8==0:
+        return (221,181,105)
+    return (255,245-y//6,199-y//3)
+
 
 if __name__=="__main__":
     png("bl_tunnel_lining_brick", brick)
+    png("bl_tunnel_lining_brick_lit", lit_brick)
+    png("bl_tunnel_lamp_housing", lambda x,y: (67+y//6,64+y//6,58+y//6))
+    png("bl_tunnel_lamp_lens", lens)
     for mode in PROFILE:
         for axis in (0,1):
             for half in (0,1):
                 for opened in (False,True):
                     name=f"bl_tunnel_bore_{mode}_{axis}_{half}_{int(opened)}"
                     side_mesh(mode,axis,half,opened).save(name)
+                    if half==0:
+                        side_mesh(mode,axis,half,opened,True).save(name+"_lamp")
                 png(f"bl_tunnel_floor_{mode}_{axis}_{half}",floor_pixel(mode,axis,half))
+                png(f"bl_tunnel_floor_{mode}_{axis}_{half}_lit",floor_pixel(mode,axis,half,True))
                 if mode=="rail":
                     rail_floor(axis,half).save(f"bl_tunnel_track_{axis}_{half}")

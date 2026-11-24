@@ -20,6 +20,17 @@ return function(api,clear_structure)
       local q=index and records and records[index[id]]
       if q then structure(key,title,q.start) end
     end
+    if t.build=="road" and ((S.tunnel_below and S.tunnel_below[id]) or
+        (S.rail_tunnel_below and S.rail_tunnel_below[id])) then
+      local q,why=Sim.road_remove_surface_plan(S,n,id)
+      if why~="NOT_PLAIN_ROAD" then
+        add("surface_road","Remove surface road, keep tunnel",q,
+          q and ("Cost: "..money(q.cost)..". The tunnel and both portals stay in place.") or Sim.road_removal_error(why),function()
+            local ok,note,tiles=Sim.apply_road_removal(S,n,q)
+            return true,ok and tiles or nil,note
+          end)
+      end
+    end
     span(S.bridge_above,S.stock_road_bridges,"Remove overhead road bridge, keep surface","road_bridge")
     span(S.rail_bridge_above,S.stock_rail_spans,"Remove overhead rail bridge, keep surface","rail_bridge")
     span(S.aqueduct_above,S.stock_aqueducts,"Remove overhead aqueduct, keep surface","aqueduct")

@@ -471,3 +471,51 @@ do
   c.stock_town_authority_ratings,s.stock_road_town_policy=previous,policy
   print("PASS authoritative town panel reads only the current company's rating and exact stock labels without opening an account or modifying the game")
 end
+
+do
+  local fixture=Sim.new(1751)
+  fixture.corner_grid=T.new(Sim.W,Sim.H,function(x) return x>=27 and x<=37 and 4 or 3 end)
+  for _,tile in ipairs(fixture.tiles) do
+    tile.terrain,tile.h="grass",3
+    tile.wood,tile.house,tile.site,tile.build,tile.owner=nil,nil,nil,nil,nil
+  end
+  local R=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,fixture,{
+    road={start_year=1950,breakdowns=0,service_interval=150},
+  })
+  local E=dofile(mod.."/campaign_authority_endpoint.lua")(Sim,R)
+  local first,last,roof=Sim.id(26,20),Sim.id(37,20),Sim.id(32,20)
+  local surface,tunnel="Surface company","Tunnel company"
+  local cash=Sim.company(fixture,surface)
+  local t=fixture.tiles[roof]
+  t.build,t.road_bits,t.owner,t.h="road",15,surface,4
+  assert(Sim.road_tunnel(fixture,tunnel,first))
+  local key=assert(fixture.tunnel_below[roof])
+  local original=fixture.stock_road_tunnels[key]
+  assert(original.start==first and original["end"]==last)
+  local function option(menu,layer)
+    for _,o in ipairs(assert(menu.value).options) do if o.key==layer then return o end end
+  end
+  local function clear(menu,company,layer)
+    return E.command(company,{kind="demolition",revision=menu.revision,token=menu.value.token,layer=layer})
+  end
+  local preview=E.demolition(surface,roof)
+  assert(option(preview,"surface_road").ok and not option(preview,"road_tunnel").ok)
+  assert(t.road_bits==15)
+  local other=E.demolition(tunnel,roof)
+  assert(not option(other,"surface_road").ok and option(other,"road_tunnel").ok)
+  assert(not clear(preview,tunnel,"surface_road").ok)
+  -- A vehicle entering between quote and confirm invalidates the row.
+  fixture.fleet[50]={id=50,owner=surface,engine="bus",route={roof}}
+  assert(not clear(preview,surface,"surface_road").ok and t.road_bits==15)
+  fixture.fleet[50]=nil
+  local before,terrain_revision=cash.cash,fixture.corner_grid.revision
+  preview=E.demolition(surface,roof)
+  local committed=clear(preview,surface,"surface_road")
+  assert(committed.ok and #committed.value==1 and committed.value[1]==roof,committed.why)
+  assert(cash.cash==before-160 and not t.build and not t.road_bits)
+  assert(fixture.corner_grid.revision==terrain_revision and t.h==4)
+  assert(fixture.stock_road_tunnels[key]==original and fixture.tunnel_below[roof]==key and
+    fixture.tiles[first].road_tunnel_id==key and fixture.tiles[last].road_tunnel_id==key)
+  assert(not option(E.demolition(surface,roof),"surface_road"))
+  print("PASS authoritative Bulldozer independently clears all surface road bits over a rival-owned bore")
+end

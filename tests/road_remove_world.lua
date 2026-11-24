@@ -47,3 +47,25 @@ s.companies[name].cash=100
 ripe=assert(TownWorld.plan(s,name,city_first,city_last,0,false,true))
 assert(#ripe.changes==1 and ripe.cost==80 and ripe.unfunded and ripe.ratings[1]==464)
 print("PASS isolated ordered town permission replay reflects prior cuts and stock NoTest budget behavior")
+
+-- The Bulldozer's selected pavement layer matches stock full-bit clearing
+-- on a junction, preserving both an independent bore and an intersecting
+-- surface tramway. Unlike RemoveRoadLong this isn't an axis drag.
+s.companies[name].cash=200
+local at=Sim.id(14,7)
+t.road_bits,t.owner,t.road_disallowed=15,name,2
+s.tunnel_below={[at]=1}
+s.stock_road_tunnels={[1]={owner="Tunnel company",base=0}}
+local bore=s.stock_road_tunnels[1]
+local whole=assert(W.surface_plan(s,name,at))
+assert(whole.cost==160 and #whole.changes==1 and whole.changes[1].road_bits==0)
+assert(t.build=="road" and t.road_bits==15,"quote mutated pavement")
+W.apply_plain(s,whole.changes[1])
+assert(not t.build and not t.road_bits and not t.road_disallowed and t.tram==rail)
+assert(s.stock_road_tunnels[1]==bore and s.tunnel_below[at]==1)
+local _,busy=W.surface_plan(s,name,Sim.id(12,7))
+local _,foreign=W.surface_plan(s,name,Sim.id(11,7))
+s.companies[name].cash=39
+local _,price=W.surface_plan(s,name,Sim.id(10,7))
+assert(busy=="VEHICLE_IN_THE_WAY" and foreign=="OWNED_BY" and price=="NOT_ENOUGH_CASH")
+print("PASS stock surface pavement clear is atomic across axes, preserves tram and bore, and refuses unsafe quotes")

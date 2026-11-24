@@ -56,9 +56,21 @@ local projected=shape.state
 local outer=cut(projected,middle,4,5,2,pave)
 local inner=cut(projected,middle,4,5,3,grass)
 assert(nodes[outer].tiles[1]=="road_top" and nodes[inner].tiles[1]=="grass")
+assert(outer:match("_lamp$") and nodes[outer].def.mesh:match("_lamp%.obj$"))
+assert(nodes[outer].tiles[3]=="bl_tunnel_lining_brick_lit.png" and
+  nodes[outer].tiles[5]=="bl_tunnel_lamp_lens.png" and not nodes[outer].def.light_source)
+assert(not inner:match("_lamp$") and not cut(projected,middle,5,5,2,pave):match("_lamp$"))
 local odd=assert(cut(projected,middle,4,5,3,slope))
 assert(nodes[odd].def.mesh:match("_1_1%.obj$") and nodes[odd].tiles[1]=="slope_without_top")
-assert(cut(projected,middle,4,4,2,pave):match("tunnel_floor_road_0_0$"))
+local warm_floor=cut(projected,middle,4,4,2,pave)
+local ambient_floor=cut(projected,middle,5,4,2,pave)
+assert(warm_floor:match("tunnel_floor_road_0_0_lit$") and ambient_floor:match("tunnel_floor_road_0_0$"))
+assert(nodes[warm_floor].def.light_source==nodes[ambient_floor].def.light_source)
+for i,box in ipairs(nodes[outer].def.collision_box.fixed) do
+  for axis,label in ipairs(box) do
+    assert(nodes[cut(projected,middle,5,5,2,pave)].def.collision_box.fixed[i][axis]==label)
+  end
+end
 assert(not cut(projected,middle,4,6,2,pave) and not cut(projected,middle,4,3,2,pave))
 assert(not cut(projected,middle,4,5,2,"luanttd_core:ocean_top_0_0"),"bore cut a water node")
 assert(not cut(projected,middle,4,5,2,"luanttd_core:stock_rail_1"),"bore cut a legitimate mesh overlay")
@@ -69,9 +81,11 @@ s.tunnel_below[middle]=nil
 accept()
 assert(not cut(projected,middle,4,5,2,pave) and not cut(projected,middle,4,4,2,grass))
 assert(s.tiles[middle].h==5 and s.tiles[middle].build=="road" and Terrain.corner(s.corner_grid,2,1)==5)
-s.rail_tunnel_below={[middle]=1};s.stock_rail_spans={[1]={kind="tunnel",axis=1,base=3,middle_by_tile={[middle]=true}}}
+s.rail_tunnel_below={[middle]=1};s.stock_rail_spans={[1]={kind="tunnel",axis=1,base=3,
+  start=id(2,2),middle_by_tile={[middle]=true}}}
 accept()
-assert(cut(projected,middle,4,4,2,grass):match("_rail_1_0_0$"))
-assert(cut(projected,middle,5,3,2,grass):match("tunnel_floor_rail_1_1$"))
+assert(cut(projected,middle,4,4,2,grass):match("_rail_1_0_0_lamp$"))
+assert(cut(projected,middle,5,3,2,grass):match("tunnel_floor_rail_1_1_lit$"))
+assert(cut(projected,middle,5,3,3,grass):match("tunnel_floor_rail_1_1$"))
 assert(not cut(projected,middle,4,5,2,grass))
-print("PASS real road/rail bore section, authoritative sparse registry, protected cover textures/collision, teardown and height preservation")
+print("PASS real road/rail bore section, interior-only lamps with unchanged collision/roof, sparse projection and teardown")

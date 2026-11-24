@@ -396,8 +396,8 @@ local road_removal_errors={
 function M.road_removal_error(reason)
   return road_removal_errors[reason] or ("Cannot remove this road: "..tostring(reason))
 end
-function M.road_remove_plan(s,owner,first,last,axis,start_half,end_half)
-  if not s.corner_grid then return nil,"PARAMETERS" end
+local function mount_road_removal()
+  if road_remove_world then return road_remove_world end
   load_road_rules()
   if not road_remove_world then
     local source=debug and debug.getinfo(1,"S").source
@@ -438,7 +438,15 @@ function M.road_remove_plan(s,owner,first,last,axis,start_half,end_half)
       end,
     })
   end
-  return road_remove_world.plan(s,owner,first,last,axis,start_half,end_half)
+  return road_remove_world
+end
+function M.road_remove_plan(s,owner,first,last,axis,start_half,end_half)
+  if not s.corner_grid then return nil,"PARAMETERS" end
+  return mount_road_removal().plan(s,owner,first,last,axis,start_half,end_half)
+end
+function M.road_remove_surface_plan(s,owner,id)
+  if not s.corner_grid then return nil,"PARAMETERS" end
+  return mount_road_removal().surface_plan(s,owner,id)
 end
 function M.apply_road_removal(s,owner,q)
   local c=s.companies[owner]

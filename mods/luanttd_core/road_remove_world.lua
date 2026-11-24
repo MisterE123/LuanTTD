@@ -12,11 +12,14 @@ return function(Sim,Terrain,rules)
     while bits>0 do n=n+bits%2;bits=math.floor(bits/2) end
     return n
   end
+  local function plain(tile)
+    return tile.build=="road" and not (tile.level_crossing or tile.road_bridge_id or tile.road_tunnel_id
+      or tile.road_waypoint_id or tile.station or tile.stop_axis or tile.road_stop_pair)
+  end
   local function quote_tile(s,owner,id,wanted,ctx,journal)
     local tile=s.tiles[id]
     if not tile or tile.stock_void then return nil,"NO_ROAD" end
-    if tile.build~="road" or tile.level_crossing or tile.road_bridge_id or tile.road_tunnel_id
-        or tile.road_waypoint_id or tile.station or tile.stop_axis or tile.road_stop_pair then
+    if not plain(tile) then
       if rules.special then return rules.special(s,owner,id,tile,wanted,ctx) end
       return nil,"NOT_PLAIN_ROAD"
     end
@@ -75,6 +78,19 @@ return function(Sim,Terrain,rules)
       end
     end
     return Sweep.sweep(req,run())
+  end
+  -- RC1 ClearTile_Road(Normal) calls RemoveRoad with all its own bits.
+  -- The host's layer dialog chooses pavement only; the other transport
+  -- records and even shared tram tracks do not belong to this command.
+  function W.surface_plan(s,owner,id)
+    local tile,company=s.tiles[id],s.companies[owner]
+    if not tile or not company or not s.corner_grid then return nil,"PARAMETERS" end
+    if not plain(tile) then return nil,"NOT_PLAIN_ROAD" end
+    local journal={ratings={},road={}}
+    local edit,why=quote_tile(s,owner,id,Sim.road_bits(s,id),rules.context and rules.context(s),journal)
+    if not edit then return nil,why end
+    if edit.cost>company.cash then return nil,"NOT_ENOUGH_CASH" end
+    return {changes={edit},cost=edit.cost,ratings=journal.ratings}
   end
   function W.apply_plain(s,edit)
     local t=s.tiles[edit.id]

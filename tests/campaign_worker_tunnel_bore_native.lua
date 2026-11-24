@@ -43,6 +43,51 @@ local function bore_native()
       n:find("tunnel_bore_",1,true) and
       n:find("_"..mode.."_",1,true)
   end
+  local function clear_surface(mode,id,roof,done)
+    local x,z=Sim.xy(id)
+    pose(x*2+1,base+6,z*2+3,math.pi,.65)
+    local below,pool,portal=mode=="road" and "tunnel_below" or "rail_tunnel_below",
+      mode=="road" and "stock_road_tunnels" or "stock_rail_spans",
+      mode=="road" and "road_tunnel_id" or "rail_span_id"
+    local before=assert(OwnerCheckpoint.read())
+    local key=assert(before[below][id])
+    local span=assert(before[pool][key])
+    local cost=mode=="road" and 160 or 80
+    if baseline then done();return end
+    wait_for(function()
+      return cleared(roof,mode) and stock(roof):find("^luanttd_core:tunnel_bore_road_")
+    end,function()
+      local show=core.show_formspec
+      core.show_formspec=function(name,form,body)
+        assert(name==player and form=="luanttd_core:demolish_layers")
+        core.show_formspec=show
+        local button=assert(body:match("(bulldoze_%d+_1);"),
+          "The surface road is not offered as its own first choice")
+        assert(body:find(button..";"..core.formspec_escape("Remove surface road, keep tunnel").."]",1,true))
+        assert(body:find(core.formspec_escape("Remove "..mode.." tunnel below, keep surface"),1,true))
+        assert(OwnerCheckpoint.read().tiles[id].road_bits==before.tiles[id].road_bits,
+          "Opening the confirmation removed the road")
+        show(name,form,body)
+        assert(ui.fields(p,form,{[button]=true}))
+        wait_for(function()
+          local live=assert(OwnerCheckpoint.read())
+          return not live.tiles[id].build and stock(roof):find("^luanttd_core:tunnel_bore_grass")
+        end,function()
+          local live=assert(OwnerCheckpoint.read())
+          assert(live.companies[player].cash==before.companies[player].cash-cost)
+          assert(live.corner_grid.revision==before.corner_grid.revision)
+          assert(live[below][id]==key and live[pool][key].base==span.base and
+            live.tiles[span.start][portal]==key and live.tiles[span["end"]][portal]==key)
+          assert(cleared(roof,mode),"Removing pavement painted over the tunnel")
+          core.log("action","PASS NATIVE BULLDOZER SURFACE ROAD above "..mode.." tunnel, preserving bore and portals")
+          done()
+        end,"Surface road stayed painted or authoritative",1)
+      end
+      ui.select_tool(p,"clear")
+      assert(ui.begin_demolition(p,id))
+      ui.end_demolition(p,id,false)
+    end,"Surface road above the "..mode.." bore did not paint",1)
+  end
   local function collision_gap(pos,axis)
     local boxes=core.get_node_boxes("collision_box",pos)
     assert(#boxes>1,"Bore remained a solid voxel")
@@ -123,6 +168,8 @@ local function bore_native()
     completed_house=assert(house_at())
     construct("road",Sim.id(26,20),function()
     construct("rail",Sim.id(65,26),function()
+      clear_surface("road",Sim.id(31,20),{x=62,y=base+1,z=40},function()
+      clear_surface("rail",Sim.id(65,31),{x=130,y=base+1,z=62},function()
       pose(49,base+2,43,-math.pi/2,.37)
       wait_for(function() return cleared(roadroof,"road") end,function()
         if not baseline then
@@ -149,6 +196,8 @@ local function bore_native()
           end,"Sightseeing car did not enter the actual underpass",1)
         end)
       end,"Road bore did not reach its native node layer",1)
+      end)
+      end)
     end)
     end)
   end,"Completed stock house did not paint before tunnel construction",1)

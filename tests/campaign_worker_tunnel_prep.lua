@@ -19,6 +19,12 @@ do
     local t=S.tiles[Sim.id(32,z)]
     t.build,t.road_bits="road",5
   end
+  -- Separate roof tiles for the Bulldozer replay; preserve the existing
+  -- road and railway examples used to test the inverse removal.
+  local surface_road=S.tiles[Sim.id(31,20)]
+  surface_road.build,surface_road.road_bits,surface_road.owner="road",15,"TunnelBoreQA"
+  local surface_rail=S.tiles[Sim.id(65,31)]
+  surface_rail.build,surface_rail.road_bits,surface_rail.owner="road",10,"TunnelBoreQA"
   for x=64,67 do
     local t=S.tiles[Sim.id(x,32)]
     t.build,t.rail_tracks,t.owner="stock_rail",1,"TunnelBoreQA"

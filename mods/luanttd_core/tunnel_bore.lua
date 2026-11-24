@@ -51,42 +51,58 @@ function B.cover_candidate(name)
 end
 
 function B.mount(reg,definitions)
-  local covers, floors={},{}
+  local covers,floors,lamps,lit_floors={},{},{},{}
   local brick="bl_tunnel_lining_brick.png"
   for _,mode in ipairs({"road","rail"}) do
-    covers[mode],floors[mode]={},{}
+    covers[mode],floors[mode],lamps[mode],lit_floors[mode]={},{},{},{}
     for axis=0,1 do for half=0,1 do
       local k=axis*2+half
       local floor=("tunnel_floor_%s_%d_%d"):format(mode,axis,half)
-      local top="bl_"..floor..".png"
-      if mode=="road" then
-        floors[mode][k]=reg(floor,{top,brick,brick},{light_source=4})
-      else
-        floors[mode][k]=reg(floor,{top,"bl_panel.png^[colorize:#93958E:244"},
+      local function floor_node(name)
+        local top="bl_"..name..".png"
+        if mode=="road" then return reg(name,{top,brick,brick},{light_source=4}) end
+        return reg(name,{top,"bl_panel.png^[colorize:#93958E:244"},
           {drawtype="mesh",mesh=("bl_tunnel_track_%d_%d.obj"):format(axis,half),paramtype="light",light_source=4})
       end
-      local variants={}
-      covers[mode][k]=variants
+      floors[mode][k],lit_floors[mode][k]=floor_node(floor),floor_node(floor.."_lit")
+      local variants,lighted={},{}
+      covers[mode][k],lamps[mode][k]=variants,lighted
       for name,def in pairs(definitions) do
         local base=name:match(":(.+)$")
         local open=base=="slope_fill_open"
         local side=def.tiles[3] or def.tiles[1]
         local tiles=open and {side,brick} or {def.tiles[1],side,brick}
         local suffix=("%s_%d_%d_%d"):format(mode,axis,half,open and 1 or 0)
-        variants[name]=reg("tunnel_bore_"..base.."_"..suffix,tiles,{
-          drawtype="mesh",mesh="bl_tunnel_bore_"..suffix..".obj",paramtype="light",
-          sunlight_propagates=false,walkable=true,collision_box=B.collision(mode,axis,half),
-        })
+        local function section_node(asset,materials)
+          return reg("tunnel_bore_"..base.."_"..asset,materials,{
+            drawtype="mesh",mesh="bl_tunnel_bore_"..asset..".obj",paramtype="light",
+            sunlight_propagates=false,walkable=true,collision_box=B.collision(mode,axis,half),
+          })
+        end
+        variants[name]=section_node(suffix,tiles)
+        if half==0 then
+          -- Engine voxel light is omnidirectional and would brighten the
+          -- roof above a shallow bore. Bake the additional warmth into
+          -- only the vault/pavement; the existing ambient floor light
+          -- supplies visibility, and exterior materials remain identical.
+          local warm="bl_tunnel_lining_brick_lit.png"
+          local housing,lens="bl_tunnel_lamp_housing.png","bl_tunnel_lamp_lens.png"
+          local lit=open and {side,warm,housing,lens} or {def.tiles[1],side,warm,housing,lens}
+          lighted[name]=section_node(suffix.."_lamp",lit)
+        end
       end
     end end
   end
   return function(s,id,x,y,z,ordinary)
     if not definitions[ordinary] then return end
     local span,mode,axis=B.section(s,id)
-    if not span then return end
+    if not span or y~=span.base and y~=span.base+1 then return end
     local k=axis*2+(axis==0 and z or x)%2
-    if y==span.base then return floors[mode][k] end
-    if y==span.base+1 then return covers[mode][k][ordinary] end
+    local stride=axis==0 and 1 or s.corner_grid and s.corner_grid.width
+    -- One wall fixture every three source tiles, not every Luanti node.
+    local lit=stride and span.start and (math.abs(id-span.start)/stride)%3==1 and (axis==0 and x or z)%2==0
+    if y==span.base then return (lit and lit_floors or floors)[mode][k] end
+    if y==span.base+1 then return lit and lamps[mode][k][ordinary] or covers[mode][k][ordinary] end
   end
 end
 return B
