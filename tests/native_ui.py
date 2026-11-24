@@ -2830,7 +2830,7 @@ try:
         await_state("opened Tramways from the main hotbar",lambda s:s.get("menu")=="tramway")
         slot(4);aim(5,10);click()
         await_state("built directional depot in the 3D view",lambda s:s.get("tram",{}).get("count")==1)
-        slot(2);aim(6,10);click();aim(8,10);click()
+        slot(2);hold_to_build(aim,(6,10),(8,10))
         await_state("laid priced track from the 3D view",lambda s:s.get("tram",{}).get("count")==4)
         for cmd,count in [("/tramway bit 6 10 8",4),("/tramway 8 7 8 14",11)]:
             chat(cmd)

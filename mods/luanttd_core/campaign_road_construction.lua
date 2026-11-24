@@ -24,13 +24,18 @@ return function(Sim,s,oneway,Bank,host)
       local q,why=Sim.road_remove_plan(s,player,first,last,request.axis,request.start_half==true,request.end_half==true)
       if not q then return nil,Sim.road_removal_error(why) end
       return q
-    elseif op=="tram_remove" then
+    elseif op=="tram_remove" or op=="tram_lay" then
       local tr=host and host.tram
       if not tr then return nil,"Tramway tools are unavailable in this campaign." end
-      local q,why=tr.net.remove_plan(s,player,request,tr.busy)
+      local planner=op=="tram_lay" and tr.net.drag_plan or tr.net.remove_plan
+      local busy=tr.busy_probe and tr.busy_probe() or tr.busy
+      local q,why=planner(s,player,request,busy)
       if not q then
         local messages={TRAM_FACILITY_PROTECTED="Use the Bulldozer to review the platform or depot.",
-          NO_TRAM="No electric tram track was selected."}
+          NO_TRAM="No electric tram track was selected.",
+          TRAM_NEEDS_FLAT_CLEARANCE="Choose a flat tile without an overhead structure.",
+          PROTECTED_TILE="The requested tile has a protected structure.",
+          ALREADY_BUILT="That tram track is already built.",NOT_ENOUGH_MONEY="Not enough cash."}
         return nil,messages[why] or Sim.road_removal_error(why)
       end
       return q
@@ -198,6 +203,8 @@ return function(Sim,s,oneway,Bank,host)
       return Sim.apply_road_stop_remove(s,player,q)
     elseif request.tool=="road_waypoint" then
       return Sim.apply_road_waypoint(s,player,q)
+    elseif request.tool=="tram_lay" then
+      return host.tram.net.apply_drag(s,player,q)
     elseif request.tool=="tram_remove" then
       return host.tram.net.apply_remove(s,player,q)
     elseif request.tool=="remove" then

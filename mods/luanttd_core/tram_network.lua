@@ -115,9 +115,7 @@ return function(Sim,T,Terrain)
     if #items==0 then return nil,"ALREADY_BUILT" end
     return items,total
   end
-  function N.construct(s,owner,kind,ids,arg,occupancy)
-    local items,cost,failed=N.plan(s,owner,kind,ids,arg,occupancy)
-    if not items then return nil,cost,failed end
+  local function apply(s,owner,items,cost)
     local company=s.companies[owner]
     if (company and company.cash or 100000)<cost then return nil,"NOT_ENOUGH_MONEY" end
     company=company or Sim.company(s,owner)
@@ -129,14 +127,69 @@ return function(Sim,T,Terrain)
     s.topology=s.topology+1
     return dirty,cost
   end
+  function N.construct(s,owner,kind,ids,arg,occupancy)
+    local items,cost,failed=N.plan(s,owner,kind,ids,arg,occupancy)
+    if not items then return nil,cost,failed end
+    return apply(s,owner,items,cost)
+  end
+  local stock_sweep
+  function N.drag_plan(s,owner,req,busy)
+    local company=s.companies[owner]
+    local first,last=req.first,req.last or req.first
+    if not company or not s.corner_grid or not s.tiles[first] or not s.tiles[last] or not busy then
+      return nil,"INVALID_PARAMETER"
+    end
+    local x,z=Sim.xy(first)
+    local u,v=Sim.xy(last)
+    if math.abs(x-u)+math.abs(z-v)>=128 then return nil,"INVALID_PARAMETER" end
+    if not stock_sweep then
+      local path=debug and debug.getinfo(1,"S").source
+      local mod=path and path:match("^@(.*/)tram_network%.lua$")
+      mod=mod or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+      stock_sweep=dofile(mod.."openttd/road_oneway.lua")(dofile(mod.."openttd/road_slope.lua"))
+    end
+    local board={xy=Sim.xy}
+    function board.adjacent(id,d) return Sim.adjacent(id,4-d) end
+    function board.connects(id,d)
+      local t=load(s,board.adjacent(id,d))
+      if not t or t.tramtype~=ELRL then return false end
+      local bit=8/2^((d+2)%4)
+      return math.floor((t.tram_bits or 0)/bit)%2==1
+    end
+    -- CmdBuildLongRoad uses the same half-tile selection for Road and
+    -- Tram when disallowed directions are none. End halves attach only
+    -- to an existing compatible continuation, with no road substitution.
+    local gesture,why=stock_sweep.drag(board,first,last,req.axis,{toggle=0,
+      start_half=req.start_half==true,end_half=req.end_half==true})
+    if not gesture then return nil,why end
+    local q,reason=stock_sweep.sweep(gesture,function(row)
+      if row.bits==0 then return nil,"NO_TRAM_PIECE" end
+      local record,cost=propose(s,owner,"road",row.tile,row.bits,busy)
+      if not record then return nil,cost end
+      return {id=row.tile,tool="tram_lay",changed=true,cost=cost,record=record,
+        build=s.tiles[row.tile].build,road_bits=Sim.road_bits(s,row.tile),tram_bits=record.tram_bits}
+    end)
+    if not q then return nil,reason end
+    if #q.changes==0 then return nil,"ALREADY_BUILT" end
+    if q.cost>company.cash then return nil,"NOT_ENOUGH_MONEY" end
+    return q
+  end
+  function N.apply_drag(s,owner,q)
+    local ids,price=apply(s,owner,q.changes,q.cost)
+    if not ids then return false,price end
+    local note=("Laid tram track on %d tile%s for $%d."):format(#ids,#ids==1 and "" or "s",price)
+    if q.stopped_at then note=note.." Stopped at an obstruction." end
+    return true,note,ids
+  end
   local removal
   function N.remove_plan(s,owner,request,busy)
     if not removal then
       local path=debug and debug.getinfo(1,"S").source
       local mod=path and path:match("^@(.*/)tram_network%.lua$")
       mod=mod or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+      local bridges=dofile(mod.."openttd/road_bridge.lua")(dofile(mod.."openttd/slope.lua"))
       removal=dofile(mod.."tram_remove_world.lua")(Sim,Terrain,
-        dofile(mod.."openttd/road_slope.lua"),dofile(mod.."openttd/road_remove_long.lua"))
+        dofile(mod.."openttd/road_slope.lua"),dofile(mod.."openttd/road_remove_long.lua"),bridges.road_clear_cost(ELRL))
     end
     return removal.plan(s,owner,request,busy)
   end

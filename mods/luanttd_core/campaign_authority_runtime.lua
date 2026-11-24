@@ -235,6 +235,8 @@ return function(Sim,mod,s,cap)
     local interval=cap.seconds_per_day or 1.25
     local net,run,clock=B.tram(s,Slope,interval)
     N.tram={run=run,net=net}
+    local tram_occupancy=dofile(mod.."/tram_occupancy.lua")
+    function N.tram.busy_probe() return tram_occupancy(Sim,run,s) end
     function N.tram.facility(owner,id,kind)
       local tile=s.tiles[id]
       return tile and tile.tram and tile.tram.owner==owner and tile.tram.kind==kind

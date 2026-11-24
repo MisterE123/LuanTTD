@@ -26,14 +26,17 @@ actual ordered footprint without changing the town's rating until
 the player commits. The enabled defaults and council tolerance come
 from OpenTTD, not a feature switch.
 
-## Remove only the tram track
+## Lay or remove only the tram track
 
-Open **Roadworks → Road Options → Electric Tramways → Remove tram
-track**. Click or drag along the track. The tool leaves shared pavement,
+Open **Roadworks → Road Options → Electric Tramways**. Click or drag
+with **Lay tramway**. Dragging follows one axis and attaches an outer
+half only if compatible tram track is already there. **Remove tram
+track** leaves shared pavement,
 town ownership and one-way signs in place. It skips another company's
 track and track occupied by traffic or protected by the active test
 streetcar; select a depot or stop with the layered Bulldozer instead.
-Streetcar dispatch and recall are in **Tram Operations**.
+Clearance uses the stock ELRL salvage price, including a refund on
+ordinary flat track. Streetcar dispatch and recall are in **Tram Operations**.
 
 ## Choose the entrance of a stop or depot
 

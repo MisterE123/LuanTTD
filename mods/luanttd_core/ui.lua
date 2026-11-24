@@ -1831,9 +1831,9 @@ end
 -- OpenTTD 16.0-RC1 road_gui.cpp: dedicated sizing pins the axis after
 -- pointer-down, while AutoRoad chooses from the pointer coordinates.
 local fixed_road_axes={road_axis_x=0,road_axis_y=1}
-local fixed_road_labels={road_axis_x="East–west road",road_axis_y="North–south road",road_remove="Remove road",tram_remove="Remove tram track",road_stop_remove="Remove road stop",road_waypoint="Road waypoint",road_waypoint_remove="Remove road waypoint"}
+local fixed_road_labels={road_axis_x="East–west road",road_axis_y="North–south road",road_remove="Remove road",tram_track="Lay tramway",tram_remove="Remove tram track",road_stop_remove="Remove road stop",road_waypoint="Road waypoint",road_waypoint_remove="Remove road waypoint"}
 local function road_gesture_op(tool)
-  return tool=="oneway_drag" and "oneway" or tool=="road_remove" and "remove" or tool=="tram_remove" and "tram_remove" or "drag"
+  return tool=="oneway_drag" and "oneway" or tool=="road_remove" and "remove" or tool=="tram_remove" and "tram_remove" or tool=="tram_track" and "tram_lay" or "drag"
 end
 function U.waypoint_tool(tool)
   return tool=="road_waypoint" or tool=="road_waypoint_remove"
@@ -1845,7 +1845,7 @@ function U.waypoint_request(p,tool,first,last)
     separate=p:get_player_control().aux1==true}
 end
 function U.road_gesture(tool,p)
-  return S.corner_grid and (U.road_stop_gesture(p,tool) or tool=="tram_remove" and (api.tram or api.authority_handoff) or tool=="road" or tool=="road_remove" or U.waypoint_tool(tool) or fixed_road_axes[tool]~=nil or tool=="oneway_drag" and api.oneway_tools)
+  return S.corner_grid and (U.road_stop_gesture(p,tool) or (tool=="tram_remove" or tool=="tram_track") and (api.tram or api.authority_handoff) or tool=="road" or tool=="road_remove" or U.waypoint_tool(tool) or fixed_road_axes[tool]~=nil or tool=="oneway_drag" and api.oneway_tools)
 end
 function U.begin_autoroad(p,id,hit)
   local V=view(p:get_player_name())
@@ -1933,12 +1933,15 @@ function U.end_autoroad(p,id,hit)
     U.commit_oneway(n,V,id,q)
     return
   end
-  if V.tool=="tram_remove" then
+  if V.tool=="tram_remove" or V.tool=="tram_track" then
     local tr=api.tram
-    local req={tool="tram_remove",first=first,last=last,axis=axis,start_half=start_half,end_half=end_half}
-    local q,why=tr.network.remove_plan(S,n,req,tr.busy)
-    if not q then V.status=Sim.road_removal_error(why);return end
-    local ok,note,ids=tr.network.apply_remove(S,n,q)
+    local req={tool=road_gesture_op(V.tool),first=first,last=last,axis=axis,start_half=start_half,end_half=end_half}
+    local lay=V.tool=="tram_track"
+    local plan=lay and tr.network.drag_plan or tr.network.remove_plan
+    local q,why=plan(S,n,req,tr.busy_probe and tr.busy_probe() or tr.busy)
+    if not q then V.status=tr.reason(why);return end
+    local apply=lay and tr.network.apply_drag or tr.network.apply_remove
+    local ok,note,ids=apply(S,n,q)
     V.status=note
     if ok then R.update(ids);api.save() end
     return
@@ -2148,15 +2151,17 @@ function U.preview(p,id,hit)
     for i,e in ipairs(q.changes) do ids[i]=e.id end
     return ids,true,fixed_road_labels[V.tool].."  |  "..dollars(q.cost)
   end
-  if V.tool=="tram_remove" and api.tram and hit then
+  if (V.tool=="tram_remove" or V.tool=="tram_track") and api.tram and hit then
+    local tr=api.tram
     local press=V.road_press or {id=id,hit=hit}
     local last,axis,a,b=Sim.autoroad_selection(press.id,press.hit,id,hit)
-    local q,why=api.tram.network.remove_plan(S,n,{first=press.id,last=last,
-      axis=axis,start_half=a,end_half=b},api.tram.busy)
-    if not q then return {id},false,Sim.road_removal_error(why) end
+    local plan=V.tool=="tram_track" and tr.network.drag_plan or tr.network.remove_plan
+    local q,why=plan(S,n,{first=press.id,last=last,axis=axis,start_half=a,end_half=b},
+      tr.busy_probe and tr.busy_probe() or tr.busy)
+    if not q then return {id},false,tr.reason(why) end
     local ids={}
     for i,e in ipairs(q.changes) do ids[i]=e.id end
-    return ids,true,"Remove tram track  |  "..dollars(q.cost)
+    return ids,true,fixed_road_labels[V.tool].."  |  "..dollars(q.cost)
   end
   if api.road_first and U.road_gesture(V.tool,p) and hit then
     local press=V.road_press or {id=id,hit=hit}

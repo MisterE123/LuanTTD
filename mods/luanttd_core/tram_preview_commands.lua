@@ -45,6 +45,8 @@ return function(api,N,Run)
     return record and record.owner==name and record.kind==kind
   end
   api.tram={network=N,run=Run,busy=busy,reason=why,start=start,clear=clear,status=status,facility=facility}
+  local occupancy=dofile(core.get_modpath("luanttd_core").."/tram_occupancy.lua")
+  function api.tram.busy_probe() return occupancy(Sim,Run,S) end
   core.register_chatcommand("tramway",{
     params="X Z END_X END_Z | bit X Z MASK | depot X Z east|west|north|south | stop X Z x|z",
     description="Build independent flat electric tram track and facilities",

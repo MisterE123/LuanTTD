@@ -1,7 +1,7 @@
 -- Normal ELRL tram layer adapter for OpenTTD 16.0-RC1 RemoveRoad /
 -- CmdRemoveLongRoad. The co-located roadway retains its own geometry,
 -- owner, town association and one-way signs.
-return function(Sim,Terrain,Slope,Sweep)
+return function(Sim,Terrain,Slope,Sweep,clear_per_piece)
   local M={}
   local board={xy=Sim.xy}
   function board.next(id,axis) return Sim.adjacent(id,axis==0 and 2 or 3) end
@@ -35,7 +35,7 @@ return function(Sim,Terrain,Slope,Sweep)
       local edit,err=Slope.remove(slope,bits,tr.tram_bits,Sim.road_bits(s,id),policy.build_on_slopes~=false)
       if not edit then return nil,err end
       return {id=id,tool="tram_remove",build=t.build,road_bits=Sim.road_bits(s,id),tram_bits=edit.road_bits,
-        cost=count(edit.removed)*40+(edit.foundation and 250 or 0)}
+        cost=count(edit.removed)*clear_per_piece+(edit.foundation and 250 or 0)}
     end
     local q,reason=Sweep.sweep(cells,quote,true,company.cash,function()end)
     if not q then return nil,reason end
@@ -55,7 +55,8 @@ return function(Sim,Terrain,Slope,Sweep)
     company.expense=company.expense+q.cost
     company.month_exp=company.month_exp+q.cost
     s.topology=s.topology+1
-    return true,("Removed tram track on %d tile%s for $%d."):format(#dirty,#dirty==1 and "" or "s",q.cost),dirty
+    local money=q.cost<0 and ("Recovered $%d."):format(-q.cost) or ("Cost $%d."):format(q.cost)
+    return true,("Removed tram track on %d tile%s. %s"):format(#dirty,#dirty==1 and "" or "s",money),dirty
   end
   return M
 end

@@ -85,6 +85,9 @@ fi
 if [[ ${LUANTTD_NATIVE_STOP_AUTO:-0} == 1 ]]; then
   printf '%s\n' 'luanttd_native_road_stop_auto = true' >> "$out/native.conf"
 fi
+if [[ ${LUANTTD_NATIVE_TRAM_DRAG:-0} == 1 ]]; then
+  printf '%s\n' 'luanttd_native_tram_drag = true' >> "$out/native.conf"
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 export LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 display=${BAYLINE_NATIVE_DISPLAY:-369}
@@ -182,6 +185,15 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
     fi
   fi
   if [[ ${LUANTTD_NATIVE_TRAM_REMOVE:-0} == 1 ]]; then
+    if [[ ${LUANTTD_NATIVE_TRAM_DRAG:-0} == 1 ]]; then
+      do_road tram-lay-start TRAM_LAY
+      slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_TRAM_LAY slot=//p' "$log" | tail -1)
+      xdotool key "$slot"; sleep .4
+      xdotool mousedown 1; sleep .45
+      do_road tram-lay-end TRAM_LAY_RELEASE
+      sleep .65; import -window root -resize 960x600 "$out/tram-lay-preview.jpg"
+      xdotool mouseup 1; sleep 1.1
+    fi
     do_road tram-remove-start TRAM_REMOVE
     slot=$(sed -n 's/.*NATIVE_ROAD_GESTURE_TRAM_REMOVE slot=//p' "$log" | tail -1)
     xdotool key "$slot"; sleep .4

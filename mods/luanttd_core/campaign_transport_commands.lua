@@ -69,7 +69,7 @@ return function(Sim,R)
         if not tile(id_) then return nil,"Invalid tram tile." end
         cells[i]=id_
       end
-      local plans,cost=R.tram.net.plan(s,owner,cmd.kind,cells,cmd.direction,R.tram.busy)
+      local plans,cost=R.tram.net.plan(s,owner,cmd.kind,cells,cmd.direction,R.tram.busy_probe and R.tram.busy_probe() or R.tram.busy)
       if not plans then return nil,cost end
       local ids={}
       for i,p in ipairs(plans) do ids[i]=p.id end
@@ -144,7 +144,7 @@ return function(Sim,R)
       return ok,msg,ok and {tiles=tiles,deck=deck} or nil
     end
     if req.mode=="tram" and req.operation=="build" then
-      local ids,cost=R.tram.net.construct(s,owner,req.kind,req.cells,req.direction,R.tram.busy)
+      local ids,cost=R.tram.net.construct(s,owner,req.kind,req.cells,req.direction,R.tram.busy_probe and R.tram.busy_probe() or R.tram.busy)
       if not ids then return false,cost end
       return true,("Tram construction: %d tiles for $%d."):format(#ids,cost),{tiles=ids}
     end
