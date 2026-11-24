@@ -119,7 +119,7 @@ return function(Sim,Service,Roster,Calendar,Rules,Catchment,debit)
     if not q then return nil,why end
     local c=Sim.company(s,owner)
     debit(c,q.price)
-    local craft={id="oil",owner=owner,depot=dep,engine=id,built=Sim.date(s),price=q.price,expense=0}
+    local craft={id="oil",owner=owner,depot=dep,engine=id,built=Sim.date(s),purchase_day=s.day,price=q.price,expense=0}
     s.stock_owned_oil_ship=craft
     return craft
   end
@@ -189,9 +189,10 @@ return function(Sim,Service,Roster,Calendar,Rules,Catchment,debit)
       c.stock_money_fraction=rem
       local cost=math.floor(fixed/256)+(rem>old and 1 or 0)
       if cost>0 then
-        debit(c,cost)
+        debit(c,cost,"ship_run")
         local craft=s.stock_owned_oil_ship
         craft.expense=craft.expense+cost
+        if Sim.stock_vehicle_operating then Sim.stock_vehicle_operating(s,craft,-cost) end
       end
     end}
     local v=Service.bind(state,pipe,state.stations,binding.by,binding.map,opts)

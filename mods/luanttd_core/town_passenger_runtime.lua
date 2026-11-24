@@ -54,8 +54,13 @@ return function(Sim,H,Packets,Rating,Mail)
       if cargo~="passenger" or amount<=0 then return end
       if hooks and hooks.passenger then return hooks.passenger(s,amount,x,z,record,tick) end
       local list={}
+      local area=record.area or 1
       for _,st in ipairs(stops) do
-        if Sim.road_stop_covers(s,st,x+1,z+1,H.bus_catchment) then
+        local covered=false
+        for dz=0,area-1 do for dx=0,area-1 do
+          if Sim.id(x+1+dx,z+1+dz) and Sim.road_stop_covers(s,st,x+1+dx,z+1+dz,H.bus_catchment) then covered=true end
+        end end
+        if covered then
           local rating=Rating.offer(s,st)
           if rating then list[#list+1]={st=st,rating=rating} end
         end
@@ -66,7 +71,7 @@ return function(Sim,H,Packets,Rating,Mail)
         local st=entry.st
         local units=Packets.whole_units(st,entry.fixed)
         if units>0 then
-          Packets.enqueue(st,{units=units,source=record.town,origin_station=st.id,age=0})
+          Packets.enqueue(st,{units=units,source=record.source or record.town,source_type=record.source_type,origin_station=st.id,age=0})
           Rating.generated(s,st,units)
         end
       end
@@ -74,7 +79,30 @@ return function(Sim,H,Packets,Rating,Mail)
     local random=function() return Rating.random_u32(s) end
     local update_rating=function() Rating.advance(s,1,mail and mail.step_rating or nil) end
     local clock=s.passenger_house_clock
-    local landscape_tile=hooks and hooks.landscape_tile
+    local landscape_visit=hooks and hooks.landscape_tile
+    local landscape_tile=landscape_visit
+    if s.stock_company_hqs and next(s.stock_company_hqs) and Sim.hq_cargo_at then
+      local headquarters={}
+      for _,record in pairs(s.stock_company_hqs) do
+        for _,id in ipairs(record.tiles) do headquarters[id]=Sim.hq_cargo_at(s,id) end
+      end
+      local width=Sim.W
+      landscape_tile=function(x,z,tick)
+        if landscape_visit then landscape_visit(x,z,tick) end
+        local id=1+x+z*width
+        local hq=headquarters[id]
+        -- If a tide cleared the parcel earlier in this tick the local
+        -- index must not emit from its now-obsolete source record.
+        if hq and s.tiles[id].stock_landmark==hq then
+          local p,m=Sim.hq_production(s,hq,random)
+          local scale=s.stock_cargo_scale_percent or 100
+          local record={source=hq.owner,source_type="headquarters",area=2}
+          p,m=H.scale(p,scale,random),H.scale(m,scale,random)
+          if p>0 then emit("passenger",p,x,z,record,tick) end
+          if m>0 then emit("mail",m,x,z,record,tick) end
+        end
+      end
+    end
     local traverse=hooks and hooks.traverse
     if after_tick then
       -- Use the same landscape cursor for housing and industry. The

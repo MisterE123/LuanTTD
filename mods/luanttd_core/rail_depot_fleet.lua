@@ -432,7 +432,7 @@ return function(Sim,Lab,Roster)
       price=fresh.price,expense="new_vehicles",roster_preview=fresh.preview,parts={}}
     for n,row in ipairs(fresh.stats.parts) do
       local part={stock_id=row.stock_id,body_id=r.id*256+n,cargo_count=0,build_year=date_parts(fresh.calendar_day),
-        purchase_value=row.price,last_service_calendar=fresh.calendar_day}
+        purchase_value=row.price,purchase_day=s.day,last_service_calendar=fresh.calendar_day}
       if row.multiheaded then part.role,part.mate=row.role,row.mate end
       if row.kind=="engine" then
         local a=availability(d,row.stock_id,fresh.calendar_day)

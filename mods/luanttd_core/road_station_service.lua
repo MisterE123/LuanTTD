@@ -53,6 +53,9 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         local value=assert(accepts(rec.id),"Unknown stock house acceptance")
         sum=sum+value
         if rec.town and value>0 then per_town[rec.town]=(per_town[rec.town] or 0)+value end
+      else
+        local hq=id and Sim.hq_cargo_at and Sim.hq_cargo_at(s,id)
+        if hq then sum=sum+Sim.hq_acceptance(hq,cargo) end
       end
     end
     return sum,per_town
@@ -298,9 +301,11 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
               Sim.cargo[v.cargo].name:lower().." for $"..payment.route..".")
           end
           v.revenue=v.revenue+payment.route
+          if Sim.stock_vehicle_operating then Sim.stock_vehicle_operating(s,v,payment.route) end
           v.delivered=v.delivered+payment.delivered
           company.units=company.units+payment.delivered
           company.paid_units=company.paid_units+payment.delivered
+          if Sim.stock_economy_delivered then Sim.stock_economy_delivered(company,v.cargo,payment.delivered) end
           push(s,v,"fare",st,tick,{amount=payment.route,units=payment.delivered})
           for id,count in pairs(v.load_state.received_by_site or {}) do
             local site=s.sites[id]

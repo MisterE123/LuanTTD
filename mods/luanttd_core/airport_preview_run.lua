@@ -244,6 +244,11 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     local c=Sim.company(s,p.owner)
     local whole,remainder=Roster.debit_fraction(c.stock_money_fraction or 0,fixed)
     c.cash,c.expense,c.month_exp=c.cash-whole,c.expense+whole,c.month_exp+whole
+    if Sim.stock_economy_money then Sim.stock_economy_money(c,"air_run",whole) end
+    if Sim.stock_vehicle_operating then
+      local asset=s.stock_owned_air_fleet and s.stock_owned_air_fleet[p.paid_clock] or s.stock_owned_aircraft
+      Sim.stock_vehicle_operating(s,asset,-whole)
+    end
     c.stock_money_fraction=remainder
     f.charged_ticks,f.expense=f.ticks,f.expense+whole
   end

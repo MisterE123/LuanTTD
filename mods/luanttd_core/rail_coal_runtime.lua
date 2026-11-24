@@ -119,7 +119,12 @@ return function(Sim,Service,Roster,debit,credit,receive)
     local company=Sim.company(s,run.owner)
     local whole,rest=Roster.debit_fraction(company.stock_money_fraction or 0,fixed)
     company.stock_money_fraction=rest
-    if whole~=0 then debit(company,whole) end
+    if whole~=0 then
+      debit(company,whole,"rail_run")
+      if Sim.stock_vehicle_operating then
+        Sim.stock_vehicle_operating(s,s.stock_rail_fleet and s.stock_rail_fleet.units[run.fleet_id],-whole)
+      end
+    end
     run.freight.charged_running_ticks=total
     run.freight.running_expense=(run.freight.running_expense or 0)+whole
   end

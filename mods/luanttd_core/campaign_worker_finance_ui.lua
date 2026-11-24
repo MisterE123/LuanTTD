@@ -1,12 +1,12 @@
 -- Native control-desk finance, entirely backed by the campaign owner.
-return function(core,client,fmt,money)
+return function(core,client,fmt,money,view_hq)
   local M={form="luanttd_core:worker_finance"}
   local open={}
   local serial=0
   local function draw(player,v,note)
     local t=v.data or {}
     local function label(y,txt) return ("label[.45,%g;%s]"):format(y,core.formspec_escape(txt)) end
-    local b={"formspec_version[7]size[8.9,5.7]bgcolor[#152334;false]",label(.4,"Finance"),
+    local b={"formspec_version[7]size[8.9,6.65]bgcolor[#152334;false]",label(.4,"Finance"),
       label(.94,note or (t.year and fmt(t.year,t.month,t.day_of_month) or "Reading company ledger…"))}
     if t.cash then
       b[#b+1]=label(1.48,"Cash: "..money(t.cash).."   ·   Loan: "..money(t.loan))
@@ -21,7 +21,15 @@ return function(core,client,fmt,money)
         end
       end
     end
-    b[#b+1]="button_exit[4.55,4.77;3.86,.58;close;Back to world]"
+    if t.hq then
+      b[#b+1]=label(4.55,("Company value: %s  ·  Performance: %d / 1000"):format(money(t.hq.value),t.hq.score))
+      if t.hq.tile and view_hq then
+        b[#b+1]=("button[.45,5.26;4,.55;f%d_view_hq;View headquarters]"):format(v.id)
+      elseif not t.hq.tile then
+        b[#b+1]=label(5.28,"Place your HQ from the Company hotbar.")
+      end
+    end
+    b[#b+1]="button_exit[4.55,5.74;3.86,.58;close;Back to world]"
     core.show_formspec(player,M.form,table.concat(b))
   end
   function M.show(p,note)
@@ -45,6 +53,12 @@ return function(core,client,fmt,money)
     if f.quit then open[name]=nil;return true end
     if v.pending or not v.revision then return true end
     local stem="f"..v.id.."_"
+    if f[stem.."view_hq"] and v.data.hq and v.data.hq.tile and view_hq then
+      open[name]=nil
+      core.close_formspec(name,M.form)
+      view_hq(p,v.data.hq.tile)
+      return true
+    end
     local command
     if f[stem.."borrow"] or f[stem.."repay"] then
       command={kind="company_loan",amount=f[stem.."borrow"] and 10000 or -10000}

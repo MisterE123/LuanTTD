@@ -145,7 +145,12 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     local c=Sim.company(s,r.owner)
     local whole,fraction=Roster.debit_fraction(c.stock_money_fraction or 0,amount)
     c.stock_money_fraction=fraction
-    if whole~=0 then debit(c,whole) end
+    if whole~=0 then
+      debit(c,whole,"rail_run")
+      if Sim.stock_vehicle_operating then
+        Sim.stock_vehicle_operating(s,s.stock_rail_fleet and s.stock_rail_fleet.units[r.fleet_id],-whole)
+      end
+    end
     r.freight.charged_running_ticks=ticks
     r.freight.running_expense=(r.freight.running_expense or 0)+whole
   end

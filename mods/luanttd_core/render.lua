@@ -856,6 +856,15 @@ return function(api)
     stock_scenery.lighthouse=architecture("stock_lighthouse","stock_lighthouse","stock_landmarks_atlas")
     stock_scenery.transmitter=architecture("stock_transmitter","stock_transmitter","stock_landmarks_atlas")
     stock_scenery.statue=architecture("stock_town_statue","stock_town_statue","stock_town_statue")
+    stock_scenery.headquarters={}
+    for stage=0,4 do
+      local row={}
+      for part=1,4 do
+        local name=("stock_company_hq_%d_%d"):format(stage,part)
+        row[part]=architecture(name,name,"stock_company_hq")
+      end
+      stock_scenery.headquarters[stage]=row
+    end
   end
   local lighthouse_beams=stock_scenery.lighthouse and dofile(modpath.."/lighthouse_beam_view.lua")(core,Sim)
   function R.step_lighthouse_beams(dt,viewers)
@@ -1200,6 +1209,16 @@ return function(api)
     end
     if y==-1 then return basement end
     if t.stock_landmark then
+      if t.stock_landmark.kind=="headquarters" then
+        local mark=t.stock_landmark
+        local _,base=terrain.tile(id)
+        if y<=base then return gnames.grass[t.variant] end
+        if y<=mark.level then return retaining end
+        if y==mark.level+1 and x%2==0 and z%2==0 then
+          return assert(stock_scenery.headquarters[mark.stage][mark.part])
+        end
+        return "air"
+      end
       if t.stock_landmark.kind=="statue" then
         local slope,base,top=terrain.tile(id)
         if y<=base then return gnames.grass[t.variant] end

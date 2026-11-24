@@ -43,7 +43,8 @@ function U.install_worker_controls(client)
   api.worker_signal_client=client
   api.worker_rail_assembly=client
   api.worker_tutorial_client=client
-  api.worker_finance=dofile(mod.."/campaign_worker_finance_ui.lua")(core,client,formatted_date,dollars)
+  api.worker_finance=dofile(mod.."/campaign_worker_finance_ui.lua")(core,client,formatted_date,dollars,
+    function(p,id) U.teleport_tile(p,id) end)
   api.worker_news=dofile(mod.."/campaign_news_ui.lua")(core,mod,client,formatted_date)
   api.worker_build=api.worker_build or dofile(mod.."/campaign_build_proxy.lua")(client)
   api.worker_depot=dofile(mod.."/campaign_worker_depot_ui.lua")(core,client,api.worker_build,dollars,function(p,id)
@@ -875,6 +876,7 @@ function U.guide(p,menu)
     local running,summary=api.tram.status(n)
     return running and summary or "Build a dedicated line, depot and two through stops. Then choose Order test streetcar."
   end
+  if V.tool=="company_hq" then return "Aim at the first corner of a 2×2 site. Click to build or relocate your headquarters." end
   if menu=="terrain" then
     if V.tool=="landscape_plant_tree" then return "Click or drag to plant. Hold Aux1 (usually E) for diagonal planting. Right-click to change type." end
     if V.tool=="landscape_purchase_land" then return "Click or drag to buy. Hold Aux1 for a diagonal area. Bulldoze your marker to sell." end
@@ -1004,6 +1006,7 @@ function U.inspect(p,tile)
   else U.context(p,tile) end
 end
 local landscape_tools={
+  company_hq={mode="company_hq",name="Company headquarters"},
   landscape_raise={mode="raise",name="Raise corner"},landscape_lower={mode="lower",name="Lower corner"},
   landscape_level={mode="level",name="Level area",area=true},
   landscape_raise_area={mode="raise",name="Raise area",area=true},
@@ -2192,6 +2195,7 @@ local function authority_preview(p,id,hit)
     kind,request="terrain",tree_request(p,V,id)
     label=tool=="landscape_purchase_land" and "Buy land" or tree_species_name(V.tree_species)
   elseif land then
+    label=land.name
     if land.area and not V.anchor then return ids,true,"Mark the first terrain corner." end
     kind,request="terrain",{operation=land.mode,first=V.anchor or id,last=land.area and id or nil,
       diagonal=p:get_player_control().aux1==true}
@@ -2237,10 +2241,18 @@ local function authority_preview(p,id,hit)
   -- while the worker validates the shape the player just selected.
   if not q then
     local tram=request.mode=="tram" or request.tool=="tram_facility"
-    if (kind=="road" or tram or request.mode=="air" or request.operation=="plant_tree" or request.operation=="purchase_land") and pending then return ids,nil,why end
+    if (kind=="road" or tram or request.mode=="air" or request.operation=="plant_tree" or
+        request.operation=="purchase_land" or request.operation=="company_hq") and pending then return ids,nil,why end
     if tram and api.tram and why then why=api.tram.reason(why) end
     if request.mode=="air" and api.airfield and why then why=api.airfield.reason(why) end
     if request.operation=="plant_tree" or request.operation=="purchase_land" then why=tree_build_errors[why] or why end
+    if request.operation=="company_hq" and why then
+      local labels={OWNED_BY_ANOTHER="Another company owns part of this site.",PROTECTED_TILE="Choose a clear, unoccupied site.",
+        CAN_T_BUILD_ON_WATER="All four parcels must be on land.",FLAT_LAND_REQUIRED="Choose four tiles at the same foundation height.",
+        ALREADY_BUILT="Your headquarters already stands here.",NOT_ENOUGH_CASH="Your company cannot afford this site.",
+        TOO_CLOSE_TO_EDGE_OF_MAP="The entire 2×2 site must fit inside the map."}
+      why=labels[why] or tree_build_errors[why] or why
+    end
     return ids,false,why
   end
   local cells=q.tiles or ids
@@ -2612,7 +2624,8 @@ function U.world_status(p,tile,show_preview,hit)
     local facility=registry and registry[mark.id]
     local site=S.sites[facility and facility.site or a.site]
     local landmark=a.stock_landmark and (a.stock_landmark.kind=="lighthouse" and "Lighthouse" or
-      a.stock_landmark.kind=="statue" and "Company statue" or "Radio transmitter")
+      a.stock_landmark.kind=="statue" and "Company statue" or
+      a.stock_landmark.kind=="headquarters" and "Company headquarters" or "Radio transmitter")
     local stake=a.stock_object and a.stock_object.kind=="owned_land" and ("Company land · "..(a.owner or "Unknown"))
     local channel=a.ship and a.ship.kind=="lock" and "Ship lock" or
       a.water_class=="river" and "River" or nil
@@ -3277,6 +3290,7 @@ function U.context(p,tile,hit)
         local platform=R.host_record and R.host_record("stock_rail_stations",t.rail_station_id)
         if platform and not Freight.role(platform) then return api.worker_rail_mail_station.open(p,tile) end
       end
+      if t.stock_landmark and t.stock_landmark.kind=="headquarters" then return U.open_finance(p) end
       local town=site and site.kind=="town" and t.site or t.road_town or
         t.stock_landmark and t.stock_landmark.kind=="statue" and t.stock_landmark.town
       if town and U.open_town_authority(p,town) then return true end

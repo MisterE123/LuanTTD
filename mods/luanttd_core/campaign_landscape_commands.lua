@@ -18,6 +18,13 @@ return function(Sim,s)
       if (math.abs(u-x)+1)*(math.abs(v-z)+1)>256 then return nil,"TERRAIN_SELECTION_TOO_LARGE" end
     end
     local a={operation=op,first=first,last=last,diagonal=request.diagonal==true}
+    if op=="company_hq" then
+      local p,why=Sim.company_hq_quote(s,owner,first)
+      if not p or not p.affordable then return nil,why or "NOT_ENOUGH_CASH" end
+      local tiles={}
+      for i,t in ipairs(p.tiles) do tiles[i]=t.id end
+      return {request=a,cost=p.cost,tiles=tiles,topology=p.topology,terrain=s.corner_grid.revision,level=p.level}
+    end
     if op=="purchase_land" then
       local plan,why=Sim.purchase_land(s,owner,first,last or first,a.diagonal,false)
       if not plan then return nil,why end
@@ -62,6 +69,9 @@ return function(Sim,s)
       return false,"TERRAIN_QUOTE_CHANGED"
     end
     local r=q.request
+    if r.operation=="company_hq" then
+      return Sim.company_hq_apply(s,owner,r.first,q)
+    end
     if r.operation=="purchase_land" then
       local p,why=Sim.purchase_land(s,owner,r.first,r.last or r.first,r.diagonal,true)
       if not p then return false,why end

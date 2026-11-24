@@ -4,6 +4,8 @@ local module_src=debug and debug.getinfo(1,"S").source
 local module_root=module_src and module_src:match("^@(.*/)sim%.lua$") or
   (core and core.get_modpath and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
 local TramIndex=dofile(module_root.."tram_fleet_index.lua")
+local CompanyQuarter=dofile(module_root.."openttd/company_quarters_rc1.lua")
+local HQStats=dofile(module_root.."company_hq_stats.lua")(M)
 M.each_tram,M.tram_frame,M.tram_serial=TramIndex.each,TramIndex.frame,TramIndex.serial
 
 M.W,M.H = 48,36
@@ -185,11 +187,17 @@ function M.company(s,owner)
   end
   return s.companies[owner]
 end
-local function debit(c,amount)
+M.stock_economy_money=CompanyQuarter.money
+M.stock_economy_delivered=CompanyQuarter.delivered
+M.stock_vehicle_operating=HQStats.record
+local function debit(c,amount,expense)
   c.cash=c.cash-amount;c.expense=c.expense+amount;c.month_exp=c.month_exp+amount
+  if expense then CompanyQuarter.money(c,expense,amount) end
 end
 local function credit(c,amount)
   c.cash=c.cash+amount;c.revenue=c.revenue+amount;c.month_rev=c.month_rev+amount
+  -- This callback is used by ordinary transport payments, not borrowing.
+  CompanyQuarter.money(c,"road_income",-amount)
 end
 function M.loan(s,owner,amount)
   local c=M.company(s,owner)
@@ -2921,7 +2929,7 @@ function M.purchase(s,owner,engine,cargo,station,depot)
   local id=s.next_vehicle;s.next_vehicle=id+1
   s.fleet[id]={id=id,name=e.name.." #"..id,owner=owner,engine=engine,cargo=cargo,station=station,
     depot=depot,home_depot=depot,orders=depot and {} or {{station=station,action="normal"}},index=1,units=0,revenue=0,expense=0,delivered=0, bought=s.day,
-    status="Stopped",running=false,progress=0,wait=0,condition=100}
+    status="Stopped",running=false,progress=0,wait=0,condition=100,stock_purchase_value=e.cost}
   if e.stock_id then
     local key=s.stock_bus_market and "stock_bus" or "stock_regal"
     local v=s.fleet[id]
@@ -3865,6 +3873,75 @@ function M.station_has_town_statue(s,st)
   end
   return t and M.town_statue_station_bonus(s,st.owner,t) or false
 end
+local hq_runtime,hq_rules
+local hq_stats_cache=setmetatable({},{__mode="k"})
+local function company_hqs()
+  if not hq_runtime then
+    load_road_rules()
+    hq_rules=dofile(module_root.."openttd/company_hq_rc1.lua")
+    hq_runtime=dofile(module_root.."company_hq_world.lua")(M,terrain_rules,hq_rules,land_rules())
+  end
+  return hq_runtime,hq_rules
+end
+local function company_hq_stats(s,owner)
+  local row=hq_stats_cache[s]
+  if not row or row.day~=s.day or row.rev~=s.authority_revision or row.topology~=s.topology then
+    row={day=s.day,rev=s.authority_revision,topology=s.topology,stats=HQStats.collect(s)}
+    hq_stats_cache[s]=row
+  end
+  return row.stats[owner] or {vehicles={},stations={},min_age=HQStats.min_age}
+end
+-- CargoPacket::InvalidateAllFrom(SourceType::Headquarters) does not delete
+-- freight or remove its fare. Only detach the source's identity.
+function M.invalidate_hq_cargo(s,owner)
+  local seen={}
+  local function traverse(t)
+    if type(t)~="table" or seen[t] then return end
+    seen[t]=true
+    if t.source_type=="headquarters" and t.source==owner then t.source=nil end
+    for _,value in pairs(t) do if type(value)=="table" then traverse(value) end end
+  end
+  for _,reg in ipairs({"stations","fleet","stock_ship_commercial","tram_pilot","stock_tram_fleet"}) do traverse(s[reg]) end
+end
+function M.hq_flood_clear(s,owner,origin)
+  local H=company_hqs()
+  return H.flood_clear(s,owner,origin)
+end
+function M.hq_cargo_at(s,id)
+  local tile=s.tiles[id]
+  local mark=tile and tile.stock_landmark
+  return mark and mark.kind=="headquarters" and mark or nil
+end
+function M.hq_acceptance(mark,cargo)
+  local _,K=company_hqs()
+  local passengers,mail=K.acceptance(mark.stage)
+  return cargo=="passenger" and passengers or cargo=="mail" and mail or 0
+end
+function M.hq_production(s,mark,random)
+  local _,K=company_hqs()
+  return K.produce(mark.stage,random(),s.stock_recession or s.stock_coal_recession)
+end
+function M.company_hq_status(s,owner)
+  if not (s.stock_generated_profile and s.companies[owner]) then return end
+  local _,K=company_hqs()
+  local c=s.companies[owner]
+  local stats=company_hq_stats(s,owner)
+  local p=s.stock_company_hqs and s.stock_company_hqs[owner]
+  local score=K.score(c,stats.vehicles,stats.stations,c.stock_quarters or {},stats.min_age)
+  return {tile=p and p.origin,stage=p and p.stage,score=score,value=K.value(c,stats.vehicles,stats.stations)}
+end
+function M.company_hq_quote(s,owner,origin)
+  local H=company_hqs()
+  return H.quote(s,owner,origin,company_hq_stats(s,owner),M.road_piece_occupancy(s))
+end
+function M.company_hq_apply(s,owner,origin,seen)
+  local had=s.stock_company_hqs and s.stock_company_hqs[owner]~=nil
+  local H=company_hqs()
+  local dirty,q=H.apply(s,owner,origin,seen,company_hq_stats(s,owner),M.road_piece_occupancy(s))
+  if not dirty then return false,q end
+  debit(s.companies[owner],q.cost)
+  return true,("%s headquarters for $%d."):format(had and "Relocated" or "Built",q.cost),dirty
+end
 function M.road_stock_service_active(s)
   return s.road_stock_loading and s.road_stock_clock and s.road_economy and s.corner_grid~=nil
 end
@@ -4189,6 +4266,8 @@ local function unload_mail(s,st,v,action)
     v.last_fare={tile=st.tile,day=s.day,amount=amount,units=paid}
     v.revenue=v.revenue+amount;v.delivered=v.delivered+paid
     company.units=company.units+paid;company.paid_units=company.paid_units+paid
+    CompanyQuarter.delivered(company,"mail",paid)
+    HQStats.record(s,v,amount)
     local site=s.sites[st.site]
     if site then site.received.mail=(site.received.mail or 0)+paid end
   end
@@ -4267,6 +4346,8 @@ local function unload_at(s,st,v,action)
       push(s,v.owner.." made their first paid delivery: "..delivered.." "..M.cargo[v.cargo].name:lower().." for $"..amount..".")
     end
     company.paid_units=company.paid_units+delivered
+    CompanyQuarter.delivered(company,v.cargo,delivered)
+    HQStats.record(s,v,amount)
   end
 end
 function M.empty(s,owner,id)
@@ -4868,7 +4949,7 @@ function M.daily(s,traverse)
         local remainder=(old-amount%256)%256
         c.stock_money_fraction=remainder
         local whole=math.floor(amount/256)+(remainder>old and 1 or 0)
-        if whole~=0 then debit(c,whole);v.expense=v.expense+whole end
+        if whole~=0 then debit(c,whole,"road_run");v.expense=v.expense+whole;HQStats.record(s,v,-whole) end
         v[key]=0
       end
       if not enabled then
@@ -4906,7 +4987,7 @@ function M.daily(s,traverse)
     local c=M.company(s,v.owner)
     local whole,remainder=road_bus_catalog().day(stock_bus(v),c.stock_money_fraction or 0)
     c.stock_money_fraction=remainder
-    if whole~=0 then debit(c,whole);v.expense=v.expense+whole end
+    if whole~=0 then debit(c,whole,"road_run");v.expense=v.expense+whole;HQStats.record(s,v,-whole) end
   end
   local stock_work
   local commercial=paid_transport_day(s)
@@ -4937,7 +5018,7 @@ function M.daily(s,traverse)
       if stock_work[id] then
         local e=M.vehicles[v.engine]
         if not stock_bus(v) and not coal_engine(v.engine) and not priced_mail(v.engine) and not industry_truck(v.engine) then
-          debit(M.company(s,v.owner),e.daily);v.expense=v.expense+e.daily
+          debit(M.company(s,v.owner),e.daily,"road_run");v.expense=v.expense+e.daily;HQStats.record(s,v,-e.daily)
         end
         if not stock_bus(v) then v.condition=math.max(30,v.condition-0.06) end
       end
@@ -4976,7 +5057,7 @@ function M.daily(s,traverse)
   elseif s.road_stock_clock then road_progress=advance_road(s,moving) end
   for _,id in ipairs(moving) do
     local v=s.fleet[id];local e=M.vehicles[v.engine]
-    local c=M.company(s,v.owner);debit(c,e.daily);v.expense=v.expense+e.daily
+    local c=M.company(s,v.owner);debit(c,e.daily,e.mode=="rail" and "rail_run" or e.mode=="water" and "ship_run" or "road_run");v.expense=v.expense+e.daily;HQStats.record(s,v,-e.daily)
     v.condition=math.max(30,v.condition-0.06)
     local desired=road_progress[id] or v.progress+e.speed*(0.55+v.condition*0.0045)
     local blocked,oneway_blocked=false,false
@@ -5108,7 +5189,17 @@ function M.daily(s,traverse)
       end
     end
     for owner,c in pairs(s.companies) do
-      debit(c,math.floor(c.loan*0.004)+(upkeep[owner] or 0))
+      debit(c,math.floor(c.loan*0.004),"loan_interest")
+      if upkeep[owner] then debit(c,upkeep[owner],"property") end
+      local quarter=CompanyQuarter.month(c,y,month)
+      if quarter and s.stock_company_hqs and s.stock_company_hqs[owner] then
+        local H,K=company_hqs()
+        local stats=company_hq_stats(s,owner)
+        local score=K.score(c,stats.vehicles,stats.stations,c.stock_quarters,stats.min_age)
+        quarter.performance_history=score
+        quarter.company_value=K.value(c,stats.vehicles,stats.stations)
+        H.upgrade(s,owner,score)
+      end
       for sid,r in pairs(c.rating) do c.rating[sid]=math.max(10,r-2) end
       table.insert(c.history,1,{day=s.day,revenue=c.month_rev,expenses=c.month_exp,cash=c.cash})
       if #c.history>24 then table.remove(c.history) end

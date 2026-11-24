@@ -68,7 +68,7 @@ H.menus={
     [7]=item("landscape_plant_tree","Plant trees · right-click for species","plant_tree"),
     [10]=item("landscape_purchase_land","Buy land","buy_land"),[8]=back},
   fleet={title="Fleet",[1]=inspect,[3]=item("company","Road vehicles","fleet"),[8]=back},
-  company={title="Company",[4]=item("finance","Finances"),
+  company={title="Company",[2]=item("company_hq","Build or move HQ","company_hq"),[4]=item("finance","Finances"),
     [5]=item("pause","Pause","pause"),[6]=item("normal_speed","Normal speed","normal_speed"),
     [7]=item("fast","Fast forward","fast_forward"),[8]=back},
   navigation={title="Navigation",[1]=inspect,[5]=jump,[8]=back},

@@ -80,6 +80,7 @@ return function(Service,key)
             "Saved physical railway formation disagrees")
         end
       end
+      service.vehicles[id].finance_asset_id=r.fleet_id
       live[id]=true
     end
     state.rail_serials=live

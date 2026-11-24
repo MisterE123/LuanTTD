@@ -32,7 +32,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
   end
   local function floodable_object(t)
     local k=t.stock_landmark and t.stock_landmark.kind
-    return k=="statue" or k=="lighthouse" or k=="transmitter" or
+    return k=="statue" or k=="lighthouse" or k=="transmitter" or k=="headquarters" or
       (t.stock_object and t.stock_object.kind=="owned_land")
   end
   local function protected(s,id,t)
@@ -125,7 +125,10 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     for _,change in ipairs(changes) do
       local id=Sim.id(change.x,change.z)
       local t=assert(s.tiles[id])
-      assert(class(s,id,t)==change.from)
+      local actual=class(s,id,t)
+      -- Several adjacent eligible parcels of one HQ may have been
+      -- quoted before the first parcel cleared the whole building.
+      assert(actual==change.from or change.from=="object" and actual=="clear")
       local _,base=Terrain.tile(s.corner_grid,change.x,change.z)
       if change.from=="rail" then
         local q=change.rail
@@ -145,7 +148,11 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         if change.from=="trees" then t.wood=nil end
         if change.from=="object" then
           local st=t.stock_landmark
-          if st and st.kind=="statue" then
+          if st and st.kind=="headquarters" and Sim.hq_flood_clear then
+            for _,parcel in ipairs(Sim.hq_flood_clear(s,st.owner,st.hq)) do
+              if parcel~=id then s.changed[#s.changed+1]=parcel end
+            end
+          elseif st and st.kind=="statue" then
             local town=s.stock_town_growth and s.stock_town_growth.towns[st.town]
             if town and town.statues and town.statues[st.owner]==id then
               town.statues[st.owner]=nil

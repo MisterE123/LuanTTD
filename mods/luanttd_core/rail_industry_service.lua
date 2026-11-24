@@ -188,6 +188,10 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
             local c=Sim.company(s,v.owner)
             if ctx.credit then ctx.credit(c,p.route) else c.cash,c.revenue,c.month_rev=c.cash+p.route,c.revenue+p.route,c.month_rev+p.route end
             c.units,c.paid_units=c.units+accepted,c.paid_units+accepted
+            if Sim.stock_economy_delivered then Sim.stock_economy_delivered(c,v.cargo,accepted) end
+            if Sim.stock_vehicle_operating then
+              Sim.stock_vehicle_operating(s,s.stock_rail_fleet and s.stock_rail_fleet.units[v.id],p.route)
+            end
             v.delivered,v.revenue=v.delivered+accepted,v.revenue+p.route
             event("fare",st,v,tick,{units=accepted,amount=p.route})
           end

@@ -46,7 +46,11 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     for id in pairs(Sim.road_stop_catchment(s,st,radius)) do
       local tile=id and s.tiles[id]
       local house=tile and tile.house and tile.source_house
-      if house then total=total+assert(house_accept[house.id],"Unknown mail acceptance for house") end
+      if house then total=total+assert(house_accept[house.id],"Unknown mail acceptance for house")
+      else
+        local hq=id and Sim.hq_cargo_at and Sim.hq_cargo_at(s,id)
+        if hq then total=total+Sim.hq_acceptance(hq,"mail") end
+      end
     end
     return total
   end
@@ -135,18 +139,19 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   -- Feed each finished house emission, in stock tick order. x,z are
   -- zero-based coordinates from H.advance_houses; callbacks do no RNG.
   local function generated(st,units,record,source_type)
-    if source_type=="town" then
+    if source_type then
+      local source=record.source or record.town
       local q=st.stock.mail or {}
       st.stock.mail=q
       for i=#q,1,-1 do
         local p=q[i]
         if p.origin_station==st.id and p.origin_tile==nil and (p.age or 0)==0 and
-            (p.source_type==nil or p.source_type=="town") and p.source==record.town and p.units+units<=65535 then
-          p.units,p.source_type=p.units+units,"town"
+            (p.source_type or "town")==source_type and p.source==source and p.units+units<=65535 then
+          p.units,p.source_type=p.units+units,source_type
           return
         end
       end
-      q[#q+1]={units=units,source=record.town,source_type="town",origin_station=st.id,age=0}
+      q[#q+1]={units=units,source=source,source_type=source_type,origin_station=st.id,age=0}
     else
       M.enqueue(st,{units=units,source=record.town,origin_station=st.id,age=0})
     end
@@ -168,15 +173,20 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   end
   function M.from_house(s,amount,x,z,record,stops)
     if amount<=0 then return 0 end
-    assert(record and record.town,"Mail origin requires the emitting house's town")
+    assert(record and (record.town or record.source),"Mail origin requires a stock source")
     local list={}
+    local area=record.area or 1
     for _,st in ipairs(stops or M.stops(s)) do
-      if Sim.road_stop_covers(s,st,x+1,z+1,radius) then
+      local covered=false
+      for dz=0,area-1 do for dx=0,area-1 do
+        if Sim.id(x+1+dx,z+1+dz) and Sim.road_stop_covers(s,st,x+1+dx,z+1+dz,radius) then covered=true end
+      end end
+      if covered then
         local rating=M.offer(st)
         if rating then list[#list+1]={st=st,rating=rating} end
       end
     end
-    return allocate(amount,record,list)
+    return allocate(amount,record,list,record.source_type)
   end
 
   -- The stock StationFinder sees one sorted station set for one house
@@ -209,13 +219,26 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     end
     function S.offer(amount,x,z,record)
       if amount<=0 or x<0 or x>=width or z<0 or z>=depth then return 0 end
-      assert(record and record.town,"Mail origin requires the emitting house's town")
-      local list={}
-      for _,q in ipairs(nearby[z*width+x] or {}) do
-        local rank=Catchment.offer(q.st,q.region,"mail",x,z,goods,options)
+      assert(record and (record.town or record.source),"Mail origin requires a stock source")
+      local candidates,list={},{}
+      local area=record.area or 1
+      for dz=0,area-1 do for dx=0,area-1 do
+        if x+dx<width and z+dz<depth then
+          for _,q in ipairs(nearby[(z+dz)*width+x+dx] or {}) do candidates[q.st.id]=q end
+        end
+      end end
+      local offer=options
+      if area>1 then
+        offer={}
+        for k,v in pairs(options or {}) do offer[k]=v end
+        offer.area=area
+      end
+      for _,q in pairs(candidates) do
+        local rank=Catchment.offer(q.st,q.region,"mail",x,z,goods,offer)
         if rank then list[#list+1]={st=q.st,rating=rank} end
       end
-      return allocate(amount,record,list,"town")
+      table.sort(list,function(a,b) return a.st.id<b.st.id end)
+      return allocate(amount,record,list,record.source_type or "town")
     end
     function S.acceptance(id,house_at)
       local _,region=lookup(id)

@@ -85,7 +85,7 @@ return function(Network,Trip,Speed,shared,Passenger)
     s.next_vehicle=id+1
     p.carrier={id=id,owner=owner,engine="native_streetcar",cargo="passenger",
       stock_tram={capacity=body.capacity,slice=body.slice,aging=body.aging,speed=body.speed},
-      running=true,batches={},units=0,revenue=0,delivered=0,bought=s.day}
+      running=true,batches={},units=0,revenue=0,delivered=0,bought=s.day,stock_purchase_value=body.price}
     c.cash,c.expense,c.month_exp=c.cash-body.price,c.expense+body.price,c.month_exp+body.price
     if additional then
       s.stock_tram_fleet=s.stock_tram_fleet or {}

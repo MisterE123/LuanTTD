@@ -52,6 +52,13 @@ return function(Packets,Rating,passenger_acceptance,mail_acceptance)
     return c
   end
 
+  function C.covers_area(c,x,y,width,depth)
+    for dz=0,(depth or 1)-1 do for dx=0,(width or 1)-1 do
+      if C.contains(c,x+dx,y+dz) then return true end
+    end end
+    return false
+  end
+
   function C.contains(c,x,y)
     return in_map(c.width,c.height,x,y) and c.tiles[y*c.width+x]==true
   end
@@ -87,7 +94,7 @@ return function(Packets,Rating,passenger_acceptance,mail_acceptance)
     for id in pairs(c.tiles) do
       local house=house_at(id%c.width,math.floor(id/c.width))
       if house then
-        local amount=assert(accepts(house.id),"Unknown stock HouseID")
+        local amount=house.hq_acceptance and (house.hq_acceptance[cargo] or 0) or assert(accepts(house.id),"Unknown stock HouseID")
         if amount>0 then
           raw=raw+amount;always=true
           if house.town~=nil then towns[house.town]=(towns[house.town] or 0)+amount end
@@ -105,8 +112,8 @@ return function(Packets,Rating,passenger_acceptance,mail_acceptance)
   -- the station's associated town, not the emitting house's town.
   function C.offer(st,c,cargo,x,y,get_goods,opts)
     assert(houses[cargo],"Unsupported house cargo")
-    if not C.contains(c,x,y) or not facility_admits(c,cargo) then return end
     opts=opts or {}
+    if not C.covers_area(c,x,y,opts.area,opts.area) or not facility_admits(c,cargo) then return end
     if opts.exclusive_owner~=nil and opts.exclusive_owner~=st.owner then return end
     if opts.town_rights and st.owner~=opts.neutral_owner then
       local rights=opts.town_rights(opts.station_town and opts.station_town(st) or st.town)

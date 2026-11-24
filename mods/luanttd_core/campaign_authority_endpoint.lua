@@ -301,7 +301,7 @@ return function(Sim,R,max_days)
     if not c then return reply(false,"COMPANY_NOT_OPEN") end
     local year,month,day=Sim.date(s)
     return reply(true,nil,{cash=c.cash,loan=c.loan,revenue=c.revenue,expense=c.expense,
-      month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,
+      month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,hq=Sim.company_hq_status(s,name),
       rail_maglev=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,3) or false,
       rail_mono=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,2) or false,
       news_head=R.news and R.news.head(),

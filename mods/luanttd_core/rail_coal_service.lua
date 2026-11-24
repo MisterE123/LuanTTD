@@ -256,6 +256,10 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
                 company.cash+p.route,company.revenue+p.route,company.month_rev+p.route
             end
             company.units,company.paid_units=company.units+accepted,company.paid_units+accepted
+            if Sim.stock_economy_delivered then Sim.stock_economy_delivered(company,"coal",accepted) end
+            if Sim.stock_vehicle_operating then
+              Sim.stock_vehicle_operating(s,s.stock_rail_fleet and s.stock_rail_fleet.units[v.id],p.route)
+            end
             v.delivered,v.revenue=v.delivered+accepted,v.revenue+p.route
             emit("fare",st,v,tick,{units=accepted,amount=p.route})
           end

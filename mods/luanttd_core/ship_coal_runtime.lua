@@ -102,7 +102,9 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
       credit=function(world,owner,amount,n)
         local company=Sim.company(world,owner)
         credit(company,amount)
+        if Sim.stock_vehicle_operating then Sim.stock_vehicle_operating(world,world.stock_coal_ship,amount) end
         company.units,company.paid_units=company.units+n,company.paid_units+n
+        if Sim.stock_economy_delivered then Sim.stock_economy_delivered(company,"coal",n) end
       end,
       charge_fixed=function(world,owner,fixed)
         local company=Sim.company(world,owner)
@@ -110,10 +112,11 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
         local remainder=(old-fixed%256)%256
         company.stock_money_fraction=remainder
         local whole=math.floor(fixed/256)+(remainder>old and 1 or 0)
-        if whole>0 then debit(company,whole) end
+        if whole>0 then debit(company,whole,"ship_run") end
         if world.stock_coal_ship then
           local craft=world.stock_coal_ship
           craft.expense=(craft.expense or 0)+whole
+          if Sim.stock_vehicle_operating then Sim.stock_vehicle_operating(world,craft,-whole) end
         end
       end,
       station_at=function(id) return s.stations[id] end,
@@ -159,7 +162,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
     local c=Sim.company(s,owner)
     if c.cash<q.purchase then return nil,"NOT_ENOUGH_MONEY" end
     debit(c,q.purchase)
-    local v={id=1,engine=id or Roster.id,owner=owner,depot=dep,built=Sim.date(s),
+    local v={id=1,engine=id or Roster.id,owner=owner,depot=dep,built=Sim.date(s),purchase_day=s.day,
       cargo=Roster.default_cargo,purchase=q.purchase,refit=0,expense=0}
     s.stock_coal_ship=v
     return {id="coal",engine=v.engine,cost=v.purchase,cargo=v.cargo,capacity=q.capacity}

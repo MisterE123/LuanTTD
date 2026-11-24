@@ -237,6 +237,8 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
             if ctx.credit then ctx.credit(c,p.route)
             else c.cash,c.revenue,c.month_rev=c.cash+p.route,c.revenue+p.route,c.month_rev+p.route end
             c.units,c.paid_units=c.units+accepted,c.paid_units+accepted
+            if Sim.stock_vehicle_operating then Sim.stock_vehicle_operating(s,v,p.route) end
+            if Sim.stock_economy_delivered then Sim.stock_economy_delivered(c,"coal",accepted) end
             v.delivered=(v.delivered or 0)+accepted
             v.revenue=(v.revenue or 0)+p.route
             event("fare",st,v,{units=accepted,amount=p.route})

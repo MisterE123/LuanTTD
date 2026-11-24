@@ -55,6 +55,11 @@ if [[ ${LUANTTD_QA_TOWN_STATUE:-0} == 1 ]]; then
   fixture=tests/town_statue_native.lua
   marker='PASS NATIVE TOWN STATUE'
 fi
+if [[ ${LUANTTD_QA_COMPANY_HQ:-0} == 1 ]]; then
+  seed=1751
+  fixture=tests/company_hq_native.lua
+  marker='PASS NATIVE HQ'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -197,8 +202,40 @@ if [[ ${LUANTTD_QA_TOWN_STATUE:-0} == 1 ]]; then
   if command -v import >/dev/null; then import -window root -quality 91 "$out/statue-offer.jpg"; fi
   xdotool mousemove 600 519 click 1
 fi
+if [[ ${LUANTTD_QA_COMPANY_HQ:-0} == 1 ]]; then
+  wait_hq() {
+    for _ in {1..235}; do
+      grep -q "$1" "$out/server.log" && return
+      kill -0 "$server" 2>/dev/null || break
+      sleep .25
+    done
+    tail -n 55 "$out/"{server,client}.log; exit 1
+  }
+  hq_slot() {
+    local k
+    k=$(sed -n "s/.*$1 //p" "$out/server.log" | tail -1)
+    [[ -n "$k" ]]
+    [[ "$k" != 10 ]] || k=0
+    xdotool key --repeat 3 --delay 140 "$k"
+  }
+  wait_hq 'NATIVE HQ READY'
+  win=$(timeout 10 xdotool search --sync --onlyvisible --pid "$client" | tail -1)
+  xdotool windowraise "$win" windowfocus --sync "$win"
+  sleep .75; hq_slot 'NATIVE HQ HOME'
+  sleep .50; xdotool mousedown 1; sleep .30; xdotool mouseup 1
+  wait_hq 'NATIVE HQ SLOT'
+  hq_slot 'NATIVE HQ SLOT'
+  wait_hq 'NATIVE HQ SELECTED'
+  sleep .50; xdotool mousedown 1; sleep .30; xdotool mouseup 1
+  wait_hq 'NATIVE HQ BUILT'
+  sleep .7
+  if command -v import >/dev/null; then import -window root -quality 91 "$out/headquarters-build.jpg"; fi
+  wait_hq 'NATIVE HQ MOVE READY'
+  sleep .50; xdotool mousedown 1; sleep .30; xdotool mouseup 1
+fi
 for _ in {1..360}; do grep -q "$marker" "$out/server.log" && break; kill -0 "$server" 2>/dev/null || break; sleep .25; done
 grep "$marker" "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
 sleep 4
+if [[ ${LUANTTD_QA_COMPANY_HQ:-0} == 1 ]]; then xdotool key 1; sleep .45; fi
 if command -v import >/dev/null; then import -window root -quality 91 "$out/steel.jpg"; fi
 if grep -E 'ERROR\[|LuanTTD viewport placement:' "$out/"{server,client}.log; then exit 1; fi

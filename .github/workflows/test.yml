@@ -317,6 +317,11 @@ jobs:
           python3 tests/town_statue_rc1_upstream.py "$src"
           lua5.1 tests/town_statue_world.lua
           /usr/bin/python3 tools/build_town_statue_art.py --check
+          python3 tests/company_hq_rc1_upstream.py "$src"
+          lua5.1 tests/company_hq_world.lua
+          lua5.1 tests/company_hq_cargo.lua
+          lua5.1 tests/company_quarters_rc1.lua
+          /usr/bin/python3 tools/build_company_hq_art.py --check
           lua5.1 tools/build_rail_split_foundations.lua --check
           /usr/bin/python3 tools/build_rail_split_atlas.py --check
           lua5.1 tests/stock_rail_ground_fence_art_surface.lua

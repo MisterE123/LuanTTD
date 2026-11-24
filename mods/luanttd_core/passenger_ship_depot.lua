@@ -29,7 +29,7 @@ return function(Sim,Roster,Calendar,Run,art)
     local c=Sim.company(s,owner)
     if c.cash<quote.price then return nil,"Not enough cash for this ferry." end
     c.cash,c.expense,c.month_exp=c.cash-quote.price,c.expense+quote.price,c.month_exp+quote.price
-    local unit={owner=owner,depot=depot,engine_id=id,price=quote.price,built=Sim.date(s),
+    local unit={owner=owner,depot=depot,engine_id=id,price=quote.price,built=Sim.date(s),purchase_day=s.day,
       running_ticks=0,charged_ticks=0,expense=0}
     s.stock_owned_ferry=unit
     return unit,"Purchased "..quote.name..". Choose two docks to order the ferry."
@@ -79,6 +79,8 @@ return function(Sim,Roster,Calendar,Run,art)
     local debit=math.floor(amount/256)+(rem>old and 1 or 0)
     c.stock_money_fraction=rem
     c.cash,c.expense,c.month_exp=c.cash-debit,c.expense+debit,c.month_exp+debit
+    if Sim.stock_economy_money then Sim.stock_economy_money(c,"ship_run",debit) end
+    if Sim.stock_vehicle_operating then Sim.stock_vehicle_operating(s,u,-debit) end
     u.expense,u.charged_ticks=u.expense+debit,u.running_ticks
   end
   return D

@@ -280,6 +280,8 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
             if options.credit then options.credit(c,p.route)
             else c.cash,c.revenue,c.month_rev=c.cash+p.route,c.revenue+p.route,c.month_rev+p.route end
             c.units,c.paid_units=c.units+n,c.paid_units+n
+            if Sim.stock_vehicle_operating then Sim.stock_vehicle_operating(s,v,p.route) end
+            if Sim.stock_economy_delivered then Sim.stock_economy_delivered(c,v.cargo,n) end
             v.delivered,v.revenue=v.delivered+n,v.revenue+p.route
             event("fare",st,v,{units=n,amount=p.route})
           end

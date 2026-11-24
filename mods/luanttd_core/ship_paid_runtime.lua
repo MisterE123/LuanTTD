@@ -85,7 +85,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local function house_at(x,z)
       local id=Sim.id(x+1,z+1)
       local tile=id and s.tiles[id]
-      return tile and tile.house and tile.source_house or nil
+      if tile and tile.house then return tile.source_house end
+      local hq=id and Sim.hq_cargo_at and Sim.hq_cargo_at(s,id)
+      if hq then return {hq_acceptance={passenger=Sim.hq_acceptance(hq,"passenger"),mail=Sim.hq_acceptance(hq,"mail")}} end
     end
     local ctx={width=Sim.W,height=Sim.H,xy=Sim.xy,house_at=house_at,
       gradual=s.stock_gradual_loading~=false,feeder_percent=s.stock_feeder_percent,
@@ -135,6 +137,14 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local sink=c.service.stations[e.station]
       e.station_local=sink and (sink.host_id or sink.id)
       if e.kind=="fare" then
+        if Sim.stock_vehicle_operating and v then
+          local asset
+          if e.mode=="rail" and v.finance_asset_id then
+            asset=s.stock_rail_fleet and s.stock_rail_fleet.units[v.finance_asset_id]
+          elseif e.mode=="ship" then asset=s.stock_owned_ferry
+          elseif e.mode=="air" then asset=s.stock_owned_air_fleet and s.stock_owned_air_fleet[e.paid_clock] or s.stock_owned_aircraft end
+          Sim.stock_vehicle_operating(s,asset,e.amount)
+        end
         local company=Sim.company(s,owner)
         credit(company,e.amount)
         if company.paid_units==0 and news then
@@ -146,6 +156,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         company.units=company.units+e.units
         company.paid_units=company.paid_units+e.units
       elseif e.kind=="deliver" then
+        if Sim.stock_economy_delivered then Sim.stock_economy_delivered(Sim.company(s,owner),e.cargo or "passenger",e.units) end
         local town=sink and s.sites[sink.town]
         if town then
           local cargo=e.cargo or "passenger"

@@ -9,6 +9,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local settings={forbid_90=true} -- OpenTTD 16.0-RC1 pf.forbid_90_deg default.
   local upstream=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local Freight=dofile(upstream.."../rail_freight_kinds.lua")
+  local Quarter=dofile(upstream.."company_quarters_rc1.lua")
+  local HQStats=dofile(upstream.."../company_hq_stats.lua")({})
+  local Calendar=dofile(upstream.."stock_engine_calendar.lua")
   local Guide=dofile(upstream.."../rail_guideway_profiles.lua")
   local Collision=dofile(upstream.."rail_collision.lua")
   local OrderList=dofile(upstream.."rail_order_list.lua")
@@ -1924,6 +1927,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local whole,remainder=Roster.debit_fraction(c.stock_money_fraction or 0,fixed)
     c.cash,c.expense,c.month_exp,c.stock_money_fraction=
       c.cash-whole,c.expense+whole,c.month_exp+whole,remainder
+    Quarter.money(c,"rail_run",whole)
+    local v=s.stock_rail_fleet and s.stock_rail_fleet.units[run.fleet_id]
+    local market=s.stock_bus_market
+    if v then
+      local year=market and Calendar.ymd(market.epoch+s.day) or 1950+math.floor(s.day/360)
+      HQStats.operating(v,year,-whole)
+    end
     ledger.charged_ticks,ledger.expense,ledger.fixed,ledger.last_day=
       ledger.charged_ticks+pending,ledger.expense+whole,ledger.fixed+fixed,s.day
     return whole,fixed,pending

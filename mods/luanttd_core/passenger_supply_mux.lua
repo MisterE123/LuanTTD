@@ -36,7 +36,7 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
   end
   local function matches(batch,e)
     local prior=batch.events[batch.by_tile[tile_key(e)]]
-    return prior and prior.amount==e.amount and prior.town==e.town
+    return prior and prior.amount==e.amount and prior.town==e.town and prior.source==e.source and prior.source_type==e.source_type and prior.area==e.area
   end
 
   -- RunTileLoop can visit many producing houses on one absolute tick.
@@ -47,7 +47,7 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
     assert(type(tick)=="number" and tick>=0 and tick==math.floor(tick)
       and type(amount)=="number" and amount>0 and amount==math.floor(amount),"Invalid stock house event")
     local g=ledger(s)
-    local e={tick=tick,x=x,y=y,amount=amount,town=house.town}
+    local e={tick=tick,x=x,y=y,amount=amount,town=house.town,source=house.source,source_type=house.source_type,area=house.area}
     if g.receipt and tick<=g.receipt.tick then
       if tick==g.receipt.tick then
         assert(matches(g.receipt,e),"Conflicting or late house event at an already consumed tick")
@@ -95,7 +95,7 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
     local function add(kind,st,tiles)
       local key=station_key(ctx,kind,st)
       local c=view_geometry(st,key,tiles,ctx)
-      if not Catchment.contains(c,e.x,e.y) then return end
+      if not Catchment.covers_area(c,e.x,e.y,e.area,e.area) then return end
       assert(not sinks[key],"Duplicate global StationID; mount a shared station as a single queue")
       local town=ctx.station_town and ctx.station_town(kind,st) or st.town
       if town==nil and kind=="road" then town=st.site end
@@ -136,32 +136,34 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
   -- Exact source packet merge for newly produced manual-distribution cargo.
   -- Origin initially refers to the sink's local station ID because its
   -- loading runtime owns that queue; canonical IDs only order competition.
-  local function generated(st,units,town)
+  local function generated(st,units,e)
+    local source=e.source or e.town
+    local kind=e.source_type or "town"
     local q=st.stock.passenger
     if not q then q={};st.stock.passenger=q end
     for i=#q,1,-1 do
       local p=q[i]
       if p.origin_station==st.id and p.origin_tile==nil and p.age==0 and
-          (p.source_type==nil or p.source_type=="town") and p.source==town and p.units+units<=65535 then
-        p.units,p.source_type=p.units+units,"town"
+          (p.source_type or "town")==kind and p.source==source and p.units+units<=65535 then
+        p.units,p.source_type=p.units+units,kind
         return
       end
     end
-    q[#q+1]={units=units,source=town,source_type="town",origin_station=st.id,age=0}
+    q[#q+1]={units=units,source=source,source_type=kind,origin_station=st.id,age=0}
   end
 
   local function consume_event(s,service,e,ctx,result)
     local candidates,covers,sinks,goods=gather(s,service,e,ctx)
     local allotment=Catchment.allocate(e.amount,candidates,covers,"passenger",e.x,e.y,
       function(st) return goods[st.id] end,{select_goods=ctx.select_goods,
-        neutral_owner=ctx.neutral_owner,town_rights=ctx.town_rights})
+        neutral_owner=ctx.neutral_owner,town_rights=ctx.town_rights,area=e.area})
     local total=0
     for _,entry in ipairs(allotment) do
       local destination=sinks[entry.st.id]
       local st=destination.st
       local units=Packets.whole_units(st,entry.fixed)
       if units>0 then
-        generated(st,units,e.town)
+        generated(st,units,e)
         if destination.kind=="road" then RoadRating.generated(s,st,units)
         else StockRating.observe_waiting(st.passenger_rating_state,units) end
         total=total+units
