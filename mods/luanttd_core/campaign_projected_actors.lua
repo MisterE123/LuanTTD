@@ -20,7 +20,7 @@ return function(core,api,motion,models,airframes)
       local e=row.engine
       return "luanttd_core:vehicle_"..e,road_art.payload(e,models[e],row.loaded),row.yaw,row.pitch
     elseif row.mode=="tram" then
-      return "luanttd_core:tram_preview_vehicle",nil,row.yaw
+      return "luanttd_core:tram_preview_vehicle",nil,row.yaw,row.pitch
     elseif row.mode=="ship" then
       local name=row.id=="coal" and (row.engine==212 and "stock_bakewell_cargo_ship" or "stock_yate_cargo_ship")
         or boats[row.engine or 206]

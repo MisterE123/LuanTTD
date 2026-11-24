@@ -248,10 +248,13 @@ return function(Sim,mod,s,cap)
       return false
     end
     local tram_motion=dofile(mod.."/road_motion_presentation.lua")(dofile(mod.."/road_lanes.lua"))
+    local pose_source=dofile(mod.."/road_source_pose.lua")(Sim,tram_motion)
     function N.tram.pose(frame)
-      local x,z=tram_motion.xy(frame[1],frame[2],frame[5])
-      local _,level=tile(frame[4])
-      return {x=x,y=level+.512,z=z},tram_motion.yaw(frame[3])
+      return pose_source.sample(s,{frame},1,1,function(id,x,z)
+        local h=net.surface_at(s,id,x,z)
+        local _,level=tile(id)
+        return (h or level)+.512
+      end)
     end
     Clock=function() clock(interval) end
   end

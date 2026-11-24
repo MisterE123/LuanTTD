@@ -373,6 +373,11 @@ return function(api)
   end
   local tramway,tram_stops,tram_depots={},{},{}
   if api.tram_tools then
+    tramway.grade={}
+    for _,slope in ipairs{3,6,9,12} do
+      local asset="tramway_grade_"..slope
+      tramway.grade[slope]=architecture(asset,asset,"tram_palette")
+    end
     for mask=1,15 do
       local asset="tramway_"..mask
       tramway[mask]=architecture(asset,asset,"tram_palette")
@@ -509,6 +514,16 @@ return function(api)
       return Sim.road_surface(S,id)
     end
   end
+  if api.tram_tools and terrain then
+    local sampler=dofile(modpath.."/openttd/tram_grade_surface.lua")(
+      dofile(modpath.."/openttd/road_slope.lua"),api.slope)
+    function R.tram_surface(id)
+      local t=S.tiles[id]
+      if not t or not t.tram then return end
+      local shape,base=terrain.tile(id)
+      return sampler.surface(shape,base,t.tram.tram_bits,Sim.road_bits(S,id))
+    end
+  end
   function R.platform(st)
     local at=st and (st.bus_tile or (st.stop_type~="truck" and st.tile))
     local t=at and S.tiles[at]
@@ -573,7 +588,7 @@ return function(api)
     local t=S.tiles[id]
     return t and not t.stock_void and (t.coastal_water or t.water_class=="river" or
       (not t.site and not t.house and not t.build and t.terrain~="water") or road_surface(id)~=nil or
-      t.rail_depot_dir~=nil)
+      t.rail_depot_dir~=nil or t.tram~=nil)
   end
   function R.surface(id,x,z)
     local t=S.tiles[id]
@@ -583,6 +598,10 @@ return function(api)
       if level then return level+.5 end
     end
     local slope,base=road_surface(id)
+    if slope==nil and R.tram_surface then
+      local track=R.tram_surface(id)
+      if track then slope,base=track.grade,track.base end
+    end
     if slope then
       local u,v=Sim.xy(id)
       return base+.5+api.slope.surface((x-2*u+.5)/2,(z-2*v+.5)/2,slope)
@@ -876,6 +895,33 @@ return function(api)
       return "air"
     end
   end
+  if api.tram_tools and terrain then
+    function R.tram_node(t,id,x,y,z,grade)
+      local p=t.tram
+      local track=R.tram_surface and R.tram_surface(id)
+      local _,ground=terrain.tile(id)
+      local level=track and track.base or ground
+      local slope=track and track.grade or 0
+      if x%2==0 and z%2==0 then
+        if slope~=0 and y==level+2 then return tramway.grade[slope] end
+        if slope==0 and y==level+1 then
+          if p.kind=="depot" then return tram_depots[p.dir] end
+          if p.kind=="drive_stop" then return tram_stops[p.dir] end
+          return tramway[p.tram_bits]
+        end
+      end
+      if not grade then
+        if slope~=0 then return source_road_node(t,id,x,y,z,slope,level,track.foundation) end
+        if y<level then return track and track.foundation~="none" and retaining or gnames.grass[t.variant] end
+        if y==level then
+          local a=x%2+2*(1-z%2)
+          if track and track.foundation~="none" then return road_foundation_flat[p.tram_bits][a] end
+          return infrastructure["road_"..p.tram_bits.."_plain"][a]
+        end
+        return "air"
+      end
+    end
+  end
   local function coastal_node(t,id,x,y,z)
     if t.stock_void then return y==0 and ocean(x,z) or "air" end
     if t.ship and t.ship.water_ground and t.ship.water_class=="sea" then return ocean(x,z) end
@@ -1123,24 +1169,9 @@ return function(api)
       end
     end
     local grade,base,foundation=road_surface(id)
-    if api.tram_tools and t.tram then
-      local p=t.tram
-      local _,level=terrain.tile(id)
-      if x%2==0 and z%2==0 then
-        if y==level+1 then
-          if p.kind=="depot" then return tram_depots[p.dir] end
-          if p.kind=="drive_stop" then return tram_stops[p.dir] end
-          return tramway[p.tram_bits]
-        end
-      end
-      if not grade then
-        if y<level then return gnames.grass[t.variant] end
-        if y==level then
-          local a=x%2+2*(1-z%2)
-          return infrastructure["road_"..p.tram_bits.."_plain"][a]
-        end
-        return "air"
-      end
+    if t.tram and R.tram_node then
+      local asset=R.tram_node(t,id,x,y,z,grade)
+      if asset then return asset end
     end
     if y==(base or 0)+1 and x%2==0 and z%2==0 then
       if t.road_waypoint_id then

@@ -75,6 +75,14 @@ local function main(x,z,level)
     assert(ok,why)
     ui.build_world(player,tile)
   end
+  local function drag(first,last)
+    local function hit(tile)
+      local a,b=Sim.xy(tile)
+      return {x=a*2+.5,z=b*2+.5}
+    end
+    assert(ui.begin_autoroad(player,first,hit(first)))
+    ui.end_autoroad(player,last,hit(last))
+  end
   local function advance(arrival)
     api.interest.refresh({{get_pos=function() return {x=2*x,z=2*z} end}})
     for _=1,400 do
@@ -124,9 +132,9 @@ local function main(x,z,level)
 
   select_("tram_depot");click(depot)
   assert(S.tiles[depot].tram and S.tiles[depot].tram.kind=="depot")
-  select_("tram_track");click(id(x-2,z));click(id(x,z))
-  select_("tram_bit");ui.rotate_tram(player);ui.rotate_tram(player);click(id(x-2,z))
-  select_("tram_track");click(id(x,z-3));click(id(x,z+4))
+  select_("tram_track");drag(id(x-2,z),id(x,z))
+  assert(S.tiles[id(x-2,z)].tram.tram_bits==10)
+  select_("tram_track");drag(id(x,z-3),id(x,z+4))
   select_("tram_stop");ui.rotate_tram(player);click(a);click(b)
   for _,tile in ipairs({a,b}) do assert(S.tiles[tile].tram.kind=="drive_stop") end
 

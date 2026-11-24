@@ -2,6 +2,8 @@
 return function(api,Run,Pose,RoadVisual)
   local V={}
   local S=api.s
+  local mod=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local source=dofile(mod.."/road_source_pose.lua")(api.Sim,Pose)
   local ref,last_yaw
   local function remove()
     if ref and ref:get_pos() then ref:remove() end
@@ -13,10 +15,12 @@ return function(api,Run,Pose,RoadVisual)
     if not pilot then remove();return end
     local f=Run.frame(pilot)
     if not f then remove();return end
-    local x,z=Pose.xy(f[1],f[2],f[5])
-    local _,level=api.terrain.tile(f[4])
-    local target=RoadVisual.nose_yaw(Pose.yaw(f[3]))
-    local p={x=x,y=level+.512,z=z}
+    local p,heading,pitch=source.sample(S,{f},1,1,function(id,x,z)
+      local h=api.tram and api.tram.network.surface_at(S,id,x,z)
+      local _,level=api.terrain.tile(id)
+      return (h or level)+.512
+    end)
+    local target=RoadVisual.nose_yaw(heading)
     if api.vehicle_ui then api.vehicle_ui.track("tram",1,p) end
     if api.interest and not api.interest.near(p,ref~=nil) then remove();return end
     if not ref or not ref:get_pos() then
@@ -27,7 +31,7 @@ return function(api,Run,Pose,RoadVisual)
     if ref then
       ref:move_to(p,true)
       last_yaw=RoadVisual.turn(last_yaw,target,math.min(1.0,dt*9))
-      ref:set_rotation({x=0,y=last_yaw,z=0})
+      ref:set_rotation({x=pitch or 0,y=last_yaw,z=0})
     end
   end
   return V

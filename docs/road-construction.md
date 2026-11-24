@@ -30,7 +30,10 @@ from OpenTTD, not a feature switch.
 
 Open **Roadworks → Road Options → Electric Tramways**. Click or drag
 with **Lay tramway**. Dragging follows one axis and attaches an outer
-half only if compatible tram track is already there. **Remove tram
+half only if compatible tram track is already there. Plain track follows
+legal OpenTTD inclines and shares a foundation with any parallel road.
+The rails and overhead wires follow the slope; streetcars tilt as they
+climb and descend. Tram depots and platforms still need flat ground. **Remove tram
 track** leaves shared pavement,
 town ownership and one-way signs in place. It skips another company's
 track and track occupied by traffic or protected by the active test

@@ -3,7 +3,8 @@
 return function(api,N,Run)
   local Sim,S=api.Sim,api.s
   local errors={
-    TRAM_NEEDS_FLAT_CLEARANCE="The pilot needs unobstructed flat tiles.",
+    TRAM_NEEDS_FLAT_CLEARANCE="A tram platform or depot needs flat ground.",
+    TRAM_SITE_CLEARANCE="Choose a clear site away from overhead or underground structures.",
     PROTECTED_TILE="The tile is protected or has incompatible infrastructure.",
     VEHICLE_IN_THE_WAY="A vehicle occupies that tile.",
     ALREADY_BUILT="Those tram pieces are already built.",

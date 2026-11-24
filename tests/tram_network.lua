@@ -50,11 +50,12 @@ assert(B.station_area(f,"bus").tile==f and B.station_area(f,"truck")==nil)
 assert(B.tile(at(10))==nil and B.can_build_tram({owner=owner},at(10),1))
 s.tiles[at(10)].house=1
 fails("PROTECTED_TILE",N.plan,s,owner,"road",{at(10)},3)
-fails("TRAM_NEEDS_FLAT_CLEARANCE",N.plan,s,owner,"road",{at(29)},10)
+assert(N.construct(s,owner,"road",{at(29)},10))
+assert(N.surface(s,at(29)).grade==3 and N.surface(s,at(29)).base==0)
 s.bridge_above={[at(12)]=true}
 s.tunnel_below={[at(13)]=true}
-fails("TRAM_NEEDS_FLAT_CLEARANCE",N.plan,s,owner,"road",{at(12)},10)
-fails("TRAM_NEEDS_FLAT_CLEARANCE",N.plan,s,owner,"road",{at(13)},10)
+fails("TRAM_SITE_CLEARANCE",N.plan,s,owner,"road",{at(12)},10)
+fails("TRAM_SITE_CLEARANCE",N.plan,s,owner,"road",{at(13)},10)
 s.tiles[at(14)].terrain="water"
 fails("PROTECTED_TILE",N.plan,s,owner,"road",{at(14)},10)
 local v={tile=a,owner=owner,tram=true,roadtype=1,compatible={[1]=true},bus=true,display_max_speed=112}

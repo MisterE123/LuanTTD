@@ -120,9 +120,9 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     local run=R.tram.run.current(s)
     local f=run and R.tram.run.frame(run)
     if f then
-      local pos,yaw=R.tram.pose(f)
+      local pos,yaw,pitch=R.tram.pose(f)
       if point(pos) then
-        add("tram",1,{owner=run.owner,tile=f[4],frame={f[1],f[2],f[3],f[4],f[5]},pos=pos,yaw=yaw})
+        add("tram",1,{owner=run.owner,tile=f[4],frame={f[1],f[2],f[3],f[4],f[5]},pos=pos,yaw=yaw,pitch=pitch})
       end
     end
   end

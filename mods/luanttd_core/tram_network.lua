@@ -1,9 +1,14 @@
--- Bridge the saved shared-corner world to the OpenTTD ELRL construction and
--- traversal rules. This slice deliberately accepts only flat, at-grade rail.
--- Rail and road bits/owners are independent even where they share a tile.
+-- Bridge the saved shared-corner world to OpenTTD ELRL construction and
+-- traversal. Plain tracks use stock grades; terminals remain flat here.
+-- Tram and road bits/owners are independent even where they share a tile.
 return function(Sim,T,Terrain)
   local N={}
   local ELRL,ROAD=1,0
+  local path=debug and debug.getinfo(1,"S").source
+  local mod=path and path:match("^@(.*/)tram_network%.lua$")
+  mod=mod or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+  local Grade=dofile(mod.."openttd/tram_grade_surface.lua")(
+    dofile(mod.."openttd/road_slope.lua"),dofile(mod.."openttd/slope.lua"))
   local function shape(s,id)
     if not s.corner_grid or not s.tiles[id] then return end
     local x,z=Sim.xy(id)
@@ -14,8 +19,8 @@ return function(Sim,T,Terrain)
     if not t then return end
     local p=t.tram
     local slope,base=shape(s,id)
-    local out={slope=slope,base=base,
-      overhead=s.bridge_above and s.bridge_above[id]~=nil or false}
+    local out={slope=slope,base=base,roadworks=t.roadworks,
+      overhead=(s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id])~=nil}
     if p then
       for k,v in pairs(p) do out[k]=v end
     end
@@ -35,12 +40,12 @@ return function(Sim,T,Terrain)
     return out
   end
   local function playable(s,id,t)
-    return t and t.slope==0 and not t.overhead and
+    return t and t.slope~=nil and not t.overhead and
       not (Sim.rail_span_protected and Sim.rail_span_protected(s,id)) and
       not (s.tunnel_below and s.tunnel_below[id])
   end
-  local function options(owner)
-    return {owner=owner,build_on_slopes=false,no_water=true,drive_through=true,
+  local function options(owner,allow_slopes)
+    return {owner=owner,build_on_slopes=allow_slopes==true,no_water=true,drive_through=true,
       stop_type="bus",clear_quote=function(t)
         if t.kind=="clear" then return 0 end
         return nil,"PROTECTED_TILE"
@@ -48,11 +53,13 @@ return function(Sim,T,Terrain)
   end
   local function propose(s,owner,kind,id,arg,occupancy)
     local t=load(s,id)
-    if not playable(s,id,t) then return nil,"TRAM_NEEDS_FLAT_CLEARANCE" end
+    if not playable(s,id,t) then return nil,"TRAM_SITE_CLEARANCE" end
+    if kind~="road" and t.slope~=0 then return nil,"TRAM_NEEDS_FLAT_CLEARANCE" end
     if occupancy and occupancy(id) then t.occupied=true end
     local p,why
     if kind=="road" and (t.kind=="road" or t.kind=="clear" or t.kind=="drive_stop") then
-      p,why=T.lay(t,arg,ELRL,options(owner))
+      local policy=s.stock_road_town_policy or {}
+      p,why=T.lay(t,arg,ELRL,options(owner,policy.build_on_slopes~=false))
     elseif kind=="depot" and (t.kind=="clear" or t.kind=="depot") then
       p,why=T.depot(t,arg,ELRL,options(owner))
     elseif kind=="drive_stop" and (t.kind=="clear" or t.kind=="road") then
@@ -196,6 +203,17 @@ return function(Sim,T,Terrain)
   function N.apply_remove(s,owner,plan)
     return assert(removal).apply(s,owner,plan)
   end
+  function N.surface(s,id)
+    local t=load(s,id)
+    if not t or not t.tramtype then return end
+    return Grade.surface(t.slope,t.base,t.tram_bits,t.road_bits)
+  end
+  function N.surface_at(s,id,x,z)
+    local p=N.surface(s,id)
+    if not p then return end
+    local u,v=Sim.xy(id)
+    return Grade.at(p,(x-2*u+.5)/2,(z-2*v+.5)/2)
+  end
   function N.board(s,occupancy)
     local B={xy=Sim.xy,tile_at=Sim.id}
     function B.tile(id)
@@ -204,13 +222,29 @@ return function(Sim,T,Terrain)
     end
     function B.tram_bits(id) return T.effective_bits(B.tile(id),false) end
     function B.adjacent(id,d) return Sim.adjacent(id,4-d) end
-    function B.center_z(id)
-      local _,height=shape(s,id)
-      return height and height*8
+    local surfaces,topology,terrain_revision
+    function B.surface(id)
+      local revision=s.corner_grid and s.corner_grid.revision
+      if not surfaces or topology~=s.topology or terrain_revision~=revision then
+        surfaces,topology,terrain_revision={},s.topology,revision
+      end
+      if surfaces[id]==nil then surfaces[id]=N.surface(s,id) or false end
+      return surfaces[id] or nil
     end
-    function B.edge_available(from,to)
+    function B.center_z(id)
+      local p=B.surface(id)
+      if p then return Grade.at(p,.5,.5)*8 end
+      local _,base=shape(s,id)
+      return base and base*8
+    end
+    function B.edge_available(from,to,dir)
       local a,b=B.tile(from),B.tile(to)
-      return playable(s,from,a) and playable(s,to,b) and a.base==b.base or false
+      if not playable(s,from,a) or not playable(s,to,b) then return false end
+      local left,right=B.surface(from),B.surface(to)
+      if not left or not right then return false end
+      if dir~=nil then return Grade.match(left,right,4-dir) end
+      for d=1,4 do if Sim.adjacent(from,d)==to then return Grade.match(left,right,d) end end
+      return false
     end
     function B.stop_continues(a,b)
       local t,u=B.tile(a),B.tile(b)

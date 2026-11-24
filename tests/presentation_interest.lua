@@ -36,11 +36,12 @@ local actor={}
 local Run={current=function() return actor end,
   advance=function(_,ticks) time=time+ticks end,
   frame=function(a) assert(a==actor);return {time,0,0,42} end}
-local Pose={xy=function(x,z)return x,z end,yaw=function()return 0 end}
+local Pose={at=function(frames) return frames[1][1],frames[1][2],0 end}
 local Visual={nose_yaw=function()return 0 end,turn=function()return 0 end}
 local state={speed=1}
 local V=dofile("mods/luanttd_core/tram_preview_view.lua")({
-  interest=interest,s=state,terrain={tile=function() return 0,1 end}},Run,Pose,Visual)
+  interest=interest,s=state,Sim={id=function()return 42 end},
+  terrain={tile=function() return 0,1 end}},Run,Pose,Visual)
 local clock=dofile("mods/luanttd_core/aux_transport_clock.lua")(state,74,Run.current,
   function(n) Run.advance(state,n) end)
 local function step(dt,online) clock(dt); V.step(dt,online) end

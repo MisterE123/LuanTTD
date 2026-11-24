@@ -33,7 +33,8 @@ return function(Sim,s,oneway,Bank,host)
       if not q then
         local messages={TRAM_FACILITY_PROTECTED="Use the Bulldozer to review the platform or depot.",
           NO_TRAM="No electric tram track was selected.",
-          TRAM_NEEDS_FLAT_CLEARANCE="Choose a flat tile without an overhead structure.",
+          TRAM_NEEDS_FLAT_CLEARANCE="A tram platform or depot needs flat ground.",
+          TRAM_SITE_CLEARANCE="Choose a clear site away from overhead or underground structures.",
           PROTECTED_TILE="The requested tile has a protected structure.",
           ALREADY_BUILT="That tram track is already built.",NOT_ENOUGH_MONEY="Not enough cash."}
         return nil,messages[why] or Sim.road_removal_error(why)

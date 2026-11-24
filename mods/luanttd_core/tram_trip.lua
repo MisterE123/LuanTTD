@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Flat, non-articulated OpenTTD 14.1 tram trip adapter. YAPF chooses
+-- Non-articulated OpenTTD 14.1 tram trip adapter. YAPF chooses
 -- all routing and legal one-bit reversals; TramMotion owns pixels and
 -- the controller's long/short turn decisions. No map/vehicle mutation.
 return function(F,Cost,Search,Motion)
@@ -62,12 +62,18 @@ return function(F,Cost,Search,Motion)
       return nil,"terminal_required"
     end
     local height=board.center_z(first.tile)
-    for _,p in ipairs(trace) do
+    for i,p in ipairs(trace) do
       local t=board.tile(p.tile)
-      if not tram_type(vehicle,t) or (t.slope or 0)~=0 or board.center_z(p.tile)~=height then
-        return nil,"unsupported_surface"
-      end
+      if not tram_type(vehicle,t) then return nil,"unsupported_surface" end
       if p.td==nil or not F.has_trackdir(F.tile_trackdirs(t,true),p.td) then return nil,"illegal_trackdir" end
+      if board.surface then
+        if not board.surface(p.tile) then return nil,"unsupported_surface" end
+        local prev=trace[i-1]
+        if prev and prev.tile~=p.tile and
+            not board.edge_available(prev.tile,p.tile,F.exit_direction(prev.td),vehicle) then
+          return nil,"unsupported_surface"
+        end
+      elseif (t.slope or 0)~=0 or board.center_z(p.tile)~=height then return nil,"unsupported_surface" end
     end
     if depot(start) and first.td~=F.direction_trackdir(start.dir) then return nil,"wrong_depot_departure" end
     local v={direction=2*F.exit_direction(first.td)+1,tile=first.tile,

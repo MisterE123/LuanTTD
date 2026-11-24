@@ -34,6 +34,15 @@ mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >> "$game/mods/luanttd_core/init.lua"
 fixture=bridge_pier_render_native
 if [[ ${BAYLINE_NATIVE_BRIDGE_ROAD_CLEAR:-0} == 1 ]]; then fixture=bridge_road_clearance_native; fi
+ready_mark=BRIDGE_PIER_RENDER_NATIVE_READY
+view_mark=BRIDGE_PIER_VIEW
+views=(wood rail water)
+if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
+  fixture=tram_grade_render_native
+  ready_mark=TRAM_GRADE_NATIVE_READY
+  view_mark=TRAM_GRADE_NATIVE_VIEW
+  views=(tram)
+fi
 cat "tests/$fixture.lua" >> "$game/mods/luanttd_core/init.lua"
 # The terrain and companies in this graphics fixture are deliberately
 # seeded in the renderer's local world, not in the campaign worker.
@@ -61,7 +70,7 @@ water_wave_height = 2.0
 enable_dynamic_shadows = true
 enable_water_reflections = true
 EOF
-if [[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 ]]; then
+if [[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 || ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   # Keep this geometry screenshot readable in software-rendered CI.
   sed -i -e 's/enable_dynamic_shadows = true/enable_dynamic_shadows = false/' \
     -e 's/enable_water_reflections = true/enable_water_reflections = false/' "$out/client.conf"
@@ -93,21 +102,25 @@ luanti --go --address 127.0.0.1 --port "$port" --config "$out/client.conf" --nam
 client=$!
 pids+=("$client")
 for _ in {1..360}; do
-  if grep -q BRIDGE_PIER_RENDER_NATIVE_READY "$out/server.log" || ! kill -0 "${pids[1]}" 2>/dev/null; then break; fi
+  if grep -q "$ready_mark" "$out/server.log" || ! kill -0 "${pids[1]}" 2>/dev/null; then break; fi
   sleep .25
 done
-grep -q BRIDGE_PIER_RENDER_NATIVE_READY "$out/server.log" || { cat "$out/"{server,client}.log; exit 1; }
+grep -q "$ready_mark" "$out/server.log" || { cat "$out/"{server,client}.log; exit 1; }
 win=$(xdotool search --sync --onlyvisible --pid "$client"|tail -1)
 xdotool windowfocus --sync "$win"
 xdotool mousemove 650 430
 sleep 3
-for view in wood rail water; do
+for view in "${views[@]}"; do
   printf '%s\n' "$view" > "$out/world/pier-view.txt"
-  for _ in {1..25}; do grep -q "BRIDGE_PIER_VIEW $view" "$out/server.log" && break; sleep .2; done
-  grep -q "BRIDGE_PIER_VIEW $view" "$out/server.log"
+  for _ in {1..25}; do grep -q "$view_mark $view" "$out/server.log" && break; sleep .2; done
+  grep -q "$view_mark $view" "$out/server.log"
   sleep 2.5
   import -window root "$out/$view.png"
 done
 ! grep -Ei 'ERROR\[|could not load' "$out/client.log" "$out/server.log"
-echo "PASS: native submerged timber road and rail footings, dry slopes and animated ocean preserved: $out"
+if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
+  echo "PASS: native roadbed, rail, wire and moving tram conform to an uphill grade: $out"
+else
+  echo "PASS: native submerged timber road and rail footings, dry slopes and animated ocean preserved: $out"
+fi
 rm -rf -- "$out/games" "$out/cache"
