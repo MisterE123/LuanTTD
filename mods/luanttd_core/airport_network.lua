@@ -31,7 +31,7 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary)
     if not field or name=="oilrig" then return nil,"AIRPORT_TYPE_NOT_AVAILABLE" end
     if field.intro_year and Sim.date(s)<field.intro_year then
       local reasons={heliport="HELIPORT_NOT_INTRODUCED",helidepot="HELIDEPOT_NOT_INTRODUCED",helistation="HELISTATION_NOT_INTRODUCED",
-        metropolitan="METROPOLITAN_AIRPORT_NOT_INTRODUCED"}
+        metropolitan="METROPOLITAN_AIRPORT_NOT_INTRODUCED", commuter="COMMUTER_AIRPORT_NOT_INTRODUCED"}
       return nil,reasons[name] or "CITY_AIRPORT_NOT_INTRODUCED"
     end
     if not (s.corner_grid and origin and s.tiles[origin]) then return nil,"SELECT_AIRFIELD_ORIGIN" end

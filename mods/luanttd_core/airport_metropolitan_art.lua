@@ -1,6 +1,6 @@
 -- Shared stock tile graphics keep the same original City assets.
 -- Only the three Metropolitan-only roles require new meshes.
-return function(profile)
+return function(profile,layout)
   local A={}
   local art={
     [0]="city_airport_4_1", -- APT_APRON
@@ -26,14 +26,19 @@ return function(profile)
     [46]="metro_runway_5", -- APT_RUNWAY_5
     [52]="metro_radar_fence_ne", -- APT_RADAR_FENCE_NE
   }
+  if layout=="commuter" then
+    art[48]="commuter_apron_fence_ne"
+    art[47]="commuter_tower"
+    art[54]="commuter_helipad_2_fence_nw"
+  end
   local rows={}
   for _,t in ipairs(profile.tiles) do
     local x,z,role=unpack(t)
-    local asset=assert(art[role],"Unknown Metropolitan tile graphic")
+    local asset=assert(art[role],"Unknown stock airport tile graphic")
     -- The two ends of the arrival runway have different threshold numerals.
-    if asset=="city_airport_0_5" and x==5 then asset="city_airport_5_5" end
+    if asset=="city_airport_0_5" and x==profile.W-1 then asset="city_airport_5_5" end
     rows[z]=rows[z] or {}
-    rows[z][x]={asset=asset,atlas=asset:match("^metro_") and "metropolitan_airport_atlas" or "city_airport_atlas",role=role}
+    rows[z][x]={asset=asset,atlas=asset:match("^metro_") and "metropolitan_airport_atlas" or asset:match("^commuter_") and "commuter_airport_atlas" or "city_airport_atlas",role=role}
   end
   A.rows=rows
   function A.missing(files)

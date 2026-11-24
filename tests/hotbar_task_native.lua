@@ -22,8 +22,13 @@ core.show_formspec=function(n,form,def)
 end
 local function scan()
   local p=core.get_player_by_name("ToolbarQA")
-  if not (p and authority and authority.status()=="owned") then core.after(.22,scan);return end
-  local s=assert(OwnerCheckpoint and OwnerCheckpoint.read())
+  if p then marker("CLIENT_JOINED") end
+  if not (p and authority and authority.status()=="owned" and #world.hotbar_layout(p)>0) then
+    core.after(.22,scan);return
+  end
+  marker("WORKER_ADMITTED")
+  local s=OwnerCheckpoint and OwnerCheckpoint.read()
+  if not s then core.after(.22,scan);return end
   if not target then
     for z=5,Sim.H-5 do
       for x=5,Sim.W-5 do
@@ -44,6 +49,7 @@ local function scan()
     p:set_pos({x=2*target.x+.5-3.0,y=target.h+3.8,z=2*target.z+.5+4.0})
     p:set_look_horizontal(math.atan2(-3,-4));p:set_look_vertical(math.atan2(4.77,5))
   end
+  if world.target(p)==target.tile then marker("AIM_SETTLED") end
   local function slot(key)
     local inv=p:get_inventory()
     for i=1,10 do if inv:get_stack("main",i):get_name()=="luanttd_core:menu_"..key then return i end end

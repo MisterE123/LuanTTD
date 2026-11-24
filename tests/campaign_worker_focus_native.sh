@@ -214,7 +214,11 @@ if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
     await_log TRAM_FLEET_NATIVE_ROSTER
     sleep .5
     import -window root -resize 840x541 "$out/streetcar-roster.jpg"
-    xdotool mousemove "${LUANTTD_TRAM_ROW_X:-416}" "${LUANTTD_TRAM_ROW_Y:-283}" click 1; sleep .28
+    # At 1180×760 the rows are at y≈300/324. Verify the receipt before
+    # pressing Retire; a click outside the list leaves #1 selected.
+    xdotool mousemove "${LUANTTD_TRAM_ROW_X:-416}" "${LUANTTD_TRAM_ROW_Y:-324}" click 1
+    await_log 'TRAM_FLEET_NATIVE_ROW CHG:2'
+    sleep .28
     xdotool mousemove "${LUANTTD_TRAM_RETIRE_X:-763}" "${LUANTTD_TRAM_RETIRE_Y:-487}" click 1
     second=$(sed -n 's/.*TRAM_FLEET_NATIVE_REOPEN primary #[0-9]*, second #\([0-9]*\).*/\1/p' "$log" | tail -1)
     test -n "$second"

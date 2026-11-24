@@ -62,7 +62,12 @@ local function start()
       if not cfg or cfg.mesh~=string.format("bl_rail_ground_fence_%d_%d.obj",piece==0 and 4 or 7,profile) then
         core.after(.20,watch);return
       end
-      assert(not cfg.walkable and not cfg.pointable and cfg.use_texture_alpha=="clip")
+      local hull=dofile(core.get_modpath("luanttd_core").."/walk_collision_art.lua").box(
+        string.format("rail_ground_fence_%d_%d",piece==0 and 4 or 7,profile))
+      assert(cfg.walkable==not not hull and not cfg.pointable and cfg.use_texture_alpha=="clip")
+      if hull then
+        assert(cfg.collision_box.type=="fixed" and #cfg.collision_box.fixed==#hull)
+      end
       local track=core.get_node({x=here.x-1,y=here.y+(slope_test and 1 or 0),z=here.z}).name
       local expected=slope_test and "luanttd_core:stock_rail_grade_"..grade or "luanttd_core:stock_rail_1"
       assert(track==expected,"Fence must preserve the rail")

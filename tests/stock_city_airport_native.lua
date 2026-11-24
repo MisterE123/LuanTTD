@@ -20,9 +20,10 @@ local models={
 local model=assert(models[stock])
 local layout=core.settings:get("luanttd_qa_air_layout") or "city"
 local metro=layout=="metropolitan"
-local city=layout=="city" or metro
+local commuter=layout=="commuter"
+local city=layout=="city" or metro or commuter
 assert(city or ((stock==221 or stock==237 or stock==238 or stock==239) and layout=="country"))
-local w,d=city and 6 or 4,city and 6 or 3
+local w,d=commuter and 5 or city and 6 or 4,commuter and 4 or city and 6 or 3
 local airport_cost=w*d*600
 local function scene(viewer)
   assert((not city or api.capabilities.city_airport) and api.capabilities.air[stock],"Complete stock media required")
@@ -90,9 +91,10 @@ local function scene(viewer)
   viewer:set_look_horizontal(0)
   viewer:set_look_vertical(.55)
   assert(world.go_menu(viewer,"airfields"))
+  if metro or commuter then assert(world.go_menu(viewer,"fixed_wing_airports")) end
   local has=false
+  local expected=(metro or commuter) and "luanttd_core:menu_"..layout.."_airport_build" or nil
   for i,slot in ipairs(world.hotbar_layout(viewer)) do
-    local expected=metro and "luanttd_core:menu_metropolitan_airport_build" or nil
     if expected and viewer:get_inventory():get_stack("main",i):get_name()==expected or not expected and slot==4 then has=true end
   end
   assert(has,"The airport has no native hotbar item")
@@ -140,16 +142,16 @@ local function scene(viewer)
     core.after(.10,watch_flight)
   end
   local function observe()
-    if metro then
-      for z=0,5 do for x=0,5 do
+    if metro or commuter then
+      for z=0,d-1 do for x=0,w-1 do
         local node=core.get_node({x=2*(focus.x+x),y=focus.h+1,z=2*(focus.z+z)})
-        if node.name~=string.format("luanttd_core:metropolitan_airport_%d_%d",x,z) then
+        if node.name~=string.format("luanttd_core:%s_airport_%d_%d",layout,x,z) then
           core.after(.18,observe);return
         end
       end end
     end
     local paint=core.get_node({x=focus.x*2+(w-1)*2,y=focus.h+1,z=focus.z*2})
-    if paint.name~=("luanttd_core:"..(metro and "metropolitan" or city and "city" or "small").."_airport_"..(w-1).."_0") then core.after(.18,observe);return end
+    if paint.name~=("luanttd_core:"..((metro or commuter) and layout or city and "city" or "small").."_airport_"..(w-1).."_0") then core.after(.18,observe);return end
     local taxi=inspect({x=focus.x*2+5,y=focus.h+2,z=focus.z*2+5},12,function(pos,mesh)
       return pos.z>focus.z*2+2.6 and pos.y<focus.h+1.1 and mesh==ground
     end)

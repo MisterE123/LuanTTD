@@ -26,10 +26,18 @@ luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" -
 server=$!
 for _ in {1..200}; do grep -q 'listening on' "$out/server.log" && break; sleep .2; done
 grep -q 'listening on' "$out/server.log" || { cat "$out/server.log"; exit 1; }
+if [[ -z ${LUANTTD_NATIVE_MEDIA_CACHE:-} ]]; then
+  python3 tests/cache_luanti_game_media.py "$game" "$XDG_CACHE_HOME"
+fi
 luanti --go --address 127.0.0.1 --port "$port" --name ToolbarQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
 mark() {
- for _ in {1..100}; do grep -q "HOTBAR_TASK $1" "$out/server.log" && return; sleep .2; done
+ local limit=${2:-100}
+ for ((i=0;i<limit;i++)); do
+   grep -q "HOTBAR_TASK $1" "$out/server.log" && return
+   kill -0 "$server" "$client" 2>/dev/null || break
+   sleep .2
+ done
  tail -n 80 "$out/"{server,client}.log; return 1
 }
 select_slot() { xdotool keydown "$1"; sleep .21; xdotool keyup "$1"; sleep .36; }
@@ -44,6 +52,9 @@ choose() {
 }
 back(){ select_slot 1; xdotool mousedown 1; sleep .3; xdotool mouseup 1; sleep .48; }
 shot(){ if command -v import >/dev/null; then sleep .44; import -window root -quality 91 "$out/$1.jpg"; fi; }
+mark CLIENT_JOINED 350
+mark WORKER_ADMITTED 250
+mark AIM_SETTLED 180
 mark HOME_ROAD
 win=$(timeout 10 xdotool search --sync --onlyvisible --pid "$client" | tail -1)
 xdotool windowraise "$win" windowfocus --sync "$win"

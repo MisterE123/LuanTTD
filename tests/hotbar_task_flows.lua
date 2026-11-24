@@ -2,7 +2,7 @@ local factory="mods/luanttd_core/hotbar.lua"
 local function mount(H,picker,features)
   H.enable_structures(picker)
   if not features then return end
-  H.enable_trams(); H.enable_ships(); H.enable_airfields(true,true,true,{helidepot=true,helistation=true})
+  H.enable_trams(); H.enable_ships(); H.enable_airfields(true,true,true,{helidepot=true,helistation=true},{metropolitan=true,commuter=true})
   H.enable_freight(); H.enable_railworks(true,true,picker); H.enable_electric_rail()
   H.enable_rail_pair(); H.enable_rail_block(); H.enable_ship_coal(); H.enable_bay_termini(); H.enable_oneway()
   H.enable_rail_waypoints(); H.mount_guideway_picker(true,true)
@@ -67,6 +67,7 @@ for _,picker in ipairs({false,true}) do for _,features in ipairs({false,true}) d
     assert(p[9][1]=="section_railsignals" and p[10][1]=="section_railops")
     assert(find(live.railworks,"rail_autotrack") and find(live.railworks,"rail_platform"))
     assert(find(live.railworks,"service_depot") and find(live.harbor,"service_depot"))
+    assert(find(live.fixed_wing_airports,"commuter_airport_build") and find(live.fixed_wing_airports,"metropolitan_airport_build"))
     assert(find(live.airfields,"service_hangar") and find(live.road_stops,"road_stop_remove"))
     assert(find(live.harbor,"ship_dock") and find(live.harbor,"ship_depot"))
     assert(find(live.waterworks,"ship_remove"))

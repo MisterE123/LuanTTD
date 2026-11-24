@@ -16,6 +16,18 @@ core.show_formspec=function(owner,form,spec)
   end
   return native_paid_form(owner,form,spec)
 end
+if fleet_case then
+  core.register_on_player_receive_fields(function(_,form,fields)
+    if form=="luanttd_core:worker_fleet" then
+      for key,value in pairs(fields) do
+        if key:match("^f%d+_row$") and type(value)=="string" then
+          core.log("action","TRAM_FLEET_NATIVE_ROW "..value)
+        end
+      end
+    end
+    return false
+  end)
+end
 core.register_on_joinplayer(function(player)
   local owner=player:get_player_name()
   local path=core.get_worldpath()

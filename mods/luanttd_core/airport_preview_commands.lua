@@ -12,6 +12,7 @@ return function(api,Network,Run,Owned,Roster)
     HELIPORT_HELICOPTERS_ONLY="Only helicopters can serve this landing facility.",
     AIRPORT_HAS_NO_HANGAR="This Heliport has a landing pad but no hangar. Buy and order the helicopter from an airport hangar.",
     CITY_AIRFIELD_SERVICE_ALREADY_ASSIGNED="That City Airport already has an assigned flight.",
+    COMMUTER_AIRPORT_NOT_INTRODUCED="The Commuter Airport becomes available in 1983.",
     LARGER_AIRFIELD_REQUIRED="This aircraft needs a full-length runway at every stop.",
     AIRCRAFT_NOT_INTRODUCED="That aircraft has not entered service in this world yet.",
     AIRPORT_OUTSIDE_REGION="The complete airfield must fit inside the region.",

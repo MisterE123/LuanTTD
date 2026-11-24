@@ -371,19 +371,21 @@ return function(api)
     airport_media("country","small_airport",4,3)
     if api.capabilities and api.capabilities.city_airport then airport_media("city","city_airport",6,6) end
     local expanded=api.capabilities and api.capabilities.expansion_airports
-    if expanded and expanded.metropolitan then
-      local data=dofile(modpath.."/openttd/airport_expansion_data.lua").metropolitan
-      local stock=dofile(modpath.."/airport_metropolitan_art.lua")(data)
-      local metro={}
-      for z=0,data.H-1 do
-        metro[z]={}
-        for x=0,data.W-1 do
-          local art=stock.rows[z][x]
-          local node=("metropolitan_airport_%d_%d"):format(x,z)
-          metro[z][x]=architecture(node,art.asset,art.atlas,false,ga_hangar.walls[art.asset])
+    for _,layout in ipairs({"metropolitan","commuter"}) do
+      if expanded and expanded[layout] then
+        local data=dofile(modpath.."/openttd/airport_expansion_data.lua")[layout]
+        local stock=dofile(modpath.."/airport_metropolitan_art.lua")(data,layout)
+        local nodes={}
+        for z=0,data.H-1 do
+          nodes[z]={}
+          for x=0,data.W-1 do
+            local art=stock.rows[z][x]
+            local node=("%s_airport_%d_%d"):format(layout,x,z)
+            nodes[z][x]=architecture(node,art.asset,art.atlas,false,ga_hangar.walls[art.asset])
+          end
         end
+        airfield_nodes[layout]=nodes
       end
-      airfield_nodes.metropolitan=metro
     end
     if api.capabilities and api.capabilities.heliport then airport_media("heliport","heliport",1,1) end
     local rotary=api.capabilities and api.capabilities.ground_rotary

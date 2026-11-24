@@ -1,6 +1,6 @@
 # Metropolitan Airport
 
-**Airfields → Build Metropolitan Airport** is available from 1980. The
+**Airfields → Metro & Commuter Airports → Build Metropolitan Airport** is available from 1980. The
 footprint, terminal order, runway reservations, and hangar use the
 OpenTTD 16.0-RC1 source tables. The 6×6 terminal has a radius-six catchment
 and separate arrival and departure runways. An arriving aircraft must

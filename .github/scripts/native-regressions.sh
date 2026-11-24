@@ -122,6 +122,7 @@ case "${1:-}" in
   native-map-art)
     export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/cache"
     python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
+    LUANTTD_QA_AIR_LAYOUT=commuter LUANTTD_QA_AIR_YEAR=1985 LUANTTD_QA_AIRFRAME=237 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
     LUANTTD_QA_AIR_LAYOUT=metropolitan LUANTTD_QA_AIR_YEAR=1985 LUANTTD_QA_AIRFRAME=222 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
     LUANTTD_QA_AIR_LAYOUT=heliport LUANTTD_QA_AIR_YEAR=1963 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
     LUANTTD_QA_AIR_LAYOUT=ground_rotary LUANTTD_QA_AIR_YEAR=1980 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
