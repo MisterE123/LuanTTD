@@ -18,6 +18,9 @@ for i=1,4096 do
   s.tiles[i]={terrain=water and "water" or "grass",variant=1,h=water and 0 or 1,
     water_class=water and "sea" or nil,coastal_water=coast and (x==12 or x==25 or x==30) or nil}
 end
+if coast then
+  s.tiles[id(12,8)].wood={class=4,ground=3,water_class="sea",count=3,growth=3,type=7,density=3}
+end
 s.road_stock_clock,s.road_economy=true,true
 s.speed=0
 Sim.company(s,owner).cash=1000000
@@ -34,7 +37,7 @@ local function coastal(view)
   local t=view.terrain(12,8)
   if not t then return end
   if coast_run=="preview" then
-    assert(t.surface.coastal_water==true and t.ground=="water")
+    assert(t.surface.coastal_water==true and t.ground=="water" and t.surface.wood.count==3)
     local q,why,pending=Build.preview(owner,"road",shore,core.get_us_time())
     if pending then return end
     assert(q,why);assert(#q.tiles==9 and q.cost>240)
@@ -53,7 +56,7 @@ local function coastal(view)
       assert(not ok and tostring(why):find("bridge over open water",1,true),why)
       local state=assert(cp.read())
       assert(state.companies[owner].cash==1000000-quote.cost)
-      assert(state.tiles[id(12,8)].build=="road" and not state.tiles[id(12,8)].coastal_water)
+      assert(state.tiles[id(12,8)].build=="road" and not state.tiles[id(12,8)].coastal_water and not state.tiles[id(12,8)].wood)
       assert(state.tiles[id(11,8)].terrain=="water" and not state.tiles[id(11,8)].build)
       coast_run="bridge_placing"
       assert(Build.commit(owner,"transport",bridge,function(ok,note,prior,result)
@@ -73,7 +76,7 @@ local function coastal(view)
     assert(state.companies[owner].cash==1000000-quote.cost-bridge_quote.cost)
     assert(state.tiles[a].road_bridge_id==state.tiles[b].road_bridge_id)
     assert(state.bridge_above[middle] and state.tiles[middle].terrain=="water")
-    core.log("action","ROAD_PLACEMENT_NATIVE_PASS mode=coast bend and bank-to-bank bridge: priced receipts, projection, and saved state match; real sea rejected")
+    core.log("action","ROAD_PLACEMENT_NATIVE_PASS mode=coast: wooded shore bend and bank-to-bank bridge; priced receipts, projection, and saved state match; real sea rejected")
     core.request_shutdown("Coast road and bridge verified.",false,0)
   end
 end

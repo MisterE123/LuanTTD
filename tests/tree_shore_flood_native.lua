@@ -4,6 +4,7 @@ local Terrain=dofile(mod.."/openttd/terrain.lua")
 local Flood=dofile(mod.."/openttd/water_flood.lua")
 local Coast=dofile(mod.."/water_flood_world.lua")(Sim,Terrain,Flood)
 local id,x,z,base,slope,wet,done
+local road=core.settings:get_bool("luanttd_coastal_road_trees_qa",false)
 local function node(px,y,pz)
   return core.get_node({x=2*x+px,y=y,z=2*z+pz}).name
 end
@@ -55,6 +56,33 @@ local function run()
     p:set_look_vertical(math.atan2(-d.y,math.sqrt(d.x*d.x+d.z*d.z)))
   end
   local shore=("luanttd_core:stock_shore_%d_%d"):format(slope,S.tiles[id].variant)
+  if road and not wet and node(0,base+1,0)==shore and has_stem() then
+    wet=true
+    local name=p:get_player_name()
+    local cash=Sim.company(S,name).cash
+    local C=dofile(mod.."/campaign_road_construction.lua")(Sim,S)
+    local request={tool="drag",first=id,last=id,start_half=false,end_half=true}
+    local q,why
+    for axis=0,1 do
+      request.axis=axis
+      q,why=C.quote(name,request)
+      if q then break end
+    end
+    assert(q,why)
+    core.log("action","NATIVE COAST FOREST BEFORE")
+    core.after(4,function()
+      local ok,note,dirty=C.commit(name,request,q,true)
+      assert(ok,note)
+      assert(S.tiles[id].build=="road" and not S.tiles[id].wood and not S.tiles[id].coastal_water)
+      assert(Sim.company(S,name).cash==cash-q.cost)
+      render.update(dirty)
+      core.after(1,function()
+        assert(not has_stem() and node(0,base+1,0)~=shore)
+        core.log("action","PASS NATIVE COAST ROAD TREES: priced construction replaces the woodland with pavement")
+      end)
+    end)
+    return
+  end
   if not wet and node(0,base+1,0)==shore and has_stem() then
     wet=true
     core.log("action","NATIVE SHORE GROVE WET: shore mesh and original stems present")

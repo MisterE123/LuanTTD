@@ -20,6 +20,11 @@ if [[ ${LUANTTD_QA_PLANT_TREES:-0} == 1 ]]; then
   fixture=tests/tree_plant_native.lua
   marker='PASS NATIVE TREE PLANT'
 fi
+if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 2 ]]; then
+  seed=1751
+  fixture=tests/tree_shore_flood_native.lua
+  marker='PASS NATIVE COAST ROAD TREES'
+fi
 if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 ]]; then
   seed=1751
   fixture=tests/tree_shore_flood_native.lua
@@ -72,7 +77,7 @@ game="$out/games/luanttd"
 mkdir -p "$game" "$out/home" "$out/cache" "$out/world"
 cp "$src/game.conf" "$game/"
 cp -al "$src/mods" "$game/" 2>/dev/null || cp -a "$src/mods" "$game/"
-if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 1 || ${LUANTTD_QA_MULTICOAST_RAIL:-0} == 1 ]]; then
+if [[ ${LUANTTD_QA_SHORE_TREES:-0} =~ ^[12]$ || ${LUANTTD_QA_MULTICOAST_RAIL:-0} == 1 ]]; then
   printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 fi
 install -m 644 "$src/mods/luanttd_core/init.lua" "$out/init"
@@ -83,6 +88,9 @@ display=${BAYLINE_NATIVE_DISPLAY:-199}
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\nbayline_seed = %s\nluanttd_qa_steel_layout = %s\n' \
   "$port" "$seed" "${LUANTTD_QA_STEEL_LAYOUT:-1}" >"$out/server.conf"
+if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 2 ]]; then
+  printf 'luanttd_coastal_road_trees_qa = true\n' >>"$out/server.conf"
+fi
 printf 'luanttd_qa_rail_ground = %s\n' "${LUANTTD_QA_RAIL_GROUND:-0}" >>"$out/server.conf"
 if [[ ${LUANTTD_QA_ROADSIDE:-0} == 1 ]]; then
   printf 'bayline_generated_map_width = 128\nbayline_generated_map_depth = 128\nbayline_generated_relief = 0\nbayline_generated_coasts = 0\nbayline_generated_towns = 3\n' >>"$out/server.conf"
@@ -102,6 +110,16 @@ for _ in {1..180}; do grep -q 'listening on' "$out/server.log" && break; sleep .
 grep -q 'listening on' "$out/server.log" || { cat "$out/server.log"; exit 1; }
 luanti --go --address 127.0.0.1 --port "$port" --name SteelReview --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
+if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 2 ]]; then
+  for _ in {1..235}; do grep -q 'NATIVE COAST FOREST BEFORE' "$out/server.log" && break; sleep .25; done
+  grep -q 'NATIVE COAST FOREST BEFORE' "$out/server.log"
+  sleep 1
+  import -window root -quality 91 "$out/coast-road-before.jpg"
+  for _ in {1..100}; do grep -q "$marker" "$out/server.log" && break; sleep .25; done
+  grep -q "$marker" "$out/server.log"
+  sleep .8
+  import -window root -quality 91 "$out/coast-road-after.jpg"
+fi
 if [[ ${LUANTTD_QA_OWNED_LAND:-0} == 1 ]]; then
   wait_land() {
     local pattern=$1

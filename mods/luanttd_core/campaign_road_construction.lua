@@ -148,7 +148,7 @@ return function(Sim,s,oneway,Bank,host)
       for _,id in ipairs(keys) do parts[#parts+1]="town:"..id..":"..q.ratings[id] end
     end
     if q.unfunded then parts[#parts+1]="unfunded:"..tostring(q.first_unfunded) end
-    return {tiles=ids,cost=q.cost,topology=s.topology,terrain=s.corner_grid and s.corner_grid.revision,stopped_at=q.stopped_at,ticket=table.concat(parts,"/")}
+    return {tiles=ids,cost=q.cost,topology=s.topology,terrain=s.corner_grid and s.corner_grid.revision,stopped_at=q.stopped_at,stop_reason=q.stop_reason,ticket=table.concat(parts,"/")}
   end
   function M.quote(player,request)
     local q,why=plan(player,request)
@@ -210,7 +210,7 @@ return function(Sim,s,oneway,Bank,host)
     -- otherwise identical direct action.
     if not (direct and published==nil) then
       if type(published)~="table" or published.cost~=current.cost or published.ticket~=current.ticket
-        or published.stopped_at~=current.stopped_at or (not direct and
+        or published.stopped_at~=current.stopped_at or published.stop_reason~=current.stop_reason or (not direct and
           (published.topology~=current.topology or published.terrain~=current.terrain)) then
         return false,"ROAD_QUOTE_CHANGED"
       end

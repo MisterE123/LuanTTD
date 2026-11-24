@@ -193,6 +193,19 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     return quote(s,W.board(s),owner,id,x,z,occupied,false)
   end
 
+  -- Tree tiles may retain a coast visual/underlying water class. RC1
+  -- dispatches LandscapeClear to ClearTile_Trees for these parcels, not
+  -- to ClearTile_Water. Keep actual facilities or active vessels protected.
+  function W.road_tree_coast_quote(s,owner,id,occupied)
+    local t=s.tiles[id]
+    if t.owner and t.owner~=owner then return nil,"OWNED_BY_ANOTHER" end
+    if t.stock_void or t.build or t.stock_canal or t.stock_object or protected(s,id,t) then
+      return nil,"PROTECTED_TILE"
+    end
+    if occupied(id) then return nil,"VEHICLE_IN_THE_WAY" end
+    return Sim.road_site_clear_cost(t)
+  end
+
   function W.clear_apply(s,id)
     local t=s.tiles[id]
     local x,z=Sim.xy(id)

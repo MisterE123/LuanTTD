@@ -1284,7 +1284,12 @@ local function road_piece_plan(s,owner,id,t,request,occupied)
     -- rejects real water, not Coast/CoastRocks (ClearTile_Water).
     -- Clearing changes the tile type, not its corner heights.
     local why
-    coast_cost,why=quote_water_clear(s,owner,id)
+    if t.wood then
+      load_road_rules()
+      coast_cost,why=coastal_world.road_tree_coast_quote(s,owner,id,function(at) return coastal_tile_occupied(s,at) end)
+    else
+      coast_cost,why=quote_water_clear(s,owner,id)
+    end
     if not coast_cost then return nil,water_clear_errors[why] or why end
   end
   local existing=bits_for(s,id,t)
@@ -1484,7 +1489,8 @@ function M.autoroad_plan(s,owner,start,last,axis,start_half,end_half)
     changes[#changes+1]=entry.proposal
     ids[#ids+1]=entry.proposal.id
   end
-  return {changes=changes,ids=ids,cost=q.cost,stopped_at=q.stopped_at,skipped=q.skipped}
+  return {changes=changes,ids=ids,cost=q.cost,stopped_at=q.stopped_at,
+    stop_reason=q.stopped_at and q.skipped[#q.skipped].reason or nil,skipped=q.skipped}
 end
 
 local function site_radius(s,id)
@@ -2451,6 +2457,7 @@ function M.apply_road_construction(s,owner,plan)
     road_stop_members.structural_apply(st,plan.stop_members)
     refresh_road_station_sites(s,st)
   end
+  if ok and plan.stop_reason then why=why.." Stopped: "..plan.stop_reason end
   return ok,why,dirty
 end
 function M.autoroad_bend_build(s,owner,start,last)
