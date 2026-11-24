@@ -17,6 +17,26 @@ return {
     mesh="bl_stock_airtaxi_a21.obj",flight="bl_stock_airtaxi_a21_flight.obj",
     atlas="bl_stock_airtaxi_a21_atlas.png",scale=1,
   },
+  yate_yae46={
+    id=237,entity="luanttd_core:stock_yate_yae46",
+    mesh="bl_stock_yate_yae46.obj",flight="bl_stock_yate_yae46_flight.obj",
+    atlas="bl_stock_yate_yae46_atlas.png",scale=1,
+  },
+  airtaxi_a31={
+    id=234,entity="luanttd_core:stock_airtaxi_a31",
+    mesh="bl_stock_airtaxi_a31.obj",flight="bl_stock_airtaxi_a31_flight.obj",
+    atlas="bl_stock_airtaxi_a31_atlas.png",scale=1,
+  },
+  dinger_100={
+    id=238,entity="luanttd_core:stock_dinger_100",
+    mesh="bl_stock_dinger_100.obj",flight="bl_stock_dinger_100_flight.obj",
+    atlas="bl_stock_dinger_100_atlas.png",scale=1,
+  },
+  airtaxi_a32={
+    id=235,entity="luanttd_core:stock_airtaxi_a32",
+    mesh="bl_stock_airtaxi_a32.obj",flight="bl_stock_airtaxi_a32_flight.obj",
+    atlas="bl_stock_airtaxi_a32_atlas.png",scale=1,
+  },
   darwin_200={
     id=227,entity="luanttd_core:stock_darwin_200",
     mesh="bl_stock_darwin_200.obj",

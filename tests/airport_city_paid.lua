@@ -14,8 +14,11 @@ local rows={[217]={90,10,43750,1248000},[218]={100,20,205078,2400000},[220]={200
   [221]={100,15,46484,1440000},[222]={150,30,49218,2352000},
   [223]={220,40,51953,1843200},[224]={230,25,54687,1824000},[225]={95,10,43750,1296000},[226]={170,35,49218,2304000},[227]={110,15,46484,1488000},
   [228]={300,50,82031,2428800},[229]={200,25,49218,2016000},[230]={240,25,51953,2112000},
-  [231]={260,40,73828,2208000},[232]={240,35,68359,2160000},[233]={260,30,54687,2256000}}
+  [231]={260,40,73828,2208000},[232]={240,35,68359,2160000},[233]={260,30,54687,2256000},
+  [234]={210,25,51953,2112000},[237]={80,10,43750,1200000},[238]={85,10,46484,1392000},
+  [235]={160,20,49218,1632000}}
 local selected=assert(rows[stock])
+local short_runway=stock==221 or stock==237 or stock==238
 local function fixture(year,ready)
   local s=Sim.new(1751)
   s.road_economy,s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading=true,true,true,true
@@ -50,8 +53,8 @@ do
   assert(not q and e=="AIRPORT_TYPE_NOT_AVAILABLE")
 end
 do
-  local mixed=stock==221 and 1975 or 1958
-  local airframe=stock==221 and 221 or 215
+  local mixed=stock==238 and 1991 or stock==237 and 1985 or stock==221 and 1975 or 1958
+  local airframe=short_runway and stock or 215
   local state,N,R,O=fixture(mixed,true)
   local small=assert(N.build(state,owner,Sim.id(9,18)))
   local city=assert(N.build(state,owner,Sim.id(47,18),"city"))
@@ -67,12 +70,12 @@ do
   assert(visits[small.id] and visits[city.id] and Sim.air_paid_status(state,unit.id).fare>0)
   print(("PASS stock #%d mixed Country–City service uses each airport's own FTA and pays real fares"):format(airframe))
 end
-local year=({[222]=1986,[224]=1996,[229]=1988,[230]=1988,[231]=2000})[stock] or 1975
+local year=({[222]=1986,[224]=1996,[229]=1988,[230]=1988,[231]=2000,[234]=1987,[237]=1985,[238]=1991,[235]=1992})[stock] or 1975
 if stock==218 or stock>=221 and stock<=224 or stock==227 or stock>=229 then
   local too_early,net,_,O=fixture(1960,true)
   local hangar=assert(net.build(too_early,owner,Sim.id(9,18),"city"))
   local q,err=O.quote(too_early,owner,hangar.id,stock)
-  if stock==221 then
+  if short_runway then
     local small=assert(net.build(too_early,owner,Sim.id(47,18)))
     local early,e=O.quote(too_early,owner,small.id,stock)
     assert(not early and e=="AIRCRAFT_NOT_INTRODUCED")
@@ -103,8 +106,8 @@ local unit=assert(O.status(s,a.id))
 assert(unit.passengers==selected[1] and unit.mail==selected[2] and unit.annual_fp==selected[4])
 assert(s.companies[owner].cash==reserve-a.price-b.price-c.price-q.price)
 local d=assert(C.depot(owner,"air",a.id))
-assert(#d.targets==(stock==221 and 3 or 2) and d.targets[1].label:find("City Airport",1,true))
-if stock~=221 then
+assert(#d.targets==(short_runway and 3 or 2) and d.targets[1].label:find("City Airport",1,true))
+if not short_runway then
   local cannot,reason=O.start(s,owner,a.id,c.id)
   assert(not cannot and reason=="LARGER_AIRFIELD_REQUIRED")
 end
@@ -114,8 +117,8 @@ local ok,e=R.route_stop(s,a,215)
 assert(not ok and e=="CITY_AIRFIELD_SERVICE_ALREADY_ASSIGNED")
 local route=m("water_air_orders")(s,Sim,m("openttd/rail_order_list"),nil,nil,nil,R).air
 local v=assert(route.read(owner,unit.id))
-assert(#v.targets==(stock==221 and 3 or 2))
-if stock~=221 then assert(not route.edit(owner,unit.id,v.revision,"append",nil,c.id)) end
+assert(#v.targets==(short_runway and 3 or 2))
+if not short_runway then assert(not route.edit(owner,unit.id,v.revision,"append",nil,c.id)) end
 local first_tick,first_fare
 for _=1,425 do
   Sim.daily(s)

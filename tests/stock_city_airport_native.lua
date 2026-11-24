@@ -12,11 +12,13 @@ local models={
   [227]={visual="darwin_200",price=46484,flight=true},[229]={visual="darwin_400",price=49218,flight=true},
   [230]={visual="darwin_500",price=51953,flight=true},[231]={visual="darwin_600",price=73828,flight=true},
   [232]={visual="guru_galaxy",price=68359,flight=true},[233]={visual="airtaxi_a21",price=54687,flight=true},
+  [234]={visual="airtaxi_a31",price=51953,flight=true},[237]={visual="yate_yae46",price=43750,flight=true},
+  [235]={visual="airtaxi_a32",price=49218,flight=true},[238]={visual="dinger_100",price=46484,flight=true},
 }
 local model=assert(models[stock])
 local layout=core.settings:get("luanttd_qa_air_layout") or "city"
 local city=layout=="city"
-assert(city or (stock==221 and layout=="country"))
+assert(city or ((stock==221 or stock==237 or stock==238) and layout=="country"))
 local w,d=city and 6 or 4,city and 6 or 3
 local airport_cost=w*d*600
 local function scene(viewer)

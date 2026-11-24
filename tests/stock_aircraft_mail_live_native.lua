@@ -17,14 +17,16 @@ local stock=tonumber(core.settings:get("luanttd_qa_paid_airframe")) or 216
 local expected_mesh={
   [216]="bl_coleman_count.obj",[218]="bl_stock_yate_haugan.obj",
   [232]="bl_stock_guru_galaxy.obj",[233]="bl_stock_airtaxi_a21.obj",
+  [234]="bl_stock_airtaxi_a31.obj",[237]="bl_stock_yate_yae46.obj",
+  [235]="bl_stock_airtaxi_a32.obj",[238]="bl_stock_dinger_100.obj",
 }
 assert(expected_mesh[stock])
-local city=stock~=216
+local city=stock~=216 and stock~=237 and stock~=238
 local layout=city and "city" or "country"
 local airport_tiles=city and 36 or 12
 local spec=assert(Roster.entry(stock))
 local road_depot,road_one,road_two=cell(17,7),cell(10,11),cell(43,11)
-local cap={road={start_year=city and 1975 or 1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
+local cap={road={start_year=(stock==235 or stock==238) and 1991 or stock>=234 and 1987 or city and 1975 or 1950,foster=true,breakdowns=0,service_interval=0,extra={mail_mps=true}},
   ferry={},air={},city_airport=city,oil_tanker=true,durable_actions=true}
 local art=m("airport_manifest")(core,mod)
 assert(art[stock] and art[stock].mesh==expected_mesh[stock])
@@ -216,7 +218,7 @@ local function work()
   for _=1,140 do
     ask("advance",{days=1});ask("checkpoint")
     s,c,run,v,a,b,p,m=payload()
-    if (v.delivered or 0)>0 and (city or s.companies[road_owner].paid_units>0) then
+    if (v.delivered or 0)>0 and (stock~=216 or s.companies[road_owner].paid_units>0) then
       local f=assert(v.last_fare)
       local commercial=s.companies[name]
       local pb,mb=assert(f.by_cargo.passenger),assert(f.by_cargo.mail)

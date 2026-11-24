@@ -15,7 +15,7 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | Rail | 34 | 0 | 53 |
 | Road | 34 | 0 | 34 |
 | Ship | 7 | 0 | 7 |
-| Aircraft | 20 | 0 | 35 |
+| Aircraft | 24 | 0 | 35 |
 
 ## Rail
 
@@ -149,11 +149,11 @@ See [building artwork](../art/stock_temperate_towns.md). Other climates are not 
 | 231 | Darwin 600 | Playable | Paid passenger service; City Airport required. |
 | 232 | Guru Galaxy | Playable | 240 passengers + 35 Mail. City Airport, original three-engine mesh with retracting gear. |
 | 233 | Airtaxi A21 | Playable | 260 passengers + 30 Mail. City Airport, original wide-body twinjet with retracting gear. |
-| 234 | Airtaxi A31 | Not mounted |  |
-| 235 | Airtaxi A32 | Not mounted |  |
+| 234 | Airtaxi A31 | Playable | 210 passengers + 25 Mail. City Airport, original compact wide-body twinjet. |
+| 235 | Airtaxi A32 | Playable | 160 passengers + 20 Mail. City Airport, shortened Airtaxi derivative. |
 | 236 | Airtaxi A33 | Not mounted |  |
-| 237 | Yate Aerospace YAe46 | Not mounted |  |
-| 238 | Dinger 100 | Not mounted |  |
+| 237 | Yate Aerospace YAe46 | Playable | 80 passengers + 10 Mail. Country or City Airport, original four-engine short-runway airframe. |
+| 238 | Dinger 100 | Playable | 85 passengers + 10 Mail. Country or City Airport, rear-engine regional twinjet. |
 | 239 | AirTaxi A34-1000 | Not mounted |  |
 | 240 | Yate Z-Shuttle | Not mounted |  |
 | 241 | Kelling K1 | Not mounted |  |

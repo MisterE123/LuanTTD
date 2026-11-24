@@ -187,7 +187,8 @@ def control_surfaces(q):
               (side*span*(f+.115),z2-.012,yy+.092),.00165,.00153,"Rib inset",6)
     flare, tipa, top = q.fin
     aft=q.fuselage[1]
-    stations=tuple((w,q.stabilizer[3]-.061+(top-q.stabilizer[3]+.061)*k,
+    fin_root=getattr(q,"fin_root",q.stabilizer[3]-.061)
+    stations=tuple((w,fin_root+(top-fin_root)*k,
                     flare+(tipa-flare)*k**.76,-aft*(.99-.064*k)) for k,w in
                    ((0,.019),(.15,.047),(.31,.048),(.52,.039),(.72,.027),(.9,.019),(1,.010)))
     contour=((0,0),(.12,-.48),(.33,-1),(.69,-.67),(.86,-.32),(1,0),(.86,.32),(.69,.67),(.33,1),(.12,.48))
@@ -286,7 +287,7 @@ def write_native(q,scene,objects,mode,colors):
     art.compact_obj(obj)
     bpy.data.objects.remove(mesh,do_unlink=True)
 
-def make(q, *, title=None, sprite_family=4, engine_title="Twin open fan nacelles", engine_mesh=engines):
+def make(q, *, title=None, sprite_family=4, class_tag="J / fast CTOL", engine_title="Twin open fan nacelles", engine_mesh=engines):
     colors=art.PAL | dict(zip(("Crown ivory","Panel ivory","Lit blue","Dark coastal cobalt","Blue taper","Copper pinstripe"),q.color))
     base.PALETTE=colors
     base.KEYS=list(colors)
@@ -295,7 +296,7 @@ def make(q, *, title=None, sprite_family=4, engine_title="Twin open fan nacelles
     e.export_atlas(q.stem,colors)
     scene=bpy.context.scene
     scene.name=f"LuanTTD | {title or f'Darwin {q.series}'} · #{q.id}"
-    scene["metadata"]=f"OpenTTD 16.0-RC1 src/table/engines.h #{q.id}: J / fast CTOL; sprite family image {sprite_family}"
+    scene["metadata"]=f"OpenTTD 16.0-RC1 src/table/engines.h #{q.id}: {class_tag}; sprite family image {sprite_family}"
     scene["original_art"]=q.description+"; original LuanTTD mesh and invented livery, no third-party image assets"
     scene["native"]= "Nose −Z; deployed gear contacts Luanti Y=0. Flight variant differs only in gear and bay doors."
     def group(title,fn):

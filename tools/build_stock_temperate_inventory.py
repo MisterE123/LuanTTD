@@ -14,7 +14,7 @@ COVERAGE = {
     "Rail": ({0,8,9,10,11,12,13,14,15,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,54,55,57,58,60,84,89,90,92}, set()),
     "Road": ({116,117,118,119,123,124,125,126,127,128,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155}, set()),
     "Ship": ({204,205,206,207,208,211,212}, set()),
-    "Aircraft": ({215,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,231,232,233,253}, set()),
+    "Aircraft": ({215,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,231,232,233,234,235,237,238,253}, set()),
 }
 KINDS = {"MT":"Rail","MM":"Rail","MW":"Rail","MR":"Road","MS":"Ship","MA":"Aircraft"}
 LIMITS = {
@@ -64,6 +64,10 @@ LIMITS = {
     231: "Paid passenger service; City Airport required.",
     232: "240 passengers + 35 Mail. City Airport, original three-engine mesh with retracting gear.",
     233: "260 passengers + 30 Mail. City Airport, original wide-body twinjet with retracting gear.",
+    234: "210 passengers + 25 Mail. City Airport, original compact wide-body twinjet.",
+    235: "160 passengers + 20 Mail. City Airport, shortened Airtaxi derivative.",
+    237: "80 passengers + 10 Mail. Country or City Airport, original four-engine short-runway airframe.",
+    238: "85 passengers + 10 Mail. Country or City Airport, rear-engine regional twinjet.",
     253: "Country/City hangars and neutral oil-rig pad, 40 seats + 15 Mail, original rotating 3D rotors.",
 }
 CITY = {217,218,220,222,223,224,225,226,227,228,229,230,231,232,233}

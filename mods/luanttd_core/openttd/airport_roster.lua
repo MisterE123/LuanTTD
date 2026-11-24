@@ -72,6 +72,20 @@ local rows={
   [233]={stock_id=233,name="Airtaxi A21",image=4,passengers=260,mail=30,acceleration=40,
     source_speed=74,intro_after_1920=18993,life=24,model_life=35,buy_factor=20,running_factor=235,
     small=false,jet=true,visual="airtaxi_a21"},
+  -- Chronological public-offer continuation, not stock ID order.
+  -- #237 is a short-runway CTOL row (P) despite its jet takeoff sound.
+  [237]={stock_id=237,name="Yate Aerospace YAe46",image=6,passengers=80,mail=10,acceleration=50,
+    source_speed=74,intro_after_1920=22005,life=25,model_life=30,buy_factor=16,running_factor=125,
+    small=true,dated=true,visual="yate_yae46"},
+  [234]={stock_id=234,name="Airtaxi A31",image=4,passengers=210,mail=25,acceleration=40,
+    source_speed=74,intro_after_1920=22401,life=24,model_life=30,buy_factor=19,running_factor=220,
+    small=false,jet=true,visual="airtaxi_a31"},
+  [238]={stock_id=238,name="Dinger 100",image=2,passengers=85,mail=10,acceleration=40,
+    source_speed=74,intro_after_1920=24107,life=20,model_life=35,buy_factor=17,running_factor=145,
+    small=true,dated=true,visual="dinger_100"},
+  [235]={stock_id=235,name="Airtaxi A32",image=4,passengers=160,mail=20,acceleration=40,
+    source_speed=74,intro_after_1920=24472,life=24,model_life=30,buy_factor=18,running_factor=170,
+    small=false,jet=true,visual="airtaxi_a32"},
 }
 A.BUY_BASE,A.RUN_BASE=700000,9600
 A.DAY_TICKS,A.DAYS_IN_YEAR=74,365
@@ -86,7 +100,7 @@ function A.entry(id)
 end
 function A.catalog(include_rotary)
   local out={}
-  for _,id in ipairs({215,219,216,217,220,225,226,221,227,228,218,232,223,233,222,230,229,224,231}) do
+  for _,id in ipairs({215,219,216,217,220,225,226,221,227,228,218,232,223,233,222,237,230,229,234,238,235,224,231}) do
     out[#out+1]=A.entry(id)
   end
   if include_rotary then out[#out+1]=A.entry(253) end
@@ -100,7 +114,7 @@ function A.available(Sim,s,id)
   local market=s.stock_bus_market
   if not market then
     return Sim.date(s)>=({[217]=1955,[218]=1969,[220]=1958,[221]=1964,[222]=1978,[223]=1970,[224]=1989,[225]=1962,[226]=1963,[227]=1967,[228]=1968,
-      [229]=1982,[230]=1981,[231]=1995,[232]=1969,[233]=1972,[253]=1957})[id]
+      [229]=1982,[230]=1981,[231]=1995,[232]=1969,[233]=1972,[237]=1980,[234]=1981,[238]=1986,[235]=1987,[253]=1957})[id]
   end
   local cached=calendar_cache[market]
   if not cached then cached={};calendar_cache[market]=cached end
