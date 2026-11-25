@@ -46,7 +46,9 @@ function M.landscape(Sim,Terrain,Generator,settings)
   local persisted=copy(settings)
   persisted.progress,persisted.corner_progress,persisted.host_progress=nil,nil,nil
   s.stock_generated_profile={version=1,width=Sim.W,depth=Sim.H,terrain="terragenesis-14.1",
-    settings=persisted,terrain_rng=copy(map.rng_after),clear_attempts=map.clear_attempts}
+    settings=persisted,terrain_rng=copy(map.rng_after),clear_attempts=map.clear_attempts,
+    map_height_limit=settings.map_height_limit and settings.map_height_limit>0 and settings.map_height_limit or
+      math.max(30,math.min(255,(map.estimated_max_height or 0)+15))}
   if map.river_tileloop_cursor then
     s.stock_generated_profile.river_rng_cursor=map.river_tileloop_cursor
     s.stock_generated_profile.river_stats=rivers
@@ -363,7 +365,8 @@ function M.forests(Sim,Terrain,s,Generator,Trees,tree_placer,pulse)
       bridge_above=s.bridge_above and s.bridge_above[id]~=nil or
         s.rail_bridge_above and s.rail_bridge_above[id]~=nil}
   end
-  local result=Trees.generate(board,start,Generator.next_random,{tree_placer=tree_placer,pulse=pulse})
+  local result=Trees.generate(board,start,Generator.next_random,{tree_placer=tree_placer,pulse=pulse,
+    map_height_limit=profile.map_height_limit or 30})
   local n=0
   result.each(function(x,z,record)
     n=n+1

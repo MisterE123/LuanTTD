@@ -312,6 +312,9 @@ jobs:
           lua5.1 tests/industry_alternate_layouts.lua
           lua5.1 tests/industry_farm_oil_layout_ingress.lua
           python3 tests/tree_lifecycle_temperate_upstream.py "$src"
+          python3 tests/tree_worldgen_upstream.py "$src"
+          python3 tests/tree_display_rc1.py "$src"
+          lua5.1 tests/tree_worldgen.lua
           python3 tests/tree_global_tick_upstream.py "$src"
           lua5.1 tests/tree_lifecycle_temperate.lua
           lua5.1 tests/clear_grass_regrowth.lua

@@ -25,21 +25,21 @@ local base=Clear.generate(G.generate({
   width=64,depth=64,seed=1751,rng_state=G.startup_rng(1751),terrain_type=3,
 }),G.next_random)
 local function tile(x,z)
-  local c,w,g=Clear.describe(base.tile(x,z))
+  local c,w,g,rocks=Clear.describe(base.tile(x,z))
   local mask,h=Slope.classify(base.corner(x,z),base.corner(x+1,z),base.corner(x,z+1),base.corner(x+1,z+1))
-  return {class=c,ground=g,slope=mask,height=h,coast=w==2}
+  return {class=c,ground=g,slope=mask,height=h,coast=w==2,rocky=rocks}
 end
 local board={width=64,depth=64,freeform=true,tile=tile}
 local none=F.generate(board,base.rng_after,G.next_random,{tree_placer=0})
 eq(none.stats.random_draws,0);eq(none.stats.tiles,0)
 eq(none.rng_after[1],base.rng_after[1]);eq(none.rng_after[2],base.rng_after[2])
-local orig=F.generate(board,base.rng_after,G.next_random,{tree_placer=1})
+local orig=F.generate(board,base.rng_after,G.next_random,{tree_placer=1,map_height_limit=30})
 eq(orig.stats.groups,2);eq(orig.stats.base_attempts,378);eq(orig.stats.same_height_attempts,0)
-eq(orig.stats.tiles,430);eq(orig.stats.shore_tiles,20)
-local improved=F.generate(board,base.rng_after,G.next_random)
-eq(improved.stats.groups,2);eq(improved.stats.base_attempts,126);eq(improved.stats.same_height_attempts,822)
-eq(improved.stats.tiles,553);eq(improved.stats.total_trees,1380);eq(improved.stats.shore_tiles,30)
-eq(improved.stats.random_draws,2951);eq(improved.rng_after[1],399317553);eq(improved.rng_after[2],1658045267)
+eq(orig.stats.tiles,229);eq(orig.stats.shore_tiles,24)
+local improved=F.generate(board,base.rng_after,G.next_random,{map_height_limit=30})
+eq(improved.stats.groups,2);eq(improved.stats.base_attempts,126);eq(improved.stats.same_height_attempts,342)
+eq(improved.stats.tiles,243);eq(improved.stats.total_trees,608);eq(improved.stats.shore_tiles,21)
+eq(improved.stats.random_draws,2479);eq(improved.rng_after[1],2766909149);eq(improved.rng_after[2],878102892)
 local seen={}
 improved.each(function(x,z,b)
   eq(b.class,4)

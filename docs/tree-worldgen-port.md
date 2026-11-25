@@ -1,17 +1,21 @@
 # Temperate forests at world creation
 
-`mods/luanttd_core/openttd/tree_worldgen.lua` is the stock OpenTTD 14.1 temperate
+`mods/luanttd_core/openttd/tree_worldgen.lua` is the stock OpenTTD 16.0-RC1 Temperate
 normal-game forest generation stage. This is not uniform decorative tree
 scattering. It preserves all RNG draws and writes in game order:
 
-1. Draw a group count (25–56 before scaling to map area). Every group
-   consumes one center draw and 1,000 offsets; only offsets within Manhattan
-   distance 13 can plant.
+1. Draw a group count (25–56 before scaling to map area). Each group draws
+   a center and four harmonic phases for the stock 16-vertex grove, then
+   attempts 1,000 offsets. A tree must fit the source polygon; it no longer
+   draws a fixed diamond on the terrain. The Lua adapter preserves the
+   source float32 and integer boundary decisions.
 2. Run six ordinary random placement passes with the Original placer, or two
    with the default Improved placer. Each pass has the stock, size-scaled
    attempt count.
-3. After a successful Improved base placement, try `2 × tile base height`
-   neighboring placements. Each searches up to 1,000 offsets, accepts
+3. After a successful Improved base placement, calculate
+   `2 × tile base height` neighbor placements, scaled by `15 / map height limit`
+   whenever the limit exceeds 15. An automatic limit uses the same terrain
+   estimate and headroom flow as stock. Each placement searches up to 1,000 offsets, accepts
    Manhattan distance at most 16 and a base height within two levels, and
    stops at the first legal result. Already planted tiles block subsequent
    attempts. Terrain base is the minimum of all four corners, as in
@@ -35,7 +39,7 @@ the prior dry ground.
 ```lua
 local Trees = dofile(modpath .. "/openttd/tree_worldgen.lua")
 local Forest = Trees.generate(board, incoming_rng, StockRandom.next_random, {
-  tree_placer = Trees.placer.improved,
+  tree_placer = Trees.placer.improved, map_height_limit = 30,
 })
 Forest.each(function(x, z, tree)
   -- x, z: 1-based. tree: class=4, type, count, growth, ground, density,
@@ -79,15 +83,20 @@ landscape-loop equilibration, or a visually playtested integrated release.
 
 ```sh
 lua5.1 tests/tree_worldgen.lua
-python3 tests/tree_worldgen_upstream.py /path/to/openttd-14.1 lua5.1
+python3 tests/tree_worldgen_upstream.py /path/to/openttd-16.0-RC1 lua5.1
 ```
 
-Differential compiles verified unmodified routines from OpenTTD 14.1
+Differential compiles verified unmodified routines from OpenTTD 16.0-RC1
 `tree_cmd.cpp`, `tree_map.h`, `tile_map.cpp`, `map.cpp`, `map_func.h`, and
 `core/random_func.cpp`, with a typed synthetic map/host. It checks actual
 TerraGenesis/clear-board fixtures and adversarial protected layouts, both
-edge modes, all placers, varied seeds/rectangular sizes, and an exhausted
-Improved neighborhood that consumes all 10,000 failed attempts. The proof
+edge modes, all placers, varied seeds, rectangular sizes, high map limits,
+and tightly obstructed neighborhoods. The proof
 compares placement coordinates/order, species, stems, growth, ground,
-density, sea class and exact RNG state and draw counts. Source by OpenTTD
+density, sea class and exact RNG state and draw counts: 26 full runs,
+19,545 tree placements and 193,162 shared RNG draws. The separate
+[display-selector oracle](../tests/tree_display_rc1.py) checks stock silhouette
+IDs and phases for all 12 TreeTypes. Finished art still uses four native
+families, and is not credited for the missing stock silhouettes.
+Source by OpenTTD
 contributors, GPL-2.0-only (see `COPYING.OpenTTD.md`).

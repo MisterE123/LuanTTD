@@ -6,6 +6,11 @@ local function scene()
   if not (p and authority and authority.status()=="owned") then core.after(.24,scene);return end
   local s=assert(OwnerCheckpoint.read())
   if not baseline then
+    local profile=s.stock_generated_profile
+    local f=assert(profile.forest_stats)
+    assert(profile.map_height_limit>=30 and f.groups>0)
+    assert(f.random_draws==1+f.groups*5+f.group_attempts+f.base_attempts+f.same_height_attempts,
+      "Opening forest did not consume the four RC1 harmonic draws per center")
     baseline={day=s.day,groves={},clock=s.stock_tree_tick_counter}
     for id,t in ipairs(s.tiles) do
       local w=t.wood

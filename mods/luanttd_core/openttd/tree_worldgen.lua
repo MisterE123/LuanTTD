@@ -1,10 +1,13 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- OpenTTD contributors, pinned 14.1 src/tree_cmd.cpp GenerateTrees,
+-- OpenTTD contributors, pinned 16.0-RC1 src/tree_cmd.cpp GenerateTrees,
 -- PlaceTreeGroups, PlaceTreesRandomly, PlaceTreeAtSameHeight, PlaceTree,
 -- PlantTreesOnTile and CanPlantTreesOnTile; src/tree_map.h, src/map.cpp and
 -- src/map_func.h. Temperate normal-game world generation only.
 -- See COPYING.OpenTTD.md; no original tree graphics are included.
 local T={}
+local here=debug and debug.getinfo(1,"S").source:match("^@(.*/)tree_worldgen%.lua$")
+local Grove=dofile((here or (core and core.get_modpath("luanttd_core").."/openttd/") or
+  "mods/luanttd_core/openttd/").."tree_grove.lua")
 local floor,ceil,min,abs=math.floor,math.ceil,math.min,math.abs
 local MP_CLEAR,MP_WATER=0,6
 local GRASS,ROUGH,ROCKS,FIELDS,SNOW,DESERT=0,1,2,3,4,5
@@ -44,7 +47,7 @@ local function encode(r,t)
     ground,density=TREE_SHORE,3
   else
     local g=t.ground or GRASS
-    density=g==ROUGH and 3 or (t.density or 3)
+    density=(t.raw_ground or g)==ROUGH and 3 or (t.density or 3)
     if g==GRASS then ground=TREE_GRASS
     elseif g==ROUGH then ground=TREE_ROUGH
     elseif g==SNOW and t.raw_ground==ROUGH then ground=TREE_ROUGH_SNOW
@@ -72,6 +75,8 @@ function T.generate(board,start,next_random,opts)
     and int(start[2],0,4294967295) and type(next_random)=="function","Expected explicit stock RNG state and advance")
   opts=opts or {}
   local mode=opts.tree_placer==nil and IMPROVED or opts.tree_placer
+  local map_height=opts.map_height_limit or 0
+  assert(int(map_height,0,255),"Expected original map-height limit")
   assert(int(mode,0,2),"Invalid OpenTTD tree placer")
   assert(opts.landscape==nil or opts.landscape=="temperate","Only temperate forest generation is supported")
   assert(not opts.editor,"Editor-only forest placement is not supported")
@@ -135,14 +140,23 @@ function T.generate(board,start,next_random,opts)
     S.groups=scale(random()%32+25)
     for _=1,S.groups do
       local x,z=xy(random()%area)
+      local grove=Grove.make(random)
+      local inside={}
       for _=1,DEFAULT_TREE_STEPS do
         S.group_attempts=S.group_attempts+1
         local r=random()
         local dx,dz=random_offset(r)
         local i=offset(x,z,dx,dz)
-        if i and abs(dx)+abs(dz)<=13 then
-          local t=available(i)
-          if t then place(i,r,t) end
+        if i then
+          -- Both predicates are pure; skip constructing a tile-view when
+          -- this offset falls outside the source grove shape.
+          local k=(dz+16)*32+dx+16
+          local grows=inside[k]
+          if grows==nil then grows=Grove.contains(grove,dx,dz);inside[k]=grows end
+          if grows then
+            local t=available(i)
+            if t then place(i,r,t) end
+          end
         end
       end
     end
@@ -158,7 +172,9 @@ function T.generate(board,start,next_random,opts)
           if mode==IMPROVED then
             local x,z=xy(i)
             local v=height(t)
-            for _=1,v*2 do near_height(x,z,v) end
+            local j=v*2
+            if map_height>15 then j=floor(j*15/map_height) end
+            for _=1,j do near_height(x,z,v) end
           end
         end
       end
