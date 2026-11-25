@@ -10,8 +10,10 @@ for _,x in ipairs({{4,2,1},{8,8,3},{16,4,2},{32,1,0}}) do
   local row=assert(R.quote(x[1],0,1,x[2],1,{autoslope=false}))
   assert(row.price==0 and row.barren and row.free_corner==x[3])
 end
-assert(not R.quote(4,0,1,2,1,{half_water=true}))
-print("PASS dry RC1 plain rail quote: retained straight surface, four free corners, and wet guard")
+assert(R.quote(4,8,0,10,0,{half_water=true}).price==10000)
+local blocked,why=R.quote(4,8,0,10,0,{half_water=true,ship_in_way=true})
+assert(not blocked and why=="VEHICLE_IN_THE_WAY")
+print("PASS dry RC1 plain rail quote: retained straight surface, four free corners, and a flooded lower corner")
 
 local Sim=dofile("mods/luanttd_core/sim.lua")
 local Terrain,Height=get("terrain"),get("rail_height")(Track,get("slope"))
@@ -56,9 +58,24 @@ for _,case in ipairs(selection) do
 end
 do
   local s,t,c=world(4,false,13)
+  s.corner_grid=Terrain.new(Sim.W,Sim.H,function(u,v)return (u==x and v==z) and 1 or 0 end)
+  for _,cell in pairs(s.tiles) do cell.h=0 end
   local cash=c.cash
+  s.stock_oil_ship_route={vehicle={tile=id}}
+  local blocked,error=Sim.landscape(s,owner,"raise",x+1,z+1)
+  assert(not blocked and error:find("vessel",1,true))
+  assert(c.cash==cash and t.rail_ground==13 and Terrain.corner(s.corner_grid,x+1,z+1)==0)
+  s.stock_oil_ship_route.vehicle.tile=Sim.id(x,z+1)
+  s.stock_oil_ship_route.vehicle.path={{tile=Sim.id(x,z+1)},{tile=id},{tile=Sim.id(x+1,z)}}
   assert(not Sim.landscape(s,owner,"raise",x+1,z+1))
-  assert(c.cash==cash and t.rail_ground==13 and Terrain.corner(s.corner_grid,x+1,z+1)==1)
+  s.stock_oil_ship_route=nil
+  local ok,price=Sim.landscape(s,owner,"raise",x+1,z+1,nil,nil,false,true)
+  assert(ok and price==10250 and t.rail_ground==13 and c.cash==cash)
+  assert(Sim.landscape(s,owner,"raise",x+1,z+1))
+  local shape,base=Terrain.tile(s.corner_grid,x,z)
+  assert(shape==10 and base==0 and t.rail_tracks==4 and t.rail_ground==0 and c.cash==cash-10250)
+  local saved=Parts.decode(Parts.encode(s))
+  assert(saved.tiles[id].rail_tracks==4 and saved.tiles[id].rail_ground==0)
 end
 do
   local s,t,c=world(4)
@@ -68,4 +85,4 @@ do
   assert(not ok and error:find("only on ordinary rail",1,true))
   assert(cash==c.cash and t.rail_ground==1 and t.rail_type==1)
 end
-print("PASS authoritative dry rail preview, commit, drag, rejected reshape and checkpoint")
+print("PASS authoritative rail preview, commit, drag, rejected reshape and checkpoint")

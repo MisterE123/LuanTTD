@@ -1,4 +1,4 @@
-"""Compare dry rail landscaping with the unmodified OpenTTD 16.0-RC1 command."""
+"""Compare dry and flooded rail landscaping with the unmodified OpenTTD 16.0-RC1 command."""
 import re
 import subprocess as sp
 import sys
@@ -14,6 +14,7 @@ src = source / "src"
 lua = sys.argv[2] if len(sys.argv) > 2 else "lua5.1"
 prices = (src / "table/pricebase.h").read_text()
 foundation = int(re.search(r"PriceBaseSpec\((\d+),.*?\)\s*,?\s*// Price::BuildFoundation", prices)[1])
+clear_water = int(re.search(r"PriceBaseSpec\((\d+),.*?\)\s*,?\s*// Price::ClearWater", prices)[1])
 
 def block(file, pattern):
     return source_block(src, file, pattern)
@@ -35,18 +36,20 @@ struct CommandCost{
 };
 constexpr int STR_ERROR_CAN_T_BUILD_ON_WATER=-1, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION=-1,
  STR_ERROR_MUST_REMOVE_RAILROAD_TRACK=-1, STR_ERROR_SHIP_IN_THE_WAY=-1;
-std::array<int,2> prices{FOUNDATION_PRICE,0};
+std::array<int,2> prices{FOUNDATION_PRICE,WATER_PRICE};
 struct Prices{
   int operator[](Price p) const{return prices[int(p)];}
 } _price;
 struct {struct {bool build_on_slopes;} construction;} _settings_game;
 bool autoslope;
 bool AutoslopeEnabled(){return autoslope;}
-enum class FloodingBehaviour{None};
-FloodingBehaviour GetFloodingBehaviour(int){return FloodingBehaviour::None;}
+enum class FloodingBehaviour{None,Active,DryOut};
+static FloodingBehaviour flood;
+FloodingBehaviour GetFloodingBehaviour(int){return flood;}
 enum class VehicleType{Ship};
 struct Vehicle{VehicleType type;};
-template<class F> bool HasVehicleOnTile(int,F){return false;}
+static bool ship_in_way;
+template<class F> bool HasVehicleOnTile(int,F f){Vehicle v{VehicleType::Ship};return ship_in_way&&f(&v);}
 template<class E> constexpr auto EnumRange(E e){assert(int(e)==4);return std::array{E(0),E(1),E(2),E(3)};}
 template<Commands C> struct Command{static CommandCost Do(DoCommandFlags,int){return -1;}};
 static Slope raw;
@@ -60,7 +63,7 @@ TrackBits GetTrackBits(int){return bits;}
 std::pair<Slope,int> GetTileSlopeZ(int){return {raw,base};}
 int GetRailDepotDirection(int){std::abort();}
 bool AutoslopeCheckForEntranceEdge(int,int,Slope,int){std::abort();}
-""".replace("FOUNDATION_PRICE", str(foundation))
+""".replace("FOUNDATION_PRICE", str(foundation)).replace("WATER_PRICE", str(clear_water))
 cpp = cpp.replace("constexpr TrackBits& Reset", "constexpr TrackBits& Set(TrackBits t){n|=t.n;return *this;}\n constexpr TrackBits& Reset")
 for f,p in [
     ("slope_func.h", r"^inline Slope SteepSlope"),
@@ -78,9 +81,14 @@ int main(){
     bits=b;raw=Slope(s);
     if(GetRailFoundation(raw,bits)==Foundation::Invalid) continue;
     for(int i:shapes) for (int z=1;z<=5;++z) for(int a=0;a<2;++a) for(int on=0;on<2;++on){
-      autoslope=a;_settings_game.construction.build_on_slopes=on;ground=RailGroundType::Grass;
+      for(int liquid=0;liquid<=2;++liquid){
+      autoslope=a;_settings_game.construction.build_on_slopes=on;
+      ground=liquid?RailGroundType::HalfTileWater:RailGroundType::Grass;
+      ship_in_way=liquid==2;
+      flood=liquid?(IsSlopeWithOneCornerRaised(raw)?FloodingBehaviour::Active:FloodingBehaviour::DryOut):FloodingBehaviour::None;
       auto q=TerraformTile_Rail(0,{},z,Slope(i));
-      std::cout<<b<<" "<<s<<" "<<i<<" "<<z<<" "<<a<<" "<<on<<" "<<q.value<<" "<<int(ground==RailGroundType::Barren)<<"\n";
+      std::cout<<b<<" "<<s<<" "<<i<<" "<<z<<" "<<a<<" "<<on<<" "<<liquid<<" "<<q.value<<" "<<int(ground==RailGroundType::Barren)<<"\n";
+      }
     }
   }
 }
@@ -92,13 +100,13 @@ local Q=m("rail_autoslope")(m("rail_track"),m("slope"))
 local cases=0
 for row in io.lines() do
   local vals={};for field in row:gmatch("%-?%d+") do vals[#vals+1]=tonumber(field) end
-  local b,s,i,z,a,on,cost,barren=unpack(vals)
-  local q=Q.quote(b,s,3,i,z,{autoslope=a==1,build_on_slopes=on==1})
+  local b,s,i,z,a,on,liquid,cost,barren=unpack(vals)
+  local q=Q.quote(b,s,3,i,z,{autoslope=a==1,build_on_slopes=on==1,half_water=liquid~=0,ship_in_way=liquid==2})
   assert((q and q.price or -1)==cost and (not not (q and q.barren))==(barren==1),row)
   cases=cases+1
 end
-assert(cases>100000)
-print(("PASS %d compiled RC1 dry running-rail terraform queries"):format(cases))
+assert(cases>500000)
+print(("PASS %d compiled RC1 running-rail terraform queries"):format(cases))
 """
 with TemporaryDirectory() as tmp:
     cc, oracle, script = (Path(tmp) / name for name in ("rail.cpp", "rail", "rail.lua"))

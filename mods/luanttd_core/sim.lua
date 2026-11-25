@@ -557,7 +557,7 @@ local function coastal_tile_occupied(s,id)
     end
     return false
   end
-  if vessel(s.ship_pilot) or vessel(s.stock_coal_ship_run) then return true end
+  if vessel(s.ship_pilot) or vessel(s.stock_coal_ship_run) or vessel(s.stock_oil_ship_route) then return true end
   for _,v in pairs(s.fleet) do
     local e=M.vehicles[v.engine]
     if e and e.mode=="water" and M.position(s,v)==id then return true end
@@ -808,8 +808,8 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       return nil,"RAIL_FACILITY_HEIGHT"
     end
     -- Preserve the running profile of ordinary rail, including signal tiles.
-    -- Flooded track, road/rail crossings and layered span geometry have
-    -- separate clearance and water-state rules.
+    -- Check flooded lower halves with the live ship clearance guard;
+    -- crossings and layered spans have separate construction commands.
     if t and t.build=="stock_rail" and (t.rail_tracks or 0)>0 and not rail_term and not crossing
       and not t.rail_span_id and not t.stock_void and not t.ship and not t.airfield
       and not (s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
@@ -817,11 +817,14 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
         s.rail_tunnel_below and s.rail_tunnel_below[id]) then
       local old_mask,old_base=terrain_rules.tile(staged_grid,tx,tz)
       local policy=s.stock_road_town_policy or {}
-      local quote=road_rules.rail_autoslope.quote(t.rail_tracks,old_mask,old_base,mask,base,{
+      local half_water=t.rail_ground==13 and not barren_rail[id]
+      local ship_in_way=half_water and (old_mask==1 or old_mask==2 or old_mask==4 or old_mask==8)
+        and coastal_tile_occupied(s,id)
+      local quote,why=road_rules.rail_autoslope.quote(t.rail_tracks,old_mask,old_base,mask,base,{
         autoslope=policy.autoslope,build_on_slopes=policy.build_on_slopes,foundation_price=policy.foundation_price,
-        half_water=t.rail_ground==13,
+        half_water=half_water,ship_in_way=ship_in_way,clear_water=policy.clear_water,
       })
-      if not quote then return nil,"MUST_REMOVE_RAILROAD_TRACK" end
+      if not quote then return nil,why end
       -- Regular and inclined geometry mounts for all gauges; only
       -- ordinary RAIL has the specialized split-foundation meshes.
       if (t.rail_type or 0)~=0 then

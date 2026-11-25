@@ -90,11 +90,47 @@ local function run()
       end)
     end)
   end
+  local function reshape(done)
+    local opposite={[1]={0,1},[2]={0,0},[4]={1,0},[8]={1,1}}
+    local o=opposite[shape]
+    local selected=assert(Sim.id(x+o[1],z+o[2]))
+    ask({kind="terrain_quote",request={operation="raise",first=selected}},function(q)
+      -- In the default test seed the selected corner is shared by
+      -- this rail and three ordinary sea tiles.
+      assert(q.value.cost==40250,q.value.cost)
+      local cash=checkpoint().companies[n].cash
+      ask({kind="command",command={kind="terrain_commit",token=q.value.token,revision=q.revision}},function()
+        local sw={{x=2*x,y=2,z=2*z},{x=2*x+1,y=1,z=2*z}}
+        local function verify(left)
+          assert(left>0,"Wet rail ground did not repaint after stock water clearance")
+          local state=checkpoint()
+          local t=state.tiles[id]
+          assert(t.rail_tracks==2^track and t.owner==n and t.rail_ground~=13)
+          assert(state.companies[n].cash==cash-q.value.cost,"Terrain payment did not match the published quote")
+          assert(Water.at(Net.board(state),id)==0)
+          local rail=core.get_node_or_nil(sw[1])
+          local dirt=core.get_node_or_nil(sw[2])
+          local lower_is_dry=true
+          for dx=0,1 do for dz=0,1 do
+            local n0=core.get_node_or_nil({x=2*x+dx,y=0,z=2*z+dz})
+            if not n0 or n0.name~="luanttd_core:slope_fill_open" then lower_is_dry=false end
+          end end
+          if not (lower_is_dry and rail and rail.name=="luanttd_core:stock_rail_"..2^track and dirt
+            and dirt.name:match("^luanttd_core:rail_foundation_split_") and not dirt.name:find("wet",1,true)) then
+            core.after(.22,function() verify(left-1) end);return
+          end
+          core.log("action",("NATIVE WET RAIL TERRAFORM: original upper mesh intact, lower lane removed, paid $%d"):format(q.value.cost))
+          core.after(2,done)
+        end
+        verify(45)
+      end)
+    end)
+  end
   local function dry_watch()
     local state=checkpoint()
     local t=state.tiles[id]
     if t.rail_tracks or not t.coastal_water or mesh(0,1)~="bl_coastal_bank_"..shape..".obj" then core.after(.22,dry_watch);return end
-    check_multicoast()
+    change(false,function() reshape(check_multicoast) end)
   end
   local function watch()
     local state=checkpoint()

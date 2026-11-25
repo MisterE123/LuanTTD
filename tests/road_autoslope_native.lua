@@ -24,7 +24,7 @@ for z=8,Sim.H-9 do
   if place then break end
 end
 assert(place,"No naturally high flat testing strip")
-local function at(d) return Sim.id(place.x+d,place.z) end
+local function at(d,z) return Sim.id(place.x+d,place.z+(z or 0)) end
 local function query(q,f)
   q.player=owner
   assert(authority.query(q,function(r) assert(r.ok,r.why);f(r) end))
@@ -65,7 +65,18 @@ local function run(viewer)
   local vehicle,waypoint
   local function add(f) tasks[#tasks+1]=f end
   local function road(req) add(function(done) build(req,done) end) end
-  add(function(done) command({kind="road_build",first=at(1),last=at(8)},done) end)
+  local function lay(first,last)
+    add(function(done) command({kind="road_build",first=first,last=last},done) end)
+  end
+  lay(at(1),at(9))
+  -- Drive-through stops preserve the leaving vehicle's heading. Explicit
+  -- turning loops beyond both platforms make a repeatable service, not
+  -- just a one-way route whose first fare is also its last.
+  for _,x in ipairs({1,8}) do
+    lay(at(x),at(x,1))
+    lay(at(x,1),at(x+1,1))
+    lay(at(x+1,1),at(x+1))
+  end
   road({tool="road_depot",first=at(0)})
   road({tool="road_station",first=at(3)})
   road({tool="road_station",first=at(7)})
@@ -113,7 +124,13 @@ local function run(viewer)
   local function verify()
     until_("Road and its support were not repainted",road_painted,function()
       local deck={x=2*(place.x+5)+.5,y=place.h+.55,z=2*place.z+.5}
-      until_("The actual bus never crossed the edited ground",function()
+      until_("The bus never traversed the edited terrain and recorded its Go via order",function()
+        if use_waypoint then
+          local _,s=finance()
+          local v=assert(s.fleet[vehicle])
+          assert(v.orders[1].station=="waypoint:"..waypoint,"The original Go via order was lost")
+          if v.last_road_waypoint~=waypoint then return end
+        end
         for _,ref in ipairs(core.get_objects_inside_radius(deck,1.35)) do
           local obj=ref:get_luaentity()
           local pick=obj and obj.luanttd_vehicle
@@ -121,16 +138,9 @@ local function run(viewer)
           if pos and math.abs(pos.y-deck.y)<.24 then return pos end
         end
       end,function()
-        core.after(3,function()
-          core.log("action","NATIVE ROAD TERRAFORM FRAME "..(use_waypoint and "waypoint-autoslope-live" or "road-autoslope-live"))
-          core.after(1,function()
-            if use_waypoint then
-              local _,s=finance()
-              local v=s.fleet[vehicle]
-              assert(v.orders[1].station=="waypoint:"..waypoint and v.last_road_waypoint==waypoint)
-            end
-            core.log("action","PASS NATIVE ROAD AUTOSLOPE: moving bus crossed above two paid foundations without moving its road or waypoint")
-          end)
+        core.log("action","NATIVE ROAD TERRAFORM FRAME "..(use_waypoint and "waypoint-autoslope-live" or "road-autoslope-live"))
+        core.after(1.2,function()
+          core.log("action","PASS NATIVE ROAD AUTOSLOPE: moving bus crossed above two paid foundations without moving its road or waypoint")
         end)
       end)
     end)

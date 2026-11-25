@@ -108,7 +108,10 @@ for k in {1..460}; do
   sleep .20
 done
 grep -E "$start_marker|$frame_prefix|$pass_marker" "$out/server.log"
-grep -Fq "$pass_marker" "$out/server.log"
+if ! grep -Fq "$pass_marker" "$out/server.log"; then
+  tail -75 "$out/server.log" "$out/client.log"
+  exit 1
+fi
 ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
 if [[ ${LUANTTD_NATIVE_GROUND_FIXTURE:-industry} == electric_crossing ]]; then
   stop_process "$client"; client=

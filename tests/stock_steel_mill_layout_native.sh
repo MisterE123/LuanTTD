@@ -196,6 +196,10 @@ if [[ ${LUANTTD_QA_WET_RAIL:-0} == 1 ]]; then
   grep -q 'NATIVE WET RAIL BUILT' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
   sleep .7
   if command -v import >/dev/null; then import -window root -quality 91 "$out/wet-rail.jpg"; fi
+  for _ in {1..240}; do grep -q 'NATIVE WET RAIL TERRAFORM' "$out/server.log" && break; sleep .25; done
+  grep -q 'NATIVE WET RAIL TERRAFORM' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
+  sleep .55
+  if command -v import >/dev/null; then import -window root -quality 91 "$out/dried-rail.jpg"; fi
 fi
 if [[ ${LUANTTD_QA_MULTICOAST_RAIL:-0} == 1 ]]; then
   for _ in {1..240}; do grep -q 'NATIVE MULTICORNER RAIL WET' "$out/server.log" && break; sleep .25; done
