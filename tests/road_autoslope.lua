@@ -53,3 +53,25 @@ for _,part in ipairs({
   assert(s.tiles[id]==part and Sim.company(s,player).cash==cash-500)
 end
 print("PASS deck-preserving landscape command across eight ordinary road/tram/terminal shapes")
+
+local Parts=dofile("mods/luanttd_core/packed_campaign.lua")
+do
+  local s=scenario({build="road",owner=player,road_bits=10,road_terminal_level=1,road_waypoint_id=12})
+  s.stock_road_waypoints={[12]={id=12,owner=player,z=1}}
+  local t=s.tiles[id]
+  assert(Sim.landscape(s,player,"raise",x,z))
+  assert(t.road_waypoint_id==12 and t.road_terminal_level==1 and t.h==1 and t.road_bits==10)
+  assert(Sim.landscape(s,player,"lower",x,z))
+  assert(t.road_terminal_level==1 and t.h==0)
+end
+do
+  local s=scenario({airfield={airport=1,x=0,z=0,layout="city",owner=player,level=1}})
+  s.stock_small_airports={[1]={id=1,ground=8,owner=player}}
+  local first=s.tiles[id].airfield
+  assert(Sim.landscape(s,player,"raise",x,z) and Sim.landscape(s,player,"lower",x,z))
+  assert(s.tiles[id].h==0 and first.level==1 and first.airport==1 and s.stock_small_airports[1].ground==8)
+  assert(not Sim.landscape(s,player,"raise",x,z+1))
+  local restored=Parts.decode(Parts.encode(s))
+  assert(restored.tiles[id].airfield.level==1 and restored.stock_small_airports[1].ground==8)
+end
+print("PASS preserved road waypoint and runway levels, including packed checkpoint")

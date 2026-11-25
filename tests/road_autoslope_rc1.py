@@ -40,6 +40,9 @@ road_seed = "{" + ",".join(initializers[:15]) + "},{" + ",".join(initializers[15
 normal = block(tf, r"case RoadTileType::Normal:").split("{", 1)[1].rsplit("}", 1)[0]
 normal = normal[:normal.rfind("break;")]
 price0 = int(re.search(r"PriceBaseSpec\((\d+),.*?\)\s*,?\s*// Price::BuildFoundation",src("table/pricebase.h"))[1])
+station_cmd=block(src("station_cmd.cpp"),r"^static CommandCost TerraformTile_Station")
+air_guard=re.search(r"if \((GetTileMaxZ\(tile\) == z_new \+ GetSlopeMaxZ\(tileh_new\))\) \{",station_cmd)[1]
+assert "case StationType::Airport:" in station_cmd
 cpp = r"""
 #include <array>
 #include <bit>
@@ -132,6 +135,10 @@ int main() {
      if(kind==0) {
        auto q=normal_(RoadBits(unsigned(bit)),old_s,base,new_s,new_base);
        if(q.Succeeded())cost=q.value;
+     } else if(kind==4) {
+       int tile=base+GetSlopeMaxZ(old_s), z_new=new_base;
+       Slope tileh_new=new_s;
+       if (%AIR%) cost=_price[Price::BuildFoundation];
      } else {
        int top=base+GetSlopeMaxZ(old_s);
        if(AutoslopeCheckForEntranceEdge(top,new_base,new_s,DiagDirection(bit)) &&
@@ -143,7 +150,7 @@ int main() {
  }
 }
 """
-cpp = cpp.replace("%SLOPES%",raw_slopes).replace("%ROAD%",road_seed).replace("%NORMAL%",normal).replace("%PRICE%",str(price0))
+cpp = cpp.replace("%SLOPES%",raw_slopes).replace("%ROAD%",road_seed).replace("%NORMAL%",normal).replace("%PRICE%",str(price0)).replace("%AIR%",air_guard)
 runner = r"""
 local src="mods/luanttd_core/openttd/"
 local function m(n) return dofile(src..n..".lua") end
@@ -153,6 +160,7 @@ for row in io.lines() do
   local opts={build_on_slopes=b[7]==1,autoslope=b[8]==1}
   local got
   if b[1]==0 then got=R.normal(b[2],b[3],b[4],b[5],b[6],opts)
+  elseif b[1]==4 then got=R.airport(b[3],b[4],b[5],b[6],opts)
   else got=R.terminal(b[2],b[1]==2,b[3],b[4],b[5],b[6],opts) end
   print(got or 0)
 end
@@ -171,6 +179,7 @@ with TemporaryDirectory() as d:
     assert len(valid)==len(all_roads)
     roads=[pair for pair,flag in zip(all_roads,valid) if flag=="1"]
     sources=[(0,b,old) for old,b in roads]+[(mode,b,s) for mode in (1,2) for b in range(4) for s in masks]
+    sources += [(4,0,s) for s in masks]
     rows=[(m,b,s,oldz,n,newz,on,a) for m,b,s in sources for n in masks
           for oldz,newz in ((1,0),(1,1),(1,2),(1,3)) for on,a in ((1,1),(0,1),(1,0))]
     data="".join(" ".join(map(str,r))+"\n" for r in rows)
@@ -179,4 +188,4 @@ with TemporaryDirectory() as d:
     assert len(want)==len(got)==len(rows)
     for row,a,b in zip(rows,got,want):
         assert a==b,(row,a,b)
-    print(f"PASS {len(rows)} RC1 normal road and terminal autoslope comparisons")
+    print(f"PASS {len(rows)} RC1 normal road, terminal entrance, and airport autoslope comparisons")

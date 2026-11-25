@@ -23,6 +23,14 @@ return function(Road,Slope,Stops)
       return opts.foundation_price or Stops.base_foundation
     end
   end
+  -- RC1 station_cmd.cpp TerraformTile_Station / Airport does not
+  -- test an entrance edge: only the tile's existing maximum height.
+  function R.airport(old_mask,old_base,new_mask,new_base,opts)
+    opts=opts or {}
+    if active(opts) and max_z(old_base,old_mask)==max_z(new_base,new_mask) then
+      return opts.foundation_price or Stops.base_foundation
+    end
+  end
   function R.terminal(direction,through,old_mask,old_base,new_mask,new_base,opts)
     opts=opts or {}
     if not active(opts) or max_z(old_base,old_mask)~=max_z(new_base,new_mask) then return end

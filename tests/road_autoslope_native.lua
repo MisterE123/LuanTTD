@@ -57,60 +57,88 @@ local function lower(q,f)
     query({kind="command",command={kind="terrain_commit",revision=r.revision,token=r.value.token}},f)
   end)
 end
+local use_waypoint=core.settings:get_bool("luanttd_qa_road_autoslope_waypoint",false)
 local function run(viewer)
   viewer:set_pos({x=2*place.x+10,y=place.h+8,z=2*place.z-9})
   viewer:set_look_horizontal(0);viewer:set_look_vertical(.57)
-  command({kind="road_build",first=at(1),last=at(8)},function()
-    build({tool="road_depot",first=at(0)},function()
-      build({tool="road_station",first=at(3)},function()
-        build({tool="road_station",first=at(7)},function()
-          query({kind="depot",mode="road",depot=at(0)},function(list)
-            local buy
-            for _,offer in ipairs(list.value.offers) do
-              if offer.request.cargo=="passenger" then buy=offer.request;break end
-            end
-            assert(buy)
-            command(buy,function(r)
-              local vehicle=r.value
+  local tasks={}
+  local vehicle,waypoint
+  local function add(f) tasks[#tasks+1]=f end
+  local function road(req) add(function(done) build(req,done) end) end
+  add(function(done) command({kind="road_build",first=at(1),last=at(8)},done) end)
+  road({tool="road_depot",first=at(0)})
+  road({tool="road_station",first=at(3)})
+  road({tool="road_station",first=at(7)})
+  if use_waypoint then road({tool="road_waypoint",first=at(5),axis=0}) end
+  add(function(done)
+    query({kind="depot",mode="road",depot=at(0)},function(list)
+      local buy
+      for _,offer in ipairs(list.value.offers) do
+        if offer.request.cargo=="passenger" then buy=offer.request;break end
+      end
+      assert(buy)
+      command(buy,function(r) vehicle=r.value;done() end)
+    end)
+  end)
+  if use_waypoint then add(function(done)
+    local _,s=finance()
+    waypoint=assert(s.tiles[at(5)].road_waypoint_id)
+    query({kind="orders",mode="road",vehicle=vehicle},function(r)
+      query({kind="command",command={kind="vehicle_order",mode="road",vehicle=vehicle,
+        operation="append",tile=at(5),order_revision=r.value.revision,revision=r.revision}},done)
+    end)
+  end) end
+  for _,site in ipairs({7,3}) do
+    add(function(done)
+      local _,s=finance()
+      command({kind="road_order_add",vehicle=vehicle,station=assert(s.tiles[at(site)].station)},done)
+    end)
+  end
+  add(function(done) command({kind="road_toggle",vehicle=vehicle},done) end)
+  add(function(done) lower(at(5),done) end)
+  local function road_painted()
+    local _,s=finance()
+    local shape,base=dofile(mod.."/openttd/terrain.lua").tile(s.corner_grid,place.x+5,place.z)
+    local x,z=2*(place.x+5),2*place.z
+    local physical=core.get_node_or_nil({x=x,y=place.h,z=z})
+    if not (shape==7 and base==place.h-1 and physical and physical.name:find("foundation",1,true)) then return end
+    if use_waypoint then
+      local t=s.tiles[at(5)]
+      assert(t.road_waypoint_id==waypoint and t.road_terminal_level==place.h)
+      local marker=core.get_node_or_nil({x=x,y=place.h+1,z=z})
+      if not marker or not marker.name:find("road_waypoint",1,true) then return end
+    end
+    return true
+  end
+  local function verify()
+    until_("Road and its support were not repainted",road_painted,function()
+      local deck={x=2*(place.x+5)+.5,y=place.h+.55,z=2*place.z+.5}
+      until_("The actual bus never crossed the edited ground",function()
+        for _,ref in ipairs(core.get_objects_inside_radius(deck,1.35)) do
+          local obj=ref:get_luaentity()
+          local pick=obj and obj.luanttd_vehicle
+          local pos=pick and pick.kind=="road" and pick.id==vehicle and ref:get_pos()
+          if pos and math.abs(pos.y-deck.y)<.24 then return pos end
+        end
+      end,function()
+        core.after(3,function()
+          core.log("action","NATIVE ROAD TERRAFORM FRAME "..(use_waypoint and "waypoint-autoslope-live" or "road-autoslope-live"))
+          core.after(1,function()
+            if use_waypoint then
               local _,s=finance()
-              local a,b=s.tiles[at(3)].station,s.tiles[at(7)].station
-              command({kind="road_order_add",vehicle=vehicle,station=b},function()
-                command({kind="road_order_add",vehicle=vehicle,station=a},function()
-                  command({kind="road_toggle",vehicle=vehicle},function()
-                    lower(at(5),function()
-                      until_("Road and its support were not repainted",function()
-                        local _,s=finance()
-                        local shape,base=dofile(mod.."/openttd/terrain.lua").tile(s.corner_grid,place.x+5,place.z)
-                        local physical=core.get_node_or_nil({x=2*(place.x+5),y=place.h,z=2*place.z})
-                        return shape==7 and base==place.h-1 and physical and physical.name:find("foundation",1,true)
-                      end,function()
-                        local deck={x=2*(place.x+5)+.5,y=place.h+.55,z=2*place.z+.5}
-                        until_("The actual bus never crossed the edited ground",function()
-                          for _,ref in ipairs(core.get_objects_inside_radius(deck,1.35)) do
-                            local obj=ref:get_luaentity()
-                            local pick=obj and obj.luanttd_vehicle
-                            local pos=pick and pick.kind=="road" and pick.id==vehicle and ref:get_pos()
-                            if pos and math.abs(pos.y-deck.y)<.24 then return pos end
-                          end
-                        end,function()
-                          core.after(3,function()
-                            core.log("action","NATIVE ROAD TERRAFORM FRAME road-autoslope-live")
-                            core.after(1,function()
-                              core.log("action","PASS NATIVE ROAD AUTOSLOPE: moving bus crossed above two paid foundations without changing roadway height")
-                            end)
-                          end)
-                        end)
-                      end)
-                    end)
-                  end)
-                end)
-              end)
-            end)
+              local v=s.fleet[vehicle]
+              assert(v.orders[1].station=="waypoint:"..waypoint and v.last_road_waypoint==waypoint)
+            end
+            core.log("action","PASS NATIVE ROAD AUTOSLOPE: moving bus crossed above two paid foundations without moving its road or waypoint")
           end)
         end)
       end)
     end)
-  end)
+  end
+  local function step(i)
+    if tasks[i] then tasks[i](function()step(i+1)end) else verify() end
+  end
+  step(1)
 end
 until_("Ordinary worker client not ready",function()
   local viewer=core.get_player_by_name(owner)

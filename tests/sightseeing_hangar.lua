@@ -20,6 +20,11 @@ local function get(id) if id==2010 then return {h=1,airfield=country} end end
 local function visible(x,y,z) return x==21 and y==2 and z==40 end
 local id,airport=H.pick(p,Sim,get,visible)
 assert(id==2010 and airport==7)
+-- Autoslope can lower the natural tile without moving the hangar pad.
+local fixed={x=3,z=0,airport=7,level=1}
+local function reshaped(id) if id==2010 then return {h=0,airfield=fixed} end end
+local parked,field=H.pick(p,Sim,reshaped,visible)
+assert(parked==2010 and field==7)
 assert(not H.pick(p,Sim,get,function()return false end),"do not select an absent prop")
 local file=assert(io.open(base.."models/bl_hangar_ga.obj"))
 local bytes=file:read("*a");file:close()

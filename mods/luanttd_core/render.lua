@@ -1656,13 +1656,15 @@ return function(api)
     end
     if api.airport_tools and t.airfield then
       local field=t.airfield
-      local _,level=terrain.tile(id)
+      local shape,base=terrain.tile(id)
+      local level=field.level or base
+      local retaining_ground=shape~=0 and level>base
       local nodes=airfield_nodes[field.layout or "country"]
       local row=nodes and nodes[field.z]
       if row and y==level+1 and x%2==0 and z%2==0 then return row[field.x] or "air" end
       if row and airfield_nodes.ga and y==level+1 and x%2==airfield_nodes.ga.x and z%2==airfield_nodes.ga.z
           and airfield_nodes.ga.has(field) then return airfield_nodes.ga_node end
-      return y<=level and gnames.grass[t.variant] or "air"
+      return y<=level and (retaining_ground and retaining or gnames.grass[t.variant]) or "air"
     end
     if api.ship_tools and S.aqueduct_above and S.aqueduct_above[id] then
       local span=S.stock_aqueducts[S.aqueduct_above[id]]

@@ -768,10 +768,21 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       -- action still requires the player to pick a layer with Bulldozer.
       return nil,"CROSSING_SURFACE_HEIGHT"
     end
+    local field=t and t.airfield and t.airfield.layout~="oilrig" and s.stock_small_airports
+      and s.stock_small_airports[t.airfield.airport]
+    if field and t.terrain~="water" and not t.stock_void and not t.ship
+      and not (s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
+        s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
+        s.rail_tunnel_below and s.rail_tunnel_below[id]) then
+      local old_mask,old_base,top=terrain_rules.tile(g,tx,tz)
+      local foundation=field.ground==top*8 and road_rules.autoslope.airport(old_mask,old_base,mask,base,s.stock_road_town_policy)
+      if foundation then return foundation end
+      return nil,"AIRPORT_SURFACE_HEIGHT"
+    end
     -- Terrain deformation is only in place when the source road surface
     -- or terminal entrance is unchanged, so active orders remain valid.
     -- Other co-located structures retain their independent validations.
-    if t and (t.build or t.tram) and not crossing and not t.road_waypoint_id and not t.road_bridge_id and not t.road_tunnel_id
+    if t and (t.build or t.tram) and not crossing and not t.road_bridge_id and not t.road_tunnel_id
         and not t.rail_span_id and not t.rail_tracks and not t.wood and not t.site and not t.house and not t.stock_object
         and not t.stock_industry and not t.stock_landmark and not t.ship and not t.airfield
         and not (s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
@@ -786,7 +797,10 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
         old_mask,old_base=terrain_rules.tile(g,tx,tz)
       end
       local foundation
-      if old_mask and (trip=="road" or trip==nil and tram and tram.kind=="road") and (not tram or tram.kind=="road") then
+      if old_mask and t.road_waypoint_id then
+        local dir=road==10 and 0 or road==5 and 1
+        if dir then foundation=A.terminal(dir,true,old_mask,old_base,mask,base,policy) end
+      elseif old_mask and (trip=="road" or trip==nil and tram and tram.kind=="road") and (not tram or tram.kind=="road") then
         local bits=tram and road_rules.union(road,tram.tram_bits or 0) or road
         foundation=A.normal(bits,old_mask,old_base,mask,base,policy)
       elseif old_mask and trip=="road_depot" and t.depot_dir then
@@ -821,7 +835,8 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       NOT_ENOUGH_MONEY="Not enough money for the next change.",ALREADY_AT_SEA_LEVEL="Already at sea level.",
       ALREADY_LEVELLED="Already level.",TOO_HIGH="The edit exceeds this world's height limit.",
       MUST_DEMOLISH_CANAL_FIRST="Dismantle the canal before landscaping.",VEHICLE_IN_THE_WAY="A vessel is in the way or has reserved the waterway.",
-      CROSSING_SURFACE_HEIGHT="Keep the crossing deck at its current height on a supported slope, or remove the crossing first."}
+      CROSSING_SURFACE_HEIGHT="Keep the crossing deck at its current height on a supported slope, or remove the crossing first.",
+      AIRPORT_SURFACE_HEIGHT="Landscaping cannot change the level of an active airport."}
     return false,(explanations[why] or water_clear_errors[why] or tostring(why or "Nothing changed."))
       ..(px and pz and (" (%d,%d)"):format(px,pz) or "")
   end
@@ -844,6 +859,10 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       local mask,base=terrain_rules.tile(g,d.x,d.z)
       local t=s.tiles[id]
       t.h=base
+      if t.airfield and t.airfield.layout~="oilrig" then
+        local field=s.stock_small_airports and s.stock_small_airports[t.airfield.airport]
+        if field then t.airfield.level=field.ground/8 end
+      end
       -- The planner only admits shapes with the same crossing top. Keep
       -- the same record and reservation, but repaint its new foundation.
       local crossing=t.level_crossing

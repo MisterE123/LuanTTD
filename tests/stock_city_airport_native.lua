@@ -19,6 +19,8 @@ local models={
 }
 local model=assert(models[stock])
 local layout=core.settings:get("luanttd_qa_air_layout") or "city"
+local terraform=core.settings:get_bool("luanttd_qa_air_autoslope",false)
+local foundation_charge=terraform and 1250 or 0
 local metro=layout=="metropolitan"
 local commuter=layout=="commuter"
 local international=layout=="international"
@@ -84,7 +86,7 @@ local function scene(viewer)
             t.stock_landmark or t.stock_void or t.terrain=="water" or t.build then enabled=false end
         level=h
       end end
-      if enabled and (#positions==0 or math.abs(positions[1].x-u)+math.abs(positions[1].z-v)>=25) then
+      if enabled and (not terraform or level>0) and (#positions==0 or math.abs(positions[1].x-u)+math.abs(positions[1].z-v)>=25) then
         positions[#positions+1]={x=u,z=v,h=level,id=Sim.id(u,v)}
         if #positions==2 then break end
       end
@@ -148,6 +150,15 @@ local function scene(viewer)
     core.after(.10,watch_flight)
   end
   local function observe()
+    if terraform then
+      local x,z=focus.x+1,focus.z+1
+      local ground=core.get_node_or_nil({x=2*x,y=focus.h,z=2*z})
+      local apron=core.get_node_or_nil({x=2*x,y=focus.h+1,z=2*z})
+      if not (ground and ground.name:match("retaining") and apron
+          and apron.name=="luanttd_core:city_airport_1_1") then
+        core.after(.18,observe);return
+      end
+    end
     if expanded then
       for z=0,d-1 do for x=0,w-1 do
         local node=core.get_node({x=2*(focus.x+x),y=focus.h+1,z=2*(focus.z+z)})
@@ -176,6 +187,7 @@ local function scene(viewer)
     use({mode="air",operation="build",layout=layout,tile=positions[1].id},function(one)
       use({mode="air",operation="build",layout=layout,tile=positions[2].id},function(two)
         local first,second=one.value.id,two.value.id
+        local function order_aircraft()
         local cell=hub and Sim.id(focus.x+hx,focus.z+hz) or nil
         ask({kind="depot",mode="air",depot=first,hangar_tile=cell},function(q)
           if hub then assert(q.value.hangar_label=="Airport #"..first.." · Hangar 2") end
@@ -188,9 +200,23 @@ local function scene(viewer)
               local disk=assert(OwnerCheckpoint.read())
               assert((disk.stock_small_airports[first].layout or "country")==layout and disk.stock_owned_air_fleet[bought.value.id].stock_id==stock)
               if hub then assert(disk.stock_owned_air_fleet[bought.value.id].hangar_index==1) end
-              assert(disk.companies[owner].cash==starting_cash+loans*10000-2*airport_cost-model.price)
+              assert(disk.companies[owner].cash==starting_cash+loans*10000-2*airport_cost-model.price-foundation_charge)
               core.after(.22,observe)
             end)
+          end)
+        end)
+        end
+        if not terraform then order_aircraft();return end
+        local x,z=focus.x+1,focus.z+1
+        ask({kind="terrain_quote",request={operation="lower",first=Sim.id(x,z)}},function(q)
+          assert(q.value.cost==foundation_charge)
+          ask({kind="command",command={kind="terrain_commit",token=q.value.token,revision=q.revision}},function()
+            local disk=assert(OwnerCheckpoint.read())
+            assert(disk.stock_small_airports[first].ground==8*focus.h)
+            local corner=dofile(mod.."/openttd/terrain.lua").corner(disk.corner_grid,x,z)
+            assert(corner==focus.h-1 and disk.tiles[Sim.id(x,z)].airfield.level==focus.h)
+            core.log("action","NATIVE AIR AUTOSLOPE: lowered natural ground below four mounted tiles without moving the runway")
+            order_aircraft()
           end)
         end)
       end)

@@ -72,8 +72,9 @@ return function(Small,City)
       local tx,tz=x+dx,z+dz
       local tile=Sim.id(tx,tz)
       local t=tile and get(tile)
-      if t and H.has(t.airfield) and visible(tx*2+H.x,t.h+1,tz*2+H.z) then
-        local at=H.hit({x=eye.x-tx*2,y=eye.y-t.h-.509,z=eye.z-tz*2},dir)
+      local level=t and t.airfield and (t.airfield.level or t.h)
+      if level and H.has(t.airfield) and visible(tx*2+H.x,level+1,tz*2+H.z) then
+        local at=H.hit({x=eye.x-tx*2,y=eye.y-level-.509,z=eye.z-tz*2},dir)
         if at and at<best then best,id,airport=at,tile,t.airfield.airport end
       end
     end end

@@ -53,6 +53,7 @@ server_announce = false
 bayline_stock_bus_start_year = ${LUANTTD_QA_AIR_YEAR:-1975}
 luanttd_qa_airframe = $airframe
 luanttd_qa_air_layout = ${LUANTTD_QA_AIR_LAYOUT:-city}
+luanttd_qa_air_autoslope = ${LUANTTD_QA_AIR_AUTOSLOPE:-false}
 bayline_generated_map_width = 128
 bayline_generated_map_depth = 128
 bayline_generated_relief = 0

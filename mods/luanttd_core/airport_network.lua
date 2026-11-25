@@ -82,7 +82,7 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary)
     s.stock_small_airports[airport.id]=airport
     local dirty={}
     for _,pos in ipairs(airport.tiles) do
-      s.tiles[pos.id].airfield={airport=airport.id,x=pos.x,z=pos.z,layout=airport.layout,owner=owner}
+      s.tiles[pos.id].airfield={airport=airport.id,x=pos.x,z=pos.z,layout=airport.layout,owner=owner,level=airport.ground/8}
       dirty[#dirty+1]=pos.id
     end
     expense(s,owner,airport.price)
