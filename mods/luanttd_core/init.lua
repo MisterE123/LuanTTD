@@ -78,6 +78,7 @@ end
 S.stock_road_town_policy={
   tolerance=math.max(0,math.min(3,math.floor(tonumber(settings:get("luanttd_town_council_tolerance")) or 0))),
   extra_dynamite=settings:get_bool("luanttd_extra_dynamite",true),
+  station_noise_level=settings:get_bool("luanttd_station_noise_level",false),
 }
 Sim.restore_road_orders(S)
 local simulation_bindings=dofile(mod.."/campaign_simulation_bindings.lua")(Sim,mod)

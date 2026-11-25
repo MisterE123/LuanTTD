@@ -2302,7 +2302,12 @@ local function authority_preview(p,id,hit)
     return ids,false,why
   end
   local cells=q.tiles or ids
-  return cells,true,("%s  |  %s  ·  %d tile%s"):format(label,dollars(q.cost or 0),#cells,#cells==1 and "" or "s")
+  local description=("%s  |  %s  ·  %d tile%s"):format(label,dollars(q.cost or 0),#cells,#cells==1 and "" or "s")
+  if request.mode=="air" and q.noise then
+    local a=q.noise
+    description=description..("  ·  %s noise: %d → %d / %d"):format(a.name,a.used,a.used+a.add,a.limit)
+  end
+  return cells,true,description
 end
 function U.preview(p,id,hit)
   if api.authority_handoff then return authority_preview(p,id,hit) end
@@ -3268,6 +3273,12 @@ function U.open_town_authority(p,town)
           ("Commission a statue · "..dollars(statue.cost).." required")))
       end
       exit=exit+.85
+    end
+    if row.airport_noise then
+      local noise=row.airport_noise
+      action=action..("label[.45,%g;%s]"):format(exit+.22,
+        esc(("Airport noise: %d / %d"):format(noise.used,noise.limit)))
+      exit=exit+.63
     end
     local size=exit+.92
     core.show_formspec(n,"luanttd_core:town_authority",

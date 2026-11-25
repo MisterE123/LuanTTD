@@ -55,6 +55,8 @@ local function ask()
           local yaw=ref:get_yaw()
           assert(math.abs(math.sin(yaw+target.f*math.pi/2))<.001)
           current=at.y-target.y
+          assert(ref:get_properties().mesh=="bl_town_stock_04_lift.obj")
+          assert(current>=-.001 and current<=36*.0475+.001,"Cab outside its native shaft")
           native_low,native_high=math.min(native_low,current),math.max(native_high,current)
           count=count+1
           car=true
@@ -62,7 +64,9 @@ local function ask()
         end
       end
     end
-    if car and high-low>=12 and native_high-native_low>=.54 and count>=4 and current>.40 and current<1.39 then
+    -- A checkpoint and a projection may coalesce different tick batches.
+    -- Require real travel in both, not a fortuitous mid-trip camera sample.
+    if car and high-low>=12 and native_high-native_low>=.54 and count>=4 then
       if resume then
         core.log("action","PASS NATIVE TOWN LIFT REOPEN: same worker-owned office continued stock cab travel after restart")
       else

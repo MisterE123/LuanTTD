@@ -1,8 +1,7 @@
 -- Saved airfield facility adapter: ordinary, level, clean-ground
--- branch of OpenTTD 14.1 CmdBuildAirport / CheckFlatLandAirport.
--- Noise, stations shared across modes, foundation clearing and airport
--- replacement are explicit future work; the preview never clears objects.
-return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary)
+-- branch of CmdBuildAirport / CheckFlatLandAirport and the RC1
+-- local authority rules. Shared stations and site clearing are separate.
+return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
   local N={PRICE_PER_TILE=600,CLEAR_PER_TILE=30}
   function N.layout(name)
     if name=="city" then return City end
@@ -26,6 +25,57 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary)
     end end
     return tiles
   end
+  -- Noise belongs to the town nearest the occupied perimeter, not
+  -- necessarily the station's named town. Derive it from saved stations
+  -- so construction, removal, setting changes and reload can't drift.
+  local function noise_at(airport,towns,tolerance)
+    if airport.layout=="oilrig" then return end
+    local level=Noise.level[airport.layout or "country"]
+    if not level then return end
+    local x,z=Sim.xy(airport.origin)
+    local cells={}
+    for _,p in ipairs(airport.tiles) do
+      cells[#cells+1]={x=x+p.x,z=z+p.z,local_x=p.x,local_z=p.z}
+    end
+    local town,d=Noise.closest(cells,airport.width,airport.height,towns)
+    if town then return town.id,Noise.for_distance(level,d,tolerance),d end
+  end
+  local function towns(s)
+    local out={}
+    for _,site in ipairs(s.sites) do
+      if site.kind=="town" then
+        local x,z=Sim.xy(site.tile)
+        out[#out+1]={id=site.id,x=x,z=z}
+      end
+    end
+    return out
+  end
+  local census=setmetatable({},{__mode="k"})
+  local function noise_budget(s,id,locality,tolerance)
+    local town=s.sites[id]
+    local limit=Noise.town_capacity(town.population or 0,Noise.population_divisor[tolerance])
+    local prior=census[s]
+    if not prior or prior.revision~=s.topology or prior.tolerance~=tolerance or prior.sites~=#s.sites then
+      prior={revision=s.topology,tolerance=tolerance,sites=#s.sites,totals={}}
+      for _,d in pairs(s.stock_small_airports or {}) do
+        local at,amount=noise_at(d,locality,tolerance)
+        if at then
+          -- Town::noise_reached is uint16_t.
+          prior.totals[at]=((prior.totals[at] or 0)+amount)%65536
+        end
+      end
+      census[s]=prior
+    end
+    return prior.totals[id] or 0,limit
+  end
+  function N.town_noise(s,id)
+    local policy=s.stock_road_town_policy or {}
+    if not (Noise and policy.station_noise_level) then return end
+    local t=s.sites[id]
+    if not t or t.kind~="town" then return end
+    local used,limit=noise_budget(s,id,towns(s),policy.tolerance or 0)
+    return {used=used,limit=limit}
+  end
   function N.quote(s,owner,origin,name)
     local field=N.layout(name)
     if not field or name=="oilrig" then return nil,"AIRPORT_TYPE_NOT_AVAILABLE" end
@@ -36,6 +86,16 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary)
       return nil,reasons[name] or "CITY_AIRPORT_NOT_INTRODUCED"
     end
     if not (s.corner_grid and origin and s.tiles[origin]) then return nil,"SELECT_AIRFIELD_ORIGIN" end
+    local town,distance=Sim.nearest_town(s,origin)
+    local policy=s.stock_road_town_policy or {}
+    local tolerance=policy.tolerance or 0
+    local company=s.companies[owner]
+    if Noise and town and tolerance~=3 and distance<20 then
+      local ratings=company and company.stock_town_authority_ratings
+      if (ratings and ratings[town.id] or 500)<=-200 then
+        return nil,"AIRPORT_AUTHORITY_RATING"
+      end
+    end
     local x,z=Sim.xy(origin)
     local airport={owner=owner,origin=origin,x=x*16,z=z*16,rotation=0,
       width=field.W,height=field.H,flags=0,tiles={},layout=name~="country" and name or nil,
@@ -55,12 +115,23 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary)
       h=level
       airport.tiles[#airport.tiles+1]={id=a,x=dx,z=dz}
     end end
-    local town=Sim.nearest_town(s,origin)
     if town then
       airport.town=town.id
-      local count=0
-      for _,d in pairs(s.stock_small_airports or {}) do if d.town==town.id then count=count+1 end end
-      if count>=2 then return nil,"TOWN_REFUSES_THIRD_AIRPORT" end
+      if Noise and policy.station_noise_level then
+        local locality=towns(s)
+        local at,amount,dist=noise_at(airport,locality,tolerance)
+        if at then
+          local used,limit=noise_budget(s,at,locality,tolerance)
+          if used+amount>limit then return nil,"TOWN_REFUSES_AIRPORT_NOISE",at end
+          airport.noise={town=at,name=s.sites[at].name,add=amount,used=used,limit=limit,distance=dist}
+        end
+      elseif tolerance~=3 then
+        local count=0
+        for _,d in pairs(s.stock_small_airports or {}) do
+          if d.town==town.id and d.layout~="oilrig" then count=count+1 end
+        end
+        if count>=2 then return nil,"TOWN_REFUSES_THIRD_AIRPORT" end
+      end
     end
     airport.ground=h*8
     airport.price=#airport.tiles*N.PRICE_PER_TILE
@@ -76,6 +147,8 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary)
   function N.build(s,owner,origin,name)
     local airport,why,id=N.quote(s,owner,origin,name)
     if not airport then return nil,why,id end
+    -- The price/impact is a quote. Do not persist a stale noise budget.
+    airport.noise=nil
     airport.id=s.next_small_airport or 1
     s.next_small_airport=airport.id+1
     s.stock_small_airports=s.stock_small_airports or {}

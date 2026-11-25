@@ -202,12 +202,12 @@ return function(Sim,R,max_days)
   function A.transport_quote(name,request,peek)
     if not owner(name) or not R.transport or not s.companies[name] then return reply(false,"TRANSPORT_QUOTE_UNAVAILABLE") end
     local quote,why=R.transport.quote(name,request)
-    if peek then return reply(quote~=nil,why,quote and {cost=quote.price,tiles=quote.tiles}) end
+    if peek then return reply(quote~=nil,why,quote and {cost=quote.price,tiles=quote.tiles,noise=quote.noise}) end
     transport_quotes[name]=nil
     if not quote then return reply(false,why) end
     quote_sequence=quote_sequence+1
     transport_quotes[name]={quote=quote,token=quote_sequence,topology=s.topology}
-    return reply(true,nil,{token=quote_sequence,cost=quote.price,tiles=quote.tiles})
+    return reply(true,nil,{token=quote_sequence,cost=quote.price,tiles=quote.tiles,noise=quote.noise})
   end
   local bridge_quotes={}
   function A.bridge_picker(name,mode,a,b,peek,gauge)
@@ -296,6 +296,9 @@ return function(Sim,R,max_days)
     row.funding=Sim.quote_town_buildings(s,name,id)
     row.reconstruction=Sim.quote_road_reconstruction(s,name,id)
     row.statue=Sim.quote_town_statue(s,name,id)
+    if R.air and R.air.network and R.air.network.town_noise then
+      row.airport_noise=R.air.network.town_noise(s,id)
+    end
     return reply(true,nil,row)
   end
   function A.company(name)

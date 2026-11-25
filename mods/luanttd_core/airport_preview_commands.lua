@@ -22,6 +22,8 @@ return function(api,Network,Run,Owned,Roster)
     AIRPORT_NEEDS_LEVEL_FIELD="The full runway, taxiways and apron need level land at the same height.",
     AIRPORT_SITE_OCCUPIED="Clear trees and structures before building the airfield.",
     TOWN_REFUSES_THIRD_AIRPORT="The town will not permit a third airport.",
+    TOWN_REFUSES_AIRPORT_NOISE="The local authority refuses this airport's noise. Try a quieter airport or build farther from town.",
+    AIRPORT_AUTHORITY_RATING="The local authority refuses new stations at your company's current rating.",
     NOT_ENOUGH_MONEY="Your company cannot afford the airfield.",
     SELECT_OWN_AIRFIELD="Choose a tile belonging to your airfield.",
     AIRCRAFT_OCCUPIES_AIRFIELD="Clear the flight pilot before removing its airfield.",
@@ -42,7 +44,10 @@ return function(api,Network,Run,Owned,Roster)
     START_FRESH_AIR_FLEET_WORLD="Start a fresh world for the two-aircraft preview.",
     NATIVE_AIRCRAFT_MODEL_UNAVAILABLE="This aircraft’s native model is missing.",
   }
-  local function why(msg) return reasons[msg] or ("Flight pilot: "..tostring(msg)) end
+  local function why(msg)
+    if type(msg)=="string" and not msg:match("^[A-Z0-9_]+$") then return msg end
+    return reasons[msg] or ("Aircraft: "..tostring(msg))
+  end
   local function at(x,z) return x and z and Sim.id(tonumber(x),tonumber(z)) end
   local function busy(id)
     if Owned.owns_hangar(S,id) then return true end

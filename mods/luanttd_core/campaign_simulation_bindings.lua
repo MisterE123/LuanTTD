@@ -42,7 +42,8 @@ return function(Sim,mod)
     for _,name in ipairs({"metropolitan","commuter","international","intercontinental"}) do
       if expansion_ready and expansion_ready[name] then ground[name]=dofile(source.."airport_"..name..".lua") end
     end
-    local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small,city or nil,rig,heliport or nil,ground)
+    local net=dofile(mod.."/airport_network.lua")(Sim,terrain,small,city or nil,rig,heliport or nil,ground,
+      dofile(source.."airport_noise.lua"))
     local roster=dofile(source.."airport_roster.lua")
     local run=dofile(mod.."/airport_preview_run.lua")(Sim,net,small,motion,terrain,slope,roster)
     run.paid_art_ready=function(p) return not p or not p.engine_id or ready(p.engine_id) end

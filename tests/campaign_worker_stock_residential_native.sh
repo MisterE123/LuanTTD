@@ -12,9 +12,13 @@ mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
 lift=${LUANTTD_QA_TOWN_LIFT:-0}
 rebuild=${LUANTTD_QA_TOWN_REBUILD:-0}
+rocky_ferry=${LUANTTD_QA_ROCKY_FERRY:-0}
+airport_noise=${LUANTTD_QA_AIRPORT_NOISE:-0}
 fixture=tests/campaign_worker_stock_residential_native.lua
 if [[ $lift == 1 ]]; then fixture=tests/town_lift_native.lua; fi
 if [[ $rebuild == 1 ]]; then fixture=tests/town_rebuild_native.lua; fi
+if [[ $rocky_ferry == 1 ]]; then fixture=tests/stock_rocky_coast_ferry_native.lua; fi
+if [[ $airport_noise == 1 ]]; then fixture=tests/airport_noise_native.lua; fi
 cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-42683}
@@ -33,6 +37,7 @@ bayline_generated_town_layout = original
 bayline_seed = ${LUANTTD_QA_TOWN_SEED:-1751}
 bayline_stock_bus_start_year = ${LUANTTD_QA_TOWN_YEAR:-1950}
 singleplayer_mode = false
+luanttd_station_noise_level = $([[ $airport_noise == 1 ]] && echo true || echo false)
 CONF
 printf 'screen_w = 1440\nscreen_h = 900\nenable_sound = false\n' >"$out/client.conf"
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
@@ -106,6 +111,26 @@ if [[ $rebuild == 1 ]]; then
   reopen luanttd_qa_town_rebuild_restart "PASS NATIVE TOWN REBUILD REOPEN"
   sleep .45
   if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/town-renewed.jpg"; fi
+  exit 0
+fi
+if [[ $rocky_ferry == 1 ]]; then
+  mark 'NATIVE ROCKY FERRY FRAME'
+  sleep .45
+  if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/rocky-ferry.jpg"; fi
+  mark 'PASS NATIVE ROCKY FERRY SERVICE'
+  grep 'PASS NATIVE ROCKY FERRY SERVICE' "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+  reopen luanttd_qa_rocky_ferry_reopen "PASS NATIVE ROCKY FERRY REOPEN"
+  exit 0
+fi
+if [[ $airport_noise == 1 ]]; then
+  mark 'NATIVE AIRPORT NOISE FRAME'
+  sleep .31
+  if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/airport-noise.jpg"; fi
+  mark 'PASS NATIVE AIRPORT NOISE SERVICE'
+  grep 'PASS NATIVE AIRPORT NOISE SERVICE' "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+  reopen luanttd_qa_airport_noise_reopen "PASS NATIVE AIRPORT NOISE REOPEN"
   exit 0
 fi
 for i in {01..13}; do

@@ -26,6 +26,12 @@ case "${1:-}" in
     LUANTTD_QA_TOWN_LIFT=1 LUANTTD_QA_TOWN_YEAR=1985 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=359 BAYLINE_NATIVE_PORT=43376 timeout --kill-after=10s 155 bash tests/campaign_worker_stock_residential_native.sh
     LUANTTD_QA_TOWN_REBUILD=1 BAYLINE_NATIVE_DISPLAY=361 BAYLINE_NATIVE_PORT=43378 timeout --kill-after=10s 160 bash tests/campaign_worker_stock_residential_native.sh
     ;;
+  native-terrain-services)
+    export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/terrain-service-cache"
+    python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
+    LUANTTD_QA_AIRPORT_NOISE=1 LUANTTD_QA_TOWN_YEAR=1985 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=363 BAYLINE_NATIVE_PORT=43380 timeout --kill-after=10s 175 bash tests/campaign_worker_stock_residential_native.sh
+    LUANTTD_QA_ROCKY_FERRY=1 LUANTTD_QA_TOWN_YEAR=1985 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=364 BAYLINE_NATIVE_PORT=43381 timeout --kill-after=10s 215 bash tests/campaign_worker_stock_residential_native.sh
+    ;;
   stock-rail)
     lua5.1 tests/stock_rail_metals_roster.lua
     python3 tests/stock_rail_metals_art.py

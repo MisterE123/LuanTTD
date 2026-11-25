@@ -3,6 +3,11 @@
 -- GetAirportNoiseLevelForDistance / AirportGetNearestTown and
 -- town.h Town::MaxTownNoise. Pure airport/town calculations.
 local A={}
+-- airport_defaults.h and economy_settings.ini. The neutral oil rig
+-- is not included in the town airport census.
+A.level={country=3,city=5,heliport=1,metropolitan=8,international=17,
+  commuter=4,helidepot=2,intercontinental=25,helistation=3}
+A.population_divisor={[0]=800,2000,4000,400}
 function A.for_distance(level,distance,tolerance)
   if level<2 then return level end
   local reduction=math.floor(distance/(8+tolerance*4))

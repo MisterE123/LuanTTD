@@ -87,6 +87,7 @@ jobs:
           lua5.1 tests/airport_metropolitan_paid.lua
           lua5.1 tests/airport_metropolitan_art.lua
           lua5.1 tests/airport_noise_rc1.lua
+          lua5.1 tests/airport_noise_world.lua
           lua5.1 tests/sightseeing_flight.lua
           lua5.1 tests/sightseeing_plane_effects.lua
           python3 tests/ride_interior_art.py
@@ -159,7 +160,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [startup, stock-rail, industry-air-and-water, rail-dispatch, native-map-art, native-airfield-art]
+        suite: [startup, stock-rail, industry-air-and-water, rail-dispatch, native-map-art, native-airfield-art, native-terrain-services]
     defaults:
       run:
         shell: bash
@@ -332,6 +333,7 @@ jobs:
           lua5.1 tests/town_lift.lua
           lua5.1 tests/town_lift_live.lua
           python3 tests/town_rebuild_rc1.py "$src"
+          python3 tests/airport_noise_upstream.py "$src"
           lua5.1 tests/town_rebuild.lua
           lua5.1 tests/town_foundation.lua
           lua5.1 tests/rail_autoslope.lua
