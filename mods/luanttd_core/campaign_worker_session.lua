@@ -121,6 +121,10 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
     render.step_ambient_particles(dt,positions)
     render.step_worker_actors(dt)
     render.step_lighthouse_beams(dt,positions)
+    if api.coal_view then
+      local sample=#positions>0 and H.solar_clock()
+      api.coal_view.step(dt,#positions>0,sample and math.min(6,sample.rate*.55) or 0)
+    end
     if H.status()=="owned" and api.crowd then api.crowd.update(core.get_connected_players(),dt) end
   end
   function Session.solar_clock() return H.solar_clock() end

@@ -1,5 +1,7 @@
 -- Decorative only. Read the painted local view; never draw from the
 -- simulation RNG or trigger industry production by observing a chimney.
+local root=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local layouts=dofile(root.."/industry_layout_art.lua")
 return function(core,Sim,ground)
   local V={}
   local enter,leave,cap=36,44,16
@@ -22,6 +24,7 @@ return function(core,Sim,ground)
     return {chimney(.04,low,.137,"factory"),chimney(.76,high,.245,"factory")}
   end
   local outlets={
+    industry_layout_gfx_8={chimney(.06,2.14,.10,"power")},
     power_station_1_1={chimney(.48,2.88,.10,"power")},
     power_station_2_1={chimney(.34,3.02,.10,"power")},
     industry_factory_1_0=factory(1.355,1.609),
@@ -74,7 +77,7 @@ return function(core,Sim,ground)
           local t=s.tiles[id]
           local b=t and t.stock_industry
           if b then
-            local key=("%s_%d_%d"):format(b.style,b.x,b.z)
+            local key=layouts.alternate(b) or ("%s_%d_%d"):format(b.style,b.x,b.z)
             local flues=outlets[key]
             if flues then
               -- Tiles may enter the view before the renderer has placed

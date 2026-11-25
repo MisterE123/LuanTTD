@@ -26,13 +26,14 @@ is not supplied; the Timber roster is deliberately not enabled by this
 detached port.
 
 Candidate layout selection includes all original layouts: four for
-coal, three for power and two each for sawmill and forest. Only layout 0
-is approved for native placement. An unsupported layout draw counts as
-a failed attempt; it does not skip draws or substitute a shape. The
-sawmill footprint has eight occupied cells and forest has eighteen.
-Unported industry types contribute no weights. Thus this is source
-scheduling over a restricted supported roster, **not** seed parity with
-an unrestricted OpenTTD world.
+coal, three for power and two each for sawmill and forest. Ordinary
+generation now mounts the [six alternate Coal Mine, Power Station and
+Sawmill layouts](stock-industry-alternate-layouts.md) once their original
+3D media are present. The source comparison can still instantiate only
+layout 0 to check the earlier restricted catalogue. An unsupported layout
+draw counts as a failed attempt; it does not skip draws or substitute a shape.
+This is source scheduling over the current supported roster, not seed parity
+with an unrestricted OpenTTD world.
 
 Sites follow source edge and freeform void rules; company/structure and
 water exclusions; closest town by Manhattan distance with lowest-ID

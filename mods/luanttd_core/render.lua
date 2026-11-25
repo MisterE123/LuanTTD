@@ -275,6 +275,14 @@ return function(api)
     rail_depot[dir]=architecture("stock_"..a,a,"rail_architecture_atlas")
   end
   local coal_buildings={}
+  local industry_layout_art=dofile(modpath.."/industry_layout_art.lua")
+  local alternate_industry={}
+  if (api.stock_coal_scenery or api.stock_timber_scenery) and industry_layout_art.available(core,modpath) then
+    for _,n in ipairs(industry_layout_art.roles) do
+      local asset=industry_layout_art.asset(n)
+      alternate_industry[asset]=architecture(asset,asset,industry_layout_art.atlas)
+    end
+  end
   if api.stock_coal_scenery then
     local assets={
       coal_mine_0={{0,0},{1,0},{1,1},{1,2},{2,0},{2,2}},
@@ -1429,6 +1437,23 @@ return function(api)
     end
     return "air"
   end
+  local function industry_node(b,industry)
+    local alternate=industry_layout_art.alternate(b)
+    if alternate then return alternate_industry[alternate] or "air" end
+    local name=("%s_%d_%d"):format(b.style,b.x,b.z)
+    if b.chain=="farm" then return assert(farm_buildings[name]) end
+    if b.chain=="oil" then return assert(oil_buildings[name]) end
+    if b.chain=="heavy" or b.chain=="bank" then return oil_buildings[name] or "air" end
+    if b.chain=="timber" then
+      if b.kind=="forest" then
+        for _,cell in ipairs(industry.tiles) do
+          if cell.x==industry.x+b.x and cell.z==industry.z+b.z and cell.gfx==17 then return timber_harvested end
+        end
+      end
+      return timber_buildings[name] or "air"
+    end
+    return coal_buildings[name] or "air"
+  end
   local function tile_node_base(id,x,y,z)
     local t=S.tiles[id]
     if y<-1 or y>top_bound then return "air" end
@@ -1541,19 +1566,7 @@ return function(api)
         b.chain=="bank" and S.stock_bank_industries or S.stock_coal_industries
       local industry=registry and registry[b.id]
       if industry and not industry.removed and y==level+1 and x%2==0 and z%2==0 then
-        local name=("%s_%d_%d"):format(b.style,b.x,b.z)
-        if b.chain=="farm" then return assert(farm_buildings[name]) end
-        if b.chain=="oil" then return assert(oil_buildings[name]) end
-        if b.chain=="heavy" or b.chain=="bank" then return oil_buildings[name] or "air" end
-        if b.chain=="timber" then
-          if b.kind=="forest" then
-            for _,cell in ipairs(industry.tiles) do
-              if cell.x==industry.x+b.x and cell.z==industry.z+b.z and cell.gfx==17 then return timber_harvested end
-            end
-          end
-          return timber_buildings[name] or "air"
-        end
-        return coal_buildings[name] or "air"
+        return industry_node(b,industry)
       end
       if b.chain=="oil" and b.kind=="rig" then
         if y~=level then return "air" end

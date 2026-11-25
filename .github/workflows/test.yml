@@ -307,6 +307,8 @@ jobs:
           /usr/bin/python3 tests/stock_steel_mill_layout_1_art.py --upstream-layout "$src/src/table/build_industry.h"
           lua5.1 tests/iron_steel_ordinary_worker.lua early layout1
           lua5.1 tests/industry_platform_level.lua
+          python3 tests/industry_layout_catalog_rc1.py "$src/src/table/build_industry.h" lua5.1
+          lua5.1 tests/industry_alternate_layouts.lua
           python3 tests/tree_lifecycle_temperate_upstream.py "$src"
           python3 tests/tree_global_tick_upstream.py "$src"
           lua5.1 tests/tree_lifecycle_temperate.lua

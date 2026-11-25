@@ -69,7 +69,8 @@ return function(core,mod,Sim,Settings)
     local Timber=Sim.timber_rules()
     local heavy=Sim.mount_heavy_world(S,Terrain)
     local ready=heavy and dofile(mod.."/iron_steel_visual_assets.lua").ready(core,mod,heavy)
-    local Industry=dofile(src.."industry_worldgen.lua")(Coal,Timber,Sim.oil_rules(),farm_rules,ready)
+    local industry_layouts=dofile(mod.."/industry_layout_art.lua").available(core,mod)
+    local Industry=dofile(src.."industry_worldgen.lua")(Coal,Timber,Sim.oil_rules(),farm_rules,ready,industry_layouts)
     Campaign.industries(Sim,Terrain,S,Gen,Industry,dofile(mod.."/coal_industry_world.lua")(Sim,Terrain,Coal),
       option("industries","bayline_generated_industries",4),tonumber(settings:get("bayline_generated_industry_count")),
       dofile(mod.."/timber_world.lua")(Sim,Terrain,Timber),Oil,Farm,

@@ -29,14 +29,17 @@ return function(Sim,Terrain,Timber)
     return false
   end
 
-  function W.quote(s,kind,origin)
+  function W.quote(s,kind,origin,layout)
     if not (styles[kind] and s.corner_grid and valid_id(origin) and s.tiles[origin]) then
       return nil,"INVALID_INDUSTRY_ORIGIN",origin
     end
+    layout=layout or 0
+    local footprint=Timber.layout[kind][layout]
+    if not footprint then return nil,"INDUSTRY_LAYOUT_UNPORTED",origin end
     local x,z=Sim.xy(origin)
     local cells,level={},nil
     -- The layout list includes only authored cells, not its holes.
-    for n,q in ipairs(Timber.layout[kind][0]) do
+    for n,q in ipairs(footprint) do
       local tx,tz=x+q[1],z+q[2]
       local id=Sim.id(tx,tz)
       local t=id and s.tiles[id]
@@ -48,7 +51,7 @@ return function(Sim,Terrain,Timber)
       cells[n]={id=id,x=q[1],z=q[2],gfx=q[3]}
     end
     if conflicts(s,kind,x,z) then return nil,"INDUSTRIES_TOO_CLOSE",origin end
-    return {version=W.VERSION,kind=kind,layout=0,origin=origin,x=x,z=z,level=level,cells=cells,
+    return {version=W.VERSION,kind=kind,layout=layout,origin=origin,x=x,z=z,level=level,cells=cells,
       topology=s.topology,seed=s.seed}
   end
 
@@ -87,7 +90,7 @@ return function(Sim,Terrain,Timber)
       if s.stock_coal_industries and s.stock_coal_industries[id] or
           s.stock_timber_industries and s.stock_timber_industries[id] then return nil,"INDUSTRY_ID_COLLISION" end
       local style=styles[p.kind]
-      local ind=generation and generation.record or Timber.new(p.kind,id,p.x-1,p.z-1,{completed=true,original=true,generating_world=true,
+      local ind=generation and generation.record or Timber.new(p.kind,id,p.x-1,p.z-1,{layout=p.layout,completed=true,original=true,generating_world=true,
         counter=1,economy_year=Sim.date(s)})
       if generation then
         assert(#plans==1 and ind.kind==p.kind and ind.x==p.x-1 and ind.z==p.z-1 and #ind.tiles==#p.cells)
@@ -111,8 +114,8 @@ return function(Sim,Terrain,Timber)
       s.sites[r.site.id]=r.site
       for _,cell in ipairs(r.p.cells) do
         local t=s.tiles[cell.id]
-        t.stock_industry={id=r.ind.id,chain="timber",kind=r.ind.kind,layout=0,
-          style=r.style.art,x=cell.x,z=cell.z,gfx=cell.gfx,site=r.site.id,origin=r.p.origin}
+        t.stock_industry={id=r.ind.id,chain="timber",kind=r.ind.kind,layout=r.p.layout,
+          style=r.ind.kind.."_"..r.p.layout,x=cell.x,z=cell.z,gfx=cell.gfx,site=r.site.id,origin=r.p.origin}
         if cell.id==r.p.origin then t.site=r.site.id end
       end
     end
@@ -122,7 +125,7 @@ return function(Sim,Terrain,Timber)
   end
   function W.commit(s,p)
     if not same(s,p) then return nil,"STALE_INDUSTRY_QUOTE" end
-    local q,why,id=W.quote(s,p.kind,p.origin)
+    local q,why,id=W.quote(s,p.kind,p.origin,p.layout)
     if not q then return nil,why,id end
     if not matches(q,p) then return nil,"STALE_INDUSTRY_QUOTE" end
     local r,dirty=writes(s,{q})
@@ -130,9 +133,9 @@ return function(Sim,Terrain,Timber)
     return r[1].ind,dirty,r[1].site
   end
   function W.place_generated(s,kind,origin,opts)
-    local q,why,id=W.quote(s,kind,origin)
-    if not q then return nil,why,id end
     assert(opts and opts.record and type(opts.name)=="string")
+    local q,why,id=W.quote(s,kind,origin,opts.record.layout)
+    if not q then return nil,why,id end
     local records,dirty=writes(s,{q},opts)
     if not records then return nil,dirty end
     return records[1].ind,q.cells,records[1].site

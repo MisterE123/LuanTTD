@@ -6,7 +6,7 @@
 -- Sawmill and Forest. Farm, Factory, Wells and Refinery tables/checks
 -- also verified against OpenTTD 16.0-RC1 (table/build_industry.h).
 -- Native initial manifest excludes industry kinds / art layouts not ported.
-return function(Coal,Timber,Oil,Farm,Heavy)
+return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
   local W={POOL_MAX=64000,HARD_ATTEMPTS=10000,SOFT_ATTEMPTS=2000}
   local floor,ceil,min,max,abs=math.floor,math.ceil,math.min,math.max,math.abs
   local U32=4294967296
@@ -74,6 +74,14 @@ return function(Coal,Timber,Oil,Farm,Heavy)
         available=id==8 and {[0]=true,[1]=true} or {[0]=true},picture="industry_"..kind,kernel=Farm}
     end
     last_type=max(last_type,18)
+  end
+  for id,variants in pairs(NativeLayouts or {}) do
+    local spec=W.specs[id]
+    if spec then
+      for variant,visible in pairs(variants) do
+        if visible and spec.layout[variant] then spec.available[variant]=true end
+      end
+    end
   end
   local temperate=Timber or Oil or Farm
   function W.scale_area(n,width,height) return ceil(n*width*height/65536) end

@@ -1,4 +1,4 @@
--- Actual stock layout-0 geometry on LuanTTD's shared corner map.
+-- Actual stock industry footprints on LuanTTD's shared-corner map.
 -- For now this creates completed map-generation sites, not a funded
 -- industry command or an approximation to stock industry creation.
 return function(Sim,Terrain,Coal)
@@ -8,12 +8,15 @@ return function(Sim,Terrain,Coal)
     power_station={name="Riverbend Power Station",kind="stock_power_station",picture="power_station"},
   }
   local function coords(u,v) return u-1,v-1 end
-  function W.quote(s,kind,origin)
+  function W.quote(s,kind,origin,layout)
     local style=styles[kind]
     if not (style and s.corner_grid and origin and s.tiles[origin]) then return nil,"INVALID_INDUSTRY_ORIGIN" end
     local ox,oz=Sim.xy(origin)
     local x,z=coords(ox,oz)
-    local ind=Coal.new(kind,0,x,z,{layout=0,completed=true,original=true})
+    layout=layout or 0
+    local variants=kind=="coal_mine" and Coal.mine_layouts or Coal.power_layouts
+    if not variants[layout] then return nil,"INDUSTRY_LAYOUT_UNPORTED" end
+    local ind=Coal.new(kind,0,x,z,{layout=layout,completed=true,original=true})
     local cells={}
     local level
     for i,part in ipairs(ind.tiles) do
@@ -34,9 +37,9 @@ return function(Sim,Terrain,Coal)
     return {origin=origin,ind=ind,cells=cells,style=style,level=level}
   end
   function W.place(s,kind,origin,opts)
-    local p,why=W.quote(s,kind,origin)
-    if not p then return nil,why end
     opts=opts or {}
+    local p,why=W.quote(s,kind,origin,opts.record and opts.record.layout or opts.layout)
+    if not p then return nil,why end
     local ind=opts.record or p.ind
     if opts.record then
       assert(ind.kind==kind and ind.x==p.ind.x and ind.z==p.ind.z and #ind.tiles==#p.cells)
@@ -51,16 +54,23 @@ return function(Sim,Terrain,Coal)
     s.next_stock_coal_industry=ind.id+1
     s.stock_coal_industries[ind.id]=ind
     local sid=#s.sites+1
-    local site={id=sid,tile=p.origin,name=opts.name or p.style.name,kind=p.style.kind,
+    -- Stock origin is at the bounding northwest corner. Do not reserve it
+    -- when the source layout has a hole there. Anchor the label to the
+    -- nearest occupied cell, breaking ties by the normal tile ordering.
+    local anchor,dist
+    for _,cell in ipairs(p.cells) do
+      local d=math.abs(cell.x)+math.abs(cell.z)
+      if not dist or d<dist or d==dist and cell.id<anchor then anchor,dist=cell.id,d end
+    end
+    local picture=ind.layout==0 and p.style.picture or kind.."_l"..ind.layout
+    local site={id=sid,tile=anchor,name=opts.name or p.style.name,kind=p.style.kind,
       produced={},received={},stock={},service=0,stock_industry=ind.id}
     s.sites[sid]=site;ind.site=sid
-    -- Source origin is occupied in layout 0. Other footprint cells
-    -- reference one site; holes are never painted or cleared.
     for _,cell in ipairs(p.cells) do
       local t=s.tiles[cell.id]
-      t.stock_industry={id=ind.id,x=cell.x,z=cell.z,gfx=cell.gfx,style=p.style.picture}
+      t.stock_industry={id=ind.id,x=cell.x,z=cell.z,gfx=cell.gfx,style=picture,layout=ind.layout}
       t.coal_site=sid
-      if cell.id==p.origin then t.site=sid end
+      if cell.id==anchor then t.site=sid end
     end
     s.topology=s.topology+1
     return ind,p.cells,site
