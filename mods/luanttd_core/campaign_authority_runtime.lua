@@ -353,8 +353,10 @@ return function(Sim,mod,s,cap)
     local coal=dofile(source.."coal_industry.lua")(stand,rate,catchment,dofile(source.."income.lua"))
     local timber=Sim.timber_rules()
     local heavy=cap.heavy_industry and Sim.mount_heavy_world(s,Terrain) or nil
-    local industry_layouts=dofile(mod.."/industry_layout_art.lua").available(core,mod)
-    local rules=dofile(source.."industry_worldgen.lua")(coal,timber,Sim.oil_rules(),farm_rules,heavy~=nil,industry_layouts)
+    -- Readiness is measured on the presentation host and copied in the
+    -- same snapshot as rail/airport assets. A detached Lua runtime has
+    -- no engine filesystem API.
+    local rules=dofile(source.."industry_worldgen.lua")(coal,timber,Sim.oil_rules(),farm_rules,heavy~=nil,cap.industry_layouts)
     local function vehicle_on_ground(tile)
       for _,r in ipairs({N.water and N.water.run or false,N.water and N.water.freight or false,
           N.water and N.water.tanker_run or false}) do

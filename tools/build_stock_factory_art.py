@@ -23,16 +23,17 @@ PAL=dict(S.PAL, **{
 })
 A.PAL=PAL;A.P=A.H.P={k:i for i,k in enumerate(PAL)}
 R.COLORS[:]=PAL.values()
-LAYOUT={(0,0):39,(0,1):40,(1,0):41,(1,1):42,
-        (0,2):39,(0,3):40,(1,2):41,(1,3):42,
-        (2,1):39,(2,2):40,(3,1):41,(3,2):42}
-NAME="industry_factory"
+VARIANT=int(os.getenv("STOCK_FACTORY_VARIANT","0"))
+BLOCKS=(((0,0),(0,2),(2,1)),((0,0),(2,0),(1,2)))[VARIANT]
+LAYOUT={(x+dx,z+dz):gfx for x,z in BLOCKS
+        for dx,dz,gfx in ((0,0,39),(0,1,40),(1,0,41),(1,1,42))}
+NAME="industry_factory"+("_l1" if VARIANT else "")
 
 
 def base(m):
     # Key the three neighboring four-cell blocks separately without adding
     # grass or padding to absent cells in the 4x4 bounding rectangle.
-    for x,z in ((0,0),(0,2),(2,1)):
+    for x,z in BLOCKS:
         x0,z0=2*x-.5,2*z-.5
         Q(m,"Joined stock asphalt plant blocks","warm_asphalt",x0,x0+4,z0,z0+4,.005)
         Q(m,"Concrete wagon loading court","service_concrete",x0+2.02,x0+3.97,z0+2.05,z0+3.94,.011)
@@ -175,7 +176,7 @@ def chimney(m,x,z,height):
 
 
 def enclosure(m):
-    for k,(x0,z0) in enumerate(((0,0),(0,4),(4,2))):
+    for k,(x0,z0) in enumerate((2*x,2*z) for x,z in BLOCKS):
         h=(.978,.855,1.113)[k]
         hall(m,"Main production workshop" if k==0 else ("Dispatch packing hall" if k==1 else "Food handling annex"),
              x0+.48,z0+.472,1.539,1.465,h,True)
@@ -208,7 +209,7 @@ def enclosure(m):
 
 def consign(m):
     rng=Random(6234)
-    for x0,z0 in ((0,0),(0,4),(4,2)):
+    for x0,z0 in ((2*x,2*z) for x,z in BLOCKS):
         for xx,zz,y in ((x0+1.87,z0+1.48,.174),(x0+2.33,z0+1.45,.174),
                         (x0+2.04,z0+2.91,.026),(x0+2.49,z0+3.39,.027)):
             h=rng.uniform(.135,.205)
@@ -234,5 +235,5 @@ if __name__=="__main__":
     S.build(NAME,LAYOUT,(("Asphalt foundations and working truck aprons",base),
       ("Factory and powerhouse buildings, masonry stacks",enclosure),
       ("Export goods pallets, drums and dispatch bollards",consign)),
-      "Westfield Factory","stock_temperate_factory.blend",(3.0,3.52,.70),
-      (11.55,12.14,8.30),10.30,PAL,os.getenv("STOCK_FACTORY_RENDER"))
+      "Westfield Factory","stock_temperate_factory"+("_l1" if VARIANT else "")+".blend",(3.0,3.52,.70),
+      (11.55,12.14,8.30),10.30,PAL,os.getenv("STOCK_FACTORY_RENDER"),upstream_layout=VARIANT)

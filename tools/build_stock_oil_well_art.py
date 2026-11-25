@@ -22,7 +22,11 @@ PAL=dict(S.PAL, **{
 })
 A.PAL=PAL;A.P=A.H.P={k:i for i,k in enumerate(PAL)}
 R.COLORS[:]=PAL.values()
-LAYOUT={(0,0):29,(1,0):29,(2,0):29,(0,1):29,(0,2):29}
+LAYOUTS=(
+    {(0,0):29,(1,0):29,(2,0):29,(0,1):29,(0,2):29},
+    {(0,0):29,(1,0):29,(1,1):29,(2,2):29,(2,3):29},
+)
+LAYOUT=LAYOUTS[0]
 NAME="industry_oil_well"
 # The horsehead faces +X; this walking beam and its rear pin use a genuine
 # four-bar link in the vertical X/Y plane.
@@ -180,7 +184,7 @@ def operating(m):
     for k,(u,v) in enumerate(LAYOUT):motion(m,2*u,2*v,k,t=.78+k*.48)
 
 
-def rig_existing():
+def rig_existing(blend_name="stock_oil_well.blend"):
     sc=bpy.context.scene
     sc.frame_start=1;sc.frame_end=1+FRAME_COUNT*4
     # Named cross-shape keys align independently on each 3D rod, gear,
@@ -205,15 +209,22 @@ def rig_existing():
         for f in obj.data.shape_keys.animation_data.action.fcurves:
             for p in f.keyframe_points:p.interpolation="LINEAR"
     sc.frame_set(1)
+    if blend_name=="stock_oil_well_l1.blend":
+        sc.name="Tideland Oil Wells / alternate OpenTTD 16.0-RC1 five-pump layout"
+        sc["Upstream cells"]="16.0-RC1 _tile_table_oil_well_1: "+", ".join(f"({x},{z}) GFX {gfx}" for (x,z),gfx in LAYOUT.items())
     sc["Motion"]="Five phase-offset, 12-step editable pumps. Rigid-link mechanical loop. Native tiles bake frame 1."
-    bpy.ops.wm.save_as_mainfile(filepath=str(S.ROOT/"art"/"stock_oil_well.blend"),compress=True)
+    bpy.ops.wm.save_as_mainfile(filepath=str(S.ROOT/"art"/blend_name),compress=True)
 
 
 if __name__=="__main__":
-    S.build(NAME,LAYOUT,(("Five individual pads and gathering pipe work",pads),
+    variant=int(os.getenv("STOCK_OIL_WELL_VARIANT","0"))
+    LAYOUT=LAYOUTS[variant]
+    suffix=f"_l{variant}" if variant else ""
+    blend_name=f"stock_oil_well{suffix}.blend"
+    S.build(NAME+suffix,LAYOUT,(("Five individual pads and gathering pipe work",pads),
       ("Cast drive housings, beam frames, and functioning wellheads",frames),
       ("Moving horseheads, reciprocating rods and eccentric links",operating)),
-      "Tideland Oil Wells","stock_oil_well.blend",(2.1,2.23,.39),(8.7,9.1,6.7),7.65,
-      PAL,os.getenv("STOCK_OIL_WELL_RENDER"))
-    bpy.ops.wm.open_mainfile(filepath=str(S.ROOT/"art"/"stock_oil_well.blend"))
-    rig_existing()
+      "Tideland Oil Wells",blend_name,(2.1,2.23,.39),(8.7,9.1,6.7),7.65,
+      PAL,os.getenv("STOCK_OIL_WELL_RENDER"),upstream_layout=variant)
+    bpy.ops.wm.open_mainfile(filepath=str(S.ROOT/"art"/blend_name))
+    rig_existing(blend_name)

@@ -277,7 +277,7 @@ return function(api)
   local coal_buildings={}
   local industry_layout_art=dofile(modpath.."/industry_layout_art.lua")
   local alternate_industry={}
-  if (api.stock_coal_scenery or api.stock_timber_scenery) and industry_layout_art.available(core,modpath) then
+  if (api.stock_coal_scenery or api.stock_timber_scenery) and (industry_layout_art.available(core,modpath) or {})[0] then
     for _,n in ipairs(industry_layout_art.roles) do
       local asset=industry_layout_art.asset(n)
       alternate_industry[asset]=architecture(asset,asset,industry_layout_art.atlas)
@@ -317,6 +317,14 @@ return function(api)
         farm_buildings[mesh]=architecture(mesh,mesh,style.."_atlas")
       end
     end
+    for style,parts in pairs(industry_layout_art.farm_footprint) do
+      for _,c in ipairs(parts) do
+        local x,z,gfx=c[1],c[2],c[3]
+        local name=("%s_%d_%d"):format(style,x,z)
+        local mesh,atlas=industry_layout_art.farm_asset(style,x,z)
+        farm_buildings[name]=architecture(name,mesh,atlas,false,industry_layout_art.farm_collision(style,gfx))
+      end
+    end
     local Pedestrian=dofile(modpath.."/pedestrian.lua")
     for _,slope in ipairs(assets.slopes) do
       local field_collision=Pedestrian.slope_box(api.slope.surface,slope,true).fixed
@@ -344,9 +352,10 @@ return function(api)
   end
   if api.oil_world then
     for style,parts in pairs(api.oil_world.visual_sources()) do
-      for _,cell in ipairs(parts) do
-        local mesh=("%s_%d_%d"):format(style,cell[1],cell[2])
-        oil_buildings[mesh]=architecture(mesh,mesh,style.."_atlas")
+      for index,cell in ipairs(parts) do
+        local name=("%s_%d_%d"):format(style,cell[1],cell[2])
+        local mesh,atlas=api.oil_world.visual_asset(style,cell,index)
+        oil_buildings[name]=architecture(name,mesh,atlas)
       end
     end
   end

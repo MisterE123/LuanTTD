@@ -49,7 +49,27 @@ fi
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!; server= client= observer=
-trap 'for pid in "$client" "$observer" "$server" "$xv"; do [[ -z "$pid" ]] || kill "$pid" 2>/dev/null || true; done; wait 2>/dev/null || true' EXIT
+cleanup(){
+  local pid alive
+  for pid in "$client" "$observer" "$server" "$xv"; do
+    if [[ -n "$pid" ]]; then kill -TERM "$pid" 2>/dev/null || true; fi
+  done
+  for _ in {1..24}; do
+    alive=false
+    for pid in "$client" "$observer" "$server" "$xv"; do
+      if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then alive=true; fi
+    done
+    if ! "$alive"; then break; fi
+    sleep .125
+  done
+  for pid in "$client" "$observer" "$server" "$xv"; do
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      printf 'Forced shutdown of graphical fixture process %s\n' "$pid" >&2
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+  done
+}
+trap cleanup EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 xdpyinfo > /dev/null || { cat "$out/xvfb.log"; exit 1; }
 luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/server.log" 2>&1 &
@@ -93,9 +113,22 @@ for phase in bus cab coach; do
   xdotool windowraise "$win" windowfocus --sync "$win"
   sleep .30
   import -window root -resize 960x600 -quality 91 "$out/$phase-builder.jpg"
-  xdotool mousedown 1; sleep .18; xdotool mouseup 1
+  boarded="RIDE_TRAIN_SEAT $phase"
+  if [[ "$phase" == bus ]]; then boarded="RIDE_VISIBLE $phase"; fi
+  # The train moves while the worker and client deliver positions. A
+  # point hit can go stale before the press reaches the server. Retry
+  # the same native click while the fixture aims; never bypass picking
+  # or click again once the seat UI (or bus ride) is visible.
+  for _ in {1..8}; do
+    grep -Fq "$boarded" "$out/server.log" && break
+    xdotool mousedown 1; sleep .18; xdotool mouseup 1
+    for _ in {1..12}; do
+      grep -Fq "$boarded" "$out/server.log" && break
+      sleep .10
+    done
+  done
   if [[ "$phase" != bus ]]; then
-    mark "RIDE_TRAIN_SEAT $phase"
+    mark "$boarded"
     sleep .52
     if [[ "$phase" == cab ]]; then xdotool mousemove 810 473 click 1
     else xdotool mousemove 620 473 click 1

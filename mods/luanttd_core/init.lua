@@ -84,6 +84,9 @@ local simulation_bindings=dofile(mod.."/campaign_simulation_bindings.lua")(Sim,m
 local api={Sim=Sim,s=S,generated_world=generated_world,road_first=true,task_hotbar=worker_boot,
   capabilities={air={},ferry={},rail={engines={},ready={},split={}}},
   interest=dofile(mod.."/presentation_interest.lua").new()}
+if generated_world then
+  api.capabilities.industry_layouts=dofile(mod.."/industry_layout_art.lua").available(core,mod)
+end
 local farm_profile=not generated_world and (S.stock_farm_industries~=nil or fresh and request_farm)
 local oil_profile=not generated_world and (S.stock_oil_industries~=nil or fresh and not farm_profile and request_oil)
 local coast_profile=not generated_world and (S.stock_coastal_profile and not S.qa_coastal or
@@ -196,10 +199,10 @@ if generated_world or S.road_oil then
   local oil,why=Sim.mount_oil_world(S,dofile(mod.."/openttd/terrain.lua"),api.capabilities.oil_tanker)
   assert(oil,why)
   for style,parts in pairs(oil.visual_sources()) do
-    assert(files["bl_"..style.."_atlas.png"],"Missing oil industry atlas "..style)
-    for _,piece in ipairs(parts) do
-      local file=("bl_%s_%d_%d.obj"):format(style,piece[1],piece[2])
-      assert(files[file],"Missing stock oil site mesh: "..file)
+    for index,piece in ipairs(parts) do
+      local mesh,atlas=oil.visual_asset(style,piece,index)
+      assert(files["bl_"..atlas..".png"],"Missing oil industry atlas "..atlas)
+      assert(files["bl_"..mesh..".obj"],"Missing stock oil site mesh: "..mesh)
     end
   end
   api.oil_world=oil

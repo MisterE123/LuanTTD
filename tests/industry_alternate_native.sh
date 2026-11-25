@@ -25,9 +25,10 @@ bayline_generated_relief = 0
 bayline_generated_coasts = 0
 bayline_generated_towns = 3
 bayline_generated_industries = 6
-bayline_generated_industry_count = 65
+bayline_generated_industry_count = ${LUANTTD_INDUSTRY_LAYOUT_COUNT:-110}
 bayline_generated_town_layout = grid2
-bayline_seed = ${LUANTTD_INDUSTRY_LAYOUT_SEED:-1751}
+bayline_seed = ${LUANTTD_INDUSTRY_LAYOUT_SEED:-11}
+luanttd_qa_industry_layouts = ${LUANTTD_INDUSTRY_LAYOUTS:-coal_mine_l1,coal_mine_l2,coal_mine_l3,factory_l1,farm_l1,farm_l2,forest_l1,oil_refinery_l1,oil_well_l1,power_station_l1,power_station_l2,sawmill_l1}
 singleplayer_mode = false
 CONF
 printf 'screen_w = 1440\nscreen_h = 900\nenable_sound = false\n' >"$out/client.conf"
@@ -40,7 +41,20 @@ export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PA
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!; server= client=
-trap '[[ -z "$client" ]] || kill "$client" 2>/dev/null || true; [[ -z "$server" ]] || kill "$server" 2>/dev/null || true; kill "$xv" 2>/dev/null || true;wait 2>/dev/null || true' EXIT
+cleanup(){
+  for pid in "$client" "$server" "$xv"; do [[ -z "$pid" ]] || kill -TERM "$pid" 2>/dev/null || true; done
+  for _ in {1..12}; do
+    alive=false
+    for pid in "$client" "$server" "$xv"; do
+      if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then alive=true; fi
+    done
+    if ! "$alive"; then break; fi
+    sleep .15
+  done
+  for pid in "$client" "$server" "$xv"; do [[ -z "$pid" ]] || kill -KILL "$pid" 2>/dev/null || true; done
+  wait 2>/dev/null || true
+}
+trap cleanup EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 xdpyinfo > /dev/null || { cat "$out/xvfb.log"; exit 1; }
 luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/server.log" 2>&1 &

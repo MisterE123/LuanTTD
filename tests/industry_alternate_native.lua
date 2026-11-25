@@ -11,10 +11,10 @@ local function start()
   local disk=assert(OwnerCheckpoint.read())
   local art=dofile(mod.."/industry_layout_art.lua")
   local scenes={}
-  for _,chain in ipairs({"coal","timber"}) do
+  for _,chain in ipairs({"coal","timber","oil","farm"}) do
     for _,industry in pairs(disk["stock_"..chain.."_industries"] or {}) do
       local l=industry.layout or 0
-      if l>0 and (industry.kind=="coal_mine" or industry.kind=="power_station" or industry.kind=="sawmill") then
+      if l>0 and (industry.kind=="coal_mine" or industry.kind=="power_station" or industry.kind=="sawmill" or industry.kind=="oil_well" or industry.kind=="oil_refinery" or industry.kind=="farm" or industry.kind=="factory" or industry.kind=="forest") then
         local label=industry.kind.."_l"..l
         scenes[label]=industry
       end
@@ -23,7 +23,12 @@ local function start()
   local keys={}
   for label in pairs(scenes) do keys[#keys+1]=label end
   table.sort(keys)
-  assert(#keys==6,"Expected all six alternate layouts on this native fixture seed")
+  local required=core.settings:get("luanttd_qa_industry_layouts") or
+    "factory_l1,farm_l1,oil_refinery_l1,oil_well_l1"
+  for tag in required:gmatch("[^,]+") do
+    assert(scenes[tag],"Missing expected "..tag.." in "..table.concat(keys,", "))
+  end
+  assert(#keys>0,"No alternate industry layouts were generated")
   core.log("action","NATIVE ALTERNATE GENERATED: "..table.concat(keys,", "))
   local function verify(i)
     local label=keys[i]
@@ -48,6 +53,12 @@ local function start()
         local base=disk.tiles[id].h
         local node=core.get_node_or_nil({x=2*u,y=base+1,z=2*v})
         local expect="luanttd_core:"..art.asset(row.gfx)
+        if scene.kind=="forest" then
+          expect=("luanttd_core:forest_%d_%d_%d"):format(scene.layout,row.x-scene.x,row.z-scene.z)
+        end
+        if scene.kind=="oil_well" or scene.kind=="oil_refinery" or scene.kind=="farm" or scene.kind=="factory" then
+          expect=("luanttd_core:industry_%s_l%d_%d_%d"):format(scene.kind,scene.layout,row.x-scene.x,row.z-scene.z)
+        end
         if not node or node.name~=expect then
           assert(n<55,("Wrong mesh in %s @ %d,%d: %s expected %s"):format(label,u,v,node and node.name or "nil",expect))
           core.after(.25,function()check(n+1)end)

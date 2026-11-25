@@ -22,6 +22,10 @@ return function(core,Sim,view)
     {kind="pig",x=4.18,z=4.23,rx=.20,rz=.16,seconds=13.2,offset=.69},
     {kind="pig",x=4.16,z=4.86,rx=.21,rz=.16,seconds=12.5,offset=.38},
   }
+  local smaller_lanes={
+    {kind="cream",x=.22,z=.48,rx=.27,rz=.15,seconds=15.8,offset=.19},
+    {kind="brown",x=.72,z=.64,rx=.22,rz=.17,seconds=16.2,offset=.57},
+  }
   for _,style in ipairs(styles) do
     core.register_entity(entity(style),{initial_properties={
       visual="mesh",mesh=mesh(style,"idle"),textures={palette},
@@ -30,7 +34,7 @@ return function(core,Sim,view)
     }})
   end
   local function close(at,h,r)
-    local dx,dz=at.x-h.x-4.5,at.z-h.z-3.5
+    local dx,dz=at.x-h.x-h.cx,at.z-h.z-h.cz
     return dx*dx+dz*dz<r*r and math.abs(at.y-h.y)<r
   end
   local function sample(row,time,offset)
@@ -79,7 +83,9 @@ return function(core,Sim,view)
   local function pen(id,tx,tz)
     local row=view.host_tile(id)
     local b=row and row.stock_industry
-    if not b or b.chain~="farm" or b.kind~="farm" or b.style~="industry_farm" or b.x~=2 or b.z~=1 then return end
+    if not b or b.chain~="farm" or b.kind~="farm" then return end
+    local stock=(b.layout or 0)>0
+    if stock and b.gfx~=38 or not stock and (b.style~="industry_farm" or b.x~=2 or b.z~=1) then return end
     local owner=view.host_record("stock_farm_industries",b.id)
     if not owner or owner.removed then return end
     local level=view.host_terrain_top(id)
@@ -87,10 +93,16 @@ return function(core,Sim,view)
     -- An authority projection can arrive before its local mapblocks.
     -- Never draw cattle floating over a farm that is not yet painted.
     local north=core.get_node_or_nil({x=2*tx,y=level+1,z=2*tz})
+    if stock then
+      local name=("luanttd_core:%s_%d_%d"):format(b.style,b.x,b.z)
+      if not north or north.name~=name then return end
+      return {key=b.id,tx=tx,tz=tz,x=2*tx,y=level+.5+.026,z=2*tz,
+        cx=.5,cz=.58,lanes=smaller_lanes,offset=(id%1249)/1249}
+    end
     local south=core.get_node_or_nil({x=2*tx,y=level+1,z=2*tz+2})
     if not north or north.name~="luanttd_core:industry_farm_2_1" or
        not south or south.name~="luanttd_core:industry_farm_2_2" then return end
-    return {key=b.id,tx=tx,tz=tz,x=2*(tx-2),y=level+.5+.026,z=2*(tz-1),offset=(id%1249)/1249}
+    return {key=b.id,tx=tx,tz=tz,x=2*(tx-2),y=level+.5+.026,z=2*(tz-1),cx=4.5,cz=3.5,lanes=lanes,offset=(id%1249)/1249}
   end
   local function scan(players)
     local count=0
@@ -128,7 +140,7 @@ return function(core,Sim,view)
       local best=math.huge
       for _,p in ipairs(players) do
         if close(p,q.pen,enter) then
-          local dx,dz=p.x-q.pen.x-4.5,p.z-q.pen.z-3.5
+          local dx,dz=p.x-q.pen.x-q.pen.cx,p.z-q.pen.z-q.pen.cz
           best=math.min(best,dx*dx+dz*dz+(p.y-q.pen.y)^2)
         end
       end
@@ -140,7 +152,7 @@ return function(core,Sim,view)
     for i=1,math.min(cap-count,#nearby) do
       local q=nearby[i]
       q.pen.members={}
-      for _,lane in ipairs(lanes) do q.pen.members[#q.pen.members+1]={lane=lane} end
+      for _,lane in ipairs(q.pen.lanes) do q.pen.members[#q.pen.members+1]={lane=lane} end
       by_pen[q.id]=q.pen
     end
   end

@@ -12,4 +12,4 @@ Evidence:
 - [Placement regression](../tests/industry_alternate_layouts.lua) covers all six newly mounted variants, named site anchoring, no writes to footprint holes, genuine media, worker projection, and save round-trip.
 - [Native Linux run](../tests/industry_alternate_native.sh) opens a normally generated worker world, finds all six variants, and checks the actual placed mesh on every occupied tile and the empty holes. The synchronous rendering assertion is on the server, and native client screenshots are captured separately.
 
-This is not full industry parity. Alternative Factory, Farm, Oil Wells and Oil Refinery art and placement remain outside this tranche, as do some site-leveling and full funding mechanics.
+This is not full industry parity. The later [Temperate footprint pass](stock-temperate-industry-layouts.md) covers the remaining variations. Some site-leveling and full funding mechanics are separate.

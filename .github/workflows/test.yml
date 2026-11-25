@@ -309,6 +309,7 @@ jobs:
           lua5.1 tests/industry_platform_level.lua
           python3 tests/industry_layout_catalog_rc1.py "$src/src/table/build_industry.h" lua5.1
           lua5.1 tests/industry_alternate_layouts.lua
+          lua5.1 tests/industry_farm_oil_layout_ingress.lua
           python3 tests/tree_lifecycle_temperate_upstream.py "$src"
           python3 tests/tree_global_tick_upstream.py "$src"
           lua5.1 tests/tree_lifecycle_temperate.lua

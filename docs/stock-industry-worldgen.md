@@ -32,7 +32,7 @@ Sawmill layouts](stock-industry-alternate-layouts.md) once their original
 3D media are present. The source comparison can still instantiate only
 layout 0 to check the earlier restricted catalogue. An unsupported layout
 draw counts as a failed attempt; it does not skip draws or substitute a shape.
-This is source scheduling over the current supported roster, not seed parity
+The [Temperate footprint audit](stock-temperate-industry-layouts.md) also mounts the remaining Forest, Farm, Factory, Oil Wells and Oil Refinery alternatives. This is source scheduling over the current supported roster, not seed parity
 with an unrestricted OpenTTD world.
 
 Sites follow source edge and freeform void rules; company/structure and

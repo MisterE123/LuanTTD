@@ -373,11 +373,11 @@ def atlas(name,pal):
     q.replace(p)
 
 
-def build(name,layout,groups,title,blend,look,cam,scale,pal,render):
+def build(name,layout,groups,title,blend,look,cam,scale,pal,render,upstream_layout=0):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.preferences.filepaths.save_version=0
     sc=bpy.context.scene;sc.name=title
-    sc["Upstream cells"]="OpenTTD 14.1 default layout 0: "+", ".join(f"({x},{z}) GFX {n}" for (x,z),n in layout.items())
+    sc["Upstream cells"]=(f"OpenTTD 16.0-RC1 layout {upstream_layout}: " if upstream_layout else "OpenTTD 14.1 default layout 0: ")+", ".join(f"({x},{z}) GFX {n}" for (x,z),n in layout.items())
     sc["Datum"]="Blender Z up, ground Z=0; runtime grade+1 anchor with cell centered at NW site +(2*x,2*z)"
     mats=R.materials()
     for i,n in enumerate(pal):mats[i].name=n.replace("_"," ").title()
@@ -421,7 +421,7 @@ def build(name,layout,groups,title,blend,look,cam,scale,pal,render):
         R.export_obj(q,clip(full,x,z,layout))
         raw=q.read_text()
         # Shared hardlinked test copies must not be modified in place.
-        q.write_text(raw.replace(raw.splitlines()[0],f"# {title}; layout 0 ({x},{z}) GFX {gfx}; original Blender art",1))
+        q.write_text(raw.replace(raw.splitlines()[0],f"# {title}; layout {upstream_layout} ({x},{z}) GFX {gfx}; original Blender art",1))
         q.replace(p)
     atlas(name,pal)
     if name==NAME:export_livestock(sc,mats)

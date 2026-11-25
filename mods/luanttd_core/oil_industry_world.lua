@@ -5,7 +5,7 @@ return function(Sim,Terrain,Rules)
   local Offshore=dofile(mod.."/offshore_rig_world.lua")(Sim,Terrain,dofile(mod.."/openttd/oil_rig.lua"),Rules)
   local W={VERSION=1,BASE=0x3000,LIMIT=0x4000,MIN_SEPARATION=15}
   W.offshore=Offshore
-  local layout={wells=Rules.layout.oil_well[0],refinery=Rules.layout.oil_refinery[0]}
+  local layouts={wells=Rules.layout.oil_well,refinery=Rules.layout.oil_refinery}
   local specs={
     wells={kind="stock_oil_wells",source="oil_well",name="Northfield Oil Wells",art="industry_oil_well",industry=11},
     refinery={kind="stock_oil_refinery",source="oil_refinery",name="Westhaven Refinery",art="industry_oil_refinery",industry=4},
@@ -33,11 +33,14 @@ return function(Sim,Terrain,Rules)
     for _,k in ipairs(overlays) do if s[k] and s[k][id] then return true end end
     return false
   end
-  local function quote(s,kind,x,z)
+  local function quote(s,kind,x,z,variant)
     if not s.corner_grid or not specs[kind] or not point(x,z) then return nil,"INVALID_OIL_SITE" end
     if kind=="refinery" and not W.refinery_edge(x,z,Sim.W,Sim.H,Rules.EDGE_LIMIT,false,not not (s.corner_grid.freeform_edges or s.stock_freeform_edges)) then return nil,"REFINERY_NOT_NEAR_EDGE" end
+    variant=variant or 0
+    local footprint=layouts[kind][variant]
+    if not footprint then return nil,"INDUSTRY_LAYOUT_UNPORTED" end
     local cells,level={},nil
-    for _,r in ipairs(layout[kind]) do
+    for _,r in ipairs(footprint) do
       local a,b=x+r[1],z+r[2]
       local id=Sim.id(a,b)
       local t=id and s.tiles[id]
@@ -48,7 +51,7 @@ return function(Sim,Terrain,Rules)
       level=h
       cells[#cells+1]={tile=id,x=a,z=b,gfx=r[3],offset_x=r[1],offset_z=r[2]}
     end
-    return {kind=kind,x=x,z=z,level=level,cells=cells}
+    return {kind=kind,x=x,z=z,level=level,cells=cells,layout=variant}
   end
   function W.plan(s,wx,wz,rx,rz)
     if s.stock_oil_placements then return nil,"OIL_ALREADY_PLACED" end
@@ -63,7 +66,7 @@ return function(Sim,Terrain,Rules)
     return {version=W.VERSION,seed=s.seed,topology=s.topology,wells=a,refinery=b}
   end
   local function same(a,b)
-    if not b or a.kind~=b.kind or a.x~=b.x or a.z~=b.z or a.level~=b.level or type(b.cells)~="table" or
+    if not b or a.kind~=b.kind or a.layout~=b.layout or a.x~=b.x or a.z~=b.z or a.level~=b.level or type(b.cells)~="table" or
        #a.cells~=#b.cells then return false end
     for i,c in ipairs(a.cells) do
       local d=b.cells[i]
@@ -111,11 +114,13 @@ return function(Sim,Terrain,Rules)
     local key=kind=="oil_well" and "wells" or kind=="oil_refinery" and "refinery" or nil
     if not key or type(origin)~="number" or origin%1~=0 or not s.tiles[origin] then return nil,"INVALID_OIL_SITE" end
     local x,z=Sim.xy(origin)
-    local p,why,tile=quote(s,key,x,z)
-    if not p then return nil,why,tile end
     local ind=opts and opts.record
-    if not ind or type(opts.name)~="string" or ind.kind~=kind or ind.x~=x-1 or ind.z~=z-1 or
-        ind.layout~=0 or #ind.tiles~=#p.cells then return nil,"GENERATED_OIL_FOOTPRINT_MISMATCH" end
+    if not ind or type(opts.name)~="string" or ind.kind~=kind or ind.x~=x-1 or ind.z~=z-1 then
+      return nil,"GENERATED_OIL_FOOTPRINT_MISMATCH"
+    end
+    local p,why,tile=quote(s,key,x,z,ind.layout)
+    if not p then return nil,why,tile end
+    if #ind.tiles~=#p.cells then return nil,"GENERATED_OIL_FOOTPRINT_MISMATCH" end
     for i,c in ipairs(p.cells) do
       local t=ind.tiles[i]
       if t.x~=c.x-1 or t.z~=c.z-1 or t.gfx~=c.gfx then return nil,"GENERATED_OIL_FOOTPRINT_MISMATCH" end
@@ -130,12 +135,13 @@ return function(Sim,Terrain,Rules)
     local desc,sid=specs[key],#s.sites+1
     local site={id=sid,name=opts.name,kind=desc.kind,tile=origin,stock={},produced={},received={},
       service=0,stock_industry=id,industry_chain="oil",town=ind.town}
-    local record={id=id,kind=key,source_type=desc.industry,site=sid,x=x,z=z,level=p.level,cells=p.cells,style=desc.art}
+    local art=p.layout==0 and desc.art or desc.art.."_l"..p.layout
+    local record={id=id,kind=key,source_type=desc.industry,site=sid,x=x,z=z,level=p.level,cells=p.cells,style=art}
     ind.id,ind.site=id,sid
     records[id],industries[id],s.sites[sid]=record,ind,site
     for _,c in ipairs(p.cells) do
       local t=s.tiles[c.tile]
-      t.stock_industry={id=id,chain="oil",kind=key,style=desc.art,x=c.offset_x,z=c.offset_z,gfx=c.gfx,
+      t.stock_industry={id=id,chain="oil",kind=key,style=art,layout=p.layout,x=c.offset_x,z=c.offset_z,gfx=c.gfx,
         site=sid,origin=origin}
     end
     s.tiles[origin].site=sid
@@ -191,7 +197,17 @@ return function(Sim,Terrain,Rules)
     return dirty
   end
   function W.visual_sources()
-    return {industry_oil_well=layout.wells,industry_oil_refinery=layout.refinery,industry_oil_rig=Rules.layout.oil_rig[0]}
+    return {industry_oil_well=layouts.wells[0],industry_oil_well_l1=layouts.wells[1],
+      industry_oil_refinery=layouts.refinery[0],industry_oil_refinery_l1=layouts.refinery[1],industry_oil_rig=Rules.layout.oil_rig[0]}
+  end
+  function W.visual_asset(style,cell,index)
+    -- All five stock well tiles have GFX29, with the same machinery and
+    -- ordinal phase on either footprint. Share the existing genuine
+    -- pumpjacks; only their placement in the generated field changes.
+    if style=="industry_oil_well_l1" then
+      style,cell="industry_oil_well",layouts.wells[0][index]
+    end
+    return ("%s_%d_%d"):format(style,cell[1],cell[2]),style.."_atlas"
   end
   return W
 end

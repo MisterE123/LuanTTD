@@ -23,11 +23,19 @@ PAL=dict(S.PAL, **{
 })
 A.PAL=PAL;A.P=A.H.P={k:i for i,k in enumerate(PAL)}
 R.COLORS[:]=PAL.values()
-LAYOUT={(0,0):20,(0,1):21,(0,2):22,(0,3):21,(1,0):20,(1,1):19,(1,2):22,(1,3):20,
-        (2,1):18,(2,2):18,(2,3):18,(3,2):18,(3,3):18,(2,0):23,(3,1):23}
-RECEIVE=((0,0,-1),(1,0,-1),(1,3,1))
-TANKS=((2,1),(2,2),(2,3),(3,2),(3,3))
-NAME="industry_oil_refinery"
+VARIANT=int(os.getenv("STOCK_REFINERY_VARIANT","0"))
+LAYOUTS=(
+    {(0,0):20,(0,1):21,(0,2):22,(0,3):21,(1,0):20,(1,1):19,(1,2):22,(1,3):20,
+     (2,1):18,(2,2):18,(2,3):18,(3,2):18,(3,3):18,(2,0):23,(3,1):23},
+    {(0,0):18,(0,1):18,(0,2):21,(0,3):22,(0,4):20,(1,0):18,(1,1):18,(1,2):19,(1,3):20,
+     (2,0):18,(2,1):18,(2,2):19,(2,3):22,(1,4):23,(2,4):23},
+)
+LAYOUT=LAYOUTS[VARIANT]
+def positions(role):
+    return tuple((x,z) for (x,z),gfx in LAYOUT.items() if gfx==role)
+RECEIVE=((0,0,-1),(1,0,-1),(1,3,1)) if not VARIANT else ((0,4,1),(1,3,-1))
+TANKS=positions(18)
+NAME="industry_oil_refinery"+("_l1" if VARIANT else "")
 
 
 def curve_pipe(m,n,c,pts,r,nside=8,flange=()):
@@ -57,10 +65,10 @@ def yard(m):
               i,i+rng.uniform(.015,.051),j,j+rng.uniform(.009,.037),.011)
     # Lined pedestrian-only service routes. The north arm ends before the
     # unowned north-east cell; no invented foundation/render occupancy there.
-    for x0,x1,z0,z1 in ((-.40,1.37,3.30,3.48),(3.49,7.43,3.30,3.47),
-                         (3.39,3.55,1.58,5.40),(.17,1.34,6.96,7.30)):
+    for x0,x1,z0,z1 in (() if VARIANT else ((-.40,1.37,3.30,3.48),(3.49,7.43,3.30,3.47),
+                         (3.39,3.55,1.58,5.40),(.17,1.34,6.96,7.30))):
         Q(m,"Painted operator routes by process cells","asphalt_l",x0,x1,z0,z1,.013)
-    for x,z in ((.5,1.22),(2.52,1.26),(2.52,5.70)):
+    for x,z in (((2*a+.51,2*b+1.22) for a,b,_ in RECEIVE) if VARIANT else ((.5,1.22),(2.52,1.26),(2.52,5.70))):
         B(m,"Low covered drainage channel","black_oil",x,z,.390,.069,.012,.022,.007)
         for j in range(8):
             xx=x-.17+j*.049
@@ -205,8 +213,8 @@ def tankfarm(m):
         for q in (-.774,.774):
             B(m,n+" containment curb","foundation",x+q,z,.057,1.596,.052,.141,.006)
             B(m,n+" containment curb","foundation",x,z+q,1.596,.057,.052,.141,.006)
-        r=(.477,.508,.506,.471,.503)[j]
-        h=(.688,.840,.780,.725,.762)[j]
+        r=(.477,.508,.506,.471,.503)[j%5]
+        h=(.688,.840,.780,.725,.762)[j%5]
         vessel(m,n,x,z,.146,h,r,"sterling","satin")
         T(m,n+" dark blue band at tank base","paint_cobalt",(x,z,.185),(x,z,.342),r*1.009,r*1.009,24)
         hoop(m,n+" open rooftop rim railing","sterling",x,z,h+.083,r*.885,.008,20)
@@ -223,11 +231,14 @@ def tankfarm(m):
 
 
 def process(m):
-    stack(m,2.17,2.40,2.216)
-    vessel(m,"GFX19 companion fractionating condenser",2.93,2.64,.085,1.234,.173,"sterling","paint_cobalt")
-    curve_pipe(m,"GFX19 inter-vessel process vapor run","paint_cobalt",[(2.26,2.39,1.796),(2.62,2.39,1.796),
-        (2.62,2.59,1.796),(2.62,2.59,1.105),(2.86,2.59,1.105)],.047,9,(2,3))
-    for k,(x,z) in enumerate(((.5,2.50),(.50,6.50))):
+    for a,b in positions(19):
+        x,z=2*a,2*b
+        stack(m,x+.17,z+.40,2.216)
+        vessel(m,"GFX19 companion fractionating condenser",x+.93,z+.64,.085,1.234,.173,"sterling","paint_cobalt")
+        curve_pipe(m,"GFX19 inter-vessel process vapor run","paint_cobalt",
+            [(x+.26,z+.39,1.796),(x+.62,z+.39,1.796),(x+.62,z+.59,1.796),
+             (x+.62,z+.59,1.105),(x+.86,z+.59,1.105)],.047,9,(2,3))
+    for x,z in ((a*2+.50,b*2+.50) for a,b in positions(21)):
         n="GFX21 open-frame exchanger building"
         B(m,n+" bolted runner foot","foundation",x,z,1.44,1.47,.008,.11,.024)
         for a in (-.54,.54):
@@ -249,7 +260,7 @@ def process(m):
                 [(x+.411,z+b,.831),(x+.483,z+b,.831),(x+.483,z+b,.979),(x+.483,z+b+.209,.979)],.036,8)
         Q(m,n+" open grippy maintenance bridge","dark_steel",x-.507,x+.512,z-.110,z+.108,1.128)
         ladder(m,n,x-.454,z+.556,.126,1.175,.049,cage=True)
-    for i,(x,z) in enumerate(((.49,4.49),(2.57,4.40))):
+    for i,(x,z) in enumerate(((a*2+.49,b*2+.49) for a,b in positions(22)) if VARIANT else ((.49,4.49),(2.57,4.40))):
         n="GFX22 raised vapor reservoir and attached pipes"
         B(m,n+" beveled concrete engine floor","foundation",x,z,1.548,1.463,.012,.101,.024)
         for a in (-.283,.283):
@@ -261,13 +272,23 @@ def process(m):
         curve_pipe(m,n+" three runs of external welded pipe","live_pipe",[(x,z,1.49),(x+.47,z,1.49),
                    (x+.47,z,1.18),(x+.52,z-.231,1.18),(x+.52,z-.231,.61)],.041,10,(1,2))
         ladder(m,n,x,z+.353,.11,1.555,.060,cage=True)
-    curve_pipe(m,"Continuous low process transfer manifold across real tiles","live_pipe",
-        [(1.18,4.67,.367),(1.43,4.67,.367),(1.43,4.06,.367),(3.52,4.06,.367),
-         (3.52,4.06,.298),(4.34,4.06,.298)],.045,10,(2,4))
+    if VARIANT:
+        for (x,z),role in LAYOUT.items():
+            if role not in (18,19,21,22):continue
+            for dx,dz in ((1,0),(0,1)):
+                if LAYOUT.get((x+dx,z+dz)) not in (18,19,21,22):continue
+                a,b=x*2+.48,z*2+.48
+                curve_pipe(m,"Low transfer manifold between adjacent process cells","live_pipe",
+                    [(a,b,.24),(a+dx*.37,b+dz*.37,.39),(a+dx*1.63,b+dz*1.63,.39),
+                     (a+dx*2,b+dz*2,.24)],.035,10,(1,))
+    else:
+        curve_pipe(m,"Continuous low process transfer manifold across real tiles","live_pipe",
+            [(1.18,4.67,.367),(1.43,4.67,.367),(1.43,4.06,.367),(3.52,4.06,.367),
+             (3.52,4.06,.298),(4.34,4.06,.298)],.045,10,(2,4))
 
 
 def officials(m):
-    for i,(x,z) in enumerate(((4.48,.479),(6.44,2.518))):
+    for i,(x,z) in enumerate(((a*2+.48,b*2+.48) for a,b in positions(23)) if VARIANT else ((4.48,.479),(6.44,2.518))):
         n="GFX23 low pump controls and passenger staff building"
         B(m,n+" small stone soubassement","foundation",x,z,1.157,.841,.012,.114,.022)
         B(m,n+" oxide wash brick and shallow wall","brick",x,z,1.073,.753,.109,.584,.015)
@@ -291,5 +312,5 @@ if __name__=="__main__":
       ("Bunded broad oil tanks and visible draw valves",tankfarm),
       ("Fractionation towers and red iron process house",process),
       ("Staff entrance and control rooms",officials)),
-      "Tideland Refinery","stock_oil_refinery.blend",(3.28,3.60,.85),(11.4,11.8,8.9),10.65,
-      PAL,os.getenv("STOCK_OIL_REFINERY_RENDER"))
+      "Tideland Refinery","stock_oil_refinery"+("_l1" if VARIANT else "")+".blend",(3.28,3.60,.85),(11.4,11.8,8.9),10.65,
+      PAL,os.getenv("STOCK_OIL_REFINERY_RENDER"),upstream_layout=VARIANT)

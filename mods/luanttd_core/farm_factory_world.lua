@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Native bridge for the original Farm and Factory layout-0 footprint.
+-- Native bridge for original Farm and Factory footprints.
 -- Ordinary map generation provides the source record; the seed-1751
 -- workbench remains available as a controlled fixture.
 return function(Sim,Terrain,Rules,Fields,Catchment)
@@ -30,15 +30,18 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     return false
   end
 
-  function W.quote(s,kind,origin,generated)
+  function W.quote(s,kind,origin,generated,layout)
     if not generated and (s.road_timber or next(s.stock_timber_industries or {})) then return nil,"TIMBER_GOODS_WORKBENCH_ACTIVE" end
     if not (styles[kind] and s.corner_grid and valid_id(origin) and s.tiles[origin]) then
       return nil,"INVALID_INDUSTRY_ORIGIN",origin
     end
+    layout=layout or 0
+    local footprint=Rules.layout[kind][layout]
+    if not footprint then return nil,"INDUSTRY_LAYOUT_UNPORTED",origin end
     local x,z=Sim.xy(origin)
     local cells,level={},nil
     -- The layout list includes only authored cells, not its holes.
-    for n,q in ipairs(Rules.layout[kind][0]) do
+    for n,q in ipairs(footprint) do
       local tx,tz=x+q[1],z+q[2]
       local id=Sim.id(tx,tz)
       local t=id and s.tiles[id]
@@ -50,7 +53,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
       cells[n]={id=id,x=q[1],z=q[2],gfx=q[3]}
     end
     if conflicts(s,kind,x,z) then return nil,"INDUSTRIES_TOO_CLOSE",origin end
-    return {version=W.VERSION,kind=kind,layout=0,origin=origin,x=x,z=z,level=level,cells=cells,
+    return {version=W.VERSION,kind=kind,layout=layout,origin=origin,x=x,z=z,level=level,cells=cells,
       topology=s.topology,seed=s.seed}
   end
 
@@ -213,7 +216,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     for k,p in ipairs(plans) do
       local id=start+k-1
       local style=styles[p.kind]
-      local ind=generation and generation.record or Rules.new(p.kind,id,p.x-1,p.z-1,{completed=true,
+      local ind=generation and generation.record or Rules.new(p.kind,id,p.x-1,p.z-1,{layout=p.layout,completed=true,
         original=s.stock_original_industry_economy~=false,generating_world=true,random_u32=rnd,economy_year=Sim.date(s)})
       if generation then
         assert(#plans==1 and ind.kind==p.kind and ind.x==p.x-1 and ind.z==p.z-1 and #ind.tiles==#p.cells)
@@ -237,8 +240,8 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
       s.sites[r.site.id]=r.site
       for _,cell in ipairs(r.p.cells) do
         local t=s.tiles[cell.id]
-        t.stock_industry={id=r.ind.id,chain="farm",kind=r.ind.kind,layout=0,
-          style=r.style.art,x=cell.x,z=cell.z,gfx=cell.gfx,site=r.site.id,origin=r.p.origin}
+        t.stock_industry={id=r.ind.id,chain="farm",kind=r.ind.kind,layout=r.p.layout,
+          style=r.p.layout==0 and r.style.art or r.style.art.."_l"..r.p.layout,x=cell.x,z=cell.z,gfx=cell.gfx,site=r.site.id,origin=r.p.origin}
         if cell.id==r.p.origin then t.site=r.site.id end
       end
     end
@@ -252,7 +255,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
   end
   function W.commit(s,p,random_u32)
     if not same(s,p) then return nil,"STALE_INDUSTRY_QUOTE" end
-    local q,why,id=W.quote(s,p.kind,p.origin)
+    local q,why,id=W.quote(s,p.kind,p.origin,nil,p.layout)
     if not q then return nil,why,id end
     if not matches(q,p) then return nil,"STALE_INDUSTRY_QUOTE" end
     local r,dirty=writes(s,{q},random_u32)
@@ -260,9 +263,9 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     return r[1].ind,dirty,r[1].site
   end
   function W.place_generated(s,kind,origin,opts,rng)
-    local q,why,id=W.quote(s,kind,origin,true)
-    if not q then return nil,why,id end
     assert(opts and opts.record and type(opts.name)=="string")
+    local q,why,id=W.quote(s,kind,origin,true,opts.record.layout)
+    if not q then return nil,why,id end
     local r,dirty=writes(s,{q},rng or Sim.stock_random_u32,opts)
     if not r then return nil,dirty end
     return r[1].ind,q.cells,r[1].site

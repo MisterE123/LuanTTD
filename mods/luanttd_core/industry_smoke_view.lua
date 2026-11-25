@@ -39,6 +39,8 @@ return function(core,Sim,ground)
     industry_oil_refinery_0_0={chimney(-.233,1.506,.998,"vent")},
     industry_oil_refinery_1_0={chimney(-.233,1.563,.998,"vent")},
     industry_oil_refinery_1_3={chimney(-.233,1.734,.222,"vent")},
+    industry_oil_refinery_l1_0_4={chimney(-.233,1.654,.222,"vent")},
+    industry_oil_refinery_l1_1_3={chimney(-.233,1.654,.998,"vent")},
   }
   local function start(name,o,px,py,pz)
     local p=o.p
@@ -79,6 +81,9 @@ return function(core,Sim,ground)
           if b then
             local key=layouts.alternate(b) or ("%s_%d_%d"):format(b.style,b.x,b.z)
             local flues=outlets[key]
+            if b.style=="industry_factory_l1" then
+              flues=outlets[layouts.farm_asset(b.style,b.x,b.z)]
+            end
             if flues then
               -- Tiles may enter the view before the renderer has placed
               -- their model. Don't let a plume hang over bare ground.
