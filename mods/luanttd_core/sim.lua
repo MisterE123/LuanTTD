@@ -244,6 +244,8 @@ local function load_road_rules()
   clear_area_rules=dofile(base.."openttd/clear_area.lua")
   local rail_track=dofile(base.."openttd/rail_track.lua")
   road_rules.union=rail_track.union
+  road_rules.rail_autoslope=dofile(base.."openttd/rail_autoslope.lua")(rail_track,slope_rules)
+  road_rules.rail_height=dofile(base.."openttd/rail_height.lua")(rail_track,slope_rules)
   local rail_water=dofile(base.."openttd/rail_half_water.lua")(rail_track,slope_rules)
   coastal_world=dofile(base.."water_flood_world.lua")(M,terrain_rules,dofile(base.."openttd/water_flood.lua"),
     rail_track,slope_rules,rail_water)
@@ -750,9 +752,17 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
   local g=s.corner_grid
   local opts={cash=company.cash,allowance=landscape_rules.replenish(company.terraform_limit,0),max_height=32}
   local coast=coastal_world.terraform(s,owner,function(id) return coastal_tile_occupied(s,id) end)
-  opts.after_step=coast.stage
+  local staged_grid,barren_rail=g,{}
+  local function remember_barren(step)
+    for id in pairs(step.rail_barren or {}) do barren_rail[id]=true end
+  end
+  opts.after_step=function(step,scratch)
+    coast.stage(step)
+    staged_grid=scratch
+    remember_barren(step)
+  end
   opts.void=function(tx,tz) return s.tiles[M.id(tx,tz)].stock_void end
-  opts.validate_tile=function(_,tx,tz,mask,base)
+  opts.validate_tile=function(pass,tx,tz,mask,base,_,step)
     local id=M.id(tx,tz)
     local t=s.tiles[id]
     if coastal_world.is_water(t) then return coast.quote(tx,tz) end
@@ -774,10 +784,57 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       and not (s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
         s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
         s.rail_tunnel_below and s.rail_tunnel_below[id]) then
-      local old_mask,old_base,top=terrain_rules.tile(g,tx,tz)
+      local old_mask,old_base,top=terrain_rules.tile(staged_grid,tx,tz)
       local foundation=field.ground==top*8 and road_rules.autoslope.airport(old_mask,old_base,mask,base,s.stock_road_town_policy)
       if foundation then return foundation end
       return nil,"AIRPORT_SURFACE_HEIGHT"
+    end
+    -- RC1 TerraformTile_Station (rail and waypoint) and the depot
+    -- branch of TerraformTile_Rail. Allow an unchanged entrance or pair
+    -- of ends, never reshape an active free-run track by this path.
+    local rail_term=t and t.build=="stock_rail" and
+      (t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir~=nil)
+    if rail_term and not t.rail_span_id and t.terrain~="water" and not t.stock_void
+      and not (s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
+        s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
+        s.rail_tunnel_below and s.rail_tunnel_below[id]) then
+      local axis=t.rail_station_axis or t.rail_waypoint_axis
+      local direction=axis or t.rail_depot_dir
+      if direction then
+        local old_mask,old_base=terrain_rules.tile(staged_grid,tx,tz)
+        local quote=road_rules.autoslope.terminal(direction,axis~=nil,old_mask,old_base,mask,base,s.stock_road_town_policy)
+        if quote then return quote end
+      end
+      return nil,"RAIL_FACILITY_HEIGHT"
+    end
+    -- Preserve the running profile of ordinary rail, including signal tiles.
+    -- Flooded track, road/rail crossings and layered span geometry have
+    -- separate clearance and water-state rules.
+    if t and t.build=="stock_rail" and (t.rail_tracks or 0)>0 and not rail_term and not crossing
+      and not t.rail_span_id and not t.stock_void and not t.ship and not t.airfield
+      and not (s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
+        s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
+        s.rail_tunnel_below and s.rail_tunnel_below[id]) then
+      local old_mask,old_base=terrain_rules.tile(staged_grid,tx,tz)
+      local policy=s.stock_road_town_policy or {}
+      local quote=road_rules.rail_autoslope.quote(t.rail_tracks,old_mask,old_base,mask,base,{
+        autoslope=policy.autoslope,build_on_slopes=policy.build_on_slopes,foundation_price=policy.foundation_price,
+        half_water=t.rail_ground==13,
+      })
+      if not quote then return nil,"MUST_REMOVE_RAILROAD_TRACK" end
+      -- Regular and inclined geometry mounts for all gauges; only
+      -- ordinary RAIL has the specialized split-foundation meshes.
+      if (t.rail_type or 0)~=0 then
+        local H=road_rules.rail_height
+        if H.split(H.profile({kind="rail",trackbits=t.rail_tracks},base,mask)) then
+          return nil,"RAIL_SPLIT_UNMOUNTED"
+        end
+      end
+      if pass==1 and quote.barren then
+        step.rail_barren=step.rail_barren or {}
+        step.rail_barren[id]=true
+      end
+      return quote.price
     end
     -- Terrain deformation is only in place when the source road surface
     -- or terminal entrance is unchanged, so active orders remain valid.
@@ -794,7 +851,7 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       local policy=s.stock_road_town_policy
       local old_mask,old_base
       if trip=="road" or trip=="road_station" or trip=="road_depot" or trip==nil and tram then
-        old_mask,old_base=terrain_rules.tile(g,tx,tz)
+        old_mask,old_base=terrain_rules.tile(staged_grid,tx,tz)
       end
       local foundation
       if old_mask and t.road_waypoint_id then
@@ -836,7 +893,10 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       ALREADY_LEVELLED="Already level.",TOO_HIGH="The edit exceeds this world's height limit.",
       MUST_DEMOLISH_CANAL_FIRST="Dismantle the canal before landscaping.",VEHICLE_IN_THE_WAY="A vessel is in the way or has reserved the waterway.",
       CROSSING_SURFACE_HEIGHT="Keep the crossing deck at its current height on a supported slope, or remove the crossing first.",
-      AIRPORT_SURFACE_HEIGHT="Landscaping cannot change the level of an active airport."}
+      AIRPORT_SURFACE_HEIGHT="Landscaping cannot change the level of an active airport.",
+      MUST_REMOVE_RAILROAD_TRACK="Landscaping would change the running surface. Remove the tracks first.",
+      RAIL_SPLIT_UNMOUNTED="That split foundation is available only on ordinary rail.",
+      RAIL_FACILITY_HEIGHT="Landscaping must leave the platform or depot level and its entrances unchanged."}
     return false,(explanations[why] or water_clear_errors[why] or tostring(why or "Nothing changed."))
       ..(px and pz and (" (%d,%d)"):format(px,pz) or "")
   end
@@ -848,6 +908,7 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
   local okay,msg=landscape_rules.apply(g,plan)
   if not okay then return false,msg end
   coast.commit(plan)
+  remember_barren(plan)
   company.terraform_limit=plan.allowance_after
   debit(company,plan.cost)
   local changed={}
@@ -859,6 +920,7 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       local mask,base=terrain_rules.tile(g,d.x,d.z)
       local t=s.tiles[id]
       t.h=base
+      if barren_rail[id] then t.rail_ground=0 end
       if t.airfield and t.airfield.layout~="oilrig" then
         local field=s.stock_small_airports and s.stock_small_airports[t.airfield.airport]
         if field then t.airfield.level=field.ground/8 end

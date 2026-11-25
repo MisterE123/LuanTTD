@@ -326,6 +326,8 @@ jobs:
           lua5.1 tests/rail_ground_temperate.lua
           lua5.1 tests/rail_split_profile.lua
           python3 tests/rail_half_water_upstream.py "$src"
+          python3 tests/rail_autoslope_rc1.py "$src"
+          lua5.1 tests/rail_autoslope.lua
           lua5.1 tests/rail_half_water.lua
           lua5.1 tests/rail_half_water_world.lua
           lua5.1 tests/rail_multi_wet_world.lua

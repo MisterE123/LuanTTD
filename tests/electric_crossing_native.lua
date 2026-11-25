@@ -1,6 +1,7 @@
 -- Default generated worker, genuine layered construction, depot purchase,
 -- and a moving electric train in an actual graphical Luanti client.
 local owner="IndustryLayoutsQA"
+local terraform=core.settings:get_bool("luanttd_qa_rail_station_autoslope",false)
 local reload=core.deserialize(storage:get_string("electric_crossing_qa"),true)
 local spot
 local function vacant(x,z,h)
@@ -14,7 +15,8 @@ end
 for row=8,Sim.H-11 do
   for col=8,Sim.W-17 do
     local h=vacant(col,row)
-    local good=h~=nil
+    local good=type(h)=="number" and (not terraform or h>0 and vacant(col+2,row-1,h) and vacant(col+3,row-1,h)
+      and vacant(col+8,row-1,h) and vacant(col+9,row-1,h))
     if good then
       for i=0,13 do if not vacant(col+i,row,h) then good=false;break end end
       for i=-3,4 do if not vacant(col+7,row+i,h) then good=false;break end end
@@ -54,17 +56,29 @@ local function until_(label,p,f,n)
   core.after(.23,function() until_(label,p,f,n+1) end)
 end
 local function live(viewer)
-  viewer:set_pos({x=2*(spot.x+7)-5,y=spot.h+5,z=2*spot.z-8})
+  local function aim(at,pos)
+    viewer:set_pos(pos)
+    local dx,dy,dz=at.x-pos.x,at.y-pos.y-1.625,at.z-pos.z
+    viewer:set_look_horizontal(math.atan2(-dx,dz))
+    viewer:set_look_vertical(math.atan2(-dy,math.sqrt(dx*dx+dz*dz)))
+  end
   local target={x=2*(spot.x+7)+.5,y=spot.h+.7,z=2*spot.z+.5}
-  local p=viewer:get_pos()
-  local dx,dy,dz=target.x-p.x,target.y-p.y-1.625,target.z-p.z
-  viewer:set_look_horizontal(math.atan2(-dx,dz))
-  viewer:set_look_vertical(math.atan2(-dy,math.sqrt(dx*dx+dz*dz)))
+  aim(target,{x=target.x-5.5,y=spot.h+5,z=target.z-8.5})
+  local slope=dofile(mod.."/openttd/terrain.lua")
+  local function held(state,offset)
+    local x,z=Sim.xy(id(offset))
+    local shape,base,top=slope.tile(state.corner_grid,x,z)
+    return shape==7 and base==spot.h-1 and top==spot.h
+  end
   if reload then
     until_("Reopened ELRL crossing lost its typed rail, mixed ways or live train",function()
       local state=assert(OwnerCheckpoint.read())
       local c=state.tiles[crossing].level_crossing
       local second=state.tiles[id(5)].level_crossing
+      if terraform then
+        assert(held(state,3) and held(state,9) and state.tiles[id(3)].rail_station_id
+          and state.tiles[id(9)].rail_tracks==1)
+      end
       local x,z=Sim.xy(crossing)
       local wire=core.get_node_or_nil({x=2*x+1,y=spot.h+2,z=2*z})
       if not (c and c.railtype==1 and c.tramtype==1 and c.roadtype==0 and second and second.railtype==1 and wire
@@ -99,6 +113,7 @@ local function live(viewer)
       local a,b=s.tiles[id(2)].rail_station_id,s.tiles[id(10)].rail_station_id
       command({kind="transport_start",mode="rail",vehicle=vehicle,first=b,second=a},function()
         local seen={}
+        local function watch()
         until_("A real SH '30' never used both sides of the mixed crossing",function()
           local now=assert(OwnerCheckpoint.read())
           local tile=now.tiles[crossing].level_crossing
@@ -106,6 +121,13 @@ local function live(viewer)
           local tram=core.get_node_or_nil({x=2*x,y=spot.h+2,z=2*z})
           local elrl=core.get_node_or_nil({x=2*x+1,y=spot.h+2,z=2*z})
           local gate=core.get_node_or_nil({x=2*x,y=spot.h+1,z=2*z})
+          if terraform then
+            local u,v=Sim.xy(id(3))
+            local incline=core.get_node_or_nil({x=2*u,y=spot.h,z=2*v})
+            local platform=core.get_node_or_nil({x=2*u,y=spot.h+1,z=2*v})
+            if not (incline and incline.name=="luanttd_core:road_retaining"
+                and platform and platform.name=="luanttd_core:stock_rail_platform_1") then return end
+          end
           if not (tram and tram.name=="luanttd_core:tramway_crossing_1" and elrl
               and elrl.name:match("^luanttd_core:electric_crossing_wire_1_")) then return end
           if gate and gate.name=="luanttd_core:level_crossing_0_closed" then seen.closed=true end
@@ -119,13 +141,58 @@ local function live(viewer)
               if at and at.x>target.x+.6 then seen.after=true end
             end
           end
+          if terraform then
+            local u,v=Sim.xy(id(9))
+            for _,ref in ipairs(core.get_objects_inside_radius({x=2*u+.5,y=spot.h+.5,z=2*v+.5},1.25)) do
+              local ent=ref:get_luaentity()
+              local pick=ent and ent.luanttd_vehicle
+              local p=pick and pick.kind=="rail" and pick.id==vehicle and ref:get_pos()
+              if p and math.abs(p.y-(spot.h+.5))<.36 then seen.foundation=true end
+            end
+          end
           return tile.railtype==1 and seen.before and seen.after and seen.closed and seen.open
+            and (not terraform or seen.foundation)
         end,function()
           storage:set_string("electric_crossing_qa",core.serialize({spot=spot,vehicle=vehicle}))
-          core.log("action","NATIVE ELRL CROSSING FRAME electric-rail-and-tram")
-          core.after(1.2,function()
-            core.log("action","PASS NATIVE ELECTRIC CROSSING: actual SH '30' on mixed road/track, both wire layers and both gate states")
+          local function finish(frame)
+            core.log("action","NATIVE ELRL CROSSING FRAME "..frame)
+            core.after(1.2,function()
+              core.log("action","PASS NATIVE ELECTRIC CROSSING: actual SH '30' on mixed road/track, both wire layers and both gate states")
+            end)
+          end
+          if not terraform then finish("electric-rail-and-tram");return end
+          local at={x=2*(spot.x+3),y=spot.h+.4,z=2*spot.z+.2}
+          aim(at,{x=at.x-4.6,y=spot.h+2.6,z=at.z-5.3})
+          core.after(1,function()
+            until_("No train on the reshaped platform for the approved native frame",function()
+              for _,ref in ipairs(core.get_objects_inside_radius(at,2.2)) do
+                local ent=ref:get_luaentity()
+                local pick=ent and ent.luanttd_vehicle
+                if pick and pick.kind=="rail" and pick.id==vehicle then return true end
+              end
+            end,function() finish("rail-platform-autoslope") end)
           end)
+        end)
+        end
+        if not terraform then watch();return end
+        local function lower(offset,check,done)
+          query({kind="terrain_quote",request={operation="lower",first=id(offset)}},function(q)
+            assert(q.value.cost==750)
+            query({kind="command",command={kind="terrain_commit",token=q.value.token,revision=q.revision}},function()
+              local state=assert(OwnerCheckpoint.read())
+              assert(held(state,offset))
+              check(state);done()
+            end)
+          end)
+        end
+        lower(3,function(state)
+          assert(state.tiles[id(3)].rail_station_id==a)
+          core.log("action","NATIVE RAIL AUTOSLOPE: preserved both active platform tiles and approach height")
+        end,function()
+          lower(9,function(state)
+            assert(state.tiles[id(9)].rail_tracks==1 and state.tiles[id(9)].owner==owner)
+            core.log("action","NATIVE RAIL AUTOSLOPE: preserved both running-rail tiles and approach height")
+          end,watch)
         end)
       end)
     end)

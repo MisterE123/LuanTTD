@@ -1753,7 +1753,8 @@ return function(api)
       local split_node=R.split_rail_node(id,t,x,y,z,shape,base)
       if split_node then return split_node end
       local grade,level,foundation,profile
-      if t.rail_depot_dir~=nil then grade,level,foundation=api.trackworks.depot_surface(shape,base)
+      if t.rail_depot_dir~=nil or t.rail_station_id or t.rail_waypoint_id then
+        grade,level,foundation=api.trackworks.depot_surface(shape,base)
       else grade,level,foundation,profile=api.trackworks.surface(shape,base,t.rail_tracks) end
       if grade then
         local barren=t.rail_ground==0 and not (t.rail_station_id or t.rail_waypoint_id or t.rail_depot_dir) and stock_scenery.rail_barren

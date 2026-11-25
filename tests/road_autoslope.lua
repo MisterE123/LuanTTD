@@ -75,3 +75,22 @@ do
   assert(restored.tiles[id].airfield.level==1 and restored.stock_small_airports[1].ground==8)
 end
 print("PASS preserved road waypoint and runway levels, including packed checkpoint")
+local Track=m("rail_track")
+local Height=m("rail_height")(Track,m("slope"))
+for _,row in ipairs({
+  {kind="station",fields={rail_station_id=3,rail_station_axis=0}},
+  {kind="waypoint",fields={rail_waypoint_id=7,rail_waypoint_axis=0}},
+  {kind="depot",fields={rail_depot_dir=2}},
+}) do
+  local t={build="stock_rail",owner=player,rail_tracks=1}
+  for k,v in pairs(row.fields) do t[k]=v end
+  local s=scenario(t)
+  local cash=Sim.company(s,player).cash
+  assert(Sim.landscape(s,player,"raise",x,z) and Sim.landscape(s,player,"lower",x,z))
+  assert(s.tiles[id]==t and t.rail_tracks==1 and Sim.company(s,player).cash==cash-1000)
+  local shape,base=Terrain.tile(s.corner_grid,x,z)
+  local profile=assert(Height.profile({kind=row.kind,axis=0,dir=2},base,shape))
+  assert(profile.base_level==1 and profile.surface==0)
+  assert(not Sim.landscape(s,player,"raise",x,z+1))
+end
+print("PASS land under rail depots, platforms and waypoints retains exact stock train height")
