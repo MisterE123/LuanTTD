@@ -131,6 +131,9 @@ case "${1:-}" in
     LUANTTD_NATIVE_GROUND_FIXTURE=crossings BAYLINE_NATIVE_DISPLAY=348 BAYLINE_NATIVE_PORT=43365 timeout 125 bash tests/industry_alternate_native.sh
     lua5.1 tests/road_autoslope.lua
     LUANTTD_NATIVE_GROUND_FIXTURE=road_autoslope BAYLINE_NATIVE_DISPLAY=349 BAYLINE_NATIVE_PORT=43366 timeout 135 bash tests/industry_alternate_native.sh
+    lua5.1 tests/typed_crossing_world.lua
+    python3 tests/electric_crossing_wire_art.py
+    LUANTTD_NATIVE_GROUND_FIXTURE=electric_crossing LUANTTD_NATIVE_START_YEAR=1972 BAYLINE_NATIVE_DISPLAY=350 BAYLINE_NATIVE_PORT=43367 timeout 175 bash tests/industry_alternate_native.sh
     LUANTTD_QA_STEEL_LAYOUT=1 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_STEEL_LAYOUT=0 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_RAIL_GROUND=1 bash tests/stock_steel_mill_layout_native.sh

@@ -9,6 +9,15 @@ return function(Sim,Terrain,Crossing,Track)
     return out
   end
   local function tile(s,id) return id~=nil and s.tiles[id] or nil end
+  -- The base RC1 catalog permits crossings on all four stock rail
+  -- gauges. Native media is mounted independently; don't accept a
+  -- gauge before its rail geometry and continuity can be represented.
+  local function admitted(s,gauge)
+    return gauge==0 or s.stock_level_crossing_art and s.stock_level_crossing_art[gauge]==true
+  end
+  local function unsupported(gauge)
+    return gauge==1 and "ELECTRIC_CROSSING_NOT_MOUNTED" or "GUIDEWAY_CROSSING_NOT_MOUNTED"
+  end
   function W.record(s,id)
     local t=tile(s,id)
     return t and t.level_crossing
@@ -95,7 +104,8 @@ return function(Sim,Terrain,Crossing,Track)
     local req=copy(r)
     req.owner=owner
     if r.kind=="rail" and (t.build=="road" or tram) and not t.rail_tracks then
-      if (r.railtype or 0)~=0 then return nil,"HOST_RAILTYPE_UNSUPPORTED" end
+      local gauge=r.railtype or 0
+      if not admitted(s,gauge) then return nil,unsupported(gauge) end
       base_record.kind="road"
       -- Host bit order N/E/S/W already equals stock NW/SW/SE/NE.
       base_record.road_bits=Sim.road_bits(s,id)
@@ -111,10 +121,10 @@ return function(Sim,Terrain,Crossing,Track)
       local wanted=r.kind=="tram" and 1 or 0
       if (r.roadtype or wanted)~=wanted then return nil,"HOST_ROADTYPE_UNSUPPORTED" end
       local gauge=t.rail_type or t.railtype or 0
-      if gauge~=0 then return nil,gauge==1 and "ELECTRIC_CROSSING_NOT_MOUNTED" or "GUIDEWAY_CROSSING_NOT_MOUNTED" end
+      if not admitted(s,gauge) then return nil,unsupported(gauge) end
       if (r.disallowed or 0)~=0 then return nil,"CROSSING_ON_ONEWAY_ROAD" end
       base_record.kind="rail"
-      base_record.trackbits,base_record.railtype=t.rail_tracks,0
+      base_record.trackbits,base_record.railtype=t.rail_tracks,gauge
       local axis=t.rail_tracks==1 and 0 or t.rail_tracks==2 and 1 or nil
       -- Only one straight axis can cross a road. In Lua false is not
       -- nil; passing it into the current reservation bits caused a crash
@@ -180,7 +190,7 @@ return function(Sim,Terrain,Crossing,Track)
   -- keep their full inherited road axis and independent owners.
   function W.rail_remove_quote(s,owner,id,ctx)
     local a=W.record(s,id)
-    if not a or a.railtype~=0 then return nil,"NO_RAIL_ON_CROSSING" end
+    if not a then return nil,"NO_RAIL_ON_CROSSING" end
     if a.rail_owner~=owner then return nil,"OWNED_BY" end
     local occupied=observe(ctx,id)
     if not occupied then return nil,"OCCUPANCY_UNKNOWN" end
@@ -213,7 +223,7 @@ return function(Sim,Terrain,Crossing,Track)
     if not q then return nil,err end
     local a,b=q.crossing,p.crossing
     if not b or q.price~=p.price or q.prior_build~=p.prior_build or q.prior_bits~=p.prior_bits or q.prior_tram_bits~=p.prior_tram_bits or
-        a.tramtype~=b.tramtype or a.roadtype~=b.roadtype or
+        a.tramtype~=b.tramtype or a.roadtype~=b.roadtype or a.railtype~=b.railtype or
         a.rail_axis~=b.rail_axis or a.road_axis~=b.road_axis or a.slope~=b.slope or a.top~=b.top then
       return nil,"STALE_QUOTE"
     end
@@ -231,7 +241,7 @@ return function(Sim,Terrain,Crossing,Track)
     -- Do not leave a second owner or competing rail editing path: Rail
     -- board reads the canonical crossing while legacy road keeps its tool.
     t.build,t.owner,t.road_bits,t.rail_tracks="road",a.road_owner or a.tram_owner,a.road_bits,nil
-    t.tram=nil
+    t.tram,t.rail_type,t.railtype=nil,nil,nil
     -- MakeRoadCrossing clears its roadside bits on first conversion.
     -- Adding the other road layer to an existing crossing preserves it.
     if s.stock_generated_profile and not t.level_crossing then

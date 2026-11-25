@@ -24,6 +24,9 @@ return function(Sim,mod,s,cap)
   if s.stock_generated_profile or s.road_oil then
     oil=assert(Sim.mount_oil_world(s,Terrain,cap.oil_tanker))
   end
+  -- Asset readiness is rediscovered by the host on each open. It is
+  -- not a stale promise carried in the saved simulation.
+  s.stock_level_crossing_art=cap.level_crossing_art
   local network=B.networks(s,Slope,tile)
   local N={world=s,network=network,farm=farm,oil=oil,terrain=Terrain}
   N.crossing_gesture=dofile(mod.."/crossing_gesture.lua")

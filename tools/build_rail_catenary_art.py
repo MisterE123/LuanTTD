@@ -94,8 +94,7 @@ def wire(m,path):
             (x,z,WIRE+.006),(x,z,messenger(t)+.004),.0047)
 
 
-def mast(m,path):
-    t=.5
+def mast(m,path,t=.5):
     x,z,dx,dz=path.sample(t)
     if path.is_straight:
         ux,uz=path.offset(t,.730)
@@ -136,7 +135,7 @@ def mast(m,path):
           (x,z,0),rr,"h",lo,lo+.009,11)
     D(m,"Through-bolted porcelain hanger with metal eye", "Porcelain tab shadow",
       (x,z,0),.0075,"h",.982,1.058,10)
-    thicker=path.offset(.5,.029)
+    thicker=path.offset(t,.029)
     bar(m,"Triangular small wire registration stay arm",
         "Raised copper end clamps",(*thicker,.999),(x,z,WIRE+.013),.0085)
     # Keeps the copper collector wire at exactly the section's surface, not

@@ -262,6 +262,14 @@ do
   if ready then
     S.stock_electrification=true
     api.electric_art,api.electric_tools=art,true
+    local crossing_ready=true
+    for mask=1,2 do for pole=0,1 do
+      crossing_ready=crossing_ready and files[("bl_electric_crossing_wire_%d_%d.obj"):format(mask,pole)]
+    end end
+    if crossing_ready and generated_world then
+      api.capabilities.level_crossing_art={[1]=true}
+    end
+    S.stock_level_crossing_art=api.capabilities.level_crossing_art
     -- Render support is independent of command and moving traction
     -- readiness. The production span conversion remains unmounted.
     local bridge=dofile(mod.."/rail_bridge_catenary_art.lua")

@@ -20,6 +20,12 @@ case ${LUANTTD_NATIVE_GROUND_FIXTURE:-industry} in
     frame_prefix='NATIVE ROAD TERRAFORM FRAME'
     pass_marker='PASS NATIVE ROAD AUTOSLOPE:'
     ;;
+  electric_crossing)
+    fixture=tests/electric_crossing_native.lua
+    start_marker='NATIVE ELRL CROSSING FRAME'
+    frame_prefix='NATIVE ELRL CROSSING FRAME'
+    pass_marker='PASS NATIVE ELECTRIC CROSSING:'
+    ;;
   *) echo "Unknown graphical ground fixture" >&2; exit 2;;
 esac
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-industry-layout-native.XXXXXX")
@@ -49,6 +55,7 @@ bayline_generated_industries = 6
 bayline_generated_industry_count = ${LUANTTD_INDUSTRY_LAYOUT_COUNT:-110}
 bayline_generated_town_layout = grid2
 bayline_seed = ${LUANTTD_INDUSTRY_LAYOUT_SEED:-11}
+bayline_stock_bus_start_year = ${LUANTTD_NATIVE_START_YEAR:-1950}
 luanttd_qa_industry_layouts = ${LUANTTD_INDUSTRY_LAYOUTS:-coal_mine_l1,coal_mine_l2,coal_mine_l3,factory_l1,farm_l1,farm_l2,forest_l1,oil_refinery_l1,oil_well_l1,power_station_l1,power_station_l2,sawmill_l1}
 singleplayer_mode = false
 CONF
@@ -101,3 +108,17 @@ done
 grep -E "$start_marker|$frame_prefix|$pass_marker" "$out/server.log"
 grep -Fq "$pass_marker" "$out/server.log"
 ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+if [[ ${LUANTTD_NATIVE_GROUND_FIXTURE:-industry} == electric_crossing ]]; then
+  stop_process "$client"; client=
+  stop_process "$server"; server=
+  mv "$out/server.log" "$out/first-server.log"
+  mv "$out/client.log" "$out/first-client.log"
+  luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/server.log" 2>&1 &
+  server=$!
+  mark 'listening on'
+  luanti --go --address 127.0.0.1 --port "$port" --name IndustryLayoutsQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
+  client=$!
+  mark 'PASS NATIVE ELECTRIC REOPEN:'
+  grep 'PASS NATIVE ELECTRIC REOPEN:' "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+fi

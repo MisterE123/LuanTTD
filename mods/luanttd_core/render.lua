@@ -1013,6 +1013,17 @@ return function(api)
   end
   if api.electric_art then
     stock_scenery.catenary,stock_scenery.catenary_eased={},{}
+    if api.capabilities and api.capabilities.level_crossing_art and api.capabilities.level_crossing_art[1] then
+      stock_scenery.crossing_wire={}
+      for mask=1,2 do
+        local family={}
+        for pole=0,1 do
+          local name=("electric_crossing_wire_%d_%d"):format(mask,pole)
+          family[pole]=architecture(name,name,"rail_catenary_atlas")
+        end
+        stock_scenery.crossing_wire[mask]=family
+      end
+    end
     function stock_scenery.rail_wire(id,t,x,z)
       local mode=diagonal.mode(S,id)
       local art=api.electric_art.overlay(t.rail_tracks,0,t.rail_station_id and "platform" or "plain",x/2,z/2,nil,mode)
@@ -1541,6 +1552,11 @@ return function(api)
     end
     if api.crossings and t.level_crossing then
       local c=t.level_crossing
+      if c.railtype==1 and y==c.top+2 and x%2==1 and z%2==0 and stock_scenery.crossing_wire then
+        local mask=2^c.rail_axis
+        local wire=api.electric_art.overlay(mask,0,"plain",(x-1)/2,z/2)
+        return stock_scenery.crossing_wire[mask][wire.pole and 1 or 0]
+      end
       local tram=R.tram_crossing_node and R.tram_crossing_node(c,x,y,z)
       if tram then return tram end
       if y<=c.top then

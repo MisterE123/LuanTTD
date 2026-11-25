@@ -96,12 +96,11 @@ return function(Sim,R,max_days)
       rail_quotes[name]={token=quote_sequence,wire=true,plan=plan}
       return reply(true,nil,{tiles=plan.ids,cost=plan.cost,token=quote_sequence,kind="wire"})
     elseif request.tool=="crossing" then
-      local gauge=s.tiles[first].rail_type or 0
-      if gauge~=0 then
-        return reply(false,Sim.crossing_construction_error(gauge==1 and "ELECTRIC_CROSSING_NOT_MOUNTED" or "GUIDEWAY_CROSSING_NOT_MOUNTED"))
-      end
       local n=R.network
-      local c,error_=R.crossing_gesture(Sim,s,first)
+      local c,error_=R.crossing_gesture(Sim,s,first,gauge)
+      if c and c.railtype and c.railtype~=0 and not R.rail.railtype_available(name,c.railtype) then
+        return reply(false,"This rail type is not available to your company.")
+      end
       if not c then return reply(false,error_) end
       local plan,msg=n.crossings.quote(s,name,first,c,n.lab.board(s))
       if peek then return reply(plan~=nil,msg,plan and {tiles={first},cost=plan.price}) end
