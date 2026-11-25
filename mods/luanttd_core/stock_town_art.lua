@@ -5,7 +5,7 @@ local Art={
   [0x01]={name="Office block",asset=true,solid={-0.240,-.50,-0.228,1.240,1.140,1.042}},
   [0x02]={name="Small block of flats",asset=true,solid={-0.195,-.50,-0.143,1.195,1.020,0.957}},
   [0x03]={name="Church",asset=true,solid={-.11,-.50,-.21,1.11,.27,.90}},
-  [0x04]={name="Large office block",asset=true,solid={-0.270,-.50,-0.278,1.270,2.380,1.092}},
+  [0x04]={name="Large office block",asset=true,solid={-0.270,-.50,-0.278,1.270,1.678,1.092}},
   [0x06]={name="Town houses",asset=true,looks={0,0,2,2},solid={-.07,-.50,-.02,1.12,.22,1.02}},
   [0x07]={name="Hotel",asset=true,width=1,depth=2,solid={-.16,-.50,-.28,1.16,1.44,1.32}},
   [0x09]={name="Statue",asset=true},

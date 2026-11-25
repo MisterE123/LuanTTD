@@ -10,7 +10,10 @@ cp -al mods "$game/" 2>/dev/null || cp -a mods/. "$game/mods/"
 cp mods/luanttd_core/init.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
-cat tests/campaign_worker_stock_residential_native.lua >>"$game/mods/luanttd_core/init.lua"
+lift=${LUANTTD_QA_TOWN_LIFT:-0}
+fixture=tests/campaign_worker_stock_residential_native.lua
+if [[ $lift == 1 ]]; then fixture=tests/town_lift_native.lua; fi
+cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-42683}
 display=${BAYLINE_NATIVE_DISPLAY:-393}
@@ -19,13 +22,14 @@ port = $port
 bind_address = 127.0.0.1
 prometheus_listener_address = 127.0.0.1:$port
 server_announce = false
-bayline_generated_map_width = 128
-bayline_generated_map_depth = 128
+bayline_generated_map_width = ${LUANTTD_QA_TOWN_WIDTH:-128}
+bayline_generated_map_depth = ${LUANTTD_QA_TOWN_WIDTH:-128}
 bayline_generated_relief = 0
 bayline_generated_coasts = 0
 bayline_generated_towns = 3
 bayline_generated_town_layout = original
-bayline_seed = 1751
+bayline_seed = ${LUANTTD_QA_TOWN_SEED:-1751}
+bayline_stock_bus_start_year = ${LUANTTD_QA_TOWN_YEAR:-1950}
 singleplayer_mode = false
 CONF
 printf 'screen_w = 1440\nscreen_h = 900\nenable_sound = false\n' >"$out/client.conf"
@@ -38,7 +42,24 @@ export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PA
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!; server= client=
-trap '[[ -z "$client" ]] || kill "$client" 2>/dev/null || true; [[ -z "$server" ]] || kill "$server" 2>/dev/null || true; kill "$xv" 2>/dev/null || true;wait 2>/dev/null || true' EXIT
+stop_process(){
+  local pid=$1
+  [[ -n "$pid" ]] || return 0
+  kill -TERM "$pid" 2>/dev/null || true
+  for _ in {1..50}; do
+    if ! kill -0 "$pid" 2>/dev/null; then wait "$pid" 2>/dev/null || true; return; fi
+    sleep .10
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+  for _ in {1..20}; do
+    if ! kill -0 "$pid" 2>/dev/null; then wait "$pid" 2>/dev/null || true; return; fi
+    sleep .10
+  done
+  return 1
+}
+cleanup(){ stop_process "$client" || true; stop_process "$server" || true; stop_process "$xv" || true; }
+trap cleanup EXIT
+trap 'tail -30 "$out/server.log" "$out/client.log" || true; exit 124' TERM INT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 xdpyinfo > /dev/null || { cat "$out/xvfb.log"; exit 1; }
 luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/server.log" 2>&1 &
@@ -47,6 +68,28 @@ mark(){ for _ in {1..920}; do grep -q "$1" "$out/server.log" && return; kill -0 
 mark 'listening on'
 luanti --go --address 127.0.0.1 --port "$port" --name StockResidentialQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
+if [[ $lift == 1 ]]; then
+  mark 'NATIVE TOWN LIFT FRAME'
+  sleep .57
+  if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/town-lift.jpg"; fi
+  mark 'PASS NATIVE TOWN LIFT'
+  grep -E 'NATIVE TOWN LIFT FRAME|PASS NATIVE TOWN LIFT' "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+  stop_process "$client"; client=
+  stop_process "$server"; server=
+  mv "$out/server.log" "$out/initial-server.log"
+  mv "$out/client.log" "$out/initial-client.log"
+  printf '\nluanttd_qa_town_lift_restart = true\n' >>"$out/server.conf"
+  luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/server.log" 2>&1 &
+  server=$!
+  mark 'listening on'
+  luanti --go --address 127.0.0.1 --port "$port" --name StockResidentialQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
+  client=$!
+  mark 'PASS NATIVE TOWN LIFT REOPEN'
+  grep 'PASS NATIVE TOWN LIFT REOPEN' "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+  exit 0
+fi
 for i in {01..13}; do
   mark "STOCK_RESIDENTIAL_VISIBLE_${i}"
   sleep .53

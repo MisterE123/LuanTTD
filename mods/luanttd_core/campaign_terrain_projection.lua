@@ -8,11 +8,12 @@ local keys={
   "coastal_water","stock_void","stock_clear_ground","stock_clear_density","water_class","stock_canal","stock_river_bits","stock_water_rocks",
   "stock_industry","stock_landmark","stock_object","ship","airfield","tram","source_house",
 }
-local function detached(value,depth)
+local lift_motion={lift_position=true,lift_destination=true,lift_has_destination=true}
+local function detached(value,depth,exclude)
   if type(value)=="table" and depth>0 then
     local out={}
     for k,v in pairs(value) do
-      if type(k)=="string" or type(k)=="number" then out[k]=detached(v,depth-1) end
+      if (type(k)=="string" or type(k)=="number") and not (exclude and exclude[k]) then out[k]=detached(v,depth-1) end
     end
     return out
   end
@@ -21,18 +22,19 @@ end
 local M={}
 function M.tile(real)
   local out={}
-  for _,key in ipairs(keys) do out[key]=detached(real[key],2) end
+  for _,key in ipairs(keys) do out[key]=detached(real[key],2,key=="source_house" and lift_motion or nil) end
   return out
 end
 -- Compare exactly what tile() would transmit, without allocating detached
 -- tables. Nested mutable records must still be checked even if the source
 -- tile and topology revision both retained their identities.
-local function same(actual,projected,depth)
+local function same(actual,projected,depth,exclude)
   local kind=type(actual)
   if kind=="table" and depth>0 then
     if type(projected)~="table" then return false end
     for k,v in pairs(actual) do
-      if (type(k)=="string" or type(k)=="number") and not same(v,projected[k],depth-1) then
+      if (type(k)=="string" or type(k)=="number") and not (exclude and exclude[k])
+          and not same(v,projected[k],depth-1) then
         return false
       end
     end
@@ -46,7 +48,7 @@ function M.matches_tile(real,projected)
   if not projected then return false end
   for _,key in ipairs(keys) do
     local a,b=real[key],projected[key]
-    if a~=b and not same(a,b,2) then return false end
+    if a~=b and not same(a,b,2,key=="source_house" and lift_motion or nil) then return false end
   end
   return true
 end

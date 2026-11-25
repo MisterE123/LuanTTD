@@ -275,7 +275,7 @@ function H.produce_tile(tile,tick,house,settings,random,emit)
   if not house.completed then return end
   local spec=assert(H.specs[house.id],"Non-vanilla house production is not implemented")
   if spec[4]==1 and not house.lift_has_destination then
-    if chance16(1,2,random()) and settings.start_lift then settings.start_lift(house) end
+    if chance16(1,2,random()) and settings.start_lift then settings.start_lift(house,tile) end
   end
   local tile_random=random()
   local mode=settings.mode or "bitcount" -- OpenTTD 14.1 new games default

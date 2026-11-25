@@ -1,5 +1,7 @@
 -- Authored scenery -> explicit vanilla archetypes. This changes source
 -- production and catchment, not town expansion or visual buildings.
+local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+local Lift=dofile(path.."openttd/town_lift.lua")
 return function(Sim,H,Packets,Rating,Mail)
   local M={}
   local axis_log={[64]=6,[128]=7,[256]=8,[512]=9,[1024]=10,[2048]=11,[4096]=12}
@@ -79,6 +81,25 @@ return function(Sim,H,Packets,Rating,Mail)
     local random=function() return Rating.random_u32(s) end
     local update_rating=function() Rating.advance(s,1,mail and mail.step_rating or nil) end
     local clock=s.passenger_house_clock
+    local lift_registry=s.stock_town_lifts
+    local settings={}
+    local animate
+    if lift_registry then
+      -- OpenTTD GameLoop calls AnimateAnimatedTiles before the game
+      -- timer increments and then runs the house tile loop. Both share
+      -- the authoritative RNG, not a per-client decorative clock.
+      settings.start_lift=function(_,tile) Lift.add(lift_registry,tile+1) end
+      animate=function(tick)
+        Lift.step(lift_registry,tick-1,function(id)
+          local t=s.tiles[id]
+          return t and t.house and t.source_house
+        end,random)
+      end
+    end
+    local rated=not animate and update_rating or function(tick)
+      animate(tick)
+      update_rating()
+    end
     local landscape_visit=hooks and hooks.landscape_tile
     local landscape_tile=landscape_visit
     if s.stock_company_hqs and next(s.stock_company_hqs) and Sim.hq_cargo_at then
@@ -111,15 +132,15 @@ return function(Sim,H,Packets,Rating,Mail)
         if growth then
           -- Source OnTick_Town precedes OnTick_Station. The mounted
           -- adapter calls this rating hook after town and vehicle work.
-          H.advance_houses(clock,1,house,{},random,emit,nil,landscape_tile,traverse)
+          H.advance_houses(clock,1,house,settings,random,emit,animate,landscape_tile,traverse)
           after_tick(clock.counter,update_rating)
         else
-          H.advance_houses(clock,1,house,{},random,emit,update_rating,landscape_tile,traverse)
+          H.advance_houses(clock,1,house,settings,random,emit,rated,landscape_tile,traverse)
           after_tick(clock.counter)
         end
       end
     else
-      H.advance_houses(clock,H.day_ticks,house,{},random,emit,update_rating,landscape_tile,traverse)
+      H.advance_houses(clock,H.day_ticks,house,settings,random,emit,rated,landscape_tile,traverse)
     end
   end
   return M

@@ -9,6 +9,7 @@ return function(Sim,Terrain,G,B,H)
     dofile(path.."openttd/rail_track.lua"),dofile(path.."openttd/slope.lua"),
     dofile(path.."openttd/roadside_temperate.lua"))
   local names=dofile(path.."stock_town_art.lua")
+  local Lift=dofile(path.."openttd/town_lift.lua")
   local authority=dofile(path.."town_road_authority.lua")(Sim,dofile(path.."openttd/road_town_permission.lua"))
   local function at(layer,id) return layer and layer[id] end
   local function record(t) return t and t.house and t.source_house or nil end
@@ -176,6 +177,9 @@ return function(Sim,Terrain,G,B,H)
   end
   function W.footprint(s,h) return names.footprint(Sim,s,h) end
   function W.remove(s,h)
+    if s.stock_town_lifts and Lift.supports(h) and h.x and h.z then
+      Lift.erase(s.stock_town_lifts,Sim.id(h.x,h.z))
+    end
     local state=s.stock_town_growth
     local t=state and h and state.towns[h.town]
     if not t then return end
@@ -213,6 +217,7 @@ return function(Sim,Terrain,G,B,H)
         local _,_,base=clear_levels(s,part.id)
         names.stamp(part.record,proposal,style,part.index,tick)
         tile.house,tile.source_house,tile.h=true,part.record,base
+        if s.stock_town_lifts and Lift.supports(part.record) then Lift.install(s.stock_town_lifts,part.id,Sim) end
         visual_changed(s,part.id)
       end
       B.house_committed(t,proposal,views,2)

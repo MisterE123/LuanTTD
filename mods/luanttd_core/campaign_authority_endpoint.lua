@@ -10,6 +10,10 @@ return function(Sim,R,max_days)
   local order_target=dofile(mod.."/campaign_order_target.lua")
   local styles=dofile(mod.."/bridge_style_assets.lua")
   local place_labels=dofile(mod.."/world_place_labels.lua")
+  local Lift=dofile(mod.."/openttd/town_lift.lua")
+  local function lift_snapshot(x,z,w,h)
+    return Lift.visible(s.stock_town_lifts,Sim,s.tiles,x,z,w,h)
+  end
   local function facility_record(registry,id)
     return id~=nil and s[registry] and s[registry][id]
   end
@@ -686,7 +690,7 @@ return function(Sim,R,max_days)
     fraction=type(fraction)=="number" and fraction>=0 and fraction<=1 and fraction or 1
     return reply(true,nil,{x=x,z=z,width=w,height=h,tiles=tiles,vehicles=vehicles,
       signals=signals,passengers=R.passengers and R.passengers.counts(tiles),
-      corners=corners,
+      corners=corners,town_lifts=lift_snapshot(x,z,w,h),
       registries=projection and projection.registries(s,tiles) or nil,
       actors=R.actors and R.actors(x,z,w,h,fraction,frame) or nil})
   end
@@ -769,7 +773,7 @@ return function(Sim,R,max_days)
         or not integer(w.w,1,32) or not integer(w.h,1,32) or w.x+w.w-1>Sim.W or w.z+w.h-1>Sim.H then
         return reply(false,"INVALID_INTEREST_WINDOW")
       end
-      packets[i]={x=w.x,z=w.z,width=w.w,height=w.h,
+      packets[i]={x=w.x,z=w.z,width=w.w,height=w.h,town_lifts=lift_snapshot(w.x,w.z,w.w,w.h),
         actors=R.actors and R.actors(w.x,w.z,w.w,w.h,fraction,frame) or {}}
     end
     return reply(true,nil,packets)

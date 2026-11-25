@@ -2207,14 +2207,17 @@ return function(api)
   local exhaust_view=dofile(modpath.."/rail_exhaust_view.lua")(core,
     dofile(modpath.."/rail_exhaust_model.lua"),vector and vector.rotate)
   local worker_observation
+  local town_lift=dofile(modpath.."/town_lift_view.lua")(core,Sim,frontage,R.house_deck)
   local actor_buffer=dofile(modpath.."/campaign_actor_buffer.lua")()
   function R.waiting_at(mode,id)
     if worker_observation then return worker_observation.waiting(mode,id) end
   end
   function R.sample_worker_actors(projection)
     actor_buffer.observe(projection.actors(),projection.actor_clock())
+    if projection.town_lifts then town_lift.observe(S,projection.town_lifts()) end
   end
   function R.step_worker_actors(dt)
+    town_lift.step(dt)
     if worker_observation then
       local actors=actor_buffer.sample(core.get_us_time())
       projected_actors.render(actors,dt,worker_observation.signals and worker_observation.signals())
@@ -2231,6 +2234,7 @@ return function(api)
   end
   local refs,last,poses={},{},{}
   function R.remove_vehicle_views()
+    town_lift.clear()
     for id,ref in pairs(refs) do
       if ref:get_pos() then ref:remove() end
       refs[id]=nil;last[id]=nil

@@ -59,6 +59,7 @@ local source=debug and debug.getinfo(1,"S").source
 local path=(core and core.get_modpath and core.get_modpath("luanttd_core") and core.get_modpath("luanttd_core").."/")
   or assert(source and source:sub(2):match("^(.+[\\/])"),"Cannot locate stock town assets")
 local art=dofile(path.."stock_town_art.lua")
+local Lift=dofile(path.."openttd/town_lift.lua")
 local dirx,dirz={[0]=-1,0,1,0},{[0]=0,1,0,-1}
 local function has(bits,bit) return math.floor(bits/bit)%2~=0 end
 local function edge(Sim,x,z)
@@ -130,6 +131,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   local state=copy(profile.terrain_rng)
   local function random() return Generator.next_random(state) end
   local save={version=1,order={},towns={}}
+  local lifts=Lift.new()
   local growth=growth_board(Sim,Terrain,s)
   local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={}}
   function board.tile(x,z) return get(Sim,Terrain,s,x+1,z+1) end
@@ -142,7 +144,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
       tile=Sim.id(x,z),stock={},produced={},received={},population=0,service=0,larger_town=candidate.city}
     local town=G.new(id,x,z,{layout=candidate.layout,larger_town=candidate.city,grow_counter=(id-1)%G.TOWN_TICKS})
     s.sites[id]=site
-    local prior={}
+    local prior,built_lifts={},{}
     local had=s.has_town_roads
     local function remember(tile)
       if not prior[tile] then prior[tile]=copy(s.tiles[tile]) end
@@ -170,6 +172,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         local x,z=Sim.xy(tile)
         local _,base=Terrain.tile(s.corner_grid,x,z)
         t.house,t.source_house,t.wood,t.stock_clear_ground,t.h=true,h,nil,nil,base
+        if Lift.supports(h) then built_lifts[#built_lifts+1]=tile end
       end
       return true
     end
@@ -181,13 +184,14 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
       s.sites[id]=nil
       return nil
     end
+    for _,id in ipairs(built_lifts) do Lift.install(lifts,id,Sim) end
     site.population=town.population
     save.towns[id],save.order[#save.order+1]=town,id
     return {x=candidate.x,z=candidate.z,id=id,name=site.name,population=town.population}
   end
   local result,why=Worldgen.generate(board,opts)
   if not result or #s.sites==0 then return nil,why or "OpenTTD's placement rules found no viable town on this seed." end
-  s.stock_town_growth=save
+  s.stock_town_growth,s.stock_town_lifts=save,lifts
   profile.towns=#s.sites
   profile.town_settings=copy(settings)
   profile.town_settings.progress=nil

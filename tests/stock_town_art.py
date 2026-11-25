@@ -54,6 +54,17 @@ for id in new_mounts:
             check(mod/"models"/f"bl_town_stock_{id:02x}_{i}.obj",110)
     else:
         check(mod/"models"/f"bl_town_stock_{id:02x}.obj",280)
+# Cabin is exported on the same node anchor, with no foundation geometry.
+assert (root/"art"/"town_lift_04.blend").stat().st_size > 20000
+cab = mod/"models"/"bl_town_stock_04_lift.obj"
+vertices=[tuple(map(float,line.split()[1:])) for line in cab.read_text().splitlines() if line.startswith("v ")]
+assert len(vertices)>50
+assert all(-.095 < x < .17 and -.40 < y < -.16 and 1.20 < z < 1.37 for x,y,z in vertices)
+office = (mod/"models"/"bl_town_stock_04.obj").read_text()
+shaft_ceiling = 1.5605 # underside of the exported crown frame
+assert any(line.startswith("v ") and abs(float(line.split()[2])-shaft_ceiling)<1e-6
+           for line in office.splitlines())
+assert max(y for _,y,_ in vertices)+36*.0475 < shaft_ceiling-.02
 alternate={0x06:(2,),0x18:(1,2,3),0x1a:(1,2,3)}
 for id,looks in alternate.items():
     for look in looks:

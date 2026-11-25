@@ -7,9 +7,11 @@ local function farm_building_native()
   local s=assert(OwnerCheckpoint.read())
   local farm
   for _,i in pairs(s.stock_farm_industries or {}) do
-    if i.kind=="farm" and not i.removed and (not farm or i.id<farm.id) then farm=i end
+    -- This street-level camera plan is for the original 3×3 yard;
+    -- the alternate full-size layouts have their own native proof.
+    if i.kind=="farm" and not i.removed and (i.layout or 0)==0 and (not farm or i.id<farm.id) then farm=i end
   end
-  assert(farm,"No farm in the ordinary worker-generated world")
+  assert(farm,"No original 3×3 farm in the ordinary worker-generated world")
   local fx,fz=2*(farm.x+1),2*(farm.z+1)
   local level=assert(s.tiles[Sim.id(farm.x+1,farm.z+1)]).h+.5
   local TerrainProbe=dofile(mod.."/openttd/terrain.lua")

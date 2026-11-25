@@ -145,6 +145,18 @@ return function()
     end
     return result
   end
+  function P.town_lifts()
+    local values,receipts={},{}
+    for _,region in pairs(regions) do
+      local r=region.motion
+      if r then
+        for id,pos in pairs(r.value.town_lifts or {}) do
+          if not receipts[id] or newer_than(r,receipts[id]) then values[id],receipts[id]=pos,r end
+        end
+      end
+    end
+    return values
+  end
   function P.actors()
     local merged={}
     for _,region in pairs(regions) do

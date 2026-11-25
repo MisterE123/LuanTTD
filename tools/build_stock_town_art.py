@@ -273,6 +273,41 @@ def office(*,tone,trim,style,floors,width,depth,wings=False):
     lamp(.811,-.765)
 
 
+def lift_office():
+    # OpenGFX's gateway is a visual reference only. Build an original
+    # brushed steel exterior lift on the right-hand side of a period office.
+    office(tone="reflection",trim="light metal",style="bands",floors=6,width=1.54,depth=1.37,wings=False)
+    x,y=.54,-.780
+    box("Indigo enamel lift shaft backing",(x,y+.080,1.085),(.302,.047,1.927),"slate")
+    for dx in (-.158,.158):
+        box("Full-height shaft exterior column",(x+dx,y+.002,1.089),(.039,.154,1.949),"light metal")
+        box("Continuous lift guide rail",(x+dx*.72,y-.035,1.087),(.014,.017,1.912),"metal")
+        box("Concrete lift footing",(x+dx,y,.083),(.088,.184,.119),"warm limestone")
+    for floor in (0,2,3,4,5,6):
+        zz=.104+floor*6*.0475
+        box("Floor sill", (x,y-.058,zz),(.306,.035,.017),"light metal")
+        box("Landing call lamp", (x+.134,y-.078,zz+.101),(.014,.009,.024),"gold")
+    box("Lift crown frame",(x,y,2.112),(.382,.231,.103),"slate")
+    box("Lift motor enclosure",(x,y+.020,2.180),(.270,.172,.083),"metal")
+    box("Polished crown flashing",(x,y-.008,2.174),(.391,.239,.019),"light metal")
+    box("Elevator approach paving",(x,y-.124,.045),(.390,.188,.033),"warm limestone")
+
+
+def lift_cab():
+    # Translated vertically as a separate original mesh on the same native
+    # anchor as the supporting office. Nothing else is animated.
+    x,y,z=.54,-.781,.225
+    box("Cabinet chassis", (x,y,z-.083),(.220,.104,.027),"metal")
+    box("Warm cabin", (x,y,z),(.212,.088,.155),"pale stone")
+    box("Sliding doors", (x,y-.049,z-.006),(.177,.018,.132),"light metal")
+    box("Door joint", (x,y-.059,z-.006),(.008,.003,.131),"metal")
+    for dx in (-.055,.055):
+        box("Blue cab viewing glass", (x+dx,y-.060,z+.025),(.062,.005,.044),"glazing")
+        box("Cab viewing glass reflection", (x+dx,y-.064,z+.034),(.058,.003,.011),"reflection")
+    box("Cab top clamp", (x,y,z+.086),(.233,.104,.020),"metal")
+    box("Amber car lamp", (x,y-.063,z+.078),(.070,.008,.011),"gold")
+
+
 def apartments(*,width,body,roof,balconies):
     plot("sage"); walk(0,-.777,.34,.23)
     depth=1.10;front=-depth/2+.11
@@ -408,7 +443,7 @@ SECOND={
     0x00:("tall_office_block",lambda:office(tone="plaster",trim="warm limestone",style="pilasters",floors=9,width=1.35,depth=1.25,wings=True)),
     0x01:("office_block",lambda:office(tone="brick bright",trim="pale stone",style="terrace",floors=4,width=1.48,depth=1.27)),
     0x02:("small_block_of_flats",lambda:apartments(width=1.39,body="plaster",roof="terracotta",balconies=True)),
-    0x04:("large_office_block",lambda:office(tone="reflection",trim="light metal",style="bands",floors=10,width=1.54,depth=1.37,wings=True)),
+    0x04:("large_office_block",lift_office),
     0x09:("statue",statue),0x0A:("fountain",fountain),
     0x0D:("office_block_stone",lambda:office(tone="warm limestone",trim="cream",style="pilasters",floors=5,width=1.50,depth=1.38)),
     0x0F:("shop_pastry",lambda:main_street(tone="burgundy",roof="slate",sign=("FLORIST","BAKERY"),narrow=True,awning=("teal","cream"))),
@@ -748,6 +783,12 @@ if __name__=="__main__":
         for id,(name,geometry) in ASSETS.items():
             if not requested or id in requested:
                 export(id,name,geometry)
+        if not requested or 0x04 in requested:
+            init()
+            lift_cab()
+            bpy.context.scene.name="LuanTTD / exterior office lift car"
+            bpy.ops.wm.save_as_mainfile(filepath=str(ROOT/"art/town_lift_04.blend"),compress=True)
+            export_obj(join_into_native(),"town_stock_04_lift")
         if not requested or requested.intersection(MULTI_SIZE):
             export_construction()
     if os.getenv("STOCK_TOWN_REVIEW"):

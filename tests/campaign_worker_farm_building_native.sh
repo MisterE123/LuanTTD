@@ -32,8 +32,10 @@ bayline_generated_map_depth = 128
 bayline_generated_relief = 0
 bayline_generated_coasts = 0
 bayline_generated_towns = 3
+bayline_generated_industries = 6
+bayline_generated_industry_count = 48
 bayline_generated_town_layout = grid2
-bayline_seed = 1751
+bayline_seed = ${LUANTTD_QA_FARM_SEED:-11}
 time_speed = 0
 singleplayer_mode = false
 CONF
