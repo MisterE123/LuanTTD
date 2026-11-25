@@ -156,9 +156,13 @@ return function(Motion,F,board)
           if reverses then
             -- RC1 RoadVehController: when the road ahead is a dead end,
             -- run the RvRev row on this tile. Do not consume the YAPF
-            -- reversal edge until its RDE_TURNED sample. Turning while
-            -- leaving an occupied stop or signed normal road must wait.
-            if part_tile.kind~="road" or (part_tile.disallowed or 0)~=0 then return end
+            -- reversal edge until its RDE_TURNED sample. RC1 stops at an
+            -- occupied bay exit, not a drive-through platform: a reversing
+            -- through vehicle leaves the stop, follows the stock turn row,
+            -- then re-enters it facing the other way.
+            local legal=part_tile.kind=="drive_stop"
+              or part_tile.kind=="road" and (part_tile.disallowed or 0)==0
+            if not legal then return end
             target,next_state,start=here,Motion.reversing_state(px),Motion.DEFAULT_START
             if not next_state then return end
           else

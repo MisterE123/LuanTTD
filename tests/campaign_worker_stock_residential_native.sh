@@ -47,7 +47,7 @@ mark(){ for _ in {1..920}; do grep -q "$1" "$out/server.log" && return; kill -0 
 mark 'listening on'
 luanti --go --address 127.0.0.1 --port "$port" --name StockResidentialQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
-for i in {01..12}; do
+for i in {01..13}; do
   mark "STOCK_RESIDENTIAL_VISIBLE_${i}"
   sleep .53
   if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/residential-${i}.jpg"

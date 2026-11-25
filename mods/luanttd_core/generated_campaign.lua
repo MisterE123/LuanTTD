@@ -81,7 +81,7 @@ local function growth_board(Sim,Terrain,s)
   function B.distance_to_edge(x,z) return edge(Sim,x,z) end
   function B.house_supported(id,x,z)
     local t=B.tile(x,z)
-    return art[id]~=nil and t and t.slope==0
+    return art[id]~=nil and t and t.slope and t.slope<16
   end
   function B.road_allowed(town,x,z,d)
     local t=B.tile(x,z)
@@ -156,10 +156,10 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         return ok
       end
       if p.kind~="house" then return false end
-      local parts,level=art.inspect(Sim,p,function(id)
+      local parts=art.inspect(Sim,p,function(id)
         local x,z=Sim.xy(id)
         local ground=growth.tile(x,z)
-        if ground and ground.kind=="clear" and ground.slope==0 then return ground.base end
+        if ground and ground.kind=="clear" and ground.slope<16 then return ground.max_z/8 end
       end)
       if not parts then return false end
       for _,part in ipairs(parts) do
@@ -167,7 +167,9 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         local t=s.tiles[tile]
         remember(tile)
         art.stamp(h,p,art[p.id],part.index)
-        t.house,t.source_house,t.wood,t.stock_clear_ground,t.h=true,h,nil,nil,level
+        local x,z=Sim.xy(tile)
+        local _,base=Terrain.tile(s.corner_grid,x,z)
+        t.house,t.source_house,t.wood,t.stock_clear_ground,t.h=true,h,nil,nil,base
       end
       return true
     end

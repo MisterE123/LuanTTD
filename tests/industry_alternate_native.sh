@@ -58,6 +58,7 @@ bayline_seed = ${LUANTTD_INDUSTRY_LAYOUT_SEED:-11}
 bayline_stock_bus_start_year = ${LUANTTD_NATIVE_START_YEAR:-1950}
 luanttd_qa_road_autoslope_waypoint = ${LUANTTD_NATIVE_AUTOSLOPE_WAYPOINT:-false}
 luanttd_qa_rail_station_autoslope = ${LUANTTD_NATIVE_RAIL_STATION_AUTOSLOPE:-false}
+luanttd_qa_road_stop_turn = ${LUANTTD_NATIVE_NO_TURN_LOOPS:-false}
 luanttd_qa_industry_layouts = ${LUANTTD_INDUSTRY_LAYOUTS:-coal_mine_l1,coal_mine_l2,coal_mine_l3,factory_l1,farm_l1,farm_l2,forest_l1,oil_refinery_l1,oil_well_l1,power_station_l1,power_station_l2,sawmill_l1}
 singleplayer_mode = false
 CONF

@@ -1,6 +1,6 @@
 -- A visual-only ambient effect. Workers still own the stock town tile;
 -- the renderer may inspect only its current view of the town.
-return function(core,Sim,frontage)
+return function(core,Sim,frontage,house_deck)
   local F={}
   local enter,leave,cap=26,32,6
   local active,elapsed={},0
@@ -39,13 +39,14 @@ return function(core,Sim,frontage)
             -- The stone nozzle is centered on the 2x2 parcel, 0.86
             -- nodes above its floor. Facedir moves the mesh anchor, not
             -- the nozzle: it remains over the center of the same parcel.
-            local px,py,pz=2*x+.5,tile.h+1.375,2*z+.5
+            local deck=house_deck and house_deck(id,tile) or tile.h
+            local px,py,pz=2*x+.5,deck+1.375,2*z+.5
             local d=(p.x-px)^2+(p.y-py)^2+(p.z-pz)^2
             local old=refs[id]
             local retain=old~=nil and old.y==py
             if d<=(retain and leave or enter)^2 then
               local dx,dz=frontage.placement(Sim,s,id,tile,nil,h.render_parcel or tile.parcel)
-              local node=core.get_node_or_nil({x=2*x+dx,y=tile.h+1,z=2*z+dz})
+              local node=core.get_node_or_nil({x=2*x+dx,y=deck+1,z=2*z+dz})
               -- A projected tile can precede painting/emerge. Never
               -- emit over unpainted terrain or a different town model.
               if node and node.name=="luanttd_core:town_stock_0a" then

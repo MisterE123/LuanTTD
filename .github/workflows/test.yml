@@ -159,7 +159,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [startup, stock-rail, industry-air-and-water, rail-dispatch, native-map-art]
+        suite: [startup, stock-rail, industry-air-and-water, rail-dispatch, native-map-art, native-airfield-art]
     defaults:
       run:
         shell: bash
@@ -327,6 +327,8 @@ jobs:
           lua5.1 tests/rail_split_profile.lua
           python3 tests/rail_half_water_upstream.py "$src"
           python3 tests/rail_autoslope_rc1.py "$src"
+          python3 tests/town_foundation_rc1.py "$src"
+          lua5.1 tests/town_foundation.lua
           lua5.1 tests/rail_autoslope.lua
           lua5.1 tests/rail_half_water.lua
           lua5.1 tests/rail_half_water_world.lua

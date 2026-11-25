@@ -19,14 +19,15 @@ return function(Sim,Terrain,G,B,H)
       at(s.level_crossing_tiles,id) or at(s.bridge_above,id) or at(s.tunnel_below,id) or
       at(s.rail_bridge_above,id) or at(s.rail_tunnel_below,id) or at(s.aqueduct_above,id)
   end
-  local function base_if_clear(s,id)
+  local function clear_levels(s,id)
     local tile=at(s.tiles,id)
     if not tile or tile.terrain~="grass" and tile.terrain~="hill" or tile.owner or tile.site or
+      tile.stock_void or tile.stock_object or at(s.stock_farm_fields,id) or
       tile.wood or tile.house or tile.source_house or tile.build or tile.station or tile.parcel or
       tile.road_bits or tile.road_town or protected(s,id,tile) then return end
     local x,z=Sim.xy(id)
-    local slope,base=Terrain.tile(s.corner_grid,x,z)
-    if slope==0 then return base end
+    local slope,base,top=Terrain.tile(s.corner_grid,x,z)
+    if slope and slope<16 then return top,slope,base end
   end
   local function board(s)
     return {
@@ -41,14 +42,14 @@ return function(Sim,Terrain,G,B,H)
               road_bits=t.road_bits or 0}
           end
         end
-        local base=base_if_clear(s,id)
-        if base then return {kind="clear",slope=0,max_z=base*8} end
+        local top,slope=clear_levels(s,id)
+        if top then return {kind="clear",slope=slope,max_z=top*8} end
         return {kind=t.terrain=="water" and "water" or t.house and "house" or "object",protected=true}
       end,
       house_supported=function(id) return names[id]~=nil end,
     }
   end
-  function W.eligible_site(s,x,z) return base_if_clear(s,Sim.id(x,z)) end
+  function W.eligible_site(s,x,z) return clear_levels(s,Sim.id(x,z)) end
 
   -- Only stock road station records have authoritative ages in all
   -- supported combinations of this preview. Do not infer other modes
@@ -197,7 +198,7 @@ return function(Sim,Terrain,G,B,H)
     -- recheck succeed. Do not issue a generic clear or terraform command.
     if not proposal or proposal.kind~="house" or proposal.town~=t.id then return false end
     local style=names[proposal.id]
-    local get_level=function(id) return base_if_clear(s,id) end
+    local get_level=function(id) return clear_levels(s,id) end
     local parts,level=names.inspect(Sim,proposal,get_level)
     if not parts then return false end
     local root=parts[1]
@@ -209,8 +210,9 @@ return function(Sim,Terrain,G,B,H)
       wrote=true
       for _,part in ipairs(parts) do
         local tile=s.tiles[part.id]
+        local _,_,base=clear_levels(s,part.id)
         names.stamp(part.record,proposal,style,part.index,tick)
-        tile.house,tile.source_house,tile.h=true,part.record,level
+        tile.house,tile.source_house,tile.h=true,part.record,base
         visual_changed(s,part.id)
       end
       B.house_committed(t,proposal,views,2)

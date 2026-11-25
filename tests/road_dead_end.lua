@@ -52,7 +52,25 @@ for d=0,3 do
   end
   assert(n>=4,"The selected in-tile turn never entered the real RC1 movement row")
   s.tiles[turn].road_disallowed=1
-  local _,_,_,refused=Sim.path(s,from,to,"road",owner,nil,v)
-  assert(not refused,"No road reversal is allowed on signed one-way pavement")
+  local _,_,_,safe=Sim.path(s,from,to,"road",owner,nil,v)
+  for _,frame in ipairs(safe or {}) do
+    assert(frame[6]~=state or frame[4]~=turn,"No reversal is allowed on signed one-way pavement")
+  end
+  -- With only one approach bit beyond the platform, the selected
+  -- pathfinder reversal takes place on the drive-through tile itself.
+  s.tiles[turn].road_disallowed=nil
+  s.tiles[turn].road_bits=2^(3-rev)
+  local turned,new_td,_,poses=Sim.path(s,from,to,"road",owner,nil,v)
+  assert(turned and poses and turned[1]==a and turned[#turned]==b and new_td==Follow.direction_trackdir(rev))
+  assert(poses[1][15]==Move.DRIVE_THROUGH_STOP and poses[#poses][15]==Move.DRIVE_THROUGH_STOP)
+  local ran,returned=0,false
+  for i,frame in ipairs(poses) do
+    assert(frame[4]~=turn and frame[4]~=last,"Do not enter the single-bit continuation")
+    if frame[6]==state then assert(frame[4]==a);ran=ran+1 end
+    if ran>0 and frame[4]==a and frame[6]==64+Follow.direction_trackdir(rev) then returned=true end
+    local previous=poses[i-1]
+    if previous then assert(math.abs(frame[1]-previous[1])<=1 and math.abs(frame[2]-previous[2])<=1) end
+  end
+  assert(ran>=4 and returned,"Re-enter the through platform only after the source turnaround row")
 end
 print("PASS four exact stock terminal turns keep positions continuous and refuse signed reversals")

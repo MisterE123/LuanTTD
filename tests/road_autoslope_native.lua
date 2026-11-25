@@ -58,6 +58,7 @@ local function lower(q,f)
   end)
 end
 local use_waypoint=core.settings:get_bool("luanttd_qa_road_autoslope_waypoint",false)
+local no_loops=core.settings:get_bool("luanttd_qa_road_stop_turn",false)
 local function run(viewer)
   viewer:set_pos({x=2*place.x+10,y=place.h+8,z=2*place.z-9})
   viewer:set_look_horizontal(0);viewer:set_look_vertical(.57)
@@ -68,14 +69,14 @@ local function run(viewer)
   local function lay(first,last)
     add(function(done) command({kind="road_build",first=first,last=last},done) end)
   end
-  lay(at(1),at(9))
-  -- Drive-through stops preserve the leaving vehicle's heading. Explicit
-  -- turning loops beyond both platforms make a repeatable service, not
-  -- just a one-way route whose first fare is also its last.
-  for _,x in ipairs({1,8}) do
-    lay(at(x),at(x,1))
-    lay(at(x,1),at(x+1,1))
-    lay(at(x+1,1),at(x+1))
+  lay(at(1),at(no_loops and 8 or 9))
+  if not no_loops then
+    -- This fixture also covers ordinary built turn loops.
+    for _,x in ipairs({1,8}) do
+      lay(at(x),at(x,1))
+      lay(at(x,1),at(x+1,1))
+      lay(at(x+1,1),at(x+1))
+    end
   end
   road({tool="road_depot",first=at(0)})
   road({tool="road_station",first=at(3)})
@@ -124,12 +125,19 @@ local function run(viewer)
   local function verify()
     until_("Road and its support were not repainted",road_painted,function()
       local deck={x=2*(place.x+5)+.5,y=place.h+.55,z=2*place.z+.5}
+      local visits={}
       until_("The bus never traversed the edited terrain and recorded its Go via order",function()
-        if use_waypoint then
+        if use_waypoint or no_loops then
           local _,s=finance()
           local v=assert(s.fleet[vehicle])
-          assert(v.orders[1].station=="waypoint:"..waypoint,"The original Go via order was lost")
-          if v.last_road_waypoint~=waypoint then return end
+          if no_loops and v.last_arrival and v.last_arrival.tile then
+            visits[v.last_arrival.tile]=v.last_arrival.tick
+          end
+          if use_waypoint then
+            assert(v.orders[1].station=="waypoint:"..waypoint,"The original Go via order was lost")
+            if v.last_road_waypoint~=waypoint then return end
+          end
+          if no_loops and not (visits[at(7)] and visits[at(3)]) then return end
         end
         for _,ref in ipairs(core.get_objects_inside_radius(deck,1.35)) do
           local obj=ref:get_luaentity()
@@ -138,7 +146,8 @@ local function run(viewer)
           if pos and math.abs(pos.y-deck.y)<.24 then return pos end
         end
       end,function()
-        core.log("action","NATIVE ROAD TERRAFORM FRAME "..(use_waypoint and "waypoint-autoslope-live" or "road-autoslope-live"))
+        core.log("action","NATIVE ROAD TERRAFORM FRAME "..(no_loops and "drive-through-turn" or use_waypoint and "waypoint-autoslope-live" or "road-autoslope-live"))
+        if no_loops then core.log("action","NATIVE ROAD STOP TURN: bus served both through stands with only a one-bit outward stub") end
         core.after(1.2,function()
           core.log("action","PASS NATIVE ROAD AUTOSLOPE: moving bus crossed above two paid foundations without moving its road or waypoint")
         end)

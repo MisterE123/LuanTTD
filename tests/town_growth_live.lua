@@ -42,7 +42,9 @@ for _,k in ipairs{"level_crossing_tiles","bridge_above","tunnel_below","rail_bri
 end
 local proposed=assert(Terrain.plan(s.corner_grid,x,z,1,true,{freeform_edges=false}))
 assert(Terrain.apply(s.corner_grid,proposed))
-assert(W.eligible_site(s,x,z)==nil)
+local shape,base,top=Terrain.tile(s.corner_grid,x,z)
+local deck,slope,raw=W.eligible_site(s,x,z)
+assert(shape<16 and shape>0 and slope==shape and deck==top and raw==base and deck>raw)
 local qa=F.first(Sim,s)
 print("Growth tile ",qa.tile,"built at",qa.built_tick,"saved at",qa.tick)
 local function copy(x)

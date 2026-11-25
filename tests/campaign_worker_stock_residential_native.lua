@@ -2,11 +2,12 @@
 -- not a staged voxel exhibit or commands that manufacture buildings.
 local stock_art=dofile(mod.."/stock_town_art.lua")
 local house_front=dofile(mod.."/house_frontage.lua")
+local T=dofile(mod.."/openttd/terrain.lua")
 local residential_ids={[0x06]=true,[0x0e]=true,[0x18]=true,[0x19]=true,[0x1a]=true}
 local set_visual_time=core.set_timeofday
 core.set_timeofday=function()return set_visual_time(.315)end
 local function find_house_plots(disk)
-  local groups,looks={},{}
+  local groups,looks,founded={},{}
   for id,t in ipairs(disk.tiles) do
     local h=t.source_house
     if t.house and h and h.root and h.completed and residential_ids[h.id] then
@@ -16,13 +17,15 @@ local function find_house_plots(disk)
         local look=stock_art.look(h.id,x,z)
         local name=stock_art.asset_name(h.id,look)
         local dx,dz,f=house_front.placement(Sim,disk,id,t,false,h.render_parcel)
-        local record={id=h.id,base={x=2*x+dx,y=t.h+1,z=2*z+dz},x=2*x+.5,z=2*z+.5,dir=f,name=name,look=look}
+        local shape,base,deck=T.tile(disk.corner_grid,x,z)
+        local record={id=h.id,base={x=2*x+dx,y=deck+1,z=2*z+dz},x=2*x+.5,z=2*z+.5,dir=f,name=name,look=look}
+        if shape~=0 and base<deck and not founded then record.founded=true;founded=record end
         groups[h.id]=groups[h.id] or record
         looks[name]=looks[name] or record
       end
     end
   end
-  return groups,looks
+  return groups,looks,founded
 end
 local function residential_native()
   local p=core.get_player_by_name("StockResidentialQA")
@@ -30,7 +33,7 @@ local function residential_native()
     core.after(.2,residential_native);return
   end
   local disk=assert(OwnerCheckpoint.read())
-  local groups,looks=find_house_plots(disk)
+  local groups,looks,founded=find_house_plots(disk)
   local take,used={},{}
   local function add(r)
     if r and not used[r.name] then
@@ -50,11 +53,13 @@ local function residential_native()
   for _,candidate in ipairs(take) do directions[candidate.dir]=true end
   for dir=0,3 do assert(directions[dir],"No houses faced direction "..dir) end
 
+  take[#take+1]=assert(founded,"No eligible completed hillside residential plot")
+
   local street_dirs={{0,1},{1,0},{0,-1},{-1,0}}
   local function verify(i)
     local show=take[i]
     if not show then
-      core.log("action",("PASS NATIVE WORKER STOCK RESIDENTIAL: %d real completed meshes painted with stock look and road frontage"):format(#take))
+      core.log("action",("PASS NATIVE WORKER STOCK RESIDENTIAL: %d real completed meshes painted with stock look and road frontage, including a founded house"):format(#take))
       return
     end
     local dir=street_dirs[show.dir+1]
@@ -65,7 +70,8 @@ local function residential_native()
     local function ready(n)
       local tag="luanttd_core:"..show.name
       local actual=core.get_node(show.base)
-      if actual.name==tag then
+      local support=not show.founded or core.get_node({x=show.base.x,y=show.base.y-1,z=show.base.z}).name=="luanttd_core:road_retaining"
+      if actual.name==tag and support then
         assert(actual.param2==show.dir,"Worker painted the right mesh with the wrong roadside orientation")
         local registered=assert(core.registered_nodes[tag])
         assert(registered.mesh=="bl_"..show.name..".obj")

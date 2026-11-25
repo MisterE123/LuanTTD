@@ -246,6 +246,7 @@ local function load_road_rules()
   road_rules.union=rail_track.union
   road_rules.rail_autoslope=dofile(base.."openttd/rail_autoslope.lua")(rail_track,slope_rules)
   road_rules.rail_height=dofile(base.."openttd/rail_height.lua")(rail_track,slope_rules)
+  road_rules.town_foundation=dofile(base.."openttd/town_foundation.lua")
   local rail_water=dofile(base.."openttd/rail_half_water.lua")(rail_track,slope_rules)
   coastal_world=dofile(base.."water_flood_world.lua")(M,terrain_rules,dofile(base.."openttd/water_flood.lua"),
     rail_track,slope_rules,rail_water)
@@ -789,6 +790,15 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       if foundation then return foundation end
       return nil,"AIRPORT_SURFACE_HEIGHT"
     end
+    if t and t.house and t.source_house and not t.stock_void and not t.site
+      and not (s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
+        s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
+        s.rail_tunnel_below and s.rail_tunnel_below[id]) then
+      local old_mask,old_base=terrain_rules.tile(staged_grid,tx,tz)
+      local foundation=road_rules.town_foundation.autoslope(old_mask,old_base,mask,base,s.stock_road_town_policy)
+      if foundation then return foundation end
+      return nil,"TOWN_HOUSE_HEIGHT"
+    end
     -- RC1 TerraformTile_Station (rail and waypoint) and the depot
     -- branch of TerraformTile_Rail. Allow an unchanged entrance or pair
     -- of ends, never reshape an active free-run track by this path.
@@ -897,6 +907,7 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       MUST_DEMOLISH_CANAL_FIRST="Dismantle the canal before landscaping.",VEHICLE_IN_THE_WAY="A vessel is in the way or has reserved the waterway.",
       CROSSING_SURFACE_HEIGHT="Keep the crossing deck at its current height on a supported slope, or remove the crossing first.",
       AIRPORT_SURFACE_HEIGHT="Landscaping cannot change the level of an active airport.",
+      TOWN_HOUSE_HEIGHT="Keep the house foundation at its current height and avoid steep slopes.",
       MUST_REMOVE_RAILROAD_TRACK="Landscaping would change the running surface. Remove the tracks first.",
       RAIL_SPLIT_UNMOUNTED="That split foundation is available only on ordinary rail.",
       RAIL_FACILITY_HEIGHT="Landscaping must leave the platform or depot level and its entrances unchanged."}

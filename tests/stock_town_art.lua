@@ -41,6 +41,7 @@ end
 local appearances={[0x06]={0,2},[0x0E]={0},[0x18]={0,1,2,3},[0x19]={0},[0x1A]={0,1,2,3}}
 local Front=load("house_frontage")
 local first_world,first_root
+local sloped={single=0,part=0}
 for _,year in ipairs({1950,1975,2020}) do
   local cases={}
   for _,seed in ipairs({9,89,1451,1751,2027,65217}) do
@@ -52,6 +53,13 @@ for _,year in ipairs({1950,1975,2020}) do
     for id,tile in ipairs(s.tiles) do
       local h=tile.source_house
       if h then
+        local x,z=Sim.xy(id)
+        local shape,base,top=Terrain.tile(s.corner_grid,x,z)
+        assert(shape<16 and tile.h==base)
+        if top>base then
+          local key=h.asset_root and "part" or "single"
+          sloped[key]=sloped[key]+1
+        end
         if h.root then
           local expected=assert(stock[h.id])
           assert(year>=expected[3] and year<=expected[4],"House outside its stock construction years")
@@ -74,7 +82,10 @@ for _,year in ipairs({1950,1975,2020}) do
           local members=assert(Art.footprint(Sim,s,h))
           for _,entry in ipairs(members) do
             local p=entry.record
-            assert(s.tiles[entry.id].h==tile.h and p.stage==h.stage and p.counter==h.counter and p.completed==h.completed)
+            local _,root_base,root_top=Terrain.tile(s.corner_grid,h.x,h.z)
+            local shape,base,top=Terrain.tile(s.corner_grid,p.x,p.z)
+            assert(shape<16 and tile.h==root_base and s.tiles[entry.id].h==base and top==root_top)
+            assert(p.stage==h.stage and p.counter==h.counter and p.completed==h.completed)
           end
           if h.root and h.id==0x14 and not first_root then first_world,first_root=s,h end
         end
@@ -86,6 +97,8 @@ for _,year in ipairs({1950,1975,2020}) do
   table.sort(ids)
   print(year..": "..table.concat(ids," "))
 end
+assert(sloped.single>0 and sloped.part>0)
+print(("PASS generated clear slopes host %d single-tile houses and %d multipart cells at their stock levels"):format(sloped.single,sloped.part))
 for _,v in ipairs(Catalog) do
   assert(all[v[1]],("stock root %02X not placed in seed coverage"):format(v[1]))
 end

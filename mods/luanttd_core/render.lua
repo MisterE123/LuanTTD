@@ -839,15 +839,23 @@ return function(api)
   function R.pick_terrain(pos,ray,limit)
     if terrain then return terrain.pick(pos,ray,R.uses_slope,limit,R.surface) end
   end
+  local town_foundation=dofile(modpath.."/openttd/town_foundation.lua")
+  function R.house_deck(id,t)
+    if not (terrain and t and t.house and t.source_house and not t.site) then return end
+    local shape,base=terrain.tile(id)
+    if shape then return town_foundation.level(shape,base),shape~=0 end
+  end
   function R.uses_slope(id)
     if not terrain then return false end
     local t=S.tiles[id]
-    return t and not t.stock_void and (t.coastal_water or t.water_class=="river" or
+    return t and not t.stock_void and (R.house_deck(id,t)~=nil or t.coastal_water or t.water_class=="river" or
       (not t.site and not t.house and not t.build and t.terrain~="water") or road_surface(id)~=nil or
       t.rail_depot_dir~=nil or t.tram~=nil or split_rail(id,t)~=nil)
   end
   function R.surface(id,x,z)
     local t=S.tiles[id]
+    local deck=R.house_deck(id,t)
+    if deck then return deck+.5 end
     if t and t.rail_depot_dir~=nil and api.trackworks then
       local shape,base=terrain.tile(id)
       local _,level=api.trackworks.depot_surface(shape,base)
@@ -899,7 +907,7 @@ return function(api)
         peak=math.max(peak or -1,box[5])
       end
     end
-    return peak and t.h+1+peak
+    return peak and (R.house_deck(id,t) or t.h)+1+peak
   end
   do
     local B=dofile(modpath.."/pedestrian_bridge.lua")
@@ -1164,7 +1172,7 @@ return function(api)
   core.register_alias("mapgen_water_source",gnames.water[0])
   core.register_alias("mapgen_river_water_source",gnames.water[0])
   local frontage=dofile(modpath.."/house_frontage.lua")
-  local fountains=dofile(modpath.."/town_fountain_view.lua")(core,Sim,frontage)
+  local fountains=dofile(modpath.."/town_fountain_view.lua")(core,Sim,frontage,R.house_deck)
   local smoke=S.stock_generated_profile and dofile(modpath.."/industry_smoke_view.lua")(core,Sim,terrain)
   function R.step_ambient_particles(dt,viewers)
     if not viewers then
@@ -1186,6 +1194,9 @@ return function(api)
   local function solid(t,id,x,z)
     if t.site or t.house then
       local record=t.source_house
+      local deck,founded=R.house_deck(id,t)
+      deck=deck or t.h
+      local base_node=founded and retaining or gnames[t.terrain][t.variant]
       -- Multipart buildings are split at real tile boundaries for
       -- independently loaded worker sectors; their stock footprint is fixed.
       local style=record and record.asset_root and stock_styles[record.asset_root]
@@ -1194,9 +1205,9 @@ return function(api)
           local part=record.asset_part
           local node=record.completed and stock_house[record.asset_root][part]
             or stock_build[style.width..style.depth][record.stage][part]
-          return node,t.h+1,0
+          return node,deck+1,0
         end
-        return gnames[t.terrain][t.variant],t.h
+        return base_node,deck
       end
       local stage,old_orientation
       local building=record and stock_house[record.id]
@@ -1218,9 +1229,9 @@ return function(api)
       if x%2==dx and z%2==dz then
         local variant=record and record.render_variant or t.variant
         return stage or building or
-          (t.site and scenery[S.sites[t.site].kind] or parcels[parcel] or house[variant]),t.h+1,facedir
+          (t.site and scenery[S.sites[t.site].kind] or parcels[parcel] or house[variant]),deck+1,facedir
       end
-      return gnames[t.terrain][t.variant],t.h
+      return base_node,deck
     end
     if t.build then
       if props[t.build] then return props[t.build],1 end
@@ -1836,7 +1847,7 @@ return function(api)
     end
     local surface_node=grade and source_road_node(t,id,x,y,z,grade,base,foundation)
     if surface_node then return surface_node end
-    if R.uses_slope(id) then
+    if (not t.house or not t.source_house) and R.uses_slope(id) then
       local mask,base=terrain.tile(id)
       local material=generated_ground[trees and trees.ground or not t.wood and t.stock_clear_ground]
       if not material and generated_ground.grass and not t.wood and not t.build then
@@ -1856,7 +1867,11 @@ return function(api)
     end
     if t.signal and y==top+1 then return props[t.closed and "closed" or "signal"] end
     if y==top then return coastal_node(t,id,x,y,z) or n,facedir end
-    if y<top then return gnames[t.terrain][t.variant] end
+    if y<top then
+      local deck,founded=R.house_deck(id,t)
+      if founded and y<=deck then return retaining end
+      return gnames[t.terrain][t.variant]
+    end
     return "air"
   end
   local tunnel_bore=terrain and Bore.mount(reg,bore_ground_defs)

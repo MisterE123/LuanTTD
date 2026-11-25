@@ -81,7 +81,29 @@ export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PA
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!; server= client=
-trap '[[ -z "$client" ]] || kill "$client" 2>/dev/null || true; [[ -z "$server" ]] || kill "$server" 2>/dev/null || true; kill "$xv" 2>/dev/null || true;wait 2>/dev/null || true' EXIT
+stop_process(){
+  local pid=$1
+  [[ -n "$pid" ]] || return 0
+  kill -TERM "$pid" 2>/dev/null || true
+  for _ in {1..50}; do
+    if ! kill -0 "$pid" 2>/dev/null; then wait "$pid" 2>/dev/null || true; return 0; fi
+    sleep .10
+  done
+  echo "Native airport process $pid did not stop after SIGTERM; forcing shutdown" >&2
+  kill -KILL "$pid" 2>/dev/null || true
+  for _ in {1..20}; do
+    if ! kill -0 "$pid" 2>/dev/null; then wait "$pid" 2>/dev/null || true; return 0; fi
+    sleep .10
+  done
+  return 1
+}
+cleanup(){
+  stop_process "$client" || true
+  stop_process "$server" || true
+  stop_process "$xv" || true
+}
+trap cleanup EXIT
+trap 'exit 124' TERM INT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 xdpyinfo > /dev/null || { cat "$out/xvfb.log"; exit 1; }
 luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/server.log" 2>&1 &
@@ -110,8 +132,8 @@ grep "$pass_mark" "$out/server.log"
 if grep -E 'ERROR\[|LuanTTD viewport placement:' "$out/server.log" "$out/client.log"; then exit 1; fi
 
 if [[ ${LUANTTD_QA_AIR_RESTART:-0} == 1 ]]; then
-  kill -TERM "$client" 2>/dev/null || true; wait "$client" || true; client=
-  kill -TERM "$server"; wait "$server" || true; server=
+  stop_process "$client"; client=
+  stop_process "$server"; server=
   printf '\nluanttd_qa_air_restart = true\n' >> "$out/server.conf"
   luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/restart-server.log" 2>&1 &
   server=$!
