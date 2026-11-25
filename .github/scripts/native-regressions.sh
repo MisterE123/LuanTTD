@@ -127,6 +127,8 @@ case "${1:-}" in
     LUANTTD_QA_AIR_LAYOUT=heliport LUANTTD_QA_AIR_YEAR=1963 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
     LUANTTD_QA_AIR_LAYOUT=ground_rotary LUANTTD_QA_AIR_YEAR=1980 LUANTTD_QA_AIR_RESTART=1 bash tests/stock_city_airport_native.sh
     BAYLINE_NATIVE_DISPLAY=347 BAYLINE_NATIVE_PORT=43364 timeout 135 bash tests/industry_alternate_native.sh
+    lua5.1 tests/roadside_crossing_ground.lua
+    LUANTTD_NATIVE_GROUND_FIXTURE=crossings BAYLINE_NATIVE_DISPLAY=348 BAYLINE_NATIVE_PORT=43365 timeout 125 bash tests/industry_alternate_native.sh
     LUANTTD_QA_STEEL_LAYOUT=1 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_STEEL_LAYOUT=0 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_RAIL_GROUND=1 bash tests/stock_steel_mill_layout_native.sh

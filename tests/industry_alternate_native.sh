@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+case ${LUANTTD_NATIVE_GROUND_FIXTURE:-industry} in
+  industry)
+    fixture=tests/industry_alternate_native.lua
+    start_marker='NATIVE ALTERNATE GENERATED:'
+    frame_prefix='NATIVE INDUSTRY FRAME'
+    pass_marker='PASS NATIVE INDUSTRY LAYOUTS:'
+    ;;
+  crossings)
+    fixture=tests/roadside_crossing_ground_native.lua
+    start_marker='NATIVE ROADSIDE FRAME'
+    frame_prefix='NATIVE ROADSIDE FRAME'
+    pass_marker='PASS NATIVE ROADSIDE GROUNDS:'
+    ;;
+  *) echo "Unknown graphical ground fixture" >&2; exit 2;;
+esac
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-industry-layout-native.XXXXXX")
 echo "Native industry layout evidence: $out"
 game="$out/games/luanttd"
@@ -10,7 +25,7 @@ cp -al mods "$game/" 2>/dev/null || cp -a mods/. "$game/mods/"
 cp mods/luanttd_core/init.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
-cat tests/industry_alternate_native.lua >>"$game/mods/luanttd_core/init.lua"
+cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-42662}
 display=${BAYLINE_NATIVE_DISPLAY:-389}
@@ -64,18 +79,18 @@ mark 'listening on'
 luanti --go --address 127.0.0.1 --port "$port" --name IndustryLayoutsQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
 
-mark 'NATIVE ALTERNATE GENERATED:'
+mark "$start_marker"
 for k in {1..460}; do
   while read -r label; do
     f="$out/$label.jpg"
     if [[ ! -e "$f" ]]; then
       import -window root -quality 91 "$f"
     fi
-  done < <(sed -n 's/.*NATIVE INDUSTRY FRAME //p' "$out/server.log")
-  if grep -q 'PASS NATIVE INDUSTRY LAYOUTS:' "$out/server.log"; then break; fi
+  done < <(sed -n "s/.*$frame_prefix //p" "$out/server.log")
+  if grep -Fq "$pass_marker" "$out/server.log"; then break; fi
   kill -0 "$server" 2>/dev/null || break
   sleep .20
 done
-grep -E 'NATIVE ALTERNATE GENERATED:|NATIVE INDUSTRY FRAME|PASS NATIVE INDUSTRY LAYOUTS:' "$out/server.log"
-grep -q 'PASS NATIVE INDUSTRY LAYOUTS:' "$out/server.log"
+grep -E "$start_marker|$frame_prefix|$pass_marker" "$out/server.log"
+grep -Fq "$pass_marker" "$out/server.log"
 ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"

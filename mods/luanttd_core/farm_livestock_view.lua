@@ -23,8 +23,8 @@ return function(core,Sim,view)
     {kind="pig",x=4.16,z=4.86,rx=.21,rz=.16,seconds=12.5,offset=.38},
   }
   local smaller_lanes={
-    {kind="cream",x=.22,z=.48,rx=.27,rz=.15,seconds=15.8,offset=.19},
-    {kind="brown",x=.72,z=.64,rx=.22,rz=.17,seconds=16.2,offset=.57},
+    {kind="cream",x=.02,z=.49,rx=.10,rz=.23,seconds=15.8,offset=.19},
+    {kind="brown",x=.68,z=.71,rx=.10,rz=.20,seconds=16.2,offset=.57},
   }
   for _,style in ipairs(styles) do
     core.register_entity(entity(style),{initial_properties={

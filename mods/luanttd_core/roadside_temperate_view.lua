@@ -14,6 +14,29 @@ return function(S,Sim,terrain,road_surface,reg,architecture,Details,Track,png,sl
       end
     end
   end
+  local tram={barren={normal={},foundation={}},grass={normal={},foundation={}}}
+  local Ground=dofile((core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core")
+    .."/openttd/road_crossing_ground.lua")
+  for class,families in pairs(tram) do
+    local tex=png(class=="barren" and "rail_barren" or "grass2")
+    families.normal.flat=reg("pure_tram_"..class,{tex,png("hill0"),png("grass_side")})
+    families.foundation.flat=reg("pure_tram_"..class.."_retaining",
+      {tex,png("hill0"),png("road_surface_retaining")})
+    for _,grade in ipairs({3,6,9,12}) do
+      for _,foundation in ipairs({"normal","foundation"}) do
+        local name=("pure_tram_%s_%s_%d"):format(class,foundation,grade)
+        local asset=(foundation=="foundation" and "bl_road_grade_foundation_" or "bl_land_")..grade..".obj"
+        families[foundation][grade]=reg(name,{tex,png("road_surface_retaining"),png("road_surface_retaining")},{
+          drawtype="mesh",mesh=asset,paramtype="light",sunlight_propagates=true,
+          pointable=false,collision_box=slope_collision(grade),
+        })
+      end
+    end
+  end
+  function V.tram_ground(t,grade,foundation)
+    local variants=tram[Ground.pure_tram(t.roadside,t.roadworks)]
+    return variants and variants[foundation=="none" and "normal" or "foundation"][grade==0 and "flat" or grade]
+  end
   local barren={normal={},foundation={}}
   for bits=0,15 do
     barren.normal[bits],barren.foundation[bits]={},{}

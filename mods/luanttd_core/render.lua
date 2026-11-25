@@ -160,6 +160,33 @@ return function(api)
       collision_box=solid and {type="fixed",fixed=solid} or nil,
       selection_box={type="fixed",fixed={-.5,-.50,-.5,1.5,.60,1.5}}})
   end
+  local crossing_ground
+  if api.crossings and api.generated_world then
+    local Ground=dofile(modpath.."/openttd/road_crossing_ground.lua")
+    local apron={}
+    for class,top in pairs({barren="rail_barren",paved="stock_crossing_paved"}) do
+      apron[class]={
+        reg("stock_crossing_"..class,{png(top),png("grass2"),png("grass_side")}),
+        reg("stock_crossing_"..class.."_retaining",{png(top),png("grass2"),png("road_surface_retaining")}),
+      }
+    end
+    local grass_retaining={}
+    for v=0,3 do
+      local tex=png("grass"..v)
+      grass_retaining[v]=reg("stock_crossing_grass_retaining_"..v,
+        {tex,tex,png("road_surface_retaining")})
+    end
+    crossing_ground=function(t,c,y,retaining)
+      local foundation=c.foundation~="none"
+      if y==c.top then
+        local surface=apron[Ground.temperate(t.roadside)]
+        if surface then return surface[foundation and 2 or 1] end
+        local variant=t.variant or 0
+        return foundation and grass_retaining[variant] or gnames.grass[variant]
+      end
+      return foundation and retaining or gnames[t.terrain][t.variant]
+    end
+  end
   local crossing_mesh={}
   if api.crossings then
     for axis=0,1 do
@@ -1397,11 +1424,24 @@ return function(api)
         end
       end
       if not grade then
-        if slope~=0 then return source_road_node(t,id,x,y,z,slope,level,track.foundation) end
-        if y<level then return track and track.foundation~="none" and retaining or gnames.grass[t.variant] end
+        local foundation=track and track.foundation or "none"
+        local bare=p.kind=="road" and roadside_view and roadside_view.tram_ground(t,slope,foundation)
+        if slope~=0 then
+          if bare then
+            if y<=level then return foundation~="none" and retaining or gnames.grass[t.variant] end
+            if y==level+1 and x%2==0 and z%2==0 then return bare end
+            return "air"
+          end
+          return source_road_node(t,id,x,y,z,slope,level,foundation)
+        end
+        if y<level then return foundation~="none" and retaining or gnames.grass[t.variant] end
         if y==level then
+          if bare then return bare end
           local a=x%2+2*(1-z%2)
-          if track and track.foundation~="none" then return road_foundation_flat[p.tram_bits][a] end
+          if p.kind=="road" and roadside_view and roadside_view.is_paved(t) then
+            return (foundation~="none" and town_foundation_flat or town_streets)[p.tram_bits][a]
+          end
+          if foundation~="none" then return road_foundation_flat[p.tram_bits][a] end
           return infrastructure["road_"..p.tram_bits.."_plain"][a]
         end
         return "air"
@@ -1503,7 +1543,10 @@ return function(api)
       local c=t.level_crossing
       local tram=R.tram_crossing_node and R.tram_crossing_node(c,x,y,z)
       if tram then return tram end
-      if y<=c.top then return c.foundation~="none" and retaining or gnames[t.terrain][t.variant] end
+      if y<=c.top then
+        if crossing_ground then return crossing_ground(t,c,y,retaining) end
+        return c.foundation~="none" and retaining or gnames[t.terrain][t.variant]
+      end
       if y==c.top+1 and x%2==0 and z%2==0 then
         local gate=(c.barred or c.phase=="unobserved" or c.phase=="mixed_occupancy") and "closed" or "open"
         return crossing_mesh[c.rail_axis][gate]

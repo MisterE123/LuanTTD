@@ -157,7 +157,9 @@ def livestock(materials):
     # end positions alone wouldn't catch the front or hindquarters clipping
     # a trough as the cow turns. A 3-cm inset covers posts and rail width.
     module=(ROOT/"mods/luanttd_core/farm_livestock_view.lua").read_text()
-    paths=re.findall(r'kind="(\w+)",x=([.\d]+),z=([.\d]+),rx=([.\d]+),rz=([.\d]+)',module)
+    lane_expr=r'kind="(\w+)",x=([.\d]+),z=([.\d]+),rx=([.\d]+),rz=([.\d]+)'
+    original,alternate=module.split("local smaller_lanes=",1)
+    paths=re.findall(lane_expr,original)
     assert len(paths)==5
     envelopes=[]
     for i,(kind,*fields) in enumerate(paths):
@@ -180,6 +182,26 @@ def livestock(materials):
     for i,(a,b,c,d) in enumerate(envelopes):
         for x,z,u,v in envelopes[:i]:
             assert c<x or u<a or d<z or v<b,"animated animal paths overlap"
+    compact=re.findall(lane_expr,alternate)
+    assert len(compact)==2
+    compact_bounds=[]
+    for kind,*fields in compact:
+        x0,z0,rx,rz=map(float,fields)
+        pose=[]
+        for step in range(180):
+            a=tau*step/180
+            x,z=x0+rx*cos(a),z0+rz*sin(a)
+            dx,dz=-rx*sin(a),rz*cos(a)
+            d=hypot(dx,dz);dx,dz=dx/d,dz/d
+            for u,v in bounds_by_kind[kind]:
+                px,pz=x+dz*u+dx*v,z-dx*u+dz*v
+                assert -.33<px<1.32 and -.30<pz<1.29,(kind,"fence",px,pz)
+                assert not (.185<px<.775 and -.292<pz<-.064),(kind,"trough",px,pz)
+                assert not (.997<px<1.283 and any(abs(pz-center)<.133 for center in (.09,.37,.65))),(
+                    kind,"bale",px,pz)
+                pose.append(px)
+        compact_bounds.append((min(pose),max(pose)))
+    assert compact_bounds[0][1]<compact_bounds[1][0],"alternate pen animals cross each other"
     return assets
 
 def test(args):

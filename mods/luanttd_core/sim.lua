@@ -256,7 +256,7 @@ end
 local crossing_errors={
   FALLBACK_CLEAR="Road and rail must cross at right angles on straight track.",
   PROTECTED_TILE="A station, roadworks, signal or protected structure blocks the crossing.",
-  HOST_FLAT_ONLY="This crossing requires level ground.",
+  LAND_SLOPED_IN_WRONG_DIRECTION="This slope cannot support a level crossing.",
   VEHICLE_IN_THE_WAY="Wait for the vehicle to clear the crossing.",
   OWNED_BY_ANOTHER="This crossing requires an existing way owned by your company.",
   ROAD_POSE_UNKNOWN="Wait for road traffic position to be confirmed.",
@@ -749,10 +749,22 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
   local coast=coastal_world.terraform(s,owner,function(id) return coastal_tile_occupied(s,id) end)
   opts.after_step=coast.stage
   opts.void=function(tx,tz) return s.tiles[M.id(tx,tz)].stock_void end
-  opts.validate_tile=function(_,tx,tz)
-    local t=s.tiles[M.id(tx,tz)]
+  opts.validate_tile=function(_,tx,tz,mask,base)
     local id=M.id(tx,tz)
+    local t=s.tiles[id]
     if coastal_world.is_water(t) then return coast.quote(tx,tz) end
+    local crossing=t and t.level_crossing
+    local wiring=crossing and crossing_bindings[s]
+    if wiring and not (
+        s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
+        s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
+        s.rail_tunnel_below and s.rail_tunnel_below[id]) then
+      local foundation=wiring.runtime.world.foundation_quote(crossing,mask,base,s.stock_road_town_policy)
+      if foundation then return foundation end
+      -- The stock fallback would clear the crossing. Here a destructive
+      -- action still requires the player to pick a layer with Bulldozer.
+      return nil,"CROSSING_SURFACE_HEIGHT"
+    end
     if not t or t.terrain=="water" or t.wood or t.site or t.stock_industry or t.stock_landmark or t.house or t.build or t.tram or t.ship or t.airfield or
         M.rail_span_protected(s,id) or (s.bridge_above and s.bridge_above[id]) or (s.aqueduct_above and s.aqueduct_above[id]) or
         (s.tunnel_below and s.tunnel_below[id]) or (t.owner and t.owner~=owner) then
@@ -771,7 +783,8 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
     local explanations={PROTECTED_TILE="Clear forest first; a building or protected infrastructure blocks this corner.",
       NOT_ENOUGH_MONEY="Not enough money for the next change.",ALREADY_AT_SEA_LEVEL="Already at sea level.",
       ALREADY_LEVELLED="Already level.",TOO_HIGH="The edit exceeds this world's height limit.",
-      MUST_DEMOLISH_CANAL_FIRST="Dismantle the canal before landscaping.",VEHICLE_IN_THE_WAY="A vessel is in the way or has reserved the waterway."}
+      MUST_DEMOLISH_CANAL_FIRST="Dismantle the canal before landscaping.",VEHICLE_IN_THE_WAY="A vessel is in the way or has reserved the waterway.",
+      CROSSING_SURFACE_HEIGHT="Keep the crossing deck at its current height on a supported slope, or remove the crossing first."}
     return false,(explanations[why] or water_clear_errors[why] or tostring(why or "Nothing changed."))
       ..(px and pz and (" (%d,%d)"):format(px,pz) or "")
   end
@@ -791,8 +804,15 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
   for _,d in ipairs(plan.dirty) do
     local id=M.id(d.x,d.z)
     if id then
-      local _,base=terrain_rules.tile(g,d.x,d.z)
-      s.tiles[id].h=base
+      local mask,base=terrain_rules.tile(g,d.x,d.z)
+      local t=s.tiles[id]
+      t.h=base
+      -- The planner only admits shapes with the same crossing top. Keep
+      -- the same record and reservation, but repaint its new foundation.
+      local crossing=t.level_crossing
+      if crossing then
+        crossing.slope,crossing.foundation=mask,mask==0 and "none" or "flattened"
+      end
       changed[#changed+1]=id
     end
   end

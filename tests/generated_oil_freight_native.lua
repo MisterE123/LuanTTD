@@ -107,31 +107,42 @@ core.after(0,function()
         end
       end
     end
+    local function turnarounds(tail,...)
+      local avoid,out={},{}
+      for _,id in ipairs({...}) do avoid[id]=true end
+      for d=1,4 do
+        local e=Sim.adjacent(tail,d)
+        for _,p in ipairs({d%4+1,(d+2)%4+1}) do
+          local f=Sim.adjacent(tail,p)
+          local middle=e and Sim.adjacent(e,p)
+          if usable(e) and usable(f) and usable(middle) and not (avoid[e] or avoid[f] or avoid[middle]) then
+            out[#out+1]={e,middle,f}
+          end
+        end
+      end
+      return out
+    end
     local road,well_tile,refinery_tile,town_tile
     for _,g in ipairs(refinery_gates) do
       local left,well_stop=scout({id=g.id,out=g.back,back=g.out},well_gates)
       if left then
         local right,town_stop=scout(g,town_gates,well_stop)
         if right then
-          local end_tile=left[#left]
-          local function turn_ok(id)
-            return id~=well_stop and usable(id)
-          end
-          -- A circuit beyond the loading stop lets a truck turn while the
-          -- platform itself stays straight and traversable in either direction.
-          for d=1,4 do
-            local e=Sim.adjacent(end_tile,d)
-            for _,p in ipairs({d%4+1,(d+2)%4+1}) do
-              local f=Sim.adjacent(end_tile,p)
-              local middle=e and Sim.adjacent(e,p)
-              if turn_ok(e) and turn_ok(f) and turn_ok(middle) then
-                local path={end_tile,e,middle,f}
-                for i=#left,1,-1 do path[#path+1]=left[i] end
-                for i=4,#right do path[#path+1]=right[i] end
-                if Sim.plan(S,owner,"road",path) then
-                  road,well_tile,refinery_tile,town_tile=path,well_stop,g.id,town_stop
-                  break
-                end
+          local well_end,town_end=left[#left],right[#right]
+          -- Both through stops preserve the heading of a loaded truck.
+          -- Two topology-only paths are not proof of a repeatable
+          -- service. Lay a real turnaround beyond each end platform
+          -- so a released truck can keep moving, then reverse via road.
+          for _,w in ipairs(turnarounds(well_end,well_stop,g.id,town_stop)) do
+            for _,t in ipairs(turnarounds(town_end,town_stop,g.id,well_stop)) do
+              local path={well_end,w[1],w[2],w[3]}
+              for i=#left,1,-1 do path[#path+1]=left[i] end
+              for i=4,#right do path[#path+1]=right[i] end
+              for _,id in ipairs(t) do path[#path+1]=id end
+              path[#path+1]=town_end
+              if Sim.plan(S,owner,"road",path) then
+                road,well_tile,refinery_tile,town_tile=path,well_stop,g.id,town_stop
+                break
               end
             end
             if road then break end
@@ -209,6 +220,7 @@ core.after(0,function()
   assert(tanker.delivered==saved.liters and goods.delivered==0)
   for _=1,500 do
     Sim.daily(S)
+    assert(tanker.status~="No path" and goods.status~="No path","The real arrival heading lost its legal return route")
     if tanker.delivered>saved.liters and goods.delivered>0 then
       local company=S.companies[owner]
       assert(company.revenue==tanker.revenue+goods.revenue)

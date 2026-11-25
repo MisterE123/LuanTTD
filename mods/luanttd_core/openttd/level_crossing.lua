@@ -8,7 +8,18 @@ return function(T)
   local C={rail_infrastructure_factor=2,default_crossing_with_competitor=true}
   local floor,abs=math.floor,math.abs
   local road_bits={[0]=10,5}
+  -- RC1 slope_type.h VALID_LEVEL_CROSSING_SLOPES is identical here:
+  -- FLAT, EW, WSE, NS, NWS, ENW and SEN. Both build commands use it.
   local valid_slope={[0]=true,[5]=true,[7]=true,[10]=true,[11]=true,[13]=true,[14]=true}
+  -- road_cmd.cpp TerraformTile_Road / Crossing. The leveled track
+  -- surface must not move. STOCK_PRICE_BUILD_FOUNDATION uses pricebase.h.
+  function C.autoslope(old_top,new_shape,new_base,opts)
+    opts=opts or {}
+    if opts.build_on_slopes==false or opts.autoslope==false or not valid_slope[new_shape] then return end
+    local top=new_base+(new_shape==0 and 0 or 1)
+    if top~=old_top then return end
+    return opts.foundation_price or 250
+  end
   local rail_mul={[0]=8,12,16,24}
   local road_mul={[0]=8,16}
   local function axis(a) return a==0 or a==1 end

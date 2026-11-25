@@ -14,6 +14,9 @@ return function(Sim,Terrain,Crossing,Track)
     return t and t.level_crossing
   end
   function W.protected(s,id) return W.record(s,id)~=nil end
+  function W.foundation_quote(record,mask,base,opts)
+    return Crossing.autoslope(record.top,mask,base,opts)
+  end
   function W.reindex(s)
     local index={}
     for id,t in pairs(s.tiles) do if t.level_crossing then index[id]=true end end
@@ -84,7 +87,6 @@ return function(Sim,Terrain,Crossing,Track)
     if occupied_layer(s,id,t,tram) then return nil,"PROTECTED_TILE" end
     local slope,base,top=shape(s,id)
     if slope==nil then return nil,"NEEDS_SHARED_CORNERS" end
-    if slope~=0 and not (ctx and ctx.allow_sloped) then return nil,"HOST_FLAT_ONLY" end
     local present=observe(ctx,id)
     if not present then return nil,"OCCUPANCY_UNKNOWN" end
     local base_record={owner=owner,slope=slope,base=base,top=top}
@@ -168,6 +170,7 @@ return function(Sim,Terrain,Crossing,Track)
     else
       t.build,t.owner,t.rail_tracks,t.rail_type=edit.build,edit.rail_owner,edit.rail_tracks,edit.railtype
       t.road_bits,t.roadtype,t.road_town,t.road_disallowed,t.disallowed,t.level_crossing=nil,nil,nil,nil,nil,nil
+      t.roadside,t.stock_roadside_town=nil,nil
       s.level_crossing_tiles[id]=nil
     end
   end
@@ -193,6 +196,8 @@ return function(Sim,Terrain,Crossing,Track)
     local t=s.tiles[id]
     assert(t.level_crossing)
     t.level_crossing,t.rail_tracks,t.rail_type=nil,nil,nil
+    -- MakeRoadNormal initializes the cross-section as barren again.
+    if s.stock_generated_profile then t.roadside,t.stock_roadside_town="barren",nil end
     t.build=edit.roadtype~=nil and "road" or nil
     t.road_bits=edit.roadtype~=nil and edit.road_bits or nil
     t.roadtype,t.owner=edit.roadtype,edit.road_owner
@@ -227,6 +232,11 @@ return function(Sim,Terrain,Crossing,Track)
     -- board reads the canonical crossing while legacy road keeps its tool.
     t.build,t.owner,t.road_bits,t.rail_tracks="road",a.road_owner or a.tram_owner,a.road_bits,nil
     t.tram=nil
+    -- MakeRoadCrossing clears its roadside bits on first conversion.
+    -- Adding the other road layer to an existing crossing preserves it.
+    if s.stock_generated_profile and not t.level_crossing then
+      t.roadside,t.stock_roadside_town="barren",nil
+    end
     t.level_crossing=a
     index[q.id]=true
     return a
