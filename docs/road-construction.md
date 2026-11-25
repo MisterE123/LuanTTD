@@ -231,3 +231,9 @@ orders and can queue at the same depot. Use **Manage streetcars** to open
 a vehicle’s orders, or select it and confirm retirement. Retirement
 keeps all facilities and clears that vehicle’s loading reservation; it
 does not refund the vehicle purchase.
+
+### Landscaping below a road or stop
+
+OpenTTD 16.0-RC1's [road autoslope rules](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/road_cmd.cpp) and [station entrance checks](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/autoslope.h) allow some terrain changes without demolishing the infrastructure. The landscaping tool quotes $250 per affected foundation in addition to the normal excavation price. A regular road or tram, including shared pavement, keeps exactly the same travel plane and existing connection bits. Depots keep their original entrance; bay stops keep one entrance edge and through stops must keep both. If a change would move the roadway or affect a protected bridge or tunnel, the tool refuses it rather than demolishing the route. Waypoints and other infrastructure types are not part of this pass.
+
+The [compiled RC1 comparison](../tests/road_autoslope_rc1.py) checks valid road-bit layouts, foundations and terminal headings. The [native worker replay](../tests/road_autoslope_native.lua) places a depot and two stops in an ordinary generated world, orders a bus through them, then charges for changing the dirt below its road and observes the original bus cross the edited segment at the same height.

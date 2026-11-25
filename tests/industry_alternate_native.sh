@@ -14,6 +14,12 @@ case ${LUANTTD_NATIVE_GROUND_FIXTURE:-industry} in
     frame_prefix='NATIVE ROADSIDE FRAME'
     pass_marker='PASS NATIVE ROADSIDE GROUNDS:'
     ;;
+  road_autoslope)
+    fixture=tests/road_autoslope_native.lua
+    start_marker='NATIVE ROAD TERRAFORM FRAME'
+    frame_prefix='NATIVE ROAD TERRAFORM FRAME'
+    pass_marker='PASS NATIVE ROAD AUTOSLOPE:'
+    ;;
   *) echo "Unknown graphical ground fixture" >&2; exit 2;;
 esac
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-industry-layout-native.XXXXXX")
@@ -56,18 +62,19 @@ export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PA
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!; server= client=
-cleanup(){
-  for pid in "$client" "$server" "$xv"; do [[ -z "$pid" ]] || kill -TERM "$pid" 2>/dev/null || true; done
-  for _ in {1..12}; do
-    alive=false
-    for pid in "$client" "$server" "$xv"; do
-      if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then alive=true; fi
-    done
-    if ! "$alive"; then break; fi
-    sleep .15
+stop_process(){
+  local pid=$1
+  [[ -n "$pid" ]] || return 0
+  kill -TERM "$pid" 2>/dev/null || true
+  for _ in {1..24}; do
+    if ! kill -0 "$pid" 2>/dev/null; then break; fi
+    sleep .10
   done
-  for pid in "$client" "$server" "$xv"; do [[ -z "$pid" ]] || kill -KILL "$pid" 2>/dev/null || true; done
-  wait 2>/dev/null || true
+  kill -KILL "$pid" 2>/dev/null || true
+}
+cleanup(){
+  # Keep X alive until the game client has shut down its renderer.
+  stop_process "$client"; stop_process "$server"; stop_process "$xv"
 }
 trap cleanup EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done

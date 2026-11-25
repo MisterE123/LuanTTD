@@ -66,7 +66,9 @@ core.register_on_joinplayer(function(p)
     assert(S.tiles[last].tram.terminal_level==2)
     assert(core.get_node({x=42,y=2,z=30}).name=="luanttd_core:tram_depot_2")
     assert(core.get_node({x=48,y=3,z=42}).name=="luanttd_core:tram_stop_1")
-    assert(core.get_node({x=48,y=2,z=34}).name=="luanttd_core:road_grade_6")
+    local pure_ground=core.get_node({x=48,y=2,z=34}).name
+    assert(pure_ground=="luanttd_core:pure_tram_barren_normal_6",
+      "Pure tram grade must show its stock barren ground, not mixed pavement: "..pure_ground)
     assert(core.get_node({x=48,y=3,z=34}).name=="luanttd_core:tramway_grade_6")
     assert(core.get_node({x=54,y=2,z=34}).name=="luanttd_core:road_grade_6")
     assert(core.get_node({x=54,y=3,z=34}).name=="luanttd_core:tramway_grade_6")

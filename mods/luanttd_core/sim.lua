@@ -237,10 +237,13 @@ local function load_road_rules()
   terrain_rules=dofile(base.."openttd/terrain.lua")
   slope_rules=dofile(base.."openttd/slope.lua")
   road_rules=dofile(base.."openttd/road_slope.lua")
+  road_rules.autoslope=dofile(base.."openttd/road_autoslope.lua")(road_rules,slope_rules,
+    dofile(base.."openttd/road_stop_build.lua"))
   long_road_rules=dofile(base.."openttd/road_oneway.lua")(road_rules)
   landscape_rules=dofile(base.."openttd/landscaping.lua")(terrain_rules)
   clear_area_rules=dofile(base.."openttd/clear_area.lua")
   local rail_track=dofile(base.."openttd/rail_track.lua")
+  road_rules.union=rail_track.union
   local rail_water=dofile(base.."openttd/rail_half_water.lua")(rail_track,slope_rules)
   coastal_world=dofile(base.."water_flood_world.lua")(M,terrain_rules,dofile(base.."openttd/water_flood.lua"),
     rail_track,slope_rules,rail_water)
@@ -764,6 +767,40 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       -- The stock fallback would clear the crossing. Here a destructive
       -- action still requires the player to pick a layer with Bulldozer.
       return nil,"CROSSING_SURFACE_HEIGHT"
+    end
+    -- Terrain deformation is only in place when the source road surface
+    -- or terminal entrance is unchanged, so active orders remain valid.
+    -- Other co-located structures retain their independent validations.
+    if t and (t.build or t.tram) and not crossing and not t.road_waypoint_id and not t.road_bridge_id and not t.road_tunnel_id
+        and not t.rail_span_id and not t.rail_tracks and not t.wood and not t.site and not t.house and not t.stock_object
+        and not t.stock_industry and not t.stock_landmark and not t.ship and not t.airfield
+        and not (s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
+          s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
+          s.rail_tunnel_below and s.rail_tunnel_below[id]) then
+      local road,tram=t.road_bits or 0,t.tram
+      local trip=t.build
+      local A=road_rules.autoslope
+      local policy=s.stock_road_town_policy
+      local old_mask,old_base
+      if trip=="road" or trip=="road_station" or trip=="road_depot" or trip==nil and tram then
+        old_mask,old_base=terrain_rules.tile(g,tx,tz)
+      end
+      local foundation
+      if old_mask and (trip=="road" or trip==nil and tram and tram.kind=="road") and (not tram or tram.kind=="road") then
+        local bits=tram and road_rules.union(road,tram.tram_bits or 0) or road
+        foundation=A.normal(bits,old_mask,old_base,mask,base,policy)
+      elseif old_mask and trip=="road_depot" and t.depot_dir then
+        foundation=A.terminal(4-t.depot_dir,false,old_mask,old_base,mask,base,policy)
+      elseif old_mask and trip=="road_station" then
+        local axis=t.stop_axis or road
+        local dir=({[10]=0,[5]=1,[8]=0,[4]=1,[2]=2,[1]=3})[axis]
+        if dir then
+          foundation=A.terminal(dir,axis==10 or axis==5,old_mask,old_base,mask,base,policy)
+        end
+      elseif old_mask and trip==nil and tram and (tram.kind=="depot" or tram.kind=="drive_stop") and tram.dir then
+        foundation=A.terminal(tram.dir,tram.kind=="drive_stop",old_mask,old_base,mask,base,policy)
+      end
+      if foundation then return foundation end
     end
     if not t or t.terrain=="water" or t.wood or t.site or t.stock_industry or t.stock_landmark or t.house or t.build or t.tram or t.ship or t.airfield or
         M.rail_span_protected(s,id) or (s.bridge_above and s.bridge_above[id]) or (s.aqueduct_above and s.aqueduct_above[id]) or
