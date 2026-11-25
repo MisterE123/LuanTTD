@@ -43,6 +43,7 @@ function G.new(id,x,z,opts)
   local n=opts.num_houses or 0
   return {id=id,x=x,z=z,num_houses=n,radii=G.radii(n),population=opts.population or 0,
     grow_counter=opts.grow_counter or id%G.TOWN_TICKS,
+    time_until_rebuild=opts.time_until_rebuild or 10,
     growth_rate=opts.growth_rate or G.to_ticks(250),growing=not not opts.growing,
     custom_growth=not not opts.custom_growth,larger_town=not not opts.larger_town,
     fund_buildings_months=opts.fund_buildings_months or 0,

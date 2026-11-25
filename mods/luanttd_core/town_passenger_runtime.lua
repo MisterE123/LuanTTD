@@ -83,6 +83,11 @@ return function(Sim,H,Packets,Rating,Mail)
     local clock=s.passenger_house_clock
     local lift_registry=s.stock_town_lifts
     local settings={}
+    if s.stock_generated_profile and growth and growth.rebuild then
+      settings.rebuild=function(house,id,word,tick,rng)
+        growth.rebuild(s,house,id,word,tick,rng)
+      end
+    end
     local animate
     if lift_registry then
       -- OpenTTD GameLoop calls AnimateAnimatedTiles before the game

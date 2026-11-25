@@ -331,6 +331,8 @@ jobs:
           python3 tests/town_lift_rc1.py "$src"
           lua5.1 tests/town_lift.lua
           lua5.1 tests/town_lift_live.lua
+          python3 tests/town_rebuild_rc1.py "$src"
+          lua5.1 tests/town_rebuild.lua
           lua5.1 tests/town_foundation.lua
           lua5.1 tests/rail_autoslope.lua
           lua5.1 tests/rail_half_water.lua

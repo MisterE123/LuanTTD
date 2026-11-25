@@ -310,9 +310,10 @@ function H.advance_houses(clock,ticks,map_house,settings,random,emit,before_tick
     if landscape_tile then landscape_tile(x,z,tick) end
     local house=map_house(x,z)
     if house then
-      H.produce_tile(tile,tick,house,settings,random,function(name,amount)
+      local word=H.produce_tile(tile,tick,house,settings,random,function(name,amount)
         emit(name,amount,x,z,house,tick)
       end)
+      if word and settings.rebuild then settings.rebuild(house,tile+1,word,tick,random) end
     end
   end,before_tick)
 end

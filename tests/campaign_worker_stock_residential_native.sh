@@ -11,8 +11,10 @@ cp mods/luanttd_core/init.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
 lift=${LUANTTD_QA_TOWN_LIFT:-0}
+rebuild=${LUANTTD_QA_TOWN_REBUILD:-0}
 fixture=tests/campaign_worker_stock_residential_native.lua
 if [[ $lift == 1 ]]; then fixture=tests/town_lift_native.lua; fi
+if [[ $rebuild == 1 ]]; then fixture=tests/town_rebuild_native.lua; fi
 cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-42683}
@@ -68,6 +70,22 @@ mark(){ for _ in {1..920}; do grep -q "$1" "$out/server.log" && return; kill -0 
 mark 'listening on'
 luanti --go --address 127.0.0.1 --port "$port" --name StockResidentialQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
+reopen(){
+  local setting=$1 finished=$2
+  stop_process "$client"; client=
+  stop_process "$server"; server=
+  mv "$out/server.log" "$out/initial-server.log"
+  mv "$out/client.log" "$out/initial-client.log"
+  printf '\n%s = true\n' "$setting" >>"$out/server.conf"
+  luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/server.log" 2>&1 &
+  server=$!
+  mark 'listening on'
+  luanti --go --address 127.0.0.1 --port "$port" --name StockResidentialQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
+  client=$!
+  mark "$finished"
+  grep "$finished" "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+}
 if [[ $lift == 1 ]]; then
   mark 'NATIVE TOWN LIFT FRAME'
   sleep .57
@@ -75,19 +93,19 @@ if [[ $lift == 1 ]]; then
   mark 'PASS NATIVE TOWN LIFT'
   grep -E 'NATIVE TOWN LIFT FRAME|PASS NATIVE TOWN LIFT' "$out/server.log"
   ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
-  stop_process "$client"; client=
-  stop_process "$server"; server=
-  mv "$out/server.log" "$out/initial-server.log"
-  mv "$out/client.log" "$out/initial-client.log"
-  printf '\nluanttd_qa_town_lift_restart = true\n' >>"$out/server.conf"
-  luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/server.log" 2>&1 &
-  server=$!
-  mark 'listening on'
-  luanti --go --address 127.0.0.1 --port "$port" --name StockResidentialQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
-  client=$!
-  mark 'PASS NATIVE TOWN LIFT REOPEN'
-  grep 'PASS NATIVE TOWN LIFT REOPEN' "$out/server.log"
+  reopen luanttd_qa_town_lift_restart "PASS NATIVE TOWN LIFT REOPEN"
+  exit 0
+fi
+if [[ $rebuild == 1 ]]; then
+  mark 'NATIVE TOWN REBUILD FRAME'
+  sleep .55
+  if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/town-rebuild.jpg"; fi
+  mark 'PASS NATIVE TOWN REBUILD'
+  grep -E 'NATIVE TOWN REBUILD (FRAME|RECEIPT)|PASS NATIVE TOWN REBUILD' "$out/server.log"
   ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+  reopen luanttd_qa_town_rebuild_restart "PASS NATIVE TOWN REBUILD REOPEN"
+  sleep .45
+  if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/town-renewed.jpg"; fi
   exit 0
 fi
 for i in {01..13}; do

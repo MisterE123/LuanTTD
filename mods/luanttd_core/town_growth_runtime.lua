@@ -10,6 +10,7 @@ return function(Sim,Terrain,G,B,H)
     dofile(path.."openttd/roadside_temperate.lua"))
   local names=dofile(path.."stock_town_art.lua")
   local Lift=dofile(path.."openttd/town_lift.lua")
+  local Rebuild=dofile(path.."openttd/town_rebuild.lua")
   local authority=dofile(path.."town_road_authority.lua")(Sim,dofile(path.."openttd/road_town_permission.lua"))
   local function at(layer,id) return layer and layer[id] end
   local function record(t) return t and t.house and t.source_house or nil end
@@ -91,7 +92,7 @@ return function(Sim,Terrain,G,B,H)
       if t then
         t.house_counts=t.house_counts or {}
         t.house_counts[h.id]=(t.house_counts[h.id] or 0)+1
-        if h.root~=false then
+        if h.root==true or not h.asset_root and h.root~=false then
           t.num_houses=t.num_houses+1
           if h.completed then t.population=t.population+assert(H.specs[h.id])[1] end
           if h.id==0x03 then t.unique={church=true,stadium=t.unique and t.unique.stadium} end
@@ -187,7 +188,7 @@ return function(Sim,Terrain,G,B,H)
       t.population=t.population-assert(H.specs[h.id])[1]
       s.sites[h.town].population=t.population
     end
-    if h.root~=false then
+    if h.root==true or not h.asset_root and h.root~=false then
       t.num_houses=t.num_houses-1;t.radii=G.radii(t.num_houses)
       if t.unique then
         if h.id==0x03 then t.unique.church=nil end
@@ -233,6 +234,40 @@ return function(Sim,Terrain,G,B,H)
       return true
     end
     return native_write()
+  end
+  function W.rebuild(s,h,id,word,tick,random)
+    if not h.root or not h.completed then return end
+    local t=s.stock_town_growth and s.stock_town_growth.towns[h.town]
+    if not t or not t.growing then return end
+    local style=names[h.id]
+    if not style then return end
+    local parts=h.asset_root and names.footprint(Sim,s,h) or not h.asset_root and {{id=id,record=h}}
+    if not parts then return end
+    for _,p in ipairs(parts) do
+      local cell=s.tiles[p.id]
+      if not cell or not cell.house or cell.source_house~=p.record
+        or p.record.player_protected or cell.owner or protected(s,p.id,cell) then return end
+    end
+    local receipt=Rebuild.visit(t,h,style,true,word)
+    if not receipt then return end
+    -- OWNER_TOWN clears the complete building. No company can be
+    -- billed or get a demolishing-company reputation adjustment.
+    for _,p in ipairs(parts) do
+      local cell=s.tiles[p.id]
+      W.remove(s,p.record)
+      cell.house,cell.source_house,cell.parcel=nil,nil,nil
+      Sim.mark_clear_land(s,p.id)
+      visual_changed(s,p.id)
+    end
+    s.topology=s.topology+1
+    local target=receipt.replace
+    if target then
+      local policy=s.stock_road_town_policy
+      local proposal=B.house(t,board(s),target.x,target.z,
+        {year=Sim.date(s),allow_roads=not policy or policy.allow_town_roads~=false},random)
+      commit(s,t,proposal,services(s),tick,nil)
+    end
+    return receipt
   end
   function W.tick(s,tick,random,write_house)
     local state=s.stock_town_growth
