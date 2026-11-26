@@ -172,11 +172,11 @@ function M.create(Loading,Timing)
     l.ticks=1
     return meta
   end
-  function C.leave(st,v,ops)
+  function C.leave(st,v,ops,destroyed)
     settle(st,v,ops)
     local child_ops=copy_ops(ops)
     for _,body in ipairs(v.carrying_parts) do
-      Loading.leave(st,body,child_ops)
+      Loading.leave(st,body,child_ops,destroyed)
       body.cargo_tile=nil
     end
     v.load_state=nil

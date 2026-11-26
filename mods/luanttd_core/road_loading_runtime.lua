@@ -257,23 +257,27 @@ return function(Timing,Packets)
     return {vehicle=v.id,loaded=m.loaded,unloaded=m.unloaded,delivered=m.delivered,transferred=m.transferred}
   end
 
-  function L.leave(st,v,ops)
+  function L.leave(st,v,ops,destroyed)
     local l=v.load_state
     if not l then return end
     assert(st.id==l.station)
     settle(st,v,ops)
-    -- CancelReservation pops the reserved tail back to this station,
-    -- not the other vehicle queues.
-    for i=#l.reserved,1,-1 do
-      local p=l.reserved[i]
-      drop(p,st,v,ops)
-      append(st,v,p,ops)
-    end
-    if #l.unload>0 then
-      local onboard={}
-      for _,item in ipairs(l.unload) do onboard[#onboard+1]=item.packet end
-      for _,p in ipairs(v.batches) do onboard[#onboard+1]=p end
-      v.batches=onboard
+    -- Vehicle::Crash does not transfer reserved packets back to the
+    -- station. Ordinary departure still follows CancelReservation.
+    if not destroyed then
+      -- CancelReservation pops the reserved tail back to this station,
+      -- not the other vehicle queues.
+      for i=#l.reserved,1,-1 do
+        local p=l.reserved[i]
+        drop(p,st,v,ops)
+        append(st,v,p,ops)
+      end
+      if #l.unload>0 then
+        local onboard={}
+        for _,item in ipairs(l.unload) do onboard[#onboard+1]=item.packet end
+        for _,p in ipairs(v.batches) do onboard[#onboard+1]=p end
+        v.batches=onboard
+      end
     end
     v.load_state=nil
     if not ops.part_of_consist then

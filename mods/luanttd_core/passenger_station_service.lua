@@ -618,7 +618,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     if v.load_state then
       local st=assert(state.stations[v.load_state.station])
       local ops=options(state,tick,ctx,events)
-      if v.carrying_parts then Compartments.leave(st,v,ops) else Loading.leave(st,v,ops) end
+      if v.carrying_parts then Compartments.leave(st,v,ops,true) else Loading.leave(st,v,ops,true) end
     end
     v.crashed,v.stopped,v.units,v.batches=true,true,0,{}
     for _,part in ipairs(v.carrying_parts or {}) do part.units,part.batches=0,{} end

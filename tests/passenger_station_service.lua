@@ -237,3 +237,30 @@ step(function(leave,events)
   assert(#state.stations[1].loading_order==0)
 end)
 print("PASS: stock explicit skip ends real loading visit once, returns reserved packets, and preserves the train")
+
+-- RC1 Vehicle::Crash settles payment for deliveries that already
+-- happened, but unlike LeaveStation never returns reserved cargo.
+for _,coaches in ipairs({false,2}) do
+  state=S.new(10289);t=0
+  S.station(state,{id=1,town=101,owner="A",tiles={block(4,5,"rail"),block(5,5,"rail"),block(6,5,"rail")}},ctx)
+  S.vehicle(state,{id=1,mode="rail",owner="A",speed=80,built=1940,length=24,passenger_coaches=coaches or nil})
+  step(function(_,events) begin(1,1,1,at(5,5),{full=true,platform_tiles=3,cargo_tiles=coaches and {at(5,5),at(6,5)} or nil},events) end)
+  step()
+  step(function() assert(S.produce(state,4,4,60,101,ctx)==41) end)
+  for _=1,19 do step() end
+  state=clone(state)
+  local v=state.vehicles[1]
+  local visible,available=S.waiting(state,1)
+  assert(v.units>0 and visible>available and v.load_state.reserved_units==visible-available)
+  local events={}
+  assert(S.crash_rail(state,1,t,ctx,events))
+  assert(not S.crash_rail(state,1,t,ctx,events))
+  local after_visible,after_available=S.waiting(state,1)
+  assert(after_visible==available and after_available==available and #state.stations[1].loading_order==0)
+  assert(v.crashed and v.stopped and v.units==0 and #v.batches==0 and not v.load_state)
+  assert(not state.companies.A and #events==0)
+  for _,body in ipairs(v.carrying_parts or {}) do
+    assert(body.units==0 and #body.batches==0 and not body.load_state)
+  end
+end
+print("PASS: RC1 crash destroys aboard and reserved passengers on single and multiple loading bodies")
