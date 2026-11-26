@@ -44,7 +44,7 @@ local function tile_bytes(t,tables)
   local presence=(c~=nil and 1 or 0)+(r~=nil and 2 or 0)+(k and 4 or 0)
   local wood=t.wood
   if wood~=nil then
-    if type(wood)~="table" or tables[wood] then return end
+    if type(wood)~="table" or tables and tables[wood] then return end
     local class,kind,count=wood.class,wood.type,wood.count
     local ground,density,growth,salt=wood.ground,wood.density,wood.growth,wood.water_class
     if not (tiny_int(class,255) and tiny_int(kind,255) and tiny_int(count,255)
@@ -54,6 +54,72 @@ local function tile_bytes(t,tables)
     return char(WOODED_TILE,h,flags,presence,c or 0,r or 0,class,kind,count,ground,density,growth,salt and 1 or 0),wood
   end
   return char(TILE,h,flags,presence,c or 0,r or 0)
+end
+
+local function decode_cell(source,at,tag)
+  local h,flags,presence,c,r=byte(source,at,at+4)
+  assert(r and presence<=7,"Invalid packed campaign ground")
+  at=at+5
+  local t={h=h,variant=floor(flags/4)%4,terrain=assert(terrains[flags%4+1],"Unknown packed terrain")}
+  local w=floor(flags/16)%4
+  if w>0 then t.water_class=assert(waters[w],"Unknown packed water") end
+  if floor(flags/64)%2==1 then t.stock_void=true end
+  if flags>=128 then t.coastal_water=true end
+  if presence%2==1 then t.stock_clear_ground=c end
+  if floor(presence/2)%2==1 then t.stock_river_bits=r end
+  if presence>=4 then t.stock_water_rocks=true end
+  if tag==WOODED_TILE then
+    local c,k,n,g,d,v,salt=byte(source,at,at+6)
+    assert(salt and salt<=1,"Invalid packed woodland")
+    at=at+7
+    local wood={class=c,type=k,count=n,ground=g,density=d,growth=v,water_class=salt==1 and "sea" or nil}
+    t.wood=wood
+  end
+  return t,at
+end
+
+-- The main VM no longer mutates the original campaign after handoff.
+-- Keep only a coordinate fallback for bootstrap presentation until real
+-- sectors arrive. Unusual tiles keep their original field tables;
+-- ordinary land, water and woodland use the exact checkpoint layout.
+function M.host_tile_view(tiles)
+  local n=#tiles
+  local pages,rows,rich={},{},{}
+  local page_size,cell_size,cache_size=4096,13,512
+  local empty=string.rep("\0",cell_size)
+  local padding=sub(empty,1,7)
+  for i=1,n do
+    local tile=tiles[i]
+    local encoded=type(tile)=="table" and tile_bytes(tile)
+    if not encoded then
+      rich[i]=tile
+      encoded=empty
+    elseif #encoded==6 then
+      encoded=encoded..padding
+    end
+    local offset=(i-1)%page_size+1
+    rows[offset]=encoded
+    if offset==page_size or i==n then
+      pages[#pages+1]=table.concat(rows,"",1,offset)
+    end
+  end
+  local cache,ids={},{}
+  return setmetatable({},{
+    __index=function(_,i)
+      if type(i)~="number" or i<1 or i>n or i%1~=0 then return end
+      if rich[i] then return rich[i] end
+      local slot=(i-1)%cache_size+1
+      if ids[slot]==i then return cache[slot] end
+      local page=pages[floor((i-1)/page_size)+1]
+      local first=((i-1)%page_size)*cell_size+1
+      local tag=byte(page,first)
+      if tag~=TILE and tag~=WOODED_TILE then return end
+      local tile=decode_cell(page,first+1,tag)
+      ids[slot],cache[slot]=i,tile
+      return tile
+    end,
+    __newindex=function() error("snapshot tiles are owned by the campaign worker") end,
+  })
 end
 
 function M.encode(root,pulse)
@@ -203,26 +269,10 @@ function M.decode(source)
         t[key]=value
       end
     elseif tag==TILE or tag==WOODED_TILE then
-      local h,flags,presence,c,r=byte(source,at,at+4)
-      assert(r and presence<=7,"Invalid packed campaign ground")
-      at=at+5
-      local t={h=h,variant=floor(flags/4)%4,terrain=assert(terrains[flags%4+1],"Unknown packed terrain")}
-      local w=floor(flags/16)%4
-      if w>0 then t.water_class=assert(waters[w],"Unknown packed water") end
-      if floor(flags/64)%2==1 then t.stock_void=true end
-      if flags>=128 then t.coastal_water=true end
-      if presence%2==1 then t.stock_clear_ground=c end
-      if floor(presence/2)%2==1 then t.stock_river_bits=r end
-      if presence>=4 then t.stock_water_rocks=true end
+      local t,after=decode_cell(source,at,tag)
+      at=after
       tables[#tables+1]=t
-      if tag==WOODED_TILE then
-        local c,k,n,g,d,v,salt=byte(source,at,at+6)
-        assert(salt and salt<=1,"Invalid packed woodland")
-        at=at+7
-        local wood={class=c,type=k,count=n,ground=g,density=d,growth=v,water_class=salt==1 and "sea" or nil}
-        t.wood=wood
-        tables[#tables+1]=wood
-      end
+      if t.wood then tables[#tables+1]=t.wood end
       return t
     elseif tag==STR then
       local value=str()

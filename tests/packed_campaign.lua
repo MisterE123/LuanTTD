@@ -57,6 +57,31 @@ print("PASS packed integer fragment cache retains exact existing checkpoint byte
 -- Exercise graph aliases using a real paid and routed stock fleet.
 dofile("tests/road_route_geometry_cache.lua")
 
+do
+  local packed=dofile("mods/luanttd_core/packed_campaign.lua")
+  local tiles={}
+  for i=1,4098 do
+    tiles[i]={h=i%12,variant=i%4,terrain="grass",stock_clear_ground=i%3}
+  end
+  tiles[8]={h=0,variant=1,terrain="water",water_class="sea",coastal_water=true,
+    stock_water_rocks=true,wood={class=4,type=2,count=1,ground=3,density=3,growth=4,water_class="sea"}}
+  tiles[4097]={h=2,variant=0,terrain="grass",build="road",marker={x=71}}
+  local fallback=packed.host_tile_view(tiles)
+  local function same(a,b)
+    if a==b then return true end
+    if type(a)~="table" or type(b)~="table" then return false end
+    for k,v in pairs(a) do if not same(v,b[k]) then return false end end
+    for k in pairs(b) do if a[k]==nil then return false end end
+    return true
+  end
+  assert(not fallback[0] and not fallback[4099] and not fallback[1.2])
+  for i,t in ipairs(tiles) do assert(same(t,fallback[i])) end
+  assert(fallback[4097]==tiles[4097] and fallback[8].wood.water_class=="sea")
+  assert(not pcall(function() fallback[8]={} end))
+  assert(fallback[1].h==1 and fallback[513].h==9 and fallback[1].h==1)
+  print("PASS compact host tile reads across storage pages, cache replacement and rich fallback")
+end
+
 -- Stock woodland has two adjacent table IDs in the compact form.
 local w={class=4,type=3,count=1,ground=0,density=3,growth=6}
 local shore={class=4,type=4,count=2,ground=3,density=3,growth=0,water_class="sea"}

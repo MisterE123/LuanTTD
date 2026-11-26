@@ -68,6 +68,12 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
         first_ready=true
         ui.install_worker_controls(H)
         present(projection)
+        -- Initial placement and the durable handoff are both complete.
+        -- Keep old coordinate reads as a compact bootstrap fallback;
+        -- rendering and gameplay still read the owner's live sectors.
+        if callbacks.compact_bootstrap and #api.s.tiles>=256*256 then
+          api.s.tiles=callbacks.compact_bootstrap(api.s.tiles)
+        end
       end
       for _,p in ipairs(core.get_connected_players()) do
         local n=p:get_player_name()

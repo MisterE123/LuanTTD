@@ -15,12 +15,16 @@ cat tests/campaign_worker_session_probe.lua >> "$game/mods/luanttd_core/init.lua
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-40024}
 display=${BAYLINE_NATIVE_DISPLAY:-199}
+size=${LUANTTD_NATIVE_SESSION_SIZE:-64}
 cat >"$out/server.conf" <<CONF
 port = $port
 bind_address = 127.0.0.1
 server_announce = false
-bayline_generated_map_width = 64
-bayline_generated_map_depth = 64
+bayline_generated_map_width = $size
+bayline_generated_map_depth = $size
+bayline_generated_towns = 3
+bayline_generated_industries = 5
+bayline_seed = 1751
 bayline_generated_relief = 0
 bayline_generated_coasts = 0
 singleplayer_mode = false
@@ -44,7 +48,7 @@ env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen
 xv=$!; server="" client=""
 trap 'if [[ -n "$client" ]]; then kill "$client" 2>/dev/null || true;fi; if [[ -n "$server" ]]; then kill "$server" 2>/dev/null || true;fi;kill "$xv" 2>/dev/null || true;wait 2>/dev/null || true' EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
-mark(){ for _ in {1..160}; do grep -q "$1" "$log" && return; kill -0 "$server" 2>/dev/null || break; sleep .25; done; tail -70 "$log"; return 1; }
+mark(){ for _ in {1..400}; do grep -q "$1" "$log" && return; kill -0 "$server" 2>/dev/null || break; sleep .25; done; tail -70 "$log"; return 1; }
 for part in 1 2; do
   log="$out/server-$part.log"
   luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$log" 2>&1 &

@@ -418,3 +418,31 @@ only releases the temporary decoder storage.
 Packed graph, alias, cycle and woodland tests passed, as did the
 native quiet-host continuation and in-place recovery from a durable
 checkpoint after an injected worker failure.
+
+### Compact the presentation host's bootstrap tiles after handoff
+
+Once the starting area is placed and the worker has sealed and opened
+the durable campaign, the presentation host replaces its old dense tile
+tables with a compact coordinate fallback. Ordinary land, water and
+woodland use the existing field representation. Special tiles retain
+their original records. The worker keeps its complete authoritative
+map; the host still paints, picks, and updates live terrain from sparse
+worker sectors. The save format and simulation are unchanged.
+
+On the same native 1024×1024 world, the host's Lua heap after collection
+was **349.4 → 166.4 MiB** (about **183 MiB lower**, after the separate
+decoder fix). The worker remained at **346 MiB**. The 512×512 host fell
+from **105.6 to 61.4 MiB**. The existing corner grid and other small
+presentation and bootstrap records remain. These are Lua heap results,
+not total process memory. The compact fallback is built once at handoff,
+not during rendering; the 1024×1024 prototype built it in about 220 ms.
+
+A fresh 512×512 native graphical session admitted the player, accepted
+real horizontal input, persisted a company transaction, and streamed
+a far-away sector after a jump while forgetting the previous sector.
+A restart reopened the same company, clock, and command revision.
+The standard 64×64 session also passed. To repeat the larger test:
+
+```sh
+LUANTTD_NATIVE_SESSION_SIZE=512 tests/campaign_worker_session_native.sh
+```
