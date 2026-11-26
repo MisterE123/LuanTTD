@@ -122,3 +122,33 @@ for 12 days, including 48 station arrivals. The focused regressions
 also exercise bridges, tunnels, opposite lanes, on-road bays, road/tram
 crossings and save/reload. These results measure worker processing, not
 frame rate or a guarantee against live checkpoint-related stutters.
+
+## Reuse identical stock road geometry, not pathfinding decisions
+
+In a 192-bus live checkpoint, 144 vehicles held a second copy of an
+already present sequence of route poses. The stock pathfinder must
+still run for every departure: live traffic can affect which trace it
+chooses. After pathfinding, LuanTTD can reuse the completed read-only
+motion rows for the same ground trace and the same depot/stop and
+one-way geometry. Vehicles still have separate route arrays and
+independent cursors, speeds, orders, cargo, and economy. The cache is
+per campaign and bounded. Bridges, tunnels, paired arrival bays and
+mid-leg replans still compile using the original path; their context
+cannot be reduced to an ordinary ground-leg key.
+
+```sh
+tests/road_route_geometry_perf_native.sh "$(command -v luantiserver)" \
+  cac41ca3c3284dae03a9d363aa9874154da275e6 /tmp/luanttd-route-sharing
+```
+
+Two sets of four paired native Lua async measurements gave medians of
+**343 → 81 ms** and **391 → 95 ms** for encoding and compressing the
+checkpoint (excluding hashing and disk I/O). All 251,904 pose references
+are still present; they now reference 31,488 unique rows instead of
+251,904. Uncompressed checkpoint data fell from 8.7 MB to 2.1–2.2 MB,
+and the compressed file payload from roughly 192–194 kB to 137–146 kB.
+The restored worlds were stepped for 12 days and matched all saved
+gameplay values and each vehicle's 75 daily pose/visibility samples;
+the regression test also verifies that replacing one vehicle's route
+tail cannot affect its peer after saving and reopening. The disk format
+and atomic write are unchanged.

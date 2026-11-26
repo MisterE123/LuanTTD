@@ -29,6 +29,61 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     for i=entry,#second do bays.second[#bays.second+1]=second[i] end
     return frames,bays
   end
+  -- The stock search runs for every vehicle (traffic affects its result).
+  -- Once it has selected a leg, ground motion's inputs are just the
+  -- ordered tile/trackdir pairs and their effective ground geometry.
+  -- Do not include spans in this cache: the motion compiler reads their
+  -- partnered heads and live span metadata while crossing the interior.
+  local ground_kind={road=0,drive_stop=1,bay_stop=2,depot=3}
+  local campaign_legs=setmetatable({},{__mode="k"})
+  local canonical_leg=setmetatable({},{__mode="k"})
+  local function ordinary_frames(s,board,trace,origin_bay,dest)
+    if not dest or dest.pair or #trace>512 then return R.frames(board,trace,nil,origin_bay) end
+    local key={Sim.W,Sim.H,origin_bay or 0}
+    for _,piece in ipairs(trace) do
+      local tile=board.tile(piece.tile)
+      local kind=tile and ground_kind[tile.kind]
+      if not kind or tile.tunnel then return R.frames(board,trace,nil,origin_bay) end
+      local td,dir,disallowed=piece.td,tile.dir or 4,tile.disallowed or 0
+      -- These fields are the ground-only inputs to MotionLeg.compile.
+      -- Do not fold a non-stock descriptor into another key; a 4 in the
+      -- direction field denotes an absent direction, not a compass point.
+      if td<0 or td>15 or td%1~=0 or dir<0 or dir>4 or dir%1~=0 or
+          disallowed<0 or disallowed>3 or disallowed%1~=0 then
+        return R.frames(board,trace,nil,origin_bay)
+      end
+      key[#key+1]=piece.tile
+      key[#key+1]=td+16*(kind+(tile.waypoint and 4 or 0)+8*(dir+5*disallowed))
+    end
+    key=table.concat(key,":")
+    local cache=campaign_legs[s]
+    if not cache then
+      cache={values=setmetatable({},{__mode="v"}),keys={},slots={},next=1}
+      campaign_legs[s]=cache
+    end
+    local frames=cache.values[key]
+    if not frames then
+      frames=R.frames(board,trace,nil,origin_bay)
+      if not frames then return end
+      local at=cache.slots[key]
+      if not at then
+        at=cache.next
+        local evict=cache.keys[at]
+        if evict then cache.values[evict],cache.slots[evict]=nil,nil end
+        cache.keys[at],cache.slots[key],cache.next=key,at,at%128+1
+      end
+      cache.values[key]=frames
+    end
+    -- The compiler finishes all edits before returning. Runtime treats
+    -- position rows as read-only, but each vehicle owns its list (a bay
+    -- commit can replace a tail; it must never edit somebody else's list).
+    -- Keep a strong reference to the canonical list as long as any copy
+    -- uses its rows, without persisting that transient reference.
+    local own={}
+    for i=1,#frames do own[i]=frames[i] end
+    canonical_leg[own]=frames
+    return own
+  end
   -- Concatenate stock pathfinder legs by the exact trackdir of the
   -- moving front. The waypoint is a destination for YAPF, never a
   -- stopping frame; the complete motion raster is compiled only once.
@@ -104,7 +159,7 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     local origin=source.pair and vehicle and vehicle.road_stop_pose
     local row=origin and origin[6]
     local origin_bay=row and row>=32 and row<48 and math.floor(row/2)%2 or nil
-    local frames,bays=R.frames(board,trace,nil,origin_bay)
+    local frames,bays=ordinary_frames(s,board,trace,origin_bay,board.tile(trace[#trace].tile))
     -- Do not fall back to a ground-plane line between bridgeheads if a
     -- stale or malformed span cannot produce its selected crossing.
     if (bridge or source.pair or dest.pair or waypoints and #waypoints>0) and not frames then return nil end

@@ -53,3 +53,6 @@ for n=0,25000 do numeric[n]=(n%7==0 and -n or n) end
 local roundtrip=P.decode(P.encode(numeric))
 for n=0,25000 do assert(roundtrip[n]==numeric[n]) end
 print("PASS packed integer fragment cache retains exact existing checkpoint bytes and numeric keys")
+
+-- Exercise graph aliases using a real paid and routed stock fleet.
+dofile("tests/road_route_geometry_cache.lua")
