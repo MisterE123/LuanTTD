@@ -1,5 +1,11 @@
 # AutoRail
 
+In a worker-owned campaign, the ghost and price come from the complete
+board. Hold the end of a drag until its price appears. Releasing commits
+only that footprint and charge; if the track or price changes, no money
+is spent. The worker also provides seam context for existing diagonal
+track and connected station canopies at the edge of a loaded map sector.
+
 Open **Railworks** from Home, then select **Lay Track**.
 Hold left-click on the starting tile, aim along the route, then release
 to build the priced preview. Right-click while holding, or change tools,

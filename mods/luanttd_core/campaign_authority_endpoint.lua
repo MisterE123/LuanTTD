@@ -66,6 +66,29 @@ return function(Sim,R,max_days)
     return reply(true,nil,data)
   end
   local rail_quotes,quote_sequence={},0
+  local function auto_quote(rail,name,request,gauge)
+    local start,last=request.start,request.finish
+    if type(start)~="table" or type(last)~="table" or
+      not (integer(start.x,16,Sim.W*16+15) and integer(start.z,16,Sim.H*16+15)
+        and integer(last.x,16,Sim.W*16+15) and integer(last.z,16,Sim.H*16+15))
+      or math.abs(start.x-last.x)+math.abs(start.z-last.z)>=128*16 then
+      return nil,"INVALID_RAIL_DRAG"
+    end
+    return rail.quote_autotrack(name,start,last,gauge)
+  end
+  local function auto_offer(q,name)
+    local draw=R.rail_preview and R.rail_preview(q.pieces,name) or nil
+    local stamp={q.price,q.tree_count or 0,q.stopped_at or "-",q.skipped_start or 0}
+    for _,p in ipairs(q.pieces) do
+      stamp[#stamp+1]=table.concat({p.id,p.tracks,p.result_railtype or 0,p.crossing_quote and 1 or 0},",")
+    end
+    for _,g in ipairs(draw or {}) do
+      stamp[#stamp+1]=g.mesh.."/"..g.pos.y
+    end
+    return {tiles=q.ids,cost=q.price,pieces=not draw and q.pieces or nil,
+      draw=draw,ticket=table.concat(stamp,":"),stopped_at=q.stopped_at,
+      skipped_start=q.skipped_start,tree_count=q.tree_count}
+  end
   function A.rail_quote(name,request,peek)
     local rail=R.rail and R.rail.build
     if not owner(name) or not rail or type(request)~="table" or not s.companies[name] then
@@ -74,16 +97,8 @@ return function(Sim,R,max_days)
     local gauge=request.railtype
     if gauge~=nil and not integer(gauge,0,3) then return reply(false,"INVALID_RAIL_TYPE") end
     if request.tool=="autotrack" then
-      local start,last=request.start,request.finish
-      if type(start)~="table" or type(last)~="table" or
-        not (integer(start.x,16,Sim.W*16+15) and integer(start.z,16,Sim.H*16+15)
-          and integer(last.x,16,Sim.W*16+15) and integer(last.z,16,Sim.H*16+15))
-        or math.abs(start.x-last.x)+math.abs(start.z-last.z)>=128*16 then
-        return reply(false,"INVALID_RAIL_DRAG")
-      end
-      local q,why=rail.quote_autotrack(name,start,last,gauge)
-      if peek then return reply(q~=nil,why,q and {tiles=q.ids,cost=q.price,pieces=q.pieces,
-        stopped_at=q.stopped_at,skipped_start=q.skipped_start,tree_count=q.tree_count}) end
+      local q,why=auto_quote(rail,name,request,gauge)
+      if peek then return reply(q~=nil,why,q and auto_offer(q,name)) end
       rail_quotes[name]=nil
       if not q then return reply(false,why) end
       quote_sequence=quote_sequence+1
@@ -507,6 +522,23 @@ return function(Sim,R,max_days)
         end
       end
       ok,note=R.transport.start(name,c)
+    elseif c.kind=="rail_place" and R.rail and R.rail.build and s.companies[name] then
+      local req=c.request
+      if type(req)~="table" or req.tool~="autotrack" or req.railtype~=nil and not integer(req.railtype,0,3)
+        or c.ticket~=nil and (type(c.ticket)~="string" or #c.ticket>16384) then
+        return reply(false,"INVALID_RAIL_DRAG")
+      end
+      local current,error_=auto_quote(R.rail.build,name,req,req.railtype)
+      if not current then return reply(false,error_) end
+      if #current.ids>1 and not c.ticket then
+        return reply(false,"Hold on the end of the drag until the track and price appear.")
+      end
+      local offer=auto_offer(current,name)
+      if c.ticket and c.ticket~=offer.ticket then
+        return reply(false,"The rail preview changed. Check the new track and price before building.")
+      end
+      ok,note=R.rail.build.build(name,current)
+      if ok then value={tiles=current.ids,cost=current.price} end
     elseif c.kind=="rail_commit" then
       local quote=rail_quotes[name]
       rail_quotes[name]=nil
@@ -632,7 +664,7 @@ return function(Sim,R,max_days)
       ok,note=Sim.toggle(s,name,c.vehicle)
     else return reply(false,"UNKNOWN_OR_INVALID_COMMAND") end
     if ok then
-      if R.guide then R.guide.changed(value) end
+      if R.guide then R.guide.changed(c.kind=="rail_place" and value.tiles or value) end
       if R.news and previous_topology~=s.topology then R.news.topology_changed() end
       authority_revision=authority_revision+1
       s.authority_revision=authority_revision
@@ -642,6 +674,9 @@ return function(Sim,R,max_days)
   -- Keep the validation and mutation under the same owner turn.
   function A.road_place(name,request,quote)
     return A.command(name,{kind="road_place",request=request,quote=quote,revision=authority_revision})
+  end
+  function A.rail_place(name,request,ticket)
+    return A.command(name,{kind="rail_place",request=request,ticket=ticket,revision=authority_revision})
   end
   -- Keep an exact, bounded scene cache in the worker. Topology alone
   -- misses houses, fields, wet corners and signal changes.
@@ -660,7 +695,10 @@ return function(Sim,R,max_days)
     if unchanged then
       for _,row in ipairs(old.tiles) do
         local t=s.tiles[row.id]
+        local rail_diagonal,rail_canopy
+        if R.rail_scene_context then rail_diagonal,rail_canopy=R.rail_scene_context(s,row.id,t) end
         if not projection.matches_tile(t,row.surface)
+          or rail_diagonal~=row.rail_diagonal or rail_canopy~=row.rail_canopy
           or steps_at(row.id,t,row.slope,row.level)~=row.front_steps
           or dikes(row.id)~=row.surface.canal_dikes
           or (t.water_class=="river" and R.river_direction and R.river_direction(row.id) or nil)~=row.river_direction then
@@ -687,7 +725,9 @@ return function(Sim,R,max_days)
           local slope,level,top=R.terrain.tile(s.corner_grid,x+dx,z+dz)
           local surface=projection and projection.tile(t) or nil
           if surface then surface.canal_dikes=dikes(id) end
-          tiles[#tiles+1]={id=id,level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
+          local rail_diagonal,rail_canopy
+          if R.rail_scene_context then rail_diagonal,rail_canopy=R.rail_scene_context(s,id,t) end
+          tiles[#tiles+1]={id=id,rail_diagonal=rail_diagonal,rail_canopy=rail_canopy,level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
             rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station,
             surface=surface,front_steps=steps_at(id,t,slope,level),
             river_direction=t.water_class=="river" and R.river_direction and R.river_direction(id) or nil}

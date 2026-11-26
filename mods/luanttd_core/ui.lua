@@ -1522,6 +1522,7 @@ end
 function U.begin_autorail(p,id,hit)
   local V=view(p:get_player_name())
   if V.pick_order or not U.rail_gesture(V.tool) or not hit then return false end
+  if api.worker_build and api.worker_build.begin_rail then api.worker_build.begin_rail(p:get_player_name()) end
   V.rail_press={id=id,point=rail_point(id,hit)}
   return true
 end
@@ -1529,6 +1530,7 @@ function U.cancel_autorail(p)
   local V=view(p:get_player_name())
   if not V.rail_press then return end
   V.rail_press,V.rail_ghost=nil,nil
+  if api.worker_build and api.worker_build.begin_rail then api.worker_build.begin_rail(p:get_player_name()) end
   V.status="Rail drag canceled."
 end
 function worker_action(n,V,command,complete)
@@ -2299,12 +2301,12 @@ local function authority_preview(p,id,hit)
     label=(request.railtype==3 and "Maglev" or "Monorail").." · "..label
   end
   local q,why,pending=client.preview(n,kind,request,core.get_us_time())
-  if tool=="rail_autotrack" then V.rail_ghost=q and {id=id,pieces=q.pieces} or nil end
+  if tool=="rail_autotrack" then V.rail_ghost=q and {id=id,pieces=q.draw and {records=q.draw} or q.pieces} or nil end
   -- A new hover is neither approved nor obstructed. Don't flash red
   -- while the worker validates the shape the player just selected.
   if not q then
     local tram=request.mode=="tram" or request.tool=="tram_facility"
-    if (kind=="road" or tram or request.mode=="air" or request.operation=="plant_tree" or
+    if (kind=="road" or tool=="rail_autotrack" or tram or request.mode=="air" or request.operation=="plant_tree" or
         request.operation=="purchase_land" or request.operation=="company_hq") and pending then return ids,nil,why end
     if tram and api.tram and why then why=api.tram.reason(why) end
     if request.mode=="air" and api.airfield and why then why=api.airfield.reason(why) end

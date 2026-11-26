@@ -15,8 +15,25 @@ return function(api)
   local rail_track=dofile(modpath.."/openttd/rail_track.lua")
   local diagonal=dofile(modpath.."/rail_diagonal.lua")(Sim,rail_track,terrain_view,
     api.trackworks and api.trackworks.surface,api.trackworks and api.trackworks.split_surface)
+  do
+    local context=dofile(modpath.."/rail_scene_context.lua")
+    local compute=terrain_view and context.make(Sim,diagonal,terrain_view)
+    function R.rail_diagonal_mode(id,bits)
+      if not projected then return diagonal.mode(S,id,bits) end
+      local t=S.tiles[id]
+      return context.mode(S.rail_diagonal[id],bits or (t and t.rail_tracks))
+    end
+    function R.rail_dual(id,bits)
+      if not projected then return diagonal.dual_variant(S,id,bits) end
+      return context.dual(S.rail_diagonal[id],bits)
+    end
+    function R.rail_canopy_mask(id,t)
+      if projected then return S.rail_canopy[id] end
+      if compute then local _,mask=compute(S,id,t);return mask end
+    end
+  end
   function R.rail_diagonal_pose(id,td,f)
-    local mode=diagonal.mode(S,id,2^rail_track.track(td))
+    local mode=R.rail_diagonal_mode(id,2^rail_track.track(td))
     if mode~=0 then return diagonal.sample(td,f,mode) end
   end
   local ids={}
@@ -290,20 +307,27 @@ return function(api)
   end
   function stock_rail.visual(id,bits,gauge)
     local art=stock_rail.guideway[gauge]
-    local pair=diagonal.dual_variant(S,id,bits)
+    local pair=R.rail_dual(id,bits)
     if pair then return stock_rail.dual[pair] end
     local eased=art and art.eased[bits] or not art and rail_eased[bits]
-    return eased and eased[diagonal.mode(S,id,bits)] or (art and art.flat[bits] or stock_rail[bits])
+    return eased and eased[R.rail_diagonal_mode(id,bits)] or (art and art.flat[bits] or stock_rail[bits])
   end
   for grade=1,4 do rail_grade[grade]=architecture("stock_rail_grade_"..grade,"rail_grade_"..grade,"rail_atlas") end
   function stock_rail.grade_art(grade,gauge)
     local art=stock_rail.guideway[gauge]
     return art and art.grade[grade] or rail_grade[grade]
   end
-  local rail_platform,rail_depot,rail_stock_layout={},{},{}
+  local rail_platform,rail_depot,rail_stock_layout={},{},{joins={}}
   for gfx=0,7 do
     local name="rail_station_gfx_"..gfx
     rail_stock_layout[gfx]=platform_architecture(name,name,"rail_architecture_atlas",PlatformWalk.stock(gfx))
+    if gfx>=4 then
+      rail_stock_layout.joins[gfx]={}
+      for mask=1,7 do
+        local asset=name.."_join_"..mask
+        rail_stock_layout.joins[gfx][mask]=architecture(asset,asset,"rail_architecture_atlas")
+      end
+    end
   end
   for axis=0,1 do
     local a="rail_platform_"..(2^axis)
@@ -312,6 +336,12 @@ return function(api)
   for dir=0,3 do
     local a="rail_depot_"..dir
     rail_depot[dir]=architecture("stock_"..a,a,"rail_architecture_atlas")
+  end
+  function rail_stock_layout.node(id,t)
+    local art=rail_stock_layout.joins[t.rail_station_gfx]
+    if not art then return end
+    local mask=R.rail_canopy_mask(id,t)
+    return mask and art[mask]
   end
   local coal_buildings={}
   local industry_layout_art=dofile(modpath.."/industry_layout_art.lua")
@@ -1093,7 +1123,7 @@ return function(api)
       end
     end
     function stock_scenery.rail_wire(id,t,x,z,under)
-      local mode=diagonal.mode(S,id)
+      local mode=R.rail_diagonal_mode(id)
       local art=api.electric_art.overlay(t.rail_tracks,0,t.rail_station_id and "platform" or "plain",x/2,z/2,nil,mode)
       if not art then return end
       local d=S.stock_rail_dispatch
@@ -1927,6 +1957,10 @@ return function(api)
               if wire then return wire end
             end
           end
+        end
+        if grade==0 and t.rail_station_id and (t.rail_type or 0)<2 and y==level+1 and x%2==1 and z%2==0 then
+          local extension=rail_stock_layout.node(id,t)
+          if extension then return extension end
         end
         if y<=level then return foundation~="none" and retaining or gnames[t.terrain][t.variant] end
         if x%2==0 and z%2==0 then

@@ -178,8 +178,22 @@ return function(api)
     local rail=bucket.rail or {};bucket.rail=rail
     local keep={}
     if pieces and rail_preview then
-      for _,record in ipairs(rail_preview(pieces,name,player:get_pos())) do
-        local id,mesh,pos=record.id,record.mesh,record.pos
+      local eye=player:get_pos()
+      local records=pieces.records or rail_preview(pieces,name,eye)
+      local first,last=1,#records
+      if pieces.records and eye and last>96 then
+        local nearest,best=1,math.huge
+        for i,record in ipairs(records) do
+          local pos=record.pos
+          local d=(pos.x-eye.x)^2+(pos.z-eye.z)^2
+          if d<best then nearest,best=i,d end
+        end
+        first=math.max(1,math.min(last-95,nearest-48))
+        last=first+95
+      end
+      for i=first,last do
+        local record=records[i]
+        local id,mesh,pos=record.id..":"..record.pos.y,record.mesh,record.pos
         local p=rail[id]
         if not p or not p.object:get_pos() then
           local object=core.add_entity(pos,rail_entity,name)

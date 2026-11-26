@@ -81,6 +81,37 @@ def platform(g, family):
     return m
 
 
+def seam(gfx, mask):
+    family, axis = gfx-gfx%2, gfx%2
+    sign = -1 if family==4 else 1
+    # Rotating +X to -Z reverses the sense of the two end bits.
+    ends = ((mask & 1)<<1)|((mask & 2)>>1) if axis else mask & 3
+    m = R.Mesh(R.terrain_height(0))
+    roof=lambda x,z:1.43+.34*(1-((z+sign)/2)**2)
+    def glass(x0,x1,z0,z1):
+        corners=[(x0,z0),(x1,z0),(x1,z1),(x0,z1)]
+        m.face("Continuous canopy glazing", A.P["Window glass"], [(x,z,roof(x,z)-.009) for x,z in corners])
+        m.face("Canopy liner", A.P["Window glass"], [(x,z,roof(x,z)-.029) for x,z in corners[::-1]])
+    for end in (-1,1):
+        if not ends & (1 if end<0 else 2):
+            continue
+        for low,high in ((-.65,-.31),(-.31,0),(0,.31),(.31,.65)):
+            glass(-1 if end<0 else .952,-.952 if end<0 else 1,low+.0045,high-.0045)
+    if mask & 4:
+        low,high = (.65,1) if sign<0 else (-1,-.65)
+        glass(-1 if ends & 1 else -.952,1 if ends & 2 else .952,low,high)
+    if axis:
+        m=A.rotated(m,3)
+    overlay=R.Mesh(R.terrain_height(0))
+    for group,faces in m.parts.items():
+        for face,color in faces:
+            verts=m.vertices[group]
+            # Renderer puts the supplemental glass in the spare node one
+            # unit to the right; compensate instead of replacing the platform.
+            overlay.face(group,color,[(verts[i][0]-1,verts[i][1],verts[i][2]) for i in face])
+    return overlay
+
+
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.preferences.filepaths.save_version=0
@@ -95,6 +126,13 @@ def main():
             col=R.stash(mesh,mats,name)
             R.instance(bpy.context.scene,col,3*(family//2),3*axis)
             R.export_obj(R.MODELS/f"bl_rail_station_gfx_{gfx}.obj",mesh,generator=Path(__file__).name)
+    for gfx in range(4,8):
+        for mask in range(1,8):
+            mesh=seam(gfx,mask)
+            name=f"Supplemental canopy glazing {gfx} join {mask}"
+            col=R.stash(mesh,mats,name)
+            R.instance(bpy.context.scene,col,3*gfx,12+3*mask)
+            R.export_obj(R.MODELS/f"bl_rail_station_gfx_{gfx}_join_{mask}.obj",mesh,generator=Path(__file__).name)
     bpy.ops.wm.save_as_mainfile(filepath=str(R.ROOT/"art/rail_station_layouts.blend"),compress=True)
 
 
