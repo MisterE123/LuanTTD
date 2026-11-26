@@ -45,10 +45,10 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     if t.ship and t.ship.water_ground and t.ship.water_class=="sea" then return "station" end
     if rail_ok(s,id,t) then return "rail" end
     if t.build=="stock_rail_bridge" and t.rail_span_id then return "rail_bridge" end
-    if t.build=="road_station" and t.station and t.stop_axis and (t.roadtype or 0)==0
-        and not (t.road_stop_pair or t.tram or t.ship or t.airfield or t.rail_tracks or t.level_crossing) then
+    if t.build=="road_station" and t.station and (t.stop_axis or t.road_stop_pair) and (t.roadtype or 0)==0
+        and not (t.tram or t.ship or t.airfield or t.rail_tracks or t.level_crossing) then
       for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return "protected" end end
-      return "through_stop"
+      return t.road_stop_pair and "bay_stop" or "through_stop"
     end
     if floodable_object(t) and (t.terrain=="grass" or t.terrain=="hill") then
       for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return "protected" end end
@@ -96,7 +96,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         return {kind=kind,id=id,slope=slope,base=base,foundation_slope=adjusted,
           foundation_base=base+rise,platform=platform,tracks=t.rail_tracks,ground=t.rail_ground or 0,water_ground=t.rail_ground==13}
       end
-      if kind=="through_stop" then return {kind=kind,id=id,slope=slope,base=base} end
+      if kind=="through_stop" or kind=="bay_stop" then return {kind=kind,id=id,slope=slope,base=base} end
       if kind=="object" then return {kind=kind,slope=slope,base=base,can_flood=true} end
       return {kind=kind,slope=slope,base=base,water_class=kind=="station" and "sea" or t.water_class,
         rocks=t.stock_water_rocks or (kind=="clear" and t.stock_clear_ground==2) or nil,
@@ -187,7 +187,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         else
           t.rail_tracks,t.rail_ground=q.tracks,q.ground
         end
-      elseif change.from=="through_stop" then
+      elseif change.from=="through_stop" or change.from=="bay_stop" then
         -- An earlier parcel of this same station could have changed
         -- its active order guard. Do not commit a now-unsafe removal.
         changed=B.clear_road_stop(id,true,B.tick)

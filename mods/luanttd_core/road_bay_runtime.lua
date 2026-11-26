@@ -33,6 +33,24 @@ return function(Occupancy)
     return {first=not O.bay_free(rs,0),second=not O.bay_free(rs,1),entrance=O.entrance_busy(rs)}
   end
 
+  -- RC1 DeleteLastRoadVeh calls RoadStop::Leave only when the wreck's
+  -- final physical body is actually deleted. The claim survives the crash.
+  function R.retire_wreck(s,v)
+    local claim=v.road_bay_claim
+    if not claim then return end
+    local f=v.road_stop_pose
+    local rs=assert(stop(s,claim.tile))
+    assert(f and f[4]==claim.tile and claim.phase=="parked" and not O.bay_free(rs,claim.bay))
+    O.leave(s.stock_road_bays,board(s),claim.tile,actor(v,f))
+    v.road_bay_claim=nil
+  end
+  function R.coastal_clear(s,id,apply)
+    local rs=stop(s,id)
+    if not rs or rs.status~=3 then return false end
+    if apply then return O.clear(s.stock_road_bays,board(s),id) end
+    return true
+  end
+
   -- Read-only proposal. The caller still needs lane proximity/height,
   -- crossing and one-way permission before applying any mutation.
   function R.propose(s,v,old,next_pose,index)

@@ -55,6 +55,7 @@ CONF
 use_market=false
 if [[ ${LUANTTD_NATIVE_ASIASTAR:-false} == true || ${LUANTTD_NATIVE_TIM:-false} == true || ${LUANTTD_NATIVE_DASH:-false} == true || ${LUANTTD_NATIVE_DASH_COACH:-false} == true || ${BAYLINE_NATIVE_SH_8P:-false} == true || ${BAYLINE_NATIVE_MANLEY:-false} == true || ${BAYLINE_NATIVE_MANLEY_COACH:-false} == true || ${BAYLINE_NATIVE_ELECTRIC:-false} == true || ${BAYLINE_NATIVE_SH_40:-false} == true ]]; then use_market=true; fi
 cat > "$out/native.conf" <<EOF_CONF
+luanttd_qa_coastal_road_bay = ${LUANTTD_NATIVE_ROAD_FLOOD_BAY:-false}
 luanttd_qa_coastal_rail_bridge = ${LUANTTD_NATIVE_RAIL_FLOOD_BRIDGE:-false}
 luanttd_qa_coastal_platform_rail = ${LUANTTD_NATIVE_RAIL_FLOOD_PLATFORM:-false}
 luanttd_qa_coastal_signed_rail = ${LUANTTD_NATIVE_RAIL_FLOOD_SIGNALS:-false}

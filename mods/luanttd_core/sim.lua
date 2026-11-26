@@ -4936,7 +4936,8 @@ function M.coastal_road_stop_runtime(s)
       -- The mounted target is a flat through-stop, so its stock running
       -- surface is at sea level; only its actual boarding body qualifies.
       if v and v.home_depot and v.cargo=="passenger" and v.load_state and not v.route and
-          v.load_state.station==t.station and M.stock_road_frame_z(s,v.road_stop_pose)<=0 then
+          v.load_state.station==t.station and M.stock_road_frame_z(s,v.road_stop_pose)<=0 and
+          (not t.road_stop_pair or v.road_bay_claim and v.road_bay_claim.phase=="parked") then
         local n=station_service.crash(s,v,tick)
         if n~=nil then
           v.road_flood_age=flood.road_crash_age(true)
@@ -4951,6 +4952,7 @@ function M.coastal_road_stop_runtime(s)
     local station=t.station and s.stations[t.station]
     if not station or station.mode~="road" or station.tram_only or not road_stop_members.current(station)[id] then return false end
     if not apply and physical(tick)[id] then return false end
+    if t.road_stop_pair and not road_clock().bay.coastal_clear(s,id,false) then return false end
     local result=road_stop_members.preview(station,{{id=id}})
     for _,v in pairs(s.fleet) do
       local e=M.vehicles[v.engine]
@@ -4970,6 +4972,10 @@ function M.coastal_road_stop_runtime(s)
       refresh_road_station_sites(s,station)
     else
       M.retire_road_station(s,station.id)
+    end
+    if t.road_stop_pair then
+      assert(road_clock().bay.coastal_clear(s,id,true),"A coastal bay changed during clearance")
+      t.road_stop_pair=nil
     end
     t.build,t.owner,t.road_bits,t.road_town,t.roadside,t.stock_roadside_town=nil,nil,nil,nil,nil,nil
     t.station,t.stop_axis,t.road_terminal_level,t.road_stop_type=nil,nil,nil,nil
@@ -5187,7 +5193,10 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       if not v.road_flood_age then return false end
       local remove
       v.road_flood_age,remove=coastal_road.road_wreck_tick(v.road_flood_age,v.road_vehicle_ticks)
-      if remove and v.order_group then orders_module().release(s,v) end
+      if remove then
+        road_clock().bay.retire_wreck(s,v)
+        if v.order_group then orders_module().release(s,v) end
+      end
       return remove
     end,
     economy=function(tick)

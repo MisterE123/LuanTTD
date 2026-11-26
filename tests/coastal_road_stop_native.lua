@@ -1,6 +1,7 @@
 do
+  local bay=core.settings:get_bool("luanttd_qa_coastal_road_bay",false)
   local F=dofile(mod.."/qa_coastal_road_stop.lua")(Sim,dofile(mod.."/openttd/terrain.lua"),
-    dofile(mod.."/openttd/town_passengers.lua"),dofile(mod.."/campaign_road_construction.lua"))
+    dofile(mod.."/openttd/town_passengers.lua"),dofile(mod.."/campaign_road_construction.lua"),bay)
   core.after(0,function()
     local proof=S.road_flood_native
     if not proof then
