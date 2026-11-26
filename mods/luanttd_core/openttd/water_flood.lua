@@ -35,22 +35,28 @@ end
 -- active water sources. The only committed classes here are ordinary
 -- clear land, plain sea and shore. The RC1 tree branches replace woods
 -- on flat/one-corner terrain, and retain shore groves on other slopes.
--- Return changes in source direction order.
-function F.visit(board,x,z)
-  local source=board.tile(x,z)
+-- Scan returns changes in source direction order, or nil for a no-op.
+-- The public visit wrapper still provides an empty list when needed.
+local function neighbor(board,x,z,dir)
+  if board.offset then return board.offset(x,z,dir) end
+  return x+dx[dir],z+dz[dir]
+end
+local function append(changes,change)
+  changes=changes or {}
+  changes[#changes+1]=change
+  return changes
+end
+function F.scan(board,x,z)
+  local source=(board.flood_source or board.tile)(x,z)
   local behaviour=F.behaviour(source)
-  local changes={}
-  local function neighbor(dir)
-    if board.offset then return board.offset(x,z,dir) end
-    return x+dx[dir],z+dz[dir]
-  end
+  local changes
   if behaviour=="active" then
     -- The host may skip materializing a descriptor for tiles already
     -- known not to be a target. Source and dryup neighbors still use
     -- the full authoritative classification.
     local target=board.flood_target or board.tile
     for dir=0,7 do
-      local u,v=neighbor(dir)
+      local u,v=neighbor(board,x,z,dir)
       local t=u and target(u,v)
       -- RC1 DoFloodTile: for non-flat object tiles the TileType::Object
       -- switch has no case; flat land delegates to LandscapeClear as WATER.
@@ -62,18 +68,18 @@ function F.visit(board,x,z)
           and (t.foundation_base or t.base)==0 and has(directions(t),opposite(dir)) then
         if t.kind=="rail" then
           local q=board.flood_rail(u,v,t)
-          if q then changes[#changes+1]={x=u,z=v,from="rail",kind=q.kind,rail=q} end
+          if q then changes=append(changes,{x=u,z=v,from="rail",kind=q.kind,rail=q}) end
         elseif t.kind=="through_stop" or t.kind=="bay_stop" or t.kind=="mixed_stop" then
-          if board.flood_road_stop(t) then changes[#changes+1]={x=u,z=v,from=t.kind,kind="sea"} end
+          if board.flood_road_stop(t) then changes=append(changes,{x=u,z=v,from=t.kind,kind="sea"}) end
         elseif t.kind=="tram_stop" then
-          if board.flood_tram_stop(t) then changes[#changes+1]={x=u,z=v,from=t.kind,kind="sea"} end
+          if board.flood_tram_stop(t) then changes=append(changes,{x=u,z=v,from=t.kind,kind="sea"}) end
         elseif t.kind=="rail_bridge" then
-          if board.flood_bridge(t) then changes[#changes+1]={x=u,z=v,from=t.kind,kind="sea",span=t.span} end
+          if board.flood_bridge(t) then changes=append(changes,{x=u,z=v,from=t.kind,kind="sea",span=t.span}) end
         else
           local keep_tree=t.kind=="trees" and t.slope~=0 and not raised[t.slope]
           if keep_tree or not board.can_clear or board.can_clear(u,v,t) then
-            changes[#changes+1]={x=u,z=v,from=t.kind,kind=keep_tree and "shore_trees"
-              or t.slope==0 and "sea" or "coast",rocks=t.slope~=0 and t.rocks or nil}
+            changes=append(changes,{x=u,z=v,from=t.kind,kind=keep_tree and "shore_trees"
+              or t.slope==0 and "sea" or "coast",rocks=t.slope~=0 and t.rocks or nil})
           end
         end
       end
@@ -83,20 +89,21 @@ function F.visit(board,x,z)
     local allowed=directions(source)
     for dir=0,7 do
       if has(allowed,dir) then
-        local u,v=neighbor(dir)
+        local u,v=neighbor(board,x,z,dir)
         local k=F.behaviour(u and board.tile(u,v))
         if k=="active" then return changes end
       end
     end
     if source.kind=="rail" then
       local q=board.dry_rail(x,z,source)
-      if q then changes[1]={x=x,z=z,from="rail",kind="rail",rail=q} end
+      if q then changes={{x=x,z=z,from="rail",kind="rail",rail=q}} end
     elseif source.kind=="trees" or not board.can_clear or board.can_clear(x,z,source) then
-      changes[1]={x=x,z=z,from=source.kind,kind=source.kind=="trees" and "dry_trees" or "clear",rocks=source.rocks}
+      changes={{x=x,z=z,from=source.kind,kind=source.kind=="trees" and "dry_trees" or "clear",rocks=source.rocks}}
     end
   end
   return changes
 end
+function F.visit(board,x,z) return F.scan(board,x,z) or {} end
 
 -- water_cmd.cpp::ClearTile_Water, ordinary WATER_TILE_CLEAR and
 -- WATER_TILE_COAST only. Explicit canal demolition differs from raising

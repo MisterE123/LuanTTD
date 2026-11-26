@@ -107,7 +107,7 @@ do
   local q=F.edit(s)
   assert(q)
   local b=W.board(s)
-  local fast=b.flood_target
+  local fast,source=b.flood_target,b.flood_source
   local function same(a,c)
     if type(a)~="table" then return a==c end
     if type(c)~="table" then return false end
@@ -122,10 +122,12 @@ do
   s.tiles[ids(2,12)].water_class="canal"
   local visited,wet=0,0
   for z=7,15 do for x=1,10 do
-    b.flood_target=nil
+    b.flood_target,b.flood_source=nil,nil
     local full=Flood.visit(b,x,z)
-    b.flood_target=fast
-    local narrow=Flood.visit(b,x,z)
+    b.flood_target,b.flood_source=fast,source
+    local changes=Flood.scan(b,x,z)
+    local narrow=changes or {}
+    assert((changes~=nil)==(#full>0))
     assert(same(full,narrow))
     wet=wet+#narrow;visited=visited+1
   end end

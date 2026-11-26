@@ -79,10 +79,11 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     end
     return "protected"
   end
+  local active_sources={sea={kind="sea"},void={kind="void"}}
   function W.board(s)
     local B={}
-    local function describe(id,t,x,z)
-      local kind=class(s,id,t)
+    local function describe(id,t,x,z,kind)
+      kind=kind or class(s,id,t)
       if kind=="protected" or kind=="canal" or kind=="river" then return {kind=kind} end
       local slope,base=Terrain.tile(s.corner_grid,x,z)
       if kind=="rail_bridge" then
@@ -113,6 +114,15 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       local id=Sim.id(x,z)
       local t=id and s.tiles[id]
       if t then return describe(id,t,x,z) end
+    end
+    function B.flood_source(x,z)
+      local id=Sim.id(x,z)
+      local t=id and s.tiles[id]
+      if not t then return end
+      local kind=class(s,id,t)
+      -- These two types are unconditionally active in Flood.behaviour;
+      -- the active branch never reads source slope or elevation.
+      return active_sources[kind] or describe(id,t,x,z,kind)
     end
     function B.flood_target(x,z)
       local id=Sim.id(x,z)
@@ -192,8 +202,8 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
          tile.water_class=="river" or tile.water_class=="canal" or tile.build=="canal")) then return 0 end
     local B=board or W.board(s)
     B.tick=tick
-    local changes=Flood.visit(B,x,z)
-    if #changes==0 then return 0 end
+    local changes=Flood.scan(B,x,z)
+    if not changes then return 0 end
     s.changed=s.changed or {}
     local cleared_spans,applied={},0
     for _,change in ipairs(changes) do

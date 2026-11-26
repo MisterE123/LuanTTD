@@ -354,3 +354,19 @@ worker CPU measurement, not a frame-rate or checkpoint gain.
 A separate 20-day native replay with 128 buses and two freight trains
 also produced identical saved state. The farm freight restart test
 still settled the exact livestock, grain and factory Goods receipts.
+
+### Avoid allocations on unchanged sea and shore visits
+
+Flooding still checks every eligible source in stock visit order. A
+plain sea or void tile is an active source regardless of its slope, so
+it does not require a new terrain descriptor. The native caller also
+no longer allocates an empty edit list for every unchanged visit. The
+active target checks, shore drying, and protected vehicle/structure
+callbacks retain their previous ordering.
+
+On the same generated 1024×1024 campaign, the two native CPU medians
+for a simulation day were **996.5 → 886.3 ms** and
+**940.3 → 902.5 ms** (about **4–11%**). Both 13-day pairs ended with
+the same tile states, values and aliases other than the wall-time
+playback fraction. The improvement depends on how much water the
+stock clock visits; these are not gameplay frame-rate figures.
