@@ -64,6 +64,9 @@ assert(ep.vehicle.tick==74)
 
 local s,p,a,b,d=fixture(true)
 assert(p.paid_clock and Sim.ferry_paid_status(s).onboard==0)
+assert(p.transport_orders_revision==0 and p.transport_order_cursor.real==0 and p.transport_orders[1].id==a.id)
+assert(#p.transport_orders==(via and 4 or 2))
+if via then assert(p.transport_orders[2].kind=="waypoint" and p.transport_orders[2].tile==via) end
 assert(Run.tick(s,74)==nil and p.vehicle.tick==0)
 if partial then
   local loaded,at,retired

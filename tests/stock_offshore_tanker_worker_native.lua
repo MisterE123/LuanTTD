@@ -106,6 +106,11 @@ local function work()
     assert(commit(offer.request).id=="oil")
     ask("command",{command={kind="transport_start",mode="ship",vehicle="oil",cargo="oil",depot=d,first=1,second=b,
         revision=revision}})
+    ask("checkpoint")
+    local initial=inspect()
+    local typed=assert(initial.stock_oil_ship_route.transport_orders)
+    assert(typed[1].kind=="station" and typed[1].id==1 and typed[1].cargo_order=="full")
+    assert(typed[2].kind=="station" and typed[2].id==b and typed[2].cargo_order=="no_load")
     local orders=ask("orders",{mode="ship",vehicle="oil",page=1})
     assert(orders.items[1].id==1 and orders.items[1].label:find("Oil Rig",1,true))
     local seen=false

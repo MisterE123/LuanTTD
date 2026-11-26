@@ -57,6 +57,8 @@ assert(q.vehicles[1].cargo=="coal")
 local start=A.command(owner,{kind="transport_start",mode="ship",cargo="coal",depot=d,vehicle="coal",
   first=a,second=b,revision=s.authority_revision})
 assert(start.ok,start.why)
+local typed=assert(s.stock_coal_ship_run.transport_orders)
+assert(typed[1].cargo_order=="full" and typed[2].cargo_order=="no_load")
 local orders=assert(rt.orders.ship.read(owner,"coal"))
 assert(#orders.items==2 and orders.items[1].label:find("mine",1,true))
 local function toggle(name)

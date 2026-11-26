@@ -76,12 +76,12 @@ return function(Sim,mod)
       local freight=dofile(source.."ship_roster.lua")
       cargo_run=make({engine=freight.model(211),engine_for=freight.model,
         key="stock_coal_ship_run",serial="next_stock_coal_ship_run",paid=function() return true end,
-        validate_both=true})
+        validate_both=true,cargo_orders=true})
       coal=Sim.mount_coal_ship(s,cargo_run,run,net,ready)
     end
     local tankers=dofile(source.."oil_ship_roster.lua")
     local oil_run=make({engine=tankers.model(204),engine_for=tankers.model,key="stock_oil_ship_route",
-      serial="next_stock_oil_ship_route",paid=function()return true end,validate_both=true,
+      serial="next_stock_oil_ship_route",paid=function()return true end,validate_both=true,cargo_orders=true,
       use_neutral=dofile(source.."oil_rig.lua").neutral_ref})
     local oil=Sim.mount_oil_ship(s,net,oil_run,ready,run,cargo_run)
     return terrain,water,net,roster,run,depot,cargo_run,coal,oil,oil_run

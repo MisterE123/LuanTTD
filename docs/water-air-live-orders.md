@@ -1,12 +1,19 @@
 # Live ship and aircraft orders
 
-From a dispatched passenger ferry, Yate cargo ship, or aircraft's vehicle panel,
+From a dispatched passenger ferry, Yate cargo ship, oil tanker, or aircraft's vehicle panel,
 open **Orders**. Select an owned dock or airfield (or a buoy for a passenger
 ferry), then add it. Select an existing row to move it, remove it, or skip
 directly to it. The arrow marks the vehicle's current order. A running
 service must keep at least two different stations; add a replacement before
 removing the old one. The Yate also needs a coal source and a power station.
 The initial order picker is still available from the purchase depot.
+
+Paid ship dispatch immediately stores the selected stations as typed orders.
+A ferry's chosen buoy is a waypoint on both legs, not a station stop.
+Coal and crude-oil routes explicitly start with Full load at the source
+and No loading at the receiver. These orders and the cursors exist in a
+save made before the player opens **Orders**; the panel only displays
+and edits the list.
 
 The list and independent real and implicit cursors use the OpenTTD 16.0-RC1
 [order commands](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/order_cmd.cpp)

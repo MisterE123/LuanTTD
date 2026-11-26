@@ -139,12 +139,22 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
     return {version=R.VERSION,owner=owner,depot=depot,first=first,second=second,vehicle=v,via=via,
       engine_id=engine_id,topology=s.topology,arrivals=0,steps=0,phase="depot",dwell=0}
   end
+  -- Dispatch creates actual typed OrderList entries, even before the
+  -- owner opens Orders. Stations and buoys remain separate ID domains.
+  local function initial_orders(p)
+    local a,b=station_order(p.first),station_order(p.second)
+    if config.cargo_orders then a.cargo_order,b.cargo_order="full","no_load" end
+    if not p.via then return {a,b} end
+    local function buoy() return {kind="waypoint",id=p.via.id,tile=p.via.tile} end
+    return {a,buoy(),b,buoy()}
+  end
   function R.start(s,owner,depot,first,second,via_tile,engine_id)
     local p,why=R.quote(s,owner,depot,first,second,via_tile,engine_id)
     if not p then return nil,why end
     if paid_mode(s) and s.road_stock_house_supply and s.corner_grid then
       p.paid_clock=s[serial] or 1
       p.paid_built_day=s.day
+      p.transport_orders,p.transport_order_cursor,p.transport_orders_revision=initial_orders(p),{real=0,implicit=0},0
       s[serial]=p.paid_clock+1
     end
     s[key]=p
@@ -223,19 +233,22 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
         return math.floor(b.max_speed*(256-ratio)/256)
       end,
       on_waypoint=function(B,b,o)
+        local target
         if p.transport_orders then
-          local _,cursor=O.next_manual(p.transport_orders,p.transport_order_cursor)
+          local order,cursor=O.next_manual(p.transport_orders,p.transport_order_cursor)
           p.transport_order_cursor=cursor
-          return
+          target=order and order.kind=="station" and order.id or nil
+        else
+          target=o.next_station
         end
         local via=p.via
-        if not via or via.id~=o.id or via.tile~=o.tile then return end
+        if not (via and via.id==o.id and via.tile==o.tile) then return end
+        if not p.transport_orders then p.pending_buoy_dock=target end
         local x,z=B.xy(b.tile)
         local u,w=B.xy(o.tile)
         via.passes=via.passes+1
         p.last_buoy_pass={tile=b.tile,order_tile=o.tile,distance=math.abs(x-u)+math.abs(z-w),
-          tick=b.tick,speed=b.speed,progress=b.progress,steps=p.steps,next_dock=o.next_station}
-        p.pending_buoy_dock=o.next_station
+          tick=b.tick,speed=b.speed,progress=b.progress,steps=p.steps,next_dock=target}
       end,
     }
     local function current_order(advance)

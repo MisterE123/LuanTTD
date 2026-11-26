@@ -83,6 +83,8 @@ if offshore then
   local kind,id=m("campaign_order_target")("ship","oil",owner,t.site,t,function(reg,ref) return s[reg][ref] end)
   assert(kind==a and id=="North Reach Oil Rig","in-world selection does not match the list")
 end
+local typed=assert(s.stock_oil_ship_route.transport_orders)
+assert(typed[1].cargo_order=="full" and typed[2].cargo_order=="no_load")
 local function toggle(who)
   return A.command(who,{kind="ship_toggle",vehicle="oil",revision=s.authority_revision})
 end
