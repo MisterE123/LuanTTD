@@ -190,19 +190,19 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
       emit("arrive",st,v,tick)
       return l
     end
-    function B.loading_tick(tick,stopped)
+    function B.loading_tick(tick,stopped,removed_berth)
       if state.loading_tick==tick then return false end
       if state.loading_tick and (state.post_tick~=state.loading_tick or tick~=state.loading_tick+1) then
         return nil,"NONCONTIGUOUS_COAL_SHIP_TICK"
       end
       local v=state.vehicle
       local l=v and v.load_state
-      if l and (not coverage[l.station] or not berth(state.stations[l.station].host_id,v.cargo_tile)) then
+      if l and (not coverage[l.station] or not removed_berth and not berth(state.stations[l.station].host_id,v.cargo_tile)) then
         return nil,"COAL_SHIP_BERTH_LOST"
       end
       if v then v.stopped=not not stopped end
       state.loading_tick=tick
-      if not l then return true end
+      if not l or removed_berth then return true end
       local ops=options(tick)
       local _,departures=Loader.tick(state.stations[l.station],{[v.id]=v},ops)
       finish(ops)

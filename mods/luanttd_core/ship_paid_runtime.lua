@@ -236,7 +236,10 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       st.mail_enabled=mail or nil
       if mail and fresh then Service.refresh_mail_acceptance(service,id,ctx) end
       if not st.sign then local x,y=Sim.xy(base);st.sign={x=x,y=y} end
-      if mode_=="ship" then st.land,st.water=actual.land,actual.water end
+      if mode_=="ship" then
+        st.land,st.water=actual.land,actual.water
+        if actual.sign_tile then local x,y=Sim.xy(actual.sign_tile);st.sign={x=x,y=y} end
+      end
     end
     if active.ship then
       for id,p in pairs(ships) do
@@ -398,7 +401,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local function before(tick)
       if run then
         local ship=assert(service.vehicles[run])
-        ship.stopped=not ship_ready or p.stopped or p.phase=="blocked" or p.vehicle.stopped or nil
+        ship.stopped=not ship_ready or p.stopped or p.phase=="blocked" or p.vehicle.stopped or p.dock_forced_leave or nil
         ship.broken=p.vehicle.breakdown or nil
       end
       Actors.controls(c,rails)

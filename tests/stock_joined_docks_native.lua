@@ -35,12 +35,15 @@ local function begin()
   local F=dofile(mod.."/openttd/ship_facilities.lua")(Track,Water)
   local N=dofile(mod.."/ship_network.lua")(Sim,Terrain,Water,F)
   local reopened=core.settings:get_bool("luanttd_qa_joined_docks_reopen",false)
+  local partial=core.settings:get_bool("luanttd_qa_joined_active_remove",false)
   local saved=reopened and assert(core.deserialize(storage:get_string("joined_docks_qa"),true))
   local function checkpoint() return assert(OwnerCheckpoint.read()) end
   local function visit(n,station,base,ext,last)
     local s=checkpoint()
     local st=assert(s.stock_ship_stations[station])
-    assert(#st.docks==2 and st.docks[1].land==base and st.docks[2].land==ext)
+    if partial and reopened then
+      assert(#st.docks==1 and st.land==saved.retained and not s.tiles[saved.removed].ship)
+    else assert(#st.docks==2 and st.docks[1].land==base and st.docks[2].land==ext) end
     local boat=s.ship_pilot
     local c=s.companies[owner]
     if boat then
@@ -50,6 +53,9 @@ local function begin()
     local paid=c.paid_units or 0
     if boat and paid>(saved and saved.paid or 0) and boat.arrivals>=(saved and saved.arrivals+1 or 2) then
       assert(c.revenue>0)
+      if partial and reopened then
+        assert(not boat.dock_forced_leave and boat.vehicle.tile~=saved.berth,"Pending removed berth did not leave")
+      end
       if not reopened then storage:set_string("joined_docks_qa",core.serialize({station=station,base=base,
         extension=ext,last=last,paid=paid,arrivals=boat.arrivals})) end
       core.log("action",("PASS NATIVE JOINED DOCK %s: station %d, continued with %d visits and %d paid passengers")
@@ -59,7 +65,85 @@ local function begin()
     assert(n>0,("No continued paid ferry service: %s visits, %s paid"):format(boat and boat.arrivals or "-",paid))
     core.after(.35,function()visit(n-1,station,base,ext,last)end)
   end
-  if reopened then visit(330,saved.station,saved.base,saved.extension,saved.last);return end
+  if reopened then
+    if partial then
+      local s=checkpoint()
+      assert(s.speed==0 and s.ship_pilot.dock_forced_leave and s.ship_pilot.vehicle.loading)
+      ask({kind="town_authority",town=assert(Sim.nearest_town(s,saved.retained)).id},function(q)
+        ask({kind="command",command={kind="speed",speed=4,revision=q.revision}},function()
+          visit(330,saved.station,saved.base,saved.extension,saved.last)
+        end)
+      end)
+    else visit(330,saved.station,saved.base,saved.extension,saved.last) end
+    return
+  end
+  local function remove_loading(n,station,base,ext,last)
+    local s=checkpoint()
+    local boat=s.ship_pilot
+    assert(not boat or not boat.failure,boat and boat.failure)
+    local function unique_berth()
+      local b=boat and boat.vehicle
+      if not (b and b.loading and b.last_station==station) then return end
+      local cells={}
+      local B=N.board(s)
+      for dir=0,3 do
+        local at=B.adjacent(b.tile,dir)
+        local t=at and s.tiles[at].ship
+        if t and t.kind=="dock" and t.station==station and t.water_part then cells[#cells+1]=at end
+      end
+      return #cells==1 and cells[1] or nil
+    end
+    local pier=unique_berth()
+    if pier then
+      local probe=Sim.nearest_town(s,base)
+      ask({kind="town_authority",town=probe.id},function(q)
+        ask({kind="command",command={kind="speed",speed=0,revision=q.revision}},function(pause)
+          s=checkpoint();boat=s.ship_pilot
+          local now=unique_berth()
+          local service=s.stock_ship_commercial and s.stock_ship_commercial.service
+          local passenger=service and service.vehicles[boat.paid_clock]
+          if not (now and passenger and passenger.load_state and (passenger.units or 0)>0) then
+            ask({kind="command",command={kind="speed",speed=1,revision=pause.revision}},function()
+              core.after(.24,function()remove_loading(n-1,station,base,ext,last)end)
+            end)
+            return
+          end
+          local st=assert(s.stock_ship_stations[station])
+          local retired,remaining
+          for _,p in ipairs(st.docks) do
+            if p.water==now then retired=p.land else remaining=p.land end
+          end
+          assert(retired and remaining)
+          ask({kind="demolition",tile=retired},function(d)
+            local found
+            for _,o in ipairs(d.value.options) do if o.key=="harbor" and o.ok then found=o;break end end
+            assert(found,"Partial active berth must be available in the ordinary Bulldozer")
+            ask({kind="command",command={kind="demolition",token=d.value.token,layer=found.key,revision=d.revision}},function()
+              local after=checkpoint()
+              local run=after.ship_pilot
+              assert(run.dock_forced_leave and run.vehicle.loading,"Lost loaded berth must defer safe departure")
+              assert(#after.stock_ship_stations[station].docks==1 and after.stock_ship_stations[station].land==remaining)
+              assert(not after.tiles[now].ship and not after.tiles[retired].ship)
+              local waiting=after.stock_ship_commercial.service.vehicles[run.paid_clock]
+              assert(waiting.load_state and waiting.units==passenger.units,"Do not lose or create passengers at demolition")
+              storage:set_string("joined_docks_qa",core.serialize({station=station,base=base,extension=ext,
+                last=last,paid=after.companies[owner].paid_units or 0,arrivals=boat.arrivals,retained=remaining,
+                removed=retired,berth=boat.vehicle.tile}))
+              shot(player,retired,remaining)
+              if api.cinematic and not api.cinematic.active(player) then api.cinematic.toggle(player) end
+              core.after(2,function()
+                core.log("action",("PASS NATIVE JOINED DOCK ACTIVE REMOVAL: %d aboard, station %d persists, former shore %d")
+                  :format(waiting.units,station,retired))
+              end)
+            end)
+          end)
+        end)
+      end)
+      return
+    end
+    assert(n>0,"No uniquely moored boarding visit")
+    core.after(.12,function()remove_loading(n-1,station,base,ext,last)end)
+  end
 
   local seed=checkpoint()
   local shore,by_id={},{}
@@ -107,6 +191,7 @@ local function begin()
       local candidate=by_id[Sim.id(x+du,z+dv)]
       local gap=math.abs(dv)+math.abs(du)
       if candidate and gap>1 and candidate.water~=base.approach and candidate.approach~=base.water
+        and (not partial or Sim.distance(base.water,candidate.water)>=3)
         and (not best_ext or gap<Sim.distance(best_ext.land,base.land)) then best_ext=candidate end
     end end
     if best_ext then
@@ -159,8 +244,9 @@ local function begin()
                     assert(owned.value.id=="ferry")
                     ask({kind="command",command={kind="transport_start",mode="ship",vehicle="ferry",depot=d.value.id,
                       first=station,second=other.value.id,revision=owned.revision}},function(started)
-                      ask({kind="command",command={kind="speed",speed=4,revision=started.revision}},function()
-                        visit(330,station,a.land,e.land,other.value.id)
+                      ask({kind="command",command={kind="speed",speed=partial and 1 or 4,revision=started.revision}},function()
+                        if partial then remove_loading(450,station,a.land,e.land,other.value.id)
+                        else visit(330,station,a.land,e.land,other.value.id) end
                       end)
                     end)
                   end)

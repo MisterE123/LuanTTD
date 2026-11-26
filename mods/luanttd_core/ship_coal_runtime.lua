@@ -263,7 +263,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
     view.samples={sample(spec.run,run)}
     local function before(tick)
       if run.transport_cancel_full then b.cancel_full();run.transport_cancel_full=nil end
-      local ok,why=b.loading_tick(tick,run.stopped or run.phase=="blocked")
+      local ok,why=b.loading_tick(tick,run.stopped or run.phase=="blocked",run.dock_forced_leave)
       if not ok and why then run.failure,run.phase=why,"blocked" end
       return ok
     end

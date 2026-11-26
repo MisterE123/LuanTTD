@@ -369,6 +369,9 @@ jobs:
           python3 tests/dock_authority_upstream.py "$src" lua5.1
           lua5.1 tests/rail_compound_wire_snapshot.lua
           lua5.1 tests/dock_station_join.lua
+          lua5.1 tests/ship_paid_runtime.lua partial
+          lua5.1 tests/coal_ship_ordinary_worker.lua 211 partial
+          lua5.1 tests/oil_ship_ordinary_worker.lua 204 partial
           lua5.1 tests/stock_dock_tree_authority.lua
           lua5.1 tests/town_council_index.lua
           python3 tests/rail_compound_wire_art.py

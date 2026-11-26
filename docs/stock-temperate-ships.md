@@ -43,9 +43,12 @@ Joined piers are physical members of the same station: orders use one
 station ID, eligible water tiles around every pier are considered for
 routing, and catchment is calculated from all the shore ramps and piers.
 The ordinary Bulldozer removes the selected ramp and its matching pier,
-not every pier in the station. Active service still protects harbor
-edits in this slice; forced departure from a demolished active
-berth and cross-mode station identity are not implemented here.
+not every pier in the station. If a ship is loading at a berth that
+ceases to serve the station, it finishes that visit and leaves once.
+A ship at another valid berth keeps loading; the station ID and orders
+do not change. The last pier and other harbor edits still have active
+service protection. Full station retirement and joining across vehicle
+modes are separate.
 
 QA: both cargo boats used real worker-authorized purchase, Coal refit,
 route and fare with the same stock mine and power plant after a partial

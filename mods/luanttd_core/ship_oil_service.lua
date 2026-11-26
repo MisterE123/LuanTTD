@@ -76,15 +76,15 @@ return function(Sim,Roster,Packets,Rating,LoadingFactory,BaseTiming)
       local st=by_dock[dock]
       if st then return B.report(st,"oil") end
     end
-    function D.loading(tick,stopped)
+    function D.loading(tick,stopped,removed_berth)
       if state.tick==tick then return false end
       if state.tick and (state.post~=state.tick or state.tick+1~=tick) then return nil,"OIL_SHIP_CLOCK_GAP" end
       local l=v.load_state
       local st=l and stations[l.station]
-      if l and (not st or by_dock[st.host_id]~=st or not berth(st.host_id,v.cargo_tile)) then return nil,"OIL_SHIP_BERTH_LOST" end
+      if l and (not st or by_dock[st.host_id]~=st or not removed_berth and not berth(st.host_id,v.cargo_tile)) then return nil,"OIL_SHIP_BERTH_LOST" end
       v.stopped=not not stopped
       state.tick=tick
-      if l then
+      if l and not removed_berth then
         local o=opts(tick)
         local _,ready=Loader.tick(st,{[v.id]=v},o)
         o.station_done(st)

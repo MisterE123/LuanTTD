@@ -5,6 +5,7 @@ local function m(p) return dofile(root..p..".lua") end
 local Sim,T=m("sim"),m("openttd/terrain")
 local engine=tonumber(arg and arg[1]) or 211
 local capacity=engine==211 and 160 or 190
+local partial=arg[2]=="partial"
 local owner="Coal dock shipping"
 local s=Sim.new(1751)
 Sim.W,Sim.H=64,64
@@ -37,6 +38,7 @@ local function commit(rq)
   assert(r.ok,r.why);return r.value
 end
 local a=commit({mode="ship",operation="build",kind="dock",tile=Sim.id(12,32)}).id
+if partial then assert(commit({mode="ship",operation="build",kind="dock",tile=Sim.id(9,32),adjacent=true,join=a}).id==a) end
 local b=commit({mode="ship",operation="build",kind="dock",tile=Sim.id(31,32)}).id
 local d=commit({mode="ship",operation="build",kind="depot",tile=Sim.id(17,35),axis=0}).id
 local q=assert(rt.transport.depot(owner,"ship",d))
@@ -68,15 +70,24 @@ local function copy(t)
   if type(t)~="table" then return t end
   local r={};for k,y in pairs(t) do r[k]=copy(y) end;return r
 end
-local saved
+local saved,removed_units
 for _=1,850 do
   rt.day()
   local v=rt.water.coal.status(s)
   assert(not v.failure,v.failure)
   if not saved and v.loading and v.onboard>0 and v.onboard<capacity then
+    if partial then
+      dofile("tests/worker_joined_dock_removal_case.lua")(Sim,A,s,owner,s.stock_coal_ship_run,a)
+      removed_units=v.onboard
+    end
     s=copy(s);mount()
     assert(rt.water.coal.status(s).onboard==v.onboard)
     saved=true
+  end
+  if partial and removed_units and v.delivered>0 then
+    assert(v.delivered==removed_units and not s.stock_coal_ship_run.dock_forced_leave and v.fare>0)
+    print(("PASS coal ship #%d left a removed joined pier after reload and paid exactly %d carried tons"):format(engine,removed_units))
+    return
   end
   if v.delivered>=capacity then
     local plant=s.stock_coal_industries[ids.power]

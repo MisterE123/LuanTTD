@@ -15,6 +15,7 @@ rebuild=${LUANTTD_QA_TOWN_REBUILD:-0}
 rocky_ferry=${LUANTTD_QA_ROCKY_FERRY:-0}
 joined_ferry=${LUANTTD_QA_JOINED_FERRY:-0}
 joined_ui=${LUANTTD_QA_JOINED_DOCK_UI:-0}
+joined_remove=${LUANTTD_QA_JOINED_ACTIVE_REMOVE:-0}
 dock_grove=${LUANTTD_QA_DOCK_GROVE:-0}
 airport_noise=${LUANTTD_QA_AIRPORT_NOISE:-0}
 canal_dikes=${LUANTTD_QA_CANAL_DIKES:-0}
@@ -27,6 +28,22 @@ if [[ $dock_grove == 1 ]]; then fixture=tests/stock_dock_grove_native.lua; fi
 if [[ $airport_noise == 1 ]]; then fixture=tests/airport_noise_native.lua; fi
 if [[ $canal_dikes == 1 ]]; then fixture=tests/canal_dikes_native.lua; fi
 cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
+if [[ $joined_remove == 1 ]]; then
+  # Freeze the already-boarded visit at the first real nonzero load.
+  # This QA-only copy gives the real client time to commit demolition.
+  # It never adds cargo, a boat, facilities, or artificial paid events.
+  file="$game/mods/luanttd_core/ship_paid_runtime.lua"
+  awk '
+    {print}
+    /ship.stopped=not ship_ready/ {
+      print "        local qa_dock=s.stock_ship_stations[p.last_dock]"
+      print "        if p.vehicle.loading and p.last_dock==p.first and (ship.units or 0)>0"
+      print "          and qa_dock and qa_dock.docks and #qa_dock.docks==2 then ship.stopped=true end"
+    }
+  ' "$file" >"$out/qa-ship-paid.lua"
+  mv "$out/qa-ship-paid.lua" "$file"
+fi
+
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-42683}
 display=${BAYLINE_NATIVE_DISPLAY:-393}
@@ -45,6 +62,7 @@ bayline_seed = ${LUANTTD_QA_TOWN_SEED:-1751}
 bayline_stock_bus_start_year = ${LUANTTD_QA_TOWN_YEAR:-1950}
 singleplayer_mode = false
 luanttd_qa_joined_docks_ui = $([[ $joined_ui == 1 ]] && echo true || echo false)
+luanttd_qa_joined_active_remove = $([[ $joined_remove == 1 ]] && echo true || echo false)
 luanttd_station_noise_level = $([[ $airport_noise == 1 ]] && echo true || echo false)
 CONF
 printf 'screen_w = 1440\nscreen_h = 900\nenable_sound = false\n' >"$out/client.conf"
@@ -157,6 +175,13 @@ if [[ $joined_ferry == 1 ]]; then
   mark 'NATIVE JOINED DOCK FRAME'
   sleep .6
   if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 93 "$out/joined-docks.jpg"; fi
+  if [[ $joined_remove == 1 ]]; then
+    mark 'PASS NATIVE JOINED DOCK ACTIVE REMOVAL'
+    if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 93 "$out/removed-pier.jpg"; fi
+    ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+    reopen luanttd_qa_joined_docks_reopen 'PASS NATIVE JOINED DOCK REOPEN'
+    exit 0
+  fi
   mark 'PASS NATIVE JOINED DOCK SERVICE'
   grep 'PASS NATIVE JOINED DOCK SERVICE' "$out/server.log"
   ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"

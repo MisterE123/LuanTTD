@@ -35,9 +35,14 @@ return function(n,id,preview)
     local changed,price,level=api.airfield.network.remove(S,n,id,preview,api.airfield.busy)
     return true,changed,changed and ("Dismantle airfield  |  "..dollars(price)) or api.airfield.reason(price),level
   elseif t.ship and api.shipyard then
-    if t.ship.kind~="buoy" and api.shipyard.busy() then return true,nil,"An active vessel protects these harbor facilities." end
+    local net=api.shipyard.network
+    local partial=net and net.active_partial_remove and net.active_partial_remove(S,id)
+    if t.ship.kind~="buoy" and not partial and api.shipyard.busy() then
+      return true,nil,"An active vessel protects these harbor facilities."
+    end
     local changed,price=aquatic_remove(n,id,preview)
-    return true,changed,changed and ("Dismantle water structure  |  "..dollars(price)) or api.shipyard.reason(price)
+    local label=partial and "Remove this pier, keep its station" or "Dismantle water structure"
+    return true,changed,changed and (label.."  |  "..dollars(price)) or api.shipyard.reason(price)
   end
 end
 end

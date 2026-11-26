@@ -65,8 +65,14 @@ local zones=m("passenger_waiting_zones")({s=s,Sim=Sim,terrain={
 assert(#zones.ship(first.id)==3,"One native queue area per joined pier")
 local tiles,cost=N.remove(s,"A",first.water,nil,true)
 assert(#tiles==2 and tiles[1]==first.land and tiles[2]==first.water and cost==55)
+assert(N.active_partial_remove(s,first.water))
+s.ship_pilot={last_dock=first.id,vehicle={tile=at(16,10),loading=true,last_station=first.id}}
+s.stock_coal_ship_run={last_dock=first.id,vehicle={tile=at(16,11),loading=true,last_station=first.id}}
+s.stock_oil_ship_route={last_dock=foreign.id,vehicle={tile=at(16,14),loading=true,last_station=foreign.id}}
 assert(N.remove(s,"A",first.water))
-assert(s.stock_ship_stations[first.id]==station and station.land==second.land)
+assert(s.ship_pilot.dock_forced_leave and not s.stock_coal_ship_run.dock_forced_leave and
+  not s.stock_oil_ship_route.dock_forced_leave,"Only the invalidated visit should leave")
+assert(s.stock_ship_stations[first.id]==station and station.land==second.land and station.sign_tile==second.land)
 assert(s.tiles[first.land].coastal_water and not s.tiles[first.land].ship and not s.tiles[first.water].ship)
 assert(s.tiles[second.water].ship.station==first.id and s.tiles[distant.water].ship.station==first.id)
 assert(not Water.ship_destination(B,at(16,10),first.id) and Water.ship_destination(B,at(16,20),first.id))

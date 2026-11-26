@@ -233,7 +233,7 @@ return function(Sim,Terrain,Water,Facilities)
         station_area=p.station_area,approach=p.approach,water_class=p.water_class}
       if not st then
         s.next_stock_ship_station=next_+1
-        st={id=next_,owner=owner}
+        st={id=next_,owner=owner,sign_tile=p.land}
         for k,v in pairs(part) do st[k]=v end
         st.docks={}
         s.stock_ship_stations[next_]=st
@@ -275,6 +275,26 @@ return function(Sim,Terrain,Water,Facilities)
     c.cash,c.expense,c.month_exp=c.cash-p.cost,c.expense+p.cost,c.month_exp+p.cost
     s.topology=s.topology+1
     return p
+  end
+  function N.active_partial_remove(s,id)
+    local tile=id and s.tiles[id]
+    local part=tile and tile.ship
+    if not part or part.kind~="dock" then return false end
+    local st=s.stock_ship_stations and s.stock_ship_stations[part.station]
+    return #Members.pairs(st)>1
+  end
+  local function wake_lost_berths(s,station)
+    local board=N.board(s)
+    for _,key in ipairs({"ship_pilot","stock_coal_ship_run","stock_oil_ship_route"}) do
+      local run=s[key]
+      local v=run and run.vehicle
+      if v and v.loading and v.tile and (v.last_station or run.last_dock)==station and
+          not Water.ship_destination(board,v.tile,station) then
+        -- RemoveDock: an order is still valid while another dock
+        -- survives. LeaveStation applies only to the invalidated visit.
+        run.dock_forced_leave=true
+      end
+    end
   end
   -- Remove both parts. Underlying water class is preserved because the
   -- facility never consumed the original ground fields. Dynamic berth
@@ -335,16 +355,22 @@ return function(Sim,Terrain,Water,Facilities)
     local c=s.companies[owner]
     if not c or c.cash<cost then return nil,"NOT_ENOUGH_MONEY" end
     if quote then return tiles,cost end
-    if pair_idx and p.docks and #p.docks>1 then
+    local partial=pair_idx and p.docks and #p.docks>1
+    if partial then
+      local sign=p.sign_tile or p.land
       table.remove(p.docks,pair_idx)
       local base=p.docks[1]
       for _,k in ipairs({"land","water","dir","station_area","approach","water_class"}) do p[k]=base[k] end
       p.spread=nil
       for _,member in ipairs(p.docks) do p.spread=Area.union(Geo,p.spread,area(member)) end
+      -- UpdateStationSignCoord clamps a surviving station's sign to the
+      -- new spread, even if the original entrance was just demolished.
+      p.sign_tile=Area.closest_tile(Geo,p.spread,sign)
     else
       entries[p.id]=nil
     end
     for _,key in ipairs(tiles) do s.tiles[key].ship=nil end
+    if partial then wake_lost_berths(s,p.id) end
     c.cash,c.expense,c.month_exp=c.cash-cost,c.expense+cost,c.month_exp+cost
     s.topology=s.topology+1
     return tiles,cost

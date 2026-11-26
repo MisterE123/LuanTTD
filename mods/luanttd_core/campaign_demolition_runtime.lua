@@ -8,7 +8,7 @@ return function(Sim,mod,R)
   local aquatic_remove
   if R.water then
     local w=R.water
-    api.shipyard={reason=function(msg) return msg end,busy=w.busy}
+    api.shipyard={reason=function(msg) return msg end,busy=w.busy,network=w.network}
     local aqueduct,works=w.aqueduct,w.works
     aquatic_remove=function(owner,id,quote)
       local t=s.tiles[id]

@@ -5,6 +5,7 @@ local function m(p) return dofile(root..p..".lua") end
 local Sim,T=m("sim"),m("openttd/terrain")
 local engine=tonumber(arg and arg[1]) or 204
 local capacity=engine==204 and 220 or 350
+local partial=arg[2]=="partial"
 local owner="Tanker works"
 local s=Sim.new(1751)
 Sim.W,Sim.H=64,64
@@ -52,6 +53,7 @@ local function commit(rq)
   assert(r.ok,r.why);revision=r.revision;return r.value
 end
 local a=rig and rig.neutral_station or commit({mode="ship",operation="build",kind="dock",tile=Sim.id(12,32)}).id
+if partial then assert(commit({mode="ship",operation="build",kind="dock",tile=Sim.id(9,32),adjacent=true,join=a}).id==a) end
 local b=commit({mode="ship",operation="build",kind="dock",tile=Sim.id(31,32)}).id
 local d=commit({mode="ship",operation="build",kind="depot",tile=Sim.id(17,35),axis=0}).id
 local q=assert(rt.transport.depot(owner,"ship",d))
@@ -103,7 +105,7 @@ if arg and arg[2]=="mixed" then
   assert(Sim.add_order(s,owner,truck,s.tiles[to].station))
   assert(Sim.toggle(s,owner,truck))
 end
-local saved,viewed=false,false
+local saved,viewed,removed_units=false,false,nil
 local function copy(t)
   if type(t)~="table" then return t end
   local x={};for k,v in pairs(t) do x[k]=copy(v) end;return x
@@ -118,11 +120,21 @@ for _=1,900 do
     assert(type(pos.x)=="number")
     viewed=true
   end
-  if not saved and status.onboard>0 and status.onboard<capacity then
+  if not saved and status.onboard>0 and status.onboard<capacity
+      and (not partial or s.stock_oil_ship_route.vehicle.loading and s.stock_oil_ship_route.vehicle.last_station==a) then
+    if partial then
+      dofile("tests/worker_joined_dock_removal_case.lua")(Sim,A,s,owner,s.stock_oil_ship_route,a)
+      removed_units=status.onboard
+    end
     local t=s.stock_oil_ship_service.tick
     s=copy(s);mount()
     assert(s.stock_oil_ship_service.tick==t and rt.water.tanker.status(s).onboard==status.onboard)
     saved=true
+  end
+  if partial and removed_units and status.delivered>0 then
+    assert(status.delivered==removed_units and not s.stock_oil_ship_route.dock_forced_leave and status.revenue>0)
+    print(("PASS tanker #%d left a removed joined pier after reload and paid exactly %d carried kL"):format(engine,removed_units))
+    return
   end
   local lorry=truck and s.fleet[truck]
   if status.delivered>=capacity and (not lorry or lorry.delivered>0) then

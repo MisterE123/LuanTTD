@@ -257,6 +257,18 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
       p.phase="sailing"
     end
     for _=1,num or 1 do
+      if p.dock_forced_leave then
+        if not v.loading then
+          p.dock_forced_leave=nil
+        elseif not paid or paid.leave(p,true) then
+          local skipped=p.transport_skip_loading==true
+          p.dock_forced_leave,p.transport_skip_loading,p.transport_cancel_full=nil,nil,nil
+          p.dwell=0
+          leave(skipped)
+        else
+          break -- do not depart with an unsettled load ledger
+        end
+      end
       if p.transport_orders then
         p.pending_buoy_dock=nil
         if v.loading and p.transport_skip_loading and (not paid or paid.leave(p,true)) then

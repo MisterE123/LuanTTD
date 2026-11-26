@@ -13,6 +13,7 @@ local Motion=dofile(src.."ship_motion.lua")(Track,Water)
 local Run=dofile(root.."ship_preview_run.lua")(Network,Track,Water,Y,Motion,
   dofile(src.."ship_regions.lua"),{width=Sim.W,height=Sim.H,x0=1,z0=1})
 local via=arg[1]=="buoy" and Sim.id(19,12) or nil
+local partial=arg[1]=="partial"
 
 local function clone(t)
   if type(t)~="table" then return t end
@@ -41,6 +42,7 @@ local function fixture(paid)
   Sim.mount_paid_ferry(s,Run)
   local a=assert(Network.build(s,"Alice","dock",Sim.id(8,9)))
   local b=assert(Network.build(s,"Alice","dock",Sim.id(8,16)))
+  if partial and paid then assert(Network.build(s,"Alice","dock",Sim.id(8,5),nil,{adjacent=true,join=a.id})) end
   local d=assert(Network.build(s,"Alice","depot",Sim.id(12,10),0))
   if via and paid then
     assert(Network.build(s,"Alice","buoy",via))
@@ -63,6 +65,44 @@ assert(ep.vehicle.tick==74)
 local s,p,a,b,d=fixture(true)
 assert(p.paid_clock and Sim.ferry_paid_status(s).onboard==0)
 assert(Run.tick(s,74)==nil and p.vehicle.tick==0)
+if partial then
+  local loaded,at,retired
+  for _=1,170 do
+    Sim.daily(s)
+    local status=assert(Sim.ferry_paid_status(s))
+    if status.loading and status.onboard>0 and p.vehicle.last_station==a.id then
+      local n=Network.board(s)
+      for _,part in ipairs(s.stock_ship_stations[a.id].docks) do
+        for d=0,3 do
+          if n.adjacent(p.vehicle.tile,d)==part.water then
+            retired=part.land;break
+          end
+        end
+      end
+      if retired then loaded,at=status.onboard,p.vehicle.tile;break end
+    end
+  end
+  assert(loaded,"A source ferry must be physically boarding at one pier")
+  assert(Network.remove(s,"Alice",retired))
+  assert(p.dock_forced_leave and p.vehicle.loading and #s.stock_ship_stations[a.id].docks==1)
+  assert(Sim.ferry_paid_status(s).onboard==loaded)
+  local P=dofile(root.."packed_campaign.lua")
+  s=P.decode(P.encode(s));p=assert(Run.current(s));Sim.mount_paid_ferry(s,Run)
+  assert(p.dock_forced_leave and p.vehicle.loading and Sim.ferry_paid_status(s).onboard==loaded)
+  local leaves,served,due=0,false,Sim.company(s,"Alice").paid_units
+  for _=1,120 do
+    Sim.daily(s)
+    assert(not p.failure and not p.dock_forced_leave,p.failure)
+    for _,e in ipairs(Sim.ferry_loading_events(s)) do
+      if e.kind=="leave" and e.station==a.id and e.tile==at then leaves=leaves+1 end
+    end
+    if p.arrivals>=2 and Sim.company(s,"Alice").paid_units>due then served=true;break end
+  end
+  assert(leaves==1 and served and s.stock_ship_stations[a.id].land~=retired,
+    ("Expected one saved forced departure and continuing paid service, got %s, %s"):format(leaves,tostring(served)))
+  print(("PASS removed active physical berth with %d aboard; pending forced departure survived packed restore, left exactly once, then paid"):format(loaded))
+  return
+end
 local cash,expense=Sim.company(s,"Alice").cash,Sim.company(s,"Alice").expense
 local moved,units,payment,board_events,deliver_events=0,0,0,0,0
 local loaded_save,dispatched_save

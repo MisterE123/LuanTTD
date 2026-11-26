@@ -213,7 +213,7 @@ return function(Sim,Service,Roster,Calendar,Rules,Catchment,debit)
     sample();views[s]=points
     return {before=function(tick)
       if p.transport_cancel_full then v.cancel_full();p.transport_cancel_full=nil end
-      local ready,why=v.loading(tick,p.stopped or p.phase=="blocked")
+      local ready,why=v.loading(tick,p.stopped or p.phase=="blocked",p.dock_forced_leave)
       if why then p.failure,p.phase=why,"blocked" end
       return ready
     end,after=function(tick,ready)
