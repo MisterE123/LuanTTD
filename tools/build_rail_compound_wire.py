@@ -36,11 +36,11 @@ def ribbon(mesh,path,name,low,w,h,c,edge=None,sections=None):
                 j=(i+1)%4
                 W.face(mesh,name,edge if edge and i in (1,3) else c,(a[i],a[j],b[j],b[i]))
 
-def wire(mask):
+def wire(mask,eased=None):
     m=R.Mesh(R.terrain_height(0))
     for bit in range(6):
         if not mask & (1<<bit): continue
-        path=R.TrackPath(bit)
+        path=(eased or {}).get(bit) or R.TrackPath(bit)
         crossing=bit==1 and mask&3==3
         sections=(([0,.497],[.503,1]) if crossing else ([0,1],)) if path.is_straight else None
         ribbon(m,path,f"Track {bit} contact wire",W.contact,.012,.009,
@@ -93,13 +93,15 @@ def join(*meshes):
                 m.face(name,color,[q.vertices[name][i] for i in ids])
     return m
 
+def export_contact(path,mesh,generator):
+    R.export_obj(path,mesh,vertical_origin=1.5,generator=generator)
+    raw=path.read_text().splitlines()
+    path.write_text("\n".join([raw[0],"g CompoundContact",*(("# "+l) if l.startswith("o ") else l for l in raw[1:])])+"\n")
+
 def main():
     for mask in range(1,64):
         name=f"bl_rail_compound_contact_{mask}"
-        path=R.MODELS/(name+".obj")
-        R.export_obj(path,wire(mask),vertical_origin=1.5,generator="build_rail_compound_wire.py")
-        raw=path.read_text().splitlines()
-        path.write_text("\n".join([raw[0],"g CompoundContact",*(("# "+l) if l.startswith("o ") else l for l in raw[1:])])+"\n")
+        export_contact(R.MODELS/(name+".obj"),wire(mask),"build_rail_compound_wire.py")
     p=portal()
     export=deepcopy(p)
     for key,row in export.vertices.items():

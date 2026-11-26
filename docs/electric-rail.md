@@ -68,6 +68,9 @@ while the same portal stays on the ground. A diamond and founded
 three-piece layout retain their metalwork after SQLite reload. See the
 [editable Blender portal and wires](../art/rail_compound_wire.blend) and
 the [contact geometry comparison](../tests/rail_compound_wire_art.py).
+The [independent pair replay](../tests/rail_paired_wire_native.lua)
+keeps an actual 45° continuation while the second contact comes live,
+then runs a paid SH ’30’ service after reopening.
 
 ## Electrify a timber bridge
 

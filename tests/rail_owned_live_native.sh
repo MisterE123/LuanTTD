@@ -32,6 +32,8 @@ elif [[ ${LUANTTD_NATIVE_ROAD_FLOOD:-false} == true ]]; then
 elif [[ ${LUANTTD_NATIVE_TRAM_FLOOD:-false} == true ]]; then
   cat tests/coastal_tram_native.lua >> "$game/mods/luanttd_core/init.lua"
   cp tests/coastal_tram_fixture.lua "$game/mods/luanttd_core/qa_coastal_tram.lua"
+elif [[ ${LUANTTD_NATIVE_RAIL_PAIR_WIRE:-false} == true ]]; then
+  cat tests/rail_paired_wire_native.lua >> "$game/mods/luanttd_core/init.lua"
 elif [[ ${LUANTTD_NATIVE_RAIL_COMPOUND_WIRE:-false} == true ]]; then
   cat tests/rail_compound_wire_native.lua >> "$game/mods/luanttd_core/init.lua"
 elif [[ ${LUANTTD_NATIVE_RAIL_CURVE_PYLON:-false} == true ]]; then
@@ -117,6 +119,9 @@ elif [[ ${LUANTTD_NATIVE_ROAD_FLOOD:-false} == true ]]; then
 elif [[ ${LUANTTD_NATIVE_TRAM_FLOOD:-false} == true ]]; then
   save_mark=TRAM_FLOOD_NATIVE_SAVED_WRECK
   pass_mark=TRAM_FLOOD_NATIVE_PASS
+elif [[ ${LUANTTD_NATIVE_RAIL_PAIR_WIRE:-false} == true ]]; then
+  save_mark=RAIL_PAIR_WIRE_NATIVE_SAVED
+  pass_mark=RAIL_PAIR_WIRE_NATIVE_PASS
 elif [[ ${LUANTTD_NATIVE_RAIL_COMPOUND_WIRE:-false} == true ]]; then
   save_mark=RAIL_COMPOUND_NATIVE_SAVED
   pass_mark=RAIL_COMPOUND_NATIVE_PASS
@@ -150,6 +155,8 @@ elif [[ ${LUANTTD_NATIVE_ROAD_FLOOD:-false} == true ]]; then
   grep ROAD_FLOOD_NATIVE_PASS "$out/reload.log"
 elif [[ ${LUANTTD_NATIVE_TRAM_FLOOD:-false} == true ]]; then
   grep TRAM_FLOOD_NATIVE_PASS "$out/reload.log"
+elif [[ ${LUANTTD_NATIVE_RAIL_PAIR_WIRE:-false} == true ]]; then
+  grep RAIL_PAIR_WIRE_NATIVE_PASS "$out/reload.log"
 elif [[ ${LUANTTD_NATIVE_RAIL_COMPOUND_WIRE:-false} == true ]]; then
   grep RAIL_COMPOUND_NATIVE_PASS "$out/reload.log"
 elif [[ ${LUANTTD_NATIVE_RAIL_CURVE_PYLON:-false} == true ]]; then

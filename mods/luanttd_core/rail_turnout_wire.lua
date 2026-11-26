@@ -5,7 +5,8 @@ return function(Sim,Track,Kernel)
   A.masks={5,6,9,10,17,18,20,24,33,34,36,40}
   local present={}
   for _,mask in ipairs(A.masks) do present[mask]=true end
-  local compound={[3]=true} -- crossing straight tracks use the same portal
+  A.pairs={[12]={4,8},[48]={16,32}}
+  local compound={[3]=true,[12]=true,[48]=true} -- independent pieces share a clear native portal
   for mask=1,63 do
     local bits,n=mask,0
     while bits>0 do n=n+bits%2;bits=math.floor(bits/2) end

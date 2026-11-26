@@ -1152,14 +1152,41 @@ return function(api)
       local name="rail_compound_contact_"..mask
       contact[mask]=architecture(name,name,"rail_catenary_atlas")
     end
-    stock_scenery.compound_portal=architecture("rail_compound_portal","rail_compound_portal","rail_catenary_atlas")
-    stock_scenery.is_compound_wire=Turnout.compound
+    local compound_portal=architecture("rail_compound_portal","rail_compound_portal","rail_catenary_atlas")
+    local paired_portal=architecture("rail_pair_portal_12","rail_pair_portal_12","rail_catenary_atlas")
+    function stock_scenery.wire_portal(bits)
+      if bits==12 then return paired_portal end
+      if Turnout.compound(bits) then return compound_portal end
+    end
+    local dual,single={},{}
+    for mask,pair in pairs(Turnout.pairs) do
+      dual[mask]={}
+      for a=0,3 do for b=0,3 do
+        if a+b>0 then
+          local name=("rail_pair_contact_%d_%d_%d"):format(mask,a,b)
+          dual[mask][4*a+b]=architecture(name,name,"rail_catenary_atlas")
+        end
+      end end
+      for _,bit in ipairs(pair) do
+        single[bit]={}
+        for mode=1,3 do
+          local name=("rail_pair_single_%d_%d"):format(bit,mode)
+          single[bit][mode]=architecture(name,name,"rail_catenary_atlas")
+        end
+      end
+    end
     function stock_scenery.rail_wire(id,t,x,z,under,stock_profile)
       local bits=t.rail_tracks
       if Turnout.supported(bits) then
         local selected
         if projected then selected=S.rail_wire[id] else selected=Turnout.at(S,id,t) end
         if not selected or under then return end
+        local pair=Turnout.pairs[bits]
+        if pair then
+          if selected~=bits then return single[selected][R.rail_diagonal_mode(id,selected)] or contact[selected] end
+          local m,n=R.rail_diagonal_mode(id,pair[1]),R.rail_diagonal_mode(id,pair[2])
+          return dual[bits][4*m+n] or contact[selected]
+        end
         if Turnout.compound(bits) then return contact[selected] end
         if selected==bits then return wires[selected] end
         return stock_scenery.catenary[selected][1]
@@ -1994,15 +2021,15 @@ return function(api)
             if pole then return pole end
           end
           local deck=Sim.bridge_deck_at(S,id)
-          local compound=stock_scenery.is_compound_wire(t.rail_tracks)
+          local portal=stock_scenery.wire_portal(t.rail_tracks)
           -- The portal's raised frame is a separate mesh, so the wires
           -- can respond to source connectivity without changing its feet.
-          if compound and (not deck or deck>y) and x%2==1 and z%2==1 then
-            return stock_scenery.compound_portal
+          if portal and (not deck or deck>y) and x%2==1 and z%2==1 then
+            return portal
           end
           -- RC1 elrail.cpp suppresses wire only one level over
           -- ground. At two levels it shares the deck's height slot.
-          if (not deck or deck>level+1) and (not compound or not deck or deck>y) then
+          if (not deck or deck>level+1) and (not portal or not deck or deck>y) then
             local under=deck==y and (t.rail_tracks==1 or t.rail_tracks==2)
             if z%2==0 and ((under and x%2==1) or (not under and x%2==0)) then
               local wire=stock_scenery.rail_wire(id,t,x-(under and 1 or 0),z,under,stock_profile)

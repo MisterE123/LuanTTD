@@ -15,8 +15,9 @@ return function(Sim,Track,terrain,surface,split_surface)
   end
   local function railhead(id,tile,bits)
     if not plain(tile) or not by_mask[bits] then return end
-    -- Paired overhead and advanced guideways need their own native art.
-    local pair=(tile.rail_type or 0)==0 and pairs_by_mask[tile.rail_tracks]
+    -- Ordinary and electric pairs share the authored two-track
+    -- geometry; unsupported guideway pairs retain stock curves.
+    local pair=(tile.rail_type or 0)<2 and pairs_by_mask[tile.rail_tracks]
     local independent=tile.rail_tracks==bits or pair and (pair[1]==bits or pair[2]==bits)
     if not independent then return end
     if not terrain then return tile.h end
