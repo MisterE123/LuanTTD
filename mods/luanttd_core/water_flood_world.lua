@@ -6,7 +6,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     "rail_bridge_above","rail_tunnel_below"}
   local function rail_ok(s,id,t)
     if not (RailWater and t.build=="stock_rail" and t.rail_tracks and (t.rail_type or 0)==0) then return false end
-    if t.ship or t.tram or t.airfield or t.level_crossing or t.rail_station_id or t.rail_waypoint_id or
+    if t.ship or t.tram or t.airfield or t.level_crossing or t.rail_waypoint_id or
         t.rail_depot_dir~=nil or t.rail_span_id then return false end
     for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return false end end
     return true
@@ -73,11 +73,13 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       if kind=="protected" or kind=="canal" or kind=="river" then return {kind=kind} end
       local slope,base=Terrain.tile(s.corner_grid,x,z)
       if kind=="rail" then
+        local platform=t.rail_station_id~=nil
+        if platform and (slope~=0 or not B.clear_platform or not B.clear_platform(id,false)) then return {kind="protected"} end
         local f,c=Track.foundation(slope,t.rail_tracks)
         if f=="invalid" then return {kind="protected"} end
         local adjusted,rise=Slope.foundation(slope,f,c)
         return {kind=kind,id=id,slope=slope,base=base,foundation_slope=adjusted,
-          foundation_base=base+rise,tracks=t.rail_tracks,ground=t.rail_ground or 0,water_ground=t.rail_ground==13}
+          foundation_base=base+rise,platform=platform,tracks=t.rail_tracks,ground=t.rail_ground or 0,water_ground=t.rail_ground==13}
       end
       if kind=="object" then return {kind=kind,slope=slope,base=base,can_flood=true} end
       return {kind=kind,slope=slope,base=base,water_class=kind=="station" and "sea" or t.water_class,
@@ -94,7 +96,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
           return rail_remove_safe(s,t.id,allow)
         end
         if t.slope==0 then
-          if removable() then return {kind="sea"} end
+          if removable() then return {kind="sea",platform=t.platform} end
           return
         end
         return RailWater.flood(t.slope,t.tracks,t.ground,removable)
@@ -144,6 +146,9 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         local q=change.rail
         if (q.removed or q.kind=="sea") and B.clear_signals then
           assert(B.clear_signals(id,q.removed,true),"Unclearable rail signal on a committed tide tile")
+        end
+        if q.platform then
+          assert(B.clear_platform(id,true),"Station footprint changed during a committed tide tile")
         end
         if q.kind=="coast" or q.kind=="sea" then
           t.rail_tracks,t.rail_ground,t.rail_type,t.build,t.owner=nil,nil,nil,nil,nil

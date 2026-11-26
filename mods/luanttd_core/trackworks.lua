@@ -2,6 +2,7 @@
 return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
   local Lab={}
   local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  local Freight=dofile(source.."../rail_freight_kinds.lua")
   local Height=dofile(source.."rail_height.lua")(Track,Slope)
   local Split=dofile(source.."../rail_split_profile.lua")(Track,Height)
   Lab.split_surface=Split.profile
@@ -204,6 +205,27 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     local ok,msg=Lab.depot_plan(s,owner,id,dir)
     if not ok then return false,msg end
     return Lab.commit_depot(s,owner,id,dir)
+  end
+  -- station_cmd.cpp: the water owner clears a single occupied platform
+  -- tile, not the full group. Caller guards actual bodies and reservations.
+  function Lab.coastal_platform_tile(s,id,apply)
+    local t=s.tiles[id]
+    local st=t and t.rail_station_id and (s.stock_rail_stations or {})[t.rail_station_id]
+    if not st or st.owner~=t.owner or Lab.facility_protected(s,id) or Freight.role(st) then return false end
+    local index
+    for i,parcel in ipairs(st.tiles) do if parcel==id then index=i;break end end
+    if not index then return false end
+    if not apply then return true end
+    local rest={}
+    for i,parcel in ipairs(st.tiles) do if i~=index then rest[#rest+1]=parcel end end
+    t.rail_station_id,t.rail_station_axis,t.rail_station_gfx=nil,nil,nil
+    if #rest==0 then
+      s.stock_rail_stations[st.id]=nil
+    else
+      st.tiles,st.area=rest,nil
+      st.area=Lab.station_bounds(s,st)
+    end
+    return true
   end
   function Lab.remove_facility(s,owner,id)
     if Lab.facility_protected(s,id) then return false,protected end

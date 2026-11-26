@@ -4,6 +4,7 @@ local Owned=assert(api.rail_owned)
 local T=dofile(mod.."/openttd/rail_track.lua")
 local Signals=dofile(mod.."/openttd/rail_signals.lua")(T)
 local signed=core.settings:get_bool("luanttd_qa_coastal_signed_rail",false)
+local platform=core.settings:get_bool("luanttd_qa_coastal_platform_rail",false)
 local at=Sim.id
 local owner="Rail flood QA"
 local function insert_line(z)
@@ -23,7 +24,12 @@ local function insert_line(z)
   local B=S.tiles[at(33,z)].rail_station_id
   local q=assert(Owned.quote(S,owner,at(4,z),{0,27}))
   local u=assert(Owned.commit(S,owner,q))
-  assert(Owned.start(S,owner,u.id,A,B))
+  if platform and z==13 then
+    assert(Owned.start_order_list(S,owner,u.id,{A,B}))
+    assert(Owned.edit_orders(S,owner,u.id,0,"load",1,2))
+  else
+    assert(Owned.start(S,owner,u.id,A,B))
+  end
   return u.id,A,B
 end
 core.after(0,function()
@@ -40,23 +46,34 @@ core.after(0,function()
     local dry,A,B=insert_line(24)
     assert(Rail.current_paid(S,wet).id==1 and Rail.current_paid(S,dry).id==2)
     local w=assert(Rail.current_paid(S,wet))
-    for _=1,10 do
-      Sim.daily(S)
-      local x=Sim.xy(w.consist.parts[1].tile)
-      if x>=6 and x<=16 then break end
+    if platform then
+      for _=1,30 do
+        Sim.daily(S)
+        if w.phase=="dwell" then break end
+      end
+      assert(w.phase=="dwell" and Sim.rail_paid_status(S,wet).loading,
+        "the purchased train must be waiting on an active full-load visit")
+    else
+      for _=1,10 do
+        Sim.daily(S)
+        local x=Sim.xy(w.consist.parts[1].tile)
+        if x>=6 and x<=16 then break end
+      end
+      local move_at=Sim.xy(w.consist.parts[1].tile)
+      assert(move_at>=6 and move_at<=16,"expected moving train on an ordinary parcel")
+      assert(Owned.toggle(S,owner,wet))
+      for day=1,6 do
+        if w.speed==0 and not w.consist.parts[1].hidden then break end
+        Sim.daily(S)
+      end
+      assert(w.speed==0 and not w.consist.parts[1].hidden)
     end
-    local move_at=Sim.xy(w.consist.parts[1].tile)
-    assert(move_at>=6 and move_at<=16,"expected moving train on an ordinary parcel")
-    assert(Owned.toggle(S,owner,wet))
-    for day=1,6 do
-      if w.speed==0 and not w.consist.parts[1].hidden then break end
-      Sim.daily(S)
-    end
-    assert(w.speed==0 and not w.consist.parts[1].hidden)
     if signed then assert(Rail.current(S).signals.records[w.consist.parts[1].tile],"Target was not signed") end
     local at_wreck=w.consist.parts[1].tile
     local x,z=Sim.xy(at_wreck)
-    assert(S.tiles[at_wreck].build=="stock_rail" and not S.tiles[at_wreck].rail_station_id and S.tiles[at_wreck].rail_depot_dir==nil)
+    local target=S.tiles[at_wreck]
+    assert(target.build=="stock_rail" and (target.rail_station_id~=nil)==platform and target.rail_depot_dir==nil)
+    local station=target.rail_station_id
     local water=at(x,z+1)
     S.tiles[water]={terrain="water",water_class="sea",h=0,variant=1}
     local terrain=dofile(mod.."/openttd/terrain.lua")
@@ -71,7 +88,13 @@ core.after(0,function()
     assert(w.flood_wreck and w.crash_age>=4000 and w.crash_age<4440,("stock tide never reached the paid train: id=%d head=%d age=%s tide=%s"):format(at_wreck,w.consist.parts[1].tile,tostring(w.crash_age),tostring(S.stock_coastal_flood)))
     assert(#w.consist.parts==2 and S.tiles[at_wreck].rail_tracks and not Rail.current_paid(S,dry).crashed)
     if signed then assert(Rail.current(S).signals.records[at_wreck],"Signalling must remain until clearing the wreck") end
-    S.rail_flood_native={owner=owner,wet=wet,dry=dry,target=at_wreck,A=A,B=B,dry_ticks=Rail.current_paid(S,dry).vehicle_ticks}
+    S.rail_flood_native={owner=owner,wet=wet,dry=dry,target=at_wreck,station=station,A=A,B=B,dry_ticks=Rail.current_paid(S,dry).vehicle_ticks}
+    if platform then
+      local svc=assert(S.stock_ship_commercial.service)
+      local v=assert(svc.vehicles[0x4000+w.paid_clock])
+      local loading=assert(svc.stations[0x4000+station]).loading_order
+      assert(v.crashed and not v.load_state and #loading==0 and S.tiles[at_wreck].rail_station_id==station)
+    end
     api.save()
     core.log("action","RAIL_FLOOD_NATIVE_SAVED_WRECK")
     core.request_shutdown("Saved a paid flooded train alongside an independent operating service",false,0)
@@ -89,6 +112,11 @@ core.after(0,function()
   assert(not Rail.current_paid(S,proof.wet) and not S.stock_rail_fleet.units[proof.wet])
   assert(S.tiles[proof.target].terrain=="water" and not S.tiles[proof.target].rail_tracks)
   assert(Rail.current_paid(S,proof.dry)==dry and dry.id==2 and dry.vehicle_ticks>proof.dry_ticks and not dry.crashed)
+  if platform then
+    assert(not S.tiles[proof.target].rail_station_id)
+    local physical=S.stock_rail_stations[proof.station]
+    if physical then for _,tile in ipairs(physical.tiles) do assert(tile~=proof.target) end end
+  end
   if signed then
     local signals=Rail.current(S).signals.records
     assert(not signals[proof.target] and signals[at(7,24)],"Removed cleared head without touching the dry counterpart")

@@ -535,6 +535,7 @@ local function coastal_visit(s)
   local board=coastal_world.board(s)
   board.flood_vehicles=function(id,tick) return M.coastal_rail_flood(s,id,tick) end
   board.clear_signals=function(id,removed,apply) return M.coastal_clear_rail_signal(s,id,removed,apply) end
+  board.clear_platform=function(id,apply) return M.coastal_clear_rail_platform(s,id,apply) end
   local trees=s.stock_generated_profile and stock_tree_lifecycle
   local random=trees and function() return M.stock_random_u32(s) end
   return function(x,z,tick)
@@ -3944,6 +3945,10 @@ function M.coastal_clear_rail_signal(s,id,removed,apply)
   if rail and rail.coastal_clear_signal then return rail.coastal_clear_signal(s,id,removed,apply) end
   local d=s.stock_rail_dispatch
   return not (d and d.signals and d.signals.records and d.signals.records[id])
+end
+function M.coastal_clear_rail_platform(s,id,apply)
+  local rail=paid_rail_runs[s]
+  return not not (rail and rail.coastal_clear_station and rail.coastal_clear_station(s,id,apply))
 end
 function M.mount_paid_rail(s,Run)
   paid_rail_runs[s]=Run

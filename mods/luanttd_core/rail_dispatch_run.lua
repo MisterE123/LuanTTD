@@ -232,6 +232,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return true,"Signal removed; rail remains."
   end
 
+  function R.coastal_clear_station(s,id,apply)
+    return Lab.coastal_platform_tile(s,id,apply)
+  end
+
   -- CmdRemoveSingleRail under OWNER_WATER removes the signal on the
   -- cleared piece. Unrelated heads on a surviving piece stay in place.
   function R.coastal_clear_signal(s,id,removed,apply)

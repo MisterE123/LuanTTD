@@ -87,3 +87,28 @@ s.tiles[blocked].house=true
 local no,_,footprint=api.rail_build.quote_station(n,blocked,Sim.id(32,33),Place.default)
 assert(not no and #footprint==4)
 print("PASS RC1 station drag, spread, fixed footprint, pricing, real station bounds, adjacency and separate stations")
+
+-- RC1 OWNER_WATER clears just the platform tile reached by the tide,
+-- not the player's full station. Shrink the footprint and keep its ID.
+local flood=Sim.new(1951)
+flood.corner_grid=Terrain.new(Sim.W,Sim.H,function() return 0 end)
+for i in ipairs(flood.tiles) do flood.tiles[i]={terrain="grass",h=0,variant=1} end
+local group={Sim.id(10,10),Sim.id(11,10),Sim.id(12,10)}
+assert(Lab.commit_station(flood,"Tide",group,0,{x=10,z=10,w=3,h=1}))
+local id=flood.tiles[group[1]].rail_station_id
+local raw=flood.stock_rail_stations[id]
+local coastal=load("water_flood_world")(Sim,Terrain,load("openttd/water_flood"),Track,Slope,
+  load("openttd/rail_half_water")(Track,Slope))
+local b=coastal.board(flood)
+b.clear_platform=function(tile,apply) return Lab.coastal_platform_tile(flood,tile,apply) end
+local sea=Sim.id(10,9)
+flood.tiles[sea].terrain,flood.tiles[sea].water_class="water","sea"
+raw.coal_role="source"
+assert(b.tile(10,10).kind=="protected" and not Lab.coastal_platform_tile(flood,group[1],false))
+raw.coal_role=nil
+assert(b.tile(10,10).kind=="rail" and b.tile(10,10).platform)
+assert(coastal.visit(flood,10,9,b)>0)
+assert(flood.tiles[group[1]].terrain=="water" and not flood.tiles[group[1]].rail_station_id)
+assert(flood.tiles[group[2]].rail_station_id==id and flood.tiles[group[3]].rail_station_id==id)
+assert(raw.area.x==11 and raw.area.w==2 and #raw.tiles==2)
+print("PASS water-owner demolition shrinks the reached platform tile only and retains the shared station")
