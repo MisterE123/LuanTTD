@@ -14,11 +14,13 @@ lift=${LUANTTD_QA_TOWN_LIFT:-0}
 rebuild=${LUANTTD_QA_TOWN_REBUILD:-0}
 rocky_ferry=${LUANTTD_QA_ROCKY_FERRY:-0}
 airport_noise=${LUANTTD_QA_AIRPORT_NOISE:-0}
+canal_dikes=${LUANTTD_QA_CANAL_DIKES:-0}
 fixture=tests/campaign_worker_stock_residential_native.lua
 if [[ $lift == 1 ]]; then fixture=tests/town_lift_native.lua; fi
 if [[ $rebuild == 1 ]]; then fixture=tests/town_rebuild_native.lua; fi
 if [[ $rocky_ferry == 1 ]]; then fixture=tests/stock_rocky_coast_ferry_native.lua; fi
 if [[ $airport_noise == 1 ]]; then fixture=tests/airport_noise_native.lua; fi
+if [[ $canal_dikes == 1 ]]; then fixture=tests/canal_dikes_native.lua; fi
 cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-42683}
@@ -44,7 +46,7 @@ if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   t=$(realpath "$BAYLINE_NATIVE_TOOLS")
   export PATH="$t/run/bin:$t/usr/bin:$PATH" LD_LIBRARY_PATH="$t/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
-export DISPLAY="127.0.0.1:$display" HOME="$out/home" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1
+export DISPLAY="127.0.0.1:$display" HOME="$out/home" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
@@ -131,6 +133,18 @@ if [[ $airport_noise == 1 ]]; then
   grep 'PASS NATIVE AIRPORT NOISE SERVICE' "$out/server.log"
   ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
   reopen luanttd_qa_airport_noise_reopen "PASS NATIVE AIRPORT NOISE REOPEN"
+  exit 0
+fi
+if [[ $canal_dikes == 1 ]]; then
+  for view in joined corner bridge-and-buoy depot; do
+    mark "NATIVE CANAL DIKES FRAME $view"
+    sleep .65
+    if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/canal-dike-$view.jpg"; fi
+  done
+  mark 'PASS NATIVE CANAL DIKES'
+  grep -E 'NATIVE CANAL DIKES (LAYERS|FRAME)|PASS NATIVE CANAL DIKES' "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+  reopen luanttd_qa_canal_dikes_reopen "PASS NATIVE CANAL DIKES REOPEN"
   exit 0
 fi
 for i in {01..13}; do

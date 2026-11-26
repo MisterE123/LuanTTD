@@ -334,6 +334,10 @@ jobs:
           lua5.1 tests/rail_ground_temperate.lua
           lua5.1 tests/rail_split_profile.lua
           python3 tests/rail_half_water_upstream.py "$src"
+          python3 tests/canal_dikes_upstream.py "$src" --lua lua5.1
+          lua5.1 tests/canal_dike_scene.lua
+          /usr/bin/python3 tools/build_stock_canal_dikes.py --check
+          /usr/bin/python3 tests/canal_dike_art.py
           python3 tests/rail_autoslope_rc1.py "$src"
           python3 tests/town_spans_rc1.py "$src"
           lua5.1 tests/generated_town_grade_spans.lua

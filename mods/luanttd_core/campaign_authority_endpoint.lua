@@ -655,11 +655,14 @@ return function(Sim,R,max_days)
     local projection=R.terrain_projection
     local corners=projection and projection.corners(R.terrain,s.corner_grid,x,z,w,h)
     local old=known and scenes[scene_key(x,z,w,h)]
+    local dikes=R.canal_dikes and R.canal_dikes.mask or function() end
     local unchanged=old and old.key==known and old.corners==corners and projection and projection.matches_tile
     if unchanged then
       for _,row in ipairs(old.tiles) do
         local t=s.tiles[row.id]
-        if not projection.matches_tile(t,row.surface) or steps_at(row.id,t,row.slope,row.level)~=row.front_steps
+        if not projection.matches_tile(t,row.surface)
+          or steps_at(row.id,t,row.slope,row.level)~=row.front_steps
+          or dikes(row.id)~=row.surface.canal_dikes
           or (t.water_class=="river" and R.river_direction and R.river_direction(row.id) or nil)~=row.river_direction then
           unchanged=false
           break
@@ -682,9 +685,11 @@ return function(Sim,R,max_days)
           local t=s.tiles[id]
           if signals_at then signals_at(id,signals) end
           local slope,level,top=R.terrain.tile(s.corner_grid,x+dx,z+dz)
+          local surface=projection and projection.tile(t) or nil
+          if surface then surface.canal_dikes=dikes(id) end
           tiles[#tiles+1]={id=id,level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
             rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station,
-            surface=projection and projection.tile(t) or nil,front_steps=steps_at(id,t,slope,level),
+            surface=surface,front_steps=steps_at(id,t,slope,level),
             river_direction=t.water_class=="river" and R.river_direction and R.river_direction(id) or nil}
         end
       end

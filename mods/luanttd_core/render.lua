@@ -2020,11 +2020,45 @@ return function(api)
     end
     return "air"
   end
+  local dikes=terrain and api.ship_tools and (function()
+    local Rules=dofile(modpath.."/openttd/canal_dikes.lua")
+    local nodes={}
+    -- Every reachable nonempty stock arrangement has one compact native mesh.
+    local bits={["-1:0"]=1,["0:1"]=2,["1:0"]=4,["0:-1"]=8,
+      ["-1:1"]=16,["1:1"]=32,["1:-1"]=64,["-1:-1"]=128}
+    for wet=0,255 do
+      local mask=Rules.edges(function(dx,dz)
+        return math.floor(wet/bits[dx..":"..dz])%2==1
+      end)
+      if mask~=0 and not nodes[mask] then
+        local name="canal_dike_"..mask
+        nodes[mask]=reg(name,{png("canal_dike_limestone")},{drawtype="mesh",
+          mesh="bl_"..name..".obj",paramtype="light",sunlight_propagates=true,
+          walkable=false,pointable=false})
+      end
+    end
+    local adapter=dofile(modpath.."/canal_dike_surface.lua")(Sim,S,function(id) return terrain.tile(id) end,Rules)
+    return function(t,id,x,y,z)
+      -- Deck and the default buoy/depot occupy even/even; a buoy beneath
+      -- a low deck occupies odd/even; bridge feet reserve odd/odd.
+      if x%2~=0 or z%2~=1 then return end
+      local mask=t.canal_dikes
+      if not projected then mask=adapter.mask(id) end
+      local node=nodes[mask]
+      if not node then return end
+      local _,level=terrain.tile(id)
+      if y==level+1 then return node end
+    end
+  end)()
   local tunnel_bore=terrain and Bore.mount(reg,bore_ground_defs)
   local function tile_node(id,x,y,z)
     local node,param2=tile_node_base(id,x,y,z)
     local cut=tunnel_bore and tunnel_bore(S,id,x,y,z,node)
     if cut then return cut,param2 end
+    if dikes and node=="air" then
+      local edge=dikes(S.tiles[id],id,x,y,z)
+      if edge then return edge end
+    end
     -- Only an unused cell in a middle tile can host the footings. Preserve
     -- the already-rendered slope/water/foundation in every occupied cell.
     if node=="air" and y>=0 and x%2==1 and z%2==1 then
@@ -2283,6 +2317,16 @@ return function(api)
           local k=Sim.adjacent(j,d%4+1)
           if k and S.tiles[k] and S.tiles[k].source_house then set[k]=true end
         end
+      end
+      if dikes and not projected then
+        local x,z=Sim.xy(id)
+        for dx=-1,1,2 do for dz=-1,1,2 do
+          local j=Sim.id(x+dx,z+dz)
+          local t=j and S.tiles[j]
+          if t and (t.stock_canal or t.water_class=="canal" or t.ship and t.ship.water_class=="canal") then
+            set[j]=true
+          end
+        end end
       end
     end
     for id in pairs(set) do paint(id) end
