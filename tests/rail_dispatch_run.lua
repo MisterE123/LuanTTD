@@ -138,3 +138,37 @@ local rejected=R.tick(s)
 assert(#rejected==1 and rejected[1].kind=="blocked" and R.current(s).runs[1].phase=="blocked")
 assert(R.clear(s,"Alice"))
 print("PASS: pass-through platform keeps every claim until the tail exits; broken topology fails closed")
+
+-- A real source-right-angle pair: SW into RIGHT exits SE, then UPPER
+-- enters from NW and exits NE. Both individually legal; the second is
+-- among the first piece's TrackdirCrossesTrackdirs.
+do
+  local owner="Policy tester"
+  local function yard()
+    local q={tiles={},topology=0}
+    local function set(x,y,track) q.tiles[id(x,y)]={owner=owner,rail_tracks=2^track} end
+    for x=4,8 do set(x,9,T.X) end
+    set(9,9,T.RIGHT)
+    set(9,10,T.UPPER)
+    for x=4,8 do set(x,10,T.X) end
+    assert(Lab.depot(q,owner,id(4,9),T.SW))
+    assert(Lab.station(q,owner,id(4,10),id(7,10)))
+    return q
+  end
+  assert(T.has(T.crossing_trackdirs(T.RIGHT),T.UPPER))
+  local strict=yard()
+  local ok,err=R.start(strict,owner,id(4,9),1)
+  assert(not ok and err:find("No connected route",1,true),err)
+  local allow=dofile(root.."rail_dispatch_run.lua")(T,F,C,S,P,Life,Sig,Motion,D,Speed,Lab,
+    nil,nil,nil,nil,nil,nil,false)
+  local allowed=yard()
+  local start,why,run=allow.start(allowed,owner,id(4,9),1)
+  assert(start,why)
+  for _=1,1100 do
+    allow.tick(allowed)
+    assert(not allow.current(allowed).failure,allow.current(allowed).failure)
+    if run.phase=="arrived" then break end
+  end
+  assert(run.phase=="arrived" and R.board(allowed).tile(run.arrival.tile).station==1)
+  print("PASS stock 90 degree setting controls route admission and lets the actual consist reach its station when disabled")
+end

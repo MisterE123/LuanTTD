@@ -3,10 +3,10 @@
 -- has one locomotive and one empty carriage; unique routes, PBS or an
 -- explicitly separate opt-in conventional block pilot.
 -- The source ports own kinematics, path search, track claims and aspects.
-return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch,Speed,Lab,stock_height,Reverse,Spans,Crossings,Roster,Block)
+return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch,Speed,Lab,stock_height,Reverse,Spans,Crossings,Roster,Block,forbid_90)
   local R={VERSION=1,SHUTTLE_DWELL_TICKS=74,engine={id=1,power=600,weight=65,speed=80,visual="diesel"},
     wagon={id=27,weight=25,length=8}}
-  local settings={forbid_90=true} -- OpenTTD 16.0-RC1 pf.forbid_90_deg default.
+  local settings={forbid_90=forbid_90~=false} -- 16.0-RC1 pf.forbid_90_deg, true by default.
   local upstream=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local Freight=dofile(upstream.."../rail_freight_kinds.lua")
   local Quarter=dofile(upstream.."company_quarters_rc1.lua")

@@ -32,3 +32,7 @@ luanttd_town_council_tolerance (Council tolerance: 0 Lenient, 1 Neutral, 2 Hosti
 # Stock OpenTTD setting. When off, the standard two-airport town limit applies.
 luanttd_station_noise_level (Limit airports by town noise instead of airport count) bool false
 luanttd_extra_dynamite (Extra dynamite) bool true
+
+[OpenTTD rail pathfinding]
+# OpenTTD 16.0-RC1 pf.forbid_90_deg (Expert). Rail-type restrictions still apply.
+luanttd_forbid_90_deg (Forbid 90 degree train turns) bool true

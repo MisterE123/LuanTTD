@@ -350,6 +350,8 @@ jobs:
           lua5.1 tests/town_rebuild.lua
           lua5.1 tests/town_foundation.lua
           lua5.1 tests/rail_autoslope.lua
+          lua5.1 tests/rail_dispatch_run.lua
+          python3 tests/rail_turn_policy_rc1.py "$src"
           lua5.1 tests/rail_half_water.lua
           lua5.1 tests/rail_half_water_world.lua
           lua5.1 tests/rail_multi_wet_world.lua

@@ -141,7 +141,7 @@ return function(Sim,mod)
     local roster=geo.owned and dofile(source.."rail_roster.lua") or nil
     local block=dofile(source.."rail_block_signals.lua")(track,signal)
     local pilot=dofile(mod.."/rail_dispatch_run.lua")(track,follow,cost,search,pbs,dispatch_life,signal,
-      dispatch_motion,dispatch,speed,lab,height,reverse,geo.spans,geo.crossings,roster,block)
+      dispatch_motion,dispatch,speed,lab,height,reverse,geo.spans,geo.crossings,roster,block,s.stock_rail_forbid_90)
     return pilot,signal,roster,height,heights,profile
   end
   function B.owned_rail(s,lab,roster,pilot,oil_active)

@@ -8,6 +8,7 @@ return function(Sim,mod,s,cap)
   local grid=assert(s.corner_grid,"Cannot mount a campaign without a corner grid.")
   Sim.W,Sim.H=grid.width,grid.depth
   assert(#s.tiles==Sim.W*Sim.H,"The authority checkpoint has the wrong tile count.")
+  if cap.rail_forbid_90~=nil then s.stock_rail_forbid_90=cap.rail_forbid_90 end
   local function tile(id)
     local x,z=Sim.xy(id)
     return Terrain.tile(grid,x,z)

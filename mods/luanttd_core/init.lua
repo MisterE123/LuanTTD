@@ -80,6 +80,7 @@ S.stock_road_town_policy={
   extra_dynamite=settings:get_bool("luanttd_extra_dynamite",true),
   station_noise_level=settings:get_bool("luanttd_station_noise_level",false),
 }
+S.stock_rail_forbid_90=settings:get_bool("luanttd_forbid_90_deg",true)
 Sim.restore_road_orders(S)
 local simulation_bindings=dofile(mod.."/campaign_simulation_bindings.lua")(Sim,mod)
 local api={Sim=Sim,s=S,generated_world=generated_world,road_first=true,task_hotbar=worker_boot,
@@ -656,7 +657,8 @@ local authority_started
 local function start_authority()
   if not authority or authority_started then return end
   authority_started=true
-  local cap={autoplay=true,seconds_per_day=interval,durable_actions=true,road_town_policy=S.stock_road_town_policy}
+  local cap={autoplay=true,seconds_per_day=interval,durable_actions=true,road_town_policy=S.stock_road_town_policy,
+    rail_forbid_90=S.stock_rail_forbid_90}
   for k,value in pairs(api.capabilities) do if cap[k]==nil then cap[k]=value end end
   authority.start(cap,Sim.W,Sim.H)
 end
