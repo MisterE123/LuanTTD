@@ -535,6 +535,7 @@ local function coastal_visit(s)
   local board=coastal_world.board(s)
   if M.road_stock_service_active(s) then
     board.road_stop_flood,board.clear_road_stop=M.coastal_road_stop_runtime(s)
+    board.tram_stop_flood,board.clear_tram_stop=M.coastal_tram_stop_runtime(s)
   end
   board.flood_vehicles=function(id,tick,other,water_z) return M.coastal_rail_flood(s,id,tick,other,water_z) end
   board.bridge_ends=function(id) return M.coastal_rail_bridge(s,id) end
@@ -4980,6 +4981,38 @@ function M.coastal_road_stop_runtime(s)
     t.build,t.owner,t.road_bits,t.road_town,t.roadside,t.stock_roadside_town=nil,nil,nil,nil,nil,nil
     t.station,t.stop_axis,t.road_terminal_level,t.road_stop_type=nil,nil,nil,nil
     t.road_disallowed,t.disallowed,t.roadworks,t.roadworks_counter=nil,nil,nil,nil
+    return true
+  end
+  return flood_at,clear
+end
+
+-- Electric streetcars share the source road clock, but are held in the
+-- canonical tram register rather than mirrored in the road-vehicle pool.
+function M.coastal_tram_stop_runtime(s)
+  local trams=shared_tram_clock[s]
+  if not trams or not trams.coastal_index then return end
+  passenger_modules()
+  local stamp,index
+  local function flood_at(id,tick)
+    if not index or stamp~=tick then index,stamp=trams.coastal_index(s),tick end
+    local st=M.tram_stop_station(s,id)
+    if not st or not st.tram_only then return end
+    for _,p in ipairs(index[id] or {}) do
+      local passengers=trams.flood(s,p,id,tick,st.id,function(v,ticks) return station_service.crash(s,v,ticks) end)
+      if passengers~=nil then
+        local victims=road_flood_rules().road_victims(M.stock_random_u32(s),passengers,true)
+        if road_flood_news[s] then road_flood_news[s](id,victims,true) end
+      end
+    end
+  end
+  local function clear(id,apply)
+    local st=M.tram_stop_station(s,id)
+    if not st or not st.tram_only or trams.coastal_in_use(s,id) or M.road_station_in_use(s,st.id) then return false end
+    if apply then
+      local t=s.tiles[id]
+      M.retire_road_station(s,st.id)
+      t.tram,t.owner,t.roadside,t.stock_roadside_town=nil,nil,nil,nil
+    end
     return true
   end
   return flood_at,clear

@@ -3,6 +3,7 @@
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local body=dofile(mod.."/tram_market.lua")
 local Index=dofile(mod.."/tram_fleet_index.lua")
+local Flood=dofile(mod.."/openttd/ground_vehicle_flood.lua")
 return function(Network,Trip,Speed,shared,Passenger)
   local R={VERSION=1}
   local speed_cap=body.speed
@@ -105,6 +106,7 @@ return function(Network,Trip,Speed,shared,Passenger)
   function R.replace_orders(s,owner,orders,next_order,retained,id)
     local _,_,p=R.orders(s,owner,id)
     if not p or #orders<2 or #orders>254 then return false,"Choose at least two tram stops." end
+    if p.road_flood_age then return false,"That streetcar is a wreck." end
     if p.carrier then
       local ids={}
       for _,tile in ipairs(orders) do
@@ -149,6 +151,7 @@ return function(Network,Trip,Speed,shared,Passenger)
   function R.clear(s,owner,id)
     local p=R.current(s,id)
     if not p or p.owner~=owner then return nil,"no_owned_pilot" end
+    if p.road_flood_age then return nil,"TRAM_WRECK_IN_THE_WAY" end
     if p.carrier and p.carrier.load_state and not Passenger.depart(s,p.carrier,s.stock_load_tick,true) then
       return nil,"TRAM_LOADING_NOT_SETTLED"
     end
@@ -196,21 +199,46 @@ return function(Network,Trip,Speed,shared,Passenger)
       if #ordered.runs==0 then return end
       local records={}
       for _,p in ipairs(ordered.runs) do
-        if k==1 then timelines[p]={frames={R.frame(p) or false}} end
         local id=Index.serial(p)
-        local record={id=id,first=id,type="road",companion=true,
-          clock=p,max_speed=speed_cap,stopped=p.phase~="running"}
-        local f=R.frame(p)
-        if f then W.put(record,f,false,z(s,f)) end
-        records[#records+1]=record
+        if R.current(s,id)==p then
+          if k==1 then timelines[p]={frames={R.frame(p) or false}} end
+          local record={id=id,first=id,type="road",companion=true,
+            clock=p,max_speed=speed_cap,stopped=p.phase~="running"}
+          local f=R.frame(p)
+          if f then W.put(record,f,false,z(s,f)) end
+          records[#records+1]=record
+        end
       end
       return records
     end
     function C.advance(s,W,tick,record,k,ready)
       local p=R.advance(s,1,nil,W,record,z,tick,ready,record.clock)
-      local sample=timelines[p]
+      local sample=p and timelines[p]
       if sample and k then sample.frames[k]=R.frame(p) or false end
       return p
+    end
+    C.coastal_in_use=R.uses
+    function C.coastal_index(s)
+      local rows={}
+      for _,p in ipairs(R.all(s)) do
+        local f=R.frame(p)
+        if f and not (f[10] or f[12] or f[13] or f[14] or f[16]) then
+          local id=f[4]
+          local row=rows[id] or {};rows[id]=row
+          row[#row+1]=p
+        end
+      end
+      return rows
+    end
+    function C.flood(s,p,id,tick,station,crash)
+      local f=R.frame(p)
+      local v=p.carrier
+      if p.phase~="stopped" or not (v and v.load_state and v.load_state.station==station and
+          f and f[4]==id and z(s,f)<=0) then return end
+      local count=crash(v,tick)
+      if count==nil then return end
+      p.phase,p.speed,p.subspeed,p.progress,p.road_flood_age="crashed",0,0,0,Flood.road_crash_age(true)
+      return count
     end
     return C
   end
@@ -220,6 +248,16 @@ return function(Network,Trip,Speed,shared,Passenger)
     if p.carrier then assert(n==1 and tick and ready,"Commercial tram requires the owner road clock") end
     for _=1,n do
       p.ticks=p.ticks+1
+      if p.road_flood_age then
+        local retire
+        p.road_flood_age,retire=Flood.road_wreck_tick(p.road_flood_age,p.ticks)
+        if retire then
+          if p==s.tram_pilot then s.tram_pilot=nil else s.stock_tram_fleet[Index.serial(p)]=nil end
+          if W then W.erase(record) end
+          return
+        end
+        return p
+      end
       local leg=p.legs[p.leg]
       local carrier=p.carrier
       if carrier and carrier.load_state then

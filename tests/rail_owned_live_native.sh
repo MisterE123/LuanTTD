@@ -29,6 +29,9 @@ if [[ ${LUANTTD_NATIVE_RAIL_FLOOD:-false} == true ]]; then
 elif [[ ${LUANTTD_NATIVE_ROAD_FLOOD:-false} == true ]]; then
   cat tests/coastal_road_stop_native.lua >> "$game/mods/luanttd_core/init.lua"
   cp tests/coastal_road_stop_fixture.lua "$game/mods/luanttd_core/qa_coastal_road_stop.lua"
+elif [[ ${LUANTTD_NATIVE_TRAM_FLOOD:-false} == true ]]; then
+  cat tests/coastal_tram_native.lua >> "$game/mods/luanttd_core/init.lua"
+  cp tests/coastal_tram_fixture.lua "$game/mods/luanttd_core/qa_coastal_tram.lua"
 elif [[ ${LUANTTD_NATIVE_ORDER_SEQUENCE:-false} == true ]]; then
   cat tests/rail_order_list_native.lua >> "$game/mods/luanttd_core/init.lua"
 elif [[ ${LUANTTD_NATIVE_MIXED_FLEET:-false} == true ]]; then
@@ -105,6 +108,9 @@ if [[ ${LUANTTD_NATIVE_RAIL_FLOOD:-false} == true ]]; then
 elif [[ ${LUANTTD_NATIVE_ROAD_FLOOD:-false} == true ]]; then
   save_mark=ROAD_FLOOD_NATIVE_SAVED_WRECK
   pass_mark=ROAD_FLOOD_NATIVE_PASS
+elif [[ ${LUANTTD_NATIVE_TRAM_FLOOD:-false} == true ]]; then
+  save_mark=TRAM_FLOOD_NATIVE_SAVED_WRECK
+  pass_mark=TRAM_FLOOD_NATIVE_PASS
 elif [[ ${LUANTTD_NATIVE_ORDER_SEQUENCE:-false} == true ]]; then
   save_mark=RAIL_ORDER_LIST_NATIVE_SAVED
   pass_mark=RAIL_ORDER_LIST_NATIVE_PASS
@@ -130,6 +136,8 @@ if [[ ${LUANTTD_NATIVE_RAIL_FLOOD:-false} == true ]]; then
   grep RAIL_FLOOD_NATIVE_PASS "$out/reload.log"
 elif [[ ${LUANTTD_NATIVE_ROAD_FLOOD:-false} == true ]]; then
   grep ROAD_FLOOD_NATIVE_PASS "$out/reload.log"
+elif [[ ${LUANTTD_NATIVE_TRAM_FLOOD:-false} == true ]]; then
+  grep TRAM_FLOOD_NATIVE_PASS "$out/reload.log"
 elif [[ ${LUANTTD_NATIVE_ORDER_SEQUENCE:-false} == true ]]; then
   grep RAIL_ORDER_LIST_NATIVE_PASS "$out/reload.log"
 elif [[ ${LUANTTD_NATIVE_MIXED_FLEET:-false} == true ]]; then
