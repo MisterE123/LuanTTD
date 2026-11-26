@@ -51,8 +51,13 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       return "tram_stop"
     end
     if t.build=="road_station" and t.station and (t.stop_axis or t.road_stop_pair) and (t.roadtype or 0)==0
-        and not (t.tram or t.ship or t.airfield or t.rail_tracks or t.level_crossing) then
+        and not (t.ship or t.airfield or t.rail_tracks or t.level_crossing) then
       for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return "protected" end end
+      if t.tram then
+        if not t.road_stop_pair and t.tram.kind=="drive_stop" and t.tram.shared_station==t.station and
+            t.tram.tramtype==1 and t.tram.tram_bits==t.stop_axis then return "mixed_stop" end
+        return "protected"
+      end
       return t.road_stop_pair and "bay_stop" or "through_stop"
     end
     if floodable_object(t) and (t.terrain=="grass" or t.terrain=="hill") then
@@ -101,7 +106,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         return {kind=kind,id=id,slope=slope,base=base,foundation_slope=adjusted,
           foundation_base=base+rise,platform=platform,tracks=t.rail_tracks,ground=t.rail_ground or 0,water_ground=t.rail_ground==13}
       end
-      if kind=="through_stop" or kind=="bay_stop" or kind=="tram_stop" then return {kind=kind,id=id,slope=slope,base=base} end
+      if kind=="through_stop" or kind=="bay_stop" or kind=="tram_stop" or kind=="mixed_stop" then return {kind=kind,id=id,slope=slope,base=base} end
       if kind=="object" then return {kind=kind,slope=slope,base=base,can_flood=true} end
       return {kind=kind,slope=slope,base=base,water_class=kind=="station" and "sea" or t.water_class,
         rocks=t.stock_water_rocks or (kind=="clear" and t.stock_clear_ground==2) or nil,
@@ -109,7 +114,12 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     end
     function B.flood_road_stop(t)
       if not B.road_stop_flood or not B.clear_road_stop then return false end
+      if t.kind=="mixed_stop" then
+        if not B.tram_stop_flood or not B.shared_tram_busy then return false end
+        B.tram_stop_flood(t.id,B.tick)
+      end
       B.road_stop_flood(t.id,B.tick)
+      if t.kind=="mixed_stop" and B.shared_tram_busy(t.id) then return false end
       return B.clear_road_stop(t.id,false,B.tick)
     end
     function B.flood_tram_stop(t)
@@ -197,7 +207,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         else
           t.rail_tracks,t.rail_ground=q.tracks,q.ground
         end
-      elseif change.from=="through_stop" or change.from=="bay_stop" then
+      elseif change.from=="through_stop" or change.from=="bay_stop" or change.from=="mixed_stop" then
         -- An earlier parcel of this same station could have changed
         -- its active order guard. Do not commit a now-unsafe removal.
         changed=B.clear_road_stop(id,true,B.tick)

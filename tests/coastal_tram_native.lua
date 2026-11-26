@@ -1,5 +1,6 @@
 do
-  local F=dofile(mod.."/qa_coastal_tram.lua")(Sim,mod)
+  local mixed=core.settings:get_bool("luanttd_qa_coastal_mixed_stop",false)
+  local F=dofile(mod.."/qa_coastal_tram.lua")(Sim,mod,mixed)
   core.after(0,function()
     local proof=S.coastal_tram_native
     if not proof then

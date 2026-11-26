@@ -535,7 +535,7 @@ local function coastal_visit(s)
   local board=coastal_world.board(s)
   if M.road_stock_service_active(s) then
     board.road_stop_flood,board.clear_road_stop=M.coastal_road_stop_runtime(s)
-    board.tram_stop_flood,board.clear_tram_stop=M.coastal_tram_stop_runtime(s)
+    board.tram_stop_flood,board.clear_tram_stop,board.shared_tram_busy=M.coastal_tram_stop_runtime(s)
   end
   board.flood_vehicles=function(id,tick,other,water_z) return M.coastal_rail_flood(s,id,tick,other,water_z) end
   board.bridge_ends=function(id) return M.coastal_rail_bridge(s,id) end
@@ -4981,6 +4981,9 @@ function M.coastal_road_stop_runtime(s)
     t.build,t.owner,t.road_bits,t.road_town,t.roadside,t.stock_roadside_town=nil,nil,nil,nil,nil,nil
     t.station,t.stop_axis,t.road_terminal_level,t.road_stop_type=nil,nil,nil,nil
     t.road_disallowed,t.disallowed,t.roadworks,t.roadworks_counter=nil,nil,nil,nil
+    -- ClearTile_Station removes both road types when the land becomes
+    -- water, unlike the player's tool that removes only the tram way.
+    if t.tram then t.tram=nil end
     return true
   end
   return flood_at,clear
@@ -4996,7 +4999,7 @@ function M.coastal_tram_stop_runtime(s)
   local function flood_at(id,tick)
     if not index or stamp~=tick then index,stamp=trams.coastal_index(s),tick end
     local st=M.tram_stop_station(s,id)
-    if not st or not st.tram_only then return end
+    if not st then return end
     for _,p in ipairs(index[id] or {}) do
       local passengers=trams.flood(s,p,id,tick,st.id,function(v,ticks) return station_service.crash(s,v,ticks) end)
       if passengers~=nil then
@@ -5015,7 +5018,11 @@ function M.coastal_tram_stop_runtime(s)
     end
     return true
   end
-  return flood_at,clear
+  local function shared_busy(id)
+    local st=M.tram_stop_station(s,id)
+    return not st or st.tram_only or trams.coastal_in_use(s,id)
+  end
+  return flood_at,clear,shared_busy
 end
 
 local function stock_next_plan(s,v,st)
