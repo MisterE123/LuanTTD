@@ -8,6 +8,13 @@ return function(api,Lab,Track,Run,prices)
   local Sim,S=api.Sim,api.s
   local function protected(id) return Lab.span_protected and Lab.span_protected(S,id) end
   local span_msg="That tile is part of a protected rail span."
+  local function facility_protected(id)
+    if Lab.facility_protected then return Lab.facility_protected(S,id) end
+    return protected(id)
+  end
+  local function track_underpass(id)
+    return Lab.flat_underpass and Lab.flat_underpass(S,id,api.terrain.tile(id))
+  end
   local function company(owner)
     return S.companies[owner] or {cash=100000}
   end
@@ -72,7 +79,8 @@ return function(api,Lab,Track,Run,prices)
     r.slope,r.base_level,r.flooding=shape,base,t.rail_ground==13
     if r.coast and Sim.coastal_in_use then r.occupied=Sim.coastal_in_use(S,id) end
     r.id=id
-    r.overhead=S.bridge_above and S.bridge_above[id]~=nil or S.aqueduct_above and S.aqueduct_above[id]~=nil or false
+    if Sim.bridge_deck_at then r.deck,r.overhead=Sim.bridge_deck_at(S,id)
+    else r.overhead=S.bridge_above and S.bridge_above[id]~=nil or S.aqueduct_above and S.aqueduct_above[id]~=nil or false end
     if S.tunnel_below and S.tunnel_below[id] then r.subsurface=true end
     return r
   end
@@ -98,6 +106,7 @@ return function(api,Lab,Track,Run,prices)
   local upstream=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local Autorail=dofile(upstream.."autorail.lua")(Track)
   local Waypoint=dofile(upstream.."rail_waypoint.lua")
+  local Bridge=dofile(upstream.."bridge_underlay.lua")
   local quote_drag=dofile(upstream.."rail_drag_build.lua")
   local Depot=dofile(upstream.."rail_depot_construction.lua")(Track,dofile(upstream.."rail_construction.lua")(Track))
   local function gauge_allowed(owner,gauge)
@@ -125,7 +134,7 @@ return function(api,Lab,Track,Run,prices)
         if remove or track~=t.level_crossing.rail_axis then return nil,span_msg end
         if t.level_crossing.rail_owner~=owner then return nil,"Another company owns a tile on this route." end
         return false,unchanged
-      elseif protected(id) then return nil,span_msg
+      elseif protected(id) and not track_underpass(id) then return nil,span_msg
       elseif not remove and S.level_crossing_enabled and (t.build=="road" or t.tram and t.tram.kind=="road") and not t.rail_tracks then
         local q,why=Sim.crossing_construction_quote(S,owner,id,{kind="rail",track=track,railtype=gauge})
         if not q then return nil,Sim.crossing_construction_error(why) end
@@ -150,7 +159,9 @@ return function(api,Lab,Track,Run,prices)
             p.remove_signal=true
           end
         end
-        if tile.overhead or tile.subsurface then return nil,"This railway preview cannot build on protected structure layers." end
+        if (tile.overhead and not track_underpass(id)) or tile.subsurface then
+          return nil,"Use level ground below the bridge or clear of the protected layer."
+        end
         local why,quote
         local options=opts(owner)
         options.railtype=gauge
@@ -235,7 +246,7 @@ return function(api,Lab,Track,Run,prices)
     for _,id in ipairs(group) do
       local why=live_edit_guard(id);if why then return nil,why,group end
       if S.tiles[id].stock_void then return nil,"The station footprint is outside playable land.",group end
-      if protected(id) then return nil,span_msg,group end
+      if facility_protected(id) then return nil,span_msg,group end
       if signed(id) then return nil,"A platform cannot cover a signal.",group end
       local tile=record(id)
       if tile.kind=="station" then
@@ -245,7 +256,7 @@ return function(api,Lab,Track,Run,prices)
         if existing and existing.id~=st.id then return nil,"Adjoins more than one existing station.",group end
         existing=st
       end
-      if tile.slope~=0 or tile.overhead or tile.subsurface then return nil,"Platforms need open level ground.",group end
+      if tile.subsurface then return nil,"Platforms need unoccupied ground.",group end
       topics[#topics+1]=tile
     end
     local join,deny=StationPlacement.find_join(area,owner,existing,layout.separate,function(col,row)
@@ -267,10 +278,23 @@ return function(api,Lab,Track,Run,prices)
     end
     local options=opts(owner)
     options.railtype=layout.railtype
+    options.build_on_slopes=S.rail_build_on_slopes~=false
     local value,why=prices.station_area(topics,area.axis,area.tracks,area.length,options)
-    if value==nil then return nil,why,group end
+    if value==nil then
+      if why=="BRIDGE_TOO_LOW_FOR_STATION" then why="The bridge is too low for this station layout. Bare platforms need two levels; covered platforms need five." end
+      if why=="MUST_DEMOLISH_BRIDGE_FIRST" then why="The overlying span has no verified height." end
+      if why=="FLAT_LAND_REQUIRED" then why="Each platform tile needs the same level foundation." end
+      return nil,why,group
+    end
+    local graphics={}
+    for _,id in ipairs(group) do
+      local col,row=Sim.xy(id)
+      local track,along=row-area.z,col-area.x
+      if area.axis==1 then track,along=along,track end
+      graphics[id]=Bridge.rail_gfx(area.tracks,area.length,track,along,area.axis)
+    end
     return budget(owner,{kind="platform",axis=area.axis,area=area,combined=combined,join=join and join.id,
-      ids=group,price=value,gauge=layout.railtype})
+      ids=group,price=value,gauge=layout.railtype,graphics=graphics})
   end
   function R.quote_platform(owner,first,last,d)
     local x,z=Sim.xy(first)
@@ -296,15 +320,7 @@ return function(api,Lab,Track,Run,prices)
         S.rail_tunnel_below and S.rail_tunnel_below[id] or t.rail_span_id or t.level_crossing then
       return nil,"Choose a clear tile without protected structures for this depot."
     end
-    if protected(id) and not (S.rail_bridge_above and S.rail_bridge_above[id]) then return nil,span_msg end
-    local over_rail=S.rail_bridge_above and S.rail_bridge_above[id]
-    local over_road=S.bridge_above and S.bridge_above[id]
-    local over_aqua=S.aqueduct_above and S.aqueduct_above[id]
-    local above=(over_rail and S.stock_rail_spans and S.stock_rail_spans[over_rail]) or
-      (over_road and S.stock_road_bridges and S.stock_road_bridges[over_road]) or
-      (over_aqua and S.stock_aqueducts and S.stock_aqueducts[over_aqua])
-    tile.overhead=not not (over_rail or over_road or over_aqua)
-    tile.deck=above and above.deck
+    if facility_protected(id) then return nil,span_msg end
     local lib=opts(owner)
     lib.build_on_slopes=S.rail_build_on_slopes~=false
     lib.railtype=gauge or tile.kind=="depot" and tile.railtype or 0
@@ -356,7 +372,7 @@ return function(api,Lab,Track,Run,prices)
   function R.quote_waypoint(owner,id,remove)
     if R.busy() then return nil,blocked() end
     local why=live_edit_guard(id);if why then return nil,why end
-    if protected(id) then return nil,span_msg end
+    if facility_protected(id) then return nil,span_msg end
     if signed(id) then return nil,"A waypoint cannot cover a signal." end
     local t=record(id)
     if not t then return nil,"Choose existing straight railway." end
@@ -374,7 +390,8 @@ return function(api,Lab,Track,Run,prices)
         NO_WAYPOINT="Choose a rail waypoint.",OWNED_BY_ANOTHER="Another company owns that tile.",
         VEHICLE_IN_THE_WAY="A train is on that tile.",
         FLAT_LAND_REQUIRED="That slope cannot support a waypoint.",
-        MUST_DEMOLISH_BRIDGE_FIRST="A bridge crosses over that tile."}
+        MUST_DEMOLISH_BRIDGE_FIRST="The overlying span has no verified height.",
+        BRIDGE_TOO_LOW_FOR_RAIL_WAYPOINT="A rail waypoint needs two levels below the bridge."}
       return nil,errors[why] or why
     end
     if t.subsurface then return nil,"A protected structure layer occupies this tile." end
@@ -513,7 +530,9 @@ return function(api,Lab,Track,Run,prices)
     for _,id in ipairs(plan.ids or {}) do
       if plan.kind~="depot" then
         local why=live_edit_guard(id);if why then return false,why end
-        if protected(id) then return false,span_msg end
+        local facility=plan.kind=="platform" or plan.kind=="waypoint" or plan.kind=="waypoint_remove"
+        if facility and facility_protected(id) or not facility and protected(id) and
+            not (plan.kind=="track" and track_underpass(id)) then return false,span_msg end
       end
     end
     local ok,note
@@ -547,7 +566,7 @@ return function(api,Lab,Track,Run,prices)
       ok,note=true,plan.crossing and "Track laid, including level crossing work." or "Track pieces updated."
     elseif plan.kind=="platform" then
       if not gauge_allowed(owner,plan.gauge) then return false,"This rail type is not available to your company." end
-      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis,plan.combined or plan.area,plan.join,plan.gauge)
+      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis,plan.combined or plan.area,plan.join,plan.gauge,plan.graphics)
     elseif plan.kind=="depot" then
       local fresh,why=R.quote_depot(owner,plan.id,plan.direction,plan.requested_railtype)
       if not fresh then return false,why end

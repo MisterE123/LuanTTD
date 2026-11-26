@@ -24,8 +24,10 @@ function A.missing(core,path)
     if not names[x] then return x end
   end
   for _,m in ipairs(A.slopes) do
-    local x="bl_farm_land_"..m..".obj"
-    if not names[x] then return x end
+    for _,suffix in ipairs({"","_shifted"}) do
+      local x="bl_farm_land_"..m..suffix..".obj"
+      if not names[x] then return x end
+    end
   end
   for i=0,8 do
     local x="bl_farm_field_"..i..".png"

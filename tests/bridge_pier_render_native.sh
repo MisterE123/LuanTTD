@@ -37,11 +37,18 @@ if [[ ${BAYLINE_NATIVE_BRIDGE_ROAD_CLEAR:-0} == 1 ]]; then fixture=bridge_road_c
 ready_mark=BRIDGE_PIER_RENDER_NATIVE_READY
 view_mark=BRIDGE_PIER_VIEW
 views=(wood rail water)
+
+if [[ ${LUANTTD_NATIVE_RAIL_UNDERPASS:-0} == 1 ]]; then
+  fixture=bridge_rail_station_native
+  ready_mark=BRIDGE_RAIL_STATION_NATIVE_READY
+  view_mark=BRIDGE_RAIL_STATION_NATIVE_VIEW
+  views=(underpass canopy fare)
+fi
 if [[ ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 ]]; then
   fixture=bridge_bank_render_native
   ready_mark=BRIDGE_BANK_NATIVE_READY
   view_mark=BRIDGE_BANK_NATIVE_VIEW
-  views=(left_bank right_bank upper modern rail)
+  views=(left_bank right_bank upper modern rail fields buoy)
 fi
 if [[ ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 ]]; then
   fixture=tram_grade_render_native
@@ -64,10 +71,18 @@ if [[ ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
   view_mark=TRAM_SPAN_NATIVE_VIEW
   views=(tram_bridge tram_tunnel)
 fi
+if [[ ${LUANTTD_NATIVE_GENERATED_TOWN_SPANS:-0} == 1 ]]; then
+  fixture=generated_town_grade_native
+  ready_mark=GENERATED_TOWN_SPANS_READY
+  view_mark=GENERATED_TOWN_SPANS_VIEW
+  views=(town_bridge town_tunnel)
+fi
 cat "tests/$fixture.lua" >> "$game/mods/luanttd_core/init.lua"
 # The terrain and companies in this graphics fixture are deliberately
 # seeded in the renderer's local world, not in the campaign worker.
-printf 'return function() return {local_replay=true} end\n' > "$game/mods/luanttd_core/qa_layout.lua"
+if [[ ${LUANTTD_NATIVE_GENERATED_TOWN_SPANS:-0} != 1 ]]; then
+  printf 'return function() return {local_replay=true} end\n' > "$game/mods/luanttd_core/qa_layout.lua"
+fi
 
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 cat > "$out/server.conf" <<EOF
@@ -78,6 +93,17 @@ bind_address = 127.0.0.1
 bayline_bridge_road_reference = $([[ ${BAYLINE_NATIVE_BRIDGE_ROAD_REFERENCE:-0} == 1 ]] && echo true || echo false)
 luanttd_native_bridge_ground_stop = $([[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 ]] && echo true || echo false)
 EOF
+if [[ ${LUANTTD_NATIVE_GENERATED_TOWN_SPANS:-0} == 1 ]]; then
+  cat >> "$out/server.conf" <<'EOF'
+bayline_seed = 798
+bayline_generated_map_width = 128
+bayline_generated_map_depth = 128
+bayline_generated_relief = 3
+bayline_generated_coasts = 0
+bayline_generated_rivers = 2
+bayline_generated_towns = 3
+EOF
+fi
 cat > "$out/client.conf" <<'EOF'
 screen_w = 1300
 screen_h = 860
@@ -91,7 +117,7 @@ water_wave_height = 2.0
 enable_dynamic_shadows = true
 enable_water_reflections = true
 EOF
-if [[ ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 || ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 || ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 || ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 || ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
+if [[ ${LUANTTD_NATIVE_GENERATED_TOWN_SPANS:-0} == 1 || ${LUANTTD_NATIVE_RAIL_UNDERPASS:-0} == 1 || ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 || ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0} == 1 || ${LUANTTD_NATIVE_TRAM_GRADE:-0} == 1 || ${LUANTTD_NATIVE_TRAM_CROSSING:-0} == 1 || ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
   # Keep this geometry screenshot readable in software-rendered CI.
   sed -i -e 's/enable_dynamic_shadows = true/enable_dynamic_shadows = false/' \
     -e 's/enable_water_reflections = true/enable_water_reflections = false/' "$out/client.conf"
@@ -133,7 +159,7 @@ xdotool mousemove 650 430
 sleep 3
 for view in "${views[@]}"; do
   printf '%s\n' "$view" > "$out/world/pier-view.txt"
-  for _ in {1..25}; do grep -q "$view_mark $view" "$out/server.log" && break; sleep .2; done
+  for _ in {1..95}; do grep -q "$view_mark $view" "$out/server.log" && break; sleep .2; done
   grep -q "$view_mark $view" "$out/server.log"
   sleep 2.5
   if [[ "$view" == tram_modal ]]; then
@@ -161,7 +187,12 @@ for view in "${views[@]}"; do
   fi
 done
 ! grep -Ei 'ERROR\[|could not load' "$out/client.log" "$out/server.log"
-if [[ ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 ]]; then
+if [[ ${LUANTTD_NATIVE_RAIL_UNDERPASS:-0} == 1 ]]; then
+  grep -q BRIDGE_RAIL_STATION_NATIVE_FARE "$out/server.log"
+  echo "PASS: native exact rail station layouts and a paid service below the deck: $out"
+elif [[ ${LUANTTD_NATIVE_GENERATED_TOWN_SPANS:-0} == 1 ]]; then
+  echo "PASS: new-world RC1 municipal bridge and bore painted by the real worker: $out"
+elif [[ ${LUANTTD_NATIVE_BANK_HEADS:-0} == 1 ]]; then
   echo "PASS: native timber, girder and rail abutments use the stock shore beneath unchanged decks: $out"
 elif [[ ${LUANTTD_NATIVE_TRAM_SPAN:-0} == 1 ]]; then
   echo "PASS: native road bridge and tunnel retain their original mesh under electrified tramway: $out"

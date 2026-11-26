@@ -11,7 +11,10 @@ return function(Sim,Network,Construction)
     local cash=s.companies[owner] and s.companies[owner].cash or 100000
     local function clear(id,t,opts)
       local tile=s.tiles[id]
-      if tile.ship or tile.tram or t.overhead or (Sim.rail_span_protected and Sim.rail_span_protected(s,id)) or
+      local rail_blocked
+      if opts.lock then rail_blocked=Network.rail_water_obstruction(s,id)
+      else rail_blocked=Sim.rail_span_protected and Sim.rail_span_protected(s,id) end
+      if tile.ship or tile.tram or (t.overhead and not opts.lock) or rail_blocked or
         s.tunnel_below and s.tunnel_below[id] then
         return nil,"LANDSCAPE_CLEAR_REQUIRED"
       end
@@ -74,9 +77,9 @@ return function(Sim,Network,Construction)
   function M.quote_lock(s,owner,id,occupied)
     if not (s.corner_grid and id and s.tiles[id]) then return nil,"INVALID_PARAMETER" end
     local opts=options(s,owner)
+    opts.lock=true
     opts.ensure_empty=function(tile)
-      return not (s.tiles[tile].ship or (Sim.rail_span_protected and Sim.rail_span_protected(s,tile)) or
-        (occupied and occupied(tile)))
+      return not (s.tiles[tile].ship or Network.rail_water_obstruction(s,tile) or (occupied and occupied(tile)))
     end
     return Construction.lock(board(s),id,opts)
   end

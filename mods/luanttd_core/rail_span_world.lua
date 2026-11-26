@@ -1,6 +1,6 @@
--- Opt-in native board adapter and write transaction for the stock rail
--- span planner. Initial visual envelope: wooden bridges, and existing,
--- complementary tunnel portals which do not require excavation.
+-- Native board adapter and write transaction for the stock rail
+-- span planner. The mounted bores require complementary portals
+-- that do not need excavation.
 return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
   local W={}
   mounted_bridge_styles=mounted_bridge_styles or {[0]=true}
@@ -118,7 +118,7 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
     local q={xy=Sim.xy,id=Sim.id,max_x=Sim.W-1}
     function q.tile(id)
       local t=s.tiles[id]
-      if not t then return end
+      if not t or t.stock_void then return end
       local shape,base,top=terrain(s,id)
       if shape==nil then return end
       local h=span_head(s,id)
@@ -137,8 +137,9 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
       elseif t.build=="road" then dirt.kind="road"
       elseif t.terrain=="water" and not (t.ship or t.build) then dirt.kind="water"
       elseif Sim.is_owned_land and Sim.is_owned_land(t) then dirt.kind="owned_land"
-      elseif t.wood or t.site or t.house or t.build or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or t.owner then
+      elseif t.site or t.house or t.build or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or t.owner then
         dirt.kind="obstructed"
+      elseif t.wood then dirt.kind="trees"
       end
       dirt.underground=by_tunnel_middle(s,id) or s.tunnel_below and s.tunnel_below[id]
       local k=s.bridge_above and s.bridge_above[id]
@@ -200,14 +201,27 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
     if not options then return nil,e end
     local terrain_board=raw_board(s)
     if Sim.date then options.year=Sim.date(s) end
-    if replacing then
-      -- All ground classes this adapter could legally mount on a
-      -- native rail span. Other stock tile handlers are still unmounted.
-      function terrain_board.check_build_above(_,t)
-        if t.kind=="clear" or t.kind=="water" or t.kind=="road" or t.kind=="rail"
-          or t.kind=="signals" or t.kind=="tunnel" then return 0 end
-        return nil,"BRIDGE_MIDDLE_OBSTRUCTED"
+    function terrain_board.check_build_above(id,t,axis,deck)
+      return Sim.bridge_check_above(s,owner,id,t,axis,deck)
+    end
+    local raw_tile=terrain_board.tile
+    function terrain_board.tile(id)
+      local record=raw_tile(id)
+      local t=record and s.tiles[id]
+      local facility=t and not t.level_crossing and not t.rail_span_id and
+        (Sim.bridge_water_facility(t.ship,record.max_z) or Sim.bridge_rail_facility(t,record.max_z))
+      if facility then
+        record.kind,record.station_type,record.layout,record.part=facility.kind,facility.station_type,facility.layout,facility.part
+      elseif t and record.kind=="water" and t.coastal_water then
+        record.kind=t.wood and "trees" or "coast"
+      elseif t and record.kind=="obstructed" and not t.ship and t.build=="canal" then
+        record.kind="canal"
       end
+      return record
+    end
+    function terrain_board.clear_quote(id,t,role,company)
+      if not t.overhead and not t.underground then return Sim.bridge_ramp_clear_quote(s,company,id,t) end
+      return nil,"Choose a clear rail portal tile; the existing layer is protected."
     end
     local p,why,id=Bridge.plan(terrain_board,a,b,style,options)
     if p and p.replacement then
@@ -267,6 +281,7 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
     if checked.price~=p.price or checked["end"]~=p["end"] then return false,"The span price or geometry changed. Quote it again." end
     p=checked
     if p.replacement then
+      Sim.bridge_apply_ground_clears(s,owner,p.clears)
       -- CmdBuildBridge keeps both physical ramp tiles and the PBS path.
       -- Claim ownership is held separately by the dispatch ledger, so
       -- leave it, the active consist and the indices entirely untouched.
@@ -288,9 +303,13 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
     s.stock_rail_spans=s.stock_rail_spans or {}
     s.stock_rail_spans[key]=p
     local dirty={p.start,p["end"]}
-    for _,id in ipairs(p.clears or {}) do
-      local t=s.tiles[id]
-      if Sim.is_owned_land and Sim.is_owned_land(t) then t.owner,t.stock_object=nil,nil end
+    if p.kind=="bridge" then
+      Sim.bridge_apply_ground_clears(s,owner,p.clears)
+    else
+      for _,id in ipairs(p.clears or {}) do
+        local t=s.tiles[id]
+        if Sim.is_owned_land and Sim.is_owned_land(t) then t.owner,t.stock_object=nil,nil end
+      end
     end
     for _,id in ipairs(dirty) do
       local t=s.tiles[id]

@@ -8,6 +8,7 @@
 -- custom railtypes, NewGRF station specs, or mutation/signal recomputation.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local RailTypes=dofile(mod.."/openttd/rail_types.lua")
+local Bridge=dofile(mod.."/openttd/bridge_underlay.lua")
 return function(Track,Signal,Height)
   local Q={}
   local floor,max=math.floor,math.max
@@ -253,7 +254,6 @@ return function(Track,Signal,Height)
     local out={cost=0,kind="station",railtype=gauge,axis=axis,owner=o.owner,numtracks=numtracks,length=length,tiles={},
       parts={foundation=0,clearing=0,track=0,station=0,length=0}}
     for i,tile in ipairs(tiles) do
-      if tile.overhead then return nil,"MUST_DEMOLISH_BRIDGE_FIRST",i end
       if occupied(tile) then return nil,"VEHICLE_IN_THE_WAY",i end
       local shape=tile.slope or 0
       if not slopes[shape] or type(tile.base_level)~="number" or tile.base_level%1~=0 then
@@ -303,7 +303,10 @@ return function(Track,Signal,Height)
           price=price+increment
         end
       end
-      local placement={id=tile.id,owner=tile.owner,cost=price,changed=changed,
+      local along=axis==Track.X and (i-1)%length or math.floor((i-1)/numtracks)
+      local track=axis==Track.X and math.floor((i-1)/length) or (i-1)%numtracks
+      local gfx=Bridge.rail_gfx(numtracks,length,track,along,axis)
+      local placement={id=tile.id,owner=tile.owner,cost=price,changed=changed,gfx=gfx,
         affected_reservations=affected,level=level,foundation=shape==0 and "none" or "leveled"}
       if Height then placement.profile=Height.profile({kind="station",axis=axis,slope=shape},tile.base_level) end
       out.tiles[i]=placement
@@ -311,6 +314,14 @@ return function(Track,Signal,Height)
     end
     for i,tile in ipairs(tiles) do
       if tile.kind=="station" and not check_owner(tile,o) then return nil,"OWNED_BY_ANOTHER",i end
+    end
+    for i,tile in ipairs(tiles) do
+      if tile.overhead then
+        if type(tile.deck)~="number" then return nil,"MUST_DEMOLISH_BRIDGE_FIRST",i end
+        local record={kind="station",station_type="rail",layout=out.tiles[i].gfx,max_z=out.tiles[i].level}
+        local price,why,pixels=Bridge.quote(record,axis,tile.deck)
+        if price==nil then return nil,why,i,pixels end
+      end
     end
     out.level=allowed
     out.existing_station=station

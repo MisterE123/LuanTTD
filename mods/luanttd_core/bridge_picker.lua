@@ -6,6 +6,17 @@ return function(api)
   local pending,latest,serial={},{},0
   local mod=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local styles=dofile(mod.."/bridge_style_assets.lua")
+  local clearance={
+    BRIDGE_TOO_LOW_FOR_BUOY="The deck is too low for the buoy.",
+    BRIDGE_TOO_LOW_FOR_DOCK="The dock needs two levels over its shore ramp and three over its pier.",
+    BRIDGE_TOO_LOW_FOR_LOCK="The deck is too low for this part of the lock.",
+    BRIDGE_TOO_LOW_FOR_SHIP_DEPOT="The ship depot needs three levels below the bridge.",
+  }
+  local function readable(reason)
+    if type(reason)~="string" then return reason end
+    local code,position=reason:match("^(BRIDGE_TOO_LOW_FOR_%u[%u_]*)(.*)$")
+    return clearance[code] and clearance[code]..position or reason
+  end
   local function valid(id)
     return type(id)=="number" and id%1==0 and id>=1 and id<=Sim.W*Sim.H and S.tiles[id]
   end
@@ -26,7 +37,7 @@ return function(api)
           speed=plan.spec and plan.spec.speed or nil,plan=plan}
       else why=why or reason end
     end
-    if #offers==0 then return nil,why or "No available bridge fits this span." end
+    if #offers==0 then return nil,readable(why) or "No available bridge fits this span." end
     local p=offers[1].plan
     local ids={p.start}
     for _,i in ipairs(p.middle) do ids[#ids+1]=i end
@@ -55,7 +66,7 @@ return function(api)
       local ok=observe({kind="bridge_picker",player=n,mode=mode,first=a,last=b,peek=true,railtype=gauge},function(r)
         if hover[n]~=q then return end
         q.ready=core.get_us_time()
-        q.value,q.why=r.value,r.why
+        q.value,q.why=r.value,readable(r.why)
       end)
       if not ok then hover[n]=nil end
     end
@@ -93,7 +104,7 @@ return function(api)
         local h=api.render.host_terrain_top and api.render.host_terrain_top(ticket.b)
         api.stock_audio.effect("CONSTRUCTION_BRIDGE",{player=n,pos=h and {x=2*x+.5,y=h+.7,z=2*z+.5}})
       end
-      if ticket.callback then ticket.callback(ok,note) end
+      if ticket.callback then ticket.callback(ok,readable(note)) end
     end
     if ticket.remote then
       local remote=ticket.remote
@@ -164,7 +175,7 @@ return function(api)
         if fetching[n]~=token then return end
         fetching[n]=nil
         if r.ok then show(player,mode,a,b,callback,r.value,{token=r.value.token,revision=r.revision})
-        elseif callback then callback(false,r.why) end
+        elseif callback then callback(false,readable(r.why)) end
       end)
       if not sent then fetching[n]=nil;return nil,why end
       return true

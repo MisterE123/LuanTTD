@@ -4,6 +4,8 @@ local player="SteelReview"
 local request,paused,cash,home,slot,selected
 local site,moved_site,level,ready,move_camera
 local built,visual,move_ready
+local object_autoslope=core.settings:get_bool("luanttd_qa_object_autoslope",false)
+local resculpted
 local function aim(p,id)
   local x,z=Sim.xy(id)
   p:set_pos({x=2*x+.5,y=level+7,z=2*z+.5})
@@ -90,7 +92,34 @@ local function check()
     if painted(hq) then
       exhibit(p,hq.origin)
       built=true;core.log("action","NATIVE HQ BUILT")
-      core.after(2.5,function() move_camera=true end)
+      if object_autoslope then
+        local x,z=Sim.xy(hq.origin)
+        assert(authority.query({kind="terrain_quote",player=player,
+          request={operation="lower",first=Sim.id(x+1,z+1)}},function(q)
+          assert(q.ok and q.value.cost==1250 and #q.value.tiles==4,tostring(q.why))
+          assert(authority.query({kind="command",player=player,command={kind="terrain_commit",
+            revision=q.revision,token=q.value.token}},function(r)
+            assert(r.ok,tostring(r.why))
+            resculpted=true
+          end))
+        end))
+      else
+        core.after(2.5,function() move_camera=true end)
+      end
+    end
+  end
+  if object_autoslope and resculpted and hq and painted(hq) then
+    local walls=0
+    for _,id in ipairs(hq.tiles) do
+      local x,z=Sim.xy(id)
+      if s.tiles[id].h==hq.level-1 and core.get_node({x=x*2,y=hq.level,z=z*2}).name==
+          "luanttd_core:road_retaining" then walls=walls+1 end
+    end
+    if walls==4 then
+      assert(hq.origin==site and hq.level==level and c.cash==cash-80-1250)
+      exhibit(p,hq.origin)
+      core.log("action","PASS NATIVE HQ: placed by mouse, four RC1 paid foundations, original meshes fixed at the same height")
+      return
     end
   end
   if move_camera and not move_ready then

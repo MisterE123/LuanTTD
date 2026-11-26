@@ -17,9 +17,9 @@ return function(n,id,preview)
     return true,ok and changed or nil,msg,level
   elseif t.road_tunnel_id and api.structure_tools then
     if preview then
-      local span=S.stock_road_tunnels and S.stock_road_tunnels[t.road_tunnel_id]
-      if not span or span.owner~=n then return true,nil,"Select your own road tunnel." end
-      return true,{span.start,span["end"]},"Request demolition of both road tunnel portals."
+      local ok,price,span=Sim.remove_road_tunnel(S,n,id,true)
+      if not ok then return true,nil,price end
+      return true,{span.start,span["end"]},"Dismantle both road tunnel portals  |  "..dollars(price)
     end
     local ok,msg,changed=Sim.remove_road_tunnel(S,n,id)
     return true,ok and changed or nil,msg

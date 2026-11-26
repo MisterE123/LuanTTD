@@ -171,18 +171,23 @@ return function(Growth,Build,Names)
     local growth_settings={year=opts.year,allow_roads=opts.allow_roads~=false,
       build_on_slopes=opts.build_on_slopes}
     local stations=opts.stations or {}
-    for _=1,stats.attempts do
-      local p=Build.grow(town,board,growth_settings,random)
-      if p then
-        local delta=p.kind=="house" and W.house_stage(p,random) or 0
-        if opts.commit(p,town) then
-          if p.kind=="house" then
-            stats.houses=stats.houses+1
-            town.population=town.population+delta
-            Build.house_committed(town,p,stations,opts.growth_setting)
-          elseif p.kind=="road" then stats.roads=stats.roads+1 end
-        end
+    local function commit(p)
+      local delta=p.kind=="house" and W.house_stage(p,random) or 0
+      if not opts.commit(p,town) then return false end
+      if p.kind=="house" then
+        stats.houses=stats.houses+1
+        town.population=town.population+delta
+        Build.house_committed(town,p,stations,opts.growth_setting)
+      else
+        stats.roads=stats.roads+1
       end
+      return true
+    end
+    growth_settings.extra_house=commit
+    for _=1,stats.attempts do
+      growth_settings.extra_succeeded=false
+      local p=Build.grow(town,board,growth_settings,random)
+      if p then commit(p) end
     end
     town.num_houses=town.num_houses-mass
     town.radii=Growth.radii(town.num_houses)

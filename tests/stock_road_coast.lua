@@ -122,11 +122,11 @@ do
   local request={mode="road",operation="bridge",tile=b,last=a,style=0}
   local offer=assert(commands.quote(owner,request))
   local cash,rev=c.cash,s.topology
-  assert(offer.price==dry_cost+80 and s.tiles[a].coastal_water and s.tiles[b].coastal_water)
+  assert(offer.price==dry_cost+40 and s.tiles[a].coastal_water and s.tiles[b].coastal_water)
   assert(c.cash==cash and s.topology==rev)
   s.tiles[a].coastal_water=nil
   local ok,why=commands.commit(owner,offer)
-  assert(not ok and why:find("clear bank tile",1,true) and c.cash==cash)
+  assert(not ok and why:find("water",1,true) and c.cash==cash)
   s.tiles[a].coastal_water=true
   s.stock_coal_ship_run={vehicle={tile=b,path={}}}
   ok,why=commands.commit(owner,offer)
@@ -150,6 +150,6 @@ do
   assert(Sim.remove_wood_bridge(s,owner,a))
   assert(s.tiles[a].terrain=="grass" and s.tiles[b].terrain=="grass")
   local bad,msg=Sim.road_bridge(s,owner,Sim.id(11,8),b,0,true)
-  assert(not bad and msg:find("clear bank tile",1,true))
+  assert(not bad and msg:find("water",1,true))
 end
 print("PASS ordinary bridge starts and ends on eligible bank slopes, bills both shore clearances and preserves water underneath")

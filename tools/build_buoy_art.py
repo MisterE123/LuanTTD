@@ -38,3 +38,10 @@ lines += [f"vt {(i+.5)/len(colours):.6f} 0.5" for i in range(len(colours))]
 lines += [f"v {x:.5f} {y:.5f} {z:.5f}" for x,y,z in vertices]
 lines += ["f "+" ".join(f"{j}/{c+1}" for j in f) for f,c in faces]
 (base/"models/bl_ship_buoy.obj").write_text("\n".join(lines)+"\n")
+
+# Luanti mirrors OBJ x; moving the node anchor east by one needs +1 OBJ x.
+# At stock minimum bridge height the deck occupies the normal node slot.
+shifted = lines[0:1+len(colours)] + [
+    f"v {x+1:.5f} {y:.5f} {z:.5f}" for x,y,z in vertices
+] + lines[1+len(colours)+len(vertices):]
+(base/"models/bl_ship_buoy_under.obj").write_text("\n".join(shifted)+"\n")

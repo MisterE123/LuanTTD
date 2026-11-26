@@ -3,6 +3,8 @@
 -- and CmdBuildRailWaypoint; station_cmd.cpp RemoveFromRailBaseStation;
 -- table/pricebase.h. Original 1x1 rail waypoints, no adjacent joining/NewGRF.
 local W={BUILD=600,REMOVE=80,CLEAR_RAIL=-70}
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local Bridge=dofile(mod.."/openttd/bridge_underlay.lua")
 function W.axis(t)
   if not t then return end
   if t.kind=="waypoint" then return t.axis end
@@ -23,7 +25,12 @@ function W.build(t,axis,o)
   if slope~=0 and (not o.build_on_slopes or slope>=16 or not bands(slope,axis)) then
     return nil,"FLAT_LAND_REQUIRED"
   end
-  if t.overhead then return nil,"MUST_DEMOLISH_BRIDGE_FIRST" end
+  if t.overhead then
+    if type(t.deck)~="number" or type(t.base_level)~="number" then return nil,"MUST_DEMOLISH_BRIDGE_FIRST" end
+    local price,why=Bridge.quote({kind="station",station_type="rail_waypoint",layout=axis,
+      max_z=t.base_level+(slope==0 and 0 or 1)},axis,t.deck)
+    if price==nil then return nil,why end
+  end
   return {axis=axis,railtype=t.railtype or 0,reserved=t.reserved==true,
     price=t.kind=="waypoint" and 0 or (o.build or W.BUILD)}
 end

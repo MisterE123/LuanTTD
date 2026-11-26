@@ -76,7 +76,7 @@ for i,t in ipairs(s.tiles) do assert(t.variant==s2.tiles[i].variant and t.wood==
 local title="coastal test circuit QA"
 local first,last=id(stats.bridge.x1,stats.bridge.z),id(stats.bridge.x2,stats.bridge.z)
 local ok,cost=Sim.road_bridge(s,title,first,last,0,true)
-assert(ok and cost==2447,tostring(cost))
+assert(ok and cost==2487,tostring(cost))
 assert(Sim.road_bridge(s,title,first,last,2,true))
 local Track=load("openttd/rail_track")
 local Follow=load("openttd/rail_follow")(Track)

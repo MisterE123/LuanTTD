@@ -4,7 +4,7 @@
 return function(Sim,Authority)
   local M={}
   local max_changes=66 -- stock 64 middle tiles plus two ramps
-  local fields={terrain=true,h=true,variant=true,stock_clear_ground=true,coastal_water=true,
+  local fields={terrain=true,h=true,variant=true,stock_clear_ground=true,stock_clear_density=true,coastal_water=true,
     water_class=true,stock_river_bits=true,stock_water_rocks=true,build=true,owner=true,road_bits=true,
     road_bridge_id=true}
   local untracked_maps={"level_crossing_tiles","aqueduct_above","tunnel_below","rail_bridge_above",
@@ -70,9 +70,14 @@ return function(Sim,Authority)
         local t=physical(id)
         if not t then return nil,"MISSING_TILE" end
         for k in pairs(t) do if not fields[k] then return nil,"UNREVIEWED_TILE",id end end
+        if t.stock_clear_density~=nil and t.stock_clear_density~=0 then return nil,"UNREVIEWED_GROUND",id end
         if t.terrain~="grass" and t.terrain~="hill" and t.terrain~="water" then return nil,"UNREVIEWED_GROUND",id end
         for _,map in ipairs(untracked_maps) do
           if s[map] and s[map][id]~=nil then return nil,"PROTECTED_LAYER",id end
+        end
+        if s.stock_generated_profile and t.build==nil and t.terrain~="water" and
+            (t.stock_clear_ground~=nil or t.stock_clear_density~=0) then
+          return nil,"UNREVIEWED_GROUND",id
         end
         local high=s.bridge_above and s.bridge_above[id]
         local head=(i==1 or i==#row)

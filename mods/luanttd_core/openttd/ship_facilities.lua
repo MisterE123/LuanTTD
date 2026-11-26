@@ -6,6 +6,17 @@
 -- by the host. Queries never change tiles.
 return function(Track,Water)
   local D={DOCK_BASE_COST=350,DEPOT_BASE_COST=700,BUOY_BASE_COST=350,BUOY_CLEAR_COST=50}
+  local source=debug and debug.getinfo(1,"S").source
+  local here=source and source:match("^@(.*/)ship_facilities%.lua$")
+  local Bridge=dofile((here or (core and core.get_modpath("luanttd_core").."/openttd/") or
+    "mods/luanttd_core/openttd/").."bridge_underlay.lua")
+  local function bridge(t,kind,layout)
+    if not t.overhead then return true end
+    if t.bridge_deck==nil or t.top==nil then return nil,"BRIDGE_ABOVE" end
+    local c,e=Bridge.quote({kind=layout and "station" or kind,station_type=kind,layout=layout,
+      max_z=t.top},0,t.bridge_deck)
+    return c~=nil,e
+  end
   local up={[12]=0,[6]=1,[3]=2,[9]=3}
   local function check(board,id)
     if id~=nil then return board.tile(id) end
@@ -52,14 +63,16 @@ return function(Track,Water)
     if dir==nil or ground(shore) then return nil,"SITE_UNSUITABLE",id end
     local okay,why=call(opts.authority,id)
     if not okay then return nil,why,id end
-    if shore.overhead then return nil,"BRIDGE_ABOVE",id end
+    local bridge_ok,blocked=bridge(shore,"dock",dir)
+    if not bridge_ok then return nil,blocked,id end
     local clear=opts.clear or default_clear
     local a,msg=clear(id,shore,false)
     if a==nil then return nil,msg or "CLEAR_LAND",id end
     local pier=board.adjacent(id,dir)
     local wet=check(board,pier)
     if not ground(wet) or not flat(wet) then return nil,"SITE_UNSUITABLE",pier end
-    if wet.overhead then return nil,"BRIDGE_ABOVE",pier end
+    bridge_ok,blocked=bridge(wet,"dock",4+dir%2)
+    if not bridge_ok then return nil,blocked,pier end
     local class=waterclass(wet)
     if class==nil then return nil,"SITE_UNSUITABLE",pier end
     local b,reason=clear(pier,wet,false)
@@ -88,7 +101,10 @@ return function(Track,Water)
     local far=board.adjacent(id,axis==0 and 2 or 1)
     local a,b=check(board,id),check(board,far)
     if not ground(a) or not ground(b) then return nil,"BUILT_ON_WATER",(not ground(a) and id or far) end
-    if a.overhead or b.overhead then return nil,"BRIDGE_ABOVE",a.overhead and id or far end
+    for i,t in ipairs({a,b}) do
+      local ok,why=bridge(t,"ship_depot")
+      if not ok then return nil,why,i==1 and id or far end
+    end
     if not flat(a) or not flat(b) then return nil,"SITE_UNSUITABLE",not flat(a) and id or far end
     if not call(opts.depot_slot,id) then return nil,"DEPOT_LIMIT",id end
     local ca,cb=waterclass(a),waterclass(b)
@@ -110,7 +126,8 @@ return function(Track,Water)
     opts=opts or {}
     local t=check(board,id)
     if id==0 or not ground(t) or t.is_coast or t.kind=="coast" then return nil,"BUOY_NEEDS_OPEN_WATER",id end
-    if t.overhead then return nil,"BRIDGE_ABOVE",id end
+    local bridge_ok,blocked=bridge(t,"buoy",0)
+    if not bridge_ok then return nil,blocked,id end
     if not flat(t) then return nil,"BUOY_NEEDS_OPEN_WATER",id end
     local available,why=call(opts.waypoint_slot,id)
     if not available then return nil,why or "STATION_LIMIT",id end

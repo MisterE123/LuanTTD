@@ -233,6 +233,15 @@ def overlays():
                 tag,x,y,z=row.split()
                 lines[i]=f"{tag} {x} {float(y)+.004:.6f} {z}"
         (R.MODELS/f"bl_farm_land_{mask}.obj").write_text("\n".join(lines)+"\n")
+        # The render node moves one host unit east when the ordinary
+        # anchor is occupied by a bridge. OBJ uses the inverse X axis.
+        shifted=list(lines)
+        shifted[0]="# Same field plane, mesh anchor moved a node east so the bridge can coexist"
+        for i,row in enumerate(shifted):
+            if row.startswith("v "):
+                tag,x,y,z=row.split()
+                shifted[i]=f"{tag} {float(x)+1:.6f} {y} {z}"
+        (R.MODELS/f"bl_farm_land_{mask}_shifted.obj").write_text("\n".join(shifted)+"\n")
 
 
 def main():

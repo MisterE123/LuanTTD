@@ -91,6 +91,9 @@ printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\nbayline_se
 if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 2 ]]; then
   printf 'luanttd_coastal_road_trees_qa = true\n' >>"$out/server.conf"
 fi
+if [[ ${LUANTTD_QA_COMPANY_HQ:-0} == 1 && ${LUANTTD_QA_OBJECT_AUTOSLOPE:-0} == 1 ]]; then
+  printf 'luanttd_qa_object_autoslope = true\n' >>"$out/server.conf"
+fi
 printf 'luanttd_qa_rail_ground = %s\n' "${LUANTTD_QA_RAIL_GROUND:-0}" >>"$out/server.conf"
 if [[ ${LUANTTD_QA_ROADSIDE:-0} == 1 ]]; then
   printf 'bayline_generated_map_width = 128\nbayline_generated_map_depth = 128\nbayline_generated_relief = 0\nbayline_generated_coasts = 0\nbayline_generated_towns = 3\n' >>"$out/server.conf"
@@ -260,8 +263,10 @@ if [[ ${LUANTTD_QA_COMPANY_HQ:-0} == 1 ]]; then
   wait_hq 'NATIVE HQ BUILT'
   sleep .7
   if command -v import >/dev/null; then import -window root -quality 91 "$out/headquarters-build.jpg"; fi
-  wait_hq 'NATIVE HQ MOVE READY'
-  sleep .50; xdotool mousedown 1; sleep .30; xdotool mouseup 1
+  if [[ ${LUANTTD_QA_OBJECT_AUTOSLOPE:-0} != 1 ]]; then
+    wait_hq 'NATIVE HQ MOVE READY'
+    sleep .50; xdotool mousedown 1; sleep .30; xdotool mouseup 1
+  fi
 fi
 if [[ ${LUANTTD_QA_SPLIT_FENCE:-0} == 1 ]]; then
   for ptn in 'NATIVE SPLIT FENCE BARREN' 'NATIVE SPLIT FENCE BORDER'; do

@@ -95,7 +95,7 @@ local _,empty_road_bridge=Sim.road_bridge(s,"Builder",ra,rb,0,true)
 buy(ra);buy(rm)
 assert(not Sim.road_bridge(s,"Other",ra,rb,0,true))
 local q_ok,road_bridge=Sim.road_bridge(s,"Builder",ra,rb,0,true)
-assert(q_ok and road_bridge==empty_road_bridge-160,tostring(road_bridge))
+assert(q_ok and road_bridge==empty_road_bridge-180,tostring(road_bridge))
 assert(Sim.road_bridge(s,"Builder",ra,rb,0))
 assert(not s.tiles[ra].stock_object and not s.tiles[rm].stock_object and s.bridge_above[rm])
 

@@ -76,3 +76,39 @@ growth adapter limits what can be built on unfamiliar slopes, what
 abstract structures can be cleared, and which native house models
 can appear. Exotic climates, NewGRF names and buildings, and every
 slope/bridge/tunnel case are outside this slice.
+
+
+## Municipal streets, river bridges and road bores
+
+In a fresh Temperate world, use the standard town layouts. Towns can
+shape clear slopes, pave a graded street or clear eligible coast, and
+cross a river or bore under a hill as their street grid grows. These are
+public roads: they carry private bus routes and do not debit a company
+at construction. Removing a town span uses the local authority's
+rating and budget check, and does not erase the river or terrain above
+the tunnel.
+
+The growth walk uses the 16.0-RC1 `town_cmd.cpp` branches
+`IsRoadAllowedHere`, `LevelTownLand`, `CanRoadContinueIntoNextTile`,
+`GrowTownWithBridge` and `GrowTownWithTunnel`. The bridge scanner
+distinguishes clear river/canal water, sea, coast and rocky water; it
+preserves the source length budgets and bounded style lottery. The
+native build commands determine final foundation, bridge head and bore
+geometry. Failed candidates discard only their own municipal
+structures and leave legal grading already performed. Industry sites
+respect the original exclusion below a bridge.
+
+Tests compile the pinned continuation and both span searches across
+25,920 inputs with exact approach classifications, styles, endpoints and
+random draw counts. The fixed ordinary 128×128 seed 798 (Mountainous,
+water borders off, river setting 2, high towns) exercises both built
+structures, regular sloped public streets, independent middle layers,
+bidirectional stock road routing, save/reopen and priced council
+demolition. The `LUANTTD_NATIVE_GENERATED_TOWN_SPANS=1` renderer replay
+views the actual freshly generated bridge and tunnel from a real
+Luanti client on the production campaign worker.
+
+This scope does not yet add live municipal road expansion, all supported
+foundation changes to public owned terrain, the native bore-exit
+excavation fallback or other climates. Initial town placement keeps
+the existing supported parcel and map classes.

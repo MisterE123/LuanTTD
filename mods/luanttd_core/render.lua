@@ -292,7 +292,28 @@ return function(api)
     local art=stock_rail.guideway[gauge]
     return art and art.grade[grade] or rail_grade[grade]
   end
-  local rail_platform,rail_depot={},{}
+  local rail_platform,rail_depot,rail_stock_layout={},{},{}
+  for gfx=0,7 do
+    local name="rail_station_gfx_"..gfx
+    local boxes={}
+    local function add(u1,h1,v1,u2,h2,v2)
+      if gfx%2==0 then
+        boxes[#boxes+1]={u1+.5,h1-.5,v1+.5,u2+.5,h2-.5,v2+.5}
+      else
+        boxes[#boxes+1]={v1+.5,h1-.5,.5-u2,v2+.5,h2-.5,.5-u1}
+      end
+    end
+    for _,dir in ipairs({-1,1}) do
+      local a,b=dir*.404,dir
+      add(-1,0,math.min(a,b),1,.276,math.max(a,b))
+    end
+    if gfx==2 or gfx==3 then add(-.54,.276,-.94,.54,.842,-.595)
+    elseif gfx>=4 then
+      local side=gfx<6 and -.922 or .922
+      for _,u in ipairs({-.815,.815}) do add(u-.04,.276,side-.04,u+.04,1.47,side+.04) end
+    end
+    rail_stock_layout[gfx]=architecture(name,name,"rail_architecture_atlas",false,boxes)
+  end
   for axis=0,1 do
     local a="rail_platform_"..(2^axis)
     rail_platform[axis]=architecture("stock_"..a,a,"rail_architecture_atlas")
@@ -335,7 +356,7 @@ return function(api)
     end
     timber_harvested=architecture("forest_harvested","forest_harvested","forest_atlas")
   end
-  local farm_buildings,farm_fields={},{}
+  local farm_buildings,farm_fields,farm_fields_shifted={},{},{}
   if api.farm_world then
     local assets=api.farm_visual_assets
     for style,parts in pairs(assets.footprints) do
@@ -355,10 +376,16 @@ return function(api)
     local Pedestrian=dofile(modpath.."/pedestrian.lua")
     for _,slope in ipairs(assets.slopes) do
       local field_collision=Pedestrian.slope_box(api.slope.surface,slope,true).fixed
-      farm_fields[slope]={}
+      local shifted={}
+      for i,b in ipairs(field_collision) do
+        shifted[i]={b[1]-1,b[2],b[3],b[4]-1,b[5],b[6]}
+      end
+      farm_fields[slope],farm_fields_shifted[slope]={},{}
       for v=0,8 do
         local key=("farm_ground_%d_%d"):format(slope,v)
         farm_fields[slope][v]=architecture(key,"farm_land_"..slope,"farm_field_"..v,false,field_collision)
+        farm_fields_shifted[slope][v]=architecture(key.."_shifted","farm_land_"..slope.."_shifted",
+          "farm_field_"..v,false,shifted)
       end
     end
   end
@@ -1013,14 +1040,17 @@ return function(api)
     end
   end
   local stock_scenery={forest={},quarters={[0]=0,2,3,1}}
-  if api.ship_tools then stock_scenery.buoy=architecture("ship_buoy","ship_buoy","ship_buoy_palette") end
+  if api.ship_tools then
+    stock_scenery.buoy=architecture("ship_buoy","ship_buoy","ship_buoy_palette")
+    stock_scenery.buoy_under=architecture("ship_buoy_under","ship_buoy_under","ship_buoy_palette")
+  end
   stock_scenery.waypoint={}
   for axis=0,1 do
     local name="rail_waypoint_"..axis
     stock_scenery.waypoint[axis]=architecture(name,name,"rail_waypoint_palette")
   end
   if api.electric_art then
-    stock_scenery.catenary,stock_scenery.catenary_eased={},{}
+    stock_scenery.catenary,stock_scenery.catenary_eased,stock_scenery.catenary_under={},{},{}
     if api.capabilities and api.capabilities.level_crossing_art and api.capabilities.level_crossing_art[1] then
       stock_scenery.crossing_wire={}
       for mask=1,2 do
@@ -1032,13 +1062,14 @@ return function(api)
         stock_scenery.crossing_wire[mask]=family
       end
     end
-    function stock_scenery.rail_wire(id,t,x,z)
+    function stock_scenery.rail_wire(id,t,x,z,under)
       local mode=diagonal.mode(S,id)
       local art=api.electric_art.overlay(t.rail_tracks,0,t.rail_station_id and "platform" or "plain",x/2,z/2,nil,mode)
       if not art then return end
       local d=S.stock_rail_dispatch
       local signal=d and d.signals and d.signals.records[id]
-      local family=mode~=0 and stock_scenery.catenary_eased[t.rail_tracks][mode]
+      local family=under and stock_scenery.catenary_under[t.rail_tracks]
+        or mode~=0 and stock_scenery.catenary_eased[t.rail_tracks][mode]
         or stock_scenery.catenary[t.rail_tracks]
       return family[art.pole and not signal and 1 or 0]
     end
@@ -1049,6 +1080,14 @@ return function(api)
         family[pole]=architecture(name,name,"rail_catenary_atlas")
       end
       stock_scenery.catenary[mask]=family
+      if mask<=2 then
+        local under={}
+        for pole=0,1 do
+          local name=("rail_catenary_%d_%d_under"):format(mask,pole)
+          under[pole]=architecture(name,name,"rail_catenary_atlas")
+        end
+        stock_scenery.catenary_under[mask]=under
+      end
       if mask>2 then
         stock_scenery.catenary_eased[mask]={}
         for variant=1,3 do
@@ -1656,12 +1695,30 @@ return function(api)
       end
       return y<=level and gnames.grass[t.variant] or "air"
     end
+    if api.ship_tools and S.aqueduct_above and S.aqueduct_above[id] then
+      local span=S.stock_aqueducts[S.aqueduct_above[id]]
+      if x%2==0 and z%2==0 then
+        if y==span.deck then return aqueduct_span[span.axis] end
+        if y<span.deck and not (t.build or t.ship or t.tram or t.wood or t.house or t.site or t.terrain=="water") then
+          local _,_,top=terrain.tile(id)
+          if y>top then return y==span.deck-1 and aqueduct_pier_head[span.axis] or aqueduct_pier[span.axis] end
+        end
+      end
+    end
     if api.farm_world then
       local field=api.farm_world.field(S,id)
       if field then
         if field.slope~=0 and y==field.base then return slope_fill end
         if y<=field.base then return gnames.grass[t.variant] end
-        if y==field.base+1 and x%2==0 and z%2==0 then return farm_fields[field.slope][field.variant] end
+        if y==field.base+1 and z%2==0 then
+          -- The deck or its pier may occupy the ordinary field mesh's
+          -- anchor. The shifted version occupies the free east node but
+          -- has the exact same world-space mesh and collision footprint.
+          local bridge=(S.bridge_above and S.bridge_above[id]) or
+            (S.rail_bridge_above and S.rail_bridge_above[id]) or (S.aqueduct_above and S.aqueduct_above[id])
+          if bridge and x%2==1 then return farm_fields_shifted[field.slope][field.variant] end
+          if not bridge and x%2==0 then return farm_fields[field.slope][field.variant] end
+        end
         return "air"
       end
     end
@@ -1677,21 +1734,16 @@ return function(api)
           and airfield_nodes.ga.has(field) then return airfield_nodes.ga_node end
       return y<=level and (retaining_ground and retaining or gnames.grass[t.variant]) or "air"
     end
-    if api.ship_tools and S.aqueduct_above and S.aqueduct_above[id] then
-      local span=S.stock_aqueducts[S.aqueduct_above[id]]
-      if x%2==0 and z%2==0 then
-        if y==span.deck then return aqueduct_span[span.axis] end
-        if y<span.deck and not (t.build or t.ship or t.tram or t.wood or t.house or t.site or t.terrain=="water") then
-          local _,_,top=terrain.tile(id)
-          if y>top then return y==span.deck-1 and aqueduct_pier_head[span.axis] or aqueduct_pier[span.axis] end
-        end
-      end
-    end
     if api.ship_tools and t.ship then
       local sp=t.ship
       local _,level=terrain.tile(id)
       if sp.kind=="buoy" then
-        if y==level+1 and x%2==0 and z%2==0 then return stock_scenery.buoy end
+        if y==level+1 and z%2==0 then
+          local deck=Sim.bridge_deck_at(S,id)
+          if deck==y then
+            if x%2==1 then return stock_scenery.buoy_under end
+          elseif x%2==0 then return stock_scenery.buoy end
+        end
         if y==level then
           if sp.water_class=="river" and stock_scenery.river then
             return stock_scenery.river[0][river_direction(id)]
@@ -1778,10 +1830,18 @@ return function(api)
         if t.rail_waypoint_id and grade==0 and y==level+1 and x%2==1 and z%2==1 then
           return stock_scenery.waypoint[t.rail_tracks==1 and 0 or 1]
         end
-        if grade==0 and y==level+2 and x%2==0 and z%2==0 and t.rail_type==1
+        if grade==0 and y==level+2 and z%2==0 and t.rail_type==1
             and not t.rail_depot_dir and stock_scenery.catenary then
-          local wire=stock_scenery.rail_wire(id,t,x,z)
-          if wire then return wire end
+          local deck=Sim.bridge_deck_at(S,id)
+          -- RC1 elrail.cpp suppresses wire only one level over
+          -- ground. At two levels it shares the deck's height slot.
+          if not deck or deck>level+1 then
+            local under=deck==y and (t.rail_tracks==1 or t.rail_tracks==2)
+            if (under and x%2==1) or (not under and x%2==0) then
+              local wire=stock_scenery.rail_wire(id,t,x-(under and 1 or 0),z,under)
+              if wire then return wire end
+            end
+          end
         end
         if y<=level then return foundation~="none" and retaining or gnames[t.terrain][t.variant] end
         if x%2==0 and z%2==0 then
@@ -1793,7 +1853,8 @@ return function(api)
                 return art[t.rail_station_axis][st.coal_stage_mirror~=false and 2 or 1]
               end
               local guideway=stock_rail.guideway[t.rail_type]
-              return guideway and guideway.station[t.rail_station_axis] or rail_platform[t.rail_station_axis]
+              return guideway and guideway.station[t.rail_station_axis]
+                or rail_stock_layout[t.rail_station_gfx] or rail_platform[t.rail_station_axis]
             end
             if t.rail_depot_dir then
               local guideway=stock_rail.guideway[t.rail_type]

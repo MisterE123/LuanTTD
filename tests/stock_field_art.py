@@ -84,13 +84,18 @@ def test():
         orig=(M/f"bl_land_{mask}.obj").read_text().splitlines()[1:]
         lifted=M/f"bl_farm_land_{mask}.obj";items.append(lifted)
         rows=lifted.read_text().splitlines()[1:]
-        assert len(orig)==len(rows)
-        for old,new in zip(orig,rows):
+        displaced=M/f"bl_farm_land_{mask}_shifted.obj";items.append(displaced)
+        shifted=displaced.read_text().splitlines()[1:]
+        assert len(orig)==len(rows)==len(shifted)
+        for old,new,off in zip(orig,rows,shifted):
             if old.startswith("v "):
-                _,x,y,z=old.split();_,X,Y,Z=new.split()
+                _,x,y,z=old.split();_,X,Y,Z=new.split();_,other_x,other_y,other_z=off.split()
                 assert X==x and Z==z and abs(float(Y)-float(y)-.004)<1e-9
+                # OBJ X is mirrored on import; moving the anchor right
+                # and adding one in the file cancel in world space.
+                assert abs(float(other_x)-float(X)-1)<1e-9 and Y==other_y and Z==other_z
             else:
-                assert old==new  # same stock crease, UV and winding
+                assert old==new==off  # same stock crease, UV and winding
     atlas=T/"bl_farm_fence_atlas.png";items.append(atlas)
     w,h,_=load(atlas);assert h==8 and w%8==0
     labels=["dense_individually_shaped_leaves","continuous_rough_split_rail","weathered_taut_strand",

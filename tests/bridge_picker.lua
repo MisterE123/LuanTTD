@@ -19,9 +19,9 @@ local picker=load("bridge_picker")({s=s,Sim=Sim,structure_tools=true,
 local seen=nil
 local function capture(yes,msg) seen={yes,msg} end
 local q=assert(picker.quote("road","Bridge Builder",a,b))
-assert(q.minimum==2447 and #q.ids==7 and #q.offers==8) -- Ordinary concrete and the fast girder are too short.
+assert(q.minimum==2487 and #q.ids==7 and #q.offers==8) -- Ordinary concrete and the fast girder are too short.
 assert(q.offers[2].name=="Steel girder" and q.offers[2].speed==64)
-assert(picker.open(p,"road",a,b,capture) and form.s:find("Timber",1,true) and form.s:find("$2,447",1,true))
+assert(picker.open(p,"road",a,b,capture) and form.s:find("Timber",1,true) and form.s:find("$2,487",1,true))
 assert(c.cash==funds and not s.stock_road_bridges and applied==0 and saves==0)
 local stale=form.s:match("(bridge_%d+_2)")
 picker.fields(p,form.f,{[stale]=true})
@@ -79,3 +79,12 @@ button=assert(large:match("(bridge_%d+_9)"))
 remote.fields(p,form.f,{[button]=true})
 assert(sent[1].command.token==98 and sent[1].command.style==9)
 print("PASS ten stock bridge offers scroll inside a bounded popup and a lower choice preserves its exact ticket")
+
+local failure_form=load("bridge_picker")({s=s,Sim=Sim,authority_handoff=true,worker_bridge_client={
+  query=function(_,reply)
+    reply({ok=false,why="BRIDGE_TOO_LOW_FOR_SHIP_DEPOT (13,22)"})
+    return true
+  end,
+}})
+assert(failure_form.open(p,"road",other_a,other_b,capture))
+assert(not seen[1] and seen[2]=="The ship depot needs three levels below the bridge. (13,22)",seen[2])

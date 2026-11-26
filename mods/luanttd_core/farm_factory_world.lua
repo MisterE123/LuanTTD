@@ -14,13 +14,14 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
   local function valid_id(id)
     return type(id)=="number" and id>=1 and id%1==0 and id<=Sim.W*Sim.H
   end
-  local function occupied(s,id,t,allow_tree)
+  local function occupied(s,id,t,allow_tree,ground_only)
     return t.terrain=="water" or t.owner or t.site or t.house or t.source_house or t.build or
       (t.wood and not allow_tree) or t.rail_tracks or t.rail_station_id or t.rail_depot_dir or t.tram or t.ship or
       t.airfield or t.stock_industry or t.stock_landmark or t.level_crossing or t.road_bridge_id or t.road_tunnel_id or
-      t.rail_span_id or t.stock_canal or s.bridge_above and s.bridge_above[id] or
-      s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
-      s.rail_tunnel_below and s.rail_tunnel_below[id] or s.aqueduct_above and s.aqueduct_above[id]
+      t.rail_span_id or t.stock_canal or not ground_only and
+      (s.bridge_above and s.bridge_above[id] or s.tunnel_below and s.tunnel_below[id] or
+       s.rail_bridge_above and s.rail_bridge_above[id] or s.rail_tunnel_below and s.rail_tunnel_below[id] or
+       s.aqueduct_above and s.aqueduct_above[id])
   end
   local function max_distance(x,z,u,v) return math.max(math.abs(x-u),math.abs(z-v)) end
   local function conflicts(s,kind,x,z)
@@ -108,7 +109,10 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
       local id=Sim.id(x+1,z+1)
       if not id or not s.tiles[id] then return nil end
       local t=s.tiles[id]
-      if t.stock_void or occupied(s,id,t,true) then return nil end
+      -- RC1 PlantFarmField / TileLoop_Clear inspect the surface tile
+      -- type. A bridge-middle flag or an underground bore is not a
+      -- replacement for that tile; growth and fences must continue.
+      if t.stock_void or occupied(s,id,t,true,true) then return nil end
       if t.wood then
         local cover=type(t.wood)=="table" and t.wood.ground
         return id,(cover==3 or t.terrain=="shore") and shore or cover==1 and rough_trees or trees
@@ -193,7 +197,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
   function W.field(s,id)
     local r=s.stock_farm_fields and s.stock_farm_fields[id]
     local t=valid_id(id) and s.tiles[id]
-    if not r or not t or occupied(s,id,t,true) then return end
+    if not r or not t or t.stock_void or occupied(s,id,t,true,true) then return end
     local x,z=Sim.xy(id)
     local slope,base=Terrain.tile(s.corner_grid,x,z)
     if slope==r.slope and base==r.base then return r end

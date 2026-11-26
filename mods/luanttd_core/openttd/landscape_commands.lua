@@ -12,7 +12,7 @@ return function(Sim,Authority)
   end
   local command_tile={tool=true,ids=true}
   local command_corner={tool=true,x=true,z=true}
-  local physical={terrain=true,h=true,variant=true,wood=true,stock_clear_ground=true,coastal_water=true,
+  local physical={terrain=true,h=true,variant=true,wood=true,stock_clear_ground=true,stock_clear_density=true,stock_clear_visits=true,coastal_water=true,
     water_class=true,stock_river_bits=true,stock_water_rocks=true,parcel=true,house=true,source_house=true,build=true,owner=true,road_bits=true,
     road_town=true} -- town road allowed only as a road-planner read
   local overlays={level_crossing_tiles=true,bridge_above=true,aqueduct_above=true,tunnel_below=true,
@@ -59,6 +59,11 @@ return function(Sim,Authority)
       local t=s.tiles[id]
       if not plain(t) then return "MISSING_TILE" end
       if not keyset(t,physical) then return "UNREVIEWED_TILE" end
+      if t.stock_clear_density~=nil and not integer(t.stock_clear_density,0,2)
+          or t.stock_clear_visits~=nil and
+            (t.stock_clear_density==nil or not integer(t.stock_clear_visits,1,7)) then
+        return "UNREVIEWED_GROUND"
+      end
       for k in pairs(overlays) do
         local layer=s[k]
         if layer~=nil and not plain(layer) then return "UNREVIEWED_LAYER" end

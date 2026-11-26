@@ -28,6 +28,16 @@ local lock={middle=2,lower=3,upper=2}
 local min_depot=3 -- MINIMAL_DEPOT_BRIDGE_HEIGHT from src/depot_type.h.
 local station_error={rail="STATION",rail_waypoint="RAIL_WAYPOINT",dock="DOCK",
   buoy="BUOY",bus="ROADSTOP",truck="ROADSTOP",road_waypoint="ROAD_WAYPOINT"}
+-- stock (no StationSpec) RailStationTileLayout<StationType::Rail>.
+-- Position starts at zero and walks along each platform before the next.
+function U.rail_gfx(tracks,length,track,along,axis)
+  local graphic
+  if length==1 then graphic=track==math.floor((tracks-1)/2) and 2 or 0
+  elseif track==0 and tracks%2==1 then graphic=along==math.floor((length-1)/2) and 2 or 0
+  elseif length>4 and (along==0 or along==length-1) then graphic=0
+  else graphic=track%2==tracks%2 and 4 or 6 end
+  return graphic+axis
+end
 function U.station_info(kind,layout)
   local t=stations[kind]
   local r=t and t[layout]
@@ -41,6 +51,7 @@ local function clearance(t,height,above,tag)
   return nil,"BRIDGE_TOO_LOW_FOR_"..tag,diff*8
 end
 
+-- MP_CLEAR always allows an overhead bridge (ClearTileProcs in clear_cmd.cpp).
 -- opts.clear(t, auto) optionally delegates normal landscape-clear
 -- permission/cost and returns (price, error, clear_ground).
 -- Returns (cost, error, extra) where extra is pixel height on denial
@@ -48,7 +59,7 @@ end
 function U.quote(t,axis,deck,opts)
   local clear=opts and opts.clear
   local k=t.kind
-  if k=="road" or k=="crossing" or k=="rail" or k=="plain_rail" or
+  if k=="clear" or k=="road" or k=="crossing" or k=="rail" or k=="plain_rail" or
       k=="signals" or k=="shore_rail" and t.plain~=false or k=="tunnel" or k=="water" or
       k=="sea" or k=="river" or k=="canal" or k=="coast" then return 0 end
   if k=="road_depot" then return clearance(t,min_depot,deck,"ROADVEH_DEPOT") end

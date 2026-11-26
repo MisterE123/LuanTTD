@@ -17,6 +17,8 @@ for phase in start reopen; do
 printf 'luanttd_qa_bridge_style = %s\n' "${BAYLINE_TEST_BRIDGE_STYLE:-9}" >> "$out/server.conf"
   timeout 100 luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' > "$out/$phase.log" 2>&1 || { tail -80 "$out/$phase.log";exit 1; }
 done
+grep AQUEDUCT_GROUND_NATIVE_PASS "$out/start.log"
+grep BRIDGE_GROUND_CLEAR_NATIVE_PASS "$out/start.log"
 grep BRIDGE_BULLDOZER_NATIVE_PASS "$out/start.log"
 grep BRIDGE_UPGRADE_NATIVE_SAVED "$out/start.log"
 grep BRIDGE_UPGRADE_NATIVE_PASS "$out/reopen.log"

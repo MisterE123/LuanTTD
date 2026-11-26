@@ -62,69 +62,20 @@ local path=(core and core.get_modpath and core.get_modpath("luanttd_core") and c
   or assert(source and source:sub(2):match("^(.+[\\/])"),"Cannot locate stock town assets")
 local art=dofile(path.."stock_town_art.lua")
 local Lift=dofile(path.."openttd/town_lift.lua")
-local dirx,dirz={[0]=-1,0,1,0},{[0]=0,1,0,-1}
-local function has(bits,bit) return math.floor(bits/bit)%2~=0 end
-local function edge(Sim,x,z)
-  return math.min(x-1,z-1,Sim.W-x,Sim.H-z)
-end
+local growth_board=dofile(path.."town_generation_board.lua")
 local function get(Sim,Terrain,s,x,z)
   local id=Sim.id(x,z)
   local t=id and s.tiles[id]
   if not t then return nil end
   if t.stock_void then return {kind="void"} end
-  if t.terrain=="water" then return {kind="water",water_ground=not t.coastal_water,coast=t.coastal_water} end
   local slope,base,top=Terrain.tile(s.corner_grid,x,z)
-  local kind=t.build=="road" and "road" or t.house and "house" or t.build and "object" or "clear"
+  if t.terrain=="water" then
+    return {kind="water",water_ground=not t.coastal_water,coast=t.coastal_water,
+      slope=slope,base=base,max_z=8*top,sea=t.water_class=="sea" and not t.coastal_water,water_rocks=t.stock_water_rocks}
+  end
+  local kind=t.build=="road" and "road" or t.house and "house" or t.build and "object" or t.wood and "trees" or "clear"
   return {kind=kind,slope=slope,base=base,max_z=8*top,road_bits=t.road_bits or 0,
     road_town=t.road_town,owner=t.owner}
-end
-local function growth_board(Sim,Terrain,s)
-  local B={}
-  function B.tile(x,z) return get(Sim,Terrain,s,x,z) end
-  function B.distance_to_edge(x,z) return edge(Sim,x,z) end
-  function B.house_supported(id,x,z)
-    local t=B.tile(x,z)
-    return art[id]~=nil and t and t.slope and t.slope<16
-  end
-  function B.road_allowed(town,x,z,d)
-    local t=B.tile(x,z)
-    if not t or (t.kind~="clear" and t.kind~="road") or t.slope~=0 or edge(Sim,x,z)<=0 then return false end
-    if t.road_town and t.road_town~=town.id then return false end
-    -- IsNeighborRoadTile (town_cmd.cpp), for ordinary flat tile layouts.
-    local dist=town.layout=="original" and 1 or 2
-    for pos=4,(dist+1)*4-1 do
-      local side=(d+(pos%2==1 and 1 or 3))%4
-      local back=math.floor(pos/2)%2==1
-      local n=math.floor(pos/4)
-      local u,v=x+dirx[side]*n,z+dirz[side]*n
-      if back then u,v=u-dirx[d],v-dirz[d] end
-      local neighbor=B.tile(u,v)
-      local bit=2^(3-(back and d or (d+2)%4))
-      if neighbor and neighbor.kind=="road" and has(neighbor.road_bits,bit) then return false end
-    end
-    return true
-  end
-  function B.clean_road_bits(_,x,z,bits)
-    -- road.cpp CleanUpRoadBits, supported clear/normal road/shore classes.
-    for d=0,3 do
-      local b=2^(3-d)
-      if has(bits,b) then
-        local t=B.tile(x+dirx[d],z+dirz[d])
-        if not t or (t.kind~="clear" and t.kind~="road" and not t.coast) then bits=bits-b end
-      end
-    end
-    return bits
-  end
-  function B.road_quote(town,x,z,bits)
-    local t=B.tile(x,z)
-    if not t or t.slope~=0 or (t.kind~="clear" and t.kind~="road") or
-        t.owner or t.road_town and town.id~=t.road_town then return end
-    for e=0,3 do
-      local bit=2^e
-      if has(bits,bit) and not has(t.road_bits,bit) then return Sim.id(x,z) end
-    end
-  end
-  return B
 end
 
 function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
@@ -134,7 +85,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   local function random() return Generator.next_random(state) end
   local save={version=1,order={},towns={}}
   local lifts=Lift.new()
-  local growth=growth_board(Sim,Terrain,s)
+  local growth=growth_board(Sim,Terrain,s,G,Worldgen,function(x,z)return get(Sim,Terrain,s,x,z) end)
   local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={}}
   function board.tile(x,z) return get(Sim,Terrain,s,x+1,z+1) end
   local opts=copy(settings)
@@ -146,30 +97,38 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
       tile=Sim.id(x,z),stock={},produced={},received={},population=0,service=0,larger_town=candidate.city}
     local town=G.new(id,x,z,{layout=candidate.layout,larger_town=candidate.city,grow_counter=(id-1)%G.TOWN_TICKS})
     s.sites[id]=site
-    local prior,built_lifts={},{}
+    local placed,built_lifts,spans={},{},{}
     local had=s.has_town_roads
-    local function remember(tile)
-      if not prior[tile] then prior[tile]=copy(s.tiles[tile]) end
-    end
     local function commit(p)
       if p.kind=="road" then
         local tile=Sim.id(p.x,p.z)
-        remember(tile)
-        local ok=Sim.seed_town_road(s,id,tile,p.bits)
-        if ok then s.tiles[tile].stock_clear_ground=nil end
+        if not Sim.town_road_piece(s,id,tile,p.bits,true) then return false end
+        placed[tile]=true
+        return true
+      end
+      if p.kind=="bridge" or p.kind=="tunnel" then
+        local a,b=Sim.id(p.x,p.z),Sim.id(p.u,p.v)
+        local ok
+        if p.kind=="bridge" then ok=Sim.road_bridge(s,"town",a,b,p.style,false,id)
+        else ok=Sim.road_tunnel(s,"town",a,false,id) end
+        if ok then spans[#spans+1]=a end
         return ok
       end
       if p.kind~="house" then return false end
       local parts=art.inspect(Sim,p,function(id)
         local x,z=Sim.xy(id)
         local ground=growth.tile(x,z)
-        if ground and ground.kind=="clear" and ground.slope<16 then return ground.max_z/8 end
+        if ground and not ground.bridge_above and ground.slope and ground.slope<16 and
+            (ground.kind=="clear" or ground.coast and Sim.town_clear_coast(s,id,false)) then
+          return ground.max_z/8
+        end
       end)
       if not parts then return false end
       for _,part in ipairs(parts) do
         local tile,h=part.id,part.record
         local t=s.tiles[tile]
-        remember(tile)
+        if t.coastal_water then assert(Sim.town_clear_coast(s,tile,true)) end
+        placed[tile]=true
         art.stamp(h,p,art[p.id],part.index)
         local x,z=Sim.xy(tile)
         local _,base=Terrain.tile(s.corner_grid,x,z)
@@ -181,7 +140,14 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
     Worldgen.initialize(town,growth,{year=settings.year,allow_roads=true,
       initial_city_size=settings.initial_city_size,growth_setting=2,commit=commit},rnd)
     if town.population==0 then
-      for i,t in pairs(prior) do s.tiles[i]=t end
+      -- CmdDeleteTown removes failed town buildings and roads, not
+      -- previously executed corner shaping or shore clearing.
+      for _,tile in ipairs(spans) do assert(Sim.discard_generated_town_span(s,tile,id)) end
+      for tile in pairs(placed) do
+        local t=s.tiles[tile]
+        t.build,t.road_bits,t.road_town,t.house,t.source_house=nil,nil,nil,nil,nil
+        t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,nil,nil
+      end
       s.has_town_roads=had
       s.sites[id]=nil
       return nil
@@ -227,6 +193,8 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     tile.slope,tile.base=Terrain.tile(s.corner_grid,u,v)
     tile.corner_height=Terrain.corner(s.corner_grid,u,v)
     if native.stock_industry then tile.kind="industry";tile.industry=true end
+    tile.bridge_above=Sim.bridge_deck_at(s,id)
+    tile.bridge=tile.bridge_above~=nil
     return tile
   end
   local Platform=Heavy and dofile(path.."openttd/industry_platform_level.lua")(Terrain)
@@ -234,7 +202,9 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     local function terraform_options()
       return {validate_tile=function(_,x,z)
         local t=board.tile(x-1,z-1)
-        return t and (t.kind=="clear" or t.kind=="trees") and not t.owner and 0 or nil
+        local id=Sim.id(x,z)
+        return t and (t.kind=="clear" or t.kind=="trees") and not t.owner and not t.bridge_above
+          and not (s.tunnel_below and s.tunnel_below[id]) and 0 or nil
       end}
     end
     function board.terraform_quote(x,z,raise)

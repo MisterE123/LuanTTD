@@ -149,7 +149,7 @@ return function(api,clear_structure)
     if t.rail_station_id or t.rail_depot_dir~=nil then
       local title=t.rail_station_id and "Remove entire station platform, keep rails" or "Remove railway depot, keep rails"
       local free=t.owner==n and api.rail_build and not api.rail_build.busy() and api.trackworks
-        and (not api.trackworks.span_protected or not api.trackworks.span_protected(S,id))
+        and (not api.trackworks.facility_protected or not api.trackworks.facility_protected(S,id))
       local occupied=t.rail_depot_dir~=nil and api.trackworks and api.trackworks.owned_depot_occupied
         and api.trackworks.owned_depot_occupied(S,id)
       add("rail_facility",title,free and not occupied,occupied and "The depot contains a purchased train."
@@ -202,7 +202,12 @@ return function(api,clear_structure)
     elseif t.road_tunnel_id then structure("road_tunnel","Remove both road tunnel portals",id)
     elseif t.rail_span_id then structure("rail_span","Remove the full rail bridge or tunnel",id)
     elseif t.airfield then structure("airfield","Remove the entire airfield",id)
-    elseif t.ship then structure("harbor","Remove the full harbor structure",id) end
+    elseif t.ship then
+      local names={buoy="buoy", dock="dock", lock="lock", ship_depot="ship depot", aqueduct="aqueduct"}
+      local name=names[t.ship.kind] or "water structure"
+      local above=Sim.bridge_deck_at and select(2,Sim.bridge_deck_at(S,id))
+      structure("harbor","Remove "..name..(above and ", keep overhead bridge" or ""),id)
+    end
     if t.rail_type==1 and not t.rail_station_id and not t.rail_depot_dir and not t.rail_span_id and
         not t.level_crossing and api.electric_quote and api.electric_commit then
       local q,why=api.electric_quote(n,{id},0)

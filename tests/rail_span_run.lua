@@ -21,7 +21,7 @@ local Q=port("rail_construction",T,Signal,H)
 local Site=dofile(src.."rail_span_site.lua")
 local B=port("rail_bridge",port("road_bridge",Slope),Q,Site)
 local U=port("rail_tunnel",dofile(src.."road_tunnel.lua"),Q,Site,T)
-local Sim={W=32,H=16}
+local Sim=dofile(root.."sim.lua"); Sim.W,Sim.H=32,16
 function Sim.id(x,y) if x>=1 and y>=1 and x<=32 and y<=16 then return x+y*64 end end
 function Sim.xy(id)return id%64,math.floor(id/64)end
 function Sim.adjacent(id,d)
@@ -33,7 +33,7 @@ function Sim.company(s,name)
   s.companies[name]=s.companies[name] or {cash=100000,expense=0,month_exp=0}
   return s.companies[name]
 end
-local s={tiles={},companies={},topology=0,rail_span_enabled=true}
+local s={tiles={},sites={},companies={},topology=0,day=0,rail_span_enabled=true}
 s.corner_grid=Terrain.new(32,16,function(x,z)
   if x>=14 and x<=18 then return 5 end
   if x==7 or x==8 then return 3 end
@@ -59,18 +59,33 @@ for _,x in ipairs({2,3,4,10,11,12,19,20,21,22,23,24}) do rail(x) end
 assert(Lab.depot(s,"Alice",id(2),T.SW))
 assert(Lab.station(s,"Alice",id(22),id(24)))
 assert(Lab.station(s,"Alice",id(10),id(11)))
+s.stock_generated_profile={width=32,depth=16}
+s.tiles[id(5)].stock_clear_ground=2
+s.tiles[id(6)].wood={class=4,count=2,ground=0,density=3,type=0,growth=3}
+s.tiles[id(7)].stock_clear_ground=1
+s.stock_farm_fields={[id(8)]={stage=4}}
 local b=assert(W.quote_bridge(s,"Alice",id(5),id(9)))
 assert(b.deck==5 and b.middle_by_tile[id(7)] and b.rail_cost==500)
+assert(b.site_cost==200+40+20 and #b.clears==3)
+assert(s.tiles[id(5)].stock_clear_ground==2 and s.tiles[id(6)].wood.count==2)
 local ok,msg,dirty= W.commit(s,"Alice",b)
 assert(ok,msg);assert(#dirty==5 and W.protected(s,id(7)))
+assert(not s.tiles[id(5)].stock_clear_ground and not s.tiles[id(6)].wood)
+assert(s.tiles[id(5)].stock_clear_density==0 and s.tiles[id(6)].stock_clear_density==0)
+assert(s.tiles[id(7)].stock_clear_ground==1 and s.stock_farm_fields[id(8)].stage==4)
 assert(not W.commit(s,"Alice",b),"stale plans must refuse")
 local u=assert(W.quote_tunnel(s,"Alice",id(13)))
 assert(u["end"]==id(18) and u.head.slope==3 and u.tail.slope==12)
 assert(W.commit(s,"Alice",u))
 assert(W.protected(s,id(15)) and W.protected(s,id(13)))
 assert(s.companies.Alice.cash==100000-b.price-u.price)
+-- RC1 plain ground rail beneath a deck is a different layer; an
+-- equivalent edit over a bore or on a portal remains protected here.
+assert(Lab.change(s,"Alice",id(7),T.X,false,0))
+assert(s.tiles[id(7)].rail_tracks==1 and W.by_bridge_middle(s,id(7)).deck==5)
+assert(Lab.change(s,"Alice",id(7),T.X,true,0))
+assert(not s.tiles[id(7)].rail_tracks and W.by_bridge_middle(s,id(7)).deck==5)
 local before=s.topology
-assert(not Lab.change(s,"Alice",id(7),T.X,false,0))
 assert(not Lab.change(s,"Alice",id(15),T.X,false,0))
 assert(not Lab.commit_depot(s,"Alice",id(5),T.SW))
 assert(not Lab.commit_station(s,"Alice",{id(8),id(9)},T.X))
@@ -142,12 +157,16 @@ for tick=1,4000 do
       local old_span=W.by_portal(s,id(5))
       local next_span=s.next_stock_rail_span
       local money=s.companies.Alice.cash
+      s.tiles[id(6)].wood={class=4,count=3,ground=0,density=3,type=0,growth=3}
       local q=assert(W.quote_bridge(s,"Alice",id(9),id(5),0,nil,2))
+      assert(#q.clears==1 and q.clears[1]==id(6) and q.site_cost==5*(50-70)+60)
       local good,note,changed,_,live=W.commit(s,"Alice",q)
       assert(good,note)
       assert(#changed==5 and live==old_span and s.tiles[id(5)].rail_span_id==span_key)
       assert(s.rail_bridge_above[id(7)]==span_key and s.next_stock_rail_span==next_span)
       assert(s.companies.Alice.cash==money-q.price and live.bridge_type==2)
+      assert(not s.tiles[id(6)].wood and s.tiles[id(6)].stock_clear_density==0)
+      assert(s.tiles[id(7)].stock_clear_ground==1 and s.stock_farm_fields[id(8)].stage==4)
       assert(Motion.max_bridge_speed(Run.board(s),run.consist)==64)
       claims(d,5,9,1)
       s=save(s);reloaded_bridge=true

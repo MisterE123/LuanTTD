@@ -1146,7 +1146,7 @@ try:
             cash=state()["cash"]
             aim(21,13);click();aim(27,13);click()
             await_state("span selected before style, with no purchase",
-                        lambda s:s.get("form")=="luanttd_core:bridge_picker" and cash-s["cash"]<2447
+                        lambda s:s.get("form")=="luanttd_core:bridge_picker" and cash-s["cash"]<2487
                         and not s["starter"].get("bridge"))
             choose_bridge_type()
         else:

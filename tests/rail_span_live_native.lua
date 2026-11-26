@@ -22,9 +22,15 @@ core.after(0,function()
   assert(api.trackworks.depot(S,owner,id(2),2))
   assert(api.trackworks.station(S,owner,id(22),id(24)))
   local station=S.tiles[id(22)].rail_station_id
+  S.tiles[id(5)].stock_clear_ground=2
+  S.tiles[id(6)].wood={class=4,count=2,ground=0,density=3,type=0,growth=3}
+  S.tiles[id(7)].stock_clear_ground=1
   local q=assert(W.quote_bridge(S,owner,id(5),id(9)))
+  assert(q.site_cost==200+40+20 and #q.clears==3)
   local ok,why,changed,deck=W.commit(S,owner,q)
   assert(ok,why);api.render.raise_bound(deck)
+  assert(not S.tiles[id(6)].wood and S.tiles[id(7)].stock_clear_ground==1)
+  core.log("action","RAIL_BRIDGE_GROUND_NATIVE_PASS preserving rough ground and clearing trees at stock price")
   local tunnel=assert(W.quote_tunnel(S,owner,id(13)))
   assert(W.commit(S,owner,tunnel))
   -- Recorded stock portals form readonly conversion records even in the

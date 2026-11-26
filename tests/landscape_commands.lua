@@ -186,6 +186,10 @@ local edit={tool="clear",ids={id}}
 local tile=s.tiles[id]
 local old=tile.build
 tile.build="road_station";reject(edit,"UNSUPPORTED_FACILITY");tile.build=old
+local original_density,original_visits=tile.stock_clear_density,tile.stock_clear_visits
+tile.stock_clear_density=3;reject(edit,"UNREVIEWED_GROUND")
+tile.stock_clear_density=0;tile.stock_clear_visits=8;reject(edit,"UNREVIEWED_GROUND")
+tile.stock_clear_density,tile.stock_clear_visits=original_density,original_visits
 tile.rail_tracks=5;reject(edit,"UNREVIEWED_TILE");tile.rail_tracks=nil
 tile.bridge_hook=0;reject(edit,"UNREVIEWED_TILE");tile.bridge_hook=nil
 tile.road_town=1;reject(edit,"PUBLIC_ROAD");tile.road_town=nil

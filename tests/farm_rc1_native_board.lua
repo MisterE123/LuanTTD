@@ -31,6 +31,21 @@ b=W.field_board(restored)
 for i=1,7 do b.visit(8,8,1+i,false);assert(restored.stock_farm_grass[rough]==i) end
 b.visit(8,8,9,false)
 assert(restored.stock_farm_grass[rough]==nil and b.tile(8,8).ground=="grass")
+-- RC1 still exposes the surface as an ordinary clear tile no matter
+-- which independent overhead/buried layer shares these coordinates.
+for i,layer in ipairs({"bridge_above","rail_bridge_above","aqueduct_above","tunnel_below","rail_tunnel_below"}) do
+  local x,z=12+i,9
+  local at=id(x,z)
+  restored[layer]={[at]=i}
+  assert(b.tile(x,z).ground=="grass")
+  b.make_field(x,z,4,123,7)
+  local field=assert(W.field(restored,at))
+  b.visit(x,z,1,false)
+  assert(W.field(restored,at)==field and field.variant==5 and field.fences[0]==3)
+  restored.tiles[at].build="road"
+  b.visit(x,z,2,false)
+  assert(not W.field(restored,at) and not restored.stock_farm_fields[at])
+end
 local p=m("generated_campaign")
 restored.stock_generated_profile.object_rng={10,20}
 restored.stock_farm_fields[rough]={kind="clear",ground="field",variant=2,counter=0,fences={},base=1,slope=0}

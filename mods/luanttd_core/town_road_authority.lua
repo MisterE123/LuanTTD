@@ -55,6 +55,16 @@ return function(Sim,Stock)
     journal.ratings[t.id]=changed
     return true
   end
+  function A.span_removal(s,company,id)
+    local town=A.nearest(s,id)
+    if not town then return {} end
+    local policy=s.stock_road_town_policy or {}
+    local ratings=company.stock_town_authority_ratings or {}
+    local changed,why=Stock.span_removal(ratings[town.id] or Stock.initial,
+      policy.tolerance or 0,policy.magic_bulldozer)
+    if not changed then return nil,why end
+    return {[town.id]=changed}
+  end
   function A.apply(company,ratings)
     if not ratings or not next(ratings) then return end
     local ledger=company.stock_town_authority_ratings or {}

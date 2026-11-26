@@ -126,7 +126,7 @@ local function live(viewer)
             local incline=core.get_node_or_nil({x=2*u,y=spot.h,z=2*v})
             local platform=core.get_node_or_nil({x=2*u,y=spot.h+1,z=2*v})
             if not (incline and incline.name=="luanttd_core:road_retaining"
-                and platform and platform.name=="luanttd_core:stock_rail_platform_1") then return end
+                and platform and (platform.name=="luanttd_core:stock_rail_platform_1" or platform.name:match("^luanttd_core:rail_station_gfx_[0246]$"))) then return end
           end
           if not (tram and tram.name=="luanttd_core:tramway_crossing_1" and elrl
               and elrl.name:match("^luanttd_core:electric_crossing_wire_1_")) then return end

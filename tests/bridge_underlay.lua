@@ -32,7 +32,9 @@ local clear={clear=function(t,auto)
 end}
 local c,e,g=U.quote({kind="station",station_type="airport",layout=0},0,7,clear)
 assert(not c and e=="REMOVE_FACILITY_FIRST" and not g)
-c,e,g=U.quote({kind="clear"},0,7,clear)
+c,e,g=U.quote({kind="clear"},0,7,{clear=function() error("ClearTileProcs never clears") end})
+assert(c==0 and not e and not g)
+c,e,g=U.quote({kind="trees"},0,7,clear)
 assert(c==20 and not e and g)
 local under={kind="bridge",axis=1,deck=3}
 assert(U.quote(under,0,4)==0)

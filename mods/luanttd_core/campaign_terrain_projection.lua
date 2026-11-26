@@ -3,7 +3,7 @@
 local keys={
   "terrain","variant","h","build","owner","wood","house","parcel","site",
   "road_bits","road_town","roadside","roadworks","road_disallowed","disallowed","road_stop_pair","stop_axis","depot_dir","road_terminal_level","road_waypoint_id","road_stop_type",
-  "rail_tracks","rail_type","rail_ground","rail_depot_dir","rail_station_id","rail_station_axis","rail_waypoint_id",
+  "rail_tracks","rail_type","rail_ground","rail_depot_dir","rail_station_id","rail_station_axis","rail_station_gfx","rail_waypoint_id","rail_waypoint_axis",
   "rail_span_id","road_bridge_id","road_tunnel_id","station","signal","closed","level_crossing",
   "coastal_water","stock_void","stock_clear_ground","stock_clear_density","water_class","stock_canal","stock_river_bits","stock_water_rocks",
   "stock_industry","stock_landmark","stock_object","ship","airfield","tram","source_house",
@@ -61,7 +61,7 @@ function M.corners(terrain,grid,x,z,w,h)
   end
   return table.concat(rows)
 end
-local span_fields={"start","end","head","tail","middle","middle_by_tile","axis","owner","base","deck","bridge_type","railtype","kind","roadtype","tramtype","road_owner","tram_owner"}
+local span_fields={"start","end","head","tail","middle","middle_by_tile","axis","owner","town","base","deck","bridge_type","railtype","kind","roadtype","tramtype","road_owner","tram_owner"}
 local station_fields={"owner","id","tile","mode","name","tiles","tram_only","stop_axis","stop_type","bus_tile","truck_tile","freight_art","coal_art","coal_role","coal_stage_tile","coal_stage_mirror","oil_role","goods_role","iron_ore_role","steel_role","valuables_role","livestock_role","grain_role","wood_role"}
 local industry_fields={"id","removed","kind","x","z","tiles","layout"}
 local farm_fields={"variant","slope","base","fences"}

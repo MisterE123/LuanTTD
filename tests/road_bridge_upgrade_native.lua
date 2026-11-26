@@ -14,6 +14,8 @@ local spec=assert(bridge_specs[upgrade])
 local speed=spec.speed
 local a,b,water=id(18,22),id(19+math.max(2,spec.min_length),22),id(19,22)
 local rails=id(20,22)
+local aq_head,aq_tail=id(10,44),id(14,44)
+local aq_wood,aq_rock,aq_water=id(11,44),id(12,44),id(13,44)
 local depot,west,east=id(9,21),id(12,22),id(29,22)
 local phase=core.settings:get("luanttd_qa_bridge_phase")
 local cap={road={start_year=1950,breakdowns=0,service_interval=0},ferry={},air={},
@@ -27,9 +29,24 @@ if phase=="start" then
   s.sites,s.tiles={},{}
   s.corner_grid=T.new(64,64,function()return 1 end)
   for i=1,64*64 do s.tiles[i]={h=1,variant=1,terrain="grass"} end
+  for z=44,45 do for x=11,14 do
+    s.corner_grid.levels[(z-1)*65+x]=0
+  end end
+  for _,t in ipairs({aq_head,aq_tail,aq_wood,aq_rock,aq_water}) do s.tiles[t].h=0 end
+  for _,at in ipairs({aq_head,aq_tail}) do
+    local t=s.tiles[at];t.terrain,t.water_class,t.coastal_water="water","sea",true
+  end
+  s.tiles[aq_tail].stock_water_rocks=true
+  s.tiles[aq_wood].wood={class=4,count=2,type=0,ground=0,growth=3,density=3}
+  s.tiles[aq_rock].stock_clear_ground=2
+  s.tiles[aq_water].terrain,s.tiles[aq_water].water_class="water","river"
   s.tiles[water].terrain="water"
+  s.tiles[id(40,26)].stock_clear_ground=2
+  s.tiles[id(39,26)].wood={class=4,count=2,type=0,ground=0,growth=3,density=3}
+  s.tiles[id(41,26)].wood={class=4,count=3,type=0,ground=0,growth=3,density=3}
   s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading,s.road_economy=true,true,true,true
   s.rail_paid_service,s.rail_owned_service=true,true
+  s.ship_paid_service=true
   for i,x in ipairs({12,29}) do
     s.sites[i]={id=i,kind="town",name="Bridge Town "..i,tile=id(x,24),
       population=520,stock={},produced={},received={},service=0}
@@ -38,7 +55,7 @@ if phase=="start" then
       t.house=true;t.source_house={id=j%2==0 and 4 or 1,town=i,completed=true}
     end end
   end
-  Sim.company(s,owner).cash=120000
+  Sim.company(s,owner).cash=220000
   cp.write_state(s)
 end
 local co,revision,goal
@@ -76,10 +93,32 @@ local function state()
 end
 local function run()
   if not earlier then
+    local quote=ask("transport_quote",{request={
+      mode="ship",operation="waterwork",kind="aqueduct",tile=aq_head,last=aq_tail,
+    }})
+    local prior=state()
+    commit("transport_commit",{token=quote.token})
+    local waterway=state()
+    local span=assert(waterway.stock_aqueducts[waterway.aqueduct_above[aq_rock]])
+    assert(span.site_cost==40+40+40 and #span.clears==3)
+    assert(waterway.companies[owner].cash==prior.companies[owner].cash-quote.cost)
+    assert(waterway.tiles[aq_tail].terrain=="grass" and not waterway.tiles[aq_tail].stock_water_rocks)
+    assert(waterway.tiles[aq_head].terrain=="grass" and not waterway.tiles[aq_head].coastal_water)
+    assert(not waterway.tiles[aq_wood].wood and waterway.tiles[aq_rock].stock_clear_ground==2)
+    assert(waterway.tiles[aq_water].terrain=="water" and waterway.tiles[aq_water].water_class=="river")
+    core.log("action","AQUEDUCT_GROUND_NATIVE_PASS real worker kept separate rock and river underlays")
     -- Bulldoze a separate ordinary span by its overhead layer. The
     -- worker must display the actual fee and not touch the lower road.
     local x1,x2,lower=id(39,26),id(42,26),id(40,26)
-    bridge(0,x1,x2)
+    local before=state()
+    local bridge_cost=bridge(0,x1,x2)
+    local crossed=state()
+    assert(not crossed.tiles[x1].wood and not crossed.tiles[id(41,26)].wood)
+    assert(crossed.companies[owner].cash==before.companies[owner].cash-bridge_cost)
+    local span=crossed.stock_road_bridges[crossed.tiles[x1].road_bridge_id]
+    assert(span.site_cost==40+60+20 and #span.clears==3)
+    assert(crossed.tiles[lower].stock_clear_ground==2)
+    core.log("action","BRIDGE_GROUND_CLEAR_NATIVE_PASS two tree groups cleared at the stock price and rocks below preserved")
     commit("road_build",{first=id(40,24),last=id(40,28)})
     local initial=state()
     local demo=ask("demolition",{tile=lower})
@@ -137,6 +176,8 @@ local function run()
     return {kind="stop"}
   end
   local disk=state()
+  assert(disk.aqueduct_above[aq_rock] and disk.tiles[aq_rock].stock_clear_ground==2)
+  assert(not disk.tiles[aq_wood].wood and disk.tiles[aq_water].water_class=="river")
   local bridge_id=disk.tiles[a].road_bridge_id
   local _,v=next(disk.fleet)
   assert(v and v.running and #v.orders==2 and disk.stock_road_bridges[bridge_id].bridge_type==upgrade)

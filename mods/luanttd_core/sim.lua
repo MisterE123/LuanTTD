@@ -247,6 +247,7 @@ local function load_road_rules()
   road_rules.rail_autoslope=dofile(base.."openttd/rail_autoslope.lua")(rail_track,slope_rules)
   road_rules.rail_height=dofile(base.."openttd/rail_height.lua")(rail_track,slope_rules)
   road_rules.town_foundation=dofile(base.."openttd/town_foundation.lua")
+  road_rules.object_autoslope=dofile(base.."openttd/object_autoslope.lua")
   local rail_water=dofile(base.."openttd/rail_half_water.lua")(rail_track,slope_rules)
   coastal_world=dofile(base.."water_flood_world.lua")(M,terrain_rules,dofile(base.."openttd/water_flood.lua"),
     rail_track,slope_rules,rail_water)
@@ -767,6 +768,19 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
     local id=M.id(tx,tz)
     local t=s.tiles[id]
     if coastal_world.is_water(t) then return coast.quote(tx,tz) end
+    local mark=t and (t.stock_landmark or t.stock_object)
+    -- RC1 founded objects keep their absolute top, independently of
+    -- the builder's ownership. Stakes have no foundation but keep owner.
+    if mark and not t.stock_void and not (
+        s.bridge_above and s.bridge_above[id] or s.aqueduct_above and s.aqueduct_above[id] or
+        s.tunnel_below and s.tunnel_below[id] or s.rail_bridge_above and s.rail_bridge_above[id] or
+        s.rail_tunnel_below and s.rail_tunnel_below[id]) then
+      local old_mask,old_base=terrain_rules.tile(staged_grid,tx,tz)
+      local foundation=road_rules.object_autoslope.quote(mark.kind,t.owner==owner,old_mask,old_base,mask,base,s.stock_road_town_policy)
+      if foundation then return foundation end
+      if mark.kind=="headquarters" or mark.kind=="statue" then return nil,"STOCK_OBJECT_SURFACE_HEIGHT" end
+      if mark.kind=="owned_land" then return nil,"OWNED_BY_ANOTHER" end
+    end
     local crossing=t and t.level_crossing
     local wiring=crossing and crossing_bindings[s]
     if wiring and not (
@@ -908,6 +922,7 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
       CROSSING_SURFACE_HEIGHT="Keep the crossing deck at its current height on a supported slope, or remove the crossing first.",
       AIRPORT_SURFACE_HEIGHT="Landscaping cannot change the level of an active airport.",
       TOWN_HOUSE_HEIGHT="Keep the house foundation at its current height and avoid steep slopes.",
+      STOCK_OBJECT_SURFACE_HEIGHT="Landscaping must keep the statue or headquarters level and avoid steep slopes.",
       MUST_REMOVE_RAILROAD_TRACK="Landscaping would change the running surface. Remove the tracks first.",
       RAIL_SPLIT_UNMOUNTED="That split foundation is available only on ordinary rail.",
       RAIL_FACILITY_HEIGHT="Landscaping must leave the platform or depot level and its entrances unchanged."}
@@ -953,11 +968,11 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
   return true,("Landscaped for $%d; %d corners changed%s."):format(plan.cost,#plan.changes,
     (extra>0 or plan.halted) and " (partial selection)" or ""),changed,peak
 end
-function M.road_bridge(s,owner,first,last,style,quote_only)
+function M.road_bridge(s,owner,first,last,style,quote_only,municipal)
   if not s.corner_grid or not first or not last then return false,"Select two bridgeheads on shared-corner terrain." end
   load_road_rules()
   if not bridge_assets.mounts("road",style) then return false,"This bridge style is not available for this road." end
-  local c=M.company(s,owner)
+  local c=not municipal and M.company(s,owner)
   local board={xy=M.xy,id=M.id}
   board.tile=function(id)
     local t=s.tiles[id]
@@ -977,6 +992,17 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
         overhead=existing and {axis=existing.axis,deck=existing.deck}}
     end
     local kind
+    local facility=not t.stock_void and not t.level_crossing and not t.rail_span_id and
+      (M.bridge_water_facility(t.ship,top) or M.bridge_rail_facility(t,top))
+    if facility then
+      facility.slope,facility.base,facility.owner=slope,base,t.owner
+      facility.overhead=existing and {axis=existing.axis,deck=existing.deck}
+      -- One mounted elevated layer per tile.
+      if s.rail_bridge_above and s.rail_bridge_above[id] or s.rail_tunnel_below and s.rail_tunnel_below[id] then
+        facility.kind="obstruction"
+      end
+      return facility
+    end
     if t.stock_void or t.tram or t.ship or t.airfield or t.stock_industry or t.stock_landmark or M.rail_span_protected(s,id) then
       kind="obstruction"
     elseif M.is_owned_land(t) then kind="owned_land"
@@ -984,47 +1010,30 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
       -- CheckBuildAbove_Rail admits stock plain rail, including signals.
       -- The ordinary rail and its dispatch state remain independent.
       kind="plain_rail"
-    elseif t.terrain=="water" then kind=t.coastal_water and "coast" or "water"
     elseif t.build=="road" then kind="road"
-    elseif t.site or t.wood or t.house or t.build then kind="obstruction"
+    elseif t.build=="canal" then kind="canal"
+    elseif t.site or t.house or t.build then kind="obstruction"
+    elseif t.wood then kind="trees"
+    elseif t.terrain=="water" then kind=t.coastal_water and "coast" or "water"
     else kind="clear" end
     return {slope=slope,base=base,max_z=top,kind=kind,owner=t.owner,
       overhead=existing and {axis=existing.axis,deck=existing.deck}}
   end
-  board.clear_quote=function(id,t,role)
-    if t.kind=="owned_land" then
-      if t.owner==owner then return -M.owned_land_resale() end
-      return nil,"OWNED_BY_ANOTHER"
-    end
-    if t.kind=="clear" and (not t.owner or t.owner==owner) then return 0 end
-    if role=="head" and t.kind=="coast" then
-      -- RC1 CmdBuildBridge clears either ramp with LandscapeClear
-      -- (Auto|NoWater); an actual water square refuses but coast can clear.
-      local cost,why=quote_water_clear(s,owner,id)
-      if cost then return cost end
-      return nil,water_clear_errors[why] or why
-    end
-    return nil,role=="head" and "BRIDGEHEAD_NEEDS_CLEAR_LAND" or "BRIDGE_MIDDLE_OBSTRUCTED"
+  board.clear_quote=function(id,t)
+    return M.bridge_ramp_clear_quote(s,owner,id,t)
   end
-  local road_clear={clear=function(t)
-    -- This native adapter still lacks stock barren/rough ground mutation;
-    -- only existing clean ground is admitted by its limited quote.
-    if t.kind=="clear" then return 0 end
-    if t.kind=="owned_land" then
-      if t.owner==owner then return -M.owned_land_resale(),nil,true end
-      return nil,"OWNED_BY_ANOTHER"
-    end
-    return nil,"BRIDGE_MIDDLE_OBSTRUCTED"
-  end}
-  function board.check_build_above(_,t,axis,deck)
-    return bridge_underlay.quote(t,axis,deck,road_clear)
+  function board.check_build_above(id,t,axis,deck)
+    return M.bridge_check_above(s,owner,id,t,axis,deck)
   end
-  local plan,why,id=bridge_rules.plan(board,first,last,style,{owner=owner,budget=c.cash,year=M.date(s)})
+  local plan,why,id=bridge_rules.plan(board,first,last,style,{owner=owner,budget=c and c.cash,
+    company=not municipal,year=M.date(s)})
   if not plan then
     local x,z
     if id then x,z=M.xy(id) end
     if why=="BRIDGEHEAD_NEEDS_CLEAR_LAND" then
       why="Place the ramp on a clear bank tile, not open water or an occupied tile."
+    else
+      why=why~="OWNED_BY_ANOTHER" and water_clear_errors[why] or why
     end
     return false,why..(x and (" (%d,%d)"):format(x,z) or "")
   end
@@ -1037,6 +1046,7 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
   if quote_only then return true,plan.price,plan end
   local bridge
   if plan.replacement then
+    if municipal then return false,"The town does not replace an existing span during generation." end
     bridge=s.tiles[plan.start].road_bridge_id
     if not (bridge and s.tiles[plan["end"]].road_bridge_id==bridge) then
       return false,"The bridge changed. Select its two ramps again."
@@ -1047,21 +1057,18 @@ function M.road_bridge(s,owner,first,last,style,quote_only)
   end
   s.stock_road_bridges=s.stock_road_bridges or {}
   s.bridge_above=s.bridge_above or {}
+  plan.town=municipal or plan.replacement and s.stock_road_bridges[bridge].town or nil
   s.stock_road_bridges[bridge]=plan
-  -- Stock objects with no AllowUnderBridge flag are sold by LandscapeClear.
-  for _,id in ipairs(plan.clears) do
-    local t=s.tiles[id]
-    if M.is_owned_land(t) then t.owner,t.stock_object=nil,nil end
-  end
+  M.bridge_apply_ground_clears(s,owner,plan.clears,municipal)
   local dirty={plan.start,plan["end"]}
   for _,head in ipairs(dirty) do
     local t=s.tiles[head]
-    if not plan.replacement and t.coastal_water then coastal_world.clear_apply(s,head) end
     t.build="stock_road_bridge";t.owner=plan.owner;t.road_bridge_id=bridge
+    t.road_town=plan.town
   end
   for _,tile in ipairs(plan.middle) do s.bridge_above[tile]=bridge;dirty[#dirty+1]=tile end
   s.topology=s.topology+1
-  debit(c,plan.price)
+  if c then debit(c,plan.price) end
   local summary=plan.replacement and "%s bridge #%d upgraded for $%d. Its road connections are unchanged."
     or "%s bridge #%d built for $%d. Connect a road to the outside of each ramp."
   return true,summary:format(bridge_assets.names[style],bridge,plan.price),
@@ -1075,7 +1082,7 @@ function M.remove_wood_bridge(s,owner,id,quote_only)
   local t=s.tiles[id]
   local bridge=t and t.road_bridge_id
   local span=bridge and s.stock_road_bridges[bridge]
-  if not span or span.owner~=owner then return false,"Select an end of your road bridge." end
+  if not span or (span.owner~=owner and not span.town) then return false,"Select an end of your road bridge." end
   if tram_uses_road_span(s,span) then return false,"Stop the tram route using this bridge first." end
   for _,v in pairs(s.fleet) do
     for _,route_tile in ipairs(v.route or {}) do
@@ -1086,6 +1093,11 @@ function M.remove_wood_bridge(s,owner,id,quote_only)
   end
   load_road_rules()
   local c=s.companies[owner]
+  local ratings
+  if c and span.town then
+    ratings=M.road_tree_authority().span_removal(s,c,id)
+    if not ratings then return false,"The local authority refuses to allow removal of this bridge." end
+  end
   local price=bridge_rules.clear_cost(span.total_length,span.roadtype or 0,span.tramtype)
   if not c or c.cash<price then return false,"Not enough funds to dismantle this bridge." end
   if quote_only then
@@ -1097,21 +1109,23 @@ function M.remove_wood_bridge(s,owner,id,quote_only)
   local dirty={span.start,span["end"]}
   for _,head in ipairs(dirty) do
     local tile=s.tiles[head]
-    tile.build=nil;tile.owner=nil;tile.road_bridge_id=nil
+    tile.build=nil;tile.owner=nil;tile.road_bridge_id=nil;tile.road_town=nil
+    M.mark_clear_land(s,head)
   end
   for _,tile in ipairs(span.middle) do s.bridge_above[tile]=nil;dirty[#dirty+1]=tile end
   s.stock_road_bridges[bridge]=nil
   s.topology=s.topology+1
   debit(c,price)
+  M.road_tree_authority().apply(c,ratings)
   return true,("Road bridge removed for $%d; land underneath retained."):format(price),dirty,span.deck
 end
-function M.road_tunnel(s,owner,start,quote_only)
+function M.road_tunnel(s,owner,start,quote_only,municipal)
   if not s.corner_grid or not start then return false,"Select an uphill tile for the portal." end
   load_road_rules()
   local board={xy=M.xy,id=M.id}
   board.tile=function(id)
     local t=s.tiles[id]
-    if not t then return end
+    if not t or t.stock_void then return end
     local x,z=M.xy(id)
     local slope,base=terrain_rules.tile(s.corner_grid,x,z)
     return {slope=slope,base=base,water=t.terrain=="water"}
@@ -1130,8 +1144,8 @@ function M.road_tunnel(s,owner,start,quote_only)
     local key=s.tunnel_below and s.tunnel_below[id]
     return key and s.stock_road_tunnels[key].base==depth
   end
-  local c=M.company(s,owner)
-  local plan,why,at=tunnel_rules.plan(board,start,{owner=owner,budget=c.cash})
+  local c=not municipal and M.company(s,owner)
+  local plan,why,at=tunnel_rules.plan(board,start,{owner=owner,budget=c and c.cash})
   if not plan then
     local x,z
     if at then x,z=M.xy(at) end
@@ -1150,34 +1164,71 @@ function M.road_tunnel(s,owner,start,quote_only)
   s.next_stock_road_tunnel=key+1
   s.stock_road_tunnels=s.stock_road_tunnels or {}
   s.tunnel_below=keys
+  plan.town=municipal
   s.stock_road_tunnels[key]=plan
   local dirty={plan.start,plan["end"]}
   for _,id in ipairs(dirty) do
     local t=s.tiles[id]
     if M.is_owned_land(t) then t.stock_object=nil end
     t.build,t.owner,t.road_tunnel_id="stock_road_tunnel",owner,key
+    t.road_town=plan.town
   end
   for _,id in ipairs(plan.middle) do keys[id]=key end
   s.topology=s.topology+1
-  debit(c,plan.price)
+  if c then debit(c,plan.price) end
   return true,("Road tunnel #%d built for $%d. Connect the outer side of both portals."):format(key,plan.price),dirty
 end
-function M.remove_road_tunnel(s,owner,id)
+function M.remove_road_tunnel(s,owner,id,quote_only)
   local t=s.tiles[id]
   local key=t and t.road_tunnel_id
   local span=key and s.stock_road_tunnels[key]
-  if not span or span.owner~=owner then return false,"Select one of your tunnel portals." end
+  if not span or (span.owner~=owner and not span.town) then return false,"Select one of your tunnel portals." end
   if tram_uses_road_span(s,span) then return false,"Stop the tram route using this tunnel first." end
   for _,v in pairs(s.fleet) do for _,tile in ipairs(v.route or {}) do
     if tile==span.start or tile==span["end"] then return false,"Wait for vehicles using the tunnel." end
   end end
+  local c,ratings=s.companies[owner]
+  local price=0
+  if span.town then
+    if not c then return false,"Open a transport company before removing a public tunnel." end
+    ratings=M.road_tree_authority().span_removal(s,c,id)
+    if not ratings then return false,"The local authority refuses to allow removal of this tunnel." end
+    price=(span.middle_length+2)*(30+2*40) -- RC1 Price::ClearTunnel and RoadClearCost(ROAD)
+    if c.cash<price then return false,"Not enough funds to dismantle this tunnel." end
+  end
+  if quote_only then return true,price,span end
   local dirty={span.start,span["end"]}
   for _,portal in ipairs(dirty) do
-    local h=s.tiles[portal];h.build,h.owner,h.road_tunnel_id=nil,nil,nil
+    local h=s.tiles[portal];h.build,h.owner,h.road_tunnel_id,h.road_town=nil,nil,nil,nil
+    M.mark_clear_land(s,portal)
   end
   for _,under in ipairs(span.middle) do s.tunnel_below[under]=nil end
   s.stock_road_tunnels[key]=nil;s.topology=s.topology+1
+  if ratings then debit(c,price);M.road_tree_authority().apply(c,ratings) end
   return true,"Removed both tunnel portals; surface land preserved.",dirty
+end
+function M.discard_generated_town_span(s,id,town)
+  local t=s.tiles[id]
+  local bridge=t.road_bridge_id
+  local records,links,field
+  if bridge then records,links,field=s.stock_road_bridges,s.bridge_above,"road_bridge_id"
+  else records,links,field=s.stock_road_tunnels,s.tunnel_below,"road_tunnel_id" end
+  local key=t[field]
+  local span=key and records[key]
+  if not span or span.town~=town then return false end
+  for _,head in ipairs({span.start,span["end"]}) do
+    local cell=s.tiles[head]
+    assert(cell[field]==key and cell.road_town==town)
+    cell[field],cell.build,cell.owner,cell.road_town=nil,nil,nil,nil
+    cell.stock_clear_ground,cell.stock_clear_density,cell.stock_clear_visits=nil,nil,nil
+  end
+  for _,mid in ipairs(span.middle) do
+    assert(links[mid]==key)
+    links[mid]=nil
+  end
+  records[key]=nil
+  s.topology=s.topology+1
+  return true
 end
 local road_flags={1,2,4,8}
 local function has_edge(bits,d)
@@ -1323,6 +1374,94 @@ function M.road_site_clear_cost(t,farm_field)
   if kind==2 then return 200 end
   if kind==3 then return 500 end
   return 40
+end
+-- RC1 CmdBuildBridge shares the dry LandscapeClear dispatch across
+-- road, rail and water bridges. Clear ramps are removed; ClearTileProcs
+-- explicitly preserves existing bare, grassy, rough, rocky or farm
+-- land under the middle, but Trees and stock owned-land objects clear.
+local function bridge_dry_ground_kind(kind)
+  return kind=="clear" or kind=="trees" or kind=="owned_land"
+end
+local function bridge_dry_ground_quote(s,owner,id,record)
+  if record.kind=="owned_land" and record.owner~=owner then return nil,"OWNED_BY_ANOTHER" end
+  if not bridge_dry_ground_kind(record.kind) or record.owner and record.owner~=owner then
+    return nil,"BRIDGE_LAND_CLEAR_REQUIRED"
+  end
+  local t=s.tiles[id]
+  if record.kind=="trees" and t.terrain=="water" then
+    if not t.coastal_water then return nil,"CAN_T_BUILD_ON_WATER" end
+    load_road_rules()
+    return coastal_world.road_tree_coast_quote(s,owner,id,function(at) return coastal_tile_occupied(s,at) end)
+  end
+  return M.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[id])
+end
+function M.bridge_ramp_clear_quote(s,owner,id,record)
+  if bridge_dry_ground_kind(record.kind) then return bridge_dry_ground_quote(s,owner,id,record) end
+  -- BuildBridge uses NoWater. Coast and CoastRocks ignore that flag and
+  -- run the charged shore clear. Open water never reaches that branch.
+  if record.kind=="coast" then return quote_water_clear(s,owner,id) end
+  if record.kind=="water" or record.kind=="sea" or record.kind=="river" or record.kind=="canal" then
+    return nil,"CAN_T_BUILD_ON_WATER"
+  end
+  return nil,"BRIDGEHEAD_NEEDS_CLEAR_LAND"
+end
+-- Engine bridge tables store only the middle cells, never the heads.
+-- A bare presence marker is treated as unknown geometry, not as clearance.
+function M.bridge_deck_at(s,id)
+  for _,layer in ipairs(M.bridge_layers) do
+    local key=s[layer[1]] and s[layer[1]][id]
+    if key then
+      local span=s[layer[2]] and s[layer[2]][key]
+      return span and span.deck or nil,true
+    end
+  end
+  return nil,false
+end
+M.bridge_layers={{"bridge_above","stock_road_bridges"},{"rail_bridge_above","stock_rail_spans"},
+  {"aqueduct_above","stock_aqueducts"}}
+-- The native station geometry stays separate from the stock layout key:
+-- paired middle buildings and platforms have different overhead masks.
+function M.bridge_rail_facility(t,top)
+  if t.rail_depot_dir~=nil then return {kind="rail_depot",max_z=top} end
+  if t.rail_station_id or t.rail_waypoint_id then
+    return {kind="station",station_type=t.rail_station_id and "rail" or "rail_waypoint",
+      layout=t.rail_station_gfx or t.rail_station_axis or t.rail_waypoint_axis or 0,max_z=top}
+  end
+end
+function M.bridge_water_facility(ship,top)
+  if not ship then return end
+  local k=ship.kind
+  if k=="dock" or k=="buoy" then
+    local layout=k=="buoy" and 0 or ship.water_part and 4+ship.dir%2 or ship.dir
+    return {kind="station",station_type=k,layout=layout,max_z=top}
+  elseif k=="lock" or k=="ship_depot" then
+    return {kind=k,part=ship.part,max_z=top}
+  end
+end
+function M.bridge_check_above(s,owner,id,record,axis,deck)
+  load_road_rules()
+  if record.kind=="trees" or record.kind=="owned_land" then
+    local cost,why=bridge_dry_ground_quote(s,owner,id,record)
+    return cost,why,cost~=nil
+  end
+  return bridge_underlay.quote(record,axis,deck)
+end
+function M.bridge_apply_ground_clears(s,owner,ids,municipal)
+  for _,id in ipairs(ids or {}) do
+    local t=s.tiles[id]
+    if M.is_owned_land(t) then
+      t.owner,t.stock_object=nil,nil
+    elseif t.wood then
+      local council=M.road_tree_authority()
+      if not municipal then council.clear_road_trees(M.company(s,owner),council.tree_town(s,id)) end
+      t.wood=nil
+    end
+    if t.coastal_water then
+      load_road_rules()
+      coastal_world.clear_apply(s,id)
+    end
+    M.mark_clear_land(s,id)
+  end
 end
 local function new_pieces(pieces,existing)
   local added,n=existing,0
@@ -1534,6 +1673,47 @@ local function linking_errors(s,proposed)
       end
     end
   end
+end
+-- Municipal construction runs the normal geometry/clearance quote but
+-- has no company ledger. Only its own normal road and clear land are
+-- writable here. Player/reserved facilities are not silently altered.
+function M.town_road_piece(s,town,id,bits,execute)
+  local t=id and s.tiles[id]
+  if not t or t.stock_void or t.stock_object or t.owner or t.tram or t.station or t.road_waypoint_id or
+      t.level_crossing or t.rail_tracks or t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or
+      (t.build and t.build~="road") or (t.road_town and t.road_town~=town) then return end
+  load_road_rules()
+  local r,c=road_piece_plan(s,nil,id,t,bits,M.road_piece_occupancy(s))
+  if not r or c==0 then return end
+  r.road_town=town
+  if linking_errors(s,{[id]=r,order={id}}) then return end
+  if execute then
+    if r.clear_road_coast then coastal_world.clear_apply(s,id) end
+    if r.clear_road_site then
+      t.wood,t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,nil,nil,nil
+      if s.stock_farm_fields then s.stock_farm_fields[id]=nil end
+    end
+    t.build,t.road_town,t.road_bits="road",town,r.road_bits
+    s.has_town_roads=true
+    s.topology=(s.topology or 0)+1
+  end
+  return r
+end
+
+function M.town_clear_coast(s,id,execute)
+  local t=s.tiles[id]
+  if not t or t.stock_void or not t.coastal_water or t.owner or t.build or t.stock_object or
+      t.site or t.house or t.rail_tracks or t.ship or t.airfield or t.tram or t.stock_industry then return end
+  load_road_rules()
+  local cost
+  if t.wood then
+    cost=coastal_world.road_tree_coast_quote(s,nil,id,function(at) return coastal_tile_occupied(s,at) end)
+  else
+    cost=quote_water_clear(s,nil,id)
+  end
+  if not cost then return end
+  if execute then coastal_world.clear_apply(s,id);t.wood=nil end
+  return cost
 end
 local function road_drag_plan(s,owner,ids)
   local requested,order,proposed,result,total={}, {}, {order={}}, {}, 0

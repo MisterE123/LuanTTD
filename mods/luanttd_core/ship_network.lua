@@ -10,9 +10,9 @@ return function(Sim,Terrain,Water,Facilities)
     local t=id and s.tiles[id]
     if not t or t.stock_void or not s.corner_grid then return end
     local x,z=Sim.xy(id)
-    local slope,base=Terrain.tile(s.corner_grid,x,z)
-    local out={slope=slope,base=base,owner=t.owner,overhead=s.bridge_above and s.bridge_above[id]~=nil or
-      s.aqueduct_above and s.aqueduct_above[id]~=nil or false}
+    local slope,base,top=Terrain.tile(s.corner_grid,x,z)
+    local deck,overhead=Sim.bridge_deck_at(s,id)
+    local out={slope=slope,base=base,top=top,owner=t.owner,overhead=overhead,bridge_deck=deck}
     if t.ship then
       for k,v in pairs(t.ship) do out[k]=v end
       return out
@@ -94,8 +94,15 @@ return function(Sim,Terrain,Water,Facilities)
     end
     return B
   end
+  -- Existing overpasses are independent of the shoreline; keep the
+  -- guard for the other native railway layers, not a rail deck above.
+  function N.rail_water_obstruction(s,id)
+    local t=s.tiles[id]
+    return t.rail_span_id or t.level_crossing or t.rail_waypoint_id or
+      s.rail_tunnel_below and s.rail_tunnel_below[id]
+  end
   local function clear(s,owner,id,t)
-    if Sim.rail_span_protected and Sim.rail_span_protected(s,id) then return nil,"PROTECTED_TILE" end
+    if N.rail_water_obstruction(s,id) then return nil,"PROTECTED_TILE" end
     if s.tunnel_below and s.tunnel_below[id] then return nil,"SUBSURFACE_RESERVED" end
     local host=s.tiles[id]
     if host.wood then return nil,"DOCK_CLEAR_TREES" end
@@ -119,7 +126,7 @@ return function(Sim,Terrain,Water,Facilities)
   end
   local function protected_buoy_site(s,id,t)
     local host=s.tiles[id]
-    if Sim.rail_span_protected and Sim.rail_span_protected(s,id) or
+    if N.rail_water_obstruction(s,id) or
         s.tunnel_below and s.tunnel_below[id] then return "PROTECTED_TILE" end
     -- The native host cannot auto-clear industry/object/station water
     -- underneath other facilities. Preserve their existing overlays.

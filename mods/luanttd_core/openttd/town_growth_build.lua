@@ -1,8 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- 14.1 OpenTTD contributors: town_cmd.cpp GrowTown*, CanFollowRoad,
+-- OpenTTD contributors, updated for 16.0-RC1: town_cmd.cpp GrowTown*, CanFollowRoad,
 -- GetTownRoadGridElement and BuildTownHouse; ordinary temperate branch.
--- Nondestructive planning, no terraforming, waterways, rail crossing,
--- structure construction or in-map destruction.
+-- Host provides deterministic planning and site authorization.
 return function(G,catalog)
   local B={}
   local floor=math.floor
@@ -21,10 +20,10 @@ return function(G,catalog)
   local function within(board,x,z) return x~=nil and z~=nil and board.tile(x,z) end
   local function per(board,x,z,d) return x+dx[d],z+dz[d] end
   local function road(t)
-    return t and (t.kind=="road" or t.kind=="drive_stop") and (t.road_bits or 0) or 0
+    return t and (t.kind=="road" or t.kind=="drive_stop" or t.kind=="bridge" or t.kind=="tunnel") and (t.road_bits or 0) or 0
   end
   local function disallowed(t)
-    return not t or t.kind=="void" or t.kind=="water" or t.water or t.protected
+    return not t or t.kind=="void" or (t.kind=="water" and not t.coast) or t.water or t.protected
   end
   local function random_dir(random)
     return G.range(4,random())
@@ -53,7 +52,7 @@ return function(G,catalog)
     -- Host-safety: never let a command quote clear or replace anything
     -- in the live rollout. Trees, farmland and other classes may later
     -- get explicit nondestructive policies, not a generic clear call.
-    if t.kind~="clear" or t.occupied or t.owner then return false end
+    if t.kind~="clear" and not t.coast or t.occupied or t.owner then return false end
     return not board.clear_quote or board.clear_quote(x,z,"house")
   end
   local function footprint(board,t,x,z,roads,spec,first)
@@ -122,20 +121,24 @@ return function(G,catalog)
     if t.kind=="drive_stop" then return true end
     if t.kind=="house" or t.kind=="industry" or t.kind=="object" or
         t.kind=="bay_stop" or t.kind=="station" or t.kind=="depot" then return false end
-    if t.kind=="bridge" or t.kind=="tunnel" then return false end -- unsupported host layer
+    if t.kind=="bridge" or t.kind=="tunnel" then return true end
     return true
   end
-  local function plan_road(t,board,x,z,rb,d)
+  local function plan_road(t,board,x,z,rb,d,random)
     if rb==0 or not board.road_quote then return end
     local current=board.tile(x,z)
     if disallowed(current) or current.occupied or (current.road_disallowed or 0)~=0 or
-      current.kind~="road" and current.kind~="clear" or current.road_town and current.road_town~=t.id
+      current.kind~="road" and current.kind~="clear" and not current.coast or current.road_town and current.road_town~=t.id
       or current.owner then return end
     if d~=nil then
       if not board.clean_road_bits then return end
       rb=board.clean_road_bits(t,x,z,rb,d)
     end
     if rb==0 then return end
+    if d~=nil and board.road_span then
+      local span=board.road_span(t,x,z,d,random)
+      if span then return span end
+    end
     local q=board.road_quote(t,x,z,rb)
     if q then return {kind="road",town=t.id,x=x,z=z,bits=rb,quote=q} end
   end
@@ -159,10 +162,9 @@ return function(G,catalog)
     end
     if rb==0 then
       if not roads or from==nil then return nil,true end
-      -- Consume stock leveling lottery in the flat-only rollout, but
-      -- never terraform. A non-flat unsupported placement fails closed.
-      if opts.build_on_slopes~=false then G.chance(1,6,random()) end
-      if (q.slope or 0)~=0 then return nil,true end
+      if opts.build_on_slopes==false or G.chance(1,6,random()) then
+        if board.level_land then board.level_land(x,z);q=board.tile(x,z) end
+      end
       local rcmd
       if grid[t.layout] then rcmd=B.grid_bits(t,x,z,from,q.slope)
       else
@@ -181,12 +183,12 @@ return function(G,catalog)
         end
         rcmd=bits[from]+bits[src]
       end
-      return plan_road(t,board,x,z,rcmd,from),true
+      return plan_road(t,board,x,z,rcmd,from,random),true
     end
     if from~=nil and not has(rb,bits[rev(from)]) then
       if not roads then return nil,true end
       local rcmd=grid[t.layout] and B.grid_bits(t,x,z,from,q.slope) or bits[rev(from)]
-      return plan_road(t,board,x,z,rcmd,from),true
+      return plan_road(t,board,x,z,rcmd,from,random),true
     end
 
     local d=random_dir(random)
@@ -206,9 +208,11 @@ return function(G,catalog)
       if t.layout=="grid3" or t.layout=="better" then
         local hx,hz=per(board,u,v,d)
         local plan=extra(t,board,hx,hz,opts,random)
-        -- The source may continue after successful extra-house. Host
-        -- commits a single nondestructive plan per scheduler attempt.
-        if plan then return plan end
+        if plan then
+          if opts.extra_house then
+            if opts.extra_house(plan) then opts.extra_succeeded=true end
+          else return plan end
+        end
       end
       if grid[t.layout] then rcmd=B.grid_bits(t,x,z,d,q.slope);permit=not has(rcmd,b)
       else rcmd=b;permit=not allowed(u,v,d) or G.chance(6,10,random()) end
@@ -216,12 +220,12 @@ return function(G,catalog)
     if board.house_roadtypes and not board.house_roadtypes(u,v) then permit=false end
     if permit then
       if h.kind~="house" then
-        G.chance(1,6,random()) -- no actual terrain write in this port
+        if G.chance(1,6,random()) and board.level_land then board.level_land(u,v) end
         return B.house(t,board,u,v,opts,random)
       end
       return
     end
-    return plan_road(t,board,x,z,rcmd,d),true
+    return plan_road(t,board,x,z,rcmd,d,random),true
   end
 
   function B.grow(t,board,opts,random)
@@ -238,11 +242,18 @@ return function(G,catalog)
           local q=board.tile(x,z)
           if disallowed(q) or q.road_town and q.road_town~=t.id then return end
           local rb=road(q)
-          local plan,stop=grow_here(t,board,x,z,rb,from,opts,random)
+          local portal=q.inside~=nil and (q.kind=="bridge" or q.kind=="tunnel") and q
+          if portal then
+            if from~=nil or G.chance(1,2,random()) then x,z=q.other_x,q.other_z end
+          end
+          local plan,stop
+          if not portal then plan,stop=grow_here(t,board,x,z,rb,from,opts,random) end
           if plan then return plan end
+          if opts.extra_succeeded then return end
           if from and has(rb,bits[rev(from)]) then rb=rb-bits[rev(from)] end
           local next_dir
-          while rb~=0 do
+          if portal and rb~=0 then next_dir=rev(board.tile(x,z).inside) end
+          while not portal and rb~=0 do
             local b
             repeat next_dir=random_dir(random);b=bits[next_dir] until has(rb,b)
             rb=rb-b
@@ -261,7 +272,7 @@ return function(G,catalog)
     x,z=startx,startz
     for _,delta in ipairs(walk_seed) do
       local q=board.tile(x,z)
-      if not disallowed(q) and q.kind=="clear" and (q.slope or 0)==0 and not q.owner and not q.occupied and
+      if not disallowed(q) and (q.kind=="clear" or q.coast) and not q.owner and not q.occupied and
           (not board.clear_quote or board.clear_quote(x,z,"road")) then
         local r=random()
         local a,b=r%4,floor(r/256)%4

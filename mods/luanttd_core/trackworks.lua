@@ -14,6 +14,20 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     return t and (t.rail_span_id~=nil or t.level_crossing~=nil) or s.rail_bridge_above and s.rail_bridge_above[id]~=nil or
       s.rail_tunnel_below and s.rail_tunnel_below[id]~=nil or false
   end
+  -- Ground railway facilities may sit below an independent elevated deck.
+  -- This does not admit portals, bores or intersections into that layer.
+  function Lab.facility_protected(s,id)
+    local t=s.tiles[id]
+    return not t or t.rail_span_id or t.level_crossing or
+      s.rail_tunnel_below and s.rail_tunnel_below[id] or s.tunnel_below and s.tunnel_below[id]
+  end
+  function Lab.flat_underpass(s,id,shape)
+    if shape~=0 or Lab.facility_protected(s,id) or not Sim.bridge_deck_at then return false end
+    local d=Sim.bridge_deck_at(s,id)
+    -- Native overlay meshes for plain rail and deck both use level + 1.
+    -- Keep new construction out of that unresolved same-node case.
+    return type(d)=="number" and d>=(s.tiles[id].h or 0)+2
+  end
   local protected="That tile is protected railway infrastructure."
   local coast_corner={[1]=true,[2]=true,[4]=true,[8]=true}
 
@@ -84,9 +98,9 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     end
     return true,group,axis
   end
-  function Lab.commit_station(s,owner,group,axis,area,join,gauge)
+  function Lab.commit_station(s,owner,group,axis,area,join,gauge,graphics)
     for _,tile in ipairs(group) do
-      if Lab.span_protected(s,tile) then return false,protected end
+      if Lab.facility_protected(s,tile) or not graphics and Lab.span_protected(s,tile) then return false,protected end
       local t=s.tiles[tile]
       if Sim.is_owned_land and Sim.is_owned_land(t) and t.owner~=owner then return false,"Land owned by another company." end
     end
@@ -111,7 +125,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     for _,tile in ipairs(group) do
       local t=s.tiles[tile]
       if Sim.is_owned_land and Sim.is_owned_land(t) then t.stock_object=nil end
-      t.rail_station_id=id;t.rail_station_axis=axis
+      t.rail_station_id=id;t.rail_station_axis=axis;t.rail_station_gfx=graphics and graphics[tile] or nil
       if gauge~=nil then t.rail_type=gauge end
       t.build,t.owner,t.rail_tracks,t.wood="stock_rail",owner,2^axis,nil
     end
@@ -130,7 +144,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
   end
   function Lab.commit_waypoint(s,owner,tile,axis,remove)
     local t=s.tiles[tile]
-    if not t or t.owner~=owner or t.rail_tracks~=2^axis or Lab.span_protected(s,tile) or
+    if not t or t.owner~=owner or t.rail_tracks~=2^axis or Lab.facility_protected(s,tile) or
         t.rail_station_id or t.rail_depot_dir then return false,"Choose owned, plain straight track." end
     if remove then
       local wp=Lab.waypoint_at(s,tile)
@@ -192,7 +206,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     return Lab.commit_depot(s,owner,id,dir)
   end
   function Lab.remove_facility(s,owner,id)
-    if Lab.span_protected(s,id) then return false,protected end
+    if Lab.facility_protected(s,id) then return false,protected end
     local t=s.tiles[id]
     if not t or t.owner~=owner then return false,"Select your rail facility." end
     local group={id}
@@ -200,12 +214,13 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       local st=s.stock_rail_stations[t.rail_station_id]
       group=st.tiles
       for _,tile in ipairs(group) do
-        if Lab.span_protected(s,tile) then return false,protected end
+        if Lab.facility_protected(s,tile) then return false,protected end
       end
       s.stock_rail_stations[st.id]=nil
       for _,tile in ipairs(group) do
         s.tiles[tile].rail_station_id=nil
         s.tiles[tile].rail_station_axis=nil
+        s.tiles[tile].rail_station_gfx=nil
       end
     elseif t.rail_depot_dir then
       if Lab.owned_depot_occupied and Lab.owned_depot_occupied(s,id) then
@@ -293,7 +308,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     return tile.trackbits,count
   end
   function Lab.piece_plan(s,owner,id,track,remove,shape)
-    if Lab.span_protected(s,id) then return false,protected end
+    if Lab.span_protected(s,id) and not Lab.flat_underpass(s,id,shape) then return false,protected end
     local t=s.tiles[id]
     if not t then return false,"That tile is outside the region." end
     local shore=shape~=nil and shape~=0 and t.h==0 and t.terrain=="water" and t.coastal_water and not t.wood
@@ -318,7 +333,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       split_foundation=not not split,shore=not not shore}
   end
   function Lab.commit_piece(s,owner,plan)
-    if Lab.span_protected(s,plan.id) then return false,protected end
+    if Lab.span_protected(s,plan.id) and not Lab.flat_underpass(s,plan.id,plan.shape) then return false,protected end
     local t=s.tiles[plan.id]
     local new=plan.tracks
     local existing_wet=t.rail_ground==13

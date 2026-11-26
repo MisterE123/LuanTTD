@@ -24,6 +24,14 @@ local function lower(rating,by,limit)
 end
 -- Tree clearing penalizes the company once per tile, not per stem.
 -- Tree purchase/removal price is a separate per-stem amount.
+-- 16.0-RC1 CheckforTownRating(TunnelBridgeRemove), and the
+-- post-clear rating change from DoClearBridge / DoClearTunnel.
+function R.span_removal(rating,tolerance,magic)
+  local needed=({[0]=144,208,400,-1000})[tolerance]
+  if not magic and rating<assert(needed) then return nil,"TOWN_REFUSES" end
+  return magic and rating or lower(rating,250,0)
+end
+
 function R.clear_trees(rating)
   return lower(rating,35,-1000)
 end

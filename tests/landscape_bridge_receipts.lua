@@ -61,7 +61,9 @@ local function world()
   -- Ordinary foreign road is valid underneath a stock bridge; its own
   -- tile record never changes just because an overhead layer does.
   s.tiles[foreign].build,s.tiles[foreign].owner,s.tiles[foreign].road_bits="road",other,5
-  s.tiles[land].owner=other -- an ordinary protected dry underlay retains ownership
+  s.tiles[land].build,s.tiles[land].owner,s.tiles[land].road_bits="road",other,5
+  -- Both ramps and the unoccupied tidal test parcel start already bare.
+  for _,id in ipairs{begin_,target,end_} do s.tiles[id].stock_clear_density=0 end
   Sim.company(s,name);Sim.company(s,other)
   return s
 end

@@ -5,6 +5,10 @@
 -- Plans never mutate. The host commits the ordered plan after validation
 -- (with optional topology token) and owns clearing external structures.
 return function(Track,Water)
+  local source=debug and debug.getinfo(1,"S").source
+  local here=source and source:match("^@(.*/)water_construction%.lua$")
+  local Bridge=dofile((here or (core and core.get_modpath("luanttd_core").."/openttd/") or
+    "mods/luanttd_core/openttd/").."bridge_underlay.lua")
   local M={CANAL_COST=5000,LOCK_COST=7500,CLEAR_CANAL=5000,CLEAR_WATER=10000,
     CLEAR_ROUGH=40,LOCK_DEPOT_TILE_FACTOR=2}
   local up={[12]=0,[6]=1,[3]=2,[9]=3}
@@ -213,8 +217,16 @@ return function(Track,Water)
     if not a then return nil,err,lower_id end
     local b,msg=bank(upper_id,upper,"upper")
     if not b then return nil,msg,upper_id end
-    for _,v in ipairs({{id,middle},{lower_id,lower},{upper_id,upper}}) do
-      if v[2].overhead then return nil,"MUST_DEMOLISH_BRIDGE_FIRST",v[1] end
+    -- RC1 CmdBuildLock uses the middle tile max height for each
+    -- planned part. Existing locks use each part's own tile max height
+    -- when the bridge itself is built (CheckBuildAbove_Water).
+    for _,v in ipairs({{id,middle,"middle"},{lower_id,lower,"lower"},{upper_id,upper,"upper"}}) do
+      local over=v[2]
+      if over.overhead then
+        if over.bridge_deck==nil then return nil,"MUST_DEMOLISH_BRIDGE_FIRST",v[1] end
+        local c,reason=Bridge.quote({kind="lock",part=v[3],max_z=get_top(middle)},0,over.bridge_deck)
+        if c==nil then return nil,reason,v[1] end
+      end
     end
     p.cost=p.cost+price(opts,"lock",M.LOCK_COST)
     infrastructure(p,opts.owner,3*M.LOCK_DEPOT_TILE_FACTOR,"build_lock",opts)
