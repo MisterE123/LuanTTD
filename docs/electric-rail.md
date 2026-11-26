@@ -27,7 +27,11 @@ converted on flat land or on a stock leveled foundation. Wiring follows
 the RC1 branch filter: an unconnected or unelectrified branch may lose its
 wire without changing the tracks. Higher-order junctions, other slopes,
 tunnels and level crossings are outside this conversion mount. Overhead
-wire inside the depot is hidden by the shed.
+wire inside the depot is hidden by the shed. For ordinary flat straight
+track, the OpenTTD pylon selector chooses actual sides at tile edges.
+A disconnected end can gain a mast even when the adjacent track falls
+outside your view. Curves, slopes, and structures are not yet covered
+by this pylon-placement mount.
 Electric locomotives support one owned shuttle, not the paired pilot.
 
 ## Run an electric service

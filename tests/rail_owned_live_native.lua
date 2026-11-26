@@ -170,7 +170,13 @@ local function stamp()
       assert(Sim.date(S,0)==(asiastar and 1995 or tim and 1988 or sh40 and 1978 or 1970) and current().engine_railtype==1 and current().traction_railtypes[1] and
         not current().traction_railtypes[0])
       assert(S.tiles[id(20)].rail_type==1 and S.tiles[id(2)].rail_type==1)
-      assert(core.get_node({x=40,y=bridge and 3 or 2,z=20}).name=="luanttd_core:rail_catenary_1_1")
+      assert(core.get_node({x=40,y=bridge and 3 or 2,z=20}).name==
+        (bridge and "luanttd_core:rail_catenary_1_1" or "luanttd_core:rail_catenary_1_0"))
+      if not bridge then
+        assert(core.get_node({x=39,y=2,z=20}).name=="luanttd_core:rail_edge_pylon_0")
+        assert(core.get_node({x=36,y=2,z=21}).name~="luanttd_core:rail_edge_pylon_2")
+        assert(core.get_node({x=41,y=2,z=20}).name~="luanttd_core:rail_edge_pylon_0")
+      end
       assert(core.get_node({x=44,y=bridge and 3 or 2,z=20}).name=="luanttd_core:rail_catenary_1_0")
       if bridge then
         assert(current().bridge_collectors and api.rail_spans.by_portal(S,id(15)).railtype==1)
@@ -398,6 +404,11 @@ local function stamp()
       assert(w.at(S,id(14),S.tiles[id(14)])==33,"Powering the next tile must connect the second wire")
     end
     assert(S.tiles[id(20)].rail_type==nil and S.tiles[id(2)].rail_type==1)
+    if not bridge then
+      api.render.update({id(19)})
+      assert(core.get_node({x=38,y=2,z=21}).name=="luanttd_core:rail_edge_pylon_2",
+        "The gap must gain its temporary end pylon before it is powered")
+    end
   end
   if dmu then
     local saved=core.show_formspec
@@ -451,6 +462,11 @@ local function stamp()
     assert(not blocked,"SH '30' must not route over the unpowered gap")
     assert(api.electric_commit(owner,assert(api.electric_quote(owner,{id(20)},1))))
     assert(S.tiles[id(20)].rail_type==1)
+    if not bridge then
+      api.render.update({id(20)})
+      assert(core.get_node({x=38,y=2,z=21}).name~="luanttd_core:rail_edge_pylon_2",
+        "Connecting the gap must remove the extra end pylon")
+    end
     if bridge then
       assert(not Owned.start(S,owner,r.id,east,west),"an unelectrified bridge is not a powered route")
       bridge_wire()

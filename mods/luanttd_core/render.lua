@@ -1124,12 +1124,29 @@ return function(api)
     end
     local Turnout=dofile(modpath.."/rail_turnout_wire.lua")(Sim,rail_track,dofile(modpath.."/openttd/rail_wire_mask.lua")(rail_track))
     local wires={}
+    local pylon=dofile(modpath.."/openttd/rail_pylon.lua")(rail_track,dofile(modpath.."/openttd/rail_pylon_tables.lua"))
+    local stock=dofile(modpath.."/rail_edge_pylon.lua")(Sim,rail_track,pylon,terrain_view)
+    local poles={}
+    for edge=0,3 do
+      local name="rail_edge_pylon_"..edge
+      poles[edge]=architecture(name,name,"rail_catenary_atlas")
+    end
+    function stock_scenery.stock_pylon(id,t)
+      if projected then return S.rail_pylon[id] end
+      return stock.at(S,id,t)
+    end
+    function stock_scenery.pylon_node(t,profile,x,z)
+      local axis=t.rail_tracks==1 and 0 or 1
+      if x%2==1 and z%2==0 and profile%2==1 then return poles[axis] end
+      if x%2==0 and z%2==1 and profile>=2 then return poles[axis+2] end
+    end
     for _,mask in ipairs(Turnout.masks) do
       local name="rail_turnout_catenary_"..mask
       wires[mask]=architecture(name,name,"rail_catenary_atlas")
     end
-    function stock_scenery.rail_wire(id,t,x,z,under)
+    function stock_scenery.rail_wire(id,t,x,z,under,stock_profile)
       local bits=t.rail_tracks
+      if stock_profile~=nil then return stock_scenery.catenary[bits][0] end
       if Turnout.supported(bits) then
         local selected
         if projected then selected=S.rail_wire[id] else selected=Turnout.at(S,id,t) end
@@ -1959,15 +1976,20 @@ return function(api)
         if t.rail_waypoint_id and grade==0 and y==level+1 and x%2==1 and z%2==1 then
           return stock_scenery.waypoint[t.rail_tracks==1 and 0 or 1]
         end
-        if grade==0 and y==level+2 and z%2==0 and t.rail_type==1
+        if grade==0 and y==level+2 and t.rail_type==1
             and not t.rail_depot_dir and stock_scenery.catenary then
+          local stock_profile=stock_scenery.stock_pylon(id,t)
+          if stock_profile~=nil then
+            local pole=stock_scenery.pylon_node(t,stock_profile,x,z)
+            if pole then return pole end
+          end
           local deck=Sim.bridge_deck_at(S,id)
           -- RC1 elrail.cpp suppresses wire only one level over
           -- ground. At two levels it shares the deck's height slot.
           if not deck or deck>level+1 then
             local under=deck==y and (t.rail_tracks==1 or t.rail_tracks==2)
-            if (under and x%2==1) or (not under and x%2==0) then
-              local wire=stock_scenery.rail_wire(id,t,x-(under and 1 or 0),z,under)
+            if z%2==0 and ((under and x%2==1) or (not under and x%2==0)) then
+              local wire=stock_scenery.rail_wire(id,t,x-(under and 1 or 0),z,under,stock_profile)
               if wire then return wire end
             end
           end

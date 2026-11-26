@@ -84,3 +84,35 @@ assert(both.scene~=e.scene and both.tiles[1].rail_wire==33)
 tile(36,17,2)
 assert(read(36,16,both.scene).tiles[1].rail_wire==1)
 print("PASS authoritative wire mask across sector edge recognizes powered, unpowered and removed branch")
+
+local Pylon=dofile(root.."openttd/rail_pylon.lua")(Track,dofile(root.."openttd/rail_pylon_tables.lua"))
+local Edge=dofile(root.."rail_edge_pylon.lua")(S,Track,Pylon,{tile=function() return 0,2 end})
+R.rail_pylon=Edge.at
+for x=36,39 do
+  tile(x,26,1,nil,nil,1)
+  world.tiles[at(x,26)].build="stock_rail"
+end
+local even=read(37,26)
+assert(even.tiles[1].rail_pylon==1)
+assert(not read(37,26,even.scene).tiles)
+world.tiles[at(38,26)].rail_type=0
+local tail=read(37,26,even.scene)
+assert(tail.tiles[1].rail_pylon==3 and tail.scene~=even.scene)
+world.tiles[at(38,26)].rail_type=1
+assert(read(37,26,tail.scene).tiles[1].rail_pylon==1)
+print("PASS alternating source mast and rail end across out-of-interest neighbor power edits")
+
+for z=33,38 do
+  tile(40,z,2,nil,nil,1)
+  world.tiles[at(40,z)].build="stock_rail"
+end
+local y_before=read(40,35)
+local mode=y_before.tiles[1].rail_pylon
+assert(mode~=nil)
+world.tiles[at(40,34)].rail_type=0
+world.tiles[at(40,36)].rail_type=0
+assert(read(40,35).tiles[1].rail_pylon==3,"a disconnected straight Y tile must hold both end pylons")
+world.tiles[at(40,34)].rail_type=1
+world.tiles[at(40,36)].rail_type=1
+assert(read(40,35).tiles[1].rail_pylon==mode)
+print("PASS both straight axes and both stock control points")
