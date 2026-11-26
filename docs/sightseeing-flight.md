@@ -6,18 +6,18 @@ You sit behind the working view windows in a Sampson trimotor. It is a
 local sightseeing vehicle; it does not join the airline, change its slots,
 transport anyone, or charge the company.
 
-- **W / S** increase / reduce power. It stays where you left it.
-- **Space / Shift** pitch up / down. Hold **W + Space** for the takeoff roll.
-- **A / D** bank left / right. Release to level.
+- **W / S** increase / reduce power. On the ground, hold **S** at idle to reverse.
+- **Space / Shift** pitch up / down. Hold **W + Space** through the takeoff roll
+  and initial climb to clear nearby rooftops.
+- **A / D** steer on the ground or bank in flight.
 - **E** resets to the departure runway if it is still visible to the
   server and safe. Otherwise it returns to the builder view.
-- **Right-click** or **`/plane`** exits to your previous position, aim, tools
-  and movement controls.
+- The **Inventory** exit or **`/plane`** restores your previous view and controls.
 
 For a manual landing, line up with a visible runway, reduce power,
 level the wings and descend shallowly at about **55–110 km/h**. Leave
-enough runway ahead to stop. A fast, steep, sideways or off-pavement
-approach is rejected rather than moving the plane through terrain.
+enough runway ahead to stop. A controlled touchdown can also use clear,
+dry ground. Steep terrain and actual building roofs still block the plane.
 Takeoff and landing use stock runway directions and elevations. All units
 use the game's compressed scenic scale. The HUD points back toward your
 departure airfield. Use the client's first-person camera to see out of the

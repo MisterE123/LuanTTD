@@ -111,7 +111,10 @@ return function(api,W)
         if a.z<(a.layout=="city" and 4 or 2) then height=1.45 end
       elseif t.stock_landmark then height=5
       elseif t.wood then height=3.6
-      elseif t.house or t.site or t.stock_industry then height=3.0
+      elseif t.house or t.site then
+        local roof,known=R.flight_house_top(id,t,x,z)
+        height=known and math.max(0,(roof or level)-level) or 3.0
+      elseif t.stock_industry then height=3.0
       elseif t.station or t.rail_station_id or t.rail_depot_dir~=nil or t.build=="road_depot" then height=1.8
       elseif t.signal or t.tram then height=1.35 end
       local deck=R.host_deck and R.host_deck(id)
@@ -275,6 +278,9 @@ return function(api,W)
       local previous=q.flight.pitch
       local d,why=F.step(q.flight,keys,dt,world)
       q.blocked=why
+      if why and q.flight.mode=="air" and not why:find("still loading",1,true) then
+        q.blocked=why:gsub("S to reverse, E to return%.","E to return to the runway.")
+      end
       if math.abs(d)>.0001 then p:set_look_horizontal((p:get_look_horizontal()-d)%(2*math.pi)) end
       local pitch=q.flight.pitch-previous
       if math.abs(pitch)>.0001 then

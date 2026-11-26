@@ -1476,6 +1476,35 @@ return function(api)
     local planted=t.wood==true and ((x%2+2*(z%2))==t.variant or (id%7==0 and x%2==z%2))
     return planted and forest[t.variant] or gnames[t.terrain][t.variant],planted and t.h+1 or t.h
   end
+  -- Solid() resolves the same node, anchor and frontage as the painter.
+  -- Meshes can occupy two node columns and extend above their anchor,
+  -- so sampling the voxel containing the plane cannot locate their roof.
+  function R.flight_house_top(id,t,x,z)
+    local tx,tz=Sim.xy(id)
+    if not (tx and tz) then return end
+    local top,resolved
+    local deck=R.house_deck(id,t) or t.h
+    for dz=0,1 do for dx=0,1 do
+      local ax,az=2*tx+dx,2*tz+dz
+      local name,y,dir=solid(t,id,ax,az)
+      if name and y>deck then
+        local def=core.registered_nodes[name]
+        if def and not def.walkable and not t.site and t.source_house and t.source_house.completed then
+          resolved=true -- a park or another deliberately open model
+        elseif def and def.collision_box then
+          resolved=true
+          local node={name=name,param1=0,param2=dir or 0}
+          for _,b in ipairs(core.get_node_boxes("collision_box",{x=ax,y=y,z=az},node)) do
+            local pad=.055
+            if x>=ax+b[1]-pad and x<=ax+b[4]+pad and z>=az+b[3]-pad and z<=az+b[6]+pad then
+              top=math.max(top or -math.huge,y+b[5]+pad)
+            end
+          end
+        end
+      end
+    end end
+    return top,resolved
+  end
   local function content(name)
     if ids[name]==nil then ids[name]=core.get_content_id(name) end
     return ids[name]

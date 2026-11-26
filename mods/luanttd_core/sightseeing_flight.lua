@@ -78,6 +78,7 @@ local function taxi(q,k,dt,world)
   if not clear then return 0,why end
   local turn=wrap(heading-q.heading)
   q.pos,q.heading,q.pitch,q.bank,q.vertical,q.elevator=nextpos,heading,pitch,bank,lift,elevator
+  if takeoff then q.departure_y=old.y end
   q.mode=takeoff and "air" or rollout and abs(q.speed)>.02 and "rollout"
     or abs(q.speed)>.02 and "taxi" or "ready"
   return turn
@@ -100,6 +101,10 @@ local function advance(q,k,dt,world)
     local rate=k.down and 5.8 or airborne and 2.4 or 3.9
     q.speed=approach(q.speed,target,rate*dt)
     local pitch_range=airborne and .32 or .18
+    -- Terrain is vertically compressed much less than the runways are
+    -- shortened. Use a brief obstacle-climb setting near liftoff, not
+    -- a geometry bypass or a teleport over the neighboring buildings.
+    if airborne and q.departure_y and q.pos.y-q.departure_y<3 and pitch_input>0 then pitch_range=.44 end
     -- Slower final approaches use a gentler elevator throw. Avoid putting
     -- the nose through the runway before the landing gear reaches it.
     if airborne and pitch_input<0 and q.speed<6.6 then pitch_range=.19 end
@@ -172,6 +177,7 @@ local function advance(q,k,dt,world)
   local clear,why=world.clear(nextpos,q.heading,not airborne and r or nil,q.pitch,q.bank)
   if not clear then return 0,why or "Terrain or obstacle ahead." end
   q.pos=nextpos
+  if q.departure_y and q.pos.y-q.departure_y>=3 then q.departure_y=nil end
   return wrap(q.heading-old_heading)
 end
 function F.step(q,keys,dt,world)
