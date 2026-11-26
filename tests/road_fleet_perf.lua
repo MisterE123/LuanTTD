@@ -10,7 +10,7 @@ return function(mod)
     for k,v in pairs(value) do out[k]=copy(v) end
     return out
   end
-  function F.make(lines,count)
+  function F.make(lines,count,prepare,choose)
     Sim.W,Sim.H=128,128
     local s=Sim.new(1751)
     s.sites={}
@@ -19,6 +19,7 @@ return function(mod)
     end
     s.corner_grid=Terrain.new(Sim.W,Sim.H,function() return 1 end)
     s.road_economy,s.road_stock_clock,s.road_stock_loading,s.road_junction_clearance=true,true,true,true
+    if prepare then prepare(Sim,s) end
     s.day=9000
     local route={}
     for line=1,lines do
@@ -35,7 +36,7 @@ return function(mod)
       route[line]={start=s.tiles[a].station,dest=s.tiles[b].station,depot=d,ids={}}
       local r=route[line]
       for i=1,count do
-        local engine=i%3==0 and "coach" or i%2==0 and "leopard_bus" or "bus"
+        local engine=choose and choose(i) or i%3==0 and "coach" or i%2==0 and "leopard_bus" or "bus"
         local id=assert(Sim.purchase(s,owner,engine,"passenger",nil,d))
         assert(Sim.add_order(s,owner,id,r.dest))
         assert(Sim.add_order(s,owner,id,r.start))

@@ -139,3 +139,48 @@ for j=1,3 do assert(live[before+j].snapped) end
 project_gear.render({},.05)
 for j=1,3 do assert(not live[before+j]:get_pos()) end
 print("PASS projected monorail articulated body and gears appear, snap and cull together; only body is selectable")
+
+-- The last simulated road tile can differ from the rendered interpolation
+-- tile. Keep the exact rendered sector, hidden depot fallback and complete
+-- tunnel poses across neighboring, overlapping and nonaligned windows.
+local Actor=dofile(mod.."campaign_actor_projection.lua")
+do
+  local located,finished={},{}
+  local fleet={{tile=32,px=65.5,pz=12,bore=5}, {tile=33}, {tile=8,px=42,pz=12}, {tile=31,px=62,pz=12}}
+  for id,v in ipairs(fleet) do v.id=id;v.engine="bus" end
+  local state={fleet=fleet}
+  local sim={W=64,H=64,position=function(_,v)return v.tile end,
+    xy=function(id)return id,6 end,road_motion_frame=function()end}
+  local function finish(x,z,yaw,_,bore)
+    if not x then return end
+    finished[x]=(finished[x] or 0)+1
+    return {x=x,z=z,y=bore or 2},yaw,bore and 0 or .25,not not bore
+  end
+  local function coordinates(v)
+    located[v.id]=(located[v.id] or 0)+1
+    return v.px,v.pz,1,nil,v.bore
+  end
+  local old={world=state,road_pose=function(v)return finish(coordinates(v)) end}
+  local new={world=state,road_coordinates=coordinates,road_finish=finish}
+  local function equal(a,b)
+    if type(a)~=type(b) then return false end
+    if type(a)~="table" then return a==b end
+    for k,v in pairs(a) do if not equal(v,b[k]) then return false end end
+    for k in pairs(b) do if a[k]==nil then return false end end
+    return true
+  end
+  -- The center enters tile 33 before the logical tile does.
+  -- A partition based on the logical position would show the wrong sector.
+  local windows={{1,4,32,5},{33,1,31,32},{31,4,3,5},{33,4,1,5}}
+  local want={}
+  local frame={road={},rail={}}
+  for i,w in ipairs(windows) do want[i]=Actor(sim,old,w[1],w[2],w[3],w[4],.25,frame) end
+  located,finished={},{}
+  frame={road={},rail={}}
+  for i,w in ipairs(windows) do assert(equal(want[i],Actor(sim,new,w[1],w[2],w[3],w[4],.25,frame))) end
+  assert(#want[1]==2 and #want[2]==2 and want[2][1].tile==32 and want[2][1].pos.y==5 and want[2][2].hidden)
+  for _,v in ipairs(fleet) do assert(located[v.id]==1 and (not v.px or finished[v.px]==1)) end
+  local tiny=Actor(sim,new,33,4,1,5,.25)
+  assert(#tiny==2 and finished[42]==1 and finished[62]==1 and finished[65.5]==2)
+end
+print("PASS exact sector receipts for an interpolated crossing, hidden depot and tunnel; one height sampling pass per visible actor")

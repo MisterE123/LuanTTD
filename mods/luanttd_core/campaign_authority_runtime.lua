@@ -310,19 +310,27 @@ return function(Sim,mod,s,cap)
   N.orders=dofile(mod.."/road_vehicle_orders.lua")({s=s,Sim=Sim,tram=N.tram})
   local motions=dofile(mod.."/road_motion_presentation.lua")(dofile(mod.."/road_lanes.lua"))
   local positions=dofile(mod.."/road_source_pose.lua")(Sim,motions)
-  function N.road_pose(v,fraction)
-    local function surface(id,x,z)
-      local slope,base=Sim.road_surface(s,id)
-      if slope then
-        local u,w=Sim.xy(id)
-        return base+.52+Slope.surface((x-2*u+.5)/2,(z-2*w+.5)/2,slope)
-      end
-      return s.tiles[id].h+.52
+  local function road_surface(id,x,z)
+    local slope,base=Sim.road_surface(s,id)
+    if slope then
+      local u,w=Sim.xy(id)
+      return base+.52+Slope.surface((x-2*u+.5)/2,(z-2*w+.5)/2,slope)
     end
-    local computed,pos,yaw,pitch,bore=positions.timeline(s,v,fraction,surface)
-    if computed then return pos,yaw,pitch,bore end
+    return s.tiles[id].h+.52
+  end
+  -- Horizontal coordinates are enough to decide which sector owns a
+  -- sample. Ground and pitch are exact but only needed for exported poses.
+  function N.road_coordinates(v,fraction)
+    local computed,x,z,yaw,bridge,bore_height=positions.timeline_coordinates(s,v,fraction)
+    if computed then return x,z,yaw,bridge,bore_height end
     local f=Sim.road_motion_frame(s,v)
-    if f then return positions.sample(s,{f},1,1,surface) end
+    if f then return positions.coordinates(s,{f},1,1) end
+  end
+  function N.road_finish(...)
+    return positions.finish(s,road_surface,...)
+  end
+  function N.road_pose(v,fraction)
+    return N.road_finish(N.road_coordinates(v,fraction))
   end
   local project=dofile(mod.."/campaign_actor_projection.lua")
   function N.actors(x,z,w,h,fraction,frame) return project(Sim,N,x,z,w,h,fraction,frame) end

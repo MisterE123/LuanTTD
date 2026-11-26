@@ -57,3 +57,25 @@ assert(coal.gfx==0 and coal.stage==3 and not coal.animated)
 assert(s.stock_oil_industries[7].tiles[1].gfx==30 and s.stock_oil_animated[c])
 Sim.stock_random_u32=saved_random
 print("PASS mounted stock machinery startup, game phases, rotating sheaves, timed sparks and sparse authoritative view")
+
+-- Visibility must react to live terrain and animation after its first
+-- observation, while a later funded footprint can enter another sector.
+local d=Sim.id(33,32)
+local function show(x,z,w,h) return Sim.visible_machinery(s,x,z,w,h) end
+assert(not show(32,31,2,2)[d])
+s.stock_coal_industries[8]={id=8,kind="coal_mine",tiles={part(d,1)}}
+s.tiles[d]={stock_industry={id=8}}
+s.next_stock_coal_industry=9
+assert(show(32,31,2,2)[d].gfx==1 and not show(1,1,32,32)[d])
+s.stock_coal_industries[8].tiles[1].animation_frame=215
+assert(show(33,32,1,1)[d].frame==215)
+s.tiles[d].stock_industry=nil
+assert(not show(33,32,1,1)[d],"Cleared tile must not leave an orphaned actor")
+s.tiles[d].stock_industry={id=8}
+s.stock_coal_industries[8].removed=true
+assert(not show(33,32,1,1)[d])
+-- Example of a complete remount replacing the backing registry.
+s.stock_oil_industries={[9]={id=9,kind="oil_well",tiles={part(d,32)}}}
+s.tiles[d]={stock_industry={id=9,chain="oil"},h=2}
+assert(show(33,32,1,1)[d].oil==8 and show(33,32,1,1)[d].base==2)
+print("PASS machinery sector boundaries, in-place phase, closure, funding and registry replacement")

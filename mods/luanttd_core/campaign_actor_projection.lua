@@ -34,26 +34,81 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     data.mode,data.id,data.key=mode,id,id_for(mode,id)
     out[#out+1]=data
   end
-  for id,v in pairs(s.fleet) do
-    local at,pos,yaw,pitch,bore=road(v)
-    if point(pos) or not pos and tile(at) then
-      local f=Sim.road_motion_frame(s,v)
-      local pose=f and {f[1],f[2],f[3],f[4],f[5]} or nil
-      local fault=v.road_fault
-      -- The worker is the only owner of the RC1 countdown. Export only the
-      -- visible smoke flag (never the timer, route or RNG).
-      local smoke=pos and not bore and s.speed~=0 and not (v.crashed or v.depot or
-        v.road_speed_state and v.road_speed_state.depot_wait) and
-        fault and fault.breakdown_ctr==1 and fault.breakdown_delay>0
-      local offer=Sim.vehicle_offer and Sim.vehicle_offer(s,v.engine)
-      add("road",id,{tile=at,frame=pose,engine=v.engine,passenger=v.cargo=="passenger",running=not not v.running,
-        sound_engine=offer and (offer.stock_id or offer.stock_engine_id),
-        breakdown_smoke=smoke and true or nil,
-        sound_idle=not v.running or not not (v.depot or v.load_state or
-          v.road_speed_state and v.road_speed_state.depot_wait),
-        sound_tick=fault and fault.tick_counter,sound_crashed=v.crashed or nil,
-        pos=pos and xyz(pos),yaw=yaw,pitch=pitch,hidden=not pos,loaded=(v.units or 0),
-        owner=v.owner,home_depot=v.home_depot or v.depot,label=v.name,order_count=#(v.orders or {})})
+  local function road_actor(id,v,at,pos,yaw,pitch,bore)
+    local f=Sim.road_motion_frame(s,v)
+    local pose=f and {f[1],f[2],f[3],f[4],f[5]} or nil
+    local fault=v.road_fault
+    -- The worker is the only owner of the RC1 countdown. Export only the
+    -- visible smoke flag (never the timer, route or RNG).
+    local smoke=pos and not bore and s.speed~=0 and not (v.crashed or v.depot or
+      v.road_speed_state and v.road_speed_state.depot_wait) and
+      fault and fault.breakdown_ctr==1 and fault.breakdown_delay>0
+    local offer=Sim.vehicle_offer and Sim.vehicle_offer(s,v.engine)
+    return {mode="road",id=id,key=id_for("road",id),sound_paused=s.speed==0 or nil,
+      tile=at,frame=pose,engine=v.engine,passenger=v.cargo=="passenger",running=not not v.running,
+      sound_engine=offer and (offer.stock_id or offer.stock_engine_id),
+      breakdown_smoke=smoke and true or nil,
+      sound_idle=not v.running or not not (v.depot or v.load_state or
+        v.road_speed_state and v.road_speed_state.depot_wait),
+      sound_tick=fault and fault.tick_counter,sound_crashed=v.crashed or nil,
+      pos=pos and xyz(pos),yaw=yaw,pitch=pitch,hidden=not pos,loaded=(v.units or 0),
+      owner=v.owner,home_depot=v.home_depot or v.depot,label=v.name,order_count=#(v.orders or {})}
+  end
+  if R.road_coordinates and R.road_finish then
+    -- The sampling fraction and world state are shared by the entire
+    -- viewport reply, including overlapping and nonaligned sectors.
+    local size,floor=32,math.floor
+    local buckets=frame.road_buckets
+    if not buckets then
+      buckets={}
+      frame.road_buckets=buckets
+      for id,v in pairs(s.fleet) do
+        local px,pz,yaw,bridge,bore_height=R.road_coordinates(v,fraction)
+        local at,u,b
+        if px~=nil then
+          u,b=floor((px+.5)/2),floor((pz+.5)/2)
+        else
+          at=Sim.position(s,v)
+          if at then u,b=Sim.xy(at) end
+        end
+        if u and u>=1 and u<=Sim.W and b>=1 and b<=Sim.H then
+          local bu,bb=floor((u-1)/size),floor((b-1)/size)
+          local row=buckets[bb]
+          if not row then row={};buckets[bb]=row end
+          local bucket=row[bu]
+          if not bucket then bucket={};row[bu]=bucket end
+          -- A compact record stores the horizontal pose and its last
+          -- logical tile separately. Cache a detached actor on first use.
+          bucket[#bucket+1]={u,b,id,v,at,px,pz,yaw,bridge,bore_height}
+        end
+      end
+    end
+    for bb=floor((z-1)/size),floor((z+h-2)/size) do
+      local row=buckets[bb]
+      if row then
+        for bu=floor((x-1)/size),floor((x+w-2)/size) do
+          local bucket=row[bu]
+          if bucket then
+            for _,p in ipairs(bucket) do
+              if inside(p[1],p[2]) then
+                local actor=p.actor
+                if not actor then
+                  local id,vehicle,at=p[3],p[4],p[5]
+                  actor=road_actor(id,vehicle,at or Sim.position(s,vehicle),
+                    R.road_finish(p[6],p[7],p[8],p[9],p[10]))
+                  p.actor=actor
+                end
+                out[#out+1]=actor
+              end
+            end
+          end
+        end
+      end
+    end
+  else
+    for id,v in pairs(s.fleet) do
+      local at,pos,yaw,pitch,bore=road(v)
+      if point(pos) or not pos and tile(at) then out[#out+1]=road_actor(id,v,at,pos,yaw,pitch,bore) end
     end
   end
   if R.rail then

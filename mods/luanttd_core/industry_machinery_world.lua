@@ -75,44 +75,74 @@ return function(Sim,Rules,OilRegistry)
     end
     return W
   end
-  function M.visible(s,x,z,w,h)
-    if not (s.stock_generated_profile and (s.stock_coal_industries or s.stock_oil_industries)) then return end
-    local poses={}
-    local tick=s.passenger_house_clock and s.passenger_house_clock.counter or 0
-    local phase=tick%2048-1024
-    for _,industry in pairs(s.stock_coal_industries or {}) do
-      if not industry.removed then
-        for _,part in ipairs(industry.tiles) do
-          local u,v=part.x+1,part.z+1
-          if u>=x and u<x+w and v>=z and v<z+h then
-            local g=part.gfx
-            if g==Rules.MINE_REST or g==Rules.MINE_RUN or g==Rules.POWER_SPARKS then
-              local id=Sim.id(u,v)
-              local tile=s.tiles[id]
-              if tile and tile.stock_industry and tile.stock_industry.id==industry.id then
-                local dir=0
-                if g==Rules.MINE_RUN then
-                  if phase>=0 and phase<0x1A0 then dir=1
-                  elseif phase>=0x200 and phase<0x3A0 then dir=-1 end
-                end
-                poses[id]={gfx=g,frame=part.animation_frame or 0,dir=dir,tick=tick,active=part.animated or false}
-              end
+  local sector_size=32
+  local visibility=setmetatable({},{__mode="k"})
+  local function visibility_index(s)
+    local coal,oil=s.stock_coal_industries,s.stock_oil_industries
+    local nc,no=s.next_stock_coal_industry,s.next_stock_oil_industry
+    local c=visibility[s]
+    if c and c.coal==coal and c.oil==oil and c.nc==nc and c.no==no and c.w==Sim.W and c.h==Sim.H then
+      return c.sectors
+    end
+    local sectors={}
+    local function add(list,well)
+      for _,industry in pairs(list or {}) do
+        if not industry.removed and (not well or industry.kind=="oil_well") then
+          for _,part in ipairs(industry.tiles) do
+            local u,v=part.x+1,part.z+1
+            local id=Sim.id(u,v)
+            if id then
+              local bx,bz=math.floor((u-1)/sector_size),math.floor((v-1)/sector_size)
+              local row=sectors[bz]
+              if not row then row={};sectors[bz]=row end
+              local bucket=row[bx]
+              if not bucket then bucket={};row[bx]=bucket end
+              -- Keep all parts: the live RC1 animation can change gfx.
+              -- Only static coordinates are cached, never pose or activity.
+              bucket[#bucket+1]={id=id,x=u,z=v,well=well,industry=industry,part=part}
             end
           end
         end
       end
     end
-    for _,industry in pairs(s.stock_oil_industries or {}) do
-      if industry.kind=="oil_well" and not industry.removed then
-        for _,part in ipairs(industry.tiles) do
-          local u,v=part.x+1,part.z+1
-          local g=part.gfx
-          if u>=x and u<x+w and v>=z and v<z+h and g>=Rules.OIL_REST and g<=Rules.OIL_LAST then
-            local id=Sim.id(u,v)
-            local t=s.tiles[id]
-            if t and t.stock_industry and t.stock_industry.id==industry.id and t.stock_industry.chain=="oil" then
-              local phase=g==Rules.OIL_REST and 0 or (g-Rules.OIL_FIRST)*4+(part.animation_frame or 0)
-              poses[id]={oil=phase,base=t.h,site=industry.id,tick=tick}
+    add(coal,false)
+    add(oil,true)
+    -- Funding appends a new ID; mounting stock footprints can replace
+    -- the registry. Either rebuilds the index. Closures retain a tombstone
+    -- and are respected immediately without reacting to ordinary road edits.
+    visibility[s]={coal=coal,oil=oil,nc=nc,no=no,w=Sim.W,h=Sim.H,sectors=sectors}
+    return sectors
+  end
+  function M.visible(s,x,z,w,h)
+    if not (s.stock_generated_profile and (s.stock_coal_industries or s.stock_oil_industries)) then return end
+    local poses={}
+    local sectors=visibility_index(s)
+    local tick=s.passenger_house_clock and s.passenger_house_clock.counter or 0
+    local phase=tick%2048-1024
+    local mine_dir=phase>=0 and phase<0x1A0 and 1 or (phase>=0x200 and phase<0x3A0 and -1 or 0)
+    for bz=math.floor((z-1)/sector_size),math.floor((z+h-2)/sector_size) do
+      local row=sectors[bz]
+      if row then
+        for bx=math.floor((x-1)/sector_size),math.floor((x+w-2)/sector_size) do
+          local bucket=row[bx]
+          if bucket then
+            for _,r in ipairs(bucket) do
+              local t=s.tiles[r.id]
+              local i,p=r.industry,r.part
+              local g=p.gfx
+              if r.x>=x and r.x<x+w and r.z>=z and r.z<z+h and not i.removed
+                and t and t.stock_industry and t.stock_industry.id==i.id then
+                if r.well then
+                  if i.kind=="oil_well" and t.stock_industry.chain=="oil" and
+                    g>=Rules.OIL_REST and g<=Rules.OIL_LAST then
+                    local frame=g==Rules.OIL_REST and 0 or (g-Rules.OIL_FIRST)*4+(p.animation_frame or 0)
+                    poses[r.id]={oil=frame,base=t.h,site=i.id,tick=tick}
+                  end
+                elseif g==Rules.MINE_REST or g==Rules.MINE_RUN or g==Rules.POWER_SPARKS then
+                  poses[r.id]={gfx=g,frame=p.animation_frame or 0,dir=g==Rules.MINE_RUN and mine_dir or 0,
+                    tick=tick,active=p.animated or false}
+                end
+              end
             end
           end
         end

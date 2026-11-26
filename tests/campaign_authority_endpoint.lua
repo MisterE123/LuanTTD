@@ -179,15 +179,15 @@ assert(s.tiles[Sim.id(9,19)].road_disallowed==1)
 assert(s.companies[john].cash==company.cash-offer.value.cost)
 assert(not A.command(john,{kind="road_commit",revision=r.revision,request=sign,quote=offer.value}).ok)
 print("PASS one-way road gestures keep stock directional restrictions, price, and stale-quote safety on the worker")
-local pose=runtime.road_pose
+local pose=runtime.road_coordinates
 local counted={}
-runtime.road_pose=function(v,f)
+runtime.road_coordinates=function(v,f)
   counted[v]=(counted[v] or 0)+1
   return pose(v,f)
 end
 assert(A.snapshots({{x=3,z=6,w=24,h=12},{x=35,z=22,w=4,h=3}},.4).ok)
 for _,v in pairs(s.fleet) do assert(counted[v]==1) end
-print("PASS one authoritative road pose per vehicle per multi-sector observation")
+print("PASS one authoritative horizontal road sample per vehicle per multi-sector observation")
 local support_tile=Sim.id(8,24)
 local support_ground=s.tiles[support_tile].terrain
 local owned=A.demolition(john,support_tile)
