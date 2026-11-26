@@ -245,6 +245,10 @@ function M.decode(source)
   end
   local root=read(take(),0)
   assert(at==#source+1,"Trailing bytes in packed campaign")
+  -- Resolved references already point at their decoded objects. Drop
+  -- the decoder's temporary graph and input bytes explicitly: on
+  -- Luanti's LuaJIT, recursive decode state can outlive this return.
+  tables,strings,source,read=nil,nil,nil,nil
   return root
 end
 

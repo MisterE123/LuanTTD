@@ -401,3 +401,20 @@ batch CPU was **7–12% lower** across three alternating runs. A real
 stock corner raise at a sector boundary produced the same updated
 bytes in both neighboring sectors as the original encoder. This does
 not measure renderer frame rate or save time.
+
+### Release the checkpoint decoder's temporary memory
+
+After restoring aliases and cycles, the decoder now explicitly drops
+its lookup tables and decompressed input. The restored graph keeps its
+own references. No save bytes or supported checkpoint fields change.
+
+In two native opens of the same 1024×1024 save, the main VM's Lua heap
+after collection dropped from **391.3 to 349.4 MiB** and the worker's
+from **388.0 to 346.0 MiB**, about **84 MiB combined**. The 512×512 case
+saved about **20 MiB combined**. The measurements exclude engine and
+graphics memory. The two VMs still hold separate map data; this change
+only releases the temporary decoder storage.
+
+Packed graph, alias, cycle and woodland tests passed, as did the
+native quiet-host continuation and in-place recovery from a durable
+checkpoint after an injected worker failure.
