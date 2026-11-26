@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo=$PWD
+python3 "$repo/tests/avatar_car_interior_geometry.py"
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   tools=$(realpath "$BAYLINE_NATIVE_TOOLS")
   export PATH="$tools/run/bin:$tools/usr/bin:$PATH"
@@ -93,7 +94,7 @@ xdotool mousemove 650 430
 sleep 3
 
 say() {
-  xdotool windowfocus --sync "$win"; xdotool key --clearmodifiers t; sleep .32; xdotool type "$1"; xdotool key --clearmodifiers Return; sleep .65
+  xdotool windowfocus --sync "$win"; xdotool key --clearmodifiers t; sleep .45; xdotool type --delay 32 "$1"; xdotool key --clearmodifiers Return; sleep .65
 }
 if [[ ${LUANTTD_NATIVE_SCENERY:-0} == 1 ]]; then
   say "/carprobe cine-before"
@@ -128,18 +129,24 @@ say "/carprobe left"
 import -window root -quality 90 "$out/car-left.jpg"
 say "/carprobe right"
 import -window root -quality 90 "$out/car-right.jpg"
+for direction in full-left full-right roof floor; do
+  say "/carprobe $direction"
+  import -window root -quality 90 "$out/car-$direction.jpg"
+done
 say "/carprobe center"
 xdotool key F7
 sleep .55
 import -window root -quality 92 "$out/car-third-back.jpg"
 xdotool key F7
-sleep .27
+sleep .4
+import -window root -quality 92 "$out/car-third-front-level.jpg"
 xdotool mousemove_relative -- 0 -92
 sleep .30
 import -window root -quality 92 "$out/car-third-front.jpg"
 xdotool mousemove_relative -- 0 92
 xdotool key F7
 sleep .55
+say "/carprobe center"
 import -window root -quality 92 "$out/car-first-again.jpg"
 xdotool key F7
 sleep .45
@@ -201,7 +208,25 @@ for phase in ("third-back","third-front","third-slope"):
     box=image.crop((width//5,height//4,width*4//5,height))
     body=sum(r>90 and r>1.8*g and r>1.75*b for r,g,b in box.getdata())
     assert body>190,(phase,body)
-print("CAR_NATIVE_CHASE_PASS complete painted body in front, rear and moving grade views")
+print("CAR_NATIVE_CHASE_PASS painted body in front, rear and moving grade views")
+
+def ratio(phase, rect, pred):
+    with Image.open(out/f"car-{phase}.jpg") as image:
+        w,h=image.size
+        a,b,c,d=rect
+        crop=image.convert("RGB").crop((int(w*a),int(h*b),int(w*c),int(h*d)))
+        return sum(pred(r,g,b) for r,g,b in crop.getdata()) / (crop.width*crop.height)
+
+window=(.3,.26,.7,.56)
+lower=(.3,.66,.7,.88)
+landscape=lambda r,g,b: (g>=r+10 and g>=b+9) or (b>=r+20 and g>=r+14)
+painted=lambda r,g,b: r>1.2*g and r>1.4*b
+brown=lambda r,g,b: r>=g+3 and b<=g-4
+assert ratio("entry",window,landscape)>.42,"forward view is blocked"
+for phase in ("full-left","full-right"):
+    assert ratio(phase,window,landscape)>.55 and ratio(phase,lower,painted)>.40,phase
+assert ratio("floor",(.4,.57,.6,.82),brown)>.8,"floor exposes ground or road"
+print("CAR_NATIVE_INTERIOR_PASS forward and both side windows are clear; looking down shows an intact floor")
 CAMERAS
 
 if [[ ${LUANTTD_NATIVE_REJOIN_CAR:-0} == 1 ]]; then

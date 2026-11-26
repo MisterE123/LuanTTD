@@ -185,7 +185,9 @@ return function(api,W)
   -- Using a vertical eye_height would slide the eye through the dashboard
   -- in local space on grades. Keep it centered under the headliner and
   -- transform the exact seat offset with the chassis instead.
-  local seat_x,seat_y,seat_z=-.007,.189,-.075
+  -- Matches the upright driver's eye in generate_sightseeing_cockpit.py.
+  local seat_x,seat_y,seat_z=-.024,.222,-.062
+  local driving_pitch=.022
   local function seated(at,yaw,pitch)
     local x,z=math.sin(yaw),math.cos(yaw)
     local sin,cos=math.sin(pitch),math.cos(pitch)
@@ -253,7 +255,8 @@ return function(api,W)
     mount_pose(q,pitch)
     q.pitch=pitch
     p:set_physics_override({gravity=0,speed=0,jump=0,sneak=false,speed_walk=0,speed_crouch=0})
-    p:set_eye_offset({x=0,y=0,z=0},{x=.07,y=2.86,z=0},{x=.07,y=1.36,z=4})
+    -- Keep both F7 camera positions relative to the unchanged actual car.
+    p:set_eye_offset({x=0,y=0,z=0},{x=.24,y=2.53,z=-.13},{x=.24,y=1.03,z=3.87})
     p:set_attach(q.interior,"",{x=0,y=0,z=0},{x=0,y=0,z=0},true)
     q.attached=true
     local graphics=p:get_properties()
@@ -265,7 +268,7 @@ return function(api,W)
     -- A non-forced child of the local player is hidden by Luanti only
     -- in first person; F7 shows the full exterior without a server poll.
     q.shell:set_attach(p,"",{x=-seat_x*10,y=-seat_y*10,z=-seat_z*10},{x=0,y=0,z=0},false)
-    p:set_look_horizontal(-q.look);p:set_look_vertical(.07-pitch)
+    p:set_look_horizontal(-q.look);p:set_look_vertical(driving_pitch-pitch)
     q.hud=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},
       text="",number=0xffe3a3,z_index=105})
     players[n]=q
@@ -371,7 +374,9 @@ return function(api,W)
   core.register_entity(cabin,{initial_properties={
     physical=false,collide_with_objects=false,pointable=false,visual="mesh",
     mesh="bl_sightseeing_car_interior.obj",textures={"bl_sightseeing_car_interior_atlas.png"},
-    backface_culling=false,visual_size={x=1,y=1,z=1},static_save=false}})
+    -- Roof and door skins face inward. From outside the local cabin
+    -- does not paint its near wall over the full-sized chase shell.
+    backface_culling=true,visual_size={x=1,y=1,z=1},static_save=false}})
   core.register_on_joinplayer(function(p)
     for _,q in pairs(players) do exterior_observers(q,p:get_player_name()) end
   end)

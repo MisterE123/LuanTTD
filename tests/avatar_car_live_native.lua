@@ -33,7 +33,7 @@ return function(api)
         if e and e.name=="luanttd_core:sightseeing_car" then
           assert(not o:get_observers()[owner],"unattached exterior is visible to the driver")
           local center,rot=o:get_pos(),o:get_rotation()
-          local want=vector.add(center,vector.rotate({x=-.007,y=.189,z=-.075},rot))
+          local want=vector.add(center,vector.rotate({x=-.024,y=.222,z=-.062},rot))
           assert(vector.distance(car:get_pos(),want)<.008,"driver eye drifted relative to the sloped cabin")
           v=center
           at=Sim.id(math.floor((v.x+.5)/2),math.floor((v.z+.5)/2))
@@ -87,12 +87,14 @@ return function(api)
     elseif tag=="candy-off" or tag=="candy-on" then
       assert(api.wildlife.enabled(p)==(tag=="candy-on"))
       core.log("action","CANDY_NATIVE_"..tag)
-    elseif tag=="left" or tag=="right" or tag=="center" then
+    elseif tag=="left" or tag=="right" or tag=="center" or tag=="full-left"
+        or tag=="full-right" or tag=="roof" or tag=="floor" then
       local cabin=assert(p:get_attach())
       local r=cabin:get_rotation()
-      local yaw=tag=="left" and .72 or tag=="right" and -.72 or 0
+      local yaw=({left=.72,right=-.72,["full-left"]=math.pi/2,["full-right"]=-math.pi/2})[tag] or 0
+      local pitch=tag=="roof" and -.88 or tag=="floor" and .86 or .022
       p:set_look_horizontal((r.y+yaw)%(2*math.pi))
-      p:set_look_vertical(.07-r.x)
+      p:set_look_vertical(pitch-r.x)
       core.log("action","CAR_QA_LOOK "..tag)
     elseif tag=="leave-spot" then
       p:set_look_horizontal(2.1);p:set_look_vertical(.36)

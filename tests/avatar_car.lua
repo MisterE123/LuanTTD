@@ -60,10 +60,10 @@ end
 local outside=registered["luanttd_core:sightseeing_car"].initial_properties
 local inside=registered["luanttd_core:sightseeing_car_interior"].initial_properties
 assert(outside.mesh=="bl_sightseeing_car.obj" and not outside.static_save)
-assert(inside.mesh=="bl_sightseeing_car_interior.obj" and not inside.static_save)
+assert(inside.mesh=="bl_sightseeing_car_interior.obj" and inside.backface_culling and not inside.static_save)
 assert(not C.toggle_at(p,id(1,1)) and not state)
 assert(C.toggle_at(p,target) and C.active(p) and attached==interior and avatar.visual=="sprite" and avatar.visual_size.y<.01)
-assert(avatar.eye_height==0 and math.abs(shell.offset.x-.07)<1e-8 and math.abs(shell.offset.y+1.89)<1e-8 and math.abs(shell.offset.z-.75)<1e-8)
+assert(avatar.eye_height==0 and math.abs(shell.offset.x-.24)<1e-8 and math.abs(shell.offset.y+2.22)<1e-8 and math.abs(shell.offset.z-.62)<1e-8)
 assert(not model.observers.driver and model.observers.observer and interior.observers.driver and not interior.observers.observer)
 assert(shell.observers.driver and not shell.observers.observer and shell.parent==p and shell.always==false)
 local newcomer={get_player_name=function()return "new" end}
@@ -73,11 +73,11 @@ leave(newcomer)
 assert(not model.observers.new)
 local start=model.pos.z
 tick({up=true},16)
-assert(model.pos.z>start+1 and math.abs(interior.pos.z-model.pos.z+.075)<1e-6 and hint:find("W drive",1,true))
+assert(model.pos.z>start+1 and math.abs(interior.pos.z-model.pos.z+.062)<1e-6 and hint:find("W drive",1,true))
 tick({up=true},45)
 assert(math.abs(model.pos.z-20.5)<.001 and hint:find("No open road",1,true),"T junction arbitrarily picked an exit")
 tick({up=true,right=true},45)
-assert(math.abs(interior.pos.x-model.pos.x+.075)<1e-6 and math.abs(interior.pos.z-model.pos.z-.007)<1e-6,
+assert(math.abs(interior.pos.x-model.pos.x+.062)<1e-6 and math.abs(interior.pos.z-model.pos.z-.024)<1e-6,
   "the private eye did not rotate with the 90-degree chassis turn")
 assert(math.abs(model.pos.x-24.5)<.001 and math.abs(model.pos.z-(20.5-.155))<.001,"D did not steer right facing +Z")
 tick({down=true},55)
@@ -168,14 +168,14 @@ local grade=math.atan(.36)
 -- positive X pitch. Player look pitch uses the opposite convention.
 assert(math.abs(model.rotation.x-grade)<1e-8 and model.rotation.x==interior.rotation.x,
   "uphill front axle must be higher than the rear")
-assert(math.abs(player_pitch-(.07-grade))<1e-8)
+assert(math.abs(player_pitch-(.022-grade))<1e-8)
 local function eye_on_grade(pitch,heading)
   local r,u=math.sin(pitch),math.cos(pitch)
   local x,z=math.sin(heading),math.cos(heading)
-  assert(math.abs(interior.pos.y-model.pos.y-(.189*u-.075*r))<1e-8)
-  local depth=-.075*u-.189*r
-  assert(math.abs(interior.pos.x-model.pos.x-(depth*x-.007*z))<1e-8)
-  assert(math.abs(interior.pos.z-model.pos.z-(depth*z+.007*x))<1e-8)
+  assert(math.abs(interior.pos.y-model.pos.y-(.222*u-.062*r))<1e-8)
+  local depth=-.062*u-.222*r
+  assert(math.abs(interior.pos.x-model.pos.x-(depth*x-.024*z))<1e-8)
+  assert(math.abs(interior.pos.z-model.pos.z-(depth*z+.024*x))<1e-8)
 end
 eye_on_grade(grade,0)
 tick({down=true},20)
@@ -186,7 +186,7 @@ assert(C.toggle_at(p,target))
 tick({up=true},8)
 assert(math.abs(model.rotation.x+grade)<1e-8 and model.rotation.x==interior.rotation.x,
   "downhill front axle must be lower than the rear")
-assert(math.abs(player_pitch-(.07+grade))<1e-8)
+assert(math.abs(player_pitch-(.022+grade))<1e-8)
 eye_on_grade(-grade,math.pi)
 C.leave("driver")
 print("PASS uphill and downhill front/rear contact: car, cabin, seat and view stay aligned; reverse keeps chassis heading")
