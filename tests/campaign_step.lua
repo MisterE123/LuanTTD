@@ -119,3 +119,76 @@ do
   assert(ok,why)
 end
 print("PASS: native owner replies and saves deliberately queued actions between full catch-up days")
+
+-- Wire requests still run while paused. An uncheckpointed edit must
+-- trigger the periodic save even if the clock is frozen; ordinary view
+-- polls should never re-save the same state.
+do
+  local prefix,mod="luanttd_core:authority:1","mods/luanttd_core"
+  local orig_core,orig_dofile=core,dofile
+  for _,durable in ipairs({false,true}) do
+    local s={day=12,speed=0,authority_revision=0}
+    local ipc,stored={},{}
+    local index,now=0,0
+    local script={
+      {8,"clock"},            -- first periodic write after mount
+      {16,"snapshots"},       -- no repeated paused write
+      {24,"actor_frames"},
+      {25,"checkpoint"},      -- reset the quiet window
+      {27,"command"},         -- persist now only if durable
+      {36,"clock"},           -- otherwise persist here
+      {44,"snapshots"},       -- no repeated write after the edit
+      {45,"checkpoint"},      -- deliberate write always honored
+      {46,"cancel"},          -- clean shutdown always honored
+    }
+    core={
+      get_modpath=function() return mod end,
+      get_current_modname=function() return "luanttd_core" end,
+      get_us_time=function() return now end,
+      ipc_get=function(k) return ipc[k] end,
+      ipc_set=function(k,v) ipc[k]=v end,
+      ipc_poll=function(k)
+        index=index+1
+        local r=assert(script[index])
+        now=r[1]*1000000
+        if r[2]=="cancel" then ipc[prefix..":cancel"]=true;return false end
+        ipc[k]={seq=index,kind=r[2],player="tester",command={kind="edit"}}
+        return true
+      end,
+    }
+    local noop=function() end
+    local read=function() return {ok=true} end
+    local modules={
+      ["/campaign_authority_runtime.lua"]=function()
+        return {day=function() error("paused day advanced") end,frame=noop,
+          passengers={frame=noop,collect=noop,collect_fares=noop}}
+      end,
+      ["/campaign_authority_endpoint.lua"]=function()
+        return {snapshots=read,actor_frames=read,command=function()
+          s.authority_revision=s.authority_revision+1
+          return {ok=true,revision=s.authority_revision}
+        end}
+      end,
+      ["/campaign_checkpoint.lua"]=function()
+        return {read=function() return s end,write_state=function()
+          stored[#stored+1]=(now/1000000)..":"..s.authority_revision
+        end}
+      end,
+      ["/packed_campaign.lua"]={},
+      ["/sim.lua"]={},
+      ["/campaign_solar_clock.lua"]={sample_interval=.1,new=function() return read end},
+    }
+    dofile=function(path) return modules[path:sub(#mod+1)] or orig_dofile(path) end
+    local ok,why=pcall(function()
+      orig_dofile(mod.."/campaign_authority_worker.lua")
+      local reason,seq,day=core.luanttd_own_campaign("ignored",prefix,{
+        autoplay=true,seconds_per_day=1,durable_actions=durable})
+      assert(reason=="cancelled" and seq==8 and day==12)
+      local expected=durable and "8:0,25:0,27:1,45:1,46:1" or "8:0,25:0,36:1,45:1,46:1"
+      assert(table.concat(stored,",")==expected,table.concat(stored,","))
+    end)
+    core,dofile=orig_core,orig_dofile
+    assert(ok,why)
+  end
+end
+print("PASS: paused viewport polls do not save; paid edit, explicit save and shutdown remain durable")

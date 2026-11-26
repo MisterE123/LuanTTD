@@ -446,3 +446,19 @@ The standard 64×64 session also passed. To repeat the larger test:
 ```sh
 LUANTTD_NATIVE_SESSION_SIZE=512 tests/campaign_worker_session_native.sh
 ```
+
+### Avoid rewriting an unchanged paused campaign
+
+Once the worker has checkpointed a paused campaign, ordinary viewport
+and clock reads no longer cause another full save every eight seconds.
+Running simulation and other requests conservatively make the campaign
+eligible for periodic saving again. Edits that require immediate
+durability still save before returning success. Explicit saves and
+shutdown always write.
+
+In a native 1024×1024 paused session, 19 seconds of viewport traffic
+previously triggered two redundant saves (1.32 and 1.46 seconds).
+The revised worker performed neither and the before/after save bytes
+matched. Native testing also reopened the durable account edit and
+verified resume and re-pause; deterministic regression tests cover
+periodic saving of edits without immediate durability.

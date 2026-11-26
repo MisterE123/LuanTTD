@@ -66,13 +66,18 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   core.ipc_set(outbox,{seq=seq,ready=true,day=s.day,revision=s.authority_revision or 0})
   local heartbeat,last_saved=prior,prior
   local fraction,overdue=nil,false
+  -- The first periodic checkpoint still saves mount-time normalization.
+  local dirty=true
+  local presentation_only={snapshots=true,actor_frames=true,clock=true}
   local function advance(dt)
+    if (s.speed or 0)>0 then dirty=true end
     local days
     fraction,days,overdue=auto.step(dt,true,true)
   end
   local function checkpoint()
     storage.write_state(s)
     last_saved=core.get_us_time()
+    dirty=false
   end
   -- A paused or unfocused native singleplayer host can stop asking for
   -- view updates completely, even while Luanti's async job stays alive.
@@ -86,6 +91,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     local deferred
     if auto then
       local dt=(now-prior)/1000000
+      if (s.speed or 0)>0 then dirty=true end
       runtime.frame(dt)
       runtime.passengers.frame(dt)
       -- Already at a completed day with more overdue work. Reply from
@@ -102,6 +108,9 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         r={ok=false,why="UNEXPECTED_SEQUENCE"}
       else
         seq=q.seq
+        -- Do not assume an uncommon panel or command cannot lazily
+        -- touch saved state. Only skip the proven display-only traffic.
+        if not presentation_only[q.kind] then dirty=true end
         if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction)
         elseif q.kind=="snapshots" then r=A.snapshots(q.windows,fraction or q.fraction,q.players)
         elseif q.kind=="actor_frames" then r=A.actor_frames(q.windows,fraction or q.fraction)
@@ -159,7 +168,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     end
     if deferred then advance(deferred) end
     if publish then publish(now) end
-    if auto and now-last_saved>=8000000 then checkpoint() end
+    if auto and dirty and now-last_saved>=8000000 then checkpoint() end
   end
   storage.write_state(s)
   return not auto and prior-heartbeat>=6500000 and "idle" or "cancelled",seq,s.day
