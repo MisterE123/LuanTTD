@@ -28,7 +28,9 @@ assert(not W.field(s,rough) and s.stock_farm_grass[rough]==0)
 local restored=assert(Codec.decode(Codec.encode(s)))
 assert(restored.stock_farm_grass[rough]==0)
 b=W.field_board(restored)
-for i=1,7 do b.visit(8,8,1+i,false);assert(restored.stock_farm_grass[rough]==i) end
+assert(b.landscape_fields==restored.stock_farm_fields and b.landscape_regrowth==restored.stock_farm_grass)
+assert(b.landscape_regrowth[rough]==0, "zero is a queued regrowth visit")
+for i=1,7 do b.visit(8,8,1+i,false,rough);assert(restored.stock_farm_grass[rough]==i) end
 b.visit(8,8,9,false)
 assert(restored.stock_farm_grass[rough]==nil and b.tile(8,8).ground=="grass")
 -- RC1 still exposes the surface as an ordinary clear tile no matter
@@ -40,11 +42,12 @@ for i,layer in ipairs({"bridge_above","rail_bridge_above","aqueduct_above","tunn
   assert(b.tile(x,z).ground=="grass")
   b.make_field(x,z,4,123,7)
   local field=assert(W.field(restored,at))
-  b.visit(x,z,1,false)
+  assert(b.landscape_fields[at]==field,"same-day planting is visible to the bound dispatcher")
+  b.visit(x,z,1,false,at)
   assert(W.field(restored,at)==field and field.variant==5 and field.fences[0]==3)
   restored.tiles[at].build="road"
   b.visit(x,z,2,false)
-  assert(not W.field(restored,at) and not restored.stock_farm_fields[at])
+  assert(not W.field(restored,at) and not b.landscape_fields[at])
 end
 local p=m("generated_campaign")
 restored.stock_generated_profile.object_rng={10,20}

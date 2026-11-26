@@ -123,7 +123,8 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     local function dirty(id)
       s.changed=s.changed or {};s.changed[#s.changed+1]=id
     end
-    local b={width=width,height=height,freeform=not not freeform}
+    local b={width=width,height=height,freeform=not not freeform,
+      landscape_fields=records,landscape_regrowth=regrowth}
     function b.tile(x,z)
       if x<0 or z<0 or x>=Sim.W or z>=Sim.H or b.freeform and (x==0 or z==0) or
           stock and (x==width-1 or z==height-1) then
@@ -158,8 +159,8 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
       local t=b.tile(x,z)
       if t.kind~="clear" or t.ground~="field" then r.fences[side]=3;dirty(id) end
     end
-    function b.visit(x,z,tick,editor)
-      local id=Sim.id(x+1,z+1)
+    function b.visit(x,z,tick,editor,id)
+      id=id or Sim.id(x+1,z+1)
       local r=id and records[id]
       if not r then
         local grow=id and regrowth and regrowth[id]

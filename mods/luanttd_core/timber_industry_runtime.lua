@@ -59,12 +59,7 @@ return function(Rules,Catchment)
     -- Call from the existing landscape loop. Replay protection is per
     -- physical tile and tick, not per-industry: multiple legit tiles of
     -- one sawmill can release separate 255-unit capped lots in a tick.
-    function B.tile_visit(x,z,tick,offer_rig_passengers)
-      assert(uint(tick))
-      if x<0 or z<0 or x>=width or z>=height then return 0,0 end
-      local key=z*width+x
-      local t=tiles[key]
-      if not t then return 0,0 end
+    local function visit(t,key,tick,offer_rig_passengers)
       if ledger.open_station then return 0,0,"PREVIOUS_STATION_SCAN_PENDING" end
       if ledger.station_phase_tick and ledger.station_phase_tick>=tick or
           ledger.industry_phase_tick and ledger.industry_phase_tick>=tick then
@@ -82,6 +77,20 @@ return function(Rules,Catchment)
           packet_allocatable=ctx.packet_allocatable,
         })
       end)
+    end
+
+    function B.tile_visit(x,z,tick,offer_rig_passengers)
+      assert(uint(tick))
+      if x<0 or z<0 or x>=width or z>=height then return 0,0 end
+      local key=z*width+x
+      local t=tiles[key]
+      if t then return visit(t,key,tick,offer_rig_passengers) end
+      return 0,0
+    end
+    -- Bound by the owner to an exact stock cursor for this day. A
+    -- present entry still runs the same ledger/order checks in visit().
+    function B.landscape(width_,height_)
+      if width==width_ and height==height_ then return tiles,visit end
     end
 
     -- Single world industry iteration, by source IndustryID, so common

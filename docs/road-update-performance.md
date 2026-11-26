@@ -332,3 +332,25 @@ does not write to the input checkpoint. On a slower host, increase
 tests/campaign_worker_fairness_native.sh "$(command -v luantiserver)" \
   958fb7ac923aa5c8f098b8063031494c50257fa9 /path/to/luanttd-campaign-owner.chk /tmp/luanttd-fairness
 ```
+
+### Skip empty industry and farm callbacks on the stock landscape walk
+
+The native owner was calling the coal, mixed-industry and farm adapters
+for hundreds of thousands of cells every day. When the stock cursor and
+world use the same dimensions, the adapters now use their existing
+physical tile indexes directly. The worker still visits every tile in
+the same order and runs the same production, cargo offer, field fencing
+and regrowth rules on occupied cells. A newly planted field can become
+eligible later in the same stock tick. Other board layouts keep their
+coordinate lookups.
+
+Across two native comparisons of thirteen days on the same generated
+1024×1024 map, median `Sim.daily` CPU time fell from **1.13 to 0.97 s**
+and from **1.09 to 0.97 s** (about **12–14%**). Total CPU across those
+thirteen days fell about **6–12%**. Both final saved states matched the
+original across all 1,048,576 tiles and every saved value and shared
+reference, discounting only the wall-time playback fraction. This is a
+worker CPU measurement, not a frame-rate or checkpoint gain.
+A separate 20-day native replay with 128 buses and two freight trains
+also produced identical saved state. The farm freight restart test
+still settled the exact livestock, grain and factory Goods receipts.

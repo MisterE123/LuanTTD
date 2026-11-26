@@ -133,8 +133,8 @@ return function(Sim,H,Packets,Rating,Mail)
         for _,id in ipairs(record.tiles) do headquarters[id]=Sim.hq_cargo_at(s,id) end
       end
       local width=Sim.W
-      landscape_tile=function(x,z,tick)
-        if landscape_visit then landscape_visit(x,z,tick) end
+      landscape_tile=function(x,z,tick,tile)
+        if landscape_visit then landscape_visit(x,z,tick,tile) end
         local id=1+x+z*width
         local hq=headquarters[id]
         -- If a tide cleared the parcel earlier in this tick the local

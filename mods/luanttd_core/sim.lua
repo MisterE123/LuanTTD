@@ -5177,7 +5177,22 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if not road_ground then road_ground=default_oneway().ground_occupancy(s) end
         return not road_ground[id]
       end
-      local function landscape(x,z,tick)
+      -- Share the exact source cursor with the sparse industry bindings.
+      -- Keep visiting every stock tile in order: only proven no-op
+      -- industry/farm callbacks are skipped, not town, water or rail work.
+      local width,height=M.W,M.H
+      local clock=s.passenger_house_clock
+      local exact=width==2^clock.log_x and height==2^clock.log_y
+      local coal_tiles,visit_coal
+      local timber_tiles,visit_timber,fields,regrowth,visit_field
+      local offer_rig=commercial and commercial.offer_rig_passengers
+      if exact then
+        if coal then coal_tiles,visit_coal=coal.landscape(width,height) end
+        if timber and timber.landscape then
+          timber_tiles,visit_timber,fields,regrowth,visit_field=timber.landscape(width,height)
+        end
+      end
+      local function landscape(x,z,tick,source)
         local work
         if work_state and (work_state.funded>0 or work_state.active>0) then
           if tick~=road_tick then road_ground=nil;road_tick=tick end
@@ -5185,11 +5200,21 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         end
         if works and not work then works.decorate(s,x+1,z+1) end
         if tide then tide(x,z,tick) end
-        local industry_id=machines and (x+z*M.W+1)
+        local industry_id=machines and (exact and source+1 or x+z*width+1)
         local completed=industry_id and machines.completed(industry_id)
-        if coal then coal.tile_visit(x,z,tick) end
+        if coal_tiles then
+          local item=coal_tiles[source]
+          if item then visit_coal(item,tick) end
+        elseif coal then coal.tile_visit(x,z,tick) end
         if completed then machines.visit(industry_id,tick) end
-        if timber then timber.tile_visit(x,z,tick,commercial and commercial.offer_rig_passengers) end
+        if timber_tiles then
+          -- The farm maps are live. A plot planted earlier in this
+          -- same source tick must still be visited if it comes next.
+          local id=source+1
+          if fields and (fields[id] or regrowth and regrowth[id]~=nil) then visit_field(x,z,tick,id) end
+          local item=timber_tiles[source]
+          if item then visit_timber(item,source,tick,offer_rig) end
+        elseif timber then timber.tile_visit(x,z,tick,offer_rig) end
       end
       town_passengers.day(s,function(tick,finish_rating)
         local ready,events

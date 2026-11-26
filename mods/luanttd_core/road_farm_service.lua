@@ -118,6 +118,22 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       if options.field_board and options.field_board.visit then options.field_board.visit(x,z,tick,options.editor and options.editor(s,tick)) end
       return raw.tile_visit(x,z,tick,offer_rig_passengers)
     end
+    function B.landscape(width_,height_)
+      -- A custom editor callback or board may do work even for a
+      -- blank cell. Keep the coordinate dispatcher for such bindings.
+      if options.editor or not raw.landscape then return end
+      local tiles,visit=raw.landscape(width_,height_)
+      if not tiles then return end
+      local field=options.field_board
+      if not (field and field.visit) then
+        return tiles,visit
+      end
+      if field.width~=width_ or field.height~=height_ or field.landscape_fields==nil then return end
+      local function visit_field(x,z,tick,id)
+        field.visit(x,z,tick,nil,id)
+      end
+      return tiles,visit,field.landscape_fields,field.landscape_regrowth,visit_field
+    end
     B.animate=options.each_tick
     function B.after_vehicle_tick(tick)
       for _,p in ipairs(stations) do refresh(p.st,tick,true) end

@@ -319,6 +319,8 @@ end
 -- map_house(x,z) uses zero-based stock coordinates and returns a HouseSpec
 -- reference (house.id), its owner (house.town), and completion state.
 -- emit(name,amount,x,z,house,tick) may apply catchment and station ratings.
+-- landscape_tile(x,z,tick,tile) also receives the exact zero-based
+-- index of this physical visit, for adapters using the same dimensions.
 -- before_tick is for running station rating before tile production at a
 -- given tick, as OpenTTD's tick timer runs before RunTileLoop.
 function H.advance_houses(clock,ticks,map_house,settings,random,emit,before_tick,landscape_tile,advance)
@@ -326,7 +328,7 @@ function H.advance_houses(clock,ticks,map_house,settings,random,emit,before_tick
   local traverse=advance or H.advance
   traverse(clock,ticks,function(tile,tick)
     local x,z=tile%width,floor(tile/width)
-    if landscape_tile then landscape_tile(x,z,tick) end
+    if landscape_tile then landscape_tile(x,z,tick,tile) end
     local house=map_house(x,z)
     if house then
       local word=H.produce_tile(tile,tick,house,settings,random,function(name,amount)

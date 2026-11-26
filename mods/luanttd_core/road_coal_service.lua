@@ -96,10 +96,7 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
     -- Call from the same stock landscape walk as houses, once per tile
     -- visited. The pure kernel drains waiting production only when a
     -- completed, genuinely visited industry tile dispatches it.
-    function B.tile_visit(x,z,tick)
-      if x<0 or x>=width or z<0 or z>=height then return 0,0 end
-      local item=tile_map[z*width+x]
-      if not item then return 0,0 end
+    local function visit(item,tick)
       return Coal.tile_loop(item[1],item[2],{
         recession=option("recession",tick),editor=option("editor",tick),
       },function(ind,amount)
@@ -108,6 +105,18 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
           neutral_owner=ctx.neutral_owner,packet_allocatable=ctx.packet_allocatable,
         })
       end)
+    end
+
+    function B.tile_visit(x,z,tick)
+      if x<0 or x>=width or z<0 or z>=height then return 0,0 end
+      local item=tile_map[z*width+x]
+      if item then return visit(item,tick) end
+      return 0,0
+    end
+    -- Day-scoped and read-only to the caller. Entries are keyed by the
+    -- zero-based source ID; the coordinate dispatcher keeps its bounds.
+    function B.landscape(width_,height_)
+      if width==width_ and height==height_ then return tile_map,visit end
     end
 
     -- Call after station loading, vehicles and OnTick_Station of the
