@@ -43,7 +43,7 @@ cat "$game/mods/luanttd_core/init.lua" >> "$out/probe.lua"
 cat >> "$out/probe.lua" <<'LUA'
 assert(placement and Sim.W==128 and Sim.H==128 and S.stock_generated_profile.industries)
 assert(core.get_mod_storage():get_string("campaign")=="")
-local terrain_witness,river_corner,mine_tile
+local terrain_witness,river_corner,mine_tile,oil_tile
 if core.settings:get_bool("luanttd_qa_normal_river",false) then
   local count=0
   local chosen,score
@@ -110,9 +110,24 @@ if core.settings:get_bool("luanttd_qa_normal_river",false) then
     chosen=assert(mine_tile,"The test world has no working mine model")
     core.log("action","WORLD_CREATION_INDUSTRY_PREGAME transitions="..stat.industry_machinery)
   end
+  if core.settings:get_bool("luanttd_qa_oil_pump",false) then
+    local keys={}
+    for id,record in pairs(S.stock_oil_industries or {}) do
+      if record.kind=="oil_well" then keys[#keys+1]=id end
+    end
+    table.sort(keys)
+    local well=assert(S.stock_oil_industries[keys[1]],"This seed should have an actual source oil field")
+    for _,part in ipairs(well.tiles) do
+      local tile=Sim.id(part.x+1,part.z+1)
+      oil_tile=oil_tile or tile
+      if part.gfx>=30 then oil_tile=tile;break end
+    end
+    chosen=assert(oil_tile)
+    core.log("action","WORLD_CREATION_OIL_FIELD "..well.id.." layout="..well.layout.." tile="..oil_tile)
+  end
   local x,z=Sim.xy(assert(chosen))
   local _,_,top=api.terrain.tile(chosen)
-  local near=mine_tile or core.settings:get_bool("luanttd_qa_initial_frontage",false)
+  local near=mine_tile or oil_tile or core.settings:get_bool("luanttd_qa_initial_frontage",false)
   local offset=mine_tile and 4 or near and 6 or 12
   terrain_witness={x=x*2+offset,y=top+(mine_tile and 5.1 or near and 6 or 11),z=z*2+offset}
   assert(S.seed==1 and count>=10,"Explicit seed should reach the real standard river generator")
@@ -128,7 +143,7 @@ render.place_world=function(done,notify)
   end
   return raw_place(done,notify)
 end
-local complete,movement_origin,moved,stopped,turned
+local complete,movement_origin,moved,stopped,turned,prior_pump,prior_phase,seen_pump,initial_inspection
 core.register_globalstep(function()
   local p=core.get_player_by_name("singleplayer")
   if p and not complete and not placement and #api.world.hotbar_layout(p)>0 then
@@ -165,6 +180,30 @@ core.register_globalstep(function()
     core.log("action","WORLD_CREATION_PLAYABLE "..S.stock_generated_profile.width)
   end
   if not p or not complete then return end
+  if oil_tile and moved and not seen_pump then
+    local view=assert(render.oil_pump_view)
+    local ref,phase=view.witness(oil_tile)
+    if ref and phase~=nil then
+      if not initial_inspection then
+        initial_inspection=true
+        local b=ref:get_pos()
+        local cam={x=b.x+3.6,y=b.y+2.8,z=b.z+4.9}
+        p:set_pos(cam)
+        local eye={x=cam.x,y=cam.y+1.625,z=cam.z}
+        local focus={x=b.x+.8,y=b.y-.35,z=b.z+.65}
+        local dir=vector.direction(eye,focus)
+        p:set_look_horizontal(core.dir_to_yaw(dir))
+        p:set_look_vertical(-math.asin(dir.y))
+        api.cinematic.toggle(p)
+      end
+      if prior_pump==ref and phase~=prior_phase then
+        assert(ref:get_properties().mesh==("bl_industry_oil_well_pose_%02d.obj"):format(phase))
+        seen_pump=true
+        core.log("action",("WORLD_CREATION_OIL_PUMP_MOVING %d->%d"):format(prior_phase,phase))
+      end
+      prior_pump,prior_phase=ref,phase
+    end
+  end
   if mine_tile and moved and not turned then
     local ref,angle,phase=api.coal_view.witness(mine_tile)
     if ref and phase and angle then
@@ -191,7 +230,7 @@ core.register_globalstep(function()
           local user=core.get_player_by_name("singleplayer")
           if not user then return end
           user:set_pos(terrain_witness)
-          if mine_tile and not api.lighting.is_always_day() then assert(api.lighting.toggle(user)) end
+          if (mine_tile or oil_tile) and not api.lighting.is_always_day() then assert(api.lighting.toggle(user)) end
           user:set_look_horizontal(mine_tile and .71*math.pi or 3*math.pi/4)
           user:set_look_vertical(mine_tile and .85 or .58)
           core.log("action","WORLD_CREATION_RIVER_VIEW")
@@ -228,6 +267,10 @@ if [[ ${LUANTTD_QA_INDUSTRY_MACHINERY:-0} == 1 ]]; then
   [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]
   printf '%s\n' 'luanttd_qa_industry_machinery = true' 'bayline_generated_relief = 1' 'bayline_generated_industries = 5' >> "$out/local.conf"
 fi
+if [[ ${LUANTTD_QA_OIL_PUMP:-0} == 1 ]]; then
+  [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]
+  printf '%s\n' 'luanttd_qa_oil_pump = true' 'bayline_generated_relief = 1' 'bayline_generated_industries = 5' >> "$out/local.conf"
+fi
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   t=$(realpath "$BAYLINE_NATIVE_TOOLS")
   export PATH="$t/run/bin:$t/usr/bin:$PATH" LD_LIBRARY_PATH="$t/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -239,7 +282,7 @@ cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$disp" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!
 client=""
-trap 'if [[ -n "$client" ]]; then kill "$client" 2>/dev/null || true; fi; kill "$xv" 2>/dev/null || true; wait 2>/dev/null || true' EXIT
+trap 'if [[ -n "$client" ]]; then kill "$client" 2>/dev/null || true; wait "$client" 2>/dev/null || true; fi; kill "$xv" 2>/dev/null || true; wait "$xv" 2>/dev/null || true' EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 "${BAYLINE_LUANTI_CLIENT:-luanti}" --go --world "$out/world" --gameid luanttd --config "$out/local.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
@@ -308,6 +351,12 @@ if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
     waitmark WORLD_CREATION_PREGAME_RESUMED
     grep WORLD_CREATION_PREGAME_RESUMED "$out/client.log"
     import -window root -quality 91 "$out/initial-settled-street.jpg"
+  elif [[ ${LUANTTD_QA_OIL_PUMP:-0} == 1 ]]; then
+    grep WORLD_CREATION_OIL_FIELD "$out/client.log"
+    waitmark WORLD_CREATION_OIL_PUMP_MOVING
+    grep WORLD_CREATION_OIL_PUMP_MOVING "$out/client.log"
+    sleep 1.5
+    import -window root -quality 91 "$out/stock-oil-pump-cycle.jpg"
   elif [[ ${LUANTTD_QA_INDUSTRY_MACHINERY:-0} == 1 ]]; then
     grep WORLD_CREATION_INDUSTRY_PREGAME "$out/client.log"
     waitmark WORLD_CREATION_MINE_MOVING

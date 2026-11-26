@@ -330,6 +330,9 @@ jobs:
           python3 tests/industry_machinery_rc1.py "$src" lua5.1
           lua5.1 tests/industry_machinery_world.lua
           lua5.1 tests/industry_machinery_view.lua
+          lua5.1 tests/oil_animation_registry.lua
+          lua5.1 tests/oil_pump_view.lua
+          python3 tests/oil_pump_runtime_art.py
           lua5.1 tests/clear_grass_regrowth.lua
           lua5.1 tests/demolition_effects.lua
           /usr/bin/python3 tools/build_demolition_particle_art.py --check

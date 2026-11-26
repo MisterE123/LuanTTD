@@ -27,6 +27,7 @@ case "${1:-}" in
     LUANTTD_QA_TOWN_REBUILD=1 BAYLINE_NATIVE_DISPLAY=361 BAYLINE_NATIVE_PORT=43378 timeout --kill-after=10s 160 bash tests/campaign_worker_stock_residential_native.sh
     ;;
   native-terrain-services)
+    LUANTTD_QA_NORMAL_RIVER=1 LUANTTD_QA_OIL_PUMP=1 BAYLINE_QA_OWNER=1 BAYLINE_NATIVE_DISPLAY=369 timeout --kill-after=10s 150 bash tests/world_setup_native.sh
     export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/terrain-service-cache"
     python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
     LUANTTD_QA_AIRPORT_NOISE=1 LUANTTD_QA_TOWN_YEAR=1985 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=363 BAYLINE_NATIVE_PORT=43380 timeout --kill-after=10s 175 bash tests/campaign_worker_stock_residential_native.sh

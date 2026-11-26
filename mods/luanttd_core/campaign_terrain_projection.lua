@@ -84,6 +84,13 @@ local function add(out,s,name,id,fields)
         for k in pairs(industry_animation) do part[k]=nil end
       end
       if source.produced and source.produced.rate>0 then record.hoist_active=true end
+    elseif name=="stock_oil_industries" and source.kind=="oil_well" then
+      -- Source art does not use the animated industry GFX to choose its
+      -- base. Oil frames travel on the small machinery motion channel.
+      for _,part in ipairs(record.tiles or {}) do
+        if part.gfx>=30 and part.gfx<=32 then part.gfx=29 end
+        for k in pairs(industry_animation) do part[k]=nil end
+      end
     end
     dst[id]=record
   else dst[id]=detached(source,2) end

@@ -118,10 +118,10 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       if options.field_board and options.field_board.visit then options.field_board.visit(x,z,tick,options.editor and options.editor(s,tick)) end
       return raw.tile_visit(x,z,tick,offer_rig_passengers)
     end
+    B.animate=options.each_tick
     function B.after_vehicle_tick(tick)
       for _,p in ipairs(stations) do refresh(p.st,tick,true) end
       for _,i in ipairs(raw.industries) do raw.produce(i.id,tick) end
-      if options.each_tick then options.each_tick(tick) end
     end
     function B.month(ordinal,year,opts)
       local out={}

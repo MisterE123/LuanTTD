@@ -410,7 +410,7 @@ return function(api)
       end
     end
   end
-  local oil_buildings={}
+  local oil_buildings,oil_pump_anchors={},{}
   if api.heavy_world then
     for style,parts in pairs(api.heavy_world.visual_sources()) do
       for _,part in ipairs(parts) do
@@ -430,7 +430,12 @@ return function(api)
       for index,cell in ipairs(parts) do
         local name=("%s_%d_%d"):format(style,cell[1],cell[2])
         local mesh,atlas=api.oil_world.visual_asset(style,cell,index)
-        oil_buildings[name]=architecture(name,mesh,atlas)
+        local is_pump=api.task_hotbar and style:match("^industry_oil_well")
+        if is_pump then
+          local base=mesh:gsub("industry_oil_well_","industry_oil_well_base_",1)
+          oil_buildings[name]=architecture(name,base,atlas,false,walk_collision.box(mesh))
+          oil_pump_anchors[oil_buildings[name]]=true
+        else oil_buildings[name]=architecture(name,mesh,atlas) end
       end
     end
   end
@@ -2474,6 +2479,8 @@ return function(api)
     dofile(modpath.."/rail_exhaust_model.lua"),vector and vector.rotate)
   local worker_observation
   local town_lift=dofile(modpath.."/town_lift_view.lua")(core,Sim,frontage,R.house_deck)
+  local oil_view=next(oil_pump_anchors) and dofile(modpath.."/oil_pump_view.lua")(core,Sim,oil_pump_anchors)
+  R.oil_pump_view=oil_view
   local actor_buffer=dofile(modpath.."/campaign_actor_buffer.lua")()
   function R.waiting_at(mode,id)
     if worker_observation then return worker_observation.waiting(mode,id) end
@@ -2481,10 +2488,15 @@ return function(api)
   function R.sample_worker_actors(projection)
     actor_buffer.observe(projection.actors(),projection.actor_clock())
     if projection.town_lifts then town_lift.observe(S,projection.town_lifts()) end
-    if api.coal_view and projection.industry_machinery then api.coal_view.observe(projection.industry_machinery()) end
+    if projection.industry_machinery then
+      local poses=projection.industry_machinery()
+      if api.coal_view then api.coal_view.observe(poses) end
+      if oil_view then oil_view.observe(poses) end
+    end
   end
   function R.step_worker_actors(dt)
     town_lift.step(dt)
+    if oil_view then oil_view.step(dt,S) end
     if worker_observation then
       local actors=actor_buffer.sample(core.get_us_time())
       projected_actors.render(actors,dt,worker_observation.signals and worker_observation.signals())
@@ -2502,6 +2514,7 @@ return function(api)
   local refs,last,poses={},{},{}
   function R.remove_vehicle_views()
     town_lift.clear()
+    if oil_view then oil_view.clear() end
     for id,ref in pairs(refs) do
       if ref:get_pos() then ref:remove() end
       refs[id]=nil;last[id]=nil

@@ -24,11 +24,26 @@ the mine and power visual pass runs before the increment, matching
 `AnimateAnimatedTiles`. Coal hoist rotation follows the direction and
 stopped windows; power particles originate at the authored transformer
 bushings. Dynamic animation frames travel with the visible motion
-packets and do not change the static model/collision receipt. The
-original oil well model is still static visually, though the startup
-state feeds its existing saved live animation registry.
+packets and do not change the static model/collision receipt. Land oil wells use five original static pads and a shared twelve-position
+Blender-exported four-bar linkage. The worker sends only in-scope motion
+receipts, so changing a crank angle never rebuilds a mapblock or moves a
+collision hull. Stopped pumps retain a complete model at ordinary
+actor-view distances. Their activation list is saved in source posting
+order; its deferred removals swap with the last entry, as in RC1
+`AnimateAnimatedTiles`. This covers the oil-well subset, not global
+ordering of every source machinery and house animation.
 
 `tests/industry_machinery_rc1.py` compiles the pinned source branches and
 compares 18,240 animation phase, frame and RNG cases. In addition,
 `tests/industry_machinery_world.lua` checks startup construction, handoff
 to the live owner, registration, static scene separation and view scope.
+
+
+The ordinary graphical world-setup regression finds a generated oil
+field and observes the same native pump object change mesh from live
+worker receipts:
+
+```sh
+LUANTTD_QA_NORMAL_RIVER=1 LUANTTD_QA_OIL_PUMP=1 BAYLINE_QA_OWNER=1 \
+  bash tests/world_setup_native.sh
+```

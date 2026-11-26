@@ -561,7 +561,8 @@ end
 local function machine_rules()
   if not machinery_world then
     machinery_world=dofile(module_root.."industry_machinery_world.lua")(M,
-      dofile(module_root.."openttd/industry_machinery_rc1.lua"))
+      dofile(module_root.."openttd/industry_machinery_rc1.lua"),
+      dofile(module_root.."oil_animation_registry.lua"))
   end
   return machinery_world
 end
@@ -3738,31 +3739,16 @@ local function passenger_modules()
       kernel,rating_runtime,loading_factory,timing)
     oil.runtime=dofile(base.."rail_oil_runtime.lua")(M,oil_rail,freight,roster,debit,credit)
     for kind,record in pairs(oil.world.facilities) do M.facilities[kind]=record end
+    local oil_registry=dofile(base.."oil_animation_registry.lua")
     function oil.animation(s)
       local tiles={}
-      local saved=s.stock_oil_animated or {}
-      s.stock_oil_animated=saved
       for _,firm in pairs(s.stock_oil_industries or {}) do
-        if not firm.removed then
+        if firm.kind=="oil_well" and not firm.removed then
           for _,t in ipairs(firm.tiles) do tiles[M.id(t.x+1,t.z+1)]=t end
         end
       end
-      local function random() return rating_runtime.random_u32(s) end
-      return function(_,tile,on) saved[M.id(tile.x+1,tile.z+1)]=on or nil end,
-        function(tick)
-          if tick%8~=0 then return end
-          local ids={}
-          for id in pairs(saved) do ids[#ids+1]=id end
-          table.sort(ids)
-          for _,id in ipairs(ids) do
-            local t=tiles[id]
-            if not t then saved[id]=nil
-            else
-              local changed,keep=oil.rules.animate(t,tick,random)
-              if changed and not keep then saved[id]=nil end
-            end
-          end
-        end
+      local register,step=oil_registry.bind(s,tiles,oil.rules.animate,function() return rating_runtime.random_u32(s) end)
+      return function(_,tile,on) register(M.id(tile.x+1,tile.z+1),on) end,step
     end
     oil.ship=dofile(base.."ship_oil_runtime.lua")(M,
       dofile(base.."ship_oil_service.lua")(M,dofile(base.."openttd/oil_ship_roster.lua"),
@@ -5226,7 +5212,10 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       end,{passenger=commercial and commercial.hooks.passenger,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
         growth=growth and growth.world,traverse=traverse,
-        before_landscape=machines and machines.animate})
+        before_landscape=(machines or timber and timber.animate) and function(tick)
+          if machines then machines.animate(tick) end
+          if timber and timber.animate then timber.animate(tick) end
+        end})
     end
   else
     generate_passengers(s,legacy_supply)

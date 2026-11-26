@@ -478,7 +478,7 @@ def write():
             rows=() if name in HANGAR_PORTALS else industry_buildings(p)
         elif name.startswith(SOLID_SCENERY):
             rows=buildings(p)
-        elif name.startswith(INDUSTRIES) and not name.startswith("industry_oil_well_motor_"):
+        elif name.startswith(INDUSTRIES) and not name.startswith(("industry_oil_well_motor_", "industry_oil_well_pose_")):
             rows=industry_buildings(p)
         elif name.startswith(("rail_ground_fence_", "rail_split_fence_")):
             rows = railway(p)

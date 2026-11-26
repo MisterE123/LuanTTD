@@ -1,6 +1,6 @@
 -- World-owned RC1 machinery clock. Static footprint roles on native
 -- scene tiles never change when their industry sprite state changes.
-return function(Sim,Rules)
+return function(Sim,Rules,OilRegistry)
   local M={}
   local function index(s,include_wells)
     local records,animated={},{}
@@ -54,8 +54,9 @@ return function(Sim,Rules)
       Rules.visit(part,tick,random)
       animated[id]=part.animated and part or nil
       if include_wells and part.gfx>=Rules.OIL_FIRST and part.gfx<=Rules.OIL_LAST then
-        s.stock_oil_animated=s.stock_oil_animated or {}
-        s.stock_oil_animated[id]=part.animated or nil
+        -- Registration survives later pregame visits and preserves
+        -- physical activation order. The live animation starts later.
+        OilRegistry.add(s,id)
         -- The established live oil animation list is authoritative for
         -- pumps after generation; never tick that same actor twice.
         part.animated=nil
@@ -75,11 +76,11 @@ return function(Sim,Rules)
     return W
   end
   function M.visible(s,x,z,w,h)
-    if not (s.stock_generated_profile and s.stock_coal_industries) then return end
+    if not (s.stock_generated_profile and (s.stock_coal_industries or s.stock_oil_industries)) then return end
     local poses={}
     local tick=s.passenger_house_clock and s.passenger_house_clock.counter or 0
     local phase=tick%2048-1024
-    for _,industry in pairs(s.stock_coal_industries) do
+    for _,industry in pairs(s.stock_coal_industries or {}) do
       if not industry.removed then
         for _,part in ipairs(industry.tiles) do
           local u,v=part.x+1,part.z+1
@@ -96,6 +97,22 @@ return function(Sim,Rules)
                 end
                 poses[id]={gfx=g,frame=part.animation_frame or 0,dir=dir,tick=tick,active=part.animated or false}
               end
+            end
+          end
+        end
+      end
+    end
+    for _,industry in pairs(s.stock_oil_industries or {}) do
+      if industry.kind=="oil_well" and not industry.removed then
+        for _,part in ipairs(industry.tiles) do
+          local u,v=part.x+1,part.z+1
+          local g=part.gfx
+          if u>=x and u<x+w and v>=z and v<z+h and g>=Rules.OIL_REST and g<=Rules.OIL_LAST then
+            local id=Sim.id(u,v)
+            local t=s.tiles[id]
+            if t and t.stock_industry and t.stock_industry.id==industry.id and t.stock_industry.chain=="oil" then
+              local phase=g==Rules.OIL_REST and 0 or (g-Rules.OIL_FIRST)*4+(part.animation_frame or 0)
+              poses[id]={oil=phase,base=t.h,site=industry.id,tick=tick}
             end
           end
         end
