@@ -45,6 +45,22 @@ assert(reverse.ok and reverse.reversed and reverse.tile==at(6,0) and reverse.tra
 assert(B.adjacent(at(0,0),F.SW)==at(1,0))
 assert(B.edge_available(at(2,0),at(3,0),F.SW))
 assert(B.center_z(at(0,0))==0 and B.tile(nil)==nil)
+do
+  local height=Sim.road_center_z
+  local calls=0
+  Sim.road_center_z=function(...)
+    calls=calls+1
+    return height(...)
+  end
+  local road=at(2,0)
+  local one=make_board(Sim,s,F)
+  assert(one.center_z(road)==0 and one.center_z(road)==0 and calls==1)
+  s.tiles[road].h=2
+  local next_search=make_board(Sim,s,F)
+  assert(next_search.center_z(road)==16 and calls==2)
+  s.tiles[road].h=0
+  Sim.road_center_z=height
+end
 mid.build,mid.station,mid.stop_axis="road_station",2,10
 s.stations[2]={id=2,tile=at(3,0),mode="road"}
 B,cost,course=route()

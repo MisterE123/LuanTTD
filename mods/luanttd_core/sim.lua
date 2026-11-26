@@ -1347,6 +1347,9 @@ local function profiles_match(s,a,ta,b,tb,d)
   local sa,ha=road_shape(s,a,ta)
   local sb,hb=road_shape(s,b,tb)
   if not sa or not sb then return false end
+  -- Both edges are constant on a flat surface; only the two
+  -- elevations matter. Keep the original tolerance.
+  if sa==0 and sb==0 then return math.abs(ha-hb)<=1e-9 end
   -- Actual road edges always have a linear height profile. Compare both
   -- ends as well as the center to catch transverse staircase joins.
   for i=0,2 do

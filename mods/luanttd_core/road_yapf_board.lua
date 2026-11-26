@@ -78,8 +78,17 @@ return function(Sim,s,F,occupancy)
   function B.edge_available(from,to,d)
     return Sim.road_geometry_connected(s,from,4-d,to)
   end
+  -- Like the tile descriptors above, this cache belongs only to the
+  -- synchronous traversal (or the read-only passing board for one tick).
+  -- A later search after construction builds a new board.
+  local center_heights={}
   function B.center_z(id)
-    return Sim.road_center_z(s,id)
+    local z=center_heights[id]
+    if z==nil then
+      z=Sim.road_center_z(s,id)
+      center_heights[id]=z
+    end
+    return z
   end
 
   -- RoadStop::IsDriveThroughRoadStopContinuation: same station index,

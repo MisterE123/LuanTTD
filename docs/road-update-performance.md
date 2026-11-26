@@ -197,3 +197,25 @@ tests/campaign_checkpoint_perf_native.sh "$(command -v luantiserver)" \
 The `--equivalent` mode checks values and shared references after save
 and reload rather than requiring the optimized file to have the same
 bytes. Always benchmark a disposable copy, not an open world.
+
+## Cheaper stock road route searches
+
+The native YAPF board computes a tile's center height once per traversal.
+A new search gets a fresh board, so grading and construction are still
+visible. Comparing two flat road surfaces now checks the same height
+tolerance directly; sloped surfaces still sample both ends and center.
+No route cost, live occupancy, reservation, or selection rule changes.
+
+A native 256² workload used 128 stock buses on 16 services alongside
+purchased ore and steel trains and their original industry cargo chain.
+Across 20 restored days, both versions reached identical campaign state.
+Separate untimed counters showed 26,720 → 6,880 center-height resolutions
+and no repeated edge samples on the fixture's 13,680 flat connections.
+
+Two native trials timed batches of 128 complete route searches on that
+saved network. Median wall time was **71.5 → 40.4 ms** and
+**67.0 → 41.3 ms** (38–44% lower; similar CPU times). Explicit garbage
+collection and route checks were outside the timer. This is a result
+for path searches on the tested corridor, not a 38–44% game-loop or
+frame-rate gain. The mixed worker still spends more time updating road
+traffic than moving its two trains.
