@@ -476,3 +476,19 @@ batch CPU fell from about **5.8–5.9 ms to 4.0–4.1 ms**, with exact
 receipts before and after a shared-corner edit. Scene tests also cover
 field deletion, nested changes, station/bridge data and ignored fields.
 This is viewport CPU, not full simulation or frame-rate speed.
+
+### Reuse packed string-reference bytes during checkpoint encoding
+
+Most keys in the general checkpoint records repeat. The writer now
+emits each already-interned key or string as one prepacked fragment,
+rather than re-encoding the same reference bytes. The format, dictionary
+order, and alias handling are unchanged.
+
+In a native LuaJIT run alternating twelve encodes of the same generated
+1024×1024 world, median packing CPU fell from **1.34 s to 1.10 s**. In
+sixteen alternating encodes of the 192-bus fixture it fell from
+**139 ms to 121 ms**. Every packed byte matched the baseline on both
+fixtures, and both versions reopened the resulting file. Unit tests
+check repeated keys and references crossing the one-, two-, and
+three-byte boundaries. This measures packing only, not disk time or
+the observer's frame rate.

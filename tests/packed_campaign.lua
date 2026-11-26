@@ -54,6 +54,22 @@ local roundtrip=P.decode(P.encode(numeric))
 for n=0,25000 do assert(roundtrip[n]==numeric[n]) end
 print("PASS packed integer fragment cache retains exact existing checkpoint bytes and numeric keys")
 
+-- On-disk references must keep their original base-128 width even
+-- after enough unique strings to cross the two- and three-byte bounds.
+local dictionary={}
+for i=1,16384 do dictionary[i]="key:"..i end
+local offsets={127,128,16383,16384}
+for i,id in ipairs(offsets) do dictionary[16384+i]=dictionary[id] end
+local ref_tail=string.char(8,127,8,128,1,8,255,127,8,128,128,1,0)
+local dictionary_bytes=P.encode(dictionary)
+assert(dictionary_bytes:sub(-#ref_tail)==ref_tail)
+local words=P.decode(dictionary_bytes)
+for i,id in ipairs(offsets) do assert(words[16384+i]==words[id]) end
+local repeated=P.encode({"shared",{shared="shared"}})
+assert(repeated==string.char(11,2,7,6).."shared"..string.char(9,8,1,8,1,0,0))
+assert(P.decode(repeated)[2].shared=="shared")
+print("PASS packed string keys and references retain exact checkpoint bytes")
+
 -- Exercise graph aliases using a real paid and routed stock fleet.
 dofile("tests/road_route_geometry_cache.lua")
 

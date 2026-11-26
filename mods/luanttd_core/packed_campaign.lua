@@ -18,6 +18,15 @@ local short_uint={}
 for n=0,8191 do
   short_uint[n]=n<128 and char(UINT,n) or char(UINT,128+n%128,floor(n/128))
 end
+-- Repeated graph keys and values share their packed string reference bytes.
+-- Dictionary IDs still follow first encounter; only the emitter changes.
+local function string_ref(n)
+  if n<128 then return char(STRREF,n) end
+  if n<16384 then return char(STRREF,128+n%128,floor(n/128)) end
+  local result=symbols[STRREF]
+  while n>=128 do result=result..symbols[128+n%128];n=floor(n/128) end
+  return result..symbols[n]
+end
 local WOODED_TILE=13
 local terrains={"grass","hill","water"}
 local terrain_codes={grass=1,hill=2,water=3}
@@ -187,13 +196,17 @@ function M.encode(root,pulse)
         end
       else tag(TAB) end
       for k,v in next,value do
-        if not dense or type(k)~="number" or k<1 or k>n or k%1~=0 then write(k);write(v) end
+        if not dense or type(k)~="number" or k<1 or k>n or k%1~=0 then
+          local key=strings[k]
+          if key then put(key) else write(k) end
+          write(v)
+        end
       end
       tag(END)
     elseif kind=="string" then
-      local id=strings[value]
-      if id then tag(STRREF);uint(id);return end
-      string_count=string_count+1;strings[value]=string_count
+      local ref=strings[value]
+      if ref then put(ref);return end
+      string_count=string_count+1;strings[value]=string_ref(string_count)
       tag(STR);str(value)
     elseif kind=="number" then
       local bytes=short_uint[value]
