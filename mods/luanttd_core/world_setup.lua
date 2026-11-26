@@ -14,7 +14,7 @@ local items={
     labels={"Very flat","Flat","Hilly","Mountainous","Alpinist"}},
   {key="sea",setting="bayline_generated_sea",default=0,values={0,1,2,3},
     labels={"Very low","Low","Medium","High"}},
-  {key="rivers",setting="bayline_generated_rivers",default=0,values={0,1,2,3},
+  {key="rivers",setting="bayline_generated_rivers",default=2,values={0,1,2,3},
     labels={"None","Few","Normal","Many"}},
   {key="towns",setting="bayline_generated_towns",default=2,values={0,1,2,3},
     labels={"Very low","Low","Normal","High"}},
@@ -62,8 +62,13 @@ local function set_size(cfg,width,depth)
   cfg.size=width==depth and width or nil -- legacy square profiles
 end
 local size_error="Choose a stock power-of-two width and depth from 64 to 4096."
-function M.defaults(settings)
+function M.random_seed(rng)
+  -- Signed RNG bounds are too narrow for the original uint32 seed.
+  return rng:next(0,65535)*65536+rng:next(0,65535)
+end
+function M.defaults(settings,fresh)
   local seed=tonumber(settings:get("bayline_seed"))
+  if not integer(seed,0,4294967295) and fresh then seed=fresh() end
   local year=tonumber(settings:get("bayline_stock_bus_start_year"))
   local out={seed=integer(seed,0,4294967295) and seed or 1751,scenario="generated",survey_size=64,
     year=integer(year,1950,2050) and year or 1950}
@@ -199,7 +204,11 @@ function M.progress_form(core,title,pct,stage,detail)
     "label[.55,2.28;"..esc(detail or "Please wait. The game is still preparing your world.").."]"
 end
 function M.mount(core,storage,prepare)
-  local draft=M.defaults(core.settings)
+  -- RC1 _ShowGenerateLandscape uses the interactive RNG, not the
+  -- terrain generator's stream. Respect an explicit configured seed.
+  local rng=PcgRandom(core.get_us_time()%2147483647)
+  local function random() return M.random_seed(rng) end
+  local draft=M.defaults(core.settings,random)
   local finished,advanced,busy=false,false,false
   local stage,percent="Starting the generator",0
   local progress_id="luanttd_core:generating_world"
@@ -207,7 +216,6 @@ function M.mount(core,storage,prepare)
     core.show_formspec(p:get_player_name(),progress_id,M.progress_form(core,
       "Generating your LuanTTD world",percent,stage,detail))
   end
-  local rng=PcgRandom(core.get_us_time()%2147483647)
   local function show(p,note)
     core.show_formspec(p:get_player_name(),M.form,formspec(core,draft,advanced,note))
   end
@@ -241,11 +249,14 @@ function M.mount(core,storage,prepare)
     end
     local value,error_text=M.parse(draft,fields)
     if value then draft=value end
-    if fields.setup_defaults then draft=M.defaults(core.settings);advanced=false;show(p)
+    if fields.setup_defaults then
+      local seed=draft.seed
+      draft=M.defaults(core.settings,function() return seed end)
+      advanced=false;show(p)
     elseif fields.setup_advanced then
       if not value then show(p,error_text);return true end
       advanced=not advanced;show(p)
-    elseif fields.setup_random then draft.seed=rng:next(0,2147483646);show(p)
+    elseif fields.setup_random then draft.seed=random();show(p)
     elseif fields.setup_generate then
       if not value then show(p,error_text);return true end
       if draft.scenario=="original" then

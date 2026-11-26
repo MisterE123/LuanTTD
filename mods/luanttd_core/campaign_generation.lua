@@ -37,7 +37,7 @@ return function(core,mod,Sim,Settings)
       width=width,depth=depth,seed=seed,rng_state=TG.startup_rng(seed),
       terrain_type=option("relief","bayline_generated_relief",1),
       quantity_sea_lakes=option("sea","bayline_generated_sea",0),
-      amount_of_rivers=option("rivers","bayline_generated_rivers",0),
+      amount_of_rivers=option("rivers","bayline_generated_rivers",2),
       min_river_length=tonumber(settings:get("bayline_generated_min_river_length")) or 16,
       tgen_smoothness=option("smooth","bayline_generated_smoothness",1),
       water_borders=option("coast","bayline_generated_coasts",15),

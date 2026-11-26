@@ -3,7 +3,7 @@ local params={bayline_seed="4294967295",bayline_generated_map_size="128",
   bayline_generated_relief="99",bayline_generated_town_layout="grid3"}
 local settings={get=function(_,name)return params[name] end}
 local defaults=M.defaults(settings)
-assert(defaults.seed==4294967295 and defaults.size==128 and defaults.relief==1 and defaults.layout=="grid3")
+assert(defaults.seed==4294967295 and defaults.size==128 and defaults.relief==1 and defaults.layout=="grid3" and defaults.rivers==2)
 local submitted={setup_seed="12345678",setup_size="1",setup_relief="3",setup_rivers="2",setup_year="1968",setup_industries="1",setup_coast="2",setup_smooth="3",setup_variety="4"}
 local cfg=assert(M.parse(defaults,submitted))
 assert(cfg.seed==12345678 and cfg.size==64 and cfg.relief==2 and cfg.rivers==1 and cfg.industries==0)
@@ -104,3 +104,31 @@ local resume=table.remove(queue,1)
 resume[1]()
 assert(saved=="valid-json" and reconnects==2)
 print("PASS failed writes leave settings unchanged; retry succeeds and duplicate/stale completions do not reconnect")
+
+-- Interactive seed is local to the new-world form. Retain it through
+-- navigation, reset and invalid input; reroll and manual seeds use all 32 bits.
+params.bayline_seed=nil
+local i=0
+PcgRandom=function()
+  return {next=function(_,lo,hi)
+    assert(lo==0 and hi==65535)
+    i=i+1;return ({0x8123,0x4567,0xffff,0xffff})[i]
+  end}
+end
+shell.show_formspec=function(_,form,body) if form==M.form then shown=body end end
+shell.write_json=function(draft)
+  assert(draft.seed==4028957751 and draft.rivers==2)
+  return "valid-json"
+end
+M.mount(shell,store)
+fields(player,M.form,{setup_advanced=true})
+assert(shown:find("2166572391",1,true))
+fields(player,M.form,{setup_defaults=true})
+assert(shown:find("2166572391",1,true))
+fields(player,M.form,{setup_random=true})
+assert(shown:find("4294967295",1,true) and i==4)
+fields(player,M.form,{setup_generate=true,setup_seed="4028957751"})
+assert(reconnects==3 and i==4)
+params.bayline_generated_rivers="0"
+assert(M.defaults(settings).rivers==0)
+print("PASS fresh 32-bit UI seeds, preserved reset, exact manual seed, and stock Normal rivers with an explicit off override")

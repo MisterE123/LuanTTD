@@ -32,6 +32,9 @@ core.show_formspec=function(name,form,body)
     end
   elseif form=="luanttd_core:world_setup" then
     core.log("action","WORLD_CREATION_OPTIONS")
+    local seed=body:match("setup_seed;World seed;(%d+)")
+    local rivers=body:match("setup_rivers;None,Few,Normal,Many;(%d+)")
+    if seed and rivers then core.log("action","WORLD_CREATION_DRAFT "..seed.." "..rivers) end
   end
   return previous_show(name,form,body)
 end
@@ -40,6 +43,30 @@ cat "$game/mods/luanttd_core/init.lua" >> "$out/probe.lua"
 cat >> "$out/probe.lua" <<'LUA'
 assert(placement and Sim.W==128 and Sim.H==128 and S.stock_generated_profile.industries)
 assert(core.get_mod_storage():get_string("campaign")=="")
+local terrain_witness
+if core.settings:get_bool("luanttd_qa_normal_river",false) then
+  local count=0
+  local chosen,score
+  for id,t in ipairs(S.tiles) do
+    if t.water_class=="river" then
+      count=count+1
+      local x,z=Sim.xy(id)
+      if x>=12 and x<=Sim.W-12 and z>=12 and z<=Sim.H-12 then
+        local runs=0
+        for dz=-7,7 do for dx=-7,7 do
+          local n=S.tiles[Sim.id(x+dx,z+dz)]
+          if n.water_class=="river" then runs=runs+1 end
+        end end
+        if not score or runs>score then chosen,score=id,runs end
+      end
+    end
+  end
+  local x,z=Sim.xy(assert(chosen))
+  local _,_,top=api.terrain.tile(chosen)
+  terrain_witness={x=x*2+12,y=top+11,z=z*2+12}
+  assert(S.seed==1 and count>=10,"Explicit seed should reach the real standard river generator")
+  core.log("action","WORLD_CREATION_NATIVE_RIVERS "..count)
+end
 local raw_place=render.place_world
 local once
 render.place_world=function(done,notify)
@@ -74,6 +101,16 @@ core.register_globalstep(function()
     if dx*dx+dz*dz>=1 then
       moved=true
       core.log("action",string.format("WORLD_CREATION_STRAFE_PASS %.2f",math.sqrt(dx*dx+dz*dz)))
+      if terrain_witness then
+        core.after(.25,function()
+          local user=core.get_player_by_name("singleplayer")
+          if not user then return end
+          user:set_pos(terrain_witness)
+          user:set_look_horizontal(3*math.pi/4)
+          user:set_look_vertical(.58)
+          core.log("action","WORLD_CREATION_RIVER_VIEW")
+        end)
+      end
     end
   end
 end)
@@ -90,12 +127,15 @@ bayline_seconds_per_day = 8
 bayline_generated_map_width = 128
 bayline_generated_map_depth = 128
 CONF
+if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
+  printf 'luanttd_qa_normal_river = true\nbayline_generated_relief = 2\n' >> "$out/local.conf"
+fi
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   t=$(realpath "$BAYLINE_NATIVE_TOOLS")
   export PATH="$t/run/bin:$t/usr/bin:$PATH" LD_LIBRARY_PATH="$t/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 disp=${BAYLINE_NATIVE_DISPLAY:-190}
-export DISPLAY="127.0.0.1:$disp" HOME="$out/home" XDG_CACHE_HOME="$out/cache" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1
+export DISPLAY="127.0.0.1:$disp" HOME="$out/home" XDG_CACHE_HOME="$out/cache" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 export LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$disp" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
@@ -112,6 +152,21 @@ win=$(xdotool search --sync --limit 1 --onlyvisible --pid "$client" | tail -1)
 xdotool windowfocus --sync "$win"
 sleep .75
 snap options
+if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
+  fresh=$(grep 'WORLD_CREATION_DRAFT ' "$out/client.log" | tail -1 | awk '{print $(NF-1)}')
+  grep -q "WORLD_CREATION_DRAFT $fresh 3" "$out/client.log"
+  [[ $fresh != 1751 ]]
+  xdotool mousemove 713 302 click 1
+  for _ in {1..40}; do [[ $(grep -c 'WORLD_CREATION_DRAFT ' "$out/client.log") -ge 2 ]] && break; sleep .2; done
+  rerolled=$(grep 'WORLD_CREATION_DRAFT ' "$out/client.log" | tail -1 | awk '{print $(NF-1)}')
+  [[ $rerolled != "$fresh" ]]
+  xdotool mousemove 489 686 click 1
+  for _ in {1..40}; do [[ $(grep -c 'WORLD_CREATION_DRAFT ' "$out/client.log") -ge 3 ]] && break; sleep .2; done
+  grep 'WORLD_CREATION_DRAFT ' "$out/client.log" | tail -1 | grep -q "WORLD_CREATION_DRAFT $rerolled 3"
+  xdotool mousemove 530 301 click 1 key ctrl+a type --clearmodifiers '1'
+  sleep .4
+  snap normal-river-options
+fi
 xdotool mousemove 916 686 click 1
 for _ in {1..160}; do
   if grep -q 'generating_world 90' "$out/client.log"; then break; fi
@@ -143,5 +198,13 @@ grep -q WORLD_CREATION_STRAFE_PASS "$out/client.log"
 grep -E 'WORLD_CREATION_(PROGRESS|PLAYABLE|STRAFE_PASS)' "$out/client.log"
 grep -q 'placing_terrain 100' "$out/client.log"
 grep -q WORLD_CREATION_WORKER_READY "$out/client.log"
+if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
+  grep WORLD_CREATION_NATIVE_RIVERS "$out/client.log"
+  waitmark WORLD_CREATION_RIVER_VIEW
+  sleep 5
+  xdotool key F1
+  sleep 1
+  import -window root -quality 91 "$out/normal-river-landscape.jpg"
+fi
 grep -q 'disposable test failure' "$out/client.log"
 ! grep -E 'ERROR\[' "$out/client.log"

@@ -1,6 +1,6 @@
 [OpenTTD world generation]
 # These are defaults for new worlds; singleplayer also offers them when creating a map.
-bayline_seed (World generation seed) int 1751 0 4294967295
+bayline_seed (Optional world generation seed; unset in Luanti for a fresh seed each setup) int 1751 0 4294967295
 bayline_generated_map_size (Legacy square map side length) enum 64 64,128,256,512
 # Pick axes independently (0 inherits the legacy square side). Maps above 262,144 tiles are memory intensive.
 bayline_generated_map_width (Generated playable map width) enum 0 0,64,128,256,512,1024,2048,4096
@@ -10,7 +10,7 @@ bayline_generated_smoothness (Generated landscape smoothness) int 1 0 3
 bayline_generated_coasts (Forced coastal edge mask, 16 random) int 15 0 16
 bayline_generated_variety (Generated regional landscape variety) int 0 0 5
 bayline_generated_sea (Generated landscape sea level) int 0 0 3
-bayline_generated_rivers (Generated rivers: 0 none, 1 few, 2 normal, 3 many) int 0 0 3
+bayline_generated_rivers (Generated rivers: 0 none, 1 few, 2 normal, 3 many) int 2 0 3
 bayline_generated_min_river_length (Generated minimum river length) int 16 2 255
 bayline_generated_towns (Generated town density) int 2 0 3
 bayline_generated_town_layout (Generated town layout) enum original original,better,grid2,grid3,random
