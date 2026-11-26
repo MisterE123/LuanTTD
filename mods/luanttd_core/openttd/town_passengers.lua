@@ -27,6 +27,7 @@ for x=0,15 do
 end
 
 local polynomial={}
+local bxor=bit and bit.bxor
 for i,p in ipairs(feedback) do
   local row={}
   repeat row[#row+1]=p%16;p=floor(p/16) until p==0
@@ -56,13 +57,19 @@ function H.new_clock(log_x,log_y,head,counter)
   return {log_x=log_x,log_y=log_y,head=head,counter=counter}
 end
 
-function H.advance(clock,ticks,visit,before_tick)
+local function advance(clock,ticks,visit,before_tick,initial)
   local bits=clock.log_x+clock.log_y
-  local poly=assert(polynomial[bits-11],"Unsupported stock map size")
+  local mask=assert(feedback[bits-11],"Unsupported stock map size")
+  local poly=polynomial[bits-11]
+  local step=bxor and function(n)
+    local half=floor(n/2)
+    if n%2==0 then return half end
+    return bxor(half,mask)
+  end or function(n) return next_tile(n,poly) end
   local tiles_per_tick=2^(bits-8)
   local tile,time=clock.head,clock.counter
   for _=1,ticks do
-    time=time+1
+    if not initial then time=time+1 end
     if before_tick then before_tick(time) end
     local count=tiles_per_tick
     if time%256==0 then
@@ -71,10 +78,22 @@ function H.advance(clock,ticks,visit,before_tick)
     end
     for _=1,count do
       visit(tile,time)
-      tile=next_tile(tile,poly)
+      tile=step(tile)
     end
+    if initial then time=time+1 end
   end
   clock.head,clock.counter=tile,time
+end
+
+function H.advance(clock,ticks,visit,before_tick)
+  advance(clock,ticks,visit,before_tick,false)
+end
+
+-- OpenTTD 16.0-RC1 genworld.cpp generates a fresh economy without
+-- calling the regular game loop: the global tick increases only
+-- after each pre-game landscape visit, including tick 0's tile 0.
+function H.advance_initial(clock,ticks,visit,before_tick)
+  advance(clock,ticks,visit,before_tick,true)
 end
 
 -- Exact source order, three little-endian bytes per zero-based tile.

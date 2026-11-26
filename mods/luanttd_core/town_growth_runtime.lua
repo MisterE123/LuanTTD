@@ -154,7 +154,7 @@ return function(Sim,Terrain,G,B,H)
     s.changed=s.changed or {}
     s.changed[#s.changed+1]=id
   end
-  function W.advance_house(s,id,h)
+  function W.advance_house(s,id,h,tick)
     if not h or not h.town_growth or h.completed then return false end
     local t=s.stock_town_growth.towns[h.town]
     local stage=h.stage
@@ -168,7 +168,7 @@ return function(Sim,Terrain,G,B,H)
     local suppress=B.advance_house(h,records,H.specs,function(p,population)
       t.population=t.population+population
       s.sites[h.town].population=t.population
-      p.completed_tick=s.passenger_house_clock.counter+1
+      p.completed_tick=tick or s.passenger_house_clock.counter+1
     end)
     if stage~=h.stage then
       if members then for _,part in ipairs(members) do visual_changed(s,part.id) end

@@ -544,14 +544,27 @@ local function coastal_visit(s)
   board.clear_platform=function(id,apply) return M.coastal_clear_rail_platform(s,id,apply) end
   local trees=s.stock_generated_profile and stock_tree_lifecycle
   local random=trees and function() return M.stock_random_u32(s) end
+  local function water(x,z,tick)
+    return coastal_world.visit(s,x+1,z+1,board,tick)
+  end
+  local visit_tree=trees and function(x,z,tick) return trees.visit(s,x,z,tick,random) end
+  local new_tree=trees and function(tick) return trees.global_tick(s,tick,random) end
   return function(x,z,tick)
     local u,v=x+1,z+1
     local rail=s.tiles[M.id(u,v)]
     local was_wet=rail and rail.rail_ground==13
-    coastal_world.visit(s,u,v,board,tick)
+    water(x,z,tick)
     if not was_wet then stock_rail_ground.visit(s,u,v) end
-    if trees and tick then trees.visit(s,u,v,tick,random) end
-  end,trees and function(tick) return trees.global_tick(s,tick,random) end
+    if visit_tree and tick then visit_tree(u,v,tick) end
+  end,new_tree,water,visit_tree
+end
+function M.prepare_initial_landscape(s,growth,Farm,progress)
+  assert(coastal_active(s) and s.passenger_house_clock and s.stock_town_growth)
+  local _,_,water,trees=coastal_visit(s)
+  local initial=dofile(module_root.."initial_landscape_world.lua")(M,
+    dofile(module_root.."openttd/town_passengers.lua"),dofile(module_root.."openttd/town_lift.lua"))
+  return initial.settle(s,growth,Farm,assert(water),assert(trees),
+    function() return M.stock_random_u32(s) end,progress)
 end
 local function coastal_tile_occupied(s,id)
   local extra=coastal_occupied[s]

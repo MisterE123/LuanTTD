@@ -170,6 +170,16 @@ dimensions with much lower memory use. See
 [scenery object generation](scenery-object-worldgen-port.md), and
 [forest generation](tree-worldgen-port.md) for the pinned differential tests.
 
+After generation, the worker runs the Temperate pregame tile loop before
+saving the starting region. The 1,280 ticks visit tiles in the stock order
+from the river-stage cursor, including tile zero's special phase. Town
+frontage, crop stages and fences, shore water, trees and houses settle
+before the first game day. House cargo counts as local production, not
+transported cargo; vehicle and economy ticks have not run. The live
+game continues from the resulting landscape clock and random state.
+The phase is compared against RC1's compiled `RunTileLoop`; that does
+not imply whole-seed RNG identity or stock industry-animation parity.
+
 The scenery object stage places lighthouses from stock coastal searches
 and radio transmitters on suitable flat high ground. They are protected
 unowned landmarks. The default seed has two lighthouses and no antenna;

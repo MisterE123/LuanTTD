@@ -63,6 +63,12 @@ if core.settings:get_bool("luanttd_qa_normal_river",false) then
   end
   if core.settings:get_bool("luanttd_qa_initial_frontage",false) then
     local done=assert(S.stock_generated_profile.frontage)
+    local trace=assert(S.stock_generated_profile.initial_landscape)
+    assert(trace.ticks==1280 and trace.houses>0 and trace.passenger>0 and trace.mail>0 and trace.tree_changes>0)
+    assert(S.passenger_house_clock.counter==1280 and S.passenger_house_clock.head==trace.next_head)
+    assert(trace.start_head==S.stock_generated_profile.river_rng_cursor and S.day==0)
+    core.log("action",("WORLD_CREATION_INITIAL_LANDSCAPE ticks=%d trees=%d tides=%d housing=%d passengers=%d mail=%d"):
+      format(trace.ticks,trace.tree_changes,trace.tide_changes,trace.houses,trace.passenger,trace.mail))
     assert(done.road>0 and done.decorated>0 and done.fields>0 and done.grown>0)
     local paved,lamp
     for id,t in ipairs(S.tiles) do
@@ -101,6 +107,17 @@ core.register_globalstep(function()
       local disk=assert(OwnerCheckpoint.read())
       assert(disk.companies["singleplayer"] and disk.stock_generated_profile.width==128)
       core.log("action","WORLD_CREATION_WORKER_READY")
+      if core.settings:get_bool("luanttd_qa_initial_frontage",false) then
+        local function check_live(retries)
+          assert(retries>0,"Worker did not advance past the pregame clock")
+          if not authority.query({kind="clock"},function(q)
+            if not q or not q.ok or q.day<1 then return core.after(.12,check_live,retries-1) end
+            assert(q.tick==1280+74*q.day,"First gameplay day restarted or repeated pregame ticks")
+            core.log("action",("WORLD_CREATION_PREGAME_RESUMED day=%d clock=%d"):format(q.day,q.tick))
+          end) then core.after(.12,check_live,retries-1) end
+        end
+        core.after(.4,check_live,50)
+      end
     end
     complete=true
     core.log("action","WORLD_CREATION_PLAYABLE "..S.stock_generated_profile.width)
@@ -224,6 +241,9 @@ if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
   sleep 1
   if [[ ${LUANTTD_QA_INITIAL_FRONTAGE:-0} == 1 ]]; then
     grep WORLD_CREATION_INITIAL_FRONTAGE "$out/client.log"
+    grep WORLD_CREATION_INITIAL_LANDSCAPE "$out/client.log"
+    waitmark WORLD_CREATION_PREGAME_RESUMED
+    grep WORLD_CREATION_PREGAME_RESUMED "$out/client.log"
     import -window root -quality 91 "$out/initial-settled-street.jpg"
   else import -window root -quality 91 "$out/normal-river-landscape.jpg"; fi
 fi
