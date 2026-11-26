@@ -192,3 +192,83 @@ do
   end
 end
 print("PASS: paused viewport polls do not save; paid edit, explicit save and shutdown remain durable")
+
+-- Each invocation starts a freshly mounted worker with a deterministic
+-- clock. An autosave occupies the owner while the host's next query arrives.
+local file="mods/luanttd_core/campaign_authority_worker.lua"
+local function scenario(kind,quick)
+  local state={day=4,speed=1}
+  local order,results,now,step={}, {},0,0
+  local channel="luanttd_core:authority:1"
+  local inbox,outbox,cancel=channel..":request",channel..":reply",channel..":cancel"
+  local pending
+  local core={get_modpath=function() return "fixture" end,get_current_modname=function()return "luanttd_core"end,
+    get_us_time=function()return now end}
+  local function record(text) order[#order+1]=text end
+  function core.ipc_get(key)
+    if key==inbox then return pending end
+    if key==cancel then return step==3 end
+  end
+  function core.ipc_poll(key,budget)
+    assert(key==inbox and budget==35);step=step+1
+    if step==1 then now=8000000;return false end
+    if step==2 then
+      pending={seq=1,kind=kind,player="Tester",command={kind="company_open"}}
+      return true
+    end
+    assert(step==3)
+    return false
+  end
+  function core.ipc_set(key,value)
+    if key==inbox then pending=nil end
+    if key==outbox and not value.ready then record("reply");results[#results+1]={value=value,time=now} end
+  end
+  local runtime={day=function() state.day=state.day+1 end,
+    frame=function()end,passengers={frame=function()end,collect=function()end,collect_fares=function()end}}
+  local noop=function()end
+  local mock={
+    campaign_authority_runtime=function()return runtime end,
+    campaign_authority_endpoint=function()
+      local function observed() return {ok=true,day=state.day} end
+      return {actor_frames=observed,snapshots=observed,
+        command=function()
+          record("command")
+          state.authority_revision=1
+          return {ok=true,revision=1,day=state.day}
+        end}
+    end,
+    campaign_checkpoint=function()
+      return {read=function()return state end,write_state=function()
+        record("save");now=now+(quick and 30000 or 1200000)
+      end}
+    end,
+    packed_campaign={},
+    campaign_solar_clock={sample_interval=.1,new=function()return function()return {} end end},
+    campaign_step={new=function(_,_,hooks)
+      return {step=function(dt)
+        record("advance");hooks.advance();now=now+(quick and 20000 or 800000)
+        return 0.4,1,false
+      end}
+    end},
+    sim={rail_paid_motion_events=noop,rail_coal_loading_events=noop,rail_goods_loading_events=noop,
+      rail_oil_loading_events=noop,air_paid_motion_events=noop}
+  }
+  local env=setmetatable({core=core,dofile=function(p) return assert(mock[p:match("([^/]+)%.lua$")]) end},{__index=_G})
+  setfenv(assert(loadfile(file)),env)()
+  local ended,seq=core.luanttd_own_campaign("fixture",channel,{autoplay=true,durable_actions=true})
+  assert(ended=="cancelled" and seq==1 and state.day==6 and #results==1)
+  return table.concat(order,","),results[1]
+end
+local sequence,actor=scenario("actor_frames")
+assert(sequence=="advance,save,reply,advance,save",sequence)
+assert(actor.time==10000000 and actor.value.day==5)
+local sequence,sector=scenario("snapshots")
+assert(sequence=="advance,save,reply,advance,save",sequence)
+assert(sector.time==actor.time and sector.value.day==actor.value.day)
+local sequence,paid=scenario("command")
+assert(sequence=="advance,save,advance,command,save,reply,save",sequence)
+assert(paid.time==12000000 and paid.value.day==6 and paid.value.revision==1)
+local sequence,fast=scenario("actor_frames",true)
+assert(sequence=="advance,save,advance,reply,save",sequence)
+assert(fast.time==8070000 and fast.value.day==6)
+print("PASS after long save: viewport replies before catch-up, durable commands still advance and save first")

@@ -492,3 +492,21 @@ fixtures, and both versions reopened the resulting file. Unit tests
 check repeated keys and references crossing the one-, two-, and
 three-byte boundaries. This measures packing only, not disk time or
 the observer's frame rate.
+
+### Return a waiting view before catching up after a slow worker turn
+
+When a view request has waited through a long owner turn, the worker
+returns the last completed view before it starts another full game day.
+This avoids adding a second delay immediately after, for example, a
+synchronous autosave. It does not move simulation work to the host or
+skip any stock ticks. Normal short turns, commands, and the durability
+of edits are unchanged.
+
+On two pairs of ordinary Luanti sessions at 1× on the same generated
+1024×1024 world, the longest of each run's observed viewport replies
+dropped from **2.04–2.20 s to 1.34–1.75 s**. All four runs advanced the
+same number of logical days and ticks. Typical replies still took
+about 25 ms, and the 95th percentile varied between runs. This is a
+tail-latency safeguard, not a simulation CPU gain or a renderer test.
+The owner-loop regression covers the same save-plus-day sequence with
+a deterministic clock, including fast views and durable edits.

@@ -69,6 +69,8 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   -- The first periodic checkpoint still saves mount-time normalization.
   local dirty=true
   local presentation_only={snapshots=true,actor_frames=true,clock=true}
+  local live_view={snapshots=true,actor_frames=true}
+  local long_turn_us=150000 -- longer than a normal mailbox poll and host frame
   local function advance(dt)
     if (s.speed or 0)>0 then dirty=true end
     local days
@@ -88,6 +90,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     local available=core.ipc_poll(inbox,auto and (overdue and 1 or 35) or 650)
     local now=core.get_us_time()
     if core.ipc_get(channel..":cancel") then break end
+    local q=available and assert(core.ipc_get(inbox))
     local deferred
     if auto then
       local dt=(now-prior)/1000000
@@ -96,12 +99,18 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       runtime.passengers.frame(dt)
       -- Already at a completed day with more overdue work. Reply from
       -- this stable boundary before starting the next full batch.
-      if available and overdue then deferred=dt else advance(dt) end
+      -- A complete autosave or slow game day can put a view request
+      -- behind another full day even if the previous turn wasn't
+      -- overdue. Deliver the last complete view before catching up.
+      -- Never skip or reorder a simulation tick or a paid edit.
+      local late_view=q and q.seq==seq+1 and now-prior>=long_turn_us and live_view[q.kind]
+      if q and (overdue or late_view) then
+        deferred=dt
+      else advance(dt) end
     end
     prior=now
-    if available then
+    if q then
       heartbeat=now
-      local q=assert(core.ipc_get(inbox))
       core.ipc_set(inbox,nil)
       local r
       if q.seq~=seq+1 then
