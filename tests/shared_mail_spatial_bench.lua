@@ -19,13 +19,22 @@ core.after(0,function()
       tiles=tiles,town=i%25+1,stock={}}
   end
   local fixture=codec.encode(w)
+  local warmed=core.settings:get_bool("luanttd_mail_bench_warm",false)
+  local function collect()
+    -- A weak-key cache can free a dead fixture's values on the second
+    -- full collection. Don't count that unrelated heap in the next day.
+    collectgarbage("collect")
+    collectgarbage("collect")
+  end
   local function run(M)
     local st=codec.decode(fixture)
-    collectgarbage("collect")
+    local opts=warmed and {immutable_footprints=true} or nil
+    if warmed then M.shared_allocator(C,side,side,st,opts) end
+    collect()
     local heap,t=collectgarbage("count"),core.get_us_time()
-    local a=M.shared_allocator(C,side,side,st)
+    local a=M.shared_allocator(C,side,side,st,opts)
     local elapsed=(core.get_us_time()-t)/1000
-    collectgarbage("collect")
+    collect()
     local grown=collectgarbage("count")-heap
     for _,stop in ipairs(st) do
       a.loading(stop.id,stop.mode,120,1989,1984,20)

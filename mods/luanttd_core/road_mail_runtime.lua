@@ -191,6 +191,25 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     return allocate(amount,record,list,record.source_type)
   end
 
+  -- The adapter publishes a new physical tile list when player
+  -- construction changes a station. Only live daily contexts use that
+  -- identity contract; external/test adapters with mutable lists do
+  -- not automatically reuse their footprint.
+  local mail_geometry=setmetatable({},{__mode="k"})
+  local function mail_region(Catchment,st,width,depth,tiles,opts)
+    local source=tiles or st.tiles
+    local modified=opts and opts.modified
+    local cache=opts and opts.immutable_footprints
+    local entry=cache and mail_geometry[st]
+    if entry and entry.source==source and entry.rules==Catchment and entry.id==st.id and
+        entry.region.width==width and entry.region.height==depth and entry.modified==modified then return entry.region end
+    local region=Catchment.build(tiles and {id=st.id,tiles=tiles} or st,width,depth,modified)
+    if cache then
+      mail_geometry[st]={source=source,rules=Catchment,id=st.id,modified=modified,region=region}
+    end
+    return region
+  end
+
   -- The stock StationFinder sees one sorted station set for one house
   -- emission. Do not dispatch beside from_house: the two eligible modes
   -- must compete in this single MoveGoodsToStation call.
@@ -200,7 +219,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     for _,st in ipairs(physical) do
       assert(not by_id[st.id],"Duplicate physical mail station")
       local tiles=options and options.tiles and options.tiles(st)
-      local region=Catchment.build(tiles and {id=st.id,tiles=tiles} or st,width,depth,options and options.modified)
+      local region=mail_region(Catchment,st,width,depth,tiles,options)
       by_id[st.id]={st=st,region=region}
       stations[#stations+1]=by_id[st.id]
     end

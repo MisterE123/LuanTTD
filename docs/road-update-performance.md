@@ -281,3 +281,24 @@ and did not pay twice after restart.
 tests/passenger_supply_spatial_bench_native.sh "$(command -v luantiserver)" \
   /tmp/luanttd-shared-mail --shared-mail 3fc99ab57e1c219d8d60f71dc327d2d0e262163d
 ```
+
+### Keep existing mail footprints between days
+
+The ordinary commercial simulator now reuses the exact footprint data
+when a station retains the same physical tile list, catchment setting
+and map dimensions. Construction publishes a new list and triggers
+a rebuild. Ratings, ownership decisions and cargo are still evaluated
+live and are not in this cache.
+
+On the same 512-station network, with geometry already loaded,
+daily allocator construction measured **13.2 → 1.0 ms** and
+**12.3 → 0.9 ms**. Each daily allocator added about **0.22 MiB** of
+heap rather than 5.1 MiB. The original footprint geometry is still
+retained; 0.22 MiB is the extra daily allocation, not total memory.
+The same 3,000 house events produced identical mail queues.
+
+```sh
+LUANTTD_MAIL_BENCH_WARM=1 \
+tests/passenger_supply_spatial_bench_native.sh "$(command -v luantiserver)" \
+  /tmp/luanttd-shared-mail-warm --shared-mail 49ef93d62a923d19bd8abb62f59ceb94e8736d12
+```

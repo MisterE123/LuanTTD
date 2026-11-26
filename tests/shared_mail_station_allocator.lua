@@ -60,3 +60,20 @@ do
   assert(units>0 and #joined.stock.mail==1 and Mail.waiting(joined)==units)
 end
 print("PASS shared mail ignores catchment gaps and does not duplicate a station across sectors")
+
+-- Published footprints are immutable until the station changes. Reuse
+-- on an ordinary new day, but never after a real replacement or radius
+-- change.
+do
+  local station=stop(0x4004,"rail",8,8,2)
+  local cfg={immutable_footprints=true}
+  local before=Mail.shared_allocator(Catchment,64,64,{station},cfg)
+  local warm=Mail.shared_allocator(Catchment,64,64,{station},cfg)
+  assert(before.near(station.id,7,8) and warm.near(station.id,7,8))
+  station.tiles={{x=23,y=8,kind="airport_intercontinental"}}
+  local moved=Mail.shared_allocator(Catchment,64,64,{station},cfg)
+  assert(not moved.near(station.id,7,8) and moved.near(station.id,15,8))
+  local compact=Mail.shared_allocator(Catchment,64,64,{station},{immutable_footprints=true,modified=false})
+  assert(not compact.near(station.id,15,8) and compact.near(station.id,20,8))
+end
+print("PASS stable mail footprints rebuild after a physical edit or catchment setting change")

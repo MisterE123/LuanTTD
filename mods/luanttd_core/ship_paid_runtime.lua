@@ -388,7 +388,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local allocator=Mail.shared_allocator(Catchment,ctx.width,ctx.height,physical,{
         select_goods=ctx.select_goods,neutral_owner=ctx.neutral_owner,town_rights=rights,
         station_town=function(st) return st.town or st.site end,
-        modified=s.stock_modified_catchment,tiles=function(st)
+        modified=s.stock_modified_catchment,immutable_footprints=true,tiles=function(st)
           if Mail.truck_stop(st) then return Sim.road_stop_tiles(st) end
           return st.tiles
         end})

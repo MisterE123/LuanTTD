@@ -28,6 +28,9 @@ else
 fi
 echo 'gameid = spatialbench' > "$out/world/world.mt"
 printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\n' "${BAYLINE_NATIVE_PORT:-44108}" > "$out/conf"
+if [[ ${LUANTTD_MAIL_BENCH_WARM:-0} == 1 ]]; then
+  echo 'luanttd_mail_bench_warm = true' >> "$out/conf"
+fi
 export HOME="$out/home" MINETEST_GAME_PATH="$out/games" LUANTI_GAME_PATH="$out/games"
 timeout 70 "$server" --world "$out/world" --config "$out/conf" --gameid spatialbench --logfile '' >"$out/log" 2>&1 ||
   { tail -50 "$out/log";exit 1; }
