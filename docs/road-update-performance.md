@@ -302,3 +302,33 @@ LUANTTD_MAIL_BENCH_WARM=1 \
 tests/passenger_supply_spatial_bench_native.sh "$(command -v luantiserver)" \
   /tmp/luanttd-shared-mail-warm --shared-mail 49ef93d62a923d19bd8abb62f59ceb94e8736d12
 ```
+
+### Keep the worker mailbox responsive while catching up
+
+At 4× speed on a large world, a slow day or an autosave can leave multiple
+game days due. The native owner used to run up to twelve complete days
+before returning to its mailbox. The owner now gives any waiting request
+a turn at the next complete-day boundary before starting more overdue
+work. It still advances the stock day in source order, preserves the
+existing elapsed-time budget, and saves a durable action before its
+receipt. Manual stepping is unchanged.
+
+On Luanti 5.15.2, two native replays of the same generated 1024×1024 save at
+4× speed included ordinary view requests, autosaves and one durable
+company creation. The longest observed viewport replies were **26.36–37.00
+seconds** before and **5.33–5.69 seconds** after. The revised worker's
+median was **0.91–0.98 seconds**; the old worker returned only five view
+samples per run under saturation, so its percentiles are not a stable
+comparison. The durable action took **34.74–35.77 → 4.83–5.54 seconds**.
+This improves request scheduling, not the CPU cost of a game day or
+checkpoint, and is not a frame-rate measurement. A single heavy day or
+save can still delay a reply.
+
+The native harness works on a copy of a stock generated campaign and
+does not write to the input checkpoint. On a slower host, increase
+`LUANTTD_BENCH_TIMEOUT` (seconds) to allow the old worker to return.
+
+```sh
+tests/campaign_worker_fairness_native.sh "$(command -v luantiserver)" \
+  958fb7ac923aa5c8f098b8063031494c50257fa9 /path/to/luanttd-campaign-owner.chk /tmp/luanttd-fairness
+```

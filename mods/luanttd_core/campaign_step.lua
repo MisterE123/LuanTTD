@@ -7,6 +7,8 @@ function M.new(s,interval,hooks)
   assert(interval>0 and hooks.advance and hooks.refresh)
   local U={}
   local persistent=hooks.persist_fraction
+  local day_budget=hooks.day_budget or 12
+  assert(day_budget>=1 and day_budget==math.floor(day_budget))
   local speed_before=s.speed
   local elapsed=persistent and (s.campaign_day_fraction or 0)*interval/math.max(1,speed_before or 0) or 0
   local function remember(step)
@@ -42,13 +44,13 @@ function M.new(s,interval,hooks)
     end
     if not online and not headless or speed<=0 then
       if not persistent then elapsed=0 end
-      return 1,0
+      return 1,0,false
     end
     if hooks.prepare then hooks.prepare(s) end
     elapsed=min(elapsed+dt,5*interval)
     local step=interval/speed
     local n=0
-    while elapsed>=step and n<12 do
+    while elapsed>=step and n<day_budget do
       local plan
       if hooks.take then
         local ready,result=hooks.take(s)
@@ -66,7 +68,7 @@ function M.new(s,interval,hooks)
       end
       if not online and hooks.discard_effects then hooks.discard_effects() end
     end
-    return remember(step),n
+    return remember(step),n,n==day_budget and elapsed>=step
   end
   return U
 end

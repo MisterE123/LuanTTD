@@ -22,6 +22,10 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     assert(type(interval)=="number" and interval>=.05 and interval<=15,"invalid worker day interval")
     auto=dofile(mod.."/campaign_step.lua").new(s,interval,{
       persist_fraction=true,
+      -- Slow maps and checkpoints may leave several full days queued.
+      -- Give the host a chance to observe or edit the world between
+      -- complete days, rather than blocking through the entire backlog.
+      day_budget=1,
       advance=function()
         runtime.day()
         -- Until the UI subscribes to notifications, do not retain
@@ -61,6 +65,11 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   end
   core.ipc_set(outbox,{seq=seq,ready=true,day=s.day,revision=s.authority_revision or 0})
   local heartbeat,last_saved=prior,prior
+  local fraction,overdue=nil,false
+  local function advance(dt)
+    local days
+    fraction,days,overdue=auto.step(dt,true,true)
+  end
   local function checkpoint()
     storage.write_state(s)
     last_saved=core.get_us_time()
@@ -71,15 +80,17 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   -- subscription. Only the explicit shutdown/cancel ends that ownership.
   -- Keep the short fail-safe solely for finite, manual test jobs.
   while (auto or prior-heartbeat<6500000) and not core.ipc_get(channel..":cancel") do
-    local available=core.ipc_poll(inbox,auto and 35 or 650)
+    local available=core.ipc_poll(inbox,auto and (overdue and 1 or 35) or 650)
     local now=core.get_us_time()
     if core.ipc_get(channel..":cancel") then break end
-    local fraction
+    local deferred
     if auto then
       local dt=(now-prior)/1000000
       runtime.frame(dt)
       runtime.passengers.frame(dt)
-      fraction=auto.step(dt,true,true)
+      -- Already at a completed day with more overdue work. Reply from
+      -- this stable boundary before starting the next full batch.
+      if available and overdue then deferred=dt else advance(dt) end
     end
     prior=now
     if available then
@@ -146,6 +157,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       r.seq=q.seq
       core.ipc_set(outbox,r)
     end
+    if deferred then advance(deferred) end
     if publish then publish(now) end
     if auto and now-last_saved>=8000000 then checkpoint() end
   end

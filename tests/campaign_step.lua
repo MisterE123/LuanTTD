@@ -31,3 +31,91 @@ world.speed=4
 f,n=run.step(600,false,true)
 assert(n==12 and world.day==16 and captures==1 and effects==15)
 print("PASS: exact one campaign clock, opt-in headless ticks, bounded serializable dirty IDs, fresh view flush and paused-time discard")
+
+-- The native owner gets an inbox turn between overdue days. The smaller
+-- slice changes latency, not the total number of days that come due.
+do
+  local s={day=0,speed=4,campaign_day_fraction=.5}
+  local run=M.new(s,1,{persist_fraction=true,day_budget=1,
+    advance=function(w) w.day=w.day+1 end,refresh=function() error("Unexpected terrain edit") end})
+  local f,n,overdue=run.step(.75,true,true)
+  assert(f==1 and n==1 and overdue and s.day==1)
+  f,n,overdue=run.step(0,true,true)
+  assert(f==1 and n==1 and overdue and s.day==2)
+  f,n,overdue=run.step(0,true,true)
+  assert(f==.5 and n==1 and not overdue and s.day==3)
+  f,n,overdue=run.step(0,true,true)
+  assert(f==.5 and n==0 and not overdue and s.day==3)
+  s.speed=0; f,n,overdue=run.step(60,true,true)
+  assert(f==1 and n==0 and not overdue and s.campaign_day_fraction==.5)
+  s.speed=2; f,n,overdue=run.step(.25,true,true)
+  assert(f==0 and n==1 and not overdue and s.day==4)
+end
+print("PASS: mailbox catch-up quantum preserves elapsed days, pause and saved interpolation")
+
+-- Exercise the real owner loop without relying on a particular CPU
+-- speed. At the first poll, exactly three whole game days become due.
+do
+  local s,ipc,events={speed=4,day=0,authority_revision=0},{},{}
+  local mod="mods/luanttd_core"
+  local prefix="luanttd_core:authority:1"
+  local now,polls=0,0
+  local old_core,load=core,dofile
+  local function add(value) events[#events+1]=value end
+  core={
+    get_modpath=function() return mod end,
+    get_current_modname=function() return "luanttd_core" end,
+    get_us_time=function() return now end,
+    ipc_get=function(k) return ipc[k] end,
+    ipc_set=function(k,v)
+      ipc[k]=v
+      if k==prefix..":reply" and v and v.seq>0 then add("reply"..v.seq..":"..s.day) end
+    end,
+    ipc_poll=function(k,wait)
+      polls=polls+1
+      assert(wait==(polls==1 and 35 or polls==4 and 35 or 1))
+      if polls==1 then now=750000;return false end
+      if polls==2 then ipc[k]={seq=1,kind="actor_frames"};return true end
+      if polls==3 then ipc[k]={seq=2,kind="command",player="tester",command={kind="edit"}};return true end
+      assert(polls==4)
+      ipc[prefix..":cancel"]=true
+      return false
+    end,
+  }
+  local noop=function() end
+  local sim=setmetatable({},{__index=function() return function() return {} end end})
+  local modules={
+    ["/campaign_authority_runtime.lua"]=function()
+      return {day=function() s.day=s.day+1;add("day"..s.day) end,frame=noop,
+        passengers={frame=noop,collect=noop,collect_fares=noop}}
+    end,
+    ["/campaign_authority_endpoint.lua"]=function()
+      return {
+        actor_frames=function(_,fraction) assert(fraction==1);return {ok=true} end,
+        command=function() s.authority_revision=1;add("edit:"..s.day);return {ok=true,revision=1} end,
+      }
+    end,
+    ["/campaign_checkpoint.lua"]=function()
+      return {read=function() return s end,write_state=function() add("save:"..s.day) end}
+    end,
+    ["/packed_campaign.lua"]={},
+    ["/sim.lua"]=sim,
+    ["/campaign_solar_clock.lua"]={sample_interval=.1,new=function() return function() return {} end end},
+  }
+  dofile=function(path)
+    if path:sub(1,#mod)==mod then
+      local override=modules[path:sub(#mod+1)]
+      if override then return override end
+    end
+    return load(path)
+  end
+  local ok,why=pcall(function()
+    load(mod.."/campaign_authority_worker.lua")
+    local why,seq,day=core.luanttd_own_campaign("ignored",prefix,{autoplay=true,seconds_per_day=1,durable_actions=true})
+    assert(why=="cancelled" and seq==2 and day==3)
+    assert(table.concat(events,",")=="day1,reply1:1,day2,edit:2,save:2,reply2:2,day3,save:3")
+  end)
+  core,dofile=old_core,load
+  assert(ok,why)
+end
+print("PASS: native owner replies and saves deliberately queued actions between full catch-up days")

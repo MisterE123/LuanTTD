@@ -63,3 +63,6 @@ parked.step(1.2,{},{})
 parked.step(1.0,{},{})
 assert(clock[session.."request"].kind=="clock","empty world must renew the lease without sending terrain")
 print("PASS host keeps its simulation lease with no viewers and no terrain traffic")
+
+-- Run the deterministic worker clock and mailbox order checks in this suite.
+dofile("tests/campaign_step.lua")
