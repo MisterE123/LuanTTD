@@ -170,3 +170,30 @@ The decoded campaigns matched at the same logical day on both map sizes,
 apart from the elapsed real-time fraction. Large checkpoint encoding still
 takes over a second on 1024²; the shortcut does not reduce that cost or
 guarantee an improvement in the worst individual day's time.
+
+## Compact checkpoints for stock woodland
+
+On the profiled generated 1024² world, 142,415 tiles held stock trees.
+Their height, terrain, variant and six small wood fields can be written
+with a compact record instead of repeatedly spelling the generic fields
+and graph tags. Both tile and tree retain their own table IDs. The
+generic path is still used for unfamiliar fields, nonstandard values or
+a woodland table seen before its tile. The new reader still opens earlier
+checkpoints; an earlier binary does not understand the new woodland tag.
+
+In two sets of paired native tests against `349badc`, the generated
+1024² checkpoint encoded in **1,290 → 1,189 ms** and **1,501 → 1,196 ms**.
+Raw data shrank by about 21%, and the stored compressed checkpoint by
+13–15%. A native world reopened a compact checkpoint, advanced two
+days with the ordinary simulation worker, and checkpointed again. The
+profiled 1024² scene had towns and industry but no player vehicles.
+
+```sh
+tests/campaign_checkpoint_perf_native.sh "$(command -v luantiserver)" \
+  349badcaf95bc7befa0f9db4032695d4a8027282 \
+  /tmp/copied-generated-checkpoint.chk /tmp/luanttd-woodland-bench --equivalent
+```
+
+The `--equivalent` mode checks values and shared references after save
+and reload rather than requiring the optimized file to have the same
+bytes. Always benchmark a disposable copy, not an open world.

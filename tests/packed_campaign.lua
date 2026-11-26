@@ -56,3 +56,28 @@ print("PASS packed integer fragment cache retains exact existing checkpoint byte
 
 -- Exercise graph aliases using a real paid and routed stock fleet.
 dofile("tests/road_route_geometry_cache.lua")
+
+-- Stock woodland has two adjacent table IDs in the compact form.
+local w={class=4,type=3,count=1,ground=0,density=3,growth=6}
+local shore={class=4,type=4,count=2,ground=3,density=3,growth=0,water_class="sea"}
+local odd={class=4,type=4,count=2,ground=3,density=3,growth=0,water_class="river",extra={1}}
+local first={h=16,terrain="hill",variant=2,wood=w}
+local second={h=0,terrain="water",variant=0,water_class="sea",wood=shore,coastal_water=true}
+local third={h=0,terrain="water",variant=0,water_class="sea",wood=odd,coastal_water=true}
+local t={tiles={first,second,third,first,{h=1,terrain="grass",variant=2,wood=w}}}
+t.tiles[0]=shore
+t.tiles[shore]=first
+odd.cycle=t
+local enc=P.encode(t);assert(enc:find(string.char(13,16,9,0,0,0,4,3,1,0,3,6,0),1,true))
+local function check(new)
+  assert(new.tiles[1]==new.tiles[4])
+  assert(new.tiles[1].wood==new.tiles[5].wood and new.tiles[2].wood==new.tiles[0])
+  assert(new.tiles[new.tiles[2].wood]==new.tiles[1])
+  assert(new.tiles[2].wood.water_class=="sea" and new.tiles[3].wood.water_class=="river")
+  assert(new.tiles[3].wood.cycle==new and new.tiles[3].wood.extra[1]==1)
+end
+check(P.decode(enc))
+local prelinked={w,tiles={first}}
+local new=P.decode(P.encode(prelinked))
+assert(new[1]==new.tiles[1].wood)
+print("PASS compact woodland keeps nested graph IDs, restored sea-ground, aliases, unsupported fields")

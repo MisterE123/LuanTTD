@@ -18,19 +18,21 @@ local short_uint={}
 for n=0,8191 do
   short_uint[n]=n<128 and char(UINT,n) or char(UINT,128+n%128,floor(n/128))
 end
+local WOODED_TILE=13
 local terrains={"grass","hill","water"}
 local terrain_codes={grass=1,hill=2,water=3}
 local waters={"sea","river"}
 local water_codes={sea=1,river=2}
 local tile_fields={h=true,variant=true,terrain=true,water_class=true,stock_void=true,coastal_water=true,
-  stock_clear_ground=true,stock_river_bits=true,stock_water_rocks=true}
+  stock_clear_ground=true,stock_river_bits=true,stock_water_rocks=true,wood=true}
+local wood_fields={class=true,type=true,count=true,ground=true,density=true,growth=true,water_class=true}
 local function tiny_int(n,high)
   return type(n)=="number" and n>=0 and n<=high and n==floor(n)
 end
 -- Most cells are unimproved land/water. Skip only keys whose exact
 -- representation fits this layout; every amended cell still uses the
 -- general graph encoder. Fixed bytes reduce per-save GC pressure.
-local function tile_bytes(t)
+local function tile_bytes(t,tables)
   local h,v,g,w=t.h,t.variant,terrain_codes[t.terrain],t.water_class
   if not (g and tiny_int(h,255) and tiny_int(v,3)) or w~=nil and not water_codes[w] then return end
   local c,r=t.stock_clear_ground,t.stock_river_bits
@@ -40,6 +42,17 @@ local function tile_bytes(t)
   for k in next,t do if not tile_fields[k] then return end end
   local flags=g-1+4*v+16*(water_codes[w] or 0)+64*(a and 1 or 0)+128*(b and 1 or 0)
   local presence=(c~=nil and 1 or 0)+(r~=nil and 2 or 0)+(k and 4 or 0)
+  local wood=t.wood
+  if wood~=nil then
+    if type(wood)~="table" or tables[wood] then return end
+    local class,kind,count=wood.class,wood.type,wood.count
+    local ground,density,growth,salt=wood.ground,wood.density,wood.growth,wood.water_class
+    if not (tiny_int(class,255) and tiny_int(kind,255) and tiny_int(count,255)
+      and tiny_int(ground,255) and tiny_int(density,255) and tiny_int(growth,255))
+      or salt~=nil and salt~="sea" then return end
+    for key in next,wood do if not wood_fields[key] then return end end
+    return char(WOODED_TILE,h,flags,presence,c or 0,r or 0,class,kind,count,ground,density,growth,salt and 1 or 0),wood
+  end
   return char(TILE,h,flags,presence,c or 0,r or 0)
 end
 
@@ -90,9 +103,11 @@ function M.encode(root,pulse)
           for i=1,n do
             if pulse and i%8192==0 then pulse() end
             local t=rawget(value,i)
-            local fixed=type(t)=="table" and not tables[t] and tile_bytes(t)
+            local fixed,wood
+            if type(t)=="table" and not tables[t] then fixed,wood=tile_bytes(t,tables) end
             if fixed then
               table_count=table_count+1;tables[t]=table_count
+              if wood then table_count=table_count+1;tables[wood]=table_count end
               put(fixed)
             else write(t) end
           end
@@ -187,7 +202,7 @@ function M.decode(source)
         assert(value~=nil,"Packed campaign contains a nil table value")
         t[key]=value
       end
-    elseif tag==TILE then
+    elseif tag==TILE or tag==WOODED_TILE then
       local h,flags,presence,c,r=byte(source,at,at+4)
       assert(r and presence<=7,"Invalid packed campaign ground")
       at=at+5
@@ -200,6 +215,14 @@ function M.decode(source)
       if floor(presence/2)%2==1 then t.stock_river_bits=r end
       if presence>=4 then t.stock_water_rocks=true end
       tables[#tables+1]=t
+      if tag==WOODED_TILE then
+        local c,k,n,g,d,v,salt=byte(source,at,at+6)
+        assert(salt and salt<=1,"Invalid packed woodland")
+        at=at+7
+        local wood={class=c,type=k,count=n,ground=g,density=d,growth=v,water_class=salt==1 and "sea" or nil}
+        t.wood=wood
+        tables[#tables+1]=wood
+      end
       return t
     elseif tag==STR then
       local value=str()
