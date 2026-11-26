@@ -13,6 +13,9 @@ core.after(0,function()
     local function run(b)
       -- Sample production daily stepping inside Luanti's async VM. This
       -- timer excludes world setup, full parity checks, and async IPC.
+      -- Collect before each run so reclamation from the other comparison
+      -- world does not randomly land in a measured step.
+      collectgarbage("collect")
       local t,c=core.get_us_time(),os.clock()
       b.sim.daily(b.world)
       return (core.get_us_time()-t)/1000,(os.clock()-c)*1000
@@ -27,12 +30,12 @@ core.after(0,function()
       results[i]={a=a,b=b,ac=ac,bc=bc,shown=shown,moving=moving,arrived=arrived}
     end
     -- Untimed copies use the same two versions with a single counter in
-    -- Sim's actual road-height resolver, not an estimate based on a mock.
+    -- Sim's actual road-surface resolver, not an estimate based on a mock.
     local old=F.backend(s,dofile(m.."/profile_baseline_sim.lua"))
     local new=F.backend(s,dofile(m.."/profile_current_sim.lua"))
     for _=1,4 do old.sim.daily(old.world);new.sim.daily(new.world) end
     F.check({old,new})
-    results.calls={old=old.sim.perf_road_height_calls,new=new.sim.perf_road_height_calls}
+    results.calls={old=old.sim.perf_road_shape_calls,new=new.sim.perf_road_shape_calls}
     assert(results.calls.new<results.calls.old)
     return results
   end,function(results)
@@ -46,7 +49,7 @@ core.after(0,function()
     for _,sample in ipairs({a,b,ac,bc}) do table.sort(sample) end
     core.log("action",("NATIVE ROAD FLEET BENCH MEDIAN baseline_ms=%.3f optimized_ms=%.3f baseline_cpu_ms=%.3f optimized_cpu_ms=%.3f"):format(
       (a[5]+a[6])/2,(b[5]+b[6])/2,(ac[5]+ac[6])/2,(bc[5]+bc[6])/2))
-    core.log("action",("NATIVE ROAD FLEET BENCH GRADE_CALLS four_days baseline=%d optimized=%d"):format(
+    core.log("action",("NATIVE ROAD FLEET BENCH SURFACE_BUILDS four_days baseline=%d optimized=%d"):format(
       results.calls.old,results.calls.new))
     core.request_shutdown("Native road fleet comparison complete",false,0)
   end))

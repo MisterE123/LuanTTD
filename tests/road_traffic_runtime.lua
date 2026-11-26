@@ -99,3 +99,52 @@ do
   assert(W.find(a,{},11,25,5)==b,"seven pixels away in the adjacent tile")
 end
 print("PASS: shared stock portal buckets, physical-vs-logical positions, unrelated-span separation, full RC1 proximity window")
+
+-- The temporary neighbor array must not leak records from an earlier
+-- query or retain a vehicle that moved between signed spatial cells.
+do
+  local W=U.traffic_world(S)
+  local a,b,c=moving(1),moving(2),moving(3)
+  W.put(a,{-8,25,5,100,1})
+  W.put(b,{-2,25,5,101,1})
+  W.put(c,{5,25,5,102,1})
+  local clock={}
+  assert(W.find(a,clock,-8,25,5)==b and clock.blocked_ctr==1)
+  W.put(b,{16,25,5,103,1})
+  assert(not W.find(a,clock,-8,25,5) and clock.blocked_ctr==0)
+  assert(W.find(c,clock,11,25,5)==b and clock.blocked_ctr==1)
+  W.erase(b);W.put(b,{14,25,5,103,1})
+  assert(W.find(c,clock,11,25,5)==b and clock.blocked_ctr==2)
+  assert(not W.find(c,{reverse_ctr=1,blocked_ctr=30},11,25,5))
+end
+
+-- Actual stock height query: a live tick can reuse one surface without
+-- losing sub-tile inclination. A fresh tick sees new ground, and spans
+-- never substitute a previously cached terrain or deck height.
+do
+  local Sim=dofile(root.."sim.lua")
+  local Terrain=dofile(root.."openttd/terrain.lua")
+  Sim.W,Sim.H=8,8
+  local s={tiles={},stock_road_bridges={},stock_road_tunnels={}}
+  local id=Sim.id(4,4)
+  s.tiles[id]={build="road",road_bits=10,h=2}
+  s.corner_grid=Terrain.new(8,8,function(x) return x>=5 and 3 or 2 end)
+  local height=Sim.stock_road_frame_z
+  local frames={{64,67,5,id},{76,67,5,id},{70,67,5,id}}
+  local old={}
+  for _,f in ipairs(frames) do assert(height(s,f,old)==height(s,f)) end
+  assert(type(old[id])=="table" and height(s,frames[1])~=height(s,frames[2]))
+  s.corner_grid=Terrain.new(8,8,function() return 7 end)
+  local fresh={}
+  assert(height(s,frames[1],fresh)==56 and height(s,frames[2],fresh)==56)
+  assert(fresh[id]==56,"flat ordinary road stored once per scope")
+  s.stock_road_bridges[1]={deck=9,middle_by_tile={[id]=true}}
+  local bridge={64,67,5,id,[10]=1}
+  assert(height(s,bridge,fresh)==72)
+  s.stock_road_bridges[1].deck=11
+  assert(height(s,bridge,fresh)==88)
+  s.stock_road_tunnels[1]={base=4}
+  assert(height(s,{64,67,5,id,[14]=1},fresh)==32)
+  assert(height(s,frames[1],fresh)==56)
+end
+print("PASS signed occupancy cells and scratch reuse; exact intra-tick grade, fresh terrain, and live span elevations")

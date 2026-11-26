@@ -43,26 +43,35 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
   end
   -- RC1 queries within ±8 pixels, using the logical tile hash. While
   -- inside a bridge or tunnel, query only its two logical portals.
-  local function world(s)
+  -- A legal world is at most 4,096 tiles per axis, including a
+  -- small signed margin for radius checks/near-edge pixel poses. Keep
+  -- a power-of-two stride well beyond that range, with exact Lua numbers.
+  local stride=131072
+  local function world(s,stable_surface)
     local buckets,bay,by_tile,wormholes,exposed={},{},{},{},0
     local W={}
-    local function at(x,y) return x..":"..y end
-    local function bin(x,y) return at(floor(x/16),floor(y/16)) end
+    local heights=stable_surface and {}
+    local empty={}
+    local nearby={}
+    -- This table belongs to one movement tick, after landscape and
+    -- station callbacks. No height survives a later world mutation.
+    function W.height(_,frame) return road_z(s,frame,heights) end
     function W.put(record,f,opposite,z)
       opposite=not not opposite
       if opposite~=not not record.opposite_lane then exposed=exposed+(opposite and 1 or -1) end
       record.opposite_lane=opposite
       record.frame=f
-      local old=record.bucket
-      local k=bin(f[1],f[2])
-      if old~=k then
-        if old then buckets[old][record.id]=nil end
-        buckets[k]=buckets[k] or {}
-        buckets[k][record.id]=record
-        record.bucket=k
+      local cell=floor(f[1]/16)*stride+floor(f[2]/16)
+      if record.cell~=cell then
+        if record.bucket then record.bucket[record.id]=nil end
+        local bucket=buckets[cell]
+        if not bucket then bucket={};buckets[cell]=bucket end
+        bucket[record.id]=record
+        record.bucket,record.cell=bucket,cell
       end
       local tile=f[4]
-      local stock_tile,opposite_portal=Wormhole.frame_bucket(s,f)
+      local stock_tile,opposite_portal=tile
+      if f[12] then stock_tile,opposite_portal=Wormhole.frame_bucket(s,f) end
       if record.opposite_portal and (not opposite_portal or record.stock_tile~=stock_tile) then
         wormholes[record.stock_tile][record.id]=nil
       end
@@ -81,56 +90,74 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         by_tile[tile][record.id]=record
       end
       if bay_tile(s,tile) and (not bay[tile] or record.id<bay[tile]) then bay[tile]=record.id end
-      record.x,record.y,record.z,record.direction,record.tile=f[1],f[2],z or road_z(s,f),f[3],tile
+      record.x,record.y,record.z,record.direction,record.tile=f[1],f[2],z or W.height(s,f),f[3],tile
     end
     function W.bay(id) return bay[id] end
     function W.exposed() return exposed>0 end
     function W.erase(record)
-      if record.bucket then buckets[record.bucket][record.id]=nil end
+      if record.bucket then record.bucket[record.id]=nil end
       if record.tile and by_tile[record.tile] then by_tile[record.tile][record.id]=nil end
       if bay[record.tile]==record.id then bay[record.tile]=nil end
       if record.opposite_portal then wormholes[record.stock_tile][record.id]=nil end
       record.stock_tile,record.opposite_portal,record.stock_x,record.stock_y=nil,nil,nil,nil
       if record.opposite_lane then exposed=exposed-1 end
-      record.bucket,record.tile,record.frame,record.opposite_lane=nil,nil,nil,nil
+      record.bucket,record.cell=nil,nil
+      record.tile,record.frame,record.opposite_lane=nil,nil,nil
     end
     function W.vehicles_at(tile)
       local list={}
-      for _,item in pairs(by_tile[tile] or {}) do list[#list+1]=item end
+      for _,item in pairs(by_tile[tile] or empty) do list[#list+1]=item end
       return list
     end
     function W.near(x,y,r,check)
+      local bottom,top=floor((y-r)/16),floor((y+r)/16)
       for ix=floor((x-r)/16),floor((x+r)/16) do
-        for iy=floor((y-r)/16),floor((y+r)/16) do
-          for _,item in pairs(buckets[at(ix,iy)] or {}) do if check(item) then return true end end
+        local key=ix*stride
+        for iy=bottom,top do
+          local bucket=buckets[key+iy]
+          if bucket then for _,item in pairs(bucket) do if check(item) then return true end end end
         end
       end
       return false
     end
+    local function stock_candidates(tile,out,n)
+      for _,item in pairs(by_tile[tile] or empty) do
+        if not item.opposite_portal then n=n+1;out[n]=item end
+      end
+      for _,item in pairs(wormholes[tile] or empty) do n=n+1;out[n]=item end
+      return n
+    end
     function W.stock_vehicles_at(tile)
       local out={}
-      for _,item in pairs(by_tile[tile] or {}) do
-        if not item.opposite_portal then out[#out+1]=item end
-      end
-      for _,item in pairs(wormholes[tile] or {}) do out[#out+1]=item end
+      stock_candidates(tile,out,0)
       return out
     end
     function W.find(record,c,x,y,dir,update)
-      local list={}
+      if (c.reverse_ctr or 0)~=0 then return end
+      local n=0
       if record.opposite_portal then
-        for _,id in ipairs({record.stock_tile,record.opposite_portal}) do
-          for _,item in ipairs(W.stock_vehicles_at(id)) do list[#list+1]=item end
-        end
+        n=stock_candidates(record.stock_tile,nearby,n)
+        n=stock_candidates(record.opposite_portal,nearby,n)
       else
-        W.near(x,y,8,function(item)
-          if not item.opposite_portal or not tile_xy or
-              item.stock_x>=floor((x-8)/16) and item.stock_x<=floor((x+8)/16) and
-              item.stock_y>=floor((y-8)/16) and item.stock_y<=floor((y+8)/16) then
-            list[#list+1]=item
+        local left,right,bottom,top=floor((x-8)/16),floor((x+8)/16),floor((y-8)/16),floor((y+8)/16)
+        for ix=left,right do
+          local key=ix*stride
+          for iy=bottom,top do
+            local bucket=buckets[key+iy]
+            if bucket then
+              for _,item in pairs(bucket) do
+                if not item.opposite_portal or not tile_xy or
+                    item.stock_x>=left and item.stock_x<=right and item.stock_y>=bottom and item.stock_y<=top then
+                  n=n+1;nearby[n]=item
+                end
+              end
+            end
           end
-        end)
+        end
       end
-      return Proximity.find(record,c,x,y,dir,list,update)
+      local leader=Proximity.find(record,c,x,y,dir,nearby,update)
+      for i=1,n do nearby[i]=nil end
+      return leader
     end
     return W
   end
@@ -164,7 +191,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       local next=frames[c.index+1]
       assert(next and next[4]==old[4] and not next[16] and is_depot(s,next[4]),
         "Corrupt transit-depot departure")
-      record.z=road_z(s,next)
+      record.z=W.height(s,next)
       if W.find(record,c,next[1],next[2],next[3],false) then c.waiting="depot";return end
       c.index,c.speed,c.heading,c.waiting=c.index+1,0,next[3],nil
       c.overtaking,c.overtaking_ctr,c.lane_pose=nil,nil,nil
@@ -174,7 +201,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       return
     end
     if c.depot_wait then
-      record.z=road_z(s,old)
+      record.z=W.height(s,old)
       if W.find(record,c,old[1],old[2],old[3],false) then c.waiting="depot";return end
       c.depot_wait=nil;c.waiting=nil
       W.put(record,old)
@@ -226,7 +253,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
           return false
         end
         local clear
-        clear,actual_z=Junction.check(s,W,record,old,b,nil,road_z)
+        clear,actual_z=Junction.check(s,W,record,old,b,nil,W.height)
         if not clear then
           state.waiting,state.speed="junction",0
           v.status="Waiting for junction clearance"
@@ -235,7 +262,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         end
       end
       if Pass and (state.lane_pose or b~=nominal or W.exposed()) then
-        actual_z=actual_z or road_z(s,b)
+        actual_z=actual_z or W.height(s,b)
         if not Pass.clear(W,record,old,b,nominal,actual_z) then
           state.waiting="road"
           return false
@@ -264,7 +291,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         if span_limit then state.speed=math.min(state.speed,permitted) end
         if state.heading~=b[3] then state.heading=b[3];Speed.turn(state) end
         if old[1]~=b[1] or old[2]~=b[2] then
-          actual_z=actual_z or road_z(s,b)
+          actual_z=actual_z or W.height(s,b)
           Speed.grade(state,record.z,actual_z,permitted)
         end
         state.index=state.index+1
@@ -366,7 +393,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     local k=1
     clock(function(tick)
       local ready=hooks.economy(tick)
-      local W=world(s)
+      local W=world(s,true)
       local board=board_for(s,W)
       local records={}
       for _,id in ipairs(ids) do

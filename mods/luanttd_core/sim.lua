@@ -2939,14 +2939,24 @@ function M.mount_shared_road_tram(s,companion) shared_tram_clock[s]=companion en
 function M.shared_road_tram_active(s)
   return shared_tram_clock[s]~=nil and M.road_stock_service_active(s)
 end
-function M.stock_road_frame_z(state,frame)
+function M.stock_road_frame_z(state,frame,surface_cache)
   load_road_rules()
-  local tile=state.tiles[frame[4]]
+  local id=frame[4]
   if frame[14] then return state.stock_road_tunnels[frame[14]].base*8 end
   local span=frame[10] and state.stock_road_bridges[frame[10]]
-  if span and (frame[12] or span.middle_by_tile[frame[4]]) then return span.deck*8 end
-  local shape,base=road_shape(state,frame[4],tile)
-  return (base or tile.h)*8+(shape and slope_rules.pixel(frame[1]%16,frame[2]%16,shape) or 0)
+  if span and (frame[12] or span.middle_by_tile[id]) then return span.deck*8 end
+  local cached=surface_cache and surface_cache[id]
+  if type(cached)=="number" then return cached end
+  if cached then return cached[2]+slope_rules.pixel(frame[1]%16,frame[2]%16,cached[1]) end
+  local tile=state.tiles[id]
+  local shape,base=road_shape(state,id,tile)
+  local z=(base or tile.h)*8
+  if not shape or shape==0 then
+    if surface_cache then surface_cache[id]=z end
+    return z
+  end
+  if surface_cache then surface_cache[id]={shape,z} end
+  return z+slope_rules.pixel(frame[1]%16,frame[2]%16,shape)
 end
 local function road_clock()
   if not source_speed then
@@ -3132,10 +3142,11 @@ local extra_road_art=setmetatable({},{__mode="k"})
 local function goods_engine(engine)
   return engine=="goods_truck" or engine==craighead or engine=="goods_goss"
 end
+local legacy_road_cargo={wood_truck="wood",goods_truck="goods",coal_tipper="coal",mail_van="mail",
+  grain_truck="grain",livestock_van="livestock",oil_tanker="oil"}
 function M.road_freight_cargo(engine)
-  return M.vehicles[engine] and M.vehicles[engine].cargo or
-    ({wood_truck="wood",goods_truck="goods",coal_tipper="coal",mail_van="mail",
-      grain_truck="grain",livestock_van="livestock",oil_tanker="oil"})[engine]
+  local def=M.vehicles[engine]
+  return def and def.cargo or legacy_road_cargo[engine]
 end
 local function timber_engine(engine)
   return M.road_freight_cargo(engine)=="wood" or goods_engine(engine)
@@ -3152,7 +3163,10 @@ local function heavy_engine(engine)
   local cargo=M.road_freight_cargo(engine)
   return cargo=="steel" or cargo=="iron_ore" or cargo=="valuables" or goods_engine(engine)
 end
-local function industry_truck(engine) return timber_engine(engine) or farm_engine(engine) or oil_engine(engine) or heavy_engine(engine) end
+local industry_road_cargo={wood=true,grain=true,livestock=true,oil=true,steel=true,iron_ore=true,valuables=true}
+local function industry_truck(engine)
+  return industry_road_cargo[M.road_freight_cargo(engine)]==true or goods_engine(engine)
+end
 local function allowed(engine,cargo)
   if engine=="leopard_bus" or engine=="foster_bus" or engine=="foster_mk2_bus" then return cargo=="passenger" end
   if mail_engine(engine) then return cargo=="mail" end
@@ -5272,9 +5286,10 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       if bus and v.running then road_bus_catalog().tick(bus) end
       if faults and faults.tick(v,tick) then return true end
       if not v.running then return end
-      if coal_engine(v.engine) then v.stock_coal_running_ticks=(v.stock_coal_running_ticks or 0)+1 end
-      if priced_mail(v.engine) then v.stock_mail_running_ticks=(v.stock_mail_running_ticks or 0)+1 end
-      if industry_truck(v.engine) then v.stock_timber_running_ticks=(v.stock_timber_running_ticks or 0)+1 end
+      local cargo=M.road_freight_cargo(v.engine)
+      if cargo=="coal" then v.stock_coal_running_ticks=(v.stock_coal_running_ticks or 0)+1 end
+      if cargo=="mail" and v.engine~="mail_van" then v.stock_mail_running_ticks=(v.stock_mail_running_ticks or 0)+1 end
+      if industry_road_cargo[cargo] or goods_engine(v.engine) then v.stock_timber_running_ticks=(v.stock_timber_running_ticks or 0)+1 end
       if v.route then
         local target,index,vias
         if v.road_order_override and not v.road_return_depot then

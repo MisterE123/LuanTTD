@@ -25,7 +25,7 @@ git show "$baseline:mods/luanttd_core/road_junction_guard.lua" > "$mod/baseline_
 for variant in baseline current; do
   input="$mod/sim.lua"
   if [[ "$variant" == baseline ]]; then input="$mod/baseline_sim.lua"; fi
-  sed '/source_speed=dofile.*Speed,Proximity,function(state,frame)$/a\      M.perf_road_height_calls=(M.perf_road_height_calls or 0)+1' "$input" > "$mod/profile_${variant}_sim.lua"
+  sed '/^local function road_shape(s,id,t)$/a\  M.perf_road_shape_calls=(M.perf_road_shape_calls or 0)+1' "$input" > "$mod/profile_${variant}_sim.lua"
 done
 printf 'gameid = fleetbench\nbackend = sqlite3\nmod_storage_backend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\n' > "$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-43042}
