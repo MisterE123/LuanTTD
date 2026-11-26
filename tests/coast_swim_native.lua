@@ -26,7 +26,7 @@ return function(api)
   S.stock_farm_fields[Sim.id(9,19)]={slope=0,base=1,variant=3,fences={[2]=3}}
   S.tiles[Sim.id(11,19)].house=true
   local farm=1000000
-  S.stock_farm_industries[farm]={id=farm,kind="farm",removed=false}
+  S.stock_farm_industries[farm]={id=farm,kind="farm",removed=false,x=10,z=16,tiles={}}
   S.tiles[Sim.id(10,16)].stock_industry={id=farm,chain="farm",style="industry_farm",x=0,z=0}
   for _,entry in ipairs({{18,19,0x14},{20,21,0x20}}) do
     for dx=0,1 do for dz=0,1 do
@@ -47,6 +47,10 @@ return function(api)
     if a and not a.leaving then
       if phases.phase=="shore" then
         if a.swimming and v.x>26 and math.abs(v.y-.32)<.1 then phases.floated=true end
+        if phases.floated and not phases.dry_edge and not a.swimming and v.x<25.49 and v.y>.49 then
+          phases.dry_edge=true
+          core.log("action","COAST_SWIM dry_edge")
+        end
         if phases.floated and not a.swimming and v.x<24.8 and v.y>.63 then phases.climbed=true end
       elseif phases.phase=="bridge" then
         if not a.swimming and v.x>26.5 and v.x<33 and math.abs(v.y-(bridge.deck+.5))<.13 then phases.deck=true end
@@ -83,11 +87,36 @@ return function(api)
   core.register_chatcommand("swimprobe",{func=function(n,tag)
     local p=assert(core.get_player_by_name(n))
     if tag=="shore" or tag=="bridge" or tag=="field" or tag=="fence" or tag=="parcel" or tag=="silo" or tag=="arena" or tag=="arena2" then setup(p,tag);return true end
+    if tag=="under_bank" then
+      local a=W.avatar_state(p)
+      assert(a and a.swimming and phases.floated,"shore witness starts in real swimming mode")
+      local water={x=25.61,y=.28,z=28.5}
+      local dry={x=25.39,y=.22,z=28.5}
+      local cell=Sim.id(12,14)
+      assert(not R.walk_waterline(cell,dry.x,dry.z) and R.surface(cell,dry.x,dry.z)-dry.y>.18)
+      p:set_pos(water)
+      core.after(.45,function()
+        assert(W.avatar_state(p)==a and a.swimming,"wet approach must be observed")
+        p:set_pos(dry)
+        core.after(.36,function()
+          local v=p:get_pos()
+          assert(W.avatar_state(p)==a and a.swimming and v.x>25.50 and v.x<25.72 and v.y<.52,
+            "under-bank packet must return to adjacent wet ground, not enter Walk under land")
+          core.log("action","COAST_SWIM_PASS under_bank")
+        end)
+      end)
+      return true
+    end
     local v,a=sample(p)
     local flags=p:hud_get_flags()
     core.log("action",("COAST_SWIM %s %.3f %.3f %.3f swimming=%s %s"):format(tag,v.x,v.y,v.z,tostring(a and a.swimming),core.serialize(phases):gsub("%s","")))
     if tag=="house" then for y=1,3 do core.log("action", "QA house node "..y.." "..core.get_node({x=22,y=y,z=38}).name) end end
     if tag=="float" then assert(a and a.swimming and phases.floated,"did not float in channel")
+    elseif tag=="shore_on_foot" then
+      local cell=assert(Sim.id(math.floor((v.x+.5)/2),math.floor((v.z+.5)/2)))
+      local ground=R.surface(cell,v.x,v.z)
+      assert(a and not a.swimming and phases.dry_edge and v.x<25.49 and ground
+        and v.y>=ground-.13 and v.y<ground+.35,"did not sustain a dry footing after leaving the water")
     elseif tag=="climb" then assert(a and not a.swimming and phases.climbed,"did not climb rocky coast")
     elseif tag=="guard" then
       assert(a and not a.swimming and v.x>26 and v.x<31 and math.abs(v.y-(bridge.deck+.5))<.13

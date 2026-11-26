@@ -8,6 +8,12 @@ case ${LUANTTD_NATIVE_GROUND_FIXTURE:-industry} in
     frame_prefix='NATIVE INDUSTRY FRAME'
     pass_marker='PASS NATIVE INDUSTRY LAYOUTS:'
     ;;
+  industry_walk)
+    fixture=tests/industry_walk_collision_native.lua
+    start_marker='NATIVE INDUSTRY WALK WALL READY'
+    frame_prefix='NATIVE INDUSTRY WALK FRAME'
+    pass_marker='PASS NATIVE INDUSTRY WALK:'
+    ;;
   crossings)
     fixture=tests/roadside_crossing_ground_native.lua
     start_marker='NATIVE ROADSIDE FRAME'
@@ -95,6 +101,36 @@ mark(){ for _ in {1..360}; do grep -q "$1" "$out/server.log" && return; kill -0 
 mark 'listening on'
 luanti --go --address 127.0.0.1 --port "$port" --name IndustryLayoutsQA --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
+
+if [[ $fixture == tests/industry_walk_collision_native.lua ]]; then
+  mark "$start_marker"
+  win=
+  for _ in {1..60}; do
+    win=$(xdotool search --onlyvisible --pid "$client" | tail -1 || true)
+    if [[ -z "$win" ]]; then
+      win=$(xdotool search --onlyvisible --name '.*' | tail -1 || true)
+    fi
+    if [[ -n "$win" ]] && xdotool windowfocus "$win"; then break; fi
+    sleep .2
+  done
+  [[ -n "$win" ]] || { xwininfo -root -tree; exit 1; }
+  xdotool getwindowname "$win"
+  xdotool keydown w; sleep 4.5; xdotool keyup w
+  sleep .4
+  import -window root -quality 91 "$out/wall-stop.jpg"
+  say() { xdotool key t; sleep .55; xdotool type --delay 55 "$1"; xdotool key Return; }
+  say "/industrywalkqa wall"
+  mark 'NATIVE INDUSTRY WALK PASSAGE READY'
+  xdotool keydown w; sleep 6.6; xdotool keyup w
+  sleep .4
+  import -window root -quality 91 "$out/refinery-passage.jpg"
+  say "/industrywalkqa passage"
+  mark 'NATIVE INDUSTRY WALK TREE READY'
+  xdotool keydown w; sleep 3.1; xdotool keyup w
+  sleep .4
+  import -window root -quality 91 "$out/tree-stop.jpg"
+  say "/industrywalkqa tree"
+fi
 
 mark "$start_marker"
 for k in {1..460}; do

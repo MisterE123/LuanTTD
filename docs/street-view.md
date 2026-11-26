@@ -4,8 +4,9 @@ Use **Survey → Walk** to land on an aimed street, open ground, bridge deck
 or water. Use **Survey → Drive Car** to enter a private car on a connected
 road. When standing on a connected road in Walk, **Inventory → Drive**
 gets into a car without leaving street view; leaving the car returns to
-Walk. Walk speed uses a 1.4 m/s human pace at the pedestrian model scale.
-Hold **E** (Luanti's Aux1 key) to run at the same scale. Normal Luanti zoom
+Walk. Walking and running use the pedestrian model's scale with a 1.5×
+sightseeing pace. Hold **E** (Luanti's Aux1 key) to run. Swimming gets the
+same 1.5× horizontal boost; surfacing still uses Jump. Normal Luanti zoom
 works in every scenic view. Right-click does not switch modes.
 
 From Walk, aim at a nearby passenger vehicle and use the primary action.

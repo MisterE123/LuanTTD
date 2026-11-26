@@ -63,6 +63,16 @@ video_driver = opengl
 shadow_map_max_distance = 100
 shadow_map_texture_size = 1024
 EOF
+if [[ ${BAYLINE_SWIM_TRANSITION_ONLY:-0} == 1 ]]; then
+  cat >> "$out/client.conf" <<'EOF'
+screen_w = 960
+screen_h = 640
+viewing_range = 32
+client_mapblock_limit = 180
+mesh_generation_threads = 1
+enable_shaders = false
+EOF
+fi
 export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" XDG_CONFIG_HOME="$out/home/.config" \
   LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games" \
   LP_NUM_THREADS=2 LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
@@ -93,7 +103,11 @@ for _ in {1..220}; do if grep -q "WALK_QA ready" "$out/server.log"; then break; 
 grep -q "WALK_QA ready" "$out/server.log" || { cat "$out/"{server,client}.log; exit 1; }
 win=$(timeout 15 xdotool search --sync --onlyvisible --pid "$client"|tail -1)
 xdotool windowfocus --sync "$win"
-xdotool mousemove 650 430
+if [[ ${BAYLINE_SWIM_TRANSITION_ONLY:-0} == 1 ]]; then
+  xdotool mousemove --window "$win" 480 320
+else
+  xdotool mousemove 650 430
+fi
 sleep 3
 
 say() {
@@ -124,6 +138,29 @@ if [[ ${BAYLINE_WALL_TEST_ONLY:-0} == 1 ]]; then
 fi
 say "/walk"
 capture coast
+if [[ ${BAYLINE_SWIM_TRANSITION_ONLY:-0} == 1 ]]; then
+  hold 4.7 w
+  sleep .45
+  say "/swimprobe float"
+  capture swim
+  say "/swimprobe under_bank"
+  sleep .45
+  grep -q "COAST_SWIM_PASS under_bank" "$out/server.log" || { cat "$out/server.log"; exit 1; }
+  xdotool keydown s space
+  for _ in {1..32}; do
+    if grep -q "COAST_SWIM dry_edge" "$out/server.log"; then break; fi
+    sleep .25
+  done
+  xdotool keyup space
+  sleep 8
+  xdotool keyup s
+  sleep .25
+  say "/swimprobe shore_on_foot"
+  capture ashore
+  for p in float under_bank shore_on_foot; do grep -q "COAST_SWIM_PASS $p" "$out/server.log" || { cat "$out/server.log"; exit 1; }; done
+  ! grep -Ei 'error|could not load' "$out/client.log"
+  exit
+fi
 hold 2.4 w
 sleep .45
 say "/swimprobe float"

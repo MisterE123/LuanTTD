@@ -8,9 +8,10 @@ local unpack_values=table.unpack or unpack
 local scale=.57
 local P={eye_height=.462*scale,visual_height=.511*scale,visual_scale=scale}
 -- Nominal adult stature 1.75 m; model height is in world nodes.
--- Walk at 1.4 m/s and run at 3.2 m/s before converting to node units.
-P.walk_nodes_per_second=P.visual_height*1.4/1.75
-P.run_nodes_per_second=P.visual_height*3.2/1.75
+-- Keep the model-scale gait ratios, with a 1.5x sightseeing pace.
+P.travel_pace=1.5
+P.walk_nodes_per_second=P.visual_height*1.4/1.75*P.travel_pace
+P.run_nodes_per_second=P.visual_height*3.2/1.75*P.travel_pace
 local function movement_setting(name,default)
   local n=core and core.settings and core.settings.get and tonumber(core.settings:get("movement_speed_"..name))
   return n and n>0 and n or default
@@ -23,6 +24,7 @@ local hidden_texture="bl_sightseeing_hidden_player.png"
 local model="bl_street_pedestrian.glb"
 local idle,walking={x=0,y=1},{x=2,y=14}
 local walk_rate=15
+local step_height,shore_error,bank_recovery_limit=.18,.035,.28
 local function copy(value)
   if type(value)~="table" then return value end
   local t={}
@@ -234,7 +236,7 @@ function P.new(api)
     local changed=state.swimming~=swimming
     if not changed and state.running==running then return end
     state.swimming,state.running=swimming,running
-    local speed=swimming and .27 or running and P.run_speed or P.walk_speed
+    local speed=swimming and .27*P.travel_pace or running and P.run_speed or P.walk_speed
     p:set_physics_override({gravity=swimming and 0 or 1,jump=swimming and 0 or .56,
       sneak=not swimming,speed_walk=speed,speed_fast=speed*slow/fast,
       speed_crouch=P.walk_nodes_per_second*.55/crouch,acceleration_air=swimming and 2.8 or 1})
@@ -244,11 +246,47 @@ function P.new(api)
         or "Walk  ·  E to run  ·  Click a vehicle to board  ·  Inventory: leave Walk")
     end
   end
+  local function retreat_from_bank(p,state,at,speed)
+    local back=state.last_wet
+    if back then
+      local id=tile_at(back.x,back.z)
+      local level=waterline(id,id and cell(id),back.x,back.z)
+      if level then
+        -- Keep the stroke and camera, but stop the part of the velocity
+        -- driving into the bank. Only return to the last sampled water;
+        -- never search for (or hoist onto) a distant dry landing.
+        local dx,dz=at.x-back.x,at.z-back.z
+        local length=math.sqrt(dx*dx+dz*dz)
+        local y=clamp(at.y,level-.42,level+.14)
+        p:set_pos({x=back.x,y=y,z=back.z})
+        if length>1e-5 then
+          dx,dz=dx/length,dz/length
+          local along=speed.x*dx+speed.z*dz
+          if along>0 then p:add_velocity({x=-along*dx,y=0,z=-along*dz}) end
+        end
+        return
+      end
+    end
+    -- Keep the existing out-of-world recovery if even the water sample
+    -- disappeared (for example, a dock was built on it meanwhile).
+    if state.last_safe then
+      position(p,state.last_safe,p:get_look_horizontal(),p:get_look_vertical())
+    end
+  end
+  local function settle_feet(p,at,speed,ground)
+    -- Keep XZ, camera and the ongoing stroke. Do not add walk speed.
+    local feet={x=at.x,y=ground+.01,z=at.z}
+    p:set_pos(feet)
+    if speed.y<0 then p:add_velocity({x=0,y=-speed.y,z=0}) end
+    return feet
+  end
   function W.enter(p,state,land,water,yaw,pitch)
     state.last_safe=land
-    state.step_height=.18
+    state.last_wet=water and land or nil
+    state.bank_footing=nil
+    state.step_height=step_height
     p:set_eye_offset()
-    p:set_properties({eye_height=P.eye_height,collisionbox={-.064,0,-.064,.064,.32,.064},stepheight=.18,
+    p:set_properties({eye_height=P.eye_height,collisionbox={-.064,0,-.064,.064,.32,.064},stepheight=step_height,
       visual="mesh",mesh=model,textures={"bl_street_pedestrian_atlas.png"},
       visual_size={x=scale,y=scale,z=scale},backface_culling=false})
     p:set_physics_override({speed=1,acceleration_default=1})
@@ -267,8 +305,8 @@ function P.new(api)
     -- Platform coping is .28 nodes high, or up to .43 on elevated
     -- guideway stations. Only increase step-up inside station tiles;
     -- normal fences and walls keep the smaller pedestrian step height.
-    local step=t and t.rail_station_id and ((t.rail_type or 0)>=2 and .45 or .30) or .18
-    if (state.step_height or .18)~=step then
+    local step=t and t.rail_station_id and ((t.rail_type or 0)>=2 and .45 or .30) or step_height
+    if (state.step_height or step_height)~=step then
       state.step_height=step
       p:set_properties({stepheight=step})
     end
@@ -276,8 +314,12 @@ function P.new(api)
     if not deck and id and api.render.walk_dock_surface then
       deck=api.render.walk_dock_surface(id,at.x,at.z,at.y)
     end
-    local water=not deck and waterline(id,t,at.x,at.z)
+    -- A sampled deck may be close above the swimmer. Its underside
+    -- is not a bank: continue using the water beneath it.
+    local under_deck=state.swimming and deck and deck-at.y>step_height
+    local water=(not deck or under_deck) and waterline(id,t,at.x,at.z)
     if water and at.y<(water+(state.swimming and .37 or .18)) then
+      state.bank_footing=nil
       gait(p,state,true,false)
       -- Keep horizontal input and collision local to Luanti. Only bias
       -- vertical velocity toward the mean surface; Space strokes upward
@@ -285,15 +327,43 @@ function P.new(api)
       local goal=water+((keys and keys.jump) and .14 or -.18)
       local dy=P.swim_impulse(goal-at.y,speed.y,dt)
       if math.abs(dy)>.016 then p:add_velocity({x=0,y=dy,z=0}) end
-      if math.abs(at.y-goal)<.28 then state.last_safe=at end
-    elseif state.swimming and blocked(t) then
-      -- Don't swim through facilities or the edge of the projected map.
-      position(p,state.last_safe,p:get_look_horizontal(),p:get_look_vertical())
+      if at.y>=water-.42 then state.last_safe,state.last_wet=at,at end
     else
+      local ground=(not under_deck and deck) or
+        (not water and not under_deck and id and not blocked(t) and surface(id,at.x,at.z))
+      local bank_footing=state.bank_footing
+      if state.swimming and not water then
+        -- Coast classification uses XZ, so a packet can be on the dry
+        -- side even while the *feet* are still below the native terrain.
+        -- Accept only an ordinary-sized step onto a real walk surface.
+        if not ground or ground-at.y>step_height then
+          retreat_from_bank(p,state,at,speed)
+          return
+        end
+        if ground-at.y>shore_error then
+          -- Reconcile once across the low-edge strips of the native
+          -- nodebox ramp.
+          at=settle_feet(p,at,speed,ground)
+        end
+        if not deck and t.coastal_water then bank_footing=at end
+      elseif bank_footing and ground and not deck then
+        -- Keep the nearest sound step until leaving the mixed shore tile.
+        -- Native collision approximates this ramp with 1/8-tile steps; a
+        -- stale falling packet must not put a newly dry walker underneath.
+        if ground-at.y>bank_recovery_limit then
+          p:set_pos(bank_footing)
+          if speed.y<0 then p:add_velocity({x=0,y=-speed.y,z=0}) end
+          return
+        elseif ground-at.y>.13 then
+          at=settle_feet(p,at,speed,ground)
+        end
+      end
       gait(p,state,false,keys and keys.aux1==true or false)
-      local ground=deck or id and t and not blocked(t) and surface(id,at.x,at.z)
-      if ground and math.abs(at.y-ground)<.32 then state.last_safe=at
-      elseif at.y<-.8 then position(p,state.last_safe,p:get_look_horizontal(),p:get_look_vertical()) end
+      state.last_wet=nil
+      state.bank_footing=bank_footing and ground and not deck and t.coastal_water
+        and {x=at.x,y=ground+.01,z=at.z} or nil
+      if ground and at.y>=ground-.08 and at.y-ground<.32 then state.last_safe=at
+      elseif at.y<-.8 and state.last_safe then position(p,state.last_safe,p:get_look_horizontal(),p:get_look_vertical()) end
     end
     local rate=state.running and walk_rate*1.65 or walk_rate
     if state.walking~=moving or state.animation_rate~=rate then

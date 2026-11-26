@@ -67,12 +67,12 @@ assert(properties.eye_height==1.63 and properties.visual=="sprite" and propertie
 local avatar={saved=P.capture(p)}
 walk.enter(p,avatar,target)
 assert(pos==target and pos.y<3 and yaw==1.2 and pitch==0)
-assert(physics.gravity==1 and physics.speed_walk==P.walk_speed and P.walk_nodes_per_second>.22 and P.walk_nodes_per_second<.25 and properties.eye_height==P.eye_height and P.eye_height>.23 and P.eye_height<.28
+assert(physics.gravity==1 and physics.speed_walk==P.walk_speed and math.abs(P.walk_nodes_per_second-.349524)<.00001 and properties.eye_height==P.eye_height and P.eye_height>.23 and P.eye_height<.28
   and P.visual_height>.28 and P.visual_height<.31 and properties.visual_size.y==P.visual_scale
   and properties.visual=="mesh" and properties.collisionbox[4]==.064)
 assert(vel.x==0 and vel.y==0 and vel.z==0)
 walk.step(p,avatar,{aux1=true})
-assert(avatar.running and physics.speed_walk==P.run_speed and P.run_nodes_per_second>.53)
+assert(avatar.running and physics.speed_walk==P.run_speed and math.abs(P.run_nodes_per_second-.798912)<.00001)
 assert(math.abs(physics.speed_fast*20-P.run_nodes_per_second)<1e-9)
 walk.step(p,avatar,{aux1=false})
 assert(not avatar.running and physics.speed_walk==P.walk_speed)
@@ -81,7 +81,7 @@ walk.step(p,avatar)
 assert(avatar.swimming and physics.gravity==0 and vel.y> -2,"falling into water changes to a controlled float")
 pos={x=8.5,y=1.32,z=2.5};vel.y=0
 walk.step(p,avatar,{jump=true,aux1=true})
-assert(not avatar.running,"Holding E must not change swim speed")
+assert(not avatar.running and math.abs(physics.speed_walk-.405)<1e-9,"E must not change the faster swim pace")
 assert(vel.y>0,"Space strokes toward shore level")
 pos={x=10.5,y=1.50,z=2.5};vel.y=0
 walk.step(p,avatar)
@@ -128,6 +128,49 @@ for _,dt in ipairs({.03,.07,.09,.1}) do
   assert(math.abs(y-.14)<.04 and high<.24,"unstable water rise")
 end
 print("PASS waterline trim settles at different step rates without a hard vertical impulse")
+
+-- The bank can switch from water to dry inside a single logical tile.
+local function coastal_water(_,x)
+  if x<9.06 then return .5 end
+end
+rows[4].coastal_water=true
+local coast=P.new({s={tiles=rows},Sim=sim,
+  render={walk_waterline=coastal_water,uses_slope=function()return true end,
+    surface=function(_,x)return .5+(x-9.06)*.7 end}})
+local coast_state={saved=P.capture(p)}
+local function drive(x,y,sx,sy,sz)
+  pos,vel={x=x,y=y,z=2.5},{x=sx or 0,y=sy or 0,z=sz or 0}
+  coast.step(p,coast_state,{},.08)
+end
+drive(8.94,.27)
+assert(coast_state.swimming and physics.gravity==0)
+local aim_yaw,aim_pitch=yaw,pitch
+drive(9.20,.20,1,.20,.35)
+assert(coast_state.swimming and physics.gravity==0 and pos.x==8.94 and pos.y==.20,
+  "a deep dry-side position must be rejected at the preceding water sample")
+assert(vel.x==0 and vel.y==.20 and vel.z==.35 and yaw==aim_yaw and pitch==aim_pitch,
+  "recovery stops into the bank without taking away the stroke, lateral input or aim")
+drive(9.20,.49,1,-.10,.35)
+assert(not coast_state.swimming and physics.gravity==1 and pos.x==9.2 and pos.y>.598 and pos.y<.62
+  and vel.x==1 and vel.y==0 and vel.z==.35 and not coast_state.last_wet,
+  "accept a normal step within the shore window without moving horizontally")
+drive(9.24,.18,1,-.10,.35)
+assert(not coast_state.swimming and pos.x==9.20 and pos.y>.598 and pos.y<.62 and vel.y==0,
+  "a stale falling packet immediately after climbing must not land below the same shore ramp")
+drive(8.97,.57)
+assert(coast_state.swimming and physics.gravity==0 and pos.x==8.97 and pos.y==.57,
+  "ordinary walk back into the water needs no pose correction")
+rows[4].coastal_water=nil
+
+local dock=P.new({s={tiles=rows},Sim=sim,
+  render={walk_waterline=function()return .5 end,uses_slope=function()return false end,
+    walk_dock_surface=function(_,x)if x>=9 then return .72 end end}})
+pos,vel={x=9.20,y=.40,z=2.5},{x=1,y=0,z=0}
+local dock_state={swimming=true}
+dock.step(p,dock_state,{},.08)
+assert(dock_state.swimming and pos.x==9.2 and pos.y==.4,
+  "a pier well above the feet must not transfer a swimming pose through its underside")
+print("PASS deep shore penetration rejected; shallow toe steps, reverse water entry, and under-pier swimming work")
 
 local Rail=dofile("mods/luanttd_core/rail_platform_walk.lua")
 local function on_deck(p,boxes)
