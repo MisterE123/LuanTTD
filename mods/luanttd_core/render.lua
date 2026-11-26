@@ -2481,6 +2481,7 @@ return function(api)
   function R.sample_worker_actors(projection)
     actor_buffer.observe(projection.actors(),projection.actor_clock())
     if projection.town_lifts then town_lift.observe(S,projection.town_lifts()) end
+    if api.coal_view and projection.industry_machinery then api.coal_view.observe(projection.industry_machinery()) end
   end
   function R.step_worker_actors(dt)
     town_lift.step(dt)

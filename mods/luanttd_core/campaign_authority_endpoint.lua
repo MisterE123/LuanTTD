@@ -751,6 +751,7 @@ return function(Sim,R,max_days)
     return reply(true,nil,{x=x,z=z,width=w,height=h,tiles=tiles,vehicles=vehicles,
       signals=signals,passengers=R.passengers and R.passengers.counts(tiles),
       corners=corners,town_lifts=lift_snapshot(x,z,w,h),
+      industry_machinery=Sim.visible_machinery and Sim.visible_machinery(s,x,z,w,h) or nil,
       registries=projection and projection.registries(s,tiles) or nil,
       actors=R.actors and R.actors(x,z,w,h,fraction,frame) or nil})
   end
@@ -834,6 +835,7 @@ return function(Sim,R,max_days)
         return reply(false,"INVALID_INTEREST_WINDOW")
       end
       packets[i]={x=w.x,z=w.z,width=w.w,height=w.h,town_lifts=lift_snapshot(w.x,w.z,w.w,w.h),
+        industry_machinery=Sim.visible_machinery and Sim.visible_machinery(s,w.x,w.z,w.w,w.h) or nil,
         actors=R.actors and R.actors(w.x,w.z,w.w,w.h,fraction,frame) or {}}
     end
     return reply(true,nil,packets)

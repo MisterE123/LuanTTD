@@ -5,7 +5,7 @@
 return function(Sim,H,Lift)
   local M={}
   local TICKS=0x500
-  function M.settle(s,growth,Farm,water,trees,random,pulse)
+  function M.settle(s,growth,Farm,water,trees,random,pulse,machines)
     local profile=assert(s.stock_generated_profile)
     local clock=assert(s.passenger_house_clock)
     assert(not profile.frontage and not profile.initial_landscape and clock.counter==0,
@@ -23,7 +23,7 @@ return function(Sim,H,Lift)
       else field_rows[id]=nil end
     end
     local stats={start_head=clock.head,ticks=TICKS,tree_changes=0,tide_changes=0,houses=0,completed=0,
-      passenger=0,mail=0}
+      passenger=0,mail=0,industry_machinery=0}
     local opts={percentage=s.stock_cargo_scale_percent or 100}
     if s.stock_town_lifts then
       opts.start_lift=function(_,tile) Lift.add(s.stock_town_lifts,tile+1) end
@@ -35,9 +35,11 @@ return function(Sim,H,Lift)
       if not t or t.stock_void then return end
       local field=field_rows[id] or s.stock_farm_grass and s.stock_farm_grass[id]
       if not (t.house or t.build=="road" or t.wood or t.terrain=="water" or
-              t.stock_clear_density or field) then return end
+              t.stock_clear_density or field or t.stock_industry) then return end
       local x,z=tile%width,floor(tile/width)
-      if t.house and t.source_house then
+      if t.stock_industry and machines then
+        if machines.visit(id,tick) then stats.industry_machinery=stats.industry_machinery+1 end
+      elseif t.house and t.source_house then
         local h=t.source_house
         local was_complete=h.completed
         if growth.advance_house(s,id,h,tick) then

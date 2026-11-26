@@ -508,7 +508,7 @@ function M.rail_span_protected(s,id)
     or s.rail_tunnel_below and s.rail_tunnel_below[id])
 end
 local coastal_occupied=setmetatable({},{__mode="k"})
-local stock_rail_ground,stock_tree_lifecycle,stock_tree_plant,stock_land_rules
+local stock_rail_ground,stock_tree_lifecycle,stock_tree_plant,stock_land_rules,machinery_world
 function M.mount_coastal_flood(s,occupied)
   assert(s.corner_grid and s.road_economy and s.road_stock_house_supply,
     "Stock coastal flooding requires shared corners and the source landscape clock.")
@@ -558,13 +558,22 @@ local function coastal_visit(s)
     if visit_tree and tick then visit_tree(u,v,tick) end
   end,new_tree,water,visit_tree
 end
+local function machine_rules()
+  if not machinery_world then
+    machinery_world=dofile(module_root.."industry_machinery_world.lua")(M,
+      dofile(module_root.."openttd/industry_machinery_rc1.lua"))
+  end
+  return machinery_world
+end
+function M.industry_machinery(s,pregame) return machine_rules().bind(s,pregame) end
+function M.visible_machinery(s,x,z,w,h) return machine_rules().visible(s,x,z,w,h) end
 function M.prepare_initial_landscape(s,growth,Farm,progress)
   assert(coastal_active(s) and s.passenger_house_clock and s.stock_town_growth)
   local _,_,water,trees=coastal_visit(s)
   local initial=dofile(module_root.."initial_landscape_world.lua")(M,
     dofile(module_root.."openttd/town_passengers.lua"),dofile(module_root.."openttd/town_lift.lua"))
   return initial.settle(s,growth,Farm,assert(water),assert(trees),
-    function() return M.stock_random_u32(s) end,progress)
+    function() return M.stock_random_u32(s) end,progress,M.industry_machinery(s,true))
 end
 local function coastal_tile_occupied(s,id)
   local extra=coastal_occupied[s]
@@ -5154,6 +5163,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
   local growth=town_growth_mount[s]
   local growth_random=growth and function() return rating_runtime.random_u32(s) end
   local tide,plant_trees=coastal_visit(s)
+  local machines=s.stock_generated_profile and s.stock_coal_industries and M.industry_machinery(s)
   if s.road_stock_house_supply then
     town_passengers.start(s)
     clock=function(callback)
@@ -5173,7 +5183,10 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         end
         if works and not work then works.decorate(s,x+1,z+1) end
         if tide then tide(x,z,tick) end
+        local industry_id=machines and (x+z*M.W+1)
+        local completed=industry_id and machines.completed(industry_id)
         if coal then coal.tile_visit(x,z,tick) end
+        if completed then machines.visit(industry_id,tick) end
         if timber then timber.tile_visit(x,z,tick,commercial and commercial.offer_rig_passengers) end
       end
       town_passengers.day(s,function(tick,finish_rating)
@@ -5212,7 +5225,8 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         end
       end,{passenger=commercial and commercial.hooks.passenger,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
-        growth=growth and growth.world,traverse=traverse})
+        growth=growth and growth.world,traverse=traverse,
+        before_landscape=machines and machines.animate})
     end
   else
     generate_passengers(s,legacy_supply)

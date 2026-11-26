@@ -13,3 +13,22 @@ Evidence:
 - [Native Linux run](../tests/industry_alternate_native.sh) opens a normally generated worker world, finds all six variants, and checks the actual placed mesh on every occupied tile and the empty holes. The synchronous rendering assertion is on the server, and native client screenshots are captured separately.
 
 This is not full industry parity. The later [Temperate footprint pass](stock-temperate-industry-layouts.md) covers the remaining variations. Some site-leveling and full funding mechanics are separate.
+
+
+### Stock running machinery
+
+OpenTTD 16.0-RC1 `TileLoop_Industry` selects mine towers, power yard
+arcs and oil well motion after the tile's construction visit. The
+worker preserves those rolls and the source absolute tick. Once live,
+the mine and power visual pass runs before the increment, matching
+`AnimateAnimatedTiles`. Coal hoist rotation follows the direction and
+stopped windows; power particles originate at the authored transformer
+bushings. Dynamic animation frames travel with the visible motion
+packets and do not change the static model/collision receipt. The
+original oil well model is still static visually, though the startup
+state feeds its existing saved live animation registry.
+
+`tests/industry_machinery_rc1.py` compiles the pinned source branches and
+compares 18,240 animation phase, frame and RNG cases. In addition,
+`tests/industry_machinery_world.lua` checks startup construction, handoff
+to the live owner, registration, static scene separation and view scope.

@@ -43,7 +43,7 @@ cat "$game/mods/luanttd_core/init.lua" >> "$out/probe.lua"
 cat >> "$out/probe.lua" <<'LUA'
 assert(placement and Sim.W==128 and Sim.H==128 and S.stock_generated_profile.industries)
 assert(core.get_mod_storage():get_string("campaign")=="")
-local terrain_witness,river_corner
+local terrain_witness,river_corner,mine_tile
 if core.settings:get_bool("luanttd_qa_normal_river",false) then
   local count=0
   local chosen,score
@@ -92,11 +92,29 @@ if core.settings:get_bool("luanttd_qa_normal_river",false) then
     core.log("action",("WORLD_CREATION_INITIAL_FRONTAGE streets=%d decorated=%d fields=%d growth=%d"):
       format(done.road,done.decorated,done.fields,done.grown))
   end
+  if core.settings:get_bool("luanttd_qa_industry_machinery",false) then
+    local stat=assert(S.stock_generated_profile.initial_landscape)
+    assert(stat.industry_machinery>0,"Real pregame ran no industry machinery transitions")
+    local keys={}
+    for id in pairs(S.stock_coal_industries or {}) do keys[#keys+1]=id end
+    table.sort(keys)
+    for _,id in ipairs(keys) do
+      local mine=S.stock_coal_industries[id]
+      if mine.kind=="coal_mine" then
+        for _,t in ipairs(mine.tiles) do
+          if t.gfx==0 or t.gfx==1 then mine_tile=Sim.id(t.x+1,t.z+1);break end
+        end
+        if mine_tile then break end
+      end
+    end
+    chosen=assert(mine_tile,"The test world has no working mine model")
+    core.log("action","WORLD_CREATION_INDUSTRY_PREGAME transitions="..stat.industry_machinery)
+  end
   local x,z=Sim.xy(assert(chosen))
   local _,_,top=api.terrain.tile(chosen)
-  local near=core.settings:get_bool("luanttd_qa_initial_frontage",false)
-  local offset=near and 6 or 12
-  terrain_witness={x=x*2+offset,y=top+(near and 6 or 11),z=z*2+offset}
+  local near=mine_tile or core.settings:get_bool("luanttd_qa_initial_frontage",false)
+  local offset=mine_tile and 4 or near and 6 or 12
+  terrain_witness={x=x*2+offset,y=top+(mine_tile and 5.1 or near and 6 or 11),z=z*2+offset}
   assert(S.seed==1 and count>=10,"Explicit seed should reach the real standard river generator")
   core.log("action","WORLD_CREATION_NATIVE_RIVERS "..count)
 end
@@ -110,7 +128,7 @@ render.place_world=function(done,notify)
   end
   return raw_place(done,notify)
 end
-local complete,movement_origin,moved
+local complete,movement_origin,moved,stopped,turned
 core.register_globalstep(function()
   local p=core.get_player_by_name("singleplayer")
   if p and not complete and not placement and #api.world.hotbar_layout(p)>0 then
@@ -147,6 +165,18 @@ core.register_globalstep(function()
     core.log("action","WORLD_CREATION_PLAYABLE "..S.stock_generated_profile.width)
   end
   if not p or not complete then return end
+  if mine_tile and moved and not turned then
+    local ref,angle,phase=api.coal_view.witness(mine_tile)
+    if ref and phase and angle then
+      if not stopped and phase.dir==0 then stopped=angle
+      elseif stopped and phase.dir~=0 and math.abs(angle-stopped)>.008 then
+        turned=true
+        assert(phase.gfx==1 and phase.active)
+        core.log("action",("WORLD_CREATION_MINE_MOVING gfx=%d angle=%.3f dir=%d absolute=%d")
+          :format(phase.gfx,angle,phase.dir,phase.tick))
+      end
+    end
+  end
   local pos=p:get_pos()
   if not movement_origin and p:get_player_control().right then
     movement_origin=pos
@@ -161,8 +191,9 @@ core.register_globalstep(function()
           local user=core.get_player_by_name("singleplayer")
           if not user then return end
           user:set_pos(terrain_witness)
-          user:set_look_horizontal(3*math.pi/4)
-          user:set_look_vertical(.58)
+          if mine_tile and not api.lighting.is_always_day() then assert(api.lighting.toggle(user)) end
+          user:set_look_horizontal(mine_tile and .71*math.pi or 3*math.pi/4)
+          user:set_look_vertical(mine_tile and .85 or .58)
           core.log("action","WORLD_CREATION_RIVER_VIEW")
         end)
       end
@@ -192,6 +223,10 @@ fi
 if [[ ${LUANTTD_QA_RIVER_GUARD:-0} == 1 ]]; then
   [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]
   printf 'luanttd_qa_river_guard = true\n' >> "$out/local.conf"
+fi
+if [[ ${LUANTTD_QA_INDUSTRY_MACHINERY:-0} == 1 ]]; then
+  [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]
+  printf '%s\n' 'luanttd_qa_industry_machinery = true' 'bayline_generated_relief = 1' 'bayline_generated_industries = 5' >> "$out/local.conf"
 fi
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   t=$(realpath "$BAYLINE_NATIVE_TOOLS")
@@ -273,6 +308,11 @@ if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
     waitmark WORLD_CREATION_PREGAME_RESUMED
     grep WORLD_CREATION_PREGAME_RESUMED "$out/client.log"
     import -window root -quality 91 "$out/initial-settled-street.jpg"
+  elif [[ ${LUANTTD_QA_INDUSTRY_MACHINERY:-0} == 1 ]]; then
+    grep WORLD_CREATION_INDUSTRY_PREGAME "$out/client.log"
+    waitmark WORLD_CREATION_MINE_MOVING
+    grep WORLD_CREATION_MINE_MOVING "$out/client.log"
+    import -window root -quality 91 "$out/stock-mine-machinery.jpg"
   elif [[ ${LUANTTD_QA_RIVER_GUARD:-0} == 1 ]]; then
     waitmark WORLD_CREATION_RIVER_GUARD
     grep WORLD_CREATION_RIVER_GUARD "$out/client.log"

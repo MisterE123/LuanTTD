@@ -101,6 +101,14 @@ return function(Sim,H,Packets,Rating,Mail)
         end,random)
       end
     end
+    local before_landscape=hooks and hooks.before_landscape
+    if before_landscape then
+      local first_animate=animate
+      animate=function(tick)
+        if first_animate then first_animate(tick) end
+        before_landscape(tick-1)
+      end
+    end
     local rated=not animate and update_rating or function(tick)
       animate(tick)
       update_rating()
