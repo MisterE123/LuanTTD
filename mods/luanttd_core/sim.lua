@@ -533,7 +533,9 @@ local function coastal_visit(s)
     stock_tree_lifecycle=dofile(module_root.."tree_lifecycle_world.lua")(M,terrain_rules,rules)
   end
   local board=coastal_world.board(s)
-  board.flood_vehicles=function(id,tick) return M.coastal_rail_flood(s,id,tick) end
+  board.flood_vehicles=function(id,tick,other,water_z) return M.coastal_rail_flood(s,id,tick,other,water_z) end
+  board.bridge_ends=function(id) return M.coastal_rail_bridge(s,id) end
+  board.clear_bridge=function(id) return M.coastal_clear_rail_bridge(s,id) end
   board.clear_signals=function(id,removed,apply) return M.coastal_clear_rail_signal(s,id,removed,apply) end
   board.clear_platform=function(id,apply) return M.coastal_clear_rail_platform(s,id,apply) end
   local trees=s.stock_generated_profile and stock_tree_lifecycle
@@ -3935,10 +3937,18 @@ function M.commercial_passengers_waiting(s,mode,id)
   if not paid_ferry or not id then return 0 end
   return paid_ferry.terminal_waiting(s,mode,id)
 end
-function M.coastal_rail_flood(s,id,tick)
+function M.coastal_rail_bridge(s,id)
+  local rail=paid_rail_runs[s]
+  if rail and rail.coastal_bridge then return rail.coastal_bridge(s,id) end
+end
+function M.coastal_clear_rail_bridge(s,id)
+  local rail=paid_rail_runs[s]
+  if rail and rail.coastal_clear_bridge then return rail.coastal_clear_bridge(s,id) end
+end
+function M.coastal_rail_flood(s,id,tick,other,water_z)
   local rail=paid_rail_runs[s]
   if not rail or not rail.flood_ground_tile or not paid_ferry then return 0 end
-  return rail.flood_ground_tile(s,id,function(r) return paid_ferry.flood_train(s,r,tick) end)
+  return rail.flood_ground_tile(s,id,function(r) return paid_ferry.flood_train(s,r,tick) end,other,water_z)
 end
 function M.coastal_clear_rail_signal(s,id,removed,apply)
   local rail=paid_rail_runs[s]

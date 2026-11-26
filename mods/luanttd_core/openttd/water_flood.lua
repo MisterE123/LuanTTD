@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- OpenTTD contributors: 14.1 src/water_cmd.cpp GetFloodingBehaviour,
--- _flood_from_dirs, TileLoop_Water, and ordinary clear ground branches of
--- DoFloodTile/FLOOD_DRYUP. Terrain structure replacement is host policy.
+-- _flood_from_dirs, TileLoop_Water, and the ordinary clear ground branches.
+-- OpenTTD 16.0-RC1 water_cmd.cpp DoFloodTile: flat rail bridge ends use
+-- the deck height and both physical portal tiles. Clearance is host policy.
 local F={}
 local floor=math.floor
 local flood={[0]=170,10,130,2,160,0,128,131,40,8,0,14,32,56,224}
@@ -50,11 +51,14 @@ function F.visit(board,x,z)
       -- RC1 DoFloodTile: for non-flat object tiles the TileType::Object
       -- switch has no case; flat land delegates to LandscapeClear as WATER.
       if t and (t.kind=="clear" or t.kind=="trees" and not t.water_ground or t.kind=="rail" and not t.water_ground and board.flood_rail
+          or t.kind=="rail_bridge" and t.slope==0 and board.flood_bridge
           or t.kind=="object" and t.can_flood and t.slope==0)
           and (t.foundation_base or t.base)==0 and has(directions(t),opposite(dir)) then
         if t.kind=="rail" then
           local q=board.flood_rail(u,v,t)
           if q then changes[#changes+1]={x=u,z=v,from="rail",kind=q.kind,rail=q} end
+        elseif t.kind=="rail_bridge" then
+          if board.flood_bridge(t) then changes[#changes+1]={x=u,z=v,from=t.kind,kind="sea",span=t.span} end
         else
           local keep_tree=t.kind=="trees" and t.slope~=0 and not raised[t.slope]
           if keep_tree or not board.can_clear or board.can_clear(u,v,t) then

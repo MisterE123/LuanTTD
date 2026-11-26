@@ -1365,10 +1365,17 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local GroundFlood=dofile((core and core.get_modpath and core.get_modpath("luanttd_core")
     or "mods/luanttd_core").."/openttd/ground_vehicle_flood.lua")
 
+  function R.coastal_bridge(s,id)
+    if Spans then return Spans.coastal_bridge(s,id) end
+  end
+  function R.coastal_clear_bridge(s,id)
+    if Spans then return Spans.coastal_clear(s,id) end
+  end
+
   -- FloodVehicleProc checks every physical body, then crashes its front.
   -- The current flood adapter mounts only ordinary owned town trains:
   -- other modes retain their separate loading, accident and retirement policies.
-  function R.flood_ground_tile(s,tile,kill)
+  function R.flood_ground_tile(s,tile,kill,other,water_z)
     local d=R.current(s)
     if not d then return 0 end
     local n=0
@@ -1389,7 +1396,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
       return out
     end
-    GroundFlood.visit_ground(tile,nil,0,bodies,function(r)
+    GroundFlood.visit_ground(tile,other,water_z or 0,bodies,function(r)
       local victims=kill(r)
       if victims==nil then return end
       r.crashed,r.phase,r.crash_age,r.speed,r.subspeed,r.progress,r.stopped=

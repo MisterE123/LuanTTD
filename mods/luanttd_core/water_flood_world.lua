@@ -44,6 +44,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     if t.stock_void then return "void" end
     if t.ship and t.ship.water_ground and t.ship.water_class=="sea" then return "station" end
     if rail_ok(s,id,t) then return "rail" end
+    if t.build=="stock_rail_bridge" and t.rail_span_id then return "rail_bridge" end
     if floodable_object(t) and (t.terrain=="grass" or t.terrain=="hill") then
       for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return "protected" end end
       return "object"
@@ -72,6 +73,15 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       local kind=class(s,id,t)
       if kind=="protected" or kind=="canal" or kind=="river" then return {kind=kind} end
       local slope,base=Terrain.tile(s.corner_grid,x,z)
+      if kind=="rail_bridge" then
+        if slope~=0 or not B.bridge_ends then return {kind="protected"} end
+        local other,water_z=B.bridge_ends(id)
+        if not other then return {kind="protected"} end
+        for _,k in ipairs(adjacent_layers) do
+          if s[k] and (s[k][id] or s[k][other]) then return {kind="protected"} end
+        end
+        return {kind=kind,id=id,span=t.rail_span_id,slope=slope,base=base,other=other,water_z=water_z}
+      end
       if kind=="rail" then
         local platform=t.rail_station_id~=nil
         if platform and (slope~=0 or not B.clear_platform or not B.clear_platform(id,false)) then return {kind="protected"} end
@@ -85,6 +95,13 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       return {kind=kind,slope=slope,base=base,water_class=kind=="station" and "sea" or t.water_class,
         rocks=t.stock_water_rocks or (kind=="clear" and t.stock_clear_ground==2) or nil,
         water_ground=kind=="trees" and t.wood.ground==3 or nil}
+    end
+    function B.flood_bridge(t)
+      if not B.flood_vehicles or not B.clear_bridge then return false end
+      B.flood_vehicles(t.id,B.tick,t.other,t.water_z)
+      -- Both endpoints reference the bridge occupancy. Do not clear a
+      -- wreck/claim or invalidate an active route the dispatcher can't yet replan.
+      return rail_remove_safe(s,t.id) and rail_remove_safe(s,t.other)
     end
     if RailWater then
       function B.flood_rail(_,_,t)
@@ -134,13 +151,15 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     local changes=Flood.visit(B,x,z)
     if #changes==0 then return 0 end
     s.changed=s.changed or {}
+    local cleared_spans={}
     for _,change in ipairs(changes) do
       local id=Sim.id(change.x,change.z)
       local t=assert(s.tiles[id])
       local actual=class(s,id,t)
       -- Several adjacent eligible parcels of one HQ may have been
       -- quoted before the first parcel cleared the whole building.
-      assert(actual==change.from or change.from=="object" and actual=="clear")
+      assert(actual==change.from or change.from=="object" and actual=="clear"
+        or change.from=="rail_bridge" and cleared_spans[change.span] and actual=="clear")
       local _,base=Terrain.tile(s.corner_grid,change.x,change.z)
       if change.from=="rail" then
         local q=change.rail
@@ -156,6 +175,14 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         else
           t.rail_tracks,t.rail_ground=q.tracks,q.ground
         end
+      elseif change.from=="rail_bridge" then
+        if not cleared_spans[change.span] then
+          for _,dirty in ipairs(assert(B.clear_bridge(id),"A quoted coastal rail bridge changed")) do
+            if dirty~=id then s.changed[#s.changed+1]=dirty end
+          end
+          cleared_spans[change.span]=true
+        end
+        apply(t,"sea",base)
       elseif change.kind=="shore_trees" then
         apply(t,"coast",base)
         t.wood.ground,t.wood.density,t.wood.water_class=3,3,"sea"

@@ -323,11 +323,7 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
     s.topology=s.topology+1
     return true,("Rail %s built for $%d."):format(p.kind,p.price),dirty,p.deck,p
   end
-  function W.clear(s,owner,id)
-    local permitted,err=precheck(s)
-    if not permitted then return false,err end
-    local p=W.by_portal(s,id)
-    if not p or p.owner~=owner then return false,"Choose your rail span portal." end
+  local function clear_structure(s,id,p)
     local key=s.tiles[id].rail_span_id
     local dirty={p.start,p["end"]}
     for _,portal in ipairs(dirty) do
@@ -337,11 +333,43 @@ return function(Sim,Terrain,Height,Bridge,Tunnel,Track,mounted_bridge_styles)
     local index=p.kind=="bridge" and "rail_bridge_above" or "rail_tunnel_below"
     for _,middle in ipairs(p.middle) do s[index][middle]=nil;dirty[#dirty+1]=middle end
     s.stock_rail_spans[key]=nil
+    return dirty
+  end
+  function W.clear(s,owner,id)
+    local permitted,err=precheck(s)
+    if not permitted then return false,err end
+    local p=W.by_portal(s,id)
+    if not p or p.owner~=owner then return false,"Choose your rail span portal." end
+    local dirty=clear_structure(s,id,p)
     local price=p.total_length*((p.kind=="bridge" and 50 or 30)-70)
     local c=Sim.company(s,owner)
     c.cash,c.expense,c.month_exp=c.cash-price,c.expense+price,c.month_exp+price
     s.topology=s.topology+1
     return true,"Rail span cleared; the terrain was retained.",dirty,p.deck
+  end
+
+  -- RC1 FloodVehicles tests both portals at GetBridgePixelHeight;
+  -- DoClearBridge drops the upper layer without charging a company.
+  function W.coastal_bridge(s,id)
+    local p=W.by_portal(s,id)
+    if not p or p.kind~="bridge" or p.transport~="rail" or p.railtype~=0 then return end
+    local other=p.start==id and p["end"] or p.start
+    if W.by_portal(s,other)~=p then return end
+    return other,p.deck*8
+  end
+  function W.coastal_clear(s,id)
+    if not W.coastal_bridge(s,id) then return end
+    local p=W.by_portal(s,id)
+    for _,middle in ipairs(p.middle) do
+      local t=s.tiles[middle]
+      if t.build=="road" and t.roadside=="trees" and not (t.station or t.level_crossing or t.road_waypoint_id) then
+        local x,z=Sim.xy(middle)
+        local slope,base=Terrain.tile(s.corner_grid,x,z)
+        local max=base+(slope>=16 and 2 or slope~=0 and 1 or 0)
+        if p.deck<max+3 then t.roadside="paved" end
+      end
+    end
+    return clear_structure(s,id,p)
   end
 
   function W.board(s,base,enabled)

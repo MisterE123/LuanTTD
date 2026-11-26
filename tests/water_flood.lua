@@ -74,3 +74,28 @@ local d=Flood.visit({tile=cell},1,1)
 assert(#d==1 and d[1].kind=="clear")
 assert(Flood.behaviour({kind="coast",slope=1})=="active")
 print(("PASS real landscaping and source clock: bay reached day %d, level-0 inland trench stayed dry, shore tracks and vessel/canal safeguards"):format(reached))
+
+
+-- RC1's flat-only TunnelBridge dispatch. A bridge on a slope or
+-- above sea level never asks for vehicle flooding or demolition.
+local reach={
+  ["0,0"]={kind="sea",slope=0,base=0},
+  ["0,-1"]={kind="rail_bridge",slope=0,base=0,id=101,other=401,water_z=8,span=7},
+  ["1,0"]={kind="rail_bridge",slope=3,base=0,id=102,other=402,water_z=8,span=9},
+  ["0,1"]={kind="rail_bridge",slope=0,base=1,id=103,other=403,water_z=16,span=10},
+}
+local calls,clear=0,false
+local bridge={
+  tile=function(x,z) return reach[x..","..z] end,
+  flood_bridge=function(t)
+    calls=calls+1
+    assert(t.id==101 and t.other==401 and t.water_z==8)
+    return clear
+  end
+}
+assert(#Flood.visit(bridge,0,0)==0 and calls==1)
+clear=true
+local changes=Flood.visit(bridge,0,0)
+assert(calls==2 and #changes==1 and changes[1].x==0 and changes[1].z==-1
+  and changes[1].from=="rail_bridge" and changes[1].kind=="sea" and changes[1].span==7)
+print("PASS: only a flat coastal rail bridge requests flooding, with deck height and both physical endpoints")
