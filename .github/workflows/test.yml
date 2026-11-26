@@ -325,6 +325,8 @@ jobs:
           lua5.1 tests/tree_lifecycle_temperate.lua
           python3 tests/initial_landscape_ticks_rc1.py "$src" lua5.1
           lua5.1 tests/stock_initial_frontage.lua
+          python3 tests/river_terraform_rc1.py "$src" lua5.1
+          lua5.1 tests/river_landscaping.lua
           lua5.1 tests/clear_grass_regrowth.lua
           lua5.1 tests/demolition_effects.lua
           /usr/bin/python3 tools/build_demolition_particle_art.py --check

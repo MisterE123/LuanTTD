@@ -43,7 +43,7 @@ cat "$game/mods/luanttd_core/init.lua" >> "$out/probe.lua"
 cat >> "$out/probe.lua" <<'LUA'
 assert(placement and Sim.W==128 and Sim.H==128 and S.stock_generated_profile.industries)
 assert(core.get_mod_storage():get_string("campaign")=="")
-local terrain_witness
+local terrain_witness,river_corner
 if core.settings:get_bool("luanttd_qa_normal_river",false) then
   local count=0
   local chosen,score
@@ -60,6 +60,19 @@ if core.settings:get_bool("luanttd_qa_normal_river",false) then
         if not score or runs>score then chosen,score=id,runs end
       end
     end
+  end
+  if core.settings:get_bool("luanttd_qa_river_guard",false) then
+    assert(chosen)
+    local cx,cz=Sim.xy(chosen)
+    for dz=-3,3 do for dx=-3,3 do
+      local id=Sim.id(cx+dx,cz+dz)
+      if not river_corner and S.tiles[id].water_class=="river" then
+        local ok,why=Sim.landscape(S,"River Probe","raise",cx+dx,cz+dz,nil,nil,nil,true)
+        if not ok and why:find("remove the river",1,true) then river_corner=id end
+      end
+    end end
+    assert(river_corner,"No usable river corner in the viewport")
+    S.companies["River Probe"]=nil
   end
   if core.settings:get_bool("luanttd_qa_initial_frontage",false) then
     local done=assert(S.stock_generated_profile.frontage)
@@ -107,6 +120,17 @@ core.register_globalstep(function()
       local disk=assert(OwnerCheckpoint.read())
       assert(disk.companies["singleplayer"] and disk.stock_generated_profile.width==128)
       core.log("action","WORLD_CREATION_WORKER_READY")
+      if river_corner then
+        assert(authority.query({kind="terrain_quote",player="singleplayer",
+          request={operation="raise",first=river_corner}},function(q)
+          assert(q and not q.ok and q.why:find("remove the river",1,true))
+          assert(authority.query({kind="terrain_quote",player="singleplayer",
+            request={operation="bulldoze",first=river_corner}},function(clear)
+            assert(clear and clear.ok and clear.value.cost==10000)
+            core.log("action","WORLD_CREATION_RIVER_GUARD protected raise; deliberate Bulldozer available")
+          end))
+        end))
+      end
       if core.settings:get_bool("luanttd_qa_initial_frontage",false) then
         local function check_live(retries)
           assert(retries>0,"Worker did not advance past the pregame clock")
@@ -164,6 +188,10 @@ fi
 if [[ ${LUANTTD_QA_INITIAL_FRONTAGE:-0} == 1 ]]; then
   [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]
   printf 'luanttd_qa_initial_frontage = true\n' >> "$out/local.conf"
+fi
+if [[ ${LUANTTD_QA_RIVER_GUARD:-0} == 1 ]]; then
+  [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]
+  printf 'luanttd_qa_river_guard = true\n' >> "$out/local.conf"
 fi
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   t=$(realpath "$BAYLINE_NATIVE_TOOLS")
@@ -245,6 +273,11 @@ if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
     waitmark WORLD_CREATION_PREGAME_RESUMED
     grep WORLD_CREATION_PREGAME_RESUMED "$out/client.log"
     import -window root -quality 91 "$out/initial-settled-street.jpg"
+  elif [[ ${LUANTTD_QA_RIVER_GUARD:-0} == 1 ]]; then
+    waitmark WORLD_CREATION_RIVER_GUARD
+    grep WORLD_CREATION_RIVER_GUARD "$out/client.log"
+    sleep 2
+    import -window root -quality 91 "$out/river-guard.jpg"
   else import -window root -quality 91 "$out/normal-river-landscape.jpg"; fi
 fi
 grep -q 'disposable test failure' "$out/client.log"

@@ -34,45 +34,72 @@ local function fingers(s,company,mode,x,z,charge,changed_corners)
   assert(company.cash==cash-charge and #dirty==#quote.tiles)
   return dirty
 end
+local function refuse(s,c,mode,x,z,u,v)
+  local before,cash,topology,quota=s.corner_grid.revision,c.cash,s.topology,c.clear_limit
+  for _,quote in ipairs{"footprint",false} do
+    local ok,why=Sim.landscape(s,"River Tester",mode,x,z,u,v,false,quote)
+    assert(not ok and why:find("remove the river",1,true),tostring(why))
+    assert(s.corner_grid.revision==before and c.cash==cash and s.topology==topology and c.clear_limit==quota)
+  end
+end
 local s,c=interior(function(x) return x>=15 and 2 or 1 end)
 for x=9,17 do water(s,x,12,"river",x*10) end
 local function cell(x) return s.tiles[Sim.id(x,12)] end
 local function wet(x) assert(cell(x).water_class=="river" and cell(x).stock_river_bits==x*10) end
-local function dry(x) assert(cell(x).terrain=="grass" and not cell(x).water_class and not cell(x).stock_river_bits) end
--- A corner on the adjoining strip changes only its own four tiles.
+-- Touching the next row, but not the river corner, remains ordinary work.
 fingers(s,c,"lower",10,11,250,1)
+refuse(s,c,"lower",12,12)
+refuse(s,c,"raise",12,12)
+refuse(s,c,"lower",12,12,12,12)
+refuse(s,c,"lower",14,12)
 for x=9,17 do wet(x) end
--- Sharing a corner with an otherwise flat river changes exactly two river tiles.
-fingers(s,c,"lower",12,12,20250,1)
-for _,x in ipairs{9,10,13,14,15,16,17} do wet(x) end
-dry(11);dry(12)
+-- A multi-corner drag still completes eligible corners in the same
+-- gesture; rejected approaches do not consume cash or clear river.
+local cash=c.cash
+local ok,price,plan=Sim.landscape(s,"River Tester","raise",6,12,10,12,false,"footprint")
+assert(ok and #plan.corners==3 and price==750,tostring(price))
+assert(Sim.landscape(s,"River Tester","raise",6,12,10,12))
+assert(c.cash==cash-750 and T.corner(s.corner_grid,8,12)==2 and T.corner(s.corner_grid,9,12)==1)
+for x=9,17 do wet(x) end
 assert(T.tile(s.corner_grid,14,12)==3 and T.tile(s.corner_grid,15,12)==0)
--- Lowering a corner beside the inclined reach also propagates into an
--- adjacent high corner, which clears a third tile outside the initial four.
-local dirty=fingers(s,c,"lower",14,12,30500,2)
-local touched={}
-for _,id in ipairs(dirty) do touched[id]=true end
-assert(touched[Sim.id(15,12)])
-dry(13);dry(14);dry(15)
-wet(10);wet(16)
--- Raising back to the old local corner height does not re-create the stream.
-fingers(s,c,"raise",14,12,250,1)
-for _=1,5 do Sim.daily(s) end
-for x=11,15 do dry(x) end
-wet(10);wet(16)
-assert(F.behaviour({kind="river",slope=0,base=0})=="none")
-assert(F.behaviour({kind="river",slope=3,base=1})=="none")
 
--- A qualifying sea-level neighbor can flood a freshly erased river, but
--- the resulting water is stock coast/sea; the river class never regrows.
+-- The only river is beyond the initial four affected tiles. OpenTTD's
+-- recursive grade propagation still reaches it and rejects the command.
+local recursive,cc=interior(function(x) return x>=15 and 2 or 1 end)
+local at,far=water(recursive,15,12,"river",150)
+refuse(recursive,cc,"lower",14,12)
+assert(far.water_class=="river" and far.stock_river_bits==150)
+local t={id=1,tile=Sim.id(18,10),kind="town",name="River town"}
+recursive.sites[1]=t
+local before,topology=cc.cash,recursive.topology
+local q,cost=Sim.plan(recursive,"River Tester","clear",{at,at})
+assert(q and cost==10000 and #q==1 and not cc.stock_town_authority_ratings)
+assert(Sim.build(recursive,"River Tester","clear",{at,at}))
+assert(cc.cash==before-10000 and recursive.topology==topology+1)
+assert(cc.stock_town_authority_ratings[1]==300)
+assert(not far.water_class and not far.stock_river_bits)
+local dirty=fingers(recursive,cc,"lower",14,12,500,2)
+local reached
+for _,id in ipairs(dirty) do if id==at then reached=true end end
+assert(reached,"The previously rejected corner did affect the far tile")
+recursive.sites[1]=nil -- the synthetic council is not a full generated town
+for _=1,5 do Sim.daily(recursive) end
+assert(not far.water_class and not far.stock_river_bits)
+
+-- Separate sea flooding remains possible after explicit river removal;
+-- it produces sea/shore water, not a regenerated river.
 s,c=interior()
-local _,cut=water(s,11,12,"river",113)
+local erase,cut=water(s,11,12,"river",113)
 water(s,12,12,"sea")
 local _,still=water(s,11,13,"river",249)
-fingers(s,c,"raise",11,12,10250,1)
+refuse(s,c,"raise",11,12)
+assert(Sim.clear_water(s,"River Tester",erase))
+fingers(s,c,"raise",11,12,250,1)
 assert(cut.terrain=="grass" and not cut.stock_river_bits)
 assert(W.visit(s,11,13)==0 and still.stock_river_bits==249)
 assert(W.visit(s,12,12)>0)
 assert(cut.terrain=="water" and cut.coastal_water and cut.water_class=="sea" and not cut.stock_river_bits)
 assert(still.water_class=="river" and still.stock_river_bits==249)
-print("PASS river landscaping: untouched adjacent, flat pair erased, inclined and propagated erase, no river refill, sea-only refill")
+assert(F.behaviour({kind="river",slope=0,base=0})=="none")
+assert(F.behaviour({kind="river",slope=3,base=1})=="none")
+print("PASS RC1 river terraforming: nearby edit, flat/slope/recursive refusal, atomic quote, explicit demolition, town rating, separate flood")

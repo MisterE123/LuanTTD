@@ -21,6 +21,7 @@ printf '\n' >> "$game/mods/luanttd_core/init.lua"
 if [[ ${BAYLINE_NATIVE_GENERATED_SCALE:-0} == 1 ]]; then
   cat tests/stock_generated_scale_append.lua >> "$game/mods/luanttd_core/init.lua"
 elif [[ ${BAYLINE_NATIVE_RIVER_LANDSCAPING:-0} == 1 ]]; then
+  printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
   cat tests/river_landscaping_native_append.lua >> "$game/mods/luanttd_core/init.lua"
 elif [[ ${BAYLINE_NATIVE_GENERATED_RIVER:-0} == 1 ]]; then
   cat tests/stock_generated_river_append.lua >> "$game/mods/luanttd_core/init.lua"

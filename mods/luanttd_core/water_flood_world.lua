@@ -291,8 +291,11 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     return Sim.road_site_clear_cost(t)
   end
 
-  function W.clear_apply(s,id)
+  function W.clear_apply(s,id,company)
     local t=s.tiles[id]
+    if company and t.water_class=="river" and not t.coastal_water then
+      Sim.road_tree_authority().clear_river(s,company,id)
+    end
     local x,z=Sim.xy(id)
     local _,base=Terrain.tile(s.corner_grid,x,z)
     if t.stock_canal and t.owner then

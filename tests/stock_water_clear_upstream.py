@@ -121,6 +121,10 @@ for line in io.lines() do
  local k,s,x,z,own,busy,free,flags,terra=unpack(a)
  local opt={owner="own",no_water=flags%2==1,clear_allowed=free==1 or x>=1 and x<62 and z>=1 and z<62}
  local cmd=terra==1 and F.terraform_water or F.clear_water
+ -- For a natural river, this historical 14.1 fixture covers the
+ -- ordinary clear path only. Its terraform result is identical to
+ -- clear, unlike the version-pinned RC1 comparator.
+ if k==1 then cmd=F.clear_water end
  local n,why=cmd({kind=cls[k],slope=s,owner=owners[own],occupied=busy==1},opt)
  local exec=n and flags>=2 and 1 or 0
  local account=4-(k==2 and own==2 and exec or 0)

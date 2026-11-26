@@ -114,8 +114,11 @@ function F.clear_water(t,opts)
   return t.kind=="canal" and (opts.clear_canal or 5000) or (opts.clear_water or 10000)
 end
 
+-- OpenTTD 16.0-RC1 water_cmd.cpp::TerraformTile_Water. Deliberate
+-- LandscapeClear remains a distinct command and may remove the river.
 function F.terraform_water(t,opts)
   if t and t.kind=="canal" then return nil,"MUST_DEMOLISH_CANAL_FIRST" end
+  if t and t.kind=="river" then return nil,"MUST_DEMOLISH_RIVER_FIRST" end
   return F.clear_water(t,opts)
 end
 return F

@@ -610,7 +610,7 @@ function M.clear_water(s,owner,id,quote_only)
   if (account and account.cash or 100000)<price then return nil,"NOT_ENOUGH_MONEY" end
   if not quote_only then
     local c=M.company(s,owner)
-    coastal_world.clear_apply(s,id)
+    coastal_world.clear_apply(s,id,c)
     s.topology=s.topology+1
     debit(c,price)
   end
@@ -940,7 +940,9 @@ function M.landscape(s,owner,mode,x,z,u,v,diagonal,quote_only)
     local explanations={PROTECTED_TILE="Clear forest first; a building or protected infrastructure blocks this corner.",
       NOT_ENOUGH_MONEY="Not enough money for the next change.",ALREADY_AT_SEA_LEVEL="Already at sea level.",
       ALREADY_LEVELLED="Already level.",TOO_HIGH="The edit exceeds this world's height limit.",
-      MUST_DEMOLISH_CANAL_FIRST="Dismantle the canal before landscaping.",VEHICLE_IN_THE_WAY="A vessel is in the way or has reserved the waterway.",
+      MUST_DEMOLISH_CANAL_FIRST="Dismantle the canal before landscaping.",
+      MUST_DEMOLISH_RIVER_FIRST="Use the Bulldozer to remove the river before landscaping.",
+      VEHICLE_IN_THE_WAY="A vessel is in the way or has reserved the waterway.",
       CROSSING_SURFACE_HEIGHT="Keep the crossing deck at its current height on a supported slope, or remove the crossing first.",
       AIRPORT_SURFACE_HEIGHT="Landscaping cannot change the level of an active airport.",
       TOWN_HOUSE_HEIGHT="Keep the house foundation at its current height and avoid steep slopes.",
@@ -2709,7 +2711,7 @@ local function apply_build(s,owner,changes,cost)
       assert(st.id==item.joined_tram_station and st.tram_only)
       M.activate_tram_road_stop(s,id,owner)
     elseif item.water_clear then
-      coastal_world.clear_apply(s,id)
+      coastal_world.clear_apply(s,id,c)
       M.mark_clear_land(s,id)
     elseif k=="clear" then
       if tile.road_stop_pair then

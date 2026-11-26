@@ -82,8 +82,11 @@ The OpenTTD contributors' GPL-2.0 logic follows pinned 14.1
 ordinary `DoFloodTile` and `DoDryUp` transitions);
 [`terraform_cmd.cpp`](https://github.com/OpenTTD/OpenTTD/blob/14.1/src/terraform_cmd.cpp)
 supplies the corner limit, quota and leveling rules that are already
-in the shared terrain planner. Normal-water clearing follows
-`TerraformTile_Water` and the ordinary `ClearTile_Water` rules.
+in the shared terrain planner. Raising and lowering water uses the
+[16.0-RC1 `TerraformTile_Water` guard](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/water_cmd.cpp):
+natural rivers and canals must be demolished separately. Bulldozing a
+river within a town's local-authority radius costs 200 rating points,
+down to the stock minimum, as well as the normal water-clear price.
 
 - On the same stock landscape cursor as house/industry visits, an
   active sea or one-raised-corner shore can wet only level-0 targets
@@ -108,29 +111,22 @@ in the shared terrain planner. Normal-water clearing follows
 lua5.1 tests/water_flood.lua
 lua5.1 tests/stock_water_clear.lua
 lua5.1 tests/river_landscaping.lua
-python3 tests/stock_water_clear_upstream.py /path/to/OpenTTD lua5.1
+python3 tests/stock_water_clear_upstream.py /path/to/OpenTTD-14.1 lua5.1
+python3 tests/river_terraform_rc1.py /path/to/OpenTTD-16.0-RC1 lua5.1
 TMPDIR=/path/to/qa_temp python3 tests/water_flood_upstream.py /path/to/OpenTTD lua5.1
 tests/water_flood_native.sh /path/to/luantiserver /path/to/new-private-evidence
 BAYLINE_NATIVE_RIVER_LANDSCAPING=1 tests/stock_generated_native.sh /path/to/new-private-evidence
 ```
 
 The compiled references check 24,000 stock flood visits and 67,584
-water clear/terraform cases, including flat and sloped river clearance. The native desktop proof uses the
-actual Bulldozer and Raise controls, then resumes the water clock and
-reopens the Luanti save. The Lua
-fixture exercises shared-corner landscaping, marine track geometry,
-protection and the actual shared landscape cursor. The dedicated
-native campaign fixture invokes the real commands in the fresh
-scenario, checks the sea, 17 shoreline mesh cells and dry trench,
-then verifies the same coastline and cursor after a SQLite restart.
-
-The generated-river native regression checks a real flat and inclined
-river in Luanti. A nearby edit leaves the flat river node and class
-intact; touching it clears it. The raised coastal incline eventually
-becomes sea-class water, a flat inland cut stays dry, and an untouched
-neighbor still has its original river class and random byte after SQLite
-reload.
-
+historical water-clear/terraform cases, plus the literal RC1 water
+terraform guard. Real Luanti checks verify the terrain quote on a
+worker-owned world, successful nearby grading, rejection at flat and
+inclined river corners, and explicit Bulldozer clearing. After SQLite
+reload the deliberately cleared tile is land and the preserved river
+keeps its slope, native mesh and random texture byte. The rule covers
+recursive corner changes, not only the four tiles immediately sharing
+the selected corner.
 
 ### Rocky shallows
 

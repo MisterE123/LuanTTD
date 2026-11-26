@@ -38,6 +38,18 @@ return function(Sim,Stock)
     ratings[town]=Stock.clear_trees(before)
     return before~=ratings[town]
   end
+  -- RC1 ClearTile_Water and ChangeTownRating: only an actual river
+  -- demolition within the town's local authority radius is penalized.
+  function A.clear_river(s,company,id)
+    local policy=s.stock_road_town_policy or {}
+    if policy.magic_bulldozer then return end
+    local town,distance=A.nearest(s,id)
+    if not town or distance>=(policy.dist_local_authority or 20) then return end
+    local ratings=company.stock_town_authority_ratings
+    local before=ratings and ratings[town.id] or Stock.initial
+    local after=before>-1000 and math.max(-1000,before-200) or before
+    A.apply(company,{[town.id]=after})
+  end
   function A.quote(s,owner,id,wanted,journal)
     local t=A.nearest(s,id)
     if not t then return true end
