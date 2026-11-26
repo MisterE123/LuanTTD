@@ -1147,12 +1147,20 @@ return function(api)
       local name="rail_turnout_catenary_"..mask
       wires[mask]=architecture(name,name,"rail_catenary_atlas")
     end
+    local contact={}
+    for mask=1,63 do
+      local name="rail_compound_contact_"..mask
+      contact[mask]=architecture(name,name,"rail_catenary_atlas")
+    end
+    stock_scenery.compound_portal=architecture("rail_compound_portal","rail_compound_portal","rail_catenary_atlas")
+    stock_scenery.is_compound_wire=Turnout.compound
     function stock_scenery.rail_wire(id,t,x,z,under,stock_profile)
       local bits=t.rail_tracks
       if Turnout.supported(bits) then
         local selected
         if projected then selected=S.rail_wire[id] else selected=Turnout.at(S,id,t) end
         if not selected or under then return end
+        if Turnout.compound(bits) then return contact[selected] end
         if selected==bits then return wires[selected] end
         return stock_scenery.catenary[selected][1]
       end
@@ -1986,9 +1994,15 @@ return function(api)
             if pole then return pole end
           end
           local deck=Sim.bridge_deck_at(S,id)
+          local compound=stock_scenery.is_compound_wire(t.rail_tracks)
+          -- The portal's raised frame is a separate mesh, so the wires
+          -- can respond to source connectivity without changing its feet.
+          if compound and (not deck or deck>y) and x%2==1 and z%2==1 then
+            return stock_scenery.compound_portal
+          end
           -- RC1 elrail.cpp suppresses wire only one level over
           -- ground. At two levels it shares the deck's height slot.
-          if not deck or deck>level+1 then
+          if (not deck or deck>level+1) and (not compound or not deck or deck>y) then
             local under=deck==y and (t.rail_tracks==1 or t.rail_tracks==2)
             if z%2==0 and ((under and x%2==1) or (not under and x%2==0)) then
               local wire=stock_scenery.rail_wire(id,t,x-(under and 1 or 0),z,under,stock_profile)

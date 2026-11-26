@@ -1,11 +1,18 @@
 -- Ported RC1 wire selection, independent of scene-interest boundaries.
--- The physical support on these two-piece turnouts is native Luanti art.
+-- The physical supports on compound junctions are native Luanti art.
 return function(Sim,Track,Kernel)
   local A={}
   A.masks={5,6,9,10,17,18,20,24,33,34,36,40}
   local present={}
   for _,mask in ipairs(A.masks) do present[mask]=true end
-  function A.supported(mask) return present[mask]==true end
+  local compound={[3]=true} -- crossing straight tracks use the same portal
+  for mask=1,63 do
+    local bits,n=mask,0
+    while bits>0 do n=n+bits%2;bits=math.floor(bits/2) end
+    if n>=3 then compound[mask]=true end
+  end
+  function A.compound(mask) return compound[mask]==true end
+  function A.supported(mask) return present[mask]==true or A.compound(mask) end
   function A.at(s,id,t)
     if not (t and t.rail_type==1 and A.supported(t.rail_tracks)) then return end
     local board={

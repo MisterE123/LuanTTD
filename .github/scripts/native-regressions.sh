@@ -35,6 +35,7 @@ case "${1:-}" in
     LUANTTD_QA_CANAL_DIKES=1 BAYLINE_NATIVE_DISPLAY=365 BAYLINE_NATIVE_PORT=43382 timeout --kill-after=10s 170 bash tests/campaign_worker_stock_residential_native.sh
     ;;
   stock-rail)
+    BAYLINE_NATIVE_PORT=43384 BAYLINE_NATIVE_STEAM_START_YEAR=1972 BAYLINE_NATIVE_ELECTRIC=true LUANTTD_NATIVE_RAIL_COMPOUND_WIRE=true bash tests/rail_owned_live_native.sh
     lua5.1 tests/stock_rail_metals_roster.lua
     python3 tests/stock_rail_metals_art.py
     bash tests/stock_rail_metals_live_native.sh

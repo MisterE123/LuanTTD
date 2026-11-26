@@ -1,7 +1,7 @@
 # Electrify an owned railway
 
 The electric roster includes the stock **SH '30'** and **SH '40'** and overhead
-wire for flat, single-piece ordinary rail. Steam and diesel can still
+wire for ordinary track, including eligible flat and founded junctions. Steam and diesel can still
 run on the converted railway. Electric locomotives must buy, start and route on
 powered track.
 
@@ -22,11 +22,14 @@ conversion back is **$12 per piece**. Flat straights and curves are
 supported, as are flat passenger platforms, enclosed depots, and
 unoccupied wooden rail bridges. Selecting either bridge portal changes
 the entire bridge once; the land below is not charged or converted.
-The twelve ordinary two-piece turnouts that share an edge can also be
-converted on flat land or on a stock leveled foundation. Wiring follows
-the RC1 branch filter: an unconnected or unelectrified branch may lose its
-wire without changing the tracks. Higher-order junctions, other slopes,
-tunnels and level crossings are outside this conversion mount. Overhead
+Single shared-edge turnouts, full diamonds and junctions with three to
+six track pieces can be converted on flat ground or a stock leveled
+foundation. Wiring follows the OpenTTD 16.0-RC1 branch filter. A branch
+may lose its wire when disconnected or unelectrified, without changing
+the track geometry or charging for more work. Complex junctions have an
+original native steel portal, not an emulation of every OpenTTD pylon
+position. Independent diagonal pairs, other slopes, and some structures
+remain outside this conversion mount. Overhead
 wire inside the depot is hidden by the shed. For ordinary flat straight
 track and single curves, the OpenTTD pylon selector chooses actual edge
 positions, including on visually straightened diagonal runs. A
@@ -57,6 +60,14 @@ At starting prices with a 40-seat carriage:
 The native paid fixture uses a longer powered route with house
 catchments. An unpowered gap blocks orders; once wired, the train
 boards passengers and can earn fares after save/reopen.
+
+The [compound native regression](../tests/rail_compound_wire_native.lua)
+shows an SH ’30’ taking a curve through six pieces and paying a fare.
+Adding powered approaches changes the contact mask from 4 to 21 to 63
+while the same portal stays on the ground. A diamond and founded
+three-piece layout retain their metalwork after SQLite reload. See the
+[editable Blender portal and wires](../art/rail_compound_wire.blend) and
+the [contact geometry comparison](../tests/rail_compound_wire_art.py).
 
 ## Electrify a timber bridge
 
