@@ -20,9 +20,11 @@ authored for LuanTTD.
   **(2x, base + 1, 2z)**, neutral rotation; the nominal ground plane is
   local Y=−.5, and the tile center is local (+.5,+.5) in X/Z.
   Every component stays inside its 2×2 tile footprint; small tie
-  ends are embedded by less than .006 node. The amber glass and red
-  beacon use opaque static color; neither model implies a light
-  animation or lighting-system change.
+  ends are embedded by less than .006 node. The amber and red glass
+  are baked into the meshes. The transmitter's small ruby housing has
+  a transient red obstruction flash mounted at the lens; the tower
+  itself never changes brightness or emits map light. The same flash
+  runs on airport mast assets that have a modeled beacon housing.
 
 Editable source: `art/stock_landmarks.blend`. Regenerate with
 `blender -b -t 3 --python-exit-code 1 --python tools/build_stock_landmarks_art.py`.

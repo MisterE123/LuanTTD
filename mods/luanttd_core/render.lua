@@ -404,7 +404,20 @@ return function(api)
       end
     end
   end
-  local airfield_nodes={}
+  local airfield_nodes,beacon_nodes={},{}
+  -- Mesh-local offsets: Luanti reflects OBJ X. Keep the flash centered
+  -- just above the baked glass/housing, not on the top of its bounding box.
+  local airport_beacon_anchors={
+    small_airport_1_0={.240,1.222,.233},
+    city_airport_0_3={.470,1.359,.380},
+    city_airport_5_3={.605,1.779,.430},
+    commuter_tower={.380,.724,.327},
+  }
+  local function airport_architecture(name,asset,atlas,walls)
+    local node=architecture(name,asset,atlas,false,walls)
+    beacon_nodes[node]=airport_beacon_anchors[asset]
+    return node
+  end
 
   if api.airport_tools then
     local ga_hangar=dofile(modpath.."/sightseeing_hangar.lua")(
@@ -426,7 +439,7 @@ return function(api)
         nodes[z]={}
         for x=0,w-1 do
           local cell=("%s_%d_%d"):format(asset,x,z)
-          nodes[z][x]=architecture(cell,cell,asset.."_atlas",false,ga_hangar.walls[cell])
+          nodes[z][x]=airport_architecture(cell,cell,asset.."_atlas",ga_hangar.walls[cell])
         end
       end
     end
@@ -443,7 +456,7 @@ return function(api)
           for x=0,data.W-1 do
             local art=stock.rows[z][x]
             local node=("%s_airport_%d_%d"):format(layout,x,z)
-            nodes[z][x]=architecture(node,art.asset,art.atlas,false,ga_hangar.walls[art.asset])
+            nodes[z][x]=airport_architecture(node,art.asset,art.atlas,ga_hangar.walls[art.asset])
           end
         end
         airfield_nodes[layout]=nodes
@@ -1162,8 +1175,28 @@ return function(api)
       local node=level and core.get_node_or_nil({x=2*x,y=level+1,z=2*z})
       if node and node.name==airfield_nodes.country[1][0] then return level end
     end)
+  if stock_scenery.transmitter then beacon_nodes[stock_scenery.transmitter]={.500,1.941,.500} end
+  local radio_beacons=dofile(modpath.."/radio_beacon_view.lua")(core,Sim,function(id,x,z,t)
+    local name,level
+    if t.airfield then
+      local field=t.airfield
+      local nodes=airfield_nodes[field.layout or "country"]
+      local row=nodes and nodes[field.z]
+      name=row and row[field.x]
+      if not beacon_nodes[name] then return end
+      local _,base=terrain.tile(id)
+      level=field.level or base
+    elseif t.stock_landmark.kind=="transmitter" then
+      name,level=stock_scenery.transmitter,t.h
+    end
+    local anchor=beacon_nodes[name]
+    if not anchor or not level then return end
+    local node=core.get_node_or_nil({x=2*x,y=level+1,z=2*z})
+    if node and node.name==name then
+      return {x=2*x+anchor[1],y=level+1+anchor[2],z=2*z+anchor[3]}
+    end
+  end)
   function R.step_local_optics(dt,viewers)
-    if not (lighthouse_beams or street_lights or windsocks) then return end
     if not viewers then
       viewers={}
       for _,player in ipairs(core.get_connected_players()) do
@@ -1174,7 +1207,7 @@ return function(api)
     if lighthouse_beams then lighthouse_beams.step(dt,S,viewers) end
     if street_lights then street_lights.step(dt,S,viewers) end
     if windsocks then windsocks.step(dt,S,viewers) end
-
+    radio_beacons.step(dt,S,viewers)
   end
   R.step_lighthouse_beams=R.step_local_optics -- existing native fixtures
   local river_view,river_revision,river_topology,river_directions
