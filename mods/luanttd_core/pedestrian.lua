@@ -161,6 +161,9 @@ function P.new(api)
     local water=waterline(id,cell(id),x,z)
     local y=water and water-.18 or surface(id,x,z)
     if not y then return end
+    if not water and api.render.walk_track_surface then
+      y=api.render.walk_track_surface(id,x,z,y) or y
+    end
     return {x=x,y=y+(water and 0 or .045),z=z},water
   end
   function W.at(tile,hit)

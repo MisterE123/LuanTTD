@@ -37,3 +37,13 @@ The native client test moves a pedestrian against a real projected power
 station facade, through the clear refinery aisle and into a stock tree
 trunk. These are decorative-world movement changes, not changes to
 OpenTTD's terrain, industry, construction or cargo rules.
+
+Flat conventional ballast, junctions and eased diagonals use the same
+track centreline as the displayed meshes. Inclined rail uses eight shallow
+ballast steps aligned to the drivable terrain underneath; their combined
+height stays below the ordinary Walk step. Level crossings keep their
+low road plates. Walk starts above the selected ballast or crossing rather
+than inside it, and actual fences remain physical. The native graphical
+fixture checks contact and movement across and along the rail:
+
+    bash tests/rail_walk_native.sh

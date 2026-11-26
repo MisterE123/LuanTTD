@@ -205,13 +205,19 @@ return function(api)
     end
   end
   local PlatformWalk=dofile(modpath.."/rail_platform_walk.lua")
+  PlatformWalk.registered={}
+  function PlatformWalk.architecture(name,asset,atlas,boxes)
+    local node=architecture(name,asset,atlas,false,boxes)
+    PlatformWalk.registered[node]=boxes
+    return node
+  end
   local crossing_mesh={}
   if api.crossings then
     for axis=0,1 do
       crossing_mesh[axis]={}
       for _,gate in ipairs({"open","closed"}) do
         local asset="level_crossing_"..axis.."_"..gate
-        crossing_mesh[axis][gate]=architecture(asset,asset,"level_crossing_atlas",false,PlatformWalk.crossing(axis))
+        crossing_mesh[axis][gate]=PlatformWalk.architecture(asset,asset,"level_crossing_atlas",PlatformWalk.crossing(axis))
       end
     end
   end
@@ -267,13 +273,13 @@ return function(api)
   end
   local stock_rail,rail_grade,rail_eased={},{},{}
   for bits=1,63 do
-    stock_rail[bits]=architecture("stock_rail_"..bits,"rail_track_"..bits,"rail_atlas",false,PlatformWalk.ballast(bits))
+    stock_rail[bits]=PlatformWalk.architecture("stock_rail_"..bits,"rail_track_"..bits,"rail_atlas",PlatformWalk.ballast(bits))
   end
   for _,part in ipairs({4,8,16,32}) do
     rail_eased[part]={}
     for mode=1,3 do
       local name="rail_eased_"..part.."_"..mode
-      rail_eased[part][mode]=architecture(name,name,"rail_atlas")
+      rail_eased[part][mode]=PlatformWalk.architecture(name,name,"rail_atlas",PlatformWalk.ballast(part,{[part]=mode}))
     end
   end
   stock_rail.dual,stock_rail.guideway={},{}
@@ -281,7 +287,8 @@ return function(api)
     if a+b>0 then
       local key=("%d_%d_%d"):format(bits,a,b)
       local name="rail_dual_"..key
-      stock_rail.dual[key]=architecture(name,name,"rail_atlas")
+      local half=bits/3
+      stock_rail.dual[key]=PlatformWalk.architecture(name,name,"rail_atlas",PlatformWalk.ballast(bits,{[half]=a,[2*half]=b}))
     end
   end end end
   for gauge,kind in pairs({[2]="mono",[3]="maglev"}) do
@@ -312,7 +319,9 @@ return function(api)
     local eased=art and art.eased[bits] or not art and rail_eased[bits]
     return eased and eased[R.rail_diagonal_mode(id,bits)] or (art and art.flat[bits] or stock_rail[bits])
   end
-  for grade=1,4 do rail_grade[grade]=architecture("stock_rail_grade_"..grade,"rail_grade_"..grade,"rail_atlas") end
+  for grade=1,4 do
+    rail_grade[grade]=PlatformWalk.architecture("stock_rail_grade_"..grade,"rail_grade_"..grade,"rail_atlas",PlatformWalk.grade(grade))
+  end
   function stock_rail.grade_art(grade,gauge)
     local art=stock_rail.guideway[gauge]
     return art and art.grade[grade] or rail_grade[grade]
@@ -949,6 +958,29 @@ return function(api)
       return base+.5+api.slope.surface((x-2*u+.5)/2,(z-2*v+.5)/2,slope)
     end
     return terrain.sample(id,x,z)
+  end
+  function R.walk_track_surface(id,x,z,ground)
+    local t=S.tiles[id]
+    if not (t and (t.rail_tracks or t.level_crossing)) then return end
+    local u,v=Sim.xy(id)
+    u,v=u*2,v*2
+    local p={x=u,y=0,z=v}
+    local h
+    -- The graded rail is registered one node higher than a flat rail.
+    -- Only accept contact near the selected ground (split tiles can
+    -- have a second rail one level above the selected lower half).
+    for y=math.floor(ground),math.floor(ground)+2 do
+      p.y=y
+      local node=core.get_node_or_nil(p)
+      for _,b in ipairs(node and PlatformWalk.registered[node.name] or {}) do
+        local y_hit=y+b[5]
+        if y_hit>ground and y_hit-ground<=.12 and
+            x-u>=b[1] and x-u<=b[4] and z-v>=b[3] and z-v<=b[6] then
+          h=math.max(h or y_hit,y_hit)
+        end
+      end
+    end
+    return h
   end
   -- Use the authoritative mean surface, not client-only wave displacement.
   -- An inclined river is a water sheet on its full slope. A coastal tile

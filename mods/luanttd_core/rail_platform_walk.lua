@@ -78,10 +78,69 @@ function P.crossing(axis)
   end
   return q.boxes
 end
-function P.ballast(bits)
-  local q=profile(0,.036)
-  if bits%2==1 then q.box(-1,0,-.25,1,.036,.25) end
-  if math.floor(bits/2)%2==1 then q.box(-.25,0,-1,.25,.036,1) end
-  if #q.boxes>0 then return q.boxes end
+-- Use the same physical centreline as the Blender rail meshes and train
+-- presentation for ordinary curves and every eased diagonal port mode.
+local root=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+local Track=dofile(root.."openttd/rail_track.lua")
+local pose=dofile(root.."rail_pose.lua")(Track)
+local diagonal=dofile(root.."rail_diagonal.lua")(nil,Track)
+local piece={}
+local crown, sleeper_top=.284,.071
+local function section(part,mode)
+  local key=part*4+mode
+  if piece[key] then return piece[key] end
+  local q=profile(0,sleeper_top)
+  if part==0 then q.box(-1,0,-crown,1,sleeper_top,crown)
+  elseif part==1 then q.box(-crown,0,-1,crown,sleeper_top,1)
+  else
+    -- A convex cross-section per depth band is enough for a single arc
+    -- and avoids one collider per sleeper or a box across the whole tile.
+    local points={}
+    for i=0,48 do
+      local x,z
+      if mode>0 then x,z=diagonal.sample(part,i/48,mode)
+      else x,z=pose.sample(part,i/48) end
+      points[#points+1]={x,z}
+    end
+    local function add(z1,z2)
+      local minx,maxx=1,-1
+      for _,p in ipairs(points) do
+        local d=math.max(0,z1-p[2],p[2]-z2)
+        if d<crown then
+          local half=math.sqrt(crown*crown-d*d)
+          minx,maxx=math.min(minx,p[1]-half),math.max(maxx,p[1]+half)
+        end
+      end
+      if minx<maxx then
+        q.box(math.max(-1,minx),0,z1,math.min(1,maxx),sleeper_top,z2)
+      end
+    end
+    for i=0,7 do add(i/4-1,(i+1)/4-1) end
+  end
+  piece[key]=q.boxes
+  return q.boxes
+end
+function P.ballast(bits,modes)
+  local boxes={}
+  for part=0,5 do
+    if Track.has(bits,part) then
+      for _,box in ipairs(section(part,modes and modes[2^part] or 0)) do boxes[#boxes+1]=box end
+    end
+  end
+  return boxes
+end
+function P.grade(grade)
+  -- These nodes are one above the ordinary track overlay. Keep the
+  -- eight low-edge steps aligned to the supporting slope collider.
+  -- .125 step rise + .05 ballast remains within the .18 walk step even
+  -- when entering sideways at the forward edge of the player capsule.
+  local q=profile(grade<=2 and 0 or 1,0)
+  local forward=grade==1 or grade==4
+  for i=0,7 do
+    local a,b=i/4-1,(i+1)/4-1
+    local h=(forward and i or 7-i)/8-1
+    q.box(a,h,-crown,b,h+.05,crown)
+  end
+  return q.boxes
 end
 return P

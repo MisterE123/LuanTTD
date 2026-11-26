@@ -189,7 +189,47 @@ for axis=0,1 do
   deck(Rail.coal(axis,"load"));deck(Rail.coal(axis,"unload"))
   assert(#Rail.crossing(axis)==9 and on_deck({x=.5,y=-.392,z=.5},Rail.crossing(axis)))
 end
-assert(#Rail.ballast(3)==2 and Rail.ballast(4)==nil)
+assert(#Rail.ballast(3)==2)
+local Track=dofile("mods/luanttd_core/openttd/rail_track.lua")
+local pose=dofile("mods/luanttd_core/rail_pose.lua")(Track)
+local diag=dofile("mods/luanttd_core/rail_diagonal.lua")(nil,Track)
+local function hull(x,z,boxes)
+  for _,b in ipairs(boxes) do
+    if x>=b[1]-1e-9 and x<=b[4]+1e-9 and z>=b[3]-1e-9 and z<=b[6]+1e-9 then return b[5] end
+  end
+end
+for kind=0,5 do
+  local bit=2^kind
+  for mode=0,kind<2 and 0 or 3 do
+    local boxes=Rail.ballast(bit,{[bit]=mode})
+    assert(#boxes>=1 and #boxes<=8)
+    for _,b in ipairs(boxes) do
+      assert(b[1]<b[4] and b[3]<b[6] and b[1]>=-.5 and b[3]>=-.5 and b[4]<=1.5 and b[6]<=1.5)
+    end
+    for i=0,32 do
+      local x,z
+      if mode==0 then x,z=pose.sample(kind,i/32) else x,z=diag.sample(kind,i/32,mode) end
+      assert(hull(x+.5,z+.5,boxes),"gap along an advertised track")
+    end
+  end
+end
+assert(not hull(1.3,1.3,Rail.ballast(4,{[4]=3})), "diagonal collider seals a non-track corner")
+assert(#Rail.ballast(12,{[4]=3,[8]=1})<=16)
+for grade=1,4 do
+  local boxes=Rail.grade(grade)
+  assert(#boxes==8)
+  for i=0,7 do
+    local along=-.5+(i+.5)/4
+    local x,z=along,.5
+    if grade>=3 then x,z=z,x end
+    local rise=(grade==1 or grade==3) and i or 7-i
+    assert(math.abs(assert(hull(x,z,boxes))-(rise/8-1.45))<.001,"incorrect grade/axis")
+  end
+end
+local spawn=P.new({s={tiles={{terrain="grass",h=1,rail_tracks=1}}},
+  Sim={xy=function()return 1,1 end},render={uses_slope=function()return false end,
+    walk_track_surface=function()return 1.571 end}})
+assert(math.abs(spawn.at(1).y-1.616)<.0001,"Walk must not place feet inside the rail")
 rows[3].h=1
 rows[5].rail_station_id=8
 local platform={x=10.30,y=1.825,z=3.13}
