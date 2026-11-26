@@ -8,6 +8,8 @@ local keys={
   "coastal_water","stock_void","stock_clear_ground","stock_clear_density","water_class","stock_canal","stock_river_bits","stock_water_rocks",
   "stock_industry","stock_landmark","stock_object","ship","airfield","tram","source_house",
 }
+local projected_key={}
+for _,key in ipairs(keys) do projected_key[key]=true end
 local lift_motion={lift_position=true,lift_destination=true,lift_has_destination=true}
 local function detached(value,depth,exclude)
   if type(value)=="table" and depth>0 then
@@ -22,7 +24,13 @@ end
 local M={}
 function M.tile(real)
   local out={}
-  for _,key in ipairs(keys) do out[key]=detached(real[key],2,key=="source_house" and lift_motion or nil) end
+  if getmetatable(real) then
+    for _,key in ipairs(keys) do out[key]=detached(real[key],2,key=="source_house" and lift_motion or nil) end
+    return out
+  end
+  for key,value in pairs(real) do
+    if projected_key[key] then out[key]=detached(value,2,key=="source_house" and lift_motion or nil) end
+  end
   return out
 end
 -- Compare exactly what tile() would transmit, without allocating detached
@@ -46,9 +54,23 @@ local function same(actual,projected,depth,exclude)
 end
 function M.matches_tile(real,projected)
   if not projected then return false end
-  for _,key in ipairs(keys) do
-    local a,b=real[key],projected[key]
-    if a~=b and not same(a,b,2,key=="source_house" and lift_motion or nil) then return false end
+  -- Synthetic preview overlays can inherit fields. Native owner
+  -- tiles are plain, sparse records, so only inspect populated keys.
+  if getmetatable(real) or getmetatable(projected) then
+    for _,key in ipairs(keys) do
+      local a,b=real[key],projected[key]
+      if a~=b and not same(a,b,2,key=="source_house" and lift_motion or nil) then return false end
+    end
+    return true
+  end
+  for key,a in pairs(real) do
+    if projected_key[key] then
+      local b=projected[key]
+      if a~=b and not same(a,b,2,key=="source_house" and lift_motion or nil) then return false end
+    end
+  end
+  for key in pairs(projected) do
+    if projected_key[key] and real[key]==nil then return false end
   end
   return true
 end

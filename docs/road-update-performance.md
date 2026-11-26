@@ -462,3 +462,17 @@ The revised worker performed neither and the before/after save bytes
 matched. Native testing also reopened the durable account edit and
 verified resume and re-pause; deterministic regression tests cover
 periodic saving of edits without immediate durability.
+
+### Check only populated fields in ordinary tile snapshots
+
+Native tiles have only a small subset of the whitelist populated. The
+worker now checks those fields and verifies that nothing visible was
+removed, rather than checking every possible field on every tile. It
+still compares nested fields and ignores private simulation data.
+Preview overlays with inherited fields keep the original lookup path.
+
+On two native runs of nine warm sectors and 192 buses, median whole
+batch CPU fell from about **5.8–5.9 ms to 4.0–4.1 ms**, with exact
+receipts before and after a shared-corner edit. Scene tests also cover
+field deletion, nested changes, station/bridge data and ignored fields.
+This is viewport CPU, not full simulation or frame-rate speed.

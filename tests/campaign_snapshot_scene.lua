@@ -86,3 +86,18 @@ for z=1,33 do assert(worker.snapshots({{x=1,z=z,w=1,h=1}},.75).ok) end
 sample(true) -- LRU ejected the old sector; receipt is now stale
 assert(not worker.snapshots({{x={},z=1,w=32,h=32}},.75).ok)
 print("PASS worker scene cache: static rows reused; exact nested/corner/river/registry updates, actor/queue/aspect freshness, retry, LRU eviction")
+
+do
+  local source={terrain="grass",h=10,wood={count=2},simulation_only={scheduling=123}}
+  local view=P.tile(source)
+  assert(not view.simulation_only and P.matches_tile(source,view))
+  source.simulation_only.scheduling=444
+  view.canal_dikes=3
+  assert(P.matches_tile(source,view),"Non-tile fields do not participate in the tile comparison")
+  source.wood=nil
+  assert(not P.matches_tile(source,view),"A deleted field must invalidate a warm view")
+  local overlay=setmetatable({road_bits=3},{__index={terrain="grass",h=10}})
+  local inherited=P.tile(overlay)
+  assert(inherited.h==10 and inherited.road_bits==3 and P.matches_tile(overlay,inherited))
+  print("PASS: sparse projection notices deletions, respects the whitelist, and preserves preview overlays")
+end
