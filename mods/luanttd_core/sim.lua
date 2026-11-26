@@ -76,7 +76,7 @@ M.facilities={
 M.tools={
   inspect={name="Inspect"}, tram_track={name="Tramway"}, tram_stop={name="Tram platform"},
   tram_depot={name="Tram depot"},tram_bit={name="Tramway half-piece"},
-  ship_dock={name="Build dock"},ship_depot={name="Ship depot"},ship_aqueduct={name="Aqueduct"},ship_canal={name="Canal"},ship_lock={name="Ship lock"},ship_remove={name="Dismantle facility"}, landscape_raise={name="Raise corner"},
+  ship_dock={name="Build dock"},ship_join_dock={name="Join dock or build separately"},ship_depot={name="Ship depot"},ship_aqueduct={name="Aqueduct"},ship_canal={name="Canal"},ship_lock={name="Ship lock"},ship_remove={name="Dismantle facility"}, landscape_raise={name="Raise corner"},
   landscape_lower={name="Lower corner"}, landscape_level={name="Level area"},
   structure_wood={name="Timber bridge"}, structure_concrete={name="Concrete bridge"}, structure_steel={name="Steel girder"}, structure_tunnel={name="Road tunnel"}, stock_rail={name="Trackworks",price=220}, stock_road_bridge={name="Road bridge",price=1200,mode="road"}, stock_road_tunnel={name="Road tunnel",price=450,mode="road"}, rail={name="Track",price=220,mode="rail"}, road={name="Road",price=190,mode="road"},
   rail_bridge={name="Rail bridge",price=620,mode="rail"}, road_bridge={name="Road bridge",price=440,mode="road"},

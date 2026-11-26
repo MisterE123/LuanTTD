@@ -2,6 +2,8 @@
 -- One ordinary 1950 Yate delivering coal, pure host-side station adapter.
 -- Uses existing stock packets, loading, catches and mine/plant authority.
 -- No movement/production clock. Host calls one phase of its stock tick.
+local dock_path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+local DockMembers=dofile(dock_path.."dock_station_members.lua")
 return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingFactory,BaseTiming)
   local M={version=1,station_base=0x8000}
   local Timing=Roster.timing(BaseTiming)
@@ -28,15 +30,15 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
       if (not ctx.dock_filter or ctx.dock_filter(local_id)) and d.id==local_id and shore and wet and shore.kind=="dock" and wet.kind=="dock" and
           shore.station==local_id and wet.station==local_id and shore.owner==d.owner and wet.owner==d.owner and
           not shore.water_part and wet.water_part then
-        local x,z=xy(d.land);local u,v=xy(d.water)
+        local x,z=xy(d.land)
         local id=M.index(local_id)
         local st=state.stations[id] or {id=id,mode="ship",host_id=local_id,owner=d.owner,
           stock={coal={}},loading_order={},time_since_load=255,time_since_unload=255,rating_phase=0}
         assert(st.owner==d.owner,"Coal dock ownership changed")
-        local changed=st.land~=d.land or st.water~=d.water
-        assert(not changed or #st.loading_order==0,"Coal berth changed during loading")
+        local tiles,rev=DockMembers.footprint(d,xy)
+        local changed=st.footprint_rev~=rev
         st.land,st.water,st.x,st.z,st.tile=d.land,d.water,x-1,z-1,d.land
-        st.tiles={{x=x-1,y=z-1,kind="dock"},{x=u-1,y=v-1,kind="dock"}}
+        st.tiles,st.footprint_rev=tiles,rev
         local town=ctx.town and ctx.town(st) or Sim.nearest_town(s,d.land)
         st.town=type(town)=="table" and town.id or town
         local c=Catchment.build(st,ctx.width or Sim.W,ctx.height or Sim.H,ctx.modified_catchment)

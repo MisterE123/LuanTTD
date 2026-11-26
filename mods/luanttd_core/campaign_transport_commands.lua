@@ -103,11 +103,20 @@ return function(Sim,R)
     elseif op=="build" and mode=="ship" and R.water and tile(cmd.tile) and
       (cmd.kind=="dock" or cmd.kind=="buoy" or cmd.kind=="depot" and integer(cmd.axis,0,1)) then
       if cmd.kind~="buoy" and R.water.busy() then return nil,"An active vessel protects these waterways." end
-      local q,why=R.water.network.quote(s,owner,cmd.kind,cmd.tile,cmd.axis)
+      local dock
+      if cmd.kind=="dock" then
+        if cmd.join~=nil and (not integer(cmd.join,1,0x3fff) or cmd.adjacent~=true) then
+          return nil,"INVALID_STATION_TO_JOIN"
+        end
+        dock={adjacent=cmd.adjacent==true,join=cmd.join}
+      end
+      local q,why=R.water.network.quote(s,owner,cmd.kind,cmd.tile,cmd.axis,dock)
       if not q then return nil,why end
+      if cmd.picker_cost~=nil and cmd.picker_cost~=q.cost then return nil,"TRANSPORT_QUOTE_CHANGED" end
       local tiles=collect_tiles(q)
       if #tiles==0 then tiles[1]=cmd.tile end
-      return {request={mode=mode,operation=op,tile=cmd.tile,kind=cmd.kind,axis=cmd.axis},price=q.cost,tiles=tiles}
+      return {request={mode=mode,operation=op,tile=cmd.tile,kind=cmd.kind,axis=cmd.axis,
+        join=dock and dock.join,adjacent=dock and dock.adjacent},price=q.cost,tiles=tiles,join=q.join}
     elseif op=="buy" and mode=="rail" and R.rail and R.rail.owned and tile(cmd.depot)
       and type(cmd.parts)=="table" and #cmd.parts>=1 and #cmd.parts<=16 then
       local parts={}
@@ -147,7 +156,7 @@ return function(Sim,R)
     local req=quote.request
     local current,why=T.quote(owner,req)
     if not current then return false,why end
-    if current.price~=quote.price or #current.tiles~=#quote.tiles then return false,"TRANSPORT_QUOTE_CHANGED" end
+    if current.price~=quote.price or current.join~=quote.join or #current.tiles~=#quote.tiles then return false,"TRANSPORT_QUOTE_CHANGED" end
     for i,t in ipairs(current.tiles) do if t~=quote.tiles[i] then return false,"TRANSPORT_QUOTE_CHANGED" end end
     if req.operation=="bridge" or req.operation=="tunnel" then
       local ok,msg,tiles,deck=spans(owner,req,false)
@@ -172,7 +181,7 @@ return function(Sim,R)
     if req.operation=="build" and req.mode=="air" then
       unit,msg=R.air.network.build(s,owner,req.tile,req.layout)
     elseif req.operation=="build" and req.mode=="ship" then
-      unit,msg=R.water.network.build(s,owner,req.kind,req.tile,req.axis)
+      unit,msg=R.water.network.build(s,owner,req.kind,req.tile,req.axis,req.kind=="dock" and req or nil)
     elseif req.mode=="rail" then
       local q,e=R.rail.owned.quote(s,owner,req.depot,req.parts)
       if not q then return false,e end
@@ -193,6 +202,10 @@ return function(Sim,R)
     end
     if not unit then return false,msg end
     return true,type(msg)=="string" and msg or nil,{id=unit.id or req.mode=="ship" and "ferry",tiles=current.tiles}
+  end
+  function T.dock_join_choices(owner,cmd)
+    if not R.water or type(cmd)~="table" or not tile(cmd.tile) then return nil,"INVALID_TILE" end
+    return R.water.network.join_choices(s,owner,cmd.tile)
   end
   function T.depot(owner,mode,key,hangar_tile)
     local offers,vehicles,targets={},{},{}

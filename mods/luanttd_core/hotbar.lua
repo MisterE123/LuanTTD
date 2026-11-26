@@ -133,7 +133,8 @@ function H.enable_ships()
     [2]=item("ship_dock","Build dock","harbor"),[3]=item("ship_depot","Ship depot","ship_depot"),
     [4]=section("waterworks","Waterworks","waterworks"),
     [5]=item("ship_remove","Dismantle facility","ship_remove"),[6]=item("ship_rotate","Rotate ship depot","ship_rotate"),
-    [7]=section("harbor_ops","Ferry Operations","harbor_ops"),[8]=back}
+    [7]=section("harbor_ops","Ferry Operations","harbor_ops"),[8]=back,
+    [10]=item("ship_join_dock","Join dock or build separately","join_dock")}
   H.menus.harbor_ops={title="Ferry Operations",[1]=inspect,
     [2]=item("ship_order","Order ferry","ferry"),[7]=item("ship_clear","Clear ferry pilot","ship_clear"),[8]=back}
   H.menus.waterworks={title="Waterworks",[1]=inspect,

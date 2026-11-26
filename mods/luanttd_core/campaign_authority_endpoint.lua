@@ -427,6 +427,13 @@ return function(Sim,R,max_days)
     local rows,why=R.road_construction.join_choices(name,request)
     return reply(rows~=nil,why,rows)
   end
+  function A.dock_join_choices(name,request)
+    if not owner(name) or not R.transport or not s.companies[name] then
+      return reply(false,"TRANSPORT_UNAVAILABLE")
+    end
+    local rows,why=R.transport.dock_join_choices(name,request)
+    return reply(rows~=nil,why,rows)
+  end
   function A.advance(days)
     if not integer(days,0,max_days or 4) then return reply(false,"INVALID_TICK_BATCH") end
     for _=1,days do R.day() end

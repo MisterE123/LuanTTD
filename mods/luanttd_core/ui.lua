@@ -1086,7 +1086,7 @@ local function tram_request(p,V,id)
   d=V.tram_depot_dir or DepotFacing(p)
   return mode,{id},d,"Door faces "..tram_dir[d]
 end
-local ship_mode={ship_dock="dock",ship_depot="depot",ship_remove="remove",ship_aqueduct="aqueduct",ship_canal="canal",ship_lock="lock"}
+local ship_mode={ship_dock="dock",ship_join_dock="dock",ship_depot="depot",ship_remove="remove",ship_aqueduct="aqueduct",ship_canal="canal",ship_lock="lock"}
 local buoy_tools={ship_buoy="Place public buoy",ship_buoy_remove="Remove buoy, keep water"}
 local function buoy_quote(n,tool,id)
   local N=api.shipyard.network
@@ -1574,6 +1574,7 @@ local function worker_build(n,V,kind,request)
   request=U.rail_gauge_request(V,kind,request)
   local ok,why=api.worker_build.commit(n,kind,request,function(built,note,quote,tiles)
     if not built and note and request.mode=="air" and api.airfield then note=api.airfield.reason(note) end
+    if not built and note and request.kind=="dock" and api.shipyard then note=api.shipyard.reason(note) end
     if not built and (request.operation=="plant_tree" or request.operation=="purchase_land") then note=tree_build_errors[note] or note end
     V.status=note or (built and "Construction complete." or "That construction was not accepted.")
     if built and api.on_worker_build then api.on_worker_build(n,tiles,quote) end
@@ -1595,21 +1596,24 @@ local function worker_build(n,V,kind,request)
 end
 -- OpenTTD 16.0-RC1 ShowSelectBaseStationIfNeeded. The survey
 -- auxiliary key fills the role of Ctrl without taking over movement.
-function U.open_road_join_picker(p,V,request)
+function U.open_road_join_picker(p,V,request,is_dock)
   local n=p:get_player_name()
   local client=api.worker_bridge_client
   if not client then V.status="The campaign worker is not ready.";return end
-  local pending={request=request,tool=V.tool,selected=1}
+  local pending={request=request,tool=V.tool,selected=1,is_dock=is_dock}
   V.road_join_picker=pending
   V.status="Finding stations that can join…"
-  local sent,why=client.query({kind="road_join_choices",player=n,request=request},function(r)
+  local sent,why=client.query({kind=is_dock and "dock_join_choices" or "road_join_choices",player=n,request=request},function(r)
     if session[n]~=V or V.road_join_picker~=pending then return end
     if V.tool~=pending.tool then V.road_join_picker=nil;return end
-    if not r.ok then V.road_join_picker=nil;V.status=r.why;return end
+    if not r.ok then
+      V.road_join_picker=nil;V.status=is_dock and api.shipyard.reason(r.why) or r.why
+      return
+    end
     pending.choices,pending.cost=r.value.choices,r.value.cost
     local labels={}
     for _,choice in ipairs(pending.choices) do labels[#labels+1]=esc(choice.name) end
-    local title=request.tool=="road_waypoint" and "Join a road waypoint" or "Join a road station"
+    local title=is_dock and "Join a dock station" or request.tool=="road_waypoint" and "Join a road waypoint" or "Join a road station"
     V.status="Choose a station or build separately."
     core.show_formspec(n,"luanttd_core:road_join_picker",
       "formspec_version[7]size[9,6.4]bgcolor[#152334;false]"..
@@ -1637,8 +1641,13 @@ function U.road_join_picker_fields(p,f)
   V.road_join_picker=nil
   core.close_formspec(n,"luanttd_core:road_join_picker")
   local r=pending.request
-  r.join,r.join_picker_cost=choice.id,pending.cost
-  worker_build(n,V,"road",r)
+  if pending.is_dock then
+    r.join,r.picker_cost=choice.id,pending.cost
+    worker_build(n,V,"transport",r)
+  else
+    r.join,r.join_picker_cost=choice.id,pending.cost
+    worker_build(n,V,"road",r)
+  end
   return true
 end
 function U.end_autorail(p,id,hit)
@@ -2274,6 +2283,10 @@ local function authority_preview(p,id,hit)
   elseif dock=="dock" or dock=="depot" or tool=="ship_buoy" then
     kind,request="transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=U.ship_depot_axis(p,V,dock)}
     if dock=="depot" then label="Ship depot"..(request.axis==0 and " · East–West" or " · North–South") end
+    if dock=="dock" then
+      request.adjacent=tool=="ship_join_dock" or p:get_player_control().aux1==true
+      if request.adjacent then label="Dock · Choose station" end
+    end
   elseif dock=="lock" or dock=="canal" or dock=="aqueduct" then
     if dock~="lock" and not V.anchor then return ids,true,"Mark the first waterway tile." end
     kind,request="transport",{mode="ship",operation="waterwork",kind=dock,tile=V.anchor or id,last=id}
@@ -2923,7 +2936,11 @@ function U.build_world(p,id,hit)
       return
     end
     if dock=="dock" or dock=="depot" or V.tool=="ship_buoy" then
-      worker_build(n,V,"transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=U.ship_depot_axis(p,V,dock)})
+      local req={mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=U.ship_depot_axis(p,V,dock)}
+      if dock=="dock" and (V.tool=="ship_join_dock" or p:get_player_control().aux1) then
+        req.adjacent=true
+        U.open_road_join_picker(p,V,req,true)
+      else worker_build(n,V,"transport",req) end
       return
     end
     if airfield_tools[V.tool] and V.tool~="airfield_remove" then

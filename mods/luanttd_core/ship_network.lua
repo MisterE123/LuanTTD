@@ -1,7 +1,27 @@
 -- Isolated host adapter for the stock port facilities and water board.
 -- No ground infrastructure or legacy route is converted implicitly.
+local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+local Area=dofile(path.."openttd/dock_station_area.lua")
+local Picker=dofile(path.."openttd/station_join_picker.lua")
+local Members=dofile(path.."dock_station_members.lua")
 return function(Sim,Terrain,Water,Facilities)
   local N={}
+  local Geo={xy=Sim.xy,id=Sim.id}
+  local function spread(s) return s.stock_station_spread or 12 end
+  local function area(p) return Area.search_area(Geo,p.land,p.dir) end
+  local function joined_board(s)
+    local B={xy=Sim.xy,id=Sim.id,matches=function()return true end}
+    function B.station(id)
+      local st=s.stock_ship_stations and s.stock_ship_stations[id]
+      if not st or st.neutral then return end
+      return {id=id,owner=st.owner,tile=st.land,spread=st.spread or area(st),name=st.name}
+    end
+    function B.station_at(id)
+      local f=s.tiles[id] and s.tiles[id].ship
+      if f and f.kind=="dock" then return B.station(f.station) end
+    end
+    return B
+  end
   local function water_class(t)
     if t.build=="canal" then return "canal" end
     if t.terrain=="water" then return t.water_class or "sea" end
@@ -72,15 +92,19 @@ return function(Sim,Terrain,Water,Facilities)
     function B.station_dock_tiles(id)
       local st=s.stock_ship_stations and s.stock_ship_stations[id]
       if not st then return {} end
-      if not st.neutral or not st.oil_rig then return Facilities.docking_neighbors(B,st.water) end
-      local neutral=(s.stock_neutral_stations or {})[id]
-      local rec=neutral and (s.stock_oil_placements or {})[neutral.industry]
-      if not rec or rec.closed then return {} end
       local docks,seen={},{}
-      for _,c in ipairs(rec.cells) do
-        for _,tile in ipairs(Facilities.docking_neighbors(B,c.id)) do
+      local function include(pier)
+        for _,tile in ipairs(Facilities.docking_neighbors(B,pier)) do
           if not seen[tile] then docks[#docks+1]=tile;seen[tile]=true end
         end
+      end
+      if st.neutral and st.oil_rig then
+        local neutral=(s.stock_neutral_stations or {})[id]
+        local rec=neutral and (s.stock_oil_placements or {})[neutral.industry]
+        if not rec or rec.closed then return {} end
+        for _,c in ipairs(rec.cells) do include(c.id) end
+      else
+        for _,p in ipairs(Members.pairs(st)) do include(p.water) end
       end
       table.sort(docks)
       return docks
@@ -88,9 +112,15 @@ return function(Sim,Terrain,Water,Facilities)
     function B.closest_station_tile(id,origin)
       local st=s.stock_ship_stations and s.stock_ship_stations[id]
       if not st then return nil end
-      local a,b=st.land,st.water
-      if Sim.distance(origin,b)<Sim.distance(origin,a) then return b end
-      return a
+      -- CalcClosestStationTile uses docking_station, not ship_station:
+      -- clamp to the bounding rectangle of real navigable berths.
+      local u,v,x,z
+      for _,berth in ipairs(B.station_dock_tiles(id)) do
+        local a,b=Sim.xy(berth)
+        u,v=math.min(u or a,a),math.min(v or b,b)
+        x,z=math.max(x or a,a),math.max(z or b,b)
+      end
+      return u and Area.closest_tile(Geo,{tile=Sim.id(u,v),w=x-u+1,h=z-v+1},origin) or st.land
     end
     return B
   end
@@ -136,12 +166,38 @@ return function(Sim,Terrain,Water,Facilities)
     end
     if not t or not (t.is_water_tile or t.rocks and t.kind=="sea") then return "BUOY_NEEDS_OPEN_WATER" end
   end
-  function N.quote(s,owner,kind,id,arg)
+  local function ship_on(s,id)
+    for _,name in ipairs({"ship_pilot","stock_coal_ship_run","stock_oil_ship_route"}) do
+      local run=s[name]
+      local v=run and run.vehicle
+      if v and (v.tile==id or v.x and v.y and
+          Sim.id(math.floor(v.x/16),math.floor(v.y/16))==id) then return true end
+    end
+    -- Ordinary campaign ships are in the three stock controllers above.
+    -- Only the fixed test scenarios use the generic fleet's water units.
+    if s.stock_generated_profile then return false end
+    for _,v in pairs(s.fleet or {}) do
+      local engine=Sim.vehicles and Sim.vehicles[v.engine]
+      if engine and engine.mode=="water" and Sim.position(s,v)==id then return true end
+    end
+    return false
+  end
+  function N.quote(s,owner,kind,id,arg,dock_request)
     if not s.corner_grid or not id or not s.tiles[id] then return nil,"INVALID_TILE" end
     local B=N.board(s)
     local opts={clear=function(i,t) return clear(s,owner,i,t) end,
       budget=s.companies[owner] and s.companies[owner].cash or 100000}
-    if kind=="dock" then return Facilities.dock(B,id,opts) end
+    if kind=="dock" then
+      local p,why,at=Facilities.dock(B,id,opts)
+      if not p then return nil,why,at end
+      if ship_on(s,p.land) then return nil,"VEHICLE_IN_THE_WAY",p.land end
+      if ship_on(s,p.water) then return nil,"VEHICLE_IN_THE_WAY",p.water end
+      local req=dock_request or {}
+      local sel,why=Area.join(joined_board(s),area(p),owner,req,spread(s),s.stock_distant_join_stations~=false)
+      if not sel then return nil,why,id end
+      p.join,p.spread=sel.id,sel.spread
+      return p
+    end
     if kind=="depot" then return Facilities.depot(B,id,arg,opts) end
     if kind=="buoy" then
       local why=protected_buoy_site(s,id,B.tile(id))
@@ -150,16 +206,37 @@ return function(Sim,Terrain,Water,Facilities)
     end
     return nil,"INVALID_FACILITY"
   end
-  function N.build(s,owner,kind,id,arg)
-    local p,why,at=N.quote(s,owner,kind,id,arg)
+  function N.join_choices(s,owner,id)
+    local p,why=N.quote(s,owner,"dock",id,nil,{adjacent=true})
+    if not p then return nil,why end
+    local rows=Picker.find(joined_board(s),area(p),owner,spread(s),s.stock_distant_join_stations~=false)
+    local choices={}
+    for i,r in ipairs(rows) do choices[i]={id=r.id,name=r.new and "Build a separate station" or r.name or ("Dock "..r.id)} end
+    return {choices=choices,cost=p.cost}
+  end
+  function N.build(s,owner,kind,id,arg,dock_request)
+    local p,why,at=N.quote(s,owner,kind,id,arg,dock_request)
     if not p then return nil,why,at end
     local c=Sim.company(s,owner)
     if kind=="dock" then
       s.stock_ship_stations=s.stock_ship_stations or {}
-      local next_=s.next_stock_ship_station or 1
-      s.next_stock_ship_station=next_+1
-      s.stock_ship_stations[next_]={id=next_,owner=owner,land=p.land,water=p.water,dir=p.dir,
+      local next_=p.join or s.next_stock_ship_station or 1
+      local st=s.stock_ship_stations[next_]
+      local part={land=p.land,water=p.water,dir=p.dir,
         station_area=p.station_area,approach=p.approach,water_class=p.water_class}
+      if not st then
+        s.next_stock_ship_station=next_+1
+        st={id=next_,owner=owner}
+        for k,v in pairs(part) do st[k]=v end
+        st.docks={}
+        s.stock_ship_stations[next_]=st
+      elseif not st.docks then
+        -- All previously authored single-dock fixtures also use this path.
+        st.docks={{land=st.land,water=st.water,dir=st.dir,station_area=st.station_area,
+          approach=st.approach,water_class=st.water_class}}
+      end
+      st.docks[#st.docks+1]=part
+      st.spread=p.spread
       s.tiles[p.land].stock_water_rocks=nil
       s.tiles[p.water].stock_water_rocks=nil
       s.tiles[p.land].ship={kind="dock",station=next_,owner=owner,dir=p.dir,water_part=false}
@@ -198,7 +275,7 @@ return function(Sim,Terrain,Water,Facilities)
   function N.remove(s,owner,id,occupied,quote)
     local t=id and s.tiles[id] and s.tiles[id].ship
     if not t or t.kind~="buoy" and t.owner~=owner then return nil,"SELECT_OWN_FACILITY" end
-    local entries,p,tiles,cost
+    local entries,p,tiles,cost,pair_idx
     if t.kind=="ship_depot" then
       entries=s.stock_ship_depots
       p=entries and entries[t.depot]
@@ -211,9 +288,14 @@ return function(Sim,Terrain,Water,Facilities)
       entries=s.stock_ship_stations
       p=entries and entries[t.station]
       if not p then return nil,"INVALID_FACILITY" end
+      local members=Members.pairs(p)
       local tanker=s.stock_oil_ship_route
-      if tanker and (tanker.first==p.id or tanker.second==p.id) then return nil,"DOCK_HAS_OIL_SERVICE" end
-      tiles,cost={p.land,p.water},55 -- PR_CLEAR_STATION_DOCK
+      if #members==1 and tanker and (tanker.first==p.id or tanker.second==p.id) then return nil,"DOCK_HAS_OIL_SERVICE" end
+      for i,member in ipairs(members) do
+        if member.land==id or member.water==id then pair_idx=i;tiles={member.land,member.water};break end
+      end
+      if not tiles then return nil,"INVALID_FACILITY" end
+      cost=55 -- PR_CLEAR_STATION_DOCK
     elseif t.kind=="buoy" then
       entries=s.stock_ship_buoys
       p=entries and entries[t.station]
@@ -239,13 +321,21 @@ return function(Sim,Terrain,Water,Facilities)
       end
       tiles,cost={id},Facilities.BUOY_CLEAR_COST
     else return nil,"INVALID_FACILITY" end
-    if occupied then
-      for _,cell in ipairs(tiles) do if occupied(cell) then return nil,"VEHICLE_IN_THE_WAY" end end
+    for _,cell in ipairs(tiles) do
+      if pair_idx and ship_on(s,cell) or occupied and occupied(cell) then return nil,"VEHICLE_IN_THE_WAY" end
     end
     local c=s.companies[owner]
     if not c or c.cash<cost then return nil,"NOT_ENOUGH_MONEY" end
     if quote then return tiles,cost end
-    entries[p.id]=nil
+    if pair_idx and p.docks and #p.docks>1 then
+      table.remove(p.docks,pair_idx)
+      local base=p.docks[1]
+      for _,k in ipairs({"land","water","dir","station_area","approach","water_class"}) do p[k]=base[k] end
+      p.spread=nil
+      for _,member in ipairs(p.docks) do p.spread=Area.union(Geo,p.spread,area(member)) end
+    else
+      entries[p.id]=nil
+    end
     for _,key in ipairs(tiles) do s.tiles[key].ship=nil end
     c.cash,c.expense,c.month_exp=c.cash-cost,c.expense+cost,c.month_exp+cost
     s.topology=s.topology+1

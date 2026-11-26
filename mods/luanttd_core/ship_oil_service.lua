@@ -5,6 +5,8 @@
 -- catchment, rating, loading/acceptance and receipt adapter as other freight.
 local mod=core and core.get_modpath("luanttd_core") or "mods/luanttd_core"
 local Rig=dofile(mod.."/openttd/oil_rig.lua")
+local dock_path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+local DockMembers=dofile(dock_path.."dock_station_members.lua")
 return function(Sim,Roster,Packets,Rating,LoadingFactory,BaseTiming)
   local M={}
   local Timing={
@@ -37,14 +39,11 @@ return function(Sim,Roster,Packets,Rating,LoadingFactory,BaseTiming)
           local slot=M.station_id(id)
           local st=state.stations[slot] or {id=slot,host_id=id,mode="ship",freight_cargo="oil",owner=d.owner,
             loading_order={},rating_phase=0,time_since_unload=255,time_since_load=255}
-          assert(st.owner==d.owner and (not st.tile or #st.loading_order==0 or st.tile==d.land))
+          assert(st.owner==d.owner,"Oil dock ownership changed")
           st.neutral_rig=valid_rig and neutral.industry or nil
           st.serve_neutral=s.stock_serve_neutral_industries~=false
           st.tile,st.x,st.z,st.tiles=d.land,x-1,z-1,{{x=x-1,y=z-1,kind="dock"}}
-          if valid_dock then
-            local u,v=Sim.xy(d.water)
-            st.tiles[2]={x=u-1,y=v-1,kind="dock"}
-          end
+          if valid_dock then st.tiles=DockMembers.footprint(d,Sim.xy) end
           by_dock[id]=st;list[#list+1]=st;state.stations[slot]=st
         end
       end

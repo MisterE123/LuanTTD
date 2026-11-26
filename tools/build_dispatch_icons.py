@@ -276,6 +276,16 @@ def harbor(i,depot=False):
         i.path([(27,20),(27,32)],SLATE,3)
         i.path([(31,30),(37,33),(40,30)],CREAM,2)
 
+def join_dock(i):
+    for y in (31,37):
+        i.path([(7,y),(14,y-2),(21,y),(28,y-2),(35,y),(41,y-2)],TEAL_DARK,2)
+    for x in (11,30):
+        i.path([(x,15),(x,25)],BRASS,5)
+        i.path([(x-3,26),(x+3,26)],CREAM,3)
+    i.path([(11,14),(20.5,14),(20.5,23),(30,23)],TEAL,2.8)
+    i.path([(36,12),(36,20)],CREAM,2.6)
+    i.path([(32,16),(40,16)],CREAM,2.6)
+
 def aqueduct(i):
     i.path([(6,19),(42,19)],TEAL,4)
     i.path([(6,23),(42,23)],CREAM,2.8)
@@ -400,7 +410,7 @@ ART=OrderedDict((("inspect",inspect),("road",road),("stop",stop),("depot",depot)
                  ("tram",lambda i:tram(i,"full")),("tram_stop",lambda i:tram(i,"stop")),
                  ("tram_depot",lambda i:tram(i,"depot")),("tram_half",lambda i:tram(i,"half")),
                  ("tram_rotate",lambda i:tram(i,"rotate")),
-                 ("harbor",harbor),("ship_depot",lambda i:harbor(i,True)),("aqueduct",aqueduct),("canal",canal),("lock",lock),("airfield",airfield),("trimotor",trimotor),("ferry",ferry),("level_crossing",level_crossing),("oneway_road",oneway_road),("rail_platform",rail_platform),
+                 ("harbor",harbor),("join_dock",join_dock),("ship_depot",lambda i:harbor(i,True)),("aqueduct",aqueduct),("canal",canal),("lock",lock),("airfield",airfield),("trimotor",trimotor),("ferry",ferry),("level_crossing",level_crossing),("oneway_road",oneway_road),("rail_platform",rail_platform),
                  ("rail_signal",rail_signal),("rail_oneway",lambda i:rail_signal(i,True)),("freight",freight))+
                 tuple(("rail_"+key,lambda i,k=key:rail_piece(i,k)) for key in ("x","y","upper","lower","left","right")))
 

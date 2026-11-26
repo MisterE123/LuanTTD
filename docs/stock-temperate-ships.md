@@ -25,6 +25,23 @@ freight groups has one owned vessel slot. Different groups use separate
 physical berths. Multi-ship scheduling, offshore platforms, more freight
 cargoes and other climates remain outside this slice.
 
+## Join dock piers
+
+A dock built next to exactly one dock station owned by your company will
+join it, provided the full station still fits the stock 12-tile spread.
+Use **Harbors → Join dock or build separately** for manual selection,
+or hold the auxiliary key while using **Build dock**. The picker can join
+a more distant dock if it fits the spread, or build at the same site as
+a separate station. Other companies' docks are never included.
+
+Joined piers are physical members of the same station: orders use one
+station ID, eligible water tiles around every pier are considered for
+routing, and catchment is calculated from all the shore ramps and piers.
+The ordinary Bulldozer removes the selected ramp and its matching pier,
+not every pier in the station. Active service still protects harbor
+edits in this slice; forced departure from a demolished active
+berth and cross-mode station identity are not implemented here.
+
 QA: both cargo boats used real worker-authorized purchase, Coal refit,
 route and fare with the same stock mine and power plant after a partial
 load restore. The Bakewell cargo and hovercraft also ran as native Linux

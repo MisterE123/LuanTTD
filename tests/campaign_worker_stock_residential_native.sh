@@ -13,12 +13,15 @@ printf '\n' >>"$game/mods/luanttd_core/init.lua"
 lift=${LUANTTD_QA_TOWN_LIFT:-0}
 rebuild=${LUANTTD_QA_TOWN_REBUILD:-0}
 rocky_ferry=${LUANTTD_QA_ROCKY_FERRY:-0}
+joined_ferry=${LUANTTD_QA_JOINED_FERRY:-0}
+joined_ui=${LUANTTD_QA_JOINED_DOCK_UI:-0}
 airport_noise=${LUANTTD_QA_AIRPORT_NOISE:-0}
 canal_dikes=${LUANTTD_QA_CANAL_DIKES:-0}
 fixture=tests/campaign_worker_stock_residential_native.lua
 if [[ $lift == 1 ]]; then fixture=tests/town_lift_native.lua; fi
 if [[ $rebuild == 1 ]]; then fixture=tests/town_rebuild_native.lua; fi
 if [[ $rocky_ferry == 1 ]]; then fixture=tests/stock_rocky_coast_ferry_native.lua; fi
+if [[ $joined_ferry == 1 ]]; then fixture=tests/stock_joined_docks_native.lua; fi
 if [[ $airport_noise == 1 ]]; then fixture=tests/airport_noise_native.lua; fi
 if [[ $canal_dikes == 1 ]]; then fixture=tests/canal_dikes_native.lua; fi
 cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
@@ -39,6 +42,7 @@ bayline_generated_town_layout = original
 bayline_seed = ${LUANTTD_QA_TOWN_SEED:-1751}
 bayline_stock_bus_start_year = ${LUANTTD_QA_TOWN_YEAR:-1950}
 singleplayer_mode = false
+luanttd_qa_joined_docks_ui = $([[ $joined_ui == 1 ]] && echo true || echo false)
 luanttd_station_noise_level = $([[ $airport_noise == 1 ]] && echo true || echo false)
 CONF
 printf 'screen_w = 1440\nscreen_h = 900\nenable_sound = false\n' >"$out/client.conf"
@@ -113,6 +117,36 @@ if [[ $rebuild == 1 ]]; then
   reopen luanttd_qa_town_rebuild_restart "PASS NATIVE TOWN REBUILD REOPEN"
   sleep .45
   if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/town-renewed.jpg"; fi
+  exit 0
+fi
+if [[ $joined_ferry == 1 ]]; then
+  if [[ $joined_ui == 1 ]]; then
+    mark 'JOINED DOCK HOME SLOT'
+    win=$(timeout 10 xdotool search --sync --onlyvisible --pid "$client" | tail -1)
+    xdotool windowraise "$win" windowfocus --sync "$win"
+    select_dock_slot(){
+      local slot
+      slot=$(sed -n "s/.*JOINED DOCK $1 SLOT //p" "$out/server.log" | tail -1)
+      [[ $slot != 10 ]] || slot=0
+      xdotool key "$slot"; sleep .48
+      xdotool mousedown 1; sleep .25; xdotool mouseup 1
+    }
+    select_dock_slot HOME
+    mark 'JOINED DOCK TOOL SLOT'
+    select_dock_slot TOOL
+    mark 'JOINED DOCK PICKER VISIBLE'
+    sleep .65
+    if command -v import >/dev/null; then import -window root -quality 93 "$out/joined-dock-picker.jpg"; fi
+    xdotool mousemove 580 393 click 1; sleep .3
+    xdotool mousemove 890 594 click 1; sleep .3
+  fi
+  mark 'NATIVE JOINED DOCK FRAME'
+  sleep .6
+  if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 93 "$out/joined-docks.jpg"; fi
+  mark 'PASS NATIVE JOINED DOCK SERVICE'
+  grep 'PASS NATIVE JOINED DOCK SERVICE' "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+  reopen luanttd_qa_joined_docks_reopen "PASS NATIVE JOINED DOCK REOPEN"
   exit 0
 fi
 if [[ $rocky_ferry == 1 ]]; then

@@ -2,6 +2,7 @@
 -- it and is outside the moving vehicle envelope. Numbers refer to the
 -- shipped station OBJ geometry, not to an abstract tile center.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local DockMembers=dofile(mod.."/dock_station_members.lua")
 local Freight=dofile(mod.."/rail_freight_kinds.lua")
 return function(api)
   local S,Sim=api.s,api.Sim
@@ -46,14 +47,18 @@ return function(api)
     local st=S.stock_ship_stations[id]
     local freight=S.stock_coal_ship
     if freight and (freight.mine==id or freight.power==id) then return end
-    local t=st and S.tiles[st.water]
-    local ref=t and t.ship
-    local a=ref and dock_axis[ref.dir]
-    if not (a and ref.kind=="dock" and ref.station==id and ref.water_part) then return end
-    local _,level=terrain(st.water)
-    -- Along the center of the level wharf, beside (not inside) the
-    -- shelter, bench and bollards. The inclined land ramp is not a queue.
-    return {rect(st.water,level+.673,-a.z*.08,a.x*.08,1.48,.32,a)}
+    local out={}
+    for _,member in ipairs(DockMembers.pairs(st)) do
+      local t=S.tiles[member.water]
+      local ref=t and t.ship
+      local a=ref and dock_axis[ref.dir]
+      if a and ref.kind=="dock" and ref.station==id and ref.water_part then
+        local _,level=terrain(member.water)
+        -- Keep the queue off the inclined ramp, shelter and bollards.
+        out[#out+1]=rect(member.water,level+.673,-a.z*.08,a.x*.08,1.48,.32,a)
+      end
+    end
+    return #out>0 and out or nil
   end
   -- Forecourts at terminal façades; exclude the expansion runways,
   -- stand centerlines, helicopter pads and hangar doors.

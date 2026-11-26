@@ -2,6 +2,9 @@
 return function(api,Network,Run)
   local Sim,S=api.Sim,api.s
   local messages={
+    ADJOINS_MULTIPLE_STATIONS="This dock touches more than one of your stations. Hold Aux to select one or build a separate station.",
+    INVALID_STATION_TO_JOIN="That dock station is not available.",
+    STATION_SPREAD="That dock would make the station too wide.",
     SITE_UNSUITABLE="Build on a straight sloping shore with two flat water tiles directly in front.",
     DOCK_CLEAR_TREES="Clear the trees before placing a dock here.",
     BUOY_NEEDS_OPEN_WATER="A buoy needs one flat, open water tile.",

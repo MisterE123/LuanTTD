@@ -67,7 +67,7 @@ local industry_animation={animation_frame=true,animated=true}
 local industry_fields={"id","removed","kind","x","z","tiles","layout"}
 local farm_fields={"variant","slope","base","fences"}
 local site_fields={"id","kind","name","tile","closed","population"}
-local port_fields={"owner","id","land","water","neutral","oil_rig","name"}
+local port_fields={"owner","id","land","water","docks","spread","neutral","oil_rig","name"}
 local airport_fields={"owner","id","origin","tiles","layout","neutral","oil_rig","name"}
 local function add(out,s,name,id,fields)
   if id==nil then return end

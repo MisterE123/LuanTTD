@@ -32,6 +32,7 @@ case "${1:-}" in
     python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
     LUANTTD_QA_AIRPORT_NOISE=1 LUANTTD_QA_TOWN_YEAR=1985 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=363 BAYLINE_NATIVE_PORT=43380 timeout --kill-after=10s 175 bash tests/campaign_worker_stock_residential_native.sh
     LUANTTD_QA_ROCKY_FERRY=1 LUANTTD_QA_TOWN_YEAR=1985 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=364 BAYLINE_NATIVE_PORT=43381 timeout --kill-after=10s 215 bash tests/campaign_worker_stock_residential_native.sh
+    LUANTTD_QA_JOINED_FERRY=1 LUANTTD_QA_JOINED_DOCK_UI=1 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=370 BAYLINE_NATIVE_PORT=43383 timeout --kill-after=10s 190 bash tests/campaign_worker_stock_residential_native.sh
     LUANTTD_QA_CANAL_DIKES=1 BAYLINE_NATIVE_DISPLAY=365 BAYLINE_NATIVE_PORT=43382 timeout --kill-after=10s 170 bash tests/campaign_worker_stock_residential_native.sh
     ;;
   stock-rail)

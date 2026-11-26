@@ -33,8 +33,8 @@ s.stock_rail_stations={
   [2]={owner="A",coal_role="load",tiles={ground(7,10,{owner="A",rail_station_id=2,rail_station_axis=1,rail_tracks=2})}},
 }
 s.stock_ship_stations={
-  [1]={water=ground(6,13,{ship={dir=1,station=1,kind="dock",water_part=true}})},
-  [2]={water=ground(7,13,{ship={dir=0,station=2,kind="dock",water_part=true}})},
+  [1]={land=ground(6,12,{}),water=ground(6,13,{ship={dir=1,station=1,kind="dock",water_part=true}})},
+  [2]={land=ground(7,12,{}),water=ground(7,13,{ship={dir=0,station=2,kind="dock",water_part=true}})},
 }
 s.stock_coal_ship={mine=2}
 s.stock_small_airports={[1]={tiles={

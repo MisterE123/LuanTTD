@@ -1,6 +1,8 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Paid stock water/rail/air controllers share the house event mux and one
 -- station clock. The original paid-ferry save key remains stable.
+local dock_path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+local DockMembers=dofile(dock_path.."dock_station_members.lua")
 return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom)
   local F={}
   local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
@@ -212,9 +214,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local rails=s.stock_rail_stations or {}
     local airports=s.stock_small_airports or {}
     local service=c.service
-    -- Both sets use physical footprints. Ships contribute exactly their
-    -- two dock tiles; trains contribute every true platform tile, never a
-    -- depot, a sign outside the platform or the occupied carriage tile.
+    -- Physical facilities supply catchment: both tiles of every joined
+    -- dock pair, and each actual railway platform tile.
     local function sync(id,local_id,actual,tiles,mode_,ref,base,id_for_tick)
       local st=service.stations[id]
       local neutral=Rig.neutral_ref(s,actual)
@@ -239,7 +240,10 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     end
     if active.ship then
       for id,p in pairs(ships) do
-        if not p.neutral then sync(id,id,p,{at("dock",p.land),at("dock",p.water)},"ship",p.land..":"..p.water,p.land,ship_index(id)) end
+        if not p.neutral then
+          local tiles,rev=DockMembers.footprint(p,Sim.xy)
+          sync(id,id,p,tiles,"ship",rev,p.land,ship_index(id))
+        end
       end
     end
     if active.rail then
