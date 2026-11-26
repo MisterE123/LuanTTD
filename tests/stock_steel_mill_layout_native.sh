@@ -70,6 +70,10 @@ if [[ ${LUANTTD_QA_SPLIT_FENCE:-0} == 1 ]]; then
   fixture=tests/rail_split_fence_native.lua
   marker='PASS NATIVE SPLIT FENCE'
 fi
+if [[ ${LUANTTD_QA_VOXEL_STORM:-0} == 1 ]]; then
+  fixture=tests/voxel_storm_native.lua
+  marker='PASS NATIVE VOXEL STORM'
+fi
 out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-native-steel-variant.XXXXXX")
 echo "Native mill evidence: $out"
 src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
@@ -81,6 +85,13 @@ if [[ ${LUANTTD_QA_SHORE_TREES:-0} =~ ^[12]$ || ${LUANTTD_QA_MULTICOAST_RAIL:-0}
   printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 fi
 install -m 644 "$src/mods/luanttd_core/init.lua" "$out/init"
+if [[ ${LUANTTD_QA_VOXEL_STORM:-0} == 1 ]]; then
+  sed '/^dofile(mod\.\."\/ambient_storms\.lua")\.start/,+2{
+    /^dofile/i local qa_storm_start
+    /^end)/c end,function() return qa_storm_start end)
+  }' "$out/init" >"$out/init-weather"
+  mv "$out/init-weather" "$out/init"
+fi
 cat "$fixture" >>"$out/init"
 mv "$out/init" "$game/mods/luanttd_core/init.lua"
 port=${BAYLINE_NATIVE_PORT:-41063}
@@ -284,6 +295,18 @@ if [[ ${LUANTTD_QA_SPLIT_FENCE:-0} == 1 ]]; then
     if command -v import >/dev/null; then
       import -window root -quality 91 "$out/fence-${ptn##* }.jpg"
     fi
+  done
+fi
+if [[ ${LUANTTD_QA_VOXEL_STORM:-0} == 1 ]]; then
+  for angle in FRONT SIDE; do
+    for _ in {1..350}; do
+      grep -q "NATIVE VOXEL STORM $angle" "$out/server.log" && break
+      kill -0 "$server" 2>/dev/null || break
+      sleep .20
+    done
+    grep -q "NATIVE VOXEL STORM $angle" "$out/server.log" || { tail -n 55 "$out/"{server,client}.log; exit 1; }
+    sleep .85
+    import -window root -quality 95 "$out/voxel-storm-${angle,,}.jpg"
   done
 fi
 for _ in {1..360}; do grep -q "$marker" "$out/server.log" && break; kill -0 "$server" 2>/dev/null || break; sleep .25; done

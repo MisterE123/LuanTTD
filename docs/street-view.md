@@ -29,7 +29,9 @@ and decks are walkable with an open boarding end. In water, use the movement
 controls to swim and hold jump to surface and reach a bank.
 
 **Controls → decorative scenery** includes distant voxel thunderstorms,
-light showers and mist. These have no effects on vehicle operations,
+light showers and thin drifting banks. Clouds use unsaved, private 3D voxel meshes
+that drift downwind rather than turning with the camera. Close clouds are removed
+so they do not obscure builders. These have no effects on vehicle operations,
 construction, simulation speed, or the world fog. It is a per-player
 presentation control and does not change the shared world.
 
