@@ -58,6 +58,15 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local d=s.stock_rail_dispatch
     if d and d.version==R.VERSION then return d end
   end
+  local function run_by_id(d,id)
+    local direct=d.runs[id]
+    if direct and direct.id==id then return direct end
+    for _,run in ipairs(d.runs) do if run.id==id then return run end end
+  end
+  function R.by_id(s,id)
+    local d=R.current(s)
+    return d and run_by_id(d,id)
+  end
   local function state(s,owner)
     local d=R.current(s)
     if d then return d end
@@ -576,7 +585,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local stats=owned and owned.stats
     local consist=ConsistMotion.seed_depot(board,depot,stats and stats.lengths or {8,R.wagon.length})
     if not consist then return false,"Cannot seed the stock consist in this depot." end
-    local run={id=#d.runs+1,owner=owner,depot=depot,station=station,consist=consist,span=span_mode,block=is_block,
+    -- Iteration stays dense, but reservations hold the stable dispatch ID.
+    local last=d.runs[#d.runs]
+    local next_id=d.next_run_id or (last and last.id+1 or 1)
+    local run={id=next_id,owner=owner,depot=depot,station=station,consist=consist,span=span_mode,block=is_block,
       branch_pbs=owned and second and not pair and not freight and not is_block and true or nil,
       local_signals=local_signals and true or nil,
       visual=R.engine.visual,phase="depot",index=1,speed=0,subspeed=0,progress=0,
@@ -802,7 +814,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       run.paid_built_day=s.day
       s.next_paid_rail_run=run.paid_clock+1
     end
-    d.runs[run.id]=run
+    d.runs[#d.runs+1]=run
+    d.next_run_id=run.id+1
     s.stock_rail_dispatch=d
     return true,pair and "Owned steam coach ordered to board, deliver and park." or
       freight and (cargo=="goods" and "Owned Goods train ordered to repeat: full load at the sawmill, unload in town." or cargo=="oil" and "Owned oil train ordered to repeat: full load at the wells, unload at the refinery." or
@@ -1089,7 +1102,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
     end
     local is_block=d.runs[1].block
-    d.runs={};d.life=Life.new();d.failure=nil;d.topology=s.topology
+    d.runs={};d.life=Life.new();d.next_run_id=nil;d.failure=nil;d.topology=s.topology
     if is_block and Block then refresh_blocks(Lab.board(s),d) end
     if Crossings then Crossings.refresh(s,rail_board(s)) end
     return true,is_block and "Dispatch consists cleared; block signals retained." or
@@ -1327,6 +1340,52 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return {events=events,reveals=move.reveals}
   end
 
+  local GroundFlood=dofile((core and core.get_modpath and core.get_modpath("luanttd_core")
+    or "mods/luanttd_core").."/openttd/ground_vehicle_flood.lua")
+
+  -- FloodVehicleProc checks every physical body, then crashes its front.
+  -- The current flood adapter mounts only ordinary owned town trains:
+  -- other modes retain their separate loading, accident and retirement policies.
+  function R.flood_ground_tile(s,tile,kill)
+    local d=R.current(s)
+    if not d then return 0 end
+    local n=0
+    local base=rail_board(s,d.runs[1] and d.runs[1].span)
+    local function bodies(at)
+      local out={}
+      local height=base.stock_height or stock_height
+      for _,r in ipairs(d.runs) do
+        if r.fleet_id and r.paid_clock and not (r.block or r.freight or r.paired) then
+          for _,p in ipairs(r.consist.parts) do
+            if p.tile==at then
+              local z=p.z
+              if z==nil and height then z=height(p.tile,p.pose.x%16,p.pose.y%16) end
+              if z~=nil then out[#out+1]={front=r,z=z} end
+            end
+          end
+        end
+      end
+      return out
+    end
+    GroundFlood.visit_ground(tile,nil,0,bodies,function(r)
+      local victims=kill(r)
+      if victims==nil then return end
+      r.crashed,r.phase,r.crash_age,r.speed,r.subspeed,r.progress,r.stopped=
+        true,"crashed",GroundFlood.train_crash_age(true),0,0,0,true
+      r.flood_wreck=true
+      for _,x in ipairs(Life.crash(base,d.life,r.id)) do
+        local t=signed(base,d).tile(x.tile)
+        for _,td in ipairs({x.track,x.track+8}) do
+          if Signal.pbs_along(t,td) then Signal.set_aspect(base,d.signals,x.tile,td,false) end
+        end
+      end
+      if Crossings then Crossings.refresh(s,base) end
+      if R.news_flood then R.news_flood(r.consist.parts[1].tile,victims) end
+      n=n+1
+    end)
+    return n
+  end
+
   local function check_collision(base,d,run,events,paid,service)
     if not run.local_signals or #d.runs<2 then return false end
     local function physical(r,p)
@@ -1362,7 +1421,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local function crash(first,second)
       local victims=0
       for _,id in ipairs({first,second}) do
-        local hit=d.runs[id]
+        local hit=assert(run_by_id(d,id),"Collision referred to an unknown dispatch ID")
         if not hit.crashed then
           local handler=service and service(hit) or paid
           local riders=not hit.freight and (hit.town_parts or hit.stock_wagon~=28)
@@ -2044,12 +2103,15 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       d.ticks=d.ticks+1
       -- Each vehicle's Train::Tick runs false then true before the next
       -- vehicle in stock pool order. Our two IDs are in creation order.
+      local removed
       for _,run in ipairs(d.runs) do
+        run.vehicle_ticks=(run.vehicle_ticks or run.ticks or 0)+1
         local callback=service and service(run) or paid
         if not run.crashed and (not service or callback) then stock_owned_tick(run,callback) end
         if run.crashed then
-          run.crash_age=run.crash_age+1
-          if run.crash_age>=4440 and d.ticks%32==0 and #run.consist.parts>0 then
+          local due
+          run.crash_age,due=GroundFlood.train_wreck_tick(run.crash_age,run.flood_wreck and run.vehicle_ticks or d.ticks)
+          if due and #run.consist.parts>0 then
             local tail=assert(Life.remove_wreck_tail(base,d.life,run.id))
             table.remove(run.consist.parts)
             local t=base.tile(tail.tile)
@@ -2062,6 +2124,14 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
               end
             end
             emit(d,run,events,"wreck_body_removed",{tile=tail.tile})
+            if run.flood_wreck and #run.consist.parts==0 then
+              assert(d.life.trains[run.id].crashed and #d.life.trains[run.id].parts==0)
+              d.life.trains[run.id]=nil
+              local fleet=s.stock_rail_fleet
+              if fleet then fleet.units[run.fleet_id]=nil end
+              removed=removed or {}
+              removed[run.id]=true
+            end
           end
         elseif run.failure or service and not callback then
           -- Missing or paused commercial service does not advance this
@@ -2119,6 +2189,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           if run.phase~="arrived" and run.phase~="dwell" then pass(s,base,d,run,events,true,callback,service) end
           if d.failure then return events end
         end
+      end
+      if removed then
+        for i=#d.runs,1,-1 do if removed[d.runs[i].id] then table.remove(d.runs,i) end end
       end
       if Crossings then Crossings.refresh(s,base) end
     end

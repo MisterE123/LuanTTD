@@ -252,6 +252,7 @@ for _,coaches in ipairs({false,2}) do
   local v=state.vehicles[1]
   local visible,available=S.waiting(state,1)
   assert(v.units>0 and visible>available and v.load_state.reserved_units==visible-available)
+  assert(S.crash_rail_headcount(v)==v.units+visible-available)
   local events={}
   assert(S.crash_rail(state,1,t,ctx,events))
   assert(not S.crash_rail(state,1,t,ctx,events))

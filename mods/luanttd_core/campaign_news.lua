@@ -56,6 +56,10 @@ return function(Sim,mod,R,cap)
       ("A collision involving two trains has been reported. %d casualties."):format(victims),
       {tile=tile,icon="train"})
   end
+  function W.rail_flood(tile,victims)
+    return publish("accident","thin","Train flooded",
+      ("A train has been flooded. %d casualties."):format(victims),{tile=tile,icon="train"})
+  end
   local calendar=dofile(source.."stock_engine_calendar.lua")
   local market_models={}
   local function market_public(row)

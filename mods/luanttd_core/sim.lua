@@ -533,13 +533,14 @@ local function coastal_visit(s)
     stock_tree_lifecycle=dofile(module_root.."tree_lifecycle_world.lua")(M,terrain_rules,rules)
   end
   local board=coastal_world.board(s)
+  board.flood_vehicles=function(id,tick) return M.coastal_rail_flood(s,id,tick) end
   local trees=s.stock_generated_profile and stock_tree_lifecycle
   local random=trees and function() return M.stock_random_u32(s) end
   return function(x,z,tick)
     local u,v=x+1,z+1
     local rail=s.tiles[M.id(u,v)]
     local was_wet=rail and rail.rail_ground==13
-    coastal_world.visit(s,u,v,board)
+    coastal_world.visit(s,u,v,board,tick)
     if not was_wet then stock_rail_ground.visit(s,u,v) end
     if trees and tick then trees.visit(s,u,v,tick,random) end
   end,trees and function(tick) return trees.global_tick(s,tick,random) end
@@ -3932,6 +3933,11 @@ function M.commercial_passengers_waiting(s,mode,id)
   if not paid_ferry or not id then return 0 end
   return paid_ferry.terminal_waiting(s,mode,id)
 end
+function M.coastal_rail_flood(s,id,tick)
+  local rail=paid_rail_runs[s]
+  if not rail or not rail.flood_ground_tile or not paid_ferry then return 0 end
+  return rail.flood_ground_tile(s,id,function(r) return paid_ferry.flood_train(s,r,tick) end)
+end
 function M.mount_paid_rail(s,Run)
   paid_rail_runs[s]=Run
   passenger_modules()
@@ -4962,7 +4968,8 @@ local function rail_tick_broker(s)
     local d=run.current(s)
     local by={passenger={}}
     for _,e in ipairs(moved) do
-      local train=d and d.runs[e.train]
+      local train
+      if run.by_id then train=run.by_id(s,e.train) elseif d then train=d.runs[e.train] end
       local cargo=train and train.freight and (train.freight.cargo or "coal") or "passenger"
       local list=by[cargo] or {};by[cargo]=list;list[#list+1]=e
       if e.kind=="rail_collision" and cargo~="passenger" then by.passenger[#by.passenger+1]=e end

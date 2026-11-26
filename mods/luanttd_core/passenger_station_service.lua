@@ -612,6 +612,16 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     return Rating.modify_around(rows,owner,x,y,-160,30)
   end
 
+  function S.crash_rail_headcount(v)
+    local function count(body)
+      return body.cargo=="passenger" and body.units+(body.load_state and body.load_state.reserved_units or 0) or 0
+    end
+    if not v.carrying_parts then return count(v) end
+    local n=0
+    for _,body in ipairs(v.carrying_parts) do n=n+count(body) end
+    return n
+  end
+
   function S.crash_rail(state,vid,tick,ctx,events)
     local v=state.vehicles[vid]
     if not v or v.mode~="rail" or v.crashed then return false end

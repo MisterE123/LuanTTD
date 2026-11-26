@@ -503,6 +503,19 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     frame.events=rest
     return selected
   end
+  local GroundFlood=dofile(mod.."/openttd/ground_vehicle_flood.lua")
+  function F.flood_train(s,run,tick)
+    local c=s.stock_ship_commercial
+    local id=run.paid_clock and rail_key(run.paid_clock)
+    local v=c and id and c.service.vehicles[id]
+    if not v or v.crashed then return end
+    local n=Service.crash_rail_headcount(v)
+    local events={}
+    if not Service.crash_rail(c.service,id,tick or c.service.tick,context(s,{rail=true}),events) then return end
+    flash(s,c,events)
+    return GroundFlood.train_victims(Sim.stock_random_u32(s),n,true)
+  end
+
   function F.take_rail_motion(s)
     local frame=view(s)
     local events=frame.rail_motion

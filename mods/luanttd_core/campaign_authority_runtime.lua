@@ -348,7 +348,10 @@ return function(Sim,mod,s,cap)
   N.transport=dofile(mod.."/campaign_transport_commands.lua")(Sim,N)
   N.news=dofile(mod.."/campaign_news.lua")(Sim,mod,N,cap)
   Sim.mount_news(s,N.news.arrive)
-  if N.rail then N.rail.run.news_collision=N.news.rail_collision end
+  if N.rail then
+    N.rail.run.news_collision=N.news.rail_collision
+    N.rail.run.news_flood=N.news.rail_flood
+  end
   for _,run in ipairs({N.rail and N.rail.run or false,N.water and N.water.run or false,
     N.water and N.water.freight or false,N.water and N.water.tanker_run or false,N.air and N.air.run or false}) do
     if run then run.news_arrival=N.news.arrive end

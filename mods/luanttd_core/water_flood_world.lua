@@ -9,9 +9,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     if t.ship or t.tram or t.airfield or t.level_crossing or t.rail_station_id or t.rail_waypoint_id or
         t.rail_depot_dir~=nil or t.rail_span_id then return false end
     for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return false end end
-    local x,z=Sim.xy(id)
-    local shape=Terrain.tile(s.corner_grid,x,z)
-    return shape~=0
+    return true
   end
   local function rail_remove_safe(s,id)
     local t=s.tiles[id]
@@ -88,6 +86,13 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     end
     if RailWater then
       function B.flood_rail(_,_,t)
+        if B.flood_vehicles then B.flood_vehicles(t.id,B.tick) end
+        -- Flat plots go through LandscapeClear as OWNER_WATER. Never
+        -- clear under any body/claim or still-ordered unsupported actor.
+        if t.slope==0 then
+          if rail_remove_safe(s,t.id) then return {kind="sea"} end
+          return
+        end
         return RailWater.flood(t.slope,t.tracks,t.ground,function() return rail_remove_safe(s,t.id) end)
       end
       function B.dry_rail(_,_,t)
@@ -110,7 +115,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       if rocks and kind=="coast" then t.stock_water_rocks=true end
     end
   end
-  function W.visit(s,x,z,board)
+  function W.visit(s,x,z,board,tick)
     if not s.corner_grid then return 0 end
     local source=Sim.id(x,z)
     local tile=source and s.tiles[source]
@@ -119,6 +124,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         (tile.terrain~="water" or not tile.coastal_water and (tile.stock_canal or
          tile.water_class=="river" or tile.water_class=="canal" or tile.build=="canal")) then return 0 end
     local B=board or W.board(s)
+    B.tick=tick
     local changes=Flood.visit(B,x,z)
     if #changes==0 then return 0 end
     s.changed=s.changed or {}
@@ -132,9 +138,9 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       local _,base=Terrain.tile(s.corner_grid,change.x,change.z)
       if change.from=="rail" then
         local q=change.rail
-        if q.kind=="coast" then
+        if q.kind=="coast" or q.kind=="sea" then
           t.rail_tracks,t.rail_ground,t.rail_type,t.build,t.owner=nil,nil,nil,nil,nil
-          apply(t,"coast",base)
+          apply(t,q.kind,base)
         else
           t.rail_tracks,t.rail_ground=q.tracks,q.ground
         end
