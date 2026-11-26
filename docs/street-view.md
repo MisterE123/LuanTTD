@@ -34,12 +34,12 @@ They do not cut into the building or change the road. A stop on the frontage
 tile suppresses the steps; a stop beside the approach reverses them if the
 opposite end is clear.
 
-**Controls → decorative scenery** includes distant voxel thunderstorms,
-light showers and thin drifting banks. Clouds use unsaved, private 3D voxel meshes
-that drift downwind rather than turning with the camera. Close clouds are removed
-so they do not obscure builders. These have no effects on vehicle operations,
-construction, simulation speed, or the world fog. It is a per-player
-presentation control and does not change the shared world.
+**Controls → decorative scenery** shows drifting voxel cloud banks, low mist,
+showers, and thunderstorms. Banks follow the terrain. A storm grows from an
+existing cloud and settles back into it as the rain stops. Nearby clouds ease
+aside for builders, but stay in place for walking, riding, flying, vehicle follow,
+and cinematic views. This setting is per player. Weather has no effects on
+vehicle operations, construction, or the simulation.
 
 Country Airfield windsocks stream downwind and ripple in the breeze.
 They follow the prevailing cloud drift with small local variation.

@@ -86,10 +86,8 @@ if [[ ${LUANTTD_QA_SHORE_TREES:-0} =~ ^[12]$ || ${LUANTTD_QA_MULTICOAST_RAIL:-0}
 fi
 install -m 644 "$src/mods/luanttd_core/init.lua" "$out/init"
 if [[ ${LUANTTD_QA_VOXEL_STORM:-0} == 1 ]]; then
-  sed '/^dofile(mod\.\."\/ambient_storms\.lua")\.start/,+2{
-    /^dofile/i local qa_storm_start
-    /^end)/c end,function() return qa_storm_start end)
-  }' "$out/init" >"$out/init-weather"
+  sed '/^local weather_options={/i local qa_weather_clock
+       /^local weather_options={/a\  clock=function() return qa_weather_clock end,' "$out/init" >"$out/init-weather"
   mv "$out/init-weather" "$out/init"
 fi
 cat "$fixture" >>"$out/init"
@@ -298,7 +296,7 @@ if [[ ${LUANTTD_QA_SPLIT_FENCE:-0} == 1 ]]; then
   done
 fi
 if [[ ${LUANTTD_QA_VOXEL_STORM:-0} == 1 ]]; then
-  for angle in FRONT SIDE; do
+  for angle in FRONT SIDE AFTER; do
     for _ in {1..350}; do
       grep -q "NATIVE VOXEL STORM $angle" "$out/server.log" && break
       kill -0 "$server" 2>/dev/null || break

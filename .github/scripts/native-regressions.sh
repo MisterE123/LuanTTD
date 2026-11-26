@@ -34,6 +34,7 @@ case "${1:-}" in
     LUANTTD_QA_ROCKY_FERRY=1 LUANTTD_QA_TOWN_YEAR=1985 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=364 BAYLINE_NATIVE_PORT=43381 timeout --kill-after=10s 215 bash tests/campaign_worker_stock_residential_native.sh
     LUANTTD_QA_JOINED_FERRY=1 LUANTTD_QA_JOINED_DOCK_UI=1 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=370 BAYLINE_NATIVE_PORT=43383 timeout --kill-after=10s 190 bash tests/campaign_worker_stock_residential_native.sh
     LUANTTD_QA_JOINED_FERRY=1 LUANTTD_QA_JOINED_DOCK_UI=1 LUANTTD_QA_JOINED_ACTIVE_REMOVE=1 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=372 BAYLINE_NATIVE_PORT=43387 timeout --kill-after=10s 195 bash tests/campaign_worker_stock_residential_native.sh
+    LUANTTD_QA_VOXEL_STORM=1 ALSOFT_DRIVERS=null BAYLINE_NATIVE_DISPLAY=376 BAYLINE_NATIVE_PORT=43389 timeout --kill-after=10s 155 bash tests/stock_steel_mill_layout_native.sh
     LUANTTD_QA_DOCK_GROVE=1 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=371 BAYLINE_NATIVE_PORT=43386 timeout --kill-after=10s 160 bash tests/campaign_worker_stock_residential_native.sh
     LUANTTD_QA_CANAL_DIKES=1 BAYLINE_NATIVE_DISPLAY=365 BAYLINE_NATIVE_PORT=43382 timeout --kill-after=10s 170 bash tests/campaign_worker_stock_residential_native.sh
     ;;

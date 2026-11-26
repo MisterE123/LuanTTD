@@ -626,9 +626,21 @@ local atmosphere,lighting=dofile(mod.."/atmosphere.lua").start(core,function()
   else return solar.phase(local_solar(now),now) end
 end,storage)
 api.lighting=lighting
+local weather_options={
+  spectator=function(p)
+    return api.cinematic and api.cinematic.active(p) or world.avatar_state(p) or
+      api.vehicle_ui and api.vehicle_ui.following and api.vehicle_ui.following(p)
+  end,
+  ground=function(x,z)
+    local id=Sim.id(math.floor(x/2),math.floor(z/2))
+    local t=render.host_tile(id)
+    if t and not t.stock_void then return t.top or render.host_terrain_top(id) or t.h end
+  end,
+  seed=function() return (tonumber(S.seed) or 0)%65521 end,
+}
 dofile(mod.."/ambient_storms.lua").start(core,function(p)
   return not placement and api.wildlife.enabled(p)
-end)
+end,weather_options)
 local function open_campaign_player(p)
   local name=p:get_player_name()
   if not authority then Sim.company(S,name) end
