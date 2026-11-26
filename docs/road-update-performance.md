@@ -219,3 +219,26 @@ collection and route checks were outside the timer. This is a result
 for path searches on the tested corridor, not a 38–44% game-loop or
 frame-rate gain. The mixed worker still spends more time updating road
 traffic than moving its two trains.
+
+## Passenger catchments on mature networks
+
+A house emission no longer tests every station in the network. The
+commercial simulator indexes station catchment bounds into 16×16
+sectors for its day's station catalog, then checks the exact union of
+the facility squares for the nearby candidates. Extending/removing
+physical facilities invalidates the index with the authoritative
+topology revision. Shared stops, cross-sector houses, station ratings,
+town rights and fixed-point allocation remain unchanged.
+
+In a synthetic native test of 512 road, rail, dock and airport stations,
+2,000 house allocations took **223 → 20 ms** and **198 → 18 ms**
+(median of eight batches for each pair). The runs produced the same
+2,683 allocations and 12,853 passenger units, with identical queues
+and receipts. The actual mixed road/freight worker also matched its
+previous saved state after 20 days and 182 house emissions. The
+allocation benchmark measures one stage, not the entire simulation.
+
+```sh
+tests/passenger_supply_spatial_bench_native.sh "$(command -v luantiserver)" \
+  /tmp/luanttd-passenger-index
+```

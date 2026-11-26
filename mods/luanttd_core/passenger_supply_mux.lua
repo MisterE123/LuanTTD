@@ -89,22 +89,8 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
     return c
   end
 
-  local function gather(s,service,e,ctx)
-    local stations,covers,sinks,goods_by_key={},{},{},{}
+  local function each_station(s,service,ctx,add)
     local native=service and service.stations or {}
-    local function add(kind,st,tiles)
-      local key=station_key(ctx,kind,st)
-      local c=view_geometry(st,key,tiles,ctx)
-      if not Catchment.covers_area(c,e.x,e.y,e.area,e.area) then return end
-      assert(not sinks[key],"Duplicate global StationID; mount a shared station as a single queue")
-      local town=ctx.station_town and ctx.station_town(kind,st) or st.town
-      if town==nil and kind=="road" then town=st.site end
-      stations[#stations+1]={id=key,owner=st.owner,town=town}
-      covers[key],sinks[key]=c,{st=st,kind=kind}
-      assert(st.owner~=nil,"Missing station owner")
-      if kind=="road" then RoadRating.status(s,st) end
-      goods_by_key[key]=assert(st.passenger_rating_state,"Missing station passenger rating")
-    end
     for _,st in pairs(native) do
       if not ctx.station_active or ctx.station_active(st) then add("service",st) end
     end
@@ -129,6 +115,86 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
           add("road",st,Sim.road_stop_tiles(st))
         end
       end
+    end
+  end
+
+  -- Town events near a station must still use the exact union of its
+  -- facility squares. This index only picks coarse candidates, with no
+  -- changes to town rights, active ratings, packet math, or tie order.
+  local buckets_by_context=setmetatable({},{__mode="k"})
+  local sector_size=16
+  local function index_for(s,service,ctx)
+    local q=buckets_by_context[ctx]
+    if q and q.s==s and q.native==(service and service.stations) and q.topology==s.topology then return q end
+    local sectors={}
+    local columns=math.ceil(ctx.width/sector_size)
+    local ordinal=0
+    each_station(s,service,ctx,function(kind,st,tiles)
+      local key=station_key(ctx,kind,st)
+      local c=view_geometry(st,key,tiles,ctx)
+      local box=c.bounds
+      if not box then return end
+      ordinal=ordinal+1
+      local entry={kind=kind,station=st,key=key,coverage=c,ordinal=ordinal}
+      for z=math.floor(box.top/sector_size),math.floor(box.bottom/sector_size) do
+        for x=math.floor(box.left/sector_size),math.floor(box.right/sector_size) do
+          local at=z*columns+x
+          local list=sectors[at]
+          if not list then list={};sectors[at]=list end
+          list[#list+1]=entry
+        end
+      end
+    end)
+    q={s=s,native=service and service.stations,topology=s.topology,sectors=sectors,columns=columns}
+    buckets_by_context[ctx]=q
+    return q
+  end
+  local function nearby(s,service,e,ctx,add)
+    local q=index_for(s,service,ctx)
+    local minx,maxx=math.max(0,e.x),math.min(ctx.width-1,e.x+(e.area or 1)-1)
+    local minz,maxz=math.max(0,e.y),math.min(ctx.height-1,e.y+(e.area or 1)-1)
+    if minx>maxx or minz>maxz then return end
+    local left,right=math.floor(minx/sector_size),math.floor(maxx/sector_size)
+    local top,bottom=math.floor(minz/sector_size),math.floor(maxz/sector_size)
+    local function use(entry)
+      add(entry.kind,entry.station,entry.key,entry.coverage)
+    end
+    if left==right and top==bottom then
+      local rows=q.sectors[top*q.columns+left]
+      if rows then for _,entry in ipairs(rows) do use(entry) end end
+      return
+    end
+    local rows,seen={},{}
+    for z=top,bottom do for x=left,right do
+      local list=q.sectors[z*q.columns+x]
+      if list then for _,entry in ipairs(list) do
+        if not seen[entry] then seen[entry]=true;rows[#rows+1]=entry end
+      end end
+    end end
+    table.sort(rows,function(a,b) return a.ordinal<b.ordinal end)
+    for _,entry in ipairs(rows) do use(entry) end
+  end
+
+  local function gather(s,service,e,ctx)
+    local stations,covers,sinks,goods_by_key={},{},{},{}
+    local function add(kind,st,key,c)
+      if not Catchment.covers_area(c,e.x,e.y,e.area,e.area) then return end
+      assert(not sinks[key],"Duplicate global StationID; mount a shared station as a single queue")
+      local town=ctx.station_town and ctx.station_town(kind,st) or st.town
+      if town==nil and kind=="road" then town=st.site end
+      stations[#stations+1]={id=key,owner=st.owner,town=town}
+      covers[key],sinks[key]=c,{st=st,kind=kind}
+      assert(st.owner~=nil,"Missing station owner")
+      if kind=="road" then RoadRating.status(s,st) end
+      goods_by_key[key]=assert(st.passenger_rating_state,"Missing station passenger rating")
+    end
+    if ctx.index_passenger_catchments then
+      nearby(s,service,e,ctx,add)
+    else
+      each_station(s,service,ctx,function(kind,st,tiles)
+        local key=station_key(ctx,kind,st)
+        add(kind,st,key,view_geometry(st,key,tiles,ctx))
+      end)
     end
     return stations,covers,sinks,goods_by_key
   end

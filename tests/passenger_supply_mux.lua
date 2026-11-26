@@ -114,7 +114,7 @@ assert(not Cross.capture(s,1,47,35,house,47))
 -- collisions or claim that a split runtime already shares a station.
 s,a=setup()
 local road,shared=s.stations[1],a.stations[1]
-local sharedctx={width=48,height=36,year=ctx.year,house_at=ctx.house_at,
+local sharedctx={width=48,height=36,year=ctx.year,house_at=ctx.house_at,index_passenger_catchments=true,
   station_id=function(_,st_) return st_.id end,
   road_alias=function(st_) if st_==road then return 1 end end}
 assert(Cross.capture(s,10,x,y,house,1))
@@ -230,3 +230,43 @@ assert(Cross.capture(s,3,10,9,h1,52))
 assert(Cross.consume(s,a,52,ctx)==4 and s.stock_passenger_mux.version==2)
 assert(s.stations[1].stock.passenger[1].source==40 and s.stations[1].stock.passenger[2].source==90)
 print("PASS: ordered same-tick emission batches, interrupted partial and v1 save migration, all replay receipts")
+
+
+-- Use two neighboring sectors and change the physical map between events.
+-- The candidate list cannot duplicate a station spanning the seam, carry
+-- an obsolete stop to the new revision, or change allocation rounding.
+do
+  local old_r,old_s=setup()
+  old_r.topology=10
+  local new_r,new_s=clone(old_r),clone(old_s)
+  local indexed={}
+  for k,v in pairs(ctx) do indexed[k]=v end
+  indexed.index_passenger_catchments=true
+  local function event(tick)
+    local h={town=99,area=2}
+    assert(Cross.capture(old_r,16,15,9,h,tick))
+    assert(Cross.capture(new_r,16,15,9,h,tick))
+    local a,b=Cross.consume(old_r,old_s,tick,ctx)
+    local c,d=Cross.consume(new_r,new_s,tick,indexed)
+    assert(a==c)
+    exact(b,d)
+    exact(old_r,new_r)
+    exact(old_s,new_s)
+    return b
+  end
+  local function has(rows,id)
+    for _,row in ipairs(rows) do if row.station==id then return true end end
+    return false
+  end
+  local initial=event(800)
+  assert(has(initial,11) and has(initial,12))
+  Service.footprint(old_s,1,{st(42,32,"rail",1)},ctx)
+  Service.footprint(new_s,1,{st(42,32,"rail",1)},indexed)
+  old_r.topology,new_r.topology=11,11
+  local moved=event(801)
+  assert(not has(moved,11) and has(moved,12))
+  old_s.stations[2],new_s.stations[2]=nil,nil
+  old_r.topology,new_r.topology=12,12
+  assert(not has(event(802),12))
+end
+print("PASS indexed catchments match every allocation across a sector seam and rebuild on topology edits")

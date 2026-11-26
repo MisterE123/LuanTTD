@@ -92,6 +92,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       if hq then return {hq_acceptance={passenger=Sim.hq_acceptance(hq,"passenger"),mail=Sim.hq_acceptance(hq,"mail")}} end
     end
     local ctx={width=Sim.W,height=Sim.H,xy=Sim.xy,house_at=house_at,
+      -- Sync the station catalog before this day's first production tick.
+      -- Interleaved removals change the authoritative topology revision.
+      index_passenger_catchments=true,
       gradual=s.stock_gradual_loading~=false,feeder_percent=s.stock_feeder_percent,
       select_goods=s.stock_select_goods,
       statue=Sim.station_has_town_statue and function(st) return Sim.station_has_town_statue(s,st) end,
