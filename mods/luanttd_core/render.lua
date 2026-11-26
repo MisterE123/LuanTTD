@@ -1226,6 +1226,7 @@ return function(api)
     end
   end
   local basement=reg("bedrock",{rock_side})
+  local coastal_seabed=reg("coastal_seabed",{{name=png("coastal_seabed"),align_style="world",scale=2}})
   core.register_alias("mapgen_stone",basement)
   core.register_alias("mapgen_water_source",gnames.water[0])
   core.register_alias("mapgen_river_water_source",gnames.water[0])
@@ -1592,7 +1593,10 @@ return function(api)
       -- not treat this decorative water node as a navigable tile.
       return coastal_node(t,id,x,y,z)
     end
-    if y==-1 then return basement end
+    if y==-1 then
+      local sea=t.water_class=="sea" or t.ship and t.ship.water_ground and t.ship.water_class=="sea"
+      return sea and coastal_seabed or basement
+    end
     if t.stock_landmark then
       if t.stock_landmark.kind=="headquarters" then
         local mark=t.stock_landmark

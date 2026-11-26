@@ -78,6 +78,8 @@ return function(api)
   end
   viewpoint("rocky-shore",shore,-4.4,-2.0,2.65)
   viewpoint("open-rocks",skerry,-3.7,2.1,3.2)
+  views["underwater-rocks"]={from={x=skerry.x*2-.22,y=-.39,z=skerry.z*2-.85},
+    at={x=skerry.x*2+.46,y=-.28,z=skerry.z*2+.5},eye_height=.25}
   viewpoint("scattered-skerries",{x=group[1].x-.5,z=group[1].z+.5,base=0},-6.0,-1.5,4.2)
   local flow=({[3]={-1,0},[6]={0,-1},[9]={0,1},[12]={1,0}})[rapid.mask]
   viewpoint("rapids",rapid,flow[1]*4.2-flow[2]*1.75,flow[2]*4.2+flow[1]*1.75,2.6)
@@ -103,8 +105,10 @@ return function(api)
     return original_spray(spec)
   end
   local function aim(p,v)
+    local eye=v.eye_height or 1.47
+    p:set_properties({eye_height=eye})
     p:set_pos(v.from)
-    local d=vector.subtract(v.at,{x=v.from.x,y=v.from.y+1.47,z=v.from.z})
+    local d=vector.subtract(v.at,{x=v.from.x,y=v.from.y+eye,z=v.from.z})
     p:set_look_horizontal(math.atan2(-d.x,d.z))
     p:set_look_vertical(math.atan2(-d.y,math.sqrt(d.x*d.x+d.z*d.z)))
   end
@@ -132,6 +136,7 @@ return function(api)
     assert(next(names,next(names)),"all four patches use the same model")
     core.log("action","COAST_SHEET_VARIANTS multiple sea forms and orientations")
     assert(tide.mesh:match("^bl_ocean_top_") and ordinary.mesh:match("^bl_ocean_top_"))
+    assert(select(2,at(skerry,-1))=="luanttd_core:coastal_seabed" and select(2,at(plain,-1))=="luanttd_core:coastal_seabed")
     assert(tide.waving==3 and ordinary.waving==3,"rock mounting changed the ordinary ocean shader")
     assert(select(2,at(plain,1))=="air","ordinary ocean got a rocky overlay")
     assert(bed.walkable and #bed.collision_box.fixed>0 and not block.walkable and not bed.pointable and not block.pointable)

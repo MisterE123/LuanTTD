@@ -202,34 +202,70 @@ def shoreline(mask, variant):
     return parts
 
 
-# Distinct ledge, rounded stack, twin islets and scattered shoal profiles.
-# Tuples: offset from parcel center, ellipse radii, crest height, long axis.
+# Broad bases taper continuously from the seabed into a fractured spine.
+# The four arrangements share no repeated columns or floating ledges.
 OPEN_SHAPES=(
-    ((-.24,.09,.39,.22,.177,.04),(.34,.16,.28,.19,.124,-.34),(-.45,-.28,.21,.14,.115,.12)),
-    ((-.33,-.18,.29,.28,.194,-.18),(-.06,.19,.29,.24,.118,.81),(.28,.38,.18,.15,.082,.12),( .26,-.32,.17,.14,.068,.42)),
-    ((-.38,.18,.33,.22,.126,.44),(.38,-.22,.32,.24,.180,-.20),(.53,.17,.15,.12,.078,.63),(-.56,-.14,.15,.13,.07,.26)),
-    ((-.49,-.06,.21,.17,.076,-1.11),(-.13,.38,.22,.17,.137,-.45),(.24,.17,.21,.17,.08,.58),(.48,-.24,.25,.17,.138,-1.10),(-.12,-.37,.20,.16,.064,.90)),
+    (-.045,.048,.90,.65,.165,.12),
+    (-.050,-.045,.85,.71,.181,-.51),
+    (.045,.019,.90,.62,.142,.71),
+    (.006,.072,.86,.67,.135,-.93),
 )
+BED = SEA-1
+
+
+def ridge(name,x,z,rx,rz,top,angle,rng):
+    """One watertight, rooted formation with a narrow split ridge, not a cap."""
+    p=Part(name)
+    count=8
+    angles=[tau*i/count+rng.uniform(-.10,.10) for i in range(count)]
+    edge=[rng.uniform(.90,1.055) for _ in angles]
+    ca,sa=cos(angle),sin(angle)
+    def point(u,v,y):
+        return (x+u*ca-v*sa,y,z+u*sa+v*ca)
+    rings=((BED-.018,1,1),(BED+.275,.90,.91),(SEA-.055,.63,.58),
+           (SEA+top*.55,.51,.29))
+    for layer,(y,u_scale,v_scale) in enumerate(rings):
+        for i,a in enumerate(angles):
+            lift=rng.uniform(-.053,.037) if 0<layer<3 else rng.uniform(-.023,.015) if layer else 0
+            u=rx*(edge[i]*u_scale*cos(a)+(.068*layer))
+            v=rz*(edge[i]*v_scale*sin(a)-(.056*layer))
+            p.points.append(point(u,v,y+lift))
+    p.points.extend((point(0,0,BED-.018),point(rx*.58,-rz*.21,SEA+top),
+                     point(-rx*.30,-rz*.13,SEA+top*.68)))
+    for i in range(count):
+        j=(i+1)%count
+        p.faces.append(((i,j,4*count),0))
+        for layer in range(3):
+            a,b,c,d=i+layer*count,j+layer*count,i+(layer+1)*count,j+(layer+1)*count
+            shades=((0,0,1,1),(0,1,1,2),(1,2,2,3))[layer]
+            p.faces.extend((((a,c,b),rng.choice(shades)),((b,c,d),rng.choice(shades))))
+        tail=4*count+2
+        tip=4*count+1
+        if i in (0,1,6,7): peak=tip
+        else: peak=tail
+        a,b=i+3*count,j+3*count
+        p.faces.append(((a,peak,b),rng.choice((2,3,3,4))))
+        if i==1:
+            p.faces.append(((b,peak,tail),4))
+        elif i==5:
+            p.faces.append(((b,peak,tip),2))
+    return p
+
+
 def open_water(form):
     rng=Random(0xC1EA+7577*form)
     parts=[]
-    for i,(u,v,rx,rz,h,angle) in enumerate(OPEN_SHAPES[form]):
-        x,z=u-.5,v+.5
-        parts.append(slab(f"Exposed skerry {i+1}",x,z,max(rx,.181),max(rz,.142),SEA+h,h+.101,angle,rng))
-        # Three shorter separate stones overlap and underlap the exposed
-        # body. Offset every successive shelf; no extruded silhouette.
-        for j,(top,thick,expand) in enumerate(((-.087,.210,1.07),(-.244,.239,1.18),(-.402,.302,1.11))):
-            dx=(j+1)*rng.uniform(-.055,.055)
-            dz=(j+1)*rng.uniform(-.059,.059)
-            parts.append(slab(f"Submerged shelf {i+1}.{j+1}",x+dx,z+dz,
-                              min(max(rx*expand,thick*.92),.40),min(max(rz*expand,thick*.86),.33),SEA+top,thick,
-                              angle+rng.uniform(-.49,.49),rng,True))
-    # Other lower rocks are secondary outcrops, not foundation feet.
-    for i,(u,v) in enumerate(((-.28,.59),(.06,-.54),(.46,.45))):
+    u,v,rx,rz,rise,angle=OPEN_SHAPES[form]
+    parts.append(ridge("Continuous fractured skerry ridge",u-.5,v+.5,rx,rz,rise,angle,rng))
+    # Small toe rubble rises separately from the same bed. No shelves
+    # underneath the visible crests, and nothing suspended in the water.
+    offsets=((-.30,.66),(.22,-.61),(.61,.43))
+    for i,(u,v) in enumerate(offsets):
         a=form*pi/8
         x=u*cos(a)-v*sin(a)-.5
         z=u*sin(a)+v*cos(a)+.5
-        parts.append(slab(f"Submerged spill {i+1}",x,z,.19,.15,SEA-(.11+i*.08),.15,.16+i*.9,rng,True))
+        h=.15+.055*i
+        parts.append(slab(f"Seabed rubble {i+1}",x,z,.185,.147,BED+h,h+.02,.2+i*.92,rng,True))
     return parts
 
 
@@ -321,6 +357,13 @@ def atlases():
             alpha=round(220*max(0,1-d)**1.28)
             foam.putpixel((x,y),(223,239,233,alpha))
     yield "bl_river_foam.png",png(foam)
+    bed=Image.new("RGB",(32,32))
+    rng=Random(0x5EABED)
+    for y in range(32):
+        for x in range(32):
+            d=round(3*sin(tau*(x+y)/32)+3*sin(tau*(x-2*y)/32))+rng.choice((-3,-2,0,0,1,3))
+            bed.putpixel((x,y),(57+d,63+d,58+d))
+    yield "bl_coastal_seabed.png",png(bed)
     for v in range(4):
         original=Image.open(MOD/"textures"/f"bl_original_coast_{v}.png").convert("RGB")
         assert original.size==(96,32)
@@ -345,7 +388,7 @@ def create_blend():
     bpy.context.preferences.filepaths.save_version=0
     scene=bpy.context.scene
     scene.name="LuanTTD | rocky coast, sea and rapids"
-    scene["Floor"]="Existing OpenTTD-derived LuanTTD planar shore. Level sea stays independent and waved."
+    scene["Floor"]="Open skerries grow out of a seabed one node below the independent, waved sea datum."
     scene["Provenance"]="Original closed rock volumes and riverbed blocks; OpenTTD 16.0-RC1 rocky-water drawing state, no sprite reused."
 
     def mat(name,hex):

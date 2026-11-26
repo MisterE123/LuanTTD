@@ -130,3 +130,13 @@ intact; touching it clears it. The raised coastal incline eventually
 becomes sea-class water, a flat inland cut stays dry, and an untouched
 neighbor still has its original river class and random byte after SQLite
 reload.
+
+
+### Rocky shallows
+
+Open-water rock tiles render as continuous tapering ridges rooted in the
+coastal bottom. Small separate rubble stays on that bottom, not suspended
+under the exposed crest. The four rock arrangements vary by tile and
+direction. The ordinary water surface still rolls over the same geometry
+when waves are turned on. This is presentation only; the rock tile's
+shipping, flooding and clearance rules are unchanged.

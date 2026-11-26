@@ -23,7 +23,7 @@ probe=coastal_sheet_native
 views=(overview near open)
 if [[ ${BAYLINE_NATIVE_ROCKY_WATER:-0} == 1 ]]; then
   probe=rocky_water_native
-  views=(rocky-shore open-rocks scattered-skerries rapids rapids-back)
+  views=(rocky-shore open-rocks underwater-rocks scattered-skerries rapids rapids-back)
   # Only this disposable fixture edits two local tile records.
   printf 'return function() return {local_replay=true} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 fi
@@ -44,6 +44,7 @@ cat >"$out/native.conf" <<GAME
 port = $port
 server_announce = false
 bind_address = 127.0.0.1
+prometheus_listener_address = 127.0.0.1:$port
 time_speed = 0
 bayline_coastal_sheet_reference = $([[ ${BAYLINE_NATIVE_COAST_REFERENCE:-0} == 1 ]] && echo true || echo false)
 GAME

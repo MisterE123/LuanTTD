@@ -9,7 +9,7 @@ from PIL import Image, ImageChops
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"tools"))
 from build_stock_rocky_water_art import (
-    MASKS, MOD, RAPIDS, REPO, SEA, SWATCHES,
+    BED, MASKS, MOD, RAPIDS, REPO, SEA, SWATCHES,
     asset_files, batch, cross, height_field, old_bank, open_water, rotated, slab,
 )
 
@@ -91,12 +91,15 @@ for name,parts,shift in batch():
         else:
             width=max(hypot(a[0]-b[0],a[2]-b[2]) for a in p.points for b in p.points)
             thickness=ceiling-min(y for _,y,_ in p.points)
-            assert thickness < .65*width or (is_shore and thickness<.77*width),(name,p.name,width,thickness)
-            if p.name.startswith("Submerged"):
+            if is_shore:
+                assert thickness<.77*width,(name,p.name,width,thickness)
+            elif p.name.startswith("Seabed rubble"):
                 submerged+=1
-                assert SEA-.405<=ceiling<=SEA-.080,(name,p.name,ceiling)
-            elif not is_shore:
-                assert SEA+.06<ceiling<SEA+.21 and min(y for _,y,_ in p.points)>=SEA-.117
+                assert BED+.12<ceiling<BED+.28,(name,p.name,ceiling)
+                assert min(y for _,y,_ in p.points)<BED
+            else:
+                assert SEA+.06<ceiling<SEA+.21 and min(y for _,y,_ in p.points)<BED
+                assert width>thickness*1.15,(name,p.name,width,thickness)
     assert len(faces)<=850,(name,"model became too expensive for repeated tiles")
 for i in range(4):
     old=Image.open(MOD/"textures"/f"bl_original_coast_{i}.png").convert("RGB")
@@ -107,17 +110,20 @@ foam=Image.open(MOD/"textures"/"bl_river_foam.png")
 assert foam.mode=="RGBA" and foam.getpixel((0,0))[3]==0 and foam.getpixel((7,7))[3]>180
 for form in range(4):
     a=open_water(form)
-    for group in range((len(a)-3)//4):
-        column=a[4*group:4*group+4]
-        assert column[0].name.startswith("Exposed")
-        for above,below in zip(column,column[1:]):
-            # Separate 3D rocks overlap at each level vertically and on both
-            # horizontal axes, instead of stretching a common column.
-            for j in range(3):
-                u,v=[p[j] for p in above.points],[p[j] for p in below.points]
-                assert min(max(u),max(v))>max(min(u),min(v)),(form,group,j)
-        assert min(y for _,y,_ in column[-1].points)<SEA-.68
+    assert len(a)==4
+    for crest in a[:1]:
+        n=8
+        # Every level contracts on both horizontal axes. The tops are
+        # fracture lines formed by two high points, never floating caps.
+        assert len(crest.points)==4*n+3
+        for axis in (0,2):
+            widths=[]
+            for j in range(4):
+                vals=[p[axis] for p in crest.points[j*n:(j+1)*n]]
+                widths.append(max(vals)-min(vals))
+            assert all(a>b for a,b in zip(widths,widths[1:])),(form,axis,widths)
+        assert set(i for f,_ in crest.faces for i in f if i>4*n)=={4*n+1,4*n+2}
     for p in a:
         assert all(isclose(a,b,abs_tol=1e-8) for u,v in zip(p.points,rotated(p,4).points) for a,b in zip(u,v))
-assert submerged>=240 and (REPO/"art"/"stock_rocky_water.blend").stat().st_size>80_000
-print(f"PASS 32 fixed-bank variants, 16 rotated skerry variants, 4 closed riverbed formations; {submerged} submerged bodies, {total_faces:,} triangles")
+assert submerged==48 and (REPO/"art"/"stock_rocky_water.blend").stat().st_size>80_000
+print(f"PASS 32 fixed-bank variants, 16 rotated skerry variants, 4 closed riverbed formations; {submerged} rooted toe rocks, {total_faces:,} triangles")
