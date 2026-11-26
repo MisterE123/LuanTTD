@@ -50,3 +50,32 @@ visibility samples for each of 192 buses across 12 days; 48 reached
 stations during the run. Separate instrumented runs counted
 **98,688 → 74,616** road-surface resolutions over four days, including
 routing and movement.
+
+## Live worker-to-host gaps
+
+The optional headless test uses the real async owner, sequenced mailbox,
+viewport interest scheduler, host projection and actor history. It runs
+192 stock buses at 4× on the same 128×128 network with nine view
+sectors, and the server loop configured for a 25 ms step. There is no client draw
+or network transit in this test. Unlike the controlled stepping benchmark
+above, Lua garbage collection and the normal periodic checkpoint run during the timing.
+
+```sh
+tests/campaign_pose_gap_native.sh "$(command -v luantiserver)" \
+  dfda4d96a78a71a19f4efcdd4e2f748977c3082d /tmp/luanttd-pose-gaps
+```
+
+Two 14-second paired runs produced the following wall-clock measurements.
+The baseline differs only in the two road simulation modules. These
+are exploratory timings on the shared Linux runner, not fixed targets:
+
+| Observation | Before (two runs) | After (two runs) |
+|---|---:|---:|
+| Host gap, median | 103 / 102 ms | 102 / 102 ms |
+| Host gap, 95th percentile | 611 / 507 ms | 406 / 318 ms |
+| Host gap, largest | 659 / 605 ms | 557 / 532 ms |
+| Worker sample gap, 95th percentile | 478 / 414 ms | 364 / 304 ms |
+
+The underlying update got faster, but it is still possible to exhaust the
+host's interpolation history. No visible position prediction or simulation
+rate change is included.
