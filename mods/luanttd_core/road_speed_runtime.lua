@@ -57,11 +57,14 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     -- station callbacks. No height survives a later world mutation.
     function W.height(_,frame) return road_z(s,frame,heights) end
     function W.put(record,f,opposite,z)
+      local x,y,direction,tile=f[1],f[2],f[3],f[4]
       opposite=not not opposite
-      if opposite~=not not record.opposite_lane then exposed=exposed+(opposite and 1 or -1) end
-      record.opposite_lane=opposite
+      if opposite~=not not record.opposite_lane then
+        exposed=exposed+(opposite and 1 or -1)
+        record.opposite_lane=opposite
+      end
       record.frame=f
-      local cell=floor(f[1]/16)*stride+floor(f[2]/16)
+      local cell=floor(x/16)*stride+floor(y/16)
       if record.cell~=cell then
         if record.bucket then record.bucket[record.id]=nil end
         local bucket=buckets[cell]
@@ -69,28 +72,34 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         bucket[record.id]=record
         record.bucket,record.cell=bucket,cell
       end
-      local tile=f[4]
-      local stock_tile,opposite_portal=tile
-      if f[12] then stock_tile,opposite_portal=Wormhole.frame_bucket(s,f) end
-      if record.opposite_portal and (not opposite_portal or record.stock_tile~=stock_tile) then
-        wormholes[record.stock_tile][record.id]=nil
+      -- Ground traffic does not need the special portal memberships.
+      -- Still visit them on the first ground pixel after leaving a span.
+      if f[12] or record.opposite_portal then
+        local stock_tile,opposite_portal=tile
+        if f[12] then stock_tile,opposite_portal=Wormhole.frame_bucket(s,f) end
+        if record.opposite_portal and (not opposite_portal or record.stock_tile~=stock_tile) then
+          wormholes[record.stock_tile][record.id]=nil
+        end
+        if opposite_portal and (not record.opposite_portal or record.stock_tile~=stock_tile) then
+          wormholes[stock_tile]=wormholes[stock_tile] or {}
+          wormholes[stock_tile][record.id]=record
+        end
+        if opposite_portal and tile_xy and (not record.opposite_portal or record.stock_tile~=stock_tile) then
+          record.stock_x,record.stock_y=tile_xy(stock_tile)
+        end
+        record.stock_tile,record.opposite_portal=stock_tile,opposite_portal
+      else
+        record.stock_tile=tile
       end
-      if opposite_portal and (not record.opposite_portal or record.stock_tile~=stock_tile) then
-        wormholes[stock_tile]=wormholes[stock_tile] or {}
-        wormholes[stock_tile][record.id]=record
-      end
-      if opposite_portal and tile_xy and (not record.opposite_portal or record.stock_tile~=stock_tile) then
-        record.stock_x,record.stock_y=tile_xy(stock_tile)
-      end
-      record.stock_tile,record.opposite_portal=stock_tile,opposite_portal
       if record.tile~=tile then
         if bay[record.tile]==record.id then bay[record.tile]=nil end
         if record.tile and by_tile[record.tile] then by_tile[record.tile][record.id]=nil end
         by_tile[tile]=by_tile[tile] or {}
         by_tile[tile][record.id]=record
       end
-      if bay_tile(s,tile) and (not bay[tile] or record.id<bay[tile]) then bay[tile]=record.id end
-      record.x,record.y,record.z,record.direction,record.tile=f[1],f[2],z or W.height(s,f),f[3],tile
+      local occupant=bay[tile]
+      if (not occupant or record.id<occupant) and bay_tile(s,tile) then bay[tile]=record.id end
+      record.x,record.y,record.z,record.direction,record.tile=x,y,z or W.height(s,f),direction,tile
     end
     function W.bay(id) return bay[id] end
     function W.exposed() return exposed>0 end
@@ -391,6 +400,9 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     end
     for _,id in ipairs(ids) do sample(id,1) end
     local k=1
+    -- step consumes this argument synchronously; only the poses and
+    -- cursors are published. Do not allocate a wrapper per vehicle/tick.
+    local moving={}
     clock(function(tick)
       local ready=hooks.economy(tick)
       local W=world(s,true)
@@ -435,7 +447,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
             if front and not rec.tile then W.put(rec,front,c.lane_pose~=nil) end
             worked[id]=true
             if v.running and not held then
-              local moving={v=v,c=c,frames=frames,record=rec}
+              moving.v,moving.c,moving.frames,moving.record=v,c,frames,rec
               step(s,W,moving,board,hooks.exited,tick)
               frames=moving.frames
             end

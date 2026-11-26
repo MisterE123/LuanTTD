@@ -148,3 +148,23 @@ do
   assert(height(s,frames[1],fresh)==56)
 end
 print("PASS signed occupancy cells and scratch reuse; exact intra-tick grade, fresh terrain, and live span elevations")
+
+-- Exercise same-tile updates across all opposite-lane transitions. An
+-- ordinary road update must not spuriously register or retain a portal.
+do
+  local W=U.traffic_world(S)
+  local a,b=moving(1),moving(2)
+  W.put(a,{50,25,5,103,1});assert(not W.exposed())
+  W.put(a,{51,25,5,103,1},true);assert(W.exposed())
+  W.put(b,{52,25,5,103,1},true);assert(W.exposed())
+  W.put(a,{53,25,5,103,1});assert(W.exposed())
+  W.put(b,{54,25,5,103,1},false);assert(not W.exposed())
+  assert(a.stock_tile==103 and b.stock_tile==103 and #W.stock_vehicles_at(103)==2)
+  W.put(a,span(80,105,1,5,8,true),true)
+  W.put(a,{130,25,5,108,1},true)
+  W.put(a,{131,25,5,108,1},true)
+  assert(a.stock_tile==108 and not a.opposite_portal and #W.stock_vehicles_at(103)==1)
+  assert(W.exposed() and #W.stock_vehicles_at(108)==1)
+  W.erase(a);assert(not W.exposed() and #W.stock_vehicles_at(108)==0)
+end
+print("PASS ordinary same-tile and span-exit lane updates preserve the occupancy buckets")

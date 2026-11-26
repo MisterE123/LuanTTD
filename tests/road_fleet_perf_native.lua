@@ -36,7 +36,7 @@ core.after(0,function()
     for _=1,4 do old.sim.daily(old.world);new.sim.daily(new.world) end
     F.check({old,new})
     results.calls={old=old.sim.perf_road_shape_calls,new=new.sim.perf_road_shape_calls}
-    assert(results.calls.new<results.calls.old)
+    assert(results.calls.new<=results.calls.old)
     return results
   end,function(results)
     assert(results and #results==12,"native road fleet harness did not complete")

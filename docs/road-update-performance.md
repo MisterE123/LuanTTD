@@ -103,3 +103,22 @@ codecs. This
 does not change when saves occur or how they are committed; compression,
 hash validation, and the atomic write are unchanged. It shortens one
 blocking part of a save, rather than removing synchronous pauses.
+
+## Ground occupancy on the worker
+
+A native profile identified repeated occupancy bookkeeping inside the road
+movement step. Ordinary road positions now skip the bridge/tunnel portal
+lookup unless they're leaving a span. The index still removes the old
+portal membership on exit. The bay occupant is only looked up in the
+world when the update can change which vehicle holds the bay. The direct
+daily road loop also shares one temporary movement argument instead of
+allocating a wrapper for every moving vehicle on every tick. No motion
+frames, gameplay rules, or time samples are removed.
+
+The same integrated 192-bus benchmark against `8c3ab0bfc69a` gave
+**68.4 → 64.9 ms** and **71.2 → 64.5 ms** median wall time per simulated
+day. In each test the entire saved world and all motion samples matched
+for 12 days, including 48 station arrivals. The focused regressions
+also exercise bridges, tunnels, opposite lanes, on-road bays, road/tram
+crossings and save/reload. These results measure worker processing, not
+frame rate or a guarantee against live checkpoint-related stutters.
