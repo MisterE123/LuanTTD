@@ -261,3 +261,23 @@ passenger service; actual cash and stop queues also matched.
 tests/passenger_supply_spatial_bench_native.sh "$(command -v luantiserver)" \
   /tmp/luanttd-road-house --road-only aff651a24de6d7090893a256d95d252d1c206090
 ```
+
+### Shared mail stations use less transient memory
+
+The daily mixed road/rail/air mail allocator now uses the same coarse
+sector lookup. Exact station regions still decide eligibility, including
+gaps between joined facilities. It no longer builds a reverse table
+entry for every tile in every station's catchment.
+
+In native pairs with 512 stations, constructing the daily allocator
+took **22.6 → 11.8 ms** and **24.4 → 13.6 ms**. Measured retained Lua
+heap for the allocator dropped from about **17.2 MiB to 5.1 MiB**.
+The two versions delivered the same 9,096 waiting mail units from
+3,000 events, with identical queue contents. Separate real rail and
+air worker tests reopened loaded vehicles, settled the correct fares
+and did not pay twice after restart.
+
+```sh
+tests/passenger_supply_spatial_bench_native.sh "$(command -v luantiserver)" \
+  /tmp/luanttd-shared-mail --shared-mail 3fc99ab57e1c219d8d60f71dc327d2d0e262163d
+```

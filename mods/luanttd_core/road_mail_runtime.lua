@@ -5,6 +5,8 @@
 -- Reuse the existing stock-tested packet, income, rating and house kernels.
 -- Vehicle acceleration, gradual loading, subsidies, link graphs, group
 -- stations, and the game-wide price and RNG streams remain host concerns.
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local sector=dofile(mod.."/catchment_sectors.lua")
 return function(Sim,H,Packets,Income,Kernel,Station)
   local M={}
   M.cargo={key="mail",id=2,bitnum=2,label="MAIL",weight_sixteenths=4,
@@ -193,7 +195,8 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   -- emission. Do not dispatch beside from_house: the two eligible modes
   -- must compete in this single MoveGoodsToStation call.
   function M.shared_allocator(Catchment,width,depth,physical,options)
-    local stations,by_id,nearby={},{},{}
+    local stations,by_id={},{}
+    local nearby=sector(width,depth)
     for _,st in ipairs(physical) do
       assert(not by_id[st.id],"Duplicate physical mail station")
       local tiles=options and options.tiles and options.tiles(st)
@@ -202,15 +205,11 @@ return function(Sim,H,Packets,Income,Kernel,Station)
       stations[#stations+1]=by_id[st.id]
     end
     table.sort(stations,function(a,b)return a.st.id<b.st.id end)
-    -- Build one reverse index for the day's stable physical stations.
-    -- Houses only compete among covering stations, not every platform
-    -- on a 4096-tile edge; candidate order remains stable StationID.
+    -- Index coarse bounds, not a second set of tables for every
+    -- covered tile. Exact coverage remains in the region and in offer().
+    -- Index insertion order is the stock numeric StationID order.
     for _,q in ipairs(stations) do
-      for tile in pairs(q.region.tiles) do
-        local a=nearby[tile]
-        if not a then a={};nearby[tile]=a end
-        a[#a+1]=q
-      end
+      if q.region.bounds then nearby.add(q.region.bounds,q) end
     end
     local S={}
     local function lookup(id)
@@ -220,24 +219,19 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     function S.offer(amount,x,z,record)
       if amount<=0 or x<0 or x>=width or z<0 or z>=depth then return 0 end
       assert(record and (record.town or record.source),"Mail origin requires a stock source")
-      local candidates,list={},{}
+      local list={}
       local area=record.area or 1
-      for dz=0,area-1 do for dx=0,area-1 do
-        if x+dx<width and z+dz<depth then
-          for _,q in ipairs(nearby[(z+dz)*width+x+dx] or {}) do candidates[q.st.id]=q end
-        end
-      end end
       local offer=options
       if area>1 then
         offer={}
         for k,v in pairs(options or {}) do offer[k]=v end
         offer.area=area
       end
-      for _,q in pairs(candidates) do
+      for _,row in ipairs(nearby.query(x,z,area)) do
+        local q=row.value
         local rank=Catchment.offer(q.st,q.region,"mail",x,z,goods,offer)
         if rank then list[#list+1]={st=q.st,rating=rank} end
       end
-      table.sort(list,function(a,b) return a.st.id<b.st.id end)
       return allocate(amount,record,list,record.source_type or "town")
     end
     function S.acceptance(id,house_at)

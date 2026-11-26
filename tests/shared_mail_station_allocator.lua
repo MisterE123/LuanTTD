@@ -44,3 +44,19 @@ assert(accepted==26 and Mail.waiting(road)==6 and Mail.waiting(rail)==8 and Mail
 assert(airport.stock.mail[1].origin_station==airport.id and airport.stock.mail[1].source==2)
 assert(air.acceptance(airport.id,house).accepts and airport.mail_rating_state.last_speed==87)
 print("PASS one stock house Mail emission competes among road, rail and air, with physical footprint and cargo filters")
+
+-- The two facility squares occupy different sectors. Their bounding
+-- rectangle includes a gap, and a two-square source straddling a sector
+-- seam must be matched only once against that physical station.
+do
+  local joined=stop(0x4003,"rail",14,13,1)
+  joined.tiles[2]={x=36,y=13,kind="rail"}
+  local a=Mail.shared_allocator(Catchment,64,64,{joined})
+  a.loading(joined.id,"rail",180,1986,1980,30)
+  joined.mail_rating_state.rating=200
+  local h={town=2,area=2}
+  assert(a.offer(40,24,13,h)==0,"A coarse sector is not effective catchment")
+  local units=a.offer(40,15,13,h)
+  assert(units>0 and #joined.stock.mail==1 and Mail.waiting(joined)==units)
+end
+print("PASS shared mail ignores catchment gaps and does not duplicate a station across sectors")
