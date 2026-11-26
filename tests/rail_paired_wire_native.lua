@@ -3,14 +3,29 @@ do
   local Owned,Run=assert(api.rail_owned),assert(api.rail_dispatch_controller)
   local Track=dofile(mod.."/openttd/rail_track.lua")
   local Wire=dofile(mod.."/rail_turnout_wire.lua")(Sim,Track,dofile(mod.."/openttd/rail_wire_mask.lua")(Track))
+  local terrain=dofile(mod.."/openttd/terrain.lua")
+  local K=dofile(mod.."/openttd/rail_pylon.lua")(Track,dofile(mod.."/openttd/rail_pylon_tables.lua"))
+  local P=dofile(mod.."/rail_edge_pylon.lua")(Sim,Track,K,{
+    tile=function(at)return terrain.tile(S.corner_grid,Sim.xy(at)) end},Wire)
+  local function supports(id,level,profile)
+    local x,z=Sim.xy(id)
+    local q=P.at(S,id,S.tiles[id])
+    assert(P.is_distributed(q),q)
+    if profile then assert(q==profile,q) end
+    for slot,d in ipairs({{1,0,2},{0,1,2},{1,1,2},{0,0,3}}) do
+      local node=P.distributed[slot][P.decode(q,slot)]
+      local got=core.get_node({x=2*x+d[1],y=(level or 0)+d[3],z=2*z+d[2]}).name
+      assert(got==(node and "luanttd_core:"..node or "air"),("Tile %d at slot %d: %s"):format(id,slot,got))
+    end
+  end
   local at=Sim.id
   local depot,pair=at(4,10),at(16,10)
-  local group,portal={x=32,y=2,z=20},{x=33,y=2,z=21}
+  local group={x=32,y=2,z=20}
   local function expect(mask,node)
     assert(Wire.at(S,pair,S.tiles[pair])==mask)
     assert(api.render.rail_dual(pair,12)=="12_2_0",api.render.rail_dual(pair,12))
     assert(core.get_node(group).name=="luanttd_core:"..node,core.get_node(group).name)
-    assert(core.get_node(portal).name=="luanttd_core:rail_pair_portal_12")
+    supports(pair)
   end
   local function verify()
     local saved=S.rail_pair_native

@@ -1130,16 +1130,29 @@ return function(api)
     local Turnout=dofile(modpath.."/rail_turnout_wire.lua")(Sim,rail_track,dofile(modpath.."/openttd/rail_wire_mask.lua")(rail_track))
     local wires={}
     local pylon=dofile(modpath.."/openttd/rail_pylon.lua")(rail_track,dofile(modpath.."/openttd/rail_pylon_tables.lua"))
-    local stock=dofile(modpath.."/rail_edge_pylon.lua")(Sim,rail_track,pylon,terrain_view)
+    local stock=dofile(modpath.."/rail_edge_pylon.lua")(Sim,rail_track,pylon,terrain_view,Turnout)
     local poles={{},{}}
     for slot,choices in ipairs(stock.poles) do
       for id,name in pairs(choices) do poles[slot][id]=architecture(name,name,"rail_catenary_atlas") end
+    end
+    local distributed={}
+    for slot,choices in ipairs(stock.distributed) do
+      distributed[slot]={}
+      for i,name in ipairs(choices) do distributed[slot][i]=architecture(name,name,"rail_catenary_atlas") end
+    end
+    stock_scenery.distributed_supports=stock.is_distributed
+    function stock_scenery.high_pylon(profile)
+      return distributed[4][stock.decode(profile,4)]
     end
     function stock_scenery.stock_pylon(id,t)
       if projected then return S.rail_pylon[id] end
       return stock.at(S,id,t)
     end
     function stock_scenery.pylon_node(profile,x,z)
+      if stock.is_distributed(profile) then
+        local slot=x%2==1 and (z%2==1 and 3 or 1) or z%2==1 and 2
+        return slot and distributed[slot][stock.decode(profile,slot)] or nil
+      end
       if x%2==1 and z%2==0 then return poles[1][profile%33] end
       if x%2==0 and z%2==1 then return poles[2][math.floor(profile/33)] end
     end
@@ -1187,7 +1200,7 @@ return function(api)
           local m,n=R.rail_diagonal_mode(id,pair[1]),R.rail_diagonal_mode(id,pair[2])
           return dual[bits][4*m+n] or contact[selected]
         end
-        if Turnout.compound(bits) then return contact[selected] end
+        if Turnout.compound(bits) or stock.is_distributed(stock_profile) then return contact[selected] end
         if selected==bits then return wires[selected] end
         return stock_scenery.catenary[selected][1]
       end
@@ -2013,6 +2026,11 @@ return function(api)
         if t.rail_waypoint_id and grade==0 and y==level+1 and x%2==1 and z%2==1 then
           return stock_scenery.waypoint[t.rail_tracks==1 and 0 or 1]
         end
+        if grade==0 and y==level+3 and x%2==0 and z%2==0 and t.rail_type==1
+            and not t.rail_depot_dir and stock_scenery.catenary then
+          local high=stock_scenery.high_pylon(stock_scenery.stock_pylon(id,t))
+          if high then return high end
+        end
         if grade==0 and y==level+2 and t.rail_type==1
             and not t.rail_depot_dir and stock_scenery.catenary then
           local stock_profile=stock_scenery.stock_pylon(id,t)
@@ -2021,7 +2039,7 @@ return function(api)
             if pole then return pole end
           end
           local deck=Sim.bridge_deck_at(S,id)
-          local portal=stock_scenery.wire_portal(t.rail_tracks)
+          local portal=not stock_scenery.distributed_supports(stock_profile) and stock_scenery.wire_portal(t.rail_tracks)
           -- The portal's raised frame is a separate mesh, so the wires
           -- can respond to source connectivity without changing its feet.
           if portal and (not deck or deck>y) and x%2==1 and z%2==1 then
@@ -2429,6 +2447,16 @@ return function(api)
           -- the adjacent property's fallback stair orientation.
           local k=Sim.adjacent(j,d%4+1)
           if k and S.tiles[k] and S.tiles[k].source_house then set[k]=true end
+          -- A compound neighbor checks its far approach before selecting
+          -- a pylon. Repaint the powered tiles affected by that second ring.
+          -- Projected clients receive those differences from the authority.
+          local neighbor=S.tiles[j]
+          if not projected and neighbor and neighbor.rail_type==1 then
+            for e=1,4 do
+              local far=Sim.adjacent(j,e)
+              if far and S.tiles[far] and S.tiles[far].rail_type==1 then set[far]=true end
+            end
+          end
         end
       end
       if dikes and not projected then

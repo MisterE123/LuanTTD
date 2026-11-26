@@ -3,15 +3,29 @@ do
   local Owned,Run=assert(api.rail_owned),assert(api.rail_dispatch_controller)
   local Track=dofile(mod.."/openttd/rail_track.lua")
   local Wire=dofile(mod.."/rail_turnout_wire.lua")(Sim,Track,dofile(mod.."/openttd/rail_wire_mask.lua")(Track))
+  local terrain=dofile(mod.."/openttd/terrain.lua")
+  local K=dofile(mod.."/openttd/rail_pylon.lua")(Track,dofile(mod.."/openttd/rail_pylon_tables.lua"))
+  local P=dofile(mod.."/rail_edge_pylon.lua")(Sim,Track,K,{
+    tile=function(at)return terrain.tile(S.corner_grid,Sim.xy(at)) end},Wire)
+  local function supports(id,level,profile)
+    local x,z=Sim.xy(id)
+    local q=P.at(S,id,S.tiles[id])
+    assert(P.is_distributed(q),q)
+    if profile then assert(q==profile,q) end
+    for slot,d in ipairs({{1,0,2},{0,1,2},{1,1,2},{0,0,3}}) do
+      local node=P.distributed[slot][P.decode(q,slot)]
+      local got=core.get_node({x=2*x+d[1],y=(level or 0)+d[3],z=2*z+d[2]}).name
+      assert(got==(node and "luanttd_core:"..node or "air"),("Tile %d at slot %d: %s"):format(id,slot,got))
+    end
+  end
   local at=Sim.id
   local depot,corner=at(4,10),at(16,10)
   local function installed(id,mask,level)
     local x,z=Sim.xy(id)
     assert(Wire.at(S,id,S.tiles[id])==mask,"Source junction contact mask")
     local wire=core.get_node({x=2*x,y=(level or 0)+2,z=2*z}).name
-    local portal=core.get_node({x=2*x+1,y=(level or 0)+2,z=2*z+1}).name
     assert(wire=="luanttd_core:rail_compound_contact_"..mask,wire)
-    assert(portal=="luanttd_core:rail_compound_portal",portal)
+    supports(id,level)
   end
   local function stamp()
     local saved=S.rail_compound_native
@@ -66,6 +80,12 @@ do
       local charge=fork_price-Sim.company(S,owner).cash
       assert(charge==544,"Expected stock per-piece conversion price")
       installed(isolated,25);installed(diamond,3);installed(founded,25,1)
+      local second,adjacent,spur,far=at(30,31),at(31,31),at(31,30),at(32,31)
+      rail(second,6);rail(adjacent,3);rail(spur,2);rail(far,1)
+      assert(api.electric_commit(owner,assert(api.electric_quote(owner,{second,adjacent,spur},1))))
+      supports(second,0,2122)
+      assert(api.electric_commit(owner,assert(api.electric_quote(owner,{far},1))))
+      supports(second,0,2170) -- repaint via the ordinary committed far conversion
       local train=assert(Owned.commit(S,owner,assert(Owned.quote(S,owner,depot,{23,27}))))
       local ok,note=Owned.start(S,owner,train.id,a,b)
       assert(ok,note)
@@ -108,6 +128,7 @@ do
       error("Train never boarded paying passengers")
     end
     installed(corner,63);installed(saved.isolated,25);installed(saved.diamond,3);installed(saved.founded,25,1)
+    supports(at(30,31),0,2170)
     local seen,arrived
     for _=1,100 do
       Sim.daily(S)
@@ -123,7 +144,7 @@ do
     core.request_shutdown("Verified stock compound wiring and owned service",false,0)
   end
   core.after(0,function()
-    core.emerge_area({x=0,y=-1,z=2},{x=47,y=5,z=37},function(_,_,n)
+    core.emerge_area({x=0,y=-1,z=2},{x=65,y=5,z=64},function(_,_,n)
       if n==0 then core.after(0,stamp) end
     end)
   end)

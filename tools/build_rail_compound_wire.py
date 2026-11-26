@@ -51,15 +51,8 @@ def wire(mask,eased=None):
             x,z,*_=path.sample(t)
             W.bar(m,f"Track {bit} independent droppers","Dropper link tempered steel",
                   (x,z,W.WIRE+.006),(x,z,low(t)+.004),.0049)
-        x,z,*_=path.sample(.5)
-        # The wire-only scene includes the hangers, not extra feet.
-        # Endpoint control remains on the canonical half-tile geometry.
-        W.bar(m,f"Track {bit} overhead registration","Braced period blue-grey steel mast",
-              P,(x,z,1.066),.013,.017)
-        W.D(m,f"Track {bit} porcelain registration","Porcelain warm bleached insulator",
-            (x,z,0),.014,"h",1.025,1.073,8)
-        W.bar(m,f"Track {bit} clip to messenger","Raised copper end clamps",
-              (x,z,1.025),(x,z,low(.5)),.006)
+        # No tile-centered frame in the wire asset. Stock edge pylons
+        # or the independently painted native fallback carry the wires.
     return m
 
 def portal():
@@ -83,6 +76,20 @@ def portal():
     W.bar(m,"Lower rolled lip along main girder","Mast steel shadow tension flange",
           (*a,TOP-.037),(*b,TOP-.037),.033,.012)
     W.B(m,"Shared bolted registration plate","Satin warm galvanized beam edge",0,0,.14,.11,TOP-.066,TOP-.013,.013)
+    # Only the fallback portal owns this frame. The distributed
+    # stock style meets the wires at their physical tile edges.
+    supports={(0,0)}
+    for bit in range(2,6):
+        x,z,*_=R.TrackPath(bit).sample(.5)
+        supports.add((round(x,5),round(z,5)))
+    for x,z in sorted(supports):
+        if x or z:
+            W.bar(m,"Separate overhead registration arm","Braced period blue-grey steel mast",
+                  (0,0,TOP-.015),(x,z,1.066),.013,.017)
+        W.D(m,"Spare porcelain registration","Porcelain warm bleached insulator",
+            (x,z,0),.014,"h",1.025,1.073,8)
+        W.bar(m,"Suspension clip from portal to messenger","Raised copper end clamps",
+              (x,z,1.025),(x,z,W.messenger(.5)),.006)
     return m
 
 def join(*meshes):

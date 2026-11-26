@@ -54,3 +54,21 @@ rail(x+1,z,1,1);rail(x,z+1,2,1)
 local both=read(paired.scene)
 assert(both.tiles[1].rail_wire==12 and C.dual(both.tiles[1].rail_diagonal,12)=="12_2_0")
 print("PASS an independent pair keeps the same exact eased railway when its other wire comes live outside the subscribed tile")
+
+-- The compound neighbor's far approach changes which supports are
+-- visible at home, without altering either of the two subscribed fields
+-- (its physical bits and live contact mask).
+for i=1,4096 do s.tiles[i]={terrain="grass",h=0} end
+x,z=30,31
+rail(x,z,6,1);rail(x+1,z,3,1);rail(x+1,z-1,2,1);rail(x+2,z,1,0)
+local K=m("openttd/rail_pylon")(Track,m("openttd/rail_pylon_tables"))
+local P=m("rail_edge_pylon")(Sim,Track,K,{tile=function(i)return T.tile(s.corner_grid,Sim.xy(i)) end},Wire)
+A=m("campaign_authority_endpoint")(Sim,{world=s,terrain=T,terrain_projection=m("campaign_terrain_projection"),
+  rail_wire_mask=Wire.at,rail_pylon=P.at})
+local outer0=read()
+assert(outer0.tiles[1].rail_pylon==2122,outer0.tiles[1].rail_pylon)
+rail(x+2,z,1,1)
+local outer1=read(outer0.scene)
+assert(outer1.tiles[1].rail_pylon==2170,outer1.tiles[1].rail_pylon)
+assert(outer1.tiles[1].rail_wire==outer0.tiles[1].rail_wire and not read(outer1.scene).tiles)
+print("PASS the compound pylon receipt invalidates a published one-tile scene from its neighbor's far approach")

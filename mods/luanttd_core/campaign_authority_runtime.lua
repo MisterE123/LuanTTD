@@ -38,7 +38,7 @@ return function(Sim,mod,s,cap)
   local wire=dofile(mod.."/rail_turnout_wire.lua")(Sim,track,dofile(mod.."/openttd/rail_wire_mask.lua")(track))
   N.rail_wire_mask=wire.at
   local pylon=dofile(mod.."/openttd/rail_pylon.lua")(track,dofile(mod.."/openttd/rail_pylon_tables.lua"))
-  N.rail_pylon=dofile(mod.."/rail_edge_pylon.lua")(Sim,track,pylon,rail_view.terrain).at
+  N.rail_pylon=dofile(mod.."/rail_edge_pylon.lua")(Sim,track,pylon,rail_view.terrain,wire).at
   N.rail_preview=dofile(mod.."/rail_preview.lua")(rail_view,mod.."/")
   N.crossing_gesture=dofile(mod.."/crossing_gesture.lua")
   if cap.temperate_bank then N.bank=Sim.mount_temperate_bank(s,Terrain,growth) end

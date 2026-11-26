@@ -26,16 +26,17 @@ Single shared-edge turnouts, full diamonds and junctions with three to
 six track pieces can be converted on flat ground or a stock leveled
 foundation. Wiring follows the OpenTTD 16.0-RC1 branch filter. A branch
 may lose its wire when disconnected or unelectrified, without changing
-the track geometry or charging for more work. Complex junctions have an
-original native steel portal, not an emulation of every OpenTTD pylon
-position. Independent diagonal pairs, other slopes, and some structures
-remain outside this conversion mount. Overhead
-wire inside the depot is hidden by the shed. For ordinary flat straight
-track and single curves, the OpenTTD pylon selector chooses actual edge
-positions, including on visually straightened diagonal runs. A
-disconnected end can gain a mast even when the adjacent track falls
-outside your view. Multi-piece track, slopes and structures are not
-covered by this pylon-placement mount.
+the track geometry or charging for more work. Independent diagonal pairs
+retain the eased track geometry and select live contacts independently.
+On plain flat or stock-leveled rail, RC1's edge ownership and direction
+preference now place individual supports on and around compound junctions.
+The calculation checks the actual wire mask of each neighboring tile, so
+a new electrical connection two tiles away can move a support. Signals,
+bridges, stations, and approaches of unequal effective elevation remain
+outside this compound support mount; affected compounds retain the original
+native steel portal and valid wire geometry. Overhead wire inside a depot
+is hidden by the shed. A disconnected end can gain a mast even when the
+adjacent track falls outside your view.
 Electric locomotives support one owned shuttle, not the paired pilot.
 
 ## Run an electric service
@@ -64,10 +65,13 @@ boards passengers and can earn fares after save/reopen.
 The [compound native regression](../tests/rail_compound_wire_native.lua)
 shows an SH ’30’ taking a curve through six pieces and paying a fare.
 Adding powered approaches changes the contact mask from 4 to 21 to 63
-while the same portal stays on the ground. A diamond and founded
+and recomputes the exact native mast arrangement. It also proves that
+a far approach relocates the correct masts without touching the home tile. A diamond and founded
 three-piece layout retain their metalwork after SQLite reload. See the
 [editable Blender portal and wires](../art/rail_compound_wire.blend) and
-the [contact geometry comparison](../tests/rail_compound_wire_art.py).
+the [contact geometry comparison](../tests/rail_compound_wire_art.py),
+and the [individual Blender supports](../art/rail_distributed_pylons.blend)
+with their [native edge coordinate check](../tests/rail_distributed_pylon_art.py).
 The [independent pair replay](../tests/rail_paired_wire_native.lua)
 keeps an actual 45° continuation while the second contact comes live,
 then runs a paid SH ’30’ service after reopening.
