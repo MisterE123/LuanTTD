@@ -28,6 +28,12 @@ crossings and raised station platforms have walking surfaces. Dock ramps
 and decks are walkable with an open boarding end. In water, use the movement
 controls to swim and hold jump to surface and reach a bank.
 
+At supported single-tile building entrances one level above a straight street,
+seven outward curbside steps connect the street to the existing building plot.
+They do not cut into the building or change the road. A stop on the frontage
+tile suppresses the steps; a stop beside the approach reverses them if the
+opposite end is clear.
+
 **Controls → decorative scenery** includes distant voxel thunderstorms,
 light showers and thin drifting banks. Clouds use unsaved, private 3D voxel meshes
 that drift downwind rather than turning with the camera. Close clouds are removed

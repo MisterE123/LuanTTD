@@ -1274,6 +1274,19 @@ return function(api)
   core.register_alias("mapgen_water_source",gnames.water[0])
   core.register_alias("mapgen_river_water_source",gnames.water[0])
   local frontage=dofile(modpath.."/house_frontage.lua")
+  local front_step_model=dofile(modpath.."/house_front_steps.lua")
+  local front_step_plan=front_step_model.make(frontage)
+  local front_step_nodes={}
+  for key=1,8 do
+    local name="town_front_steps_"..key
+    front_step_nodes[key]=reg(name,{png("road_surface_retaining")},
+      {drawtype="mesh",mesh="bl_"..name..".obj",paramtype="light",sunlight_propagates=true,
+      pointable=false,walkable=true,collision_box={type="fixed",fixed=front_step_model.boxes(key)}})
+  end
+  local function house_steps(id,t,deck)
+    if projected then return S.front_steps[id] end
+    return front_step_plan(Sim,S,id,t,deck)
+  end
   local fountains=dofile(modpath.."/town_fountain_view.lua")(core,Sim,frontage,R.house_deck)
   local smoke=S.stock_generated_profile and dofile(modpath.."/industry_smoke_view.lua")(core,Sim,terrain)
   function R.step_ambient_particles(dt,viewers)
@@ -1327,7 +1340,13 @@ return function(api)
         end
       end
       local parcel=record and record.render_parcel or t.parcel
-      local dx,dz,facedir=frontage.placement(Sim,S,id,t,old_orientation,parcel)
+      local steps=house_steps(id,t,deck)
+      local dir=steps and front_step_model.direction(steps)
+      local dx,dz,facedir=frontage.placement(Sim,S,id,t,old_orientation,parcel,dir)
+      if steps then
+        local sx,sz=front_step_model.anchor(dir)
+        if x%2==sx and z%2==sz then return front_step_nodes[steps],deck+1,0 end
+      end
       if x%2==dx and z%2==dz then
         local variant=record and record.render_variant or t.variant
         return stage or building or
@@ -2255,7 +2274,16 @@ return function(api)
     update_river_directions(set)
     for _,id in ipairs(changed or {}) do
       set[id]=true
-      for d=1,4 do local j=Sim.adjacent(id,d);if j then set[j]=true end end
+      for d=1,4 do
+        local j=Sim.adjacent(id,d)
+        if j then
+          set[j]=true
+          -- A change at a platform beside a stair's road can alter
+          -- the adjacent property's fallback stair orientation.
+          local k=Sim.adjacent(j,d%4+1)
+          if k and S.tiles[k] and S.tiles[k].source_house then set[k]=true end
+        end
+      end
     end
     for id in pairs(set) do paint(id) end
   end

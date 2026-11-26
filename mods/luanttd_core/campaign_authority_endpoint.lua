@@ -11,6 +11,16 @@ return function(Sim,R,max_days)
   local styles=dofile(mod.."/bridge_style_assets.lua")
   local place_labels=dofile(mod.."/world_place_labels.lua")
   local Lift=dofile(mod.."/openttd/town_lift.lua")
+  local TownFoundation=dofile(mod.."/openttd/town_foundation.lua")
+  local front_steps=dofile(mod.."/house_front_steps.lua").make(dofile(mod.."/house_frontage.lua"))
+  local function steps_at(id,t,slope,level)
+    if not (t and t.house and t.source_house and Sim.road_surface and Sim.road_bits) then return end
+    if not slope then
+      local x,z=Sim.xy(id)
+      slope,level=R.terrain.tile(s.corner_grid,x,z)
+    end
+    if slope~=nil and level~=nil then return front_steps(Sim,s,id,t,TownFoundation.level(slope,level)) end
+  end
   local function lift_snapshot(x,z,w,h)
     return Lift.visible(s.stock_town_lifts,Sim,s.tiles,x,z,w,h)
   end
@@ -649,7 +659,7 @@ return function(Sim,R,max_days)
     if unchanged then
       for _,row in ipairs(old.tiles) do
         local t=s.tiles[row.id]
-        if not projection.matches_tile(t,row.surface)
+        if not projection.matches_tile(t,row.surface) or steps_at(row.id,t,row.slope,row.level)~=row.front_steps
           or (t.water_class=="river" and R.river_direction and R.river_direction(row.id) or nil)~=row.river_direction then
           unchanged=false
           break
@@ -674,7 +684,7 @@ return function(Sim,R,max_days)
           local slope,level,top=R.terrain.tile(s.corner_grid,x+dx,z+dz)
           tiles[#tiles+1]={id=id,level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
             rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station,
-            surface=projection and projection.tile(t) or nil,
+            surface=projection and projection.tile(t) or nil,front_steps=steps_at(id,t,slope,level),
             river_direction=t.water_class=="river" and R.river_direction and R.river_direction(id) or nil}
         end
       end

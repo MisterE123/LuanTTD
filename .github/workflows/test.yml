@@ -376,6 +376,9 @@ jobs:
           python3 tools/build_parallel_rail_art.py --check
           lua5.1 tools/build_rail_inclined_foundations.lua --check
           python3 tests/rail_retaining_shell.py
+          lua5.1 tests/house_front_steps.lua
+          lua5.1 tools/build_house_front_steps.lua --check
+          python3 tests/house_front_steps_mesh.py
           python3 tools/build_rail_barren_texture.py --check
           python3 tools/build_voxel_storm.py --check
           python3 tests/stock_dash_art.py --upstream-engines "$src/src/table/engines.h"

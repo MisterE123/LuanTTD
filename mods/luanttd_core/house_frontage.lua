@@ -25,9 +25,9 @@ function H.road(Sim,S,id,t)
   return best
 end
 
-function H.placement(Sim,S,id,t,stage,parcel)
+function H.placement(Sim,S,id,t,stage,parcel,street_direction)
   if t.site or not t.house or parcel=="green" or parcel=="market" then return 0,0,0 end
-  local direction=H.road(Sim,S,id,t)
+  local direction=street_direction or H.road(Sim,S,id,t)
   if not direction then return 0,0,0 end
   -- Completed houses and the corner grocer export their entrances on
   -- +Z, including the stock site meshes. The shared construction kit

@@ -12,7 +12,7 @@ return function(Sim,baseline)
   })
   F.state=proxy
   function F.accept(projection)
-    local state={tiles={},sites={},stations={},fleet={},topology=0,river_directions={},paint_tops={},
+    local state={tiles={},sites={},stations={},fleet={},topology=0,river_directions={},paint_tops={},front_steps={},
       bridge_above={},stock_road_bridges={},stock_road_tunnels={},stock_rail_spans={},
       corner_grid={width=Sim.W,depth=Sim.H,levels={},revision=0,max_height=255}}
     for key,value in pairs(metadata) do state[key]=value end
@@ -22,6 +22,7 @@ return function(Sim,baseline)
       for _,row in ipairs(w.tiles) do
         state.tiles[row.id]=row.surface
         state.paint_tops[row.id]=math.max(row.top or 0,row.surface.h or 0)+3
+        state.front_steps[row.id]=row.front_steps
         if row.river_direction then state.river_directions[row.id]=row.river_direction end
       end
       for dz=0,w.height do

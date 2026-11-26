@@ -27,6 +27,7 @@ cp -al mods "$game/"
 rm "$game/mods/luanttd_core/init.lua"
 cp mods/luanttd_core/init.lua "$game/mods/luanttd_core/init.lua"
 cp tests/house_frontage_native.lua "$game/mods/luanttd_core/house_frontage_native.lua"
+printf 'return function() return {local_replay=true} end\n' > "$game/mods/luanttd_core/qa_layout.lua"
 printf '\ndofile(mod.."/house_frontage_native.lua")(api)\n' >> "$game/mods/luanttd_core/init.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 if [[ -n ${BAYLINE_NATIVE_CACHE_SEED:-} ]]; then
@@ -49,7 +50,7 @@ enable_sound = false
 viewing_range = 80
 fps_max = 30
 EOF
-export HOME="$out/home" XDG_CACHE_HOME="$out/cache" XDG_CONFIG_HOME="$out/home/.config" \
+export HOME="$out/home" XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" XDG_CONFIG_HOME="$out/home/.config" \
   LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games" \
   LIBGL_ALWAYS_SOFTWARE=1 ALSOFT_DRIVERS=null
 export DISPLAY=":$disp" XAUTHORITY="$out/Xauthority"
@@ -83,10 +84,42 @@ xdotool mousemove 650 430
 sleep 3
 xdotool key F2
 sleep 1
+if [[ ${LUANTTD_QA_EXTERIOR_STAIRS:-0} != 1 ]]; then
 for shot in 1 2 3 4 5 7; do
   xdotool key t; sleep .2; xdotool type "/frontage $shot"; xdotool key Return
   sleep 1.2
   import -window root "$out/house-front-$shot.png"
 done
+fi
+frontage() {
+  xdotool key t; sleep .2; xdotool type "/frontage $1"; xdotool key Return
+}
+if [[ ${LUANTTD_QA_EXTERIOR_STAIRS:-0} == 1 ]]; then
+  grep -q 'HOUSE_FRONT_STEPS_STOPS_OK' "$out/server.log"
+  frontage steps_view
+  sleep .9
+  import -window root "$out/frontage-stair-overview.png"
+  frontage steps
+  sleep .8
+  import -window root "$out/house-front-stairs.png"
+  walk_until() {
+    local mark="$1"
+    xdotool keydown w
+    for _ in {1..100}; do
+      grep -q "$mark" "$out/server.log" && break
+      sleep .10
+    done
+    xdotool keyup w
+    grep -q "$mark" "$out/server.log" || { cat "$out/server.log";exit 1; }
+  }
+  walk_until HOUSE_FRONT_STEPS_REACHED
+  frontage landing
+  sleep .55
+  grep -q HOUSE_FRONT_STEPS_WALK_LANDING "$out/server.log" || { cat "$out/server.log";exit 1; }
+  walk_until HOUSE_FRONT_STEPS_PLOT_ENTERED
+  frontage plot
+  sleep .55
+  grep 'PASS NATIVE FRONTAGE STEPS' "$out/server.log" || { cat "$out/server.log";exit 1; }
+fi
 ! grep -Ei 'error|could not load' "$out/client.log"
 printf 'PASS: native four-side houses, shop and construction visual evidence in %s\n' "$out"
