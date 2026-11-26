@@ -67,15 +67,21 @@ assert(properties.eye_height==1.63 and properties.visual=="sprite" and propertie
 local avatar={saved=P.capture(p)}
 walk.enter(p,avatar,target)
 assert(pos==target and pos.y<3 and yaw==1.2 and pitch==0)
-assert(physics.gravity==1 and physics.speed_walk==.38 and properties.eye_height==P.eye_height and P.eye_height>.23 and P.eye_height<.28
+assert(physics.gravity==1 and physics.speed_walk==P.walk_speed and P.walk_nodes_per_second>.22 and P.walk_nodes_per_second<.25 and properties.eye_height==P.eye_height and P.eye_height>.23 and P.eye_height<.28
   and P.visual_height>.28 and P.visual_height<.31 and properties.visual_size.y==P.visual_scale
   and properties.visual=="mesh" and properties.collisionbox[4]==.064)
 assert(vel.x==0 and vel.y==0 and vel.z==0)
+walk.step(p,avatar,{aux1=true})
+assert(avatar.running and physics.speed_walk==P.run_speed and P.run_nodes_per_second>.53)
+assert(math.abs(physics.speed_fast*20-P.run_nodes_per_second)<1e-9)
+walk.step(p,avatar,{aux1=false})
+assert(not avatar.running and physics.speed_walk==P.walk_speed)
 pos={x=8.5,y=.12,z=2.5};vel.y=-2
 walk.step(p,avatar)
 assert(avatar.swimming and physics.gravity==0 and vel.y> -2,"falling into water changes to a controlled float")
 pos={x=8.5,y=1.32,z=2.5};vel.y=0
-walk.step(p,avatar,{jump=true})
+walk.step(p,avatar,{jump=true,aux1=true})
+assert(not avatar.running,"Holding E must not change swim speed")
 assert(vel.y>0,"Space strokes toward shore level")
 pos={x=10.5,y=1.50,z=2.5};vel.y=0
 walk.step(p,avatar)
@@ -122,3 +128,32 @@ for _,dt in ipairs({.03,.07,.09,.1}) do
   assert(math.abs(y-.14)<.04 and high<.24,"unstable water rise")
 end
 print("PASS waterline trim settles at different step rates without a hard vertical impulse")
+
+local Rail=dofile("mods/luanttd_core/rail_platform_walk.lua")
+local function on_deck(p,boxes)
+  for _,b in ipairs(boxes) do
+    if p.x>b[1] and p.x<b[4] and p.z>b[3] and p.z<b[6] and math.abs(p.y-b[5])<.001 then
+      return true
+    end
+  end
+end
+local function deck(q)
+  for _,p in ipairs(q.landing) do assert(on_deck(p,q.boxes),"landing floats or is outside deck") end
+end
+for fx=0,7 do deck(Rail.stock(fx)) end
+for axis=0,1 do
+  for gauge=0,3 do deck(Rail.ordinary(axis,gauge)) end
+  deck(Rail.coal(axis,"load"));deck(Rail.coal(axis,"unload"))
+  assert(#Rail.crossing(axis)==9 and on_deck({x=.5,y=-.392,z=.5},Rail.crossing(axis)))
+end
+assert(#Rail.ballast(3)==2 and Rail.ballast(4)==nil)
+rows[3].h=1
+rows[5].rail_station_id=8
+local platform={x=10.30,y=1.825,z=3.13}
+local pedestrian_rail=P.new({s={tiles=rows},Sim=sim,render={uses_slope=function()return false end,
+  walk_platform_landings=function(id)if id==5 then return {platform} end end}})
+local rail_stop=assert(pedestrian_rail.ride_landing("rail",{x=8.2,y=1.66,z=2.5}))
+assert(rail_stop==platform,"a train dismount prefers a nearby platform")
+local bus_stop=assert(pedestrian_rail.ride_landing("road",{x=9.0,y=1.65,z=2.5}))
+assert(bus_stop.x==6.5 and not pedestrian_rail.ride_landing("air",{x=9.0,y=42,z=2.5}))
+print("PASS platform boxes cover landing points in both axes; local ride exits favor platform or road and reject an aerial drop")

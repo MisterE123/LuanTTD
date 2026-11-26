@@ -48,8 +48,12 @@ local api={road_first=true,s={tiles=roads},Sim={xy=function(id)return 3,id==7 an
     pick_sightseeing_hangar=function()return hangar_picked end}}
 local car,plane
 local W
-api.car={toggle_at=function(_,id,hit)
-  assert(id==7 and hit.y==1.625 and hit.x==6.6)
+local near_road=false
+api.car={walk_entry=function() return near_road and 7 or nil end,
+  toggle_at=function(_,id,hit)
+  assert(id==7)
+  if hit then assert(hit.y==1.625 and hit.x==6.6)
+  else assert(W.begin_avatar(fake,"car")) end
   car=(car or 0)+1;return true
 end}
 api.sightseeing_plane={board=function(p,id)
@@ -145,6 +149,21 @@ assert(clicked({kind="rail",id=39,body=2}))
 assert(W.scenic_fields(fake,inventory_form[1],{coach=true}) and actions[5]=="ride:39")
 riding=false;W.follow_hud(fake,false)
 local walk_pos=at
+assert(type(inventory_form)~="string" or not inventory_form:find("luanttd_scenic_drive",1,true))
+assert(W.scenic_fields(fake,"",{luanttd_scenic_drive=true}) and car==1)
+near_road=true
+W.finish_ride_landing(fake,{x=6.65,y=1.53,z=4.76},nil,.3,.12)
+assert(at.x==6.65 and at.y==1.53 and yaw==.3 and pitch==.12)
+assert(inventory_form:find("luanttd_scenic_drive",1,true))
+near_road=false
+assert(W.scenic_fields(fake,"",{luanttd_scenic_drive=true}) and car==1,"A stale road button cannot launch a car")
+near_road=true
+assert(W.scenic_fields(fake,"",{luanttd_scenic_drive=true}) and car==2)
+assert(W.avatar_state(fake).mode=="car" and W.avatar_state(fake).previous==walking)
+assert(W.end_avatar(fake,"car"))
+table.remove(callbacks,1)()
+assert(W.avatar_state(fake)==walking and inventory_form:find("luanttd_scenic_drive",1,true))
+walk_pos=at
 hangar_picked=7
 assert(clicked(nil))
 assert(plane==1 and W.avatar_state(fake).mode=="plane")

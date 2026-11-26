@@ -149,3 +149,23 @@ D.fields(mock,{[restored.."start_copied"]=true})
 assert(request.command.mode=="rail" and request.command.copied and request.command.vehicle==22
   and request.command.draft_revision=="rail-parked:1" and request.command.first==nil)
 print("PASS railway depot keeps the parked destination selected and can review/start its independent copied orders")
+
+D.open(mock,"rail",69)
+rail_depot.vehicles={
+  {id=51,unit_number=1,label="Train 1",wagon_count=1,parked=true},
+  {id=54,unit_number=2,label="Train 2",wagon_count=2,parked=true,cargo="mixed"},
+}
+done({ok=true,revision=26,value=rail_depot})
+local new=assert(body:match("(d%d+_)unit_row2"))
+assert(body:find("Train 1 · 1 wagon",1,true) and body:find("Train 2 · 2 wagons",1,true))
+assert(body:find("Select the train you want to use.",1,true) and not body:find(new.."start;",1,true))
+D.fields(mock,{[new.."start"]=true})
+assert(request.kind=="depot","Never silently dispatch the first of several trains")
+D.fields(mock,{[new.."unit_row2"]=true})
+assert(body:find(new.."start;Start Train 2",1,true))
+D.fields(mock,{[new.."start"]=true,[new.."from"]="2",[new.."to"]="1"})
+assert(request.command.vehicle==54 and request.command.cargo=="mixed" and request.command.first==9)
+done({ok=false,why="No route"})
+done({ok=true,revision=26,value=rail_depot})
+assert(body:find("Start Train 2",1,true) and body:find("No route",1,true))
+print("PASS explicit rail selection, visible wagon counts, named dispatch and preserved selection after failure")

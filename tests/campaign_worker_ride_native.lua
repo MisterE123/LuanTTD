@@ -90,11 +90,11 @@ local function stock_train(q,done)
     build("rail",{tool="depot",first=q.depot,direction=2},function()
       build("rail",first,function()
         build("rail",second,function()
-          build("transport",{mode="rail",operation="buy",depot=q.depot,parts={0,27}},function(r)
+          build("transport",{mode="rail",operation="buy",depot=q.depot,parts={0,27,28}},function(r)
             local train=r.value.id
             local state=assert(OwnerCheckpoint.read())
             local a,b=state.tiles[first.first].rail_station_id,state.tiles[second.first].rail_station_id
-            commit({kind="transport_start",mode="rail",vehicle=train,first=b,second=a},function() done(train) end)
+            commit({kind="transport_start",mode="rail",vehicle=train,first=b,second=a,cargo="mixed"},function() done(train) end)
           end)
         end)
       end)
@@ -192,13 +192,14 @@ local function inspect(phase,mode,q,rider,witness,id,next_)
             local pick=entity and entity.luanttd_vehicle
             if pick and pick.kind=="rail" and pick.id==id then
               local visible=peer:get_effective_observers()
-              assert(visible and visible[witness_name] and not visible[rider_name],"same-train body occluded rider")
+              assert((not visible or visible[witness_name]) and (not visible or not not visible[rider_name])==(peer~=actual),
+                "Only the occupied body should be hidden from the rider")
               consist_bodies=consist_bodies+1
             end
           end
           -- A sector can attach the cab before delivering the trailing
           -- coach. Wait for the complete projected consist, not a subset.
-          if consist_bodies<2 then return end
+          if consist_bodies<3 then return end
         end
         return true
       end
@@ -218,21 +219,18 @@ local function inspect(phase,mode,q,rider,witness,id,next_)
       end,function()
         assert(exists())
         core.log("action","RIDE_SIDE_VIEW "..phase)
-        wait_for(phase.." exact restore",function()
-          if api.vehicle_ui.riding(rider) then return end
-          local eye=rider:get_pos()
-          local drift=math.abs(eye.x-state.pos.x)+math.abs(eye.y-state.pos.y)+math.abs(eye.z-state.pos.z)
-          return drift<.12 and math.abs((rider:get_look_horizontal()-state.yaw+math.pi)%(2*math.pi)-math.pi)<.035
-            and math.abs(rider:get_look_vertical()-state.pitch)<.035
+        local landing=world.finish_ride_landing
+        local planned
+        world.finish_ride_landing=function(p,at,...) planned=at;return landing(p,at,...) end
+        wait_for(phase.." local disembark",function()
+          if api.vehicle_ui.riding(rider) or not planned then return end
+          local at=rider:get_pos()
+          return math.abs(at.x-planned.x)+math.abs(at.z-planned.z)<.2 and math.abs(at.y-planned.y)<.20
         end,function()
           api.vehicle_ui.ride_toggle=entry
+          world.finish_ride_landing=landing
           assert(not rider:get_attach() and not nearby(state.pos,cabin) and not anchor:get_pos())
-          local eye=rider:get_pos()
-          local d=math.abs(eye.x-state.pos.x)+math.abs(eye.y-state.pos.y)+math.abs(eye.z-state.pos.z)
-          local diff=math.abs((rider:get_look_horizontal()-state.yaw+math.pi)%(2*math.pi)-math.pi)
-          assert(d<.12 and diff<.035 and math.abs(rider:get_look_vertical()-state.pitch)<.035,
-            ("Builder pose not restored: %.3f / %.3f"):format(d,diff))
-          assert(rider:get_inventory_formspec()==state.inventory)
+          assert(rider:get_inventory_formspec():find("luanttd_scenic_exit",1,true))
           assert(world.avatar_state(rider).mode=="walk" and not rider:hud_get_flags().hotbar)
           assert(not actual:get_pos() or not actual:get_observers())
           core.log("action","PASS NATIVE PRIVATE RIDE "..phase)

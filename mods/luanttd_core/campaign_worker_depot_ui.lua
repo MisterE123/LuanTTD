@@ -7,11 +7,15 @@ return function(core,client,build,money,assembly)
   local D={form="luanttd_core:worker_depot"}
   local panels={}
   local serial=0
+  local function unit_index(p,rows)
+    return p.unit or ((p.mode~="rail" or #rows==1) and 1 or 0)
+  end
   local function routes(p)
     local data=p.data or {}
-    local unit=data.vehicles and data.vehicles[p.unit or 1]
-    return Route.targets(p.mode,data,unit)
+    local rows=data.vehicles or {}
+    return Route.targets(p.mode,data,rows[unit_index(p,rows)])
   end
+  local function train_name(u) return u.unit_number and "Train "..u.unit_number or u.label end
   local function draw(n,p,note)
     local data=p.data or {}
     local offers,units,from,to=data.offers or {},data.vehicles or {},{},{}
@@ -35,8 +39,14 @@ return function(core,client,build,money,assembly)
         return model or q.name,(cargo and cargo.." · " or "")..money(q.price)
       end})
     Help.rows(b,esc,{x=5.82,y=1.57,w=5.12,h=3.57,items=units,prefix=stem.."unit_",
-      scroll=p.unit_scroll,selected=p.unit or 1,help=info,
-      label=function(u) return u.label,info(u).service end})
+      scroll=p.unit_scroll,selected=unit_index(p,units),help=info,
+      label=function(u)
+        if p.mode=="rail" and u.unit_number then
+          local count=u.wagon_count
+          return train_name(u)..(count and (" · "..count..(count==1 and " wagon" or " wagons")) or ""),info(u).service
+        end
+        return u.label,info(u).service
+      end})
     if #offers==0 then b[#b+1]="label[.5,1.89;No vehicles currently on sale.]" end
     if #units==0 then b[#b+1]="label[5.87,1.89;No vehicles assigned here.]" end
     if #offers>0 then
@@ -44,15 +54,18 @@ return function(core,client,build,money,assembly)
       local action=(chosen.request.operation=="refit" and "Refit" or "Buy").." for "..money(chosen.price)
       b[#b+1]="button[.45,5.42;5.12,.59;"..stem.."buy;"..action.."]"
     end
-    local active=units[p.unit or 1]
-    if #units>0 then
+    local active=units[unit_index(p,units)]
+    if active then
       if p.mode=="road" or p.mode=="rail" and active and active.order_copy then
         b[#b+1]="button[5.82,5.42;2.54,.59;"..stem.."orders;"..(active and active.copied and "Review orders" or "Open vehicle").."]"
         b[#b+1]="button[8.47,5.42;2.47,.59;"..stem.."copy;Copy orders…]"
         b[#b+1]="tooltip["..stem.."copy;Copy an independent order list from another vehicle to the selected vehicle.]"
       else b[#b+1]="button[5.82,5.42;5.12,.59;"..stem.."orders;Open selected vehicle]" end
     end
-    local route_ok=Route.possible(first,last)
+    if p.mode=="rail" and #units>1 and not active then
+      b[#b+1]="label[5.85,5.70;Select the train you want to use.]"
+    end
+    local route_ok=Route.possible(first,last) and not (p.mode=="rail" and active and active.parked==false)
     local origin=p.mode=="air" and p.depot or (first[p.from or 1] or {}).id
     local default_to=last[1] and last[1].id==origin and 2 or 1
     if p.mode=="rail" and active and active.copied then
@@ -63,14 +76,14 @@ return function(core,client,build,money,assembly)
         b[#b+1]=("dropdown[.45,6.17;3.39,.57;%sfrom;%s;%d;true]"):format(stem,table.concat(from,","),p.from or 1)
       end
       b[#b+1]=("dropdown[3.98,6.17;3.38,.57;%sto;%s;%d;true]"):format(stem,table.concat(to,","),p.to or default_to)
-      b[#b+1]="button[7.50,6.17;3.44,.57;"..stem.."start;Start service]"
+      b[#b+1]="button[7.50,6.17;3.44,.57;"..stem.."start;"..esc(p.mode=="rail" and "Start "..train_name(active) or "Start service").."]"
     end
-    if units[p.unit or 1] and units[p.unit or 1].unsupported then
+    if active and active.unsupported then
       b[#b+1]="label[.45,6.45;Unsupported freight formation. Rearrange its wagons in the depot.]"
-    elseif active and not route_ok and (p.mode=="rail" or p.mode=="ship") and not active.copied then
+    elseif active and not route_ok and (p.mode=="rail" or p.mode=="ship") and not active.copied and active.parked~=false then
       b[#b+1]="textarea[.45,6.15;10.49,.69;;;"..esc(Route.notice(p.mode,active)).."]"
     end
-    local chosen=p.focus~="offer" and units[p.unit or 1] or offers[p.offer or 1]
+    local chosen=p.focus~="offer" and active or offers[p.offer or 1]
     chosen=chosen or offers[p.offer or 1]
     Help.card(b,esc,.45,6.98,10.49,1.72,chosen and info(chosen))
     if p.mode=="rail" and assembly and p.data then
@@ -202,7 +215,7 @@ return function(core,client,build,money,assembly)
       p[field]=Help.scroll_fields(core,f,key.."scroll",p[field])
       local i=Help.selected(f,key.."row",#list)
       if i then
-        unit_changed=kind=="unit" and (p.unit or 1)~=i
+        unit_changed=kind=="unit" and unit_index(p,list)~=i
         p[kind],p.focus,update=i,kind,true
       end
     end
@@ -212,7 +225,7 @@ return function(core,client,build,money,assembly)
       p.to=tonumber(f[stem.."to"]) or p.to
     end
     if f[stem.."copy"] then
-      local u=p.data.vehicles[p.unit or 1]
+      local u=p.data.vehicles[unit_index(p,p.data.vehicles)]
       if u and (p.mode=="road" or p.mode=="rail" and u.order_copy) then
         serial=serial+1
         local c={vehicle=u.id,label=u.label,token=serial}
@@ -223,7 +236,7 @@ return function(core,client,build,money,assembly)
     end
     if p.mode=="rail" and f[stem.."assemble"] and assembly then return assembly(player,p.depot) end
     if f[stem.."orders"] and p.vehicle_handler then
-      local u=p.data.vehicles[p.unit or 1]
+      local u=p.data.vehicles[unit_index(p,p.data.vehicles)]
       if u then
         local first,last=routes(p)
         local offer=p.data.offers[p.offer or 1]
@@ -240,7 +253,7 @@ return function(core,client,build,money,assembly)
       return true
     end
     if p.mode=="rail" and f[stem.."start_copied"] then
-      local u=p.data.vehicles[p.unit or 1]
+      local u=p.data.vehicles[unit_index(p,p.data.vehicles)]
       if not (u and u.copied and u.draft_revision) then return true end
       p.pending=true
       local sent,why=client.query({kind="command",player=n,command={kind="transport_start",mode="rail",
@@ -252,20 +265,25 @@ return function(core,client,build,money,assembly)
       return true
     end
     if f[stem.."start"] then
-      local unit=p.data.vehicles[p.unit or 1]
+      local unit=p.data.vehicles[unit_index(p,p.data.vehicles)]
       local sources,sinks,cargo=routes(p)
       local first=p.mode=="air" and Route.find(sources,p.depot) or sources[p.from or 1]
       local default_to=sinks[1] and first and sinks[1].id==first.id and 2 or 1
       local last=sinks[p.to or default_to]
-      if not (unit and first and last and first.id~=last.id) then
+      if not (unit and unit.parked~=false and first and last and first.id~=last.id) then
         draw(n,p,"Choose two different destinations.");return true
       end
       p.pending=true
       local sent,why=client.query({kind="command",player=n,command={kind="transport_start",mode=p.mode,
         vehicle=unit.id,depot=p.depot,first=p.mode=="air" and p.depot or first.id,second=last.id,cargo=cargo,
         revision=p.revision}},
-        function(r) if panels[n]==p then D.open(player,p.mode,p.depot,r.why or (r.ok and "Service dispatched." or
-          "Service could not start."),p.vehicle_handler,nil,nil,p.hangar_tile) end end)
+        function(r) if panels[n]==p then
+          local q=p.data.offers[p.offer or 1]
+          local prior={first=first.id,second=last.id,offer_name=q and q.name,
+            offer_scroll=p.offer_scroll,unit_scroll=p.unit_scroll}
+          D.open(player,p.mode,p.depot,r.why or (r.ok and "Service dispatched." or
+            "Service could not start."),p.vehicle_handler,unit.id,prior,p.hangar_tile)
+        end end)
       if not sent then p.pending=nil;draw(n,p,why) end
       return true
     end

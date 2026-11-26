@@ -529,7 +529,7 @@ return function(api,ui)
   end
   local function walk_hint(p,avatar,note)
     local text=note or (avatar.swimming and "Swim  ·  Space to surface  ·  Inventory: leave Walk"
-      or "Walk  ·  Click a vehicle to board  ·  Inventory: leave Walk")
+      or "Walk  ·  E to run  ·  Click a vehicle to board  ·  Inventory: leave Walk")
     if avatar.hint then p:hud_change(avatar.hint,"text",text)
     else avatar.hint=p:hud_add({type="text",position={x=.5,y=.94},alignment={x=0,y=0},
       z_index=100,text=text,number=0xffe8b7}) end
@@ -537,9 +537,13 @@ return function(api,ui)
   local function scenic_inventory(p,avatar)
     local label=({walk="Walk",car="Drive",plane="Pilot"})[avatar.mode]
     local back=avatar.previous and "Return to walking" or "Return to builder"
+    local drive=avatar.mode=="walk" and not avatar.swimming and api.car and api.car.walk_entry and api.car.walk_entry(p)
+    avatar.drive_available=not not drive
+    local buttons=drive and ("button_exit[.5,1.25;3.4,.7;luanttd_scenic_drive;Drive]"..
+      "button_exit[4.1,1.25;3.4,.7;luanttd_scenic_exit;"..back.."]") or
+      "button_exit[.5,1.25;7,.7;luanttd_scenic_exit;"..back.."]"
     p:set_inventory_formspec("formspec_version[7]size[8,2.4]bgcolor[#152334;true]"..
-      "label[.5,.55;"..label.." mode]"..
-      "button_exit[.5,1.25;7,.7;luanttd_scenic_exit;"..back.."]")
+      "label[.5,.55;"..label.." mode]"..buttons)
   end
   local train_seat_form="luanttd_core:scenic_train_seat"
   local function scenic_feedback(p,avatar,note)
@@ -586,6 +590,16 @@ return function(api,ui)
   function W.scenic_fields(p,form,fields)
     local state=controls[p:get_player_name()]
     local avatar=state and state.avatar
+    if form=="" and fields.luanttd_scenic_drive and avatar and avatar.mode=="walk" then
+      local id=not avatar.leaving and not avatar.swimming and api.car and api.car.walk_entry and api.car.walk_entry(p)
+      if id and not (api.vehicle_ui and api.vehicle_ui.following(p)) then
+        state.car_entry=true
+        local ok,why=api.car.toggle_at(p,id)
+        state.car_entry=nil
+        if not ok then scenic_feedback(p,avatar,why) end
+      end
+      return true
+    end
     if form=="" and fields.luanttd_scenic_exit and avatar then return W.exit_avatar(p) end
     if form~=train_seat_form then return false end
     local selection=state and state.seat_pick
@@ -613,7 +627,8 @@ return function(api,ui)
     local state=controls[n]
     if not state then return nil,"Join the campaign to enter street view." end
     local previous=state.avatar
-    if previous and (previous.leaving or previous.mode~="walk" or mode~="plane" or not state.hangar_entry)
+    local transition=mode=="plane" and state.hangar_entry or mode=="car" and state.car_entry
+    if previous and (previous.leaving or previous.mode~="walk" or not transition)
       or p.get_attach and p:get_attach() or api.vehicle_ui and api.vehicle_ui.following(p) then
       return nil,"Leave the current scenic mode in Inventory first."
     end
@@ -635,6 +650,20 @@ return function(api,ui)
     if ui.cinematic then ui.cinematic(p,true) end
     if mode=="walk" then walk_hint(p,avatar) end
     return avatar
+  end
+  function W.ride_landing(_,mode,pos)
+    return pedestrian.ride_landing(mode,pos)
+  end
+  function W.finish_ride_landing(p,land,water,yaw,pitch,prior)
+    local avatar=W.avatar_state(p)
+    if not avatar then
+      avatar=W.begin_avatar(p,"walk")
+      if avatar and prior then avatar.saved.pos,avatar.saved.yaw,avatar.saved.pitch=prior.return_pos,prior.yaw,prior.pitch end
+    end
+    if not avatar then return end
+    pedestrian.enter(p,avatar,land,water,yaw,pitch)
+    walk_hint(p,avatar)
+    scenic_inventory(p,avatar)
   end
   function W.end_avatar(p,mode)
     local state=controls[p:get_player_name()]
@@ -695,6 +724,7 @@ return function(api,ui)
     local avatar,why=W.begin_avatar(p,"walk")
     if not avatar then return false,why end
     pedestrian.enter(p,avatar,land,water)
+    scenic_inventory(p,avatar)
     return true
   end
   function W.toggle_walk(p) return toggle_walk(p) end
@@ -1023,7 +1053,14 @@ return function(api,ui)
         local right=keys.place or keys.RMB
         if not state.avatar.leaving then
           if state.avatar.mode=="walk" then
-            pedestrian.step(p,state.avatar,keys,dt)
+            local avatar=state.avatar
+            pedestrian.step(p,avatar,keys,dt)
+            avatar.drive_poll=(avatar.drive_poll or 0)+dt
+            if avatar.drive_poll>=.20 then
+              avatar.drive_poll=0
+              local drive=not avatar.swimming and api.car and api.car.walk_entry and api.car.walk_entry(p)
+              if (not not drive)~=avatar.drive_available then scenic_inventory(p,avatar) end
+            end
             local click=keys.dig or keys.LMB
             if click and not state.dig then W.scenic_click(p) end
             state.dig=click

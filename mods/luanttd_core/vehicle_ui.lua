@@ -245,7 +245,8 @@ return function(api)
   end
   function V.leave(p)
     local n=p:get_player_name()
-    V.exit(p);panels[n]=nil;remote[n]=nil;pickers[n]=nil;selected[n]=nil
+    if ride.active(p) then ride.exit(p,"Leaving the world.") else V.exit(p) end
+    panels[n]=nil;remote[n]=nil;pickers[n]=nil;selected[n]=nil
   end
   local function title(txt,height)
     return ("formspec_version[7]size[11,%g]bgcolor[#152334;false]"):format(height or 8)..

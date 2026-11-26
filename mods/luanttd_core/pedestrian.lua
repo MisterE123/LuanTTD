@@ -7,6 +7,18 @@ local unpack_values=table.unpack or unpack
 -- their glazing rather than the upper window/roof line.
 local scale=.57
 local P={eye_height=.462*scale,visual_height=.511*scale,visual_scale=scale}
+-- Nominal adult stature 1.75 m; model height is in world nodes.
+-- Walk at 1.4 m/s and run at 3.2 m/s before converting to node units.
+P.walk_nodes_per_second=P.visual_height*1.4/1.75
+P.run_nodes_per_second=P.visual_height*3.2/1.75
+local function movement_setting(name,default)
+  local n=core and core.settings and core.settings.get and tonumber(core.settings:get("movement_speed_"..name))
+  return n and n>0 and n or default
+end
+local slow=movement_setting("walk",4)
+local fast=movement_setting("fast",20)
+local crouch=movement_setting("crouch",1.35)
+P.walk_speed,P.run_speed=P.walk_nodes_per_second/slow,P.run_nodes_per_second/slow
 local hidden_texture="bl_sightseeing_hidden_player.png"
 local model="bl_street_pedestrian.glb"
 local idle,walking={x=0,y=1},{x=2,y=14}
@@ -134,6 +146,15 @@ function P.new(api)
     if dock and (not aim_y or math.abs(dock-aim_y)<.30) then return {x=x,y=dock+.045,z=z} end
     local arena=api.render.walk_stadium_surface and api.render.walk_stadium_surface(id,x,z)
     if arena then return {x=x,y=arena+.045,z=z} end
+    if cell(id) and cell(id).rail_station_id and api.render.walk_platform_landings then
+      local best,dist
+      local ground=surface(id,x,z)
+      for _,p in ipairs(ground and api.render.walk_platform_landings(id,aim_y or ground) or {}) do
+        local d=(p.x-x)^2+(p.z-z)^2
+        if not dist or d<dist then best,dist=p,d end
+      end
+      if best and (not aim_y or dist<=.4) then return best end
+    end
     if blocked(cell(id)) then return end
     local water=waterline(id,cell(id),x,z)
     local y=water and water-.18 or surface(id,x,z)
@@ -162,48 +183,102 @@ function P.new(api)
     end end
     return best,wet
   end
-  local function swim_mode(p,state,swimming)
-    if state.swimming==swimming then return end
-    state.swimming=swimming
+  -- Bound both the search and the vertical drop. Don't move a rider
+  -- through a hillside, down from flight, or back across the map.
+  function W.ride_landing(mode,focus)
+    if not focus then return end
+    local x,z=math.floor((focus.x+.5)/2),math.floor((focus.z+.5)/2)
+    local best,score
+    local function offer(pos,priority)
+      if not pos then return end
+      local dx,dy,dz=pos.x-focus.x,pos.y-focus.y,pos.z-focus.z
+      local distance=dx*dx+dz*dz
+      if distance>36 or dy>1.10 or dy< -1.20 then return end
+      if core and core.get_node_or_nil then
+        -- Never place feet in an unloaded mapblock or a plain wall.
+        local cube={x=math.floor(pos.x+.5),y=math.floor(pos.y+.56),z=math.floor(pos.z+.5)}
+        local node=core.get_node_or_nil(cube)
+        if not node then return end
+        local def=core.registered_nodes[node.name]
+        if def and def.walkable and def.drawtype=="normal" then return end
+      end
+      local cost=priority+distance+dy*dy*4
+      if not score or cost<score then best,score=pos,cost end
+    end
+    local render=api.render
+    for dz=-3,3 do for dx=-3,3 do
+      local id=Sim.id(x+dx,z+dz)
+      local t=id and cell(id)
+      if t then
+        local cx,cz=2*(x+dx)+.5,2*(z+dz)+.5
+        if mode=="rail" and render.walk_platform_landings then
+          for _,p in ipairs(render.walk_platform_landings(id,focus.y) or {}) do offer(p,0) end
+        end
+        if mode=="ship" and render.walk_dock_surface then
+          local y=render.walk_dock_surface(id,cx,cz,focus.y)
+          if y then offer({x=cx,y=y+.045,z=cz},0) end
+        end
+        if not blocked(t) and not t.rail_station_id and not t.rail_tracks then
+          local p,wet=point(id,cx,cz,focus.y)
+          if p and not wet then
+            local road=t.build=="road" or t.town_road or t.road_town or t.stock_town_road or t.road_bits
+            offer(p,road and 42 or 85)
+          end
+        end
+      end
+    end end
+    return best
+  end
+
+  local function gait(p,state,swimming,running)
+    local changed=state.swimming~=swimming
+    if not changed and state.running==running then return end
+    state.swimming,state.running=swimming,running
+    local speed=swimming and .27 or running and P.run_speed or P.walk_speed
     p:set_physics_override({gravity=swimming and 0 or 1,jump=swimming and 0 or .56,
-      sneak=not swimming,speed_walk=swimming and .27 or .38,acceleration_air=swimming and 2.8 or 1})
-    if state.hint and p.hud_change then
+      sneak=not swimming,speed_walk=speed,speed_fast=speed*slow/fast,
+      speed_crouch=P.walk_nodes_per_second*.55/crouch,acceleration_air=swimming and 2.8 or 1})
+    if changed and state.hint and p.hud_change then
       p:hud_change(state.hint,"text",swimming
         and "SWIMMING  ·  Space to surface  ·  Inventory: leave Walk"
-        or "Walk  ·  Click a vehicle to board  ·  Inventory: leave Walk")
+        or "Walk  ·  E to run  ·  Click a vehicle to board  ·  Inventory: leave Walk")
     end
   end
-  function W.enter(p,state,land,water)
+  function W.enter(p,state,land,water,yaw,pitch)
     state.last_safe=land
+    state.step_height=.18
     p:set_eye_offset()
     p:set_properties({eye_height=P.eye_height,collisionbox={-.064,0,-.064,.064,.32,.064},stepheight=.18,
       visual="mesh",mesh=model,textures={"bl_street_pedestrian_atlas.png"},
       visual_size={x=scale,y=scale,z=scale},backface_culling=false})
-    p:set_physics_override({gravity=1,jump=.56,sneak=true,speed=1,speed_walk=.38,
-      speed_crouch=.67,acceleration_default=1,acceleration_air=1})
+    p:set_physics_override({speed=1,acceleration_default=1})
     if p.set_local_animation then p:set_local_animation(idle,walking,idle,walking,walk_rate) end
     if p.set_animation then p:set_animation(idle,walk_rate,.1,true) end
-    state.walking=false
-    swim_mode(p,state,water~=nil)
-    position(p,land,state.saved.yaw,0)
+    state.walking,state.swimming,state.running=false,nil,nil
+    gait(p,state,water~=nil,false)
+    position(p,land,yaw or state.saved.yaw,pitch or 0)
   end
   function W.step(p,state,keys,dt)
     local at=p:get_pos()
     local speed=p:get_velocity()
-    local moving=speed.x*speed.x+speed.z*speed.z>.12^2
-    if p.set_animation and state.walking~=moving then
-      p:set_animation(moving and walking or idle,walk_rate,.1,true)
-      state.walking=moving
-    end
+    local moving=speed.x*speed.x+speed.z*speed.z>.07^2
     local id=tile_at(at.x,at.z)
     local t=id and cell(id)
+    -- Platform coping is .28 nodes high, or up to .43 on elevated
+    -- guideway stations. Only increase step-up inside station tiles;
+    -- normal fences and walls keep the smaller pedestrian step height.
+    local step=t and t.rail_station_id and ((t.rail_type or 0)>=2 and .45 or .30) or .18
+    if (state.step_height or .18)~=step then
+      state.step_height=step
+      p:set_properties({stepheight=step})
+    end
     local deck=id and api.render.walk_bridge_surface and api.render.walk_bridge_surface(id,at.x,at.z,at.y)
     if not deck and id and api.render.walk_dock_surface then
       deck=api.render.walk_dock_surface(id,at.x,at.z,at.y)
     end
     local water=not deck and waterline(id,t,at.x,at.z)
     if water and at.y<(water+(state.swimming and .37 or .18)) then
-      swim_mode(p,state,true)
+      gait(p,state,true,false)
       -- Keep horizontal input and collision local to Luanti. Only bias
       -- vertical velocity toward the mean surface; Space strokes upward
       -- into the walkable bank. Bounded correction avoids teleport jitters.
@@ -215,10 +290,16 @@ function P.new(api)
       -- Don't swim through facilities or the edge of the projected map.
       position(p,state.last_safe,p:get_look_horizontal(),p:get_look_vertical())
     else
-      swim_mode(p,state,false)
+      gait(p,state,false,keys and keys.aux1==true or false)
       local ground=deck or id and t and not blocked(t) and surface(id,at.x,at.z)
       if ground and math.abs(at.y-ground)<.32 then state.last_safe=at
       elseif at.y<-.8 then position(p,state.last_safe,p:get_look_horizontal(),p:get_look_vertical()) end
+    end
+    local rate=state.running and walk_rate*1.65 or walk_rate
+    if state.walking~=moving or state.animation_rate~=rate then
+      if p.set_animation then p:set_animation(moving and walking or idle,rate,.1,true) end
+      if p.set_local_animation then p:set_local_animation(idle,walking,idle,walking,rate) end
+      state.walking,state.animation_rate=moving,rate
     end
   end
   return W

@@ -121,7 +121,8 @@ return function(core,api,path)
     local b=list[body]
     if not b then b={};list[body]=b end
     if meta.auxiliary then
-      b.auxiliary=ref
+      b.auxiliary=b.auxiliary or {}
+      b.auxiliary[ref]={pos=pos,rotation=rotation,at=now}
     else
       b.ref,b.pos,b.rotation,b.meta,b.at=ref,pos,rotation,meta,now
     end
@@ -230,15 +231,13 @@ return function(core,api,path)
     end
     if not hide(b.ref,n) then return false end
     local wanted={[b.ref]=b}
-    local bodies=tracked[key(state.kind,state.id)]
-    for _,part in pairs(bodies) do
-      -- This is the selected train, not just one ObjectRef. A coupled
-      -- coach can interpenetrate the private cab during a reversal.
-      if live(part) then
-        wanted[part.ref]=part
-        if alive(part.auxiliary) then wanted[part.auxiliary]={} end
-      end
+    -- Swap only the occupied shell and attached fittings. Other railway
+    -- bodies must remain visible through the cab/coach windows.
+    for ref,part in pairs(b.auxiliary or {}) do
+      if alive(ref) and now-part.at<.55 then wanted[ref]=part
+      else b.auxiliary[ref]=nil end
     end
+    state.vehicle_pos=b.pos
     for ref in pairs(wanted) do if hide(ref,n) then state.hidden[ref]=true end end
     for ref in pairs(state.hidden) do
       if not wanted[ref] then reveal(ref,n);state.hidden[ref]=nil end
@@ -285,14 +284,25 @@ return function(core,api,path)
     local state=riders[n]
     if not state then return false end
     local last_yaw,last_pitch=p:get_look_horizontal(),p:get_look_vertical()
+    local disembark=not why and api.world and api.world.ride_landing
+    local land,water
+    if disembark then
+      land,water=disembark(p,state.kind,state.vehicle_pos)
+      if not land then
+        if state.hud then
+          p:hud_change(state.hud,"text","No safe place to get off here. Try again near a stop.")
+        end
+        return true
+      end
+    end
     riders[n]=nil
     remove_interior(state,n)
     if p:get_attach()==state.anchor then p:set_detach() end
     if alive(state.anchor) then state.anchor:remove() end
     p:set_eye_offset(state.eye_a,state.eye_b,state.eye_c)
     p:set_inventory_formspec(state.inventory)
-    restore_view(p,state)
-    if core.after and core.get_player_by_name then
+    if not land then restore_view(p,state) end
+    if not land and core.after and core.get_player_by_name then
       settling[n]=state
       core.after(.23,function()
         if settling[n]~=state then return end
@@ -315,7 +325,12 @@ return function(core,api,path)
     if state.hud then p:hud_remove(state.hud) end
     if api.world and api.world.follow_hud then api.world.follow_hud(p,false) end
     if state.flags then p:hud_set_flags(state.flags) end
-    if api.vehicle_status then api.vehicle_status(p,why or "Returned to your previous view.") end
+    if land then
+      api.world.finish_ride_landing(p,land,water,last_yaw,last_pitch,state)
+    end
+    if api.vehicle_status then
+      api.vehicle_status(p,why or (land and "Exited the vehicle." or "Returned to your previous view."))
+    end
     return true
   end
   function R.enter(p,mode,target)
@@ -386,7 +401,7 @@ return function(core,api,path)
       if state then
         local list=tracked[key(state.kind,state.id)]
         local b=list and list[state.body]
-        if not alive(state.anchor) or p:get_attach()~=state.anchor then R.exit(p)
+        if not alive(state.anchor) or p:get_attach()~=state.anchor then R.exit(p,"The seat view ended.")
         elseif live(b) then
           state.missing=nil
           if not maintain(state,b,n,p) then R.exit(p,"The vehicle's seat view is no longer available.")

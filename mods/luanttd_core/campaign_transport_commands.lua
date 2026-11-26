@@ -316,18 +316,19 @@ return function(Sim,R)
         local profile=Freight.profiles[cargo]
         local unsupported=profile and R.rail.owned.profile_consist and not R.rail.owned.profile_consist(s,unit,cargo)
         local car=cargo and catalogue[unit.stock_ids[2]]
-        local wagon_count=car and not unsupported and #unit.stock_ids-1 or nil
+        local wagon_count=not unsupported and #unit.stock_ids-1 or nil
         local dmu=Roster.passenger_dmu(unit.stock_ids[1])
         local part=dmu and "dmu" or #unit.stock_ids==1 and "engine" or nil
         local seats=dmu and (2*Roster.entry(unit.stock_ids[1]).capacity+(unit.stock_ids[2]==27 and 40 or 0)) or nil
-        vehicles[#vehicles+1]={id=unit.id,label="Train "..unit.unit_number..
+        vehicles[#vehicles+1]={id=unit.id,unit_number=unit.unit_number,parked=unit.status=="depot",
+          wagon_count=wagon_count,label="Train "..unit.unit_number..
           (cargo and " · "..(cargo=="mixed" and "Coach and Mail" or Sim.cargo[cargo].name) or "")..
-          (wagon_count and wagon_count>1 and (" · "..wagon_count.." wagons") or ""),cargo=cargo,unsupported=unsupported or nil,
+          (wagon_count and wagon_count>0 and (" · "..wagon_count..(wagon_count==1 and " wagon" or " wagons")) or ""),cargo=cargo,unsupported=unsupported or nil,
           order_copy=unit.status=="depot" and (not cargo and R.rail.owned.passenger_consist(unit) or cargo=="mixed" or cargo=="mail") or nil,
           copied=unit.order_draft and #unit.order_draft.orders,
           draft_revision=unit.order_draft and "rail-parked:"..unit.order_draft.revision,
           help=Help.describe("rail",cargo or Help.rail_cargo(unit.stock_ids[2]),engine.name,
-            {speed=engine.speed,capacity=wagon_count and car.capacity*wagon_count or seats,
+            {speed=engine.speed,capacity=car and wagon_count and not mixed and car.capacity*wagon_count or seats,
               mail_capacity=unit.stock_ids[1]==22 and #unit.stock_ids==2 and unit.stock_ids[2]==27 and s.rail_mail_service and 8 or nil},part)}
       end
     elseif mode=="ship" and R.water and id(key) then

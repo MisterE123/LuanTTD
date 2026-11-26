@@ -131,13 +131,13 @@ rail(cab,coach,1,2)
 -- that exact body (plus its collector) becomes hidden for the rider.
 assert(R.enter(a,"cab",{kind="rail",id=9,body=31}))
 assert(not cab:get_observers().Rider and cab:get_observers().Other and not cab:get_observers().Late)
-assert(not collector:get_observers().Rider and not coach:get_observers().Rider and coach:get_observers().Other)
+assert(not collector:get_observers().Rider and not coach:get_observers())
 assert(R.exit(a))
 assert(cab:get_observers().Rider and cab:get_observers().Other and not cab:get_observers().Late)
 assert(not collector:get_observers())
 
 assert(R.enter(a,"ride",{kind="rail",id=9,body=7}))
-assert(not coach:get_observers().Rider and not cab:get_observers().Rider)
+assert(not coach:get_observers().Rider and cab:get_observers().Rider)
 local interior=attachments[#attachments]
 coach:remove()
 local seat=a:get_attach()
@@ -150,8 +150,8 @@ local rebuilt=object({x=29,y=6,z=31})
 rail(cab,rebuilt,2,1)
 R.step(.1,{a,b,c})
 assert(R.active(a) and rebuilt:get_observers().Other and not rebuilt:get_observers().Rider)
-assert(not cab:get_observers().Rider and cab:get_observers().Other,
-  "travel-order reversal must not change which entire consist is hidden")
+assert(cab:get_observers().Rider and cab:get_observers().Other,
+  "travel-order reversal must not mask the unoccupied locomotive")
 assert(equal(a:get_attach():get_pos().x,rebuilt:get_pos().x+.091),
   "after reversal the seat must follow the same physical coach rather than the new front")
 rebuilt:remove()

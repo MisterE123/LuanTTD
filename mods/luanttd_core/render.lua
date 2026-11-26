@@ -187,13 +187,14 @@ return function(api)
       return foundation and retaining or gnames[t.terrain][t.variant]
     end
   end
+  local PlatformWalk=dofile(modpath.."/rail_platform_walk.lua")
   local crossing_mesh={}
   if api.crossings then
     for axis=0,1 do
       crossing_mesh[axis]={}
       for _,gate in ipairs({"open","closed"}) do
         local asset="level_crossing_"..axis.."_"..gate
-        crossing_mesh[axis][gate]=architecture(asset,asset,"level_crossing_atlas")
+        crossing_mesh[axis][gate]=architecture(asset,asset,"level_crossing_atlas",false,PlatformWalk.crossing(axis))
       end
     end
   end
@@ -230,20 +231,26 @@ return function(api)
       Sim.road_edge(S,rear,d2) and Sim.road_edge(S,front,d1)
     return road_marks[(interior and "oneway_paint_" or "oneway_")..m.dir.."_g"..m.slope]
   end
+  local platform_collision={}
+  local function platform_architecture(name,asset,palette,profile)
+    local node=architecture(name,asset,palette,false,profile.boxes)
+    platform_collision[node]=profile
+    return node
+  end
   local coal_rail_stage={}
   for _,role in ipairs({"load","unload"}) do
     coal_rail_stage[role]={}
     for axis=0,1 do
       local asset="rail_coal_stage_"..role.."_"..axis
       coal_rail_stage[role][axis]={
-        architecture(asset,asset,"rail_coal_stage_atlas"),
-        architecture(asset.."_mirror",asset.."_mirror","rail_coal_stage_atlas"),
+        platform_architecture(asset,asset,"rail_coal_stage_atlas",PlatformWalk.coal(axis,role)),
+        platform_architecture(asset.."_mirror",asset.."_mirror","rail_coal_stage_atlas",PlatformWalk.coal(axis,role)),
       }
     end
   end
   local stock_rail,rail_grade,rail_eased={},{},{}
   for bits=1,63 do
-    stock_rail[bits]=architecture("stock_rail_"..bits,"rail_track_"..bits,"rail_atlas")
+    stock_rail[bits]=architecture("stock_rail_"..bits,"rail_track_"..bits,"rail_atlas",false,PlatformWalk.ballast(bits))
   end
   for _,part in ipairs({4,8,16,32}) do
     rail_eased[part]={}
@@ -269,11 +276,12 @@ return function(api)
     end
     for bits=1,63 do guideway.flat[bits]=mesh("flat_"..bits) end
     for grade=1,4 do guideway.grade[grade]=mesh("grade_"..grade) end
-    local function facility(variant)
+    local function facility(variant,profile)
       local name="guideway_"..kind.."_"..variant
+      if profile then return platform_architecture(name,name,"guideway_"..kind.."_facility_atlas",profile) end
       return architecture(name,name,"guideway_"..kind.."_facility_atlas")
     end
-    for axis=0,1 do guideway.station[axis]=facility("platform_"..axis) end
+    for axis=0,1 do guideway.station[axis]=facility("platform_"..axis,PlatformWalk.ordinary(axis,gauge)) end
     for dir=0,3 do guideway.depot[dir]=facility("depot_"..dir) end
     for _,bits in ipairs({4,8,16,32}) do
       guideway.eased[bits]={}
@@ -295,28 +303,11 @@ return function(api)
   local rail_platform,rail_depot,rail_stock_layout={},{},{}
   for gfx=0,7 do
     local name="rail_station_gfx_"..gfx
-    local boxes={}
-    local function add(u1,h1,v1,u2,h2,v2)
-      if gfx%2==0 then
-        boxes[#boxes+1]={u1+.5,h1-.5,v1+.5,u2+.5,h2-.5,v2+.5}
-      else
-        boxes[#boxes+1]={v1+.5,h1-.5,.5-u2,v2+.5,h2-.5,.5-u1}
-      end
-    end
-    for _,dir in ipairs({-1,1}) do
-      local a,b=dir*.404,dir
-      add(-1,0,math.min(a,b),1,.276,math.max(a,b))
-    end
-    if gfx==2 or gfx==3 then add(-.54,.276,-.94,.54,.842,-.595)
-    elseif gfx>=4 then
-      local side=gfx<6 and -.922 or .922
-      for _,u in ipairs({-.815,.815}) do add(u-.04,.276,side-.04,u+.04,1.47,side+.04) end
-    end
-    rail_stock_layout[gfx]=architecture(name,name,"rail_architecture_atlas",false,boxes)
+    rail_stock_layout[gfx]=platform_architecture(name,name,"rail_architecture_atlas",PlatformWalk.stock(gfx))
   end
   for axis=0,1 do
     local a="rail_platform_"..(2^axis)
-    rail_platform[axis]=architecture("stock_"..a,a,"rail_architecture_atlas")
+    rail_platform[axis]=platform_architecture("stock_"..a,a,"rail_architecture_atlas",PlatformWalk.ordinary(axis))
   end
   for dir=0,3 do
     local a="rail_depot_"..dir
@@ -877,21 +868,28 @@ return function(api)
     local t=S.tiles[id]
     return t and not t.stock_void and (R.house_deck(id,t)~=nil or t.coastal_water or t.water_class=="river" or
       (not t.site and not t.house and not t.build and t.terrain~="water") or road_surface(id)~=nil or
-      t.rail_depot_dir~=nil or t.tram~=nil or split_rail(id,t)~=nil)
+      t.rail_tracks~=nil or t.level_crossing~=nil or t.tram~=nil)
   end
   function R.surface(id,x,z)
     local t=S.tiles[id]
     local deck=R.house_deck(id,t)
     if deck then return deck+.5 end
-    if t and t.rail_depot_dir~=nil and api.trackworks then
-      local shape,base=terrain.tile(id)
-      local _,level=api.trackworks.depot_surface(shape,base)
-      if level then return level+.5 end
-    end
+    if t and t.level_crossing then return t.level_crossing.top+.5 end
     local p=split_rail(id,t)
     if p then
       local u,v=Sim.xy(id)
       return p.base_level+.5+api.slope.surface((x-2*u+.5)/2,(z-2*v+.5)/2,p.surface)
+    end
+    if t and t.rail_tracks and terrain and api.trackworks then
+      local shape,base=terrain.tile(id)
+      local grade,level,_,profile
+      if t.rail_station_id or t.rail_depot_dir~=nil or t.rail_waypoint_id then
+        grade,level=api.trackworks.depot_surface(shape,base)
+      else grade,level,_,profile=api.trackworks.surface(shape,base,t.rail_tracks) end
+      if grade then
+        local u,v=Sim.xy(id)
+        return level+.5+(grade>0 and api.slope.surface((x-2*u+.5)/2,(z-2*v+.5)/2,profile) or 0)
+      end
     end
     local slope,base=road_surface(id)
     if slope==nil and R.tram_surface then
@@ -920,6 +918,25 @@ return function(api)
       if land==nil or land>base+.505 then return end
     end
     return base+.5
+  end
+  function R.walk_platform_landings(id,near)
+    local t=S.tiles[id]
+    if not (t and t.rail_station_id) then return end
+    local x,z=Sim.xy(id)
+    local p={x=2*x,y=math.floor(near+.5),z=2*z}
+    local floor=p.y-2
+    for y=p.y+1,floor,-1 do
+      p.y=y
+      local node=core.get_node_or_nil(p)
+      local deck=node and platform_collision[node.name]
+      if deck then
+        local out={}
+        for i,at in ipairs(deck.landing) do
+          out[i]={x=p.x+at.x,y=p.y+at.y+.045,z=p.z+at.z}
+        end
+        return out
+      end
+    end
   end
   function R.walk_stadium_surface(id,x,z)
     local t=S.tiles[id]

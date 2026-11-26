@@ -229,7 +229,7 @@ return function(api,W)
       release(existing,p)
       players[n]=nil
       W.end_avatar(p,"car")
-      return true,"Returned to builder view."
+      return true,"Left the sightseeing car."
     end
     local id
     if strict then if selected and legal_tile(selected) then id=selected end
@@ -270,7 +270,16 @@ return function(api,W)
       text="",number=0xffe3a3,z_index=105})
     players[n]=q
     status(p,q)
-    return true,"You're in a car. W drives, A/D steer, S brakes or reverses; right-click or /car to get out."
+    return true,"You're in a car. W drives, A/D steer, S brakes or reverses; open Inventory to get out."
+  end
+  function C.walk_entry(p)
+    refresh_board()
+    local at=p:get_pos()
+    if not at then return end
+    local id=tile(at.x,at.z)
+    if not legal_tile(id) then return end
+    local y=api.render.surface(id,at.x,at.z)
+    if y and math.abs(at.y-y)<=.27 then return id end
   end
   function C.toggle(p) return toggle(p,nil,false) end
   function C.toggle_at(p,tile) return toggle(p,tile,true) end
