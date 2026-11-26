@@ -99,3 +99,38 @@ local changes=Flood.visit(bridge,0,0)
 assert(calls==2 and #changes==1 and changes[1].x==0 and changes[1].z==-1
   and changes[1].from=="rail_bridge" and changes[1].kind=="sea" and changes[1].span==7)
 print("PASS: only a flat coastal rail bridge requests flooding, with deck height and both physical endpoints")
+
+-- The native flood target shortcut is an adapter only. For identical
+-- visits, both ways must return the same stock direction-ordered edits.
+do
+  local s=F.seed(Sim.new(1753))
+  local q=F.edit(s)
+  assert(q)
+  local b=W.board(s)
+  local fast=b.flood_target
+  local function same(a,c)
+    if type(a)~="table" then return a==c end
+    if type(c)~="table" then return false end
+    for k,v in pairs(a) do if not same(v,c[k]) then return false end end
+    for k in pairs(c) do if a[k]==nil then return false end end
+    return true
+  end
+  -- Mix untouchable water and void neighbors with actual floodable
+  -- dry ground around the bay and active one-corner coast.
+  s.tiles[ids(2,9)].stock_void=true
+  s.tiles[ids(2,11)].water_class="river"
+  s.tiles[ids(2,12)].water_class="canal"
+  local visited,wet=0,0
+  for z=7,15 do for x=1,10 do
+    b.flood_target=nil
+    local full=Flood.visit(b,x,z)
+    b.flood_target=fast
+    local narrow=Flood.visit(b,x,z)
+    assert(same(full,narrow))
+    wet=wet+#narrow;visited=visited+1
+  end end
+  assert(wet>0 and visited==90)
+  assert(b.tile(1,9).kind=="sea" and not b.flood_target(1,9))
+  assert(b.tile(2,9).kind=="void" and not b.flood_target(2,9))
+end
+print("PASS water-target prefilter is identical to full stock classification at the shore")

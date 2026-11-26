@@ -81,10 +81,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
   end
   function W.board(s)
     local B={}
-    function B.tile(x,z)
-      local id=Sim.id(x,z)
-      local t=id and s.tiles[id]
-      if not t then return end
+    local function describe(id,t,x,z)
       local kind=class(s,id,t)
       if kind=="protected" or kind=="canal" or kind=="river" then return {kind=kind} end
       local slope,base=Terrain.tile(s.corner_grid,x,z)
@@ -111,6 +108,22 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       return {kind=kind,slope=slope,base=base,water_class=kind=="station" and "sea" or t.water_class,
         rocks=t.stock_water_rocks or (kind=="clear" and t.stock_clear_ground==2) or nil,
         water_ground=kind=="trees" and t.wood.ground==3 or nil}
+    end
+    function B.tile(x,z)
+      local id=Sim.id(x,z)
+      local t=id and s.tiles[id]
+      if t then return describe(id,t,x,z) end
+    end
+    function B.flood_target(x,z)
+      local id=Sim.id(x,z)
+      local t=id and s.tiles[id]
+      if not t or t.stock_void then return end
+      -- Plain water already cannot receive an active flood. Keep the
+      -- descriptor path for water-backed track, stops, wooded coast
+      -- and any other layer the stock switch might be able to alter.
+      if t.terrain=="water" and not (t.wood or t.rail_tracks or t.tram
+          or t.build=="stock_rail_bridge" or t.build=="road_station") then return end
+      return describe(id,t,x,z)
     end
     function B.flood_road_stop(t)
       if not B.road_stop_flood or not B.clear_road_stop then return false end

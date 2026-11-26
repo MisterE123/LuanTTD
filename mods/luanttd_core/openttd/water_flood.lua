@@ -45,9 +45,13 @@ function F.visit(board,x,z)
     return x+dx[dir],z+dz[dir]
   end
   if behaviour=="active" then
+    -- The host may skip materializing a descriptor for tiles already
+    -- known not to be a target. Source and dryup neighbors still use
+    -- the full authoritative classification.
+    local target=board.flood_target or board.tile
     for dir=0,7 do
       local u,v=neighbor(dir)
-      local t=u and board.tile(u,v)
+      local t=u and target(u,v)
       -- RC1 DoFloodTile: for non-flat object tiles the TileType::Object
       -- switch has no case; flat land delegates to LandscapeClear as WATER.
       if t and (t.kind=="clear" or t.kind=="trees" and not t.water_ground or t.kind=="rail" and not t.water_ground and board.flood_rail

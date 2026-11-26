@@ -152,3 +152,21 @@ gameplay values and each vehicle's 75 daily pose/visibility samples;
 the regression test also verifies that replacing one vehicle's route
 tail cannot affect its peer after saving and reopening. The disk format
 and atomic write are unchanged.
+
+## Large generated worlds: skip ineligible ocean neighbors
+
+The RC1 flood visitor still evaluates sources, drying, and potentially
+floodable neighbors in the original order. For an active source, the
+native board no longer classifies stock voids or computes corner slopes
+and builds a temporary descriptor for a plain water neighbor that could
+not be changed. Water-backed rail, stops and woods still get the full
+classification. Tests compare the exact stock receipts with and without
+the shortcut and cover actual flooding, drying, and casualty handling.
+
+Paired headless replays of the same generated 512² and 1024² saves, with
+towns and industry but no player vehicles, measured median daily
+simulation times of **281 → 260 ms** and **1,162 → 1,034 ms**, respectively.
+The decoded campaigns matched at the same logical day on both map sizes,
+apart from the elapsed real-time fraction. Large checkpoint encoding still
+takes over a second on 1024²; the shortcut does not reduce that cost or
+guarantee an improvement in the worst individual day's time.
