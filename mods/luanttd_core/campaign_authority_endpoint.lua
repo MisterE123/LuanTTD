@@ -690,7 +690,7 @@ return function(Sim,R,max_days)
   -- misses houses, fields, wet corners and signal changes.
   local scenes,scene_count,scene_clock={},0,0
   local function scene_key(x,z,w,h) return table.concat({x,z,w,h},":") end
-  local function snapshot(x,z,w,h,fraction,frame,known)
+  local function snapshot(x,z,w,h,fraction,frame,known,include_vehicle_summary)
     if not integer(x,1,Sim.W) or not integer(z,1,Sim.H)
       or not integer(w,1,32) or not integer(h,1,32) or x+w-1>Sim.W or z+h-1>Sim.H then
       return reply(false,"INVALID_INTEREST_WINDOW")
@@ -744,17 +744,20 @@ return function(Sim,R,max_days)
         end
       end
     end
-    local vehicles={}
-    for id,v in pairs(s.fleet) do
-      local at=Sim.position(s,v)
-      if at then
-        local a,b=Sim.xy(at)
-        if a>=x and a<x+w and b>=z and b<z+h then
-          vehicles[#vehicles+1]={id=id,tile=at,engine=v.engine,running=not not v.running,order_count=#(v.orders or {})}
+    local vehicles
+    if include_vehicle_summary then
+      vehicles={}
+      for id,v in pairs(s.fleet) do
+        local at=Sim.position(s,v)
+        if at then
+          local a,b=Sim.xy(at)
+          if a>=x and a<x+w and b>=z and b<z+h then
+            vehicles[#vehicles+1]={id=id,tile=at,engine=v.engine,running=not not v.running,order_count=#(v.orders or {})}
+          end
         end
       end
+      table.sort(vehicles,function(a,b) return a.id<b.id end)
     end
-    table.sort(vehicles,function(a,b) return a.id<b.id end)
     fraction=type(fraction)=="number" and fraction>=0 and fraction<=1 and fraction or 1
     return reply(true,nil,{x=x,z=z,width=w,height=h,tiles=tiles,vehicles=vehicles,
       signals=signals,passengers=R.passengers and R.passengers.counts(tiles),
@@ -764,7 +767,7 @@ return function(Sim,R,max_days)
       actors=R.actors and R.actors(x,z,w,h,fraction,frame) or nil})
   end
   function A.snapshot(x,z,w,h,fraction,frame)
-    return snapshot(x,z,w,h,fraction,frame)
+    return snapshot(x,z,w,h,fraction,frame,nil,true)
   end
   local function equal(a,b)
     if a==b then return true end
@@ -806,6 +809,8 @@ return function(Sim,R,max_days)
     local packets,frame={},{road={},rail={},whole_trains=true}
     for _,w in ipairs(windows) do
       if type(w)~="table" then return reply(false,"INVALID_INTEREST_WINDOW") end
+      -- Browsing sectors consumes projected actors, not a second full
+      -- scan and copy of the fleet registry for each window.
       local r=snapshot(w.x,w.z,w.w,w.h,fraction,frame,w.scene)
       if not r.ok then return r end
       scene(r.value,w.scene)

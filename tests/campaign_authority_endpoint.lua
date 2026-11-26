@@ -76,6 +76,8 @@ do
 end
 local sectors=A.snapshots({{x=3,z=6,w=24,h=12},{x=35,z=22,w=4,h=3}},.5)
 assert(sectors.ok and sectors.tick==74 and #sectors.value==2 and #sectors.value[1].actors==1 and #sectors.value[2].actors==0)
+assert(sectors.value[1].vehicles==nil and sectors.value[2].vehicles==nil,
+  "Ordinary view batches use projected actors, not duplicate fleet summaries")
 assert(not A.snapshots({{x=1,z=1,w=1,h=1},{x=2,z=2,w=100,h=100}}).ok)
 print("PASS multiple sectors captured at the same authoritative tick")
 local bend={tool="bend",first=Sim.id(20,10),last=Sim.id(23,13)}

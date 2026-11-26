@@ -370,3 +370,18 @@ for a simulation day were **996.5 → 886.3 ms** and
 the same tile states, values and aliases other than the wall-time
 playback fraction. The improvement depends on how much water the
 stock clock visits; these are not gameplay frame-rate figures.
+
+### Don't scan the fleet again for each visible sector
+
+The live host uses the assembled actor projection for its viewport.
+Nine sector replies no longer repeat an unused legacy list of the same
+road vehicles. The diagnostic single-window endpoint still supplies
+that list, and the viewport's actor poses, shapes, orders and scene
+versions are otherwise unchanged.
+
+In the native worker, a 192-bus, nine-sector fixture made **1,864 → 136**
+position lookups and dropped 136 redundant rows per batch. Warm batches
+took **7.39–8.80 → 5.83–6.32 ms** of worker CPU across four alternating
+samples. An ordinary mixed-fleet worker replay also kept drawing road
+traffic and acknowledged both durable construction commands. The
+batch timing is not a frame-rate or whole-day speedup.
