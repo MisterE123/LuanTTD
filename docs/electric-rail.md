@@ -22,8 +22,12 @@ conversion back is **$12 per piece**. Flat straights and curves are
 supported, as are flat passenger platforms, enclosed depots, and
 unoccupied wooden rail bridges. Selecting either bridge portal changes
 the entire bridge once; the land below is not charged or converted.
-Ordinary slopes, junctions, tunnels and level crossings cannot be
-converted. Overhead wire inside the depot is hidden by the shed.
+The twelve ordinary two-piece turnouts that share an edge can also be
+converted on flat land or on a stock leveled foundation. Wiring follows
+the RC1 branch filter: an unconnected or unelectrified branch may lose its
+wire without changing the tracks. Higher-order junctions, other slopes,
+tunnels and level crossings are outside this conversion mount. Overhead
+wire inside the depot is hidden by the shed.
 Electric locomotives support one owned shuttle, not the paired pilot.
 
 ## Run an electric service

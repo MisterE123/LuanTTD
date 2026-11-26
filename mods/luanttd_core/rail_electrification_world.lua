@@ -2,8 +2,10 @@
 -- First safe host mount for pinned OpenTTD 14.1 ordinary electrification.
 -- Source quote/prices belong to rail_types.lua. The current native pilot
 -- cannot atomically retarget an active train's reservations during work.
+local base=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
 return function(Sim,Terrain,Track,RailTypes,Spans)
   local R={FIELD="rail_type"}
+  local Turnout=dofile(base.."rail_turnout_wire.lua")(Sim,Track,dofile(base.."openttd/rail_wire_mask.lua")(Track))
   local tickets=setmetatable({},{__mode="k"})
   local function int(n,lo,hi)
     return type(n)=="number" and n%1==0 and n>=lo and n<=hi
@@ -128,13 +130,20 @@ return function(Sim,Terrain,Track,RailTypes,Spans)
     local r=rail_type(t)
     if r==nil then return nil,"UNSUPPORTED_RAILTYPE_CONVERSION" end
     local kind,tk="rail",piece[t.rail_tracks]
-    if tk==nil then return nil,"SINGLE_RAIL_PIECE_REQUIRED" end
+    local turnout=tk==nil and Turnout.supported(t.rail_tracks)
+    if tk==nil and not turnout then return nil,"SINGLE_RAIL_PIECE_REQUIRED" end
     local sl,base=shape(s,id)
     if sl==nil then return nil,"NEEDS_SHARED_CORNERS" end
-    if sl~=0 then return nil,"FLAT_RAIL_REQUIRED" end
+    if sl~=0 then
+      if not turnout or Track.foundation(sl,t.rail_tracks)~="leveled" then return nil,"FLAT_RAIL_REQUIRED" end
+      base=base+1
+    end
     if t.rail_station_id~=nil and t.rail_depot_dir~=nil then return nil,"UNKNOWN_RAIL_PLACEMENT" end
     local dispatch=maps(s,"stock_rail_dispatch")
     local record=dispatch and dispatch.signals and dispatch.signals.records and dispatch.signals.records[id]
+    if turnout and (record or t.signal or t.rail_station_id or t.rail_depot_dir~=nil or t.rail_waypoint_id) then
+      return nil,"SINGLE_RAIL_PIECE_REQUIRED"
+    end
     if t.rail_station_id~=nil then
       if (tk~=Track.X and tk~=Track.Y) or t.rail_station_axis~=tk then return nil,"UNKNOWN_RAIL_PLATFORM" end
       if record or t.signal then return nil,"UNKNOWN_RAIL_PLATFORM" end

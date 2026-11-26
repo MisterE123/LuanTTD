@@ -691,6 +691,7 @@ return function(Sim,R,max_days)
     local corners=projection and projection.corners(R.terrain,s.corner_grid,x,z,w,h)
     local old=known and scenes[scene_key(x,z,w,h)]
     local dikes=R.canal_dikes and R.canal_dikes.mask or function() end
+    local wires=R.rail_wire_mask or function() end
     local unchanged=old and old.key==known and old.corners==corners and projection and projection.matches_tile
     if unchanged then
       for _,row in ipairs(old.tiles) do
@@ -698,7 +699,7 @@ return function(Sim,R,max_days)
         local rail_diagonal,rail_canopy
         if R.rail_scene_context then rail_diagonal,rail_canopy=R.rail_scene_context(s,row.id,t) end
         if not projection.matches_tile(t,row.surface)
-          or rail_diagonal~=row.rail_diagonal or rail_canopy~=row.rail_canopy
+          or rail_diagonal~=row.rail_diagonal or rail_canopy~=row.rail_canopy or wires(s,row.id,t)~=row.rail_wire
           or steps_at(row.id,t,row.slope,row.level)~=row.front_steps
           or dikes(row.id)~=row.surface.canal_dikes
           or (t.water_class=="river" and R.river_direction and R.river_direction(row.id) or nil)~=row.river_direction then
@@ -727,7 +728,7 @@ return function(Sim,R,max_days)
           if surface then surface.canal_dikes=dikes(id) end
           local rail_diagonal,rail_canopy
           if R.rail_scene_context then rail_diagonal,rail_canopy=R.rail_scene_context(s,id,t) end
-          tiles[#tiles+1]={id=id,rail_diagonal=rail_diagonal,rail_canopy=rail_canopy,level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
+          tiles[#tiles+1]={id=id,rail_diagonal=rail_diagonal,rail_canopy=rail_canopy,rail_wire=wires(s,id,t),level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
             rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station,
             surface=surface,front_steps=steps_at(id,t,slope,level),
             river_direction=t.water_class=="river" and R.river_direction and R.river_direction(id) or nil}

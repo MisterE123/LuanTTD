@@ -34,6 +34,9 @@ return function(Sim,mod,s,cap)
   local scene_diagonal=dofile(mod.."/rail_diagonal.lua")(Sim,network.track,rail_view.terrain,
     network.lab.surface,network.lab.split_surface)
   N.rail_scene_context=dofile(mod.."/rail_scene_context.lua").make(Sim,scene_diagonal,rail_view.terrain)
+  local track=network.track
+  local wire=dofile(mod.."/rail_turnout_wire.lua")(Sim,track,dofile(mod.."/openttd/rail_wire_mask.lua")(track))
+  N.rail_wire_mask=wire.at
   N.rail_preview=dofile(mod.."/rail_preview.lua")(rail_view,mod.."/")
   N.crossing_gesture=dofile(mod.."/crossing_gesture.lua")
   if cap.temperate_bank then N.bank=Sim.mount_temperate_bank(s,Terrain,growth) end

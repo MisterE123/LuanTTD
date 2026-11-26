@@ -1122,7 +1122,21 @@ return function(api)
         stock_scenery.crossing_wire[mask]=family
       end
     end
+    local Turnout=dofile(modpath.."/rail_turnout_wire.lua")(Sim,rail_track,dofile(modpath.."/openttd/rail_wire_mask.lua")(rail_track))
+    local wires={}
+    for _,mask in ipairs(Turnout.masks) do
+      local name="rail_turnout_catenary_"..mask
+      wires[mask]=architecture(name,name,"rail_catenary_atlas")
+    end
     function stock_scenery.rail_wire(id,t,x,z,under)
+      local bits=t.rail_tracks
+      if Turnout.supported(bits) then
+        local selected
+        if projected then selected=S.rail_wire[id] else selected=Turnout.at(S,id,t) end
+        if not selected or under then return end
+        if selected==bits then return wires[selected] end
+        return stock_scenery.catenary[selected][1]
+      end
       local mode=R.rail_diagonal_mode(id)
       local art=api.electric_art.overlay(t.rail_tracks,0,t.rail_station_id and "platform" or "plain",x/2,z/2,nil,mode)
       if not art then return end

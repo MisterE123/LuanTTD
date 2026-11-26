@@ -68,3 +68,19 @@ q=assert(A.rail_quote(n,req,true).value)
 local r=A.rail_place(n,req,q.ticket)
 assert(r.ok and r.value.cost==120 and #r.value.tiles==2 and c.cash==cash-120)
 print("PASS transactional AutoRail checks displayed authoritative ghost and price; changed mesh, price or missing preview cannot spend")
+
+-- The branching direction touches an electrified cell outside the one
+-- requested render cell. The source mask must still invalidate the cache.
+local Wire=dofile(root.."rail_turnout_wire.lua")(S,Track,dofile(root.."openttd/rail_wire_mask.lua")(Track))
+R.rail_wire_mask=Wire.at
+tile(36,16,33,nil,nil,1)
+tile(35,16,1,nil,nil,1);tile(37,16,1,nil,nil,1)
+tile(36,17,2)
+local e=read(36,16)
+assert(e.tiles[1].rail_wire==1 and not read(36,16,e.scene).tiles)
+tile(36,17,2,nil,nil,1)
+local both=read(36,16,e.scene)
+assert(both.scene~=e.scene and both.tiles[1].rail_wire==33)
+tile(36,17,2)
+assert(read(36,16,both.scene).tiles[1].rail_wire==1)
+print("PASS authoritative wire mask across sector edge recognizes powered, unpowered and removed branch")

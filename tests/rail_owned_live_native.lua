@@ -16,6 +16,7 @@ local asiastar=core.settings:get_bool("luanttd_qa_asiastar",false)
 local tim=asiastar or core.settings:get_bool("luanttd_qa_tim",false)
 local electric=tim or sh40 or core.settings:get_bool("bayline_native_electric_probe",false)
 local bridge=core.settings:get_bool("bayline_native_electric_bridge_probe",false)
+local wire_turnout=core.settings:get_bool("luanttd_qa_electric_turnout",false)
 local lookahead=core.settings:get_bool("bayline_native_platform_lookahead_probe",false)
 local branch=lookahead or core.settings:get_bool("bayline_native_rail_branch_probe",false)
 assert(not bridge or electric)
@@ -291,6 +292,12 @@ local function stamp()
       for i=1,3 do entity_at(current(),i,1) end
       core.log("action",("OWNED_RAIL_TWO_COACHES_NATIVE_PASS separately purchased 2 × 40 seats, two reversals, fare=$%d"):format(fare))
     end
+    if wire_turnout then
+      api.render.update({id(14),id(14,11),id(14,15)})
+      assert(core.get_node({x=28,y=2,z=20}).name=="luanttd_core:rail_turnout_catenary_33")
+      assert(core.get_node({x=28,y=3,z=30}).name=="luanttd_core:rail_turnout_catenary_33")
+      core.log("action","ELECTRIC_TURNOUT_NATIVE_PASS branch contact, paid SH30 route, exact native mesh and restart")
+    end
     core.log("action",("OWNED_RAIL_LIVE_NATIVE_PASS engine=%d fare=$%d operating_cost=$%d peak=%d bodies=%d"):
       format(engine,fare,after.running_expense,qa.peak,physical_count))
     core.request_shutdown("Native steam ride survived restart and earned its first fare",false,0)
@@ -309,6 +316,20 @@ local function stamp()
     end
   end
   local c=Sim.company(S,owner)
+  if wire_turnout then
+    assert(electric and not bridge)
+    S.tiles[id(14,11)]={h=0,terrain="grass",variant=1,owner=owner,rail_tracks=2,build="stock_rail"}
+    S.tiles[id(14)].rail_tracks=33
+    S.tiles[id(14,9)]={h=0,terrain="grass",variant=1}
+    local apron=id(14,15)
+    local i=(15-1)*(g.width+1)+14
+    g.levels[i+1],g.levels[i+g.width+1]=1,1
+    local T=dofile(mod_path.."/openttd/terrain.lua")
+    assert(T.tile(g,14,15)==5)
+    S.tiles[apron]={h=0,terrain="hill",variant=1,owner=owner,rail_tracks=33,build="stock_rail"}
+    local second=assert(api.electric_quote(owner,{apron},1))
+    assert(second.price==136 and api.electric_commit(owner,second))
+  end
   local bridge_wire
   if bridge then
     local w=assert(api.rail_spans)
@@ -366,8 +387,16 @@ local function stamp()
     local line={}
     for x=2,24 do if x~=20 and (not bridge or x<15 or x>19) then line[#line+1]=id(x) end end
     local quote=assert(api.electric_quote(owner,line,1))
-    assert(quote.price==(bridge and 17 or 22)*68)
+    assert(quote.price==((bridge and 17 or 22)+(wire_turnout and 1 or 0))*68)
     assert(api.electric_commit(owner,quote))
+    if wire_turnout then
+      assert(S.tiles[id(14)].rail_type==1 and S.tiles[id(14)].rail_tracks==33)
+      local track=dofile(mod_path.."/openttd/rail_track.lua")
+      local w=dofile(mod_path.."/rail_turnout_wire.lua")(Sim,track,dofile(mod_path.."/openttd/rail_wire_mask.lua")(track))
+      assert(w.at(S,id(14),S.tiles[id(14)])==1,"Unpowered branch must not show an energized contact wire")
+      assert(api.electric_commit(owner,assert(api.electric_quote(owner,{id(14,11)},1))))
+      assert(w.at(S,id(14),S.tiles[id(14)])==33,"Powering the next tile must connect the second wire")
+    end
     assert(S.tiles[id(20)].rail_type==nil and S.tiles[id(2)].rail_type==1)
   end
   if dmu then
