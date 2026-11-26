@@ -2,6 +2,8 @@
 local Rail=assert(api.rail_dispatch_controller)
 local Owned=assert(api.rail_owned)
 local T=dofile(mod.."/openttd/rail_track.lua")
+local Signals=dofile(mod.."/openttd/rail_signals.lua")(T)
+local signed=core.settings:get_bool("luanttd_qa_coastal_signed_rail",false)
 local at=Sim.id
 local owner="Rail flood QA"
 local function insert_line(z)
@@ -12,6 +14,11 @@ local function insert_line(z)
   assert(api.trackworks.depot(S,owner,at(4,z),T.SW))
   assert(api.trackworks.station(S,owner,at(19,z),at(20,z)))
   assert(api.trackworks.station(S,owner,at(33,z),at(34,z)))
+  if signed then
+    for x=6,10 do
+      assert(Rail.place_signal(S,owner,at(x,z),T.trackdir_for_exit(T.X,T.SW),Signals.BLOCK,true))
+    end
+  end
   local A=S.tiles[at(19,z)].rail_station_id
   local B=S.tiles[at(33,z)].rail_station_id
   local q=assert(Owned.quote(S,owner,at(4,z),{0,27}))
@@ -46,6 +53,7 @@ core.after(0,function()
       Sim.daily(S)
     end
     assert(w.speed==0 and not w.consist.parts[1].hidden)
+    if signed then assert(Rail.current(S).signals.records[w.consist.parts[1].tile],"Target was not signed") end
     local at_wreck=w.consist.parts[1].tile
     local x,z=Sim.xy(at_wreck)
     assert(S.tiles[at_wreck].build=="stock_rail" and not S.tiles[at_wreck].rail_station_id and S.tiles[at_wreck].rail_depot_dir==nil)
@@ -62,6 +70,7 @@ core.after(0,function()
     end
     assert(w.flood_wreck and w.crash_age>=4000 and w.crash_age<4440,("stock tide never reached the paid train: id=%d head=%d age=%s tide=%s"):format(at_wreck,w.consist.parts[1].tile,tostring(w.crash_age),tostring(S.stock_coastal_flood)))
     assert(#w.consist.parts==2 and S.tiles[at_wreck].rail_tracks and not Rail.current_paid(S,dry).crashed)
+    if signed then assert(Rail.current(S).signals.records[at_wreck],"Signalling must remain until clearing the wreck") end
     S.rail_flood_native={owner=owner,wet=wet,dry=dry,target=at_wreck,A=A,B=B,dry_ticks=Rail.current_paid(S,dry).vehicle_ticks}
     api.save()
     core.log("action","RAIL_FLOOD_NATIVE_SAVED_WRECK")
@@ -80,6 +89,10 @@ core.after(0,function()
   assert(not Rail.current_paid(S,proof.wet) and not S.stock_rail_fleet.units[proof.wet])
   assert(S.tiles[proof.target].terrain=="water" and not S.tiles[proof.target].rail_tracks)
   assert(Rail.current_paid(S,proof.dry)==dry and dry.id==2 and dry.vehicle_ticks>proof.dry_ticks and not dry.crashed)
+  if signed then
+    local signals=Rail.current(S).signals.records
+    assert(not signals[proof.target] and signals[at(7,24)],"Removed cleared head without touching the dry counterpart")
+  end
   local depot=at(4,24)
   local q=assert(Owned.quote(S,owner,depot,{0,27}))
   local new=assert(Owned.commit(S,owner,q))

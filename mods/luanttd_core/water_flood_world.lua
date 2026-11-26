@@ -11,13 +11,13 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return false end end
     return true
   end
-  local function rail_remove_safe(s,id)
+  local function rail_remove_safe(s,id,allow_signal)
     local t=s.tiles[id]
     if t.signal or t.rail_reserved and t.rail_reserved~=0 or t.reserved_rail and t.reserved_rail~=0
         or s.stock_rail_run or s.stock_rail_platform_run then return false end
     local d=s.stock_rail_dispatch
     if not d then return true end
-    if d.signals and d.signals.records and d.signals.records[id] or
+    if d.signals and d.signals.records and d.signals.records[id] and not allow_signal or
         d.life and d.life.claims and d.life.claims[id] then return false end
     for _,r in ipairs(d.runs or {}) do
       for _,p in ipairs(r.consist and r.consist.parts or {}) do if p.tile==id then return false end end
@@ -89,11 +89,15 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
         if B.flood_vehicles then B.flood_vehicles(t.id,B.tick) end
         -- Flat plots go through LandscapeClear as OWNER_WATER. Never
         -- clear under any body/claim or still-ordered unsupported actor.
+        local function removable(removed)
+          local allow=B.clear_signals and B.clear_signals(t.id,removed,false)
+          return rail_remove_safe(s,t.id,allow)
+        end
         if t.slope==0 then
-          if rail_remove_safe(s,t.id) then return {kind="sea"} end
+          if removable() then return {kind="sea"} end
           return
         end
-        return RailWater.flood(t.slope,t.tracks,t.ground,function() return rail_remove_safe(s,t.id) end)
+        return RailWater.flood(t.slope,t.tracks,t.ground,removable)
       end
       function B.dry_rail(_,_,t)
         return {tracks=t.tracks,ground=RailWater.dry_ground(t.tracks)}
@@ -138,6 +142,9 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       local _,base=Terrain.tile(s.corner_grid,change.x,change.z)
       if change.from=="rail" then
         local q=change.rail
+        if (q.removed or q.kind=="sea") and B.clear_signals then
+          assert(B.clear_signals(id,q.removed,true),"Unclearable rail signal on a committed tide tile")
+        end
         if q.kind=="coast" or q.kind=="sea" then
           t.rail_tracks,t.rail_ground,t.rail_type,t.build,t.owner=nil,nil,nil,nil,nil
           apply(t,q.kind,base)

@@ -232,6 +232,24 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return true,"Signal removed; rail remains."
   end
 
+  -- CmdRemoveSingleRail under OWNER_WATER removes the signal on the
+  -- cleared piece. Unrelated heads on a surviving piece stay in place.
+  function R.coastal_clear_signal(s,id,removed,apply)
+    local d=R.current(s)
+    if not (d and d.signals.records[id]) then return true end
+    local t=Lab.board(s).tile(id)
+    if not (t and t.owner==d.owner) then return false end
+    local track
+    if removed then
+      for i=0,5 do if removed==Track.trackbit(i) then track=i;break end end
+      if track==nil then return false end
+      local signed_tile=signed(Lab.board(s),d).tile(id)
+      if not Signal.on_track(signed_tile,track) then return true end
+    end
+    if not edit_signal_allowed(d,id) then return false end
+    return not apply or R.remove_signal(s,t.owner,id,track)
+  end
+
   local ordinary_traction={[0]=true,[1]=true}
   -- Non-PBS trains still run the stock pathfinder at a turnout.
   -- The quote checks the reachability of each physical segment; the

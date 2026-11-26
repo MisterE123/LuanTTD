@@ -190,6 +190,7 @@ case "${1:-}" in
     LUANTTD_NATIVE_DISCONNECTED_PBS=true bash tests/rail_owned_live_native.sh
     LUANTTD_NATIVE_SHARED_DEPOT=true bash tests/rail_owned_live_native.sh
     LUANTTD_NATIVE_RAIL_FLOOD=true bash tests/rail_owned_live_native.sh
+    LUANTTD_NATIVE_RAIL_FLOOD=true LUANTTD_NATIVE_RAIL_FLOOD_SIGNALS=true bash tests/rail_owned_live_native.sh
     LUANTTD_NATIVE_COLLISION=true bash tests/rail_owned_live_native.sh
     ;;
   *) printf 'Unknown native regression suite: %s\n' "${1:-}" >&2; exit 2 ;;
