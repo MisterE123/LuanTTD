@@ -24,6 +24,19 @@ return function(Sim,Stock)
       road_minimum=Stock.road_removal_minimum(policy.tolerance or 0),
       extra_dynamite=policy.extra_dynamite~=false}
   end
+  function A.new_station(s,owner,id,no_test)
+    local policy=s.stock_road_town_policy or {}
+    local tolerance=policy.tolerance or 0
+    if tolerance==3 or no_test then return true end
+    local town,distance=A.nearest(s,id)
+    local company=s.companies[owner]
+    local all=company and company.stock_town_authority_ratings
+    local rating=town and all and all[town.id] or Stock.initial
+    if Stock.allow_new_station(rating,distance,policy.dist_local_authority or 20,tolerance,no_test) then
+      return true
+    end
+    return nil,"STATION_AUTHORITY_RATING",town.id
+  end
   function A.tree_town(s,id)
     local policy=s.stock_road_town_policy or {}
     if policy.magic_bulldozer then return end

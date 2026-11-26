@@ -28,7 +28,7 @@ assert(purse.cash==before and not s.tiles[shore].ship)
 s.tiles[shore].house={};local no,why=N.quote(s,"A","dock",shore)
 assert(not no and why=="PROTECTED_TILE");s.tiles[shore].house=nil
 s.tiles[shore].wood=true;no,why=N.quote(s,"A","dock",shore)
-assert(not no and why=="DOCK_CLEAR_TREES");s.tiles[shore].wood=nil
+assert(no and no.cost==370 and s.tiles[shore].wood);s.tiles[shore].wood=nil
 s.tiles[pier].airfield=1;no,why=N.quote(s,"A","dock",shore)
 assert(not no and why=="PROTECTED_TILE");s.tiles[pier].airfield=nil
 assert(N.build(s,"A","dock",shore) and purse.cash==before-390)

@@ -16,6 +16,11 @@ function R.rating_name(rating)
   if rating>-400 then return "Very poor" end
   return "Appalling"
 end
+-- town_cmd.cpp CheckIfAuthorityAllowsNewStation. Unlike road removal
+-- there is one hardcoded threshold for every non-permissive council.
+function R.allow_new_station(rating,distance,limit,tolerance,no_test)
+  return tolerance==3 or no_test or distance==nil or distance>=limit or rating>-200
+end
 local bits={1,2,4,8} -- NW, SW, SE, NE in native board order
 local reverse={4,8,1,2}
 local function has(mask,b) return math.floor(mask/b)%2==1 end

@@ -34,6 +34,11 @@ or hold the auxiliary key while using **Build dock**. The picker can join
 a more distant dock if it fits the spread, or build at the same site as
 a separate station. Other companies' docks are never included.
 
+You can build directly on a legal inclined shore with trees. The quote
+includes $20 per tree at base prices, and clearing one tile changes your
+local rating once, not once per tree. Non-permissive councils refuse a
+dock at a company rating of −200 or worse within their authority radius.
+
 Joined piers are physical members of the same station: orders use one
 station ID, eligible water tiles around every pier are considered for
 routing, and catchment is calculated from all the shore ramps and piers.

@@ -15,6 +15,7 @@ rebuild=${LUANTTD_QA_TOWN_REBUILD:-0}
 rocky_ferry=${LUANTTD_QA_ROCKY_FERRY:-0}
 joined_ferry=${LUANTTD_QA_JOINED_FERRY:-0}
 joined_ui=${LUANTTD_QA_JOINED_DOCK_UI:-0}
+dock_grove=${LUANTTD_QA_DOCK_GROVE:-0}
 airport_noise=${LUANTTD_QA_AIRPORT_NOISE:-0}
 canal_dikes=${LUANTTD_QA_CANAL_DIKES:-0}
 fixture=tests/campaign_worker_stock_residential_native.lua
@@ -22,6 +23,7 @@ if [[ $lift == 1 ]]; then fixture=tests/town_lift_native.lua; fi
 if [[ $rebuild == 1 ]]; then fixture=tests/town_rebuild_native.lua; fi
 if [[ $rocky_ferry == 1 ]]; then fixture=tests/stock_rocky_coast_ferry_native.lua; fi
 if [[ $joined_ferry == 1 ]]; then fixture=tests/stock_joined_docks_native.lua; fi
+if [[ $dock_grove == 1 ]]; then fixture=tests/stock_dock_grove_native.lua; fi
 if [[ $airport_noise == 1 ]]; then fixture=tests/airport_noise_native.lua; fi
 if [[ $canal_dikes == 1 ]]; then fixture=tests/canal_dikes_native.lua; fi
 cat "$fixture" >>"$game/mods/luanttd_core/init.lua"
@@ -117,6 +119,18 @@ if [[ $rebuild == 1 ]]; then
   reopen luanttd_qa_town_rebuild_restart "PASS NATIVE TOWN REBUILD REOPEN"
   sleep .45
   if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/town-renewed.jpg"; fi
+  exit 0
+fi
+if [[ $dock_grove == 1 ]]; then
+  mark 'NATIVE DOCK GROVE BEFORE'
+  sleep .26
+  if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 93 "$out/dock-before.jpg"; fi
+  mark 'PASS NATIVE DOCK GROVE'
+  sleep .56
+  if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 93 "$out/dock-grove.jpg"; fi
+  grep 'PASS NATIVE DOCK GROVE' "$out/server.log"
+  ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"
+  reopen luanttd_qa_dock_grove_reopen 'PASS NATIVE DOCK GROVE REOPEN'
   exit 0
 fi
 if [[ $joined_ferry == 1 ]]; then

@@ -48,7 +48,7 @@ local terminal=arg and arg[1]=="terminal"
 local middle=at(25,20)
 local high_berth=terminal and at(26,20) or at(27,18)
 local arrival_ticks=terminal and {1020,1511,2004} or {1191,2231,3047}
-local build_cost=terminal and 24150 or 69150
+local build_cost=terminal and 24210 or 69150
 local company=Sim.company(s,owner)
 local initial=company.cash
 local board=Network.board(s)

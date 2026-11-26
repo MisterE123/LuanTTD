@@ -366,8 +366,10 @@ jobs:
           python3 tests/rail_turn_policy_rc1.py "$src"
           python3 tests/rail_wire_mask_upstream.py "$src" lua5.1
           python3 tests/dock_station_join_upstream.py "$src" lua5.1
+          python3 tests/dock_authority_upstream.py "$src" lua5.1
           lua5.1 tests/rail_compound_wire_snapshot.lua
           lua5.1 tests/dock_station_join.lua
+          lua5.1 tests/stock_dock_tree_authority.lua
           python3 tests/rail_compound_wire_art.py
           python3 tests/rail_paired_wire_art.py
           python3 tests/rail_distributed_pylon_art.py

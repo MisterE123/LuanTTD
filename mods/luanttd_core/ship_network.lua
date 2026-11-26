@@ -131,14 +131,20 @@ return function(Sim,Terrain,Water,Facilities)
     return t.rail_span_id or t.level_crossing or t.rail_waypoint_id or
       s.rail_tunnel_below and s.rail_tunnel_below[id]
   end
-  local function clear(s,owner,id,t)
+  local function clear(s,owner,id,t,dock)
     if N.rail_water_obstruction(s,id) then return nil,"PROTECTED_TILE" end
     if s.tunnel_below and s.tunnel_below[id] then return nil,"SUBSURFACE_RESERVED" end
     local host=s.tiles[id]
-    if host.wood then return nil,"DOCK_CLEAR_TREES" end
     if host.ship or host.house or host.site or host.tram or host.airfield or
         host.stock_industry or host.stock_landmark or host.build and host.build~="canal" then
       return nil,"PROTECTED_TILE"
+    end
+    if host.wood then
+      if not dock then return nil,"DOCK_CLEAR_TREES" end
+      if host.owner and host.owner~=owner then return nil,"OWNED_BY_ANOTHER" end
+      -- CmdBuildDock calls LandscapeClear on the sloped tile. A
+      -- Temperate grove is charged per stem, not as bare shore.
+      return Sim.road_site_clear_cost(host)
     end
     -- RC1 ClearRocks isn't plain water. CmdBuildDock, CmdBuildShipDepot
     -- and CmdBuildBuoy include its LandscapeClear cost before replacing it.
@@ -185,9 +191,10 @@ return function(Sim,Terrain,Water,Facilities)
   function N.quote(s,owner,kind,id,arg,dock_request)
     if not s.corner_grid or not id or not s.tiles[id] then return nil,"INVALID_TILE" end
     local B=N.board(s)
-    local opts={clear=function(i,t) return clear(s,owner,i,t) end,
+    local opts={clear=function(i,t) return clear(s,owner,i,t,kind=="dock") end,
       budget=s.companies[owner] and s.companies[owner].cash or 100000}
     if kind=="dock" then
+      opts.authority=function(i) return Sim.road_tree_authority().new_station(s,owner,i) end
       local p,why,at=Facilities.dock(B,id,opts)
       if not p then return nil,why,at end
       if ship_on(s,p.land) then return nil,"VEHICLE_IN_THE_WAY",p.land end
@@ -237,6 +244,7 @@ return function(Sim,Terrain,Water,Facilities)
       end
       st.docks[#st.docks+1]=part
       st.spread=p.spread
+      if s.tiles[p.land].wood then Sim.bridge_apply_ground_clears(s,owner,{p.land}) end
       s.tiles[p.land].stock_water_rocks=nil
       s.tiles[p.water].stock_water_rocks=nil
       s.tiles[p.land].ship={kind="dock",station=next_,owner=owner,dir=p.dir,water_part=false}
