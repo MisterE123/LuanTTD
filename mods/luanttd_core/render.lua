@@ -1154,8 +1154,9 @@ return function(api)
     end
   end
   local lighthouse_beams=stock_scenery.lighthouse and dofile(modpath.."/lighthouse_beam_view.lua")(core,Sim)
+  local street_lights=roadside_view and dofile(modpath.."/street_light_view.lua")(core,Sim,roadside_view.lamps)
   function R.step_lighthouse_beams(dt,viewers)
-    if not lighthouse_beams then return end
+    if not (lighthouse_beams or street_lights) then return end
     if not viewers then
       viewers={}
       for _,player in ipairs(core.get_connected_players()) do
@@ -1163,7 +1164,8 @@ return function(api)
         if at then viewers[#viewers+1]=at end
       end
     end
-    lighthouse_beams.step(dt,S,viewers)
+    if lighthouse_beams then lighthouse_beams.step(dt,S,viewers) end
+    if street_lights then street_lights.step(dt,S,viewers) end
   end
   local river_view,river_revision,river_topology,river_directions
   if S.stock_generated_profile and S.stock_generated_profile.river_stats then

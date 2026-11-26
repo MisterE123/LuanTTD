@@ -215,6 +215,10 @@ if [[ ${LUANTTD_QA_ROADSIDE:-0} == 1 ]]; then
   grep -q 'NATIVE ROADSIDE trees READY' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
   sleep 1
   if command -v import >/dev/null; then import -window root -quality 91 "$out/roadside-trees.jpg"; fi
+  for _ in {1..240}; do grep -q 'NATIVE ROADSIDE NIGHT READY' "$out/server.log" && break; sleep .25; done
+  grep -q 'NATIVE ROADSIDE NIGHT READY' "$out/server.log" || { tail -n 75 "$out/"{server,client}.log; exit 1; }
+  sleep 1.65
+  if command -v import >/dev/null; then import -window root "$out/roadside-night.png"; fi
 fi
 if [[ ${LUANTTD_QA_TOWN_STATUE:-0} == 1 ]]; then
   wait_statue() {

@@ -52,7 +52,34 @@ local function run()
   core.log("action",("NATIVE ROADSIDE %s READY: source day %d, mesh %s, real paved shoulders")
     :format(type_,s.day,expected))
   if next_==#show then
-    core.log("action","PASS NATIVE ROADSIDE: living worker towns have both real trees and streetlights")
+    local phase=.5
+    -- Keep only this disposable screenshot clock still. World fixtures,
+    -- lamp zones, terrain and placement remain ordinary worker output.
+    local real=core.get_timeofday
+    local set=core.set_timeofday
+    core.get_timeofday=function() return phase or real() end
+    core.register_globalstep(function() if phase then set(phase) end end)
+    local function count(kind)
+      local n=0
+      for _,ref in ipairs(core.get_objects_inside_radius({x=2*x+.5,y=focus.base+1,z=2*z+.5},3)) do
+        local e=ref:get_luaentity()
+        if e and e.name=="luanttd_core:street_light_"..kind then n=n+1 end
+      end
+      return n
+    end
+    render.step_lighthouse_beams(.5,{p:get_pos()})
+    assert(count("cone")==0 and count("pool")==0,"daylight left lamp effects")
+    phase=.91
+    render.step_lighthouse_beams(.5,{p:get_pos()})
+    assert(count("cone")>=1 and count("pool")>=1,"actual painted lamp did not light at night")
+    for _,flag in ipairs({"hotbar","crosshair","wielditem","healthbar","basic_debug"}) do p:hud_set_flags({[flag]=false}) end
+    core.log("action","NATIVE ROADSIDE NIGHT READY")
+    core.after(3.5,function()
+      phase=.5
+      render.step_lighthouse_beams(.5,{p:get_pos()})
+      assert(count("cone")==0 and count("pool")==0,"dawn left lamp effects")
+      core.log("action","PASS NATIVE ROADSIDE: living worker town lamps glow at night and go out by day")
+    end)
   else
     local function advance() next_=next_+1;focus=nil;run() end
     core.after(6,advance)

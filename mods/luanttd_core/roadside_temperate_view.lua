@@ -26,7 +26,8 @@ return function(S,Sim,terrain,road_surface,reg,architecture,Details,Track,png,sl
       for _,foundation in ipairs({"normal","foundation"}) do
         local name=("pure_tram_%s_%s_%d"):format(class,foundation,grade)
         local asset=(foundation=="foundation" and "bl_road_grade_foundation_" or "bl_land_")..grade..".obj"
-        families[foundation][grade]=reg(name,{tex,png("road_surface_retaining"),png("road_surface_retaining")},{
+        local atlas=foundation=="foundation" and png("pure_tram_grade_foundation_"..class) or tex
+        families[foundation][grade]=reg(name,{atlas},{
           drawtype="mesh",mesh=asset,paramtype="light",sunlight_propagates=true,
           pointable=false,collision_box=slope_collision(grade),
         })
@@ -54,8 +55,8 @@ return function(S,Sim,terrain,road_surface,reg,architecture,Details,Track,png,sl
       local tex=png("roadside_grade_sheet")..("^[sheet:4x1:%d,0"):format(cell)
       local base=("roadside_grade_%s_%d"):format(material,grade)
       for _,foundation in ipairs({"normal","foundation"}) do
-        family[foundation][grade]=reg(base.."_"..foundation,{tex,
-            png("road_surface_retaining"),png("road_surface_retaining")},{
+        local atlas=foundation=="foundation" and png("roadside_grade_foundation_"..cell) or tex
+        family[foundation][grade]=reg(base.."_"..foundation,{atlas},{
           drawtype="mesh",mesh=(foundation=="foundation" and "bl_road_grade_foundation_" or "bl_land_")..grade..".obj",
           paramtype="light",sunlight_propagates=true,pointable=false,collision_box=slope_collision(grade)})
       end
@@ -92,11 +93,11 @@ return function(S,Sim,terrain,road_surface,reg,architecture,Details,Track,png,sl
     add("aqueduct_above","stock_aqueducts")
     return a
   end
-  function V.node(t,id,x,y,z)
-    if x%2~=1 or z%2~=1 or not entries[t.roadside] or t.roadworks or t.build~="road"
+  local function mount(t,id)
+    if not entries[t.roadside] or t.roadworks or t.build~="road"
         or t.road_waypoint_id or t.level_crossing or t.station or t.road_tunnel_id or t.road_bridge_id then return end
     local grade,base=road_surface(id)
-    if grade==nil or y~=base+1 then return end
+    if grade==nil then return end
     local rb=Sim.road_bits(S,id)
     local tb=t.tram and (t.tram.tram_bits or 0) or 0
     local all=Track.union(rb,tb)
@@ -105,7 +106,17 @@ return function(S,Sim,terrain,road_surface,reg,architecture,Details,Track,png,sl
     if not variant then return end
     local shape,rawbase=terrain.tile(id)
     local max=rawbase+(shape>=16 and 2 or shape==0 and 0 or 1)
-    return Details.points(t.roadside,rb,all,false,max,minimum_deck(id)) and variant or nil
+    local points=Details.points(t.roadside,rb,all,false,max,minimum_deck(id))
+    if points then return variant,base,grade,points end
+  end
+  function V.node(t,id,x,y,z)
+    if x%2~=1 or z%2~=1 then return end
+    local variant,base=mount(t,id)
+    if base and y==base+1 then return variant end
+  end
+  function V.lamps(t,id)
+    if t.roadside~="street_lights" then return end
+    return mount(t,id)
   end
   return V
 end
