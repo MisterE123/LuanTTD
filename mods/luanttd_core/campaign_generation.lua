@@ -50,14 +50,15 @@ return function(core,mod,Sim,Settings)
     Sim.mount_road_bus_market(S,Calendar,option("year","bayline_stock_bus_start_year",1950),false,false)
     Sim.mount_coastal_flood(S)
     progress(62,"Building towns and roads")
-    local towns,why=Campaign.towns(Sim,Terrain,S,Gen,dofile(src.."town_worldgen.lua")(G,B),
+    local towns,why,generated_roads=Campaign.towns(Sim,Terrain,S,Gen,dofile(src.."town_worldgen.lua")(G,B),
       dofile(src.."stock_town_name.lua"),G,B,{
       layout=cfg and cfg.layout or settings:get("bayline_generated_town_layout") or "original",
       difficulty=option("towns","bayline_generated_towns",2),larger_towns=4,initial_city_size=2,year=Sim.date(S),
       progress=function(i,n) progress(62+math.floor(9*i/math.max(1,n)),"Building towns and roads",true) end,
     })
     assert(towns,why)
-    Sim.mount_stock_town_growth(S,dofile(mod.."/town_growth_runtime.lua")(Sim,Terrain,G,B,dofile(src.."town_passengers.lua")),true)
+    local growth=dofile(mod.."/town_growth_runtime.lua")(Sim,Terrain,G,B,dofile(src.."town_passengers.lua"))
+    Sim.mount_stock_town_growth(S,growth,true)
     progress(72,"Placing industries")
     local Farm,error_,farm_rules=Sim.mount_farm_world(S,Terrain,true)
     assert(Farm,error_)
@@ -79,6 +80,8 @@ return function(core,mod,Sim,Settings)
     Campaign.landmarks(Sim,Terrain,S,Gen,dofile(src.."scenery_object_rc1.lua")(Clear,Calendar),Calendar.date(Sim.date(S)))
     Campaign.forests(Sim,Terrain,S,Gen,dofile(src.."tree_worldgen.lua"),option("trees","bayline_generated_tree_placer",2),
       function() progress(79,"Adding landmarks and forests",true) end)
+    progress(84,"Settling streets and fields")
+    Campaign.settle_frontage(Sim,S,generated_roads,growth.reconstruction,Farm)
     return S
   end
   return C

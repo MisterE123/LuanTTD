@@ -84,6 +84,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   local state=copy(profile.terrain_rng)
   local function random() return Generator.next_random(state) end
   local save={version=1,order={},towns={}}
+  local generated_roads={}
   local lifts=Lift.new()
   local growth=growth_board(Sim,Terrain,s,G,Worldgen,function(x,z)return get(Sim,Terrain,s,x,z) end)
   local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={}}
@@ -152,6 +153,11 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
       s.sites[id]=nil
       return nil
     end
+    for tile in pairs(placed) do
+      if s.tiles[tile].build=="road" and s.tiles[tile].road_town==id then
+        generated_roads[#generated_roads+1]=tile
+      end
+    end
     for _,id in ipairs(built_lifts) do Lift.install(lifts,id,Sim) end
     site.population=town.population
     save.towns[id],save.order[#save.order+1]=town,id
@@ -165,7 +171,55 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   profile.town_settings.progress=nil
   profile.town_rng=copy(state)
   s.passenger_rating_rng=copy(state)
-  return result
+  table.sort(generated_roads)
+  return result,nil,generated_roads
+end
+
+-- RC1 genworld.cpp advances RunTileLoop 0x500 times (5 physical
+-- passes at TILE_UPDATE_FREQUENCY=256). These post-gen Temperate
+-- road surfaces and live owned fields don't use RNG or the clock;
+-- apply their sparse deterministic subset before checkpointing.
+function M.settle_frontage(Sim,s,roads,reconstruction,Farm)
+  local source=assert(s.stock_generated_profile)
+  assert(not source.frontage,"Fresh-world frontage was already settled")
+  local stats={road=0,decorated=0,fields=0,grown=0}
+  source.frontage=stats
+  local seen={}
+  for _,id in ipairs(roads or {}) do
+    local t=s.tiles[id]
+    if not seen[id] and t and t.build=="road" and t.road_town and not t.roadworks then
+      seen[id]=true
+      local x,z=Sim.xy(id)
+      local before=t.roadside
+      for _=1,5 do reconstruction.decorate(s,x,z) end
+      stats.road=stats.road+1
+      if t.roadside~=before then stats.decorated=stats.decorated+1 end
+    end
+  end
+  local fields={}
+  for id,field in pairs(s.stock_farm_fields or {}) do
+    if Farm.field(s,id)~=field then s.stock_farm_fields[id]=nil
+    else
+      local ind=s.stock_farm_industries and s.stock_farm_industries[field.industry]
+      if ind and not ind.removed then fields[#fields+1]=id end
+    end
+  end
+  table.sort(fields)
+  if #fields>0 then
+    local board=Farm.field_board(s)
+    for _,id in ipairs(fields) do
+      local x,z=Sim.xy(id)
+      local field=s.stock_farm_fields[id]
+      local stage=field.variant
+      for i=1,5 do board.visit(x-1,z-1,i,false) end
+      -- Do not conflate the five isolated setup visits with the game's
+      -- absolute keepalive/duplicate-detection clock.
+      field.last_tick=nil
+      stats.fields=stats.fields+1
+      if field.variant~=stage then stats.grown=stats.grown+1 end
+    end
+  end
+  return stats
 end
 
 function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_count,Timber,Oil,Farm,progress,Heavy)

@@ -61,9 +61,23 @@ if core.settings:get_bool("luanttd_qa_normal_river",false) then
       end
     end
   end
+  if core.settings:get_bool("luanttd_qa_initial_frontage",false) then
+    local done=assert(S.stock_generated_profile.frontage)
+    assert(done.road>0 and done.decorated>0 and done.fields>0 and done.grown>0)
+    local paved,lamp
+    for id,t in ipairs(S.tiles) do
+      if t.build=="road" and t.road_town and t.roadside=="street_lights" and not lamp then lamp=id end
+      if t.build=="road" and t.road_town and t.roadside=="paved" and not paved then paved=id end
+    end
+    chosen=assert(lamp or paved,"Expected source frontage on an actual generated town street")
+    core.log("action",("WORLD_CREATION_INITIAL_FRONTAGE streets=%d decorated=%d fields=%d growth=%d"):
+      format(done.road,done.decorated,done.fields,done.grown))
+  end
   local x,z=Sim.xy(assert(chosen))
   local _,_,top=api.terrain.tile(chosen)
-  terrain_witness={x=x*2+12,y=top+11,z=z*2+12}
+  local near=core.settings:get_bool("luanttd_qa_initial_frontage",false)
+  local offset=near and 6 or 12
+  terrain_witness={x=x*2+offset,y=top+(near and 6 or 11),z=z*2+offset}
   assert(S.seed==1 and count>=10,"Explicit seed should reach the real standard river generator")
   core.log("action","WORLD_CREATION_NATIVE_RIVERS "..count)
 end
@@ -129,6 +143,10 @@ bayline_generated_map_depth = 128
 CONF
 if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
   printf 'luanttd_qa_normal_river = true\nbayline_generated_relief = 2\n' >> "$out/local.conf"
+fi
+if [[ ${LUANTTD_QA_INITIAL_FRONTAGE:-0} == 1 ]]; then
+  [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]
+  printf 'luanttd_qa_initial_frontage = true\n' >> "$out/local.conf"
 fi
 if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   t=$(realpath "$BAYLINE_NATIVE_TOOLS")
@@ -204,7 +222,10 @@ if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
   sleep 5
   xdotool key F1
   sleep 1
-  import -window root -quality 91 "$out/normal-river-landscape.jpg"
+  if [[ ${LUANTTD_QA_INITIAL_FRONTAGE:-0} == 1 ]]; then
+    grep WORLD_CREATION_INITIAL_FRONTAGE "$out/client.log"
+    import -window root -quality 91 "$out/initial-settled-street.jpg"
+  else import -window root -quality 91 "$out/normal-river-landscape.jpg"; fi
 fi
 grep -q 'disposable test failure' "$out/client.log"
 ! grep -E 'ERROR\[' "$out/client.log"
