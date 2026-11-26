@@ -132,12 +132,12 @@ def native_aim(x, z, target_height=.5, framing=False):
     await_state("native mouse targeted "+wanted,lambda s:s["target"]==wanted,2)
 
 
-def aim(x, z):
+def aim(x, z, side=None):
     if fresh_profile:
         native_aim(x,z)
         return
     pos = f"{x},{z}"
-    chat(f"/qa_aim {x} {z}")
+    chat(f"/qa_aim {x} {z}" + (f" {side}" if side else ""))
     await_state("camera pointing at tile "+pos, lambda s: s.get("aim") == pos and s["target"] == pos)
     time.sleep(.35)
 
@@ -1382,8 +1382,7 @@ try:
         for p in ((37,7),(41,7)):
             aim(*p);click()
         slot(8);click();await_state("back to Railworks",lambda s:s.get("menu")=="railworks")
-        rotate_rail_fitting(3)
-        slot(4);aim(39,2);click()
+        slot(4);aim(39,2,"south");click()
         await_state("south-facing real depot",lambda s:(s.get("rail_work") or {}).get("depot")==2)
         slot(3);aim(39,12);click();aim(39,14);click()
         slot(5);click();await_state("rail signals menu",lambda s:s.get("menu")=="railsignals")
@@ -1814,8 +1813,7 @@ try:
         await_state("rail-only coal industry seeded",lambda s:s.get("rail_coal",{}).get("ready"))
         slot(8);click()
         await_state("Railworks",lambda s:s.get("menu")=="railworks")
-        rotate_rail_fitting(2)
-        slot(4);aim(44,15);click()
+        slot(4);aim(44,15,"west");click()
         await_state("west-facing dedicated rail depot",lambda s:
             (s.get("track_nodes") or {}).get("44,15",{}).get("depot")==0)
         slot(2);hold_to_build(aim,(30,15),(43,15))
@@ -2702,6 +2700,36 @@ try:
         (out/"rail-span-native.json").write_text(json.dumps(dict(first=first,reopened=reopened,after=end),indent=2))
         stop_server()
         print(f"PASS: native mouse-built rail spans, real rolling stock on bridge, saved, hidden/revealed and arrived: {out}")
+        sys.exit(0)
+    if os.environ.get("LUANTTD_NATIVE_DEPOT_FACING")=="1":
+        phase="check rail depot preview, click, and mesh from every side"
+        slot(8);click()
+        await_state("Railworks",lambda s:s.get("menu")=="railworks")
+        slot(4)
+        rows=[(3,9,"west",0),(5,12,"south",1),(7,12,"east",2),(9,12,"north",3)]
+        def placed(x,z,dir_):
+            return lambda s: (s.get("track_nodes") or {}).get(f"{x},{z}",{}).get("node")==f"luanttd_core:stock_rail_depot_{dir_}"
+        for x,z,side,dir_ in rows:
+            aim(x,z,side)
+            await_state("door preview faces "+side,lambda s:"Door faces "+side.title() in (s.get("depot_hint") or ""))
+            click()
+            s=await_state("matching placed "+side+" mesh",placed(x,z,dir_))
+            assert s["track_nodes"][f"{x},{z}"]["depot"]==dir_
+        aim(5,15,"west")
+        click(3)
+        choose("luanttd_core:rail_depot_direction","rail_door_2","choose-east-instead-of-west")
+        await_state("manual override preview",lambda s:"Door faces East" in (s.get("depot_hint") or ""))
+        click()
+        await_state("manual east mesh",placed(5,15,2))
+        aim(7,15,"north")
+        click(3)
+        choose("luanttd_core:rail_depot_direction","rail_door_auto","restore-face-me")
+        await_state("camera-facing preview restored",lambda s:"Door faces North" in (s.get("depot_hint") or ""))
+        click()
+        await_state("camera-facing north mesh",placed(7,15,3))
+        screenshot("camera-facing-rail-depots")
+        stop_server()
+        print(f"PASS: real preview and depot meshes agree for four sides; manual override and Face me reset: {out}")
         sys.exit(0)
     if os.environ.get("BAYLINE_NATIVE_RAIL_BUILD")=="1":
         phase="build all railway pieces from native hotbars"

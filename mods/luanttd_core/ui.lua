@@ -8,6 +8,7 @@ local worker_jump_fields
 local worker_jump_form="luanttd_core:worker_jump"
 local tram_offer_form="luanttd_core:tram_service_offer"
 local TramMarket=dofile(moddir.."/tram_market.lua")
+local DepotFacing=dofile(moddir.."/depot_orientation.lua").facing
 local esc=core.formspec_escape
 local session,hud={},{}
 local Workbenches=api.road_first and dofile(core.get_modpath("luanttd_core").."/workbench_index.lua")(api)
@@ -1075,14 +1076,15 @@ function U.clear_tram_run(p)
   V.status=msg
   if ok then V.anchor,V.tram_first=nil,nil end
 end
-local function tram_request(V,id)
+local function tram_request(p,V,id)
   local mode=tram_mode[V.tool]
   local d=V.tram_dir or 2
   if not mode then return end
   if V.tool=="tram_track" then return mode,V.anchor and Sim.line(V.anchor,id,V.zfirst) or {id} end
   if V.tool=="tram_bit" then return mode,{id},8/2^d,tram_dir[d] end
   if V.tool=="tram_stop" then return mode,{id},d%2,d%2==0 and "East–West" or "North–South" end
-  return mode,{id},d,tram_dir[d]
+  d=V.tram_depot_dir or DepotFacing(p)
+  return mode,{id},d,"Door faces "..tram_dir[d]
 end
 local ship_mode={ship_dock="dock",ship_depot="depot",ship_remove="remove",ship_aqueduct="aqueduct",ship_canal="canal",ship_lock="lock"}
 local buoy_tools={ship_buoy="Place public buoy",ship_buoy_remove="Remove buoy, keep water"}
@@ -1110,8 +1112,14 @@ local function ship_span(plan)
 end
 function U.rotate_ship(p)
   local V=view(p:get_player_name())
-  V.ship_axis=1-(V.ship_axis or 0)
+  V.ship_axis=1-(V.ship_axis or DepotFacing(p)%2)
   V.status=V.ship_axis==0 and "Ship depot: East–West." or "Ship depot: North–South."
+end
+function U.ship_depot_axis(p,V,kind)
+  return V.ship_axis or (kind=="depot" and DepotFacing(p)%2 or 0)
+end
+function U.rail_depot_request(p,V,id)
+  return {tool="depot",first=id,direction=V.rail_depot_dir or DepotFacing(p)}
 end
 local rail_tool_code={rail_track_x=0,rail_track_y=1,rail_track_upper=2,rail_track_lower=3,
   rail_track_left=4,rail_track_right=5}
@@ -1159,16 +1167,21 @@ function U.rotate_rail(p)
   V.rail_dir=((V.rail_dir or 2)+1)%4
   V.status="Rail fitting direction: "..tram_dir[V.rail_dir].."."
 end
-function U.open_depot_direction(p)
+function U.open_depot_direction(p,tool)
   local n=p:get_player_name()
   local V=view(n)
-  V.depot_direction_open=true
+  local tram=tool=="tram_depot"
+  local setting=tram and "tram_depot_dir" or "rail_depot_dir"
+  local choice=V[setting]
+  V.depot_direction_open=setting
   local b={"formspec_version[7]size[8.2,4.22]bgcolor[#152334;false]",
-    "label[.4,.45;Rail depot / Door direction]",
+    "label[.4,.45;"..(tram and "Tram" or "Rail").." depot / Door direction]",
     "label[.4,1.06;Choose the side that connects to the track.]"}
+  if choice==nil then b[#b+1]="style[rail_door_auto;bgimg=bl_button_active.png]" end
+  b[#b+1]="button[2.94,2.34;2.31,.64;rail_door_auto;Face me]"
   for _,dir in ipairs({3,0,2,1}) do
     local x,y=dir==0 and .42 or dir==2 and 5.47 or 2.94,dir==3 and 1.48 or dir==1 and 3.18 or 2.34
-    local active=(V.rail_dir or 2)==dir
+    local active=choice==dir
     local key="rail_door_"..dir
     if active then b[#b+1]="style["..key..";bgimg=bl_button_active.png]" end
     b[#b+1]=("button[%g,%g;2.31,.64;%s;%s]"):format(x,y,key,esc(tram_dir[dir]))
@@ -1188,10 +1201,10 @@ function U.depot_direction_fields(p,f)
       chosen=d
     end
   end
-  if not chosen then return true end
-  V.rail_dir,V.depot_direction_open=chosen,nil
+  if chosen==nil and not f.rail_door_auto or chosen~=nil and f.rail_door_auto then return true end
+  V[V.depot_direction_open],V.depot_direction_open=chosen,nil
   core.close_formspec(n,"luanttd_core:rail_depot_direction")
-  U.status(p,"Depot door faces "..tram_dir[chosen]..". Click a tile to build or turn an empty depot.")
+  U.status(p,chosen~=nil and ("Depot door faces "..tram_dir[chosen]..".") or "Depot door faces you.")
   return true
 end
 local road_terminal_kind={road_station="bus",truck_stop_tool="truck",road_depot="depot"}
@@ -1206,7 +1219,8 @@ end
 function U.road_auto_terminal(p,tool,id)
   local kind=road_terminal_kind[tool]
   if kind then return {tool="stock_terminal_auto",kind=kind,first=id,
-    adjacent=kind~="depot" and p:get_player_control().aux1==true} end
+    adjacent=kind~="depot" and p:get_player_control().aux1==true,
+    preferred_direction=kind=="depot" and DepotFacing(p) or nil} end
 end
 function U.road_stop_gesture(p,tool)
   if not api.authority_handoff then return false end
@@ -1715,7 +1729,7 @@ function U.rail_overlay(p,id)
   local ghost=V.rail_ghost
   if ghost and ghost.id==id then return ghost.pieces end
 end
-local function quote_rail(n,V,id)
+local function quote_rail(p,n,V,id)
   local r=api.rail_build
   local tool=V.tool
   local code=rail_tool_code[tool]
@@ -1726,7 +1740,7 @@ local function quote_rail(n,V,id)
   elseif tool=="rail_platform" then
     if not V.anchor then return nil,"Mark first end of the railway platform.",true end
     return r.quote_platform(n,V.anchor,id,d)
-  elseif tool=="rail_depot_tool" then return r.quote_depot(n,id,d)
+  elseif tool=="rail_depot_tool" then return r.quote_depot(n,id,U.rail_depot_request(p,V,id).direction)
   elseif tool=="rail_signal_remove" then return r.quote_remove_signal(n,id)
   else return r.quote_signal(n,id,d,tool=="rail_signal_oneway",tool=="rail_signal_block") end
 end
@@ -2216,7 +2230,8 @@ local function authority_preview(p,id,hit)
     kind,request="rail",{tool="station",first=V.anchor or id,last=id,axis=l.axis,
       tracks=l.tracks,length=l.length,separate=l.separate,drag=l.drag}
   elseif tool=="rail_depot_tool" then
-    kind,request="rail",{tool="depot",first=id,direction=V.rail_dir or 2}
+    kind,request="rail",U.rail_depot_request(p,V,id)
+    label=label.." · Door faces "..tram_dir[request.direction]
   elseif tool=="rail_crossing_tool" or tool=="rail_waypoint_place" then
     kind,request="rail",{tool=tool=="rail_crossing_tool" and "crossing" or "waypoint",first=id}
   elseif U.tree_gesture(tool) then
@@ -2255,7 +2270,8 @@ local function authority_preview(p,id,hit)
     if request.tool=="stock_terminal" then label=road_terminal_label(request)
     elseif request.tool=="stock_terminal_auto" then label=road_terminal_title[request.kind].." · Auto orientation" end
   elseif dock=="dock" or dock=="depot" or tool=="ship_buoy" then
-    kind,request="transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=V.ship_axis or 0}
+    kind,request="transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=U.ship_depot_axis(p,V,dock)}
+    if dock=="depot" then label="Ship depot"..(request.axis==0 and " · East–West" or " · North–South") end
   elseif dock=="lock" or dock=="canal" or dock=="aqueduct" then
     if dock~="lock" and not V.anchor then return ids,true,"Mark the first waterway tile." end
     kind,request="transport",{mode="ship",operation="waterwork",kind=dock,tile=V.anchor or id,last=id}
@@ -2265,9 +2281,10 @@ local function authority_preview(p,id,hit)
   elseif tool=="structure_tunnel" or tool=="rail_span_tunnel" then
     kind,request="transport",{mode=tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id}
   else
-    local tram,cells,direction,face=tram_request(V,id)
+    local tram,cells,direction,face=tram_request(p,V,id)
     if tram then
       if tool=="tram_track" and not V.anchor then return ids,true,"Mark the first tramway tile." end
+      if tool=="tram_depot" then label="Tram depot" end
       if face then label=label.." · "..face end
       if tool=="tram_track" then
         kind,request="transport",{mode="tram",operation="build",kind=tram,cells=cells,direction=direction}
@@ -2302,6 +2319,9 @@ local function authority_preview(p,id,hit)
     return ids,false,why
   end
   local cells=q.tiles or ids
+  if request.tool=="stock_terminal_auto" and q.depot_direction~=nil then
+    label="Road depot · Door faces "..tram_dir[q.depot_direction]
+  end
   local description=("%s  |  %s  ·  %d tile%s"):format(label,dollars(q.cost or 0),#cells,#cells==1 and "" or "s")
   if request.mode=="air" and q.noise then
     local a=q.noise
@@ -2495,11 +2515,11 @@ function U.preview(p,id,hit)
     return {id},q~=nil,hint
   end
   if rail_tool_labels[V.tool] and api.rail_build then
-    local plan,msg,anchor=quote_rail(n,V,id)
+    local plan,msg,anchor=quote_rail(p,n,V,id)
     if not plan then return {id},not not anchor,msg end
     local title=rail_tool_labels[V.tool]
     if plan.kind=="depot" then
-      title=(plan.rotate and "Rotate depot" or title).."  ·  Door faces "..tram_dir[V.rail_dir or 2]
+      title=(plan.rotate and "Rotate depot" or title).."  ·  Door faces "..tram_dir[U.rail_depot_request(p,V,id).direction]
         ..(plan.foundation=="leveled" and "  ·  Level foundation" or "").."  ·  Right-click for direction"
     elseif plan.kind=="signal" then title=title.."  ·  Train travels "..tram_dir[V.rail_dir or 2] end
     if V.rail_remove and plan.kind=="track" then title="Remove "..title:lower() end
@@ -2556,7 +2576,7 @@ function U.preview(p,id,hit)
       if not plan then return {id},false,api.shipyard.reason(reason) end
       return ship_span(plan),true,("Aqueduct  |  %s  ·  %d tiles"):format(dollars(plan.price),plan.total_length)
     end
-    local plan,reason=api.shipyard.network.quote(S,n,ship,id,V.ship_axis or 0)
+    local plan,reason=api.shipyard.network.quote(S,n,ship,id,U.ship_depot_axis(p,V,ship))
     if not plan then return {id},false,api.shipyard.reason(reason) end
     local label=ship=="dock" and "Dock" or ("Ship depot  ·  "..(plan.axis==0 and "East–West" or "North–South"))
     return plan.tiles,true,label.."  |  "..dollars(plan.cost)
@@ -2565,7 +2585,7 @@ function U.preview(p,id,hit)
     local valid,hint=tram_order_target(n,V,id)
     return {id},not not valid,hint
   end
-  local tram,tram_ids,direction,face=tram_request(V,id)
+  local tram,tram_ids,direction,face=tram_request(p,V,id)
   if tram and api.tram then
     if V.tool=="tram_track" and not V.anchor then return tram_ids,true,"Mark start of tramway." end
     local proposed,price=api.tram.network.plan(S,n,tram,tram_ids,direction,api.tram.busy)
@@ -2792,7 +2812,7 @@ function U.build_world(p,id,hit)
       return
     end
     if V.tool=="rail_depot_tool" then
-      worker_build(n,V,"rail",{tool="depot",first=id,direction=V.rail_dir or 2});return
+      worker_build(n,V,"rail",U.rail_depot_request(p,V,id));return
     end
     local surface=R.host_tile and R.host_tile(id)
     if rail_orders[V.tool] then
@@ -2881,7 +2901,7 @@ function U.build_world(p,id,hit)
       end)
       return
     end
-    local tram,cells,direction=tram_request(V,id)
+    local tram,cells,direction=tram_request(p,V,id)
     if tram then
       if V.tool=="tram_track" and not V.anchor then V.anchor=id;V.status="Choose the end of the tramway.";return end
       V.anchor=nil
@@ -2901,7 +2921,7 @@ function U.build_world(p,id,hit)
       return
     end
     if dock=="dock" or dock=="depot" or V.tool=="ship_buoy" then
-      worker_build(n,V,"transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=V.ship_axis or 0})
+      worker_build(n,V,"transport",{mode="ship",operation="build",kind=dock or "buoy",tile=id,axis=U.ship_depot_axis(p,V,dock)})
       return
     end
     if airfield_tools[V.tool] and V.tool~="airfield_remove" then
@@ -3051,7 +3071,7 @@ function U.build_world(p,id,hit)
     return
   end
   if rail_tool_labels[V.tool] and api.rail_build then
-    local plan,note,anchor=quote_rail(n,V,id)
+    local plan,note,anchor=quote_rail(p,n,V,id)
     if anchor then V.anchor=id;V.status="Mark the last tile.";return end
     if not plan then V.status=note;return end
     local ok,msg=api.rail_build.build(n,plan)
@@ -3140,7 +3160,7 @@ function U.build_world(p,id,hit)
       local plan,changed=api.aqueduct.build(S,n,V.anchor,id)
       if plan then dirty,cost=changed,plan.price;R.raise_bound(plan.deck) else cost=changed end
     else
-      local plan,reason=api.shipyard.network.build(S,n,ship,id,V.ship_axis or 0)
+      local plan,reason=api.shipyard.network.build(S,n,ship,id,U.ship_depot_axis(p,V,ship))
       if plan then dirty,cost=plan.tiles,plan.cost else cost=reason end
     end
     if not dirty then V.status=api.shipyard.reason(cost);return end
@@ -3160,7 +3180,7 @@ function U.build_world(p,id,hit)
     V.status=msg
     return
   end
-  local tram,tiles,direction=tram_request(V,id)
+  local tram,tiles,direction=tram_request(p,V,id)
   if tram and api.tram then
     if V.tool=="tram_track" and not V.anchor then
       V.anchor=id;V.status="Choose the end of the tramway.";return

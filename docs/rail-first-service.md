@@ -144,8 +144,10 @@ which track or direction it protects.
 
 ## Placing a depot
 
-With **Rail depot** selected, right-click and choose the exit direction,
-then use the ordinary placement preview and click. The same tool can
+With **Rail depot** selected, the door faces you by default. The
+placement preview shows the compass direction. Right-click to pick a
+fixed direction or select **Face me** to return to automatic facing.
+The same tool can
 rotate a clear owned depot; a no-change quote costs nothing. Keep the
 exit next to the line if you want automatic attachment. The post-build
 connections are independent stock rail quotes, not free automatic

@@ -2534,7 +2534,11 @@ return function(api,qa_ui)
     if t then px,pz=Sim.xy(t) end
     local camera=player and {pos=player:get_pos(),eye=player:get_properties().eye_height,
       pitch=player:get_look_vertical(),yaw=player:get_look_horizontal()} or nil
-    local obj={camera=camera,present=player~=nil,hotbar=player and player:get_wield_index() or 0,
+    local depot_hint
+    if rail_build_fixture and player and t and player:get_wielded_item():get_name()=="luanttd_core:menu_rail_depot_tool" then
+      depot_hint=select(3,qa_ui.preview(player,t))
+    end
+    local obj={depot_hint=depot_hint,camera=camera,present=player~=nil,hotbar=player and player:get_wield_index() or 0,
       menu=player and api.world.menu(player),hotbar_layout=player and api.world.hotbar_layout and api.world.hotbar_layout(player),crowd=crowd_samples,wield_item=player and player:get_wielded_item():get_name(),
       jump_map=extended.jump_map_live,
       water_fx=extended.water_fx and extended.water_fx(player),
@@ -2628,15 +2632,17 @@ return function(api,qa_ui)
     end
     return false
   end)
-  core.register_chatcommand("qa_aim",{params="<x> <z>",func=function(name,args)
-    local a,b=args:match("^(%d+) (%d+)$")
+  core.register_chatcommand("qa_aim",{params="<x> <z> [side]",func=function(name,args)
+    local a,b,side=args:match("^(%d+) (%d+) *(%a*)$")
     local x,z=tonumber(a),tonumber(b)
-    if api.road_first or name~=username or not x or not Sim.id(x,z) then return false,"Invalid QA aim" end
+    if api.road_first and not core.settings:get_bool("luanttd_native_depot_facing",false) or name~=username or not x or not Sim.id(x,z) then return false,"Invalid QA aim" end
     local p=core.get_player_by_name(name)
     local pitch=1.52
     local eye=p:get_properties().eye_height
-    p:set_pos({x=x*2+.5,y=9,z=z*2+.5-(9+eye-.5)/math.tan(pitch)})
-    p:set_look_horizontal(0)
+    local yaw=({north=0,east=math.pi/2,south=math.pi,west=3*math.pi/2})[side] or math.pi/2
+    local dist=(9+eye-.5)/math.tan(pitch)
+    p:set_pos({x=x*2+.5+math.sin(yaw)*dist,y=9,z=z*2+.5-math.cos(yaw)*dist})
+    p:set_look_horizontal(yaw)
     p:set_look_vertical(pitch)
     aim=x..","..z
     return true

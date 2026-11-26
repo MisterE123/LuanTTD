@@ -130,8 +130,10 @@ return function(Sim,s,oneway,Bank,host)
   end
   local function summary(q)
     local ids,parts={},{}
+    local depot_direction
     for i,c in ipairs(q.changes) do
       ids[i]=c.id or c.tile
+      if c.build=="road_depot" and c.depot_dir then depot_direction=4-c.depot_dir end
       parts[i]=table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
         tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation),tostring(c.rail_tracks),tostring(c.railtype),
         c.rail_owner and ("%q"):format(c.rail_owner) or "-",tostring(c.depot_dir),tostring(c.stop_axis),
@@ -148,7 +150,7 @@ return function(Sim,s,oneway,Bank,host)
       for _,id in ipairs(keys) do parts[#parts+1]="town:"..id..":"..q.ratings[id] end
     end
     if q.unfunded then parts[#parts+1]="unfunded:"..tostring(q.first_unfunded) end
-    return {tiles=ids,cost=q.cost,topology=s.topology,terrain=s.corner_grid and s.corner_grid.revision,stopped_at=q.stopped_at,stop_reason=q.stop_reason,ticket=table.concat(parts,"/")}
+    return {tiles=ids,cost=q.cost,depot_direction=depot_direction,topology=s.topology,terrain=s.corner_grid and s.corner_grid.revision,stopped_at=q.stopped_at,stop_reason=q.stop_reason,ticket=table.concat(parts,"/")}
   end
   function M.quote(player,request)
     local q,why=plan(player,request)

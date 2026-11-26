@@ -34,6 +34,18 @@ assert(chooser.choices[2].id==group and chooser.cost==200)
 local d=id(10,8)
 place(auto(d,"depot"))
 assert(s.tiles[d].depot_dir==3 and S.road_bits(s,id(10,9))==11)
+-- Facing preference can break a tie, but never sacrifices an
+-- existing joined road mouth just because the builder faces away.
+local tied=id(26,16)
+local east,west=id(27,16),id(25,16)
+s.tiles[east].build,s.tiles[east].owner,s.tiles[east].road_bits="road",n,10
+s.tiles[west].build,s.tiles[west].owner,s.tiles[west].road_bits="road",n,10
+local looking=auto(tied,"depot");looking.preferred_direction=2
+assert(assert(C.quote(n,looking)).depot_direction==2)
+looking.preferred_direction=0
+assert(assert(C.quote(n,looking)).depot_direction==0)
+s.tiles[west].road_bits=5
+assert(assert(C.quote(n,looking)).depot_direction==2)
 local corner=id(20,9)
 assert(S.build(s,n,"road",S.line(corner,id(20,12))))
 assert(select(2,C.quote(n,auto(corner,"bus"))):find("corner",1,true))

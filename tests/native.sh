@@ -77,6 +77,7 @@ bayline_development_tools = $([[ ${BAYLINE_NATIVE_FRESH:-0} == 1 ]] && echo fals
 bayline_road_oneway_preview = $([[ ${BAYLINE_NATIVE_ONEWAY:-0} == 1 ]] && echo true || echo false)
 bayline_bridge_construction_preview = $([[ ${BAYLINE_NATIVE_LANDSCAPE_BRIDGE:-0} == 1 ]] && echo true || echo false)
 bayline_rail_dispatch_preview = $([[ ${BAYLINE_NATIVE_RAIL_DISPATCH:-0} == 1 || ${BAYLINE_NATIVE_RAIL_SHUTTLE:-0} == 1 || ${BAYLINE_NATIVE_RAIL_GRADE:-0} == 1 || ${BAYLINE_NATIVE_PAID_RAIL:-0} == 1 || ${BAYLINE_NATIVE_RAIL_BUILD:-0} == 1 ]] && echo true || echo false)
+luanttd_native_depot_facing = $([[ ${LUANTTD_NATIVE_DEPOT_FACING:-0} == 1 ]] && echo true || echo false)
 bayline_native_shuttle = $([[ ${BAYLINE_NATIVE_RAIL_SHUTTLE:-0} == 1 ]] && echo true || echo false)
 bayline_rail_construction_preview = $([[ ${BAYLINE_NATIVE_RAIL_BUILD:-0} == 1 || ${BAYLINE_NATIVE_RAIL_SPAN:-0} == 1 || ${BAYLINE_NATIVE_CROSSING:-0} == 1 ]] && echo true || echo false)
 bayline_native_owned_default = $([[ ${BAYLINE_NATIVE_OWNED_DEFAULT:-0} == 1 ]] && echo true || echo false)

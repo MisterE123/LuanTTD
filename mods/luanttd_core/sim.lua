@@ -2207,7 +2207,12 @@ function M.auto_road_terminal_plan(s,owner,id,request)
     end
     prefs[#prefs+1]={dir=4-d,score=score}
   end
-  table.sort(prefs,function(a,b) return a.score>b.score or a.score==b.score and a.dir<b.dir end)
+  local facing=kind=="depot" and request.preferred_direction
+  table.sort(prefs,function(a,b)
+    if a.score~=b.score then return a.score>b.score end
+    if (a.dir==facing)~=(b.dir==facing) then return a.dir==facing end
+    return a.dir<b.dir
+  end)
   local reason
   for _,choice in ipairs(prefs) do
     local q,why=propose(choice.dir,false)
