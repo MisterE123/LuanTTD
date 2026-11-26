@@ -562,7 +562,7 @@ core.register_globalstep(function(dt)
   api.interest.refresh(players)
   if api.farm_view then api.farm_view.step(dt) end
   render.step_ambient_particles(dt)
-  render.step_lighthouse_beams(dt)
+  render.step_local_optics(dt)
   if online then render.refresh_interest() else render.remove_vehicle_views() end
   if api.rail_platform_view then api.rail_platform_view.step(dt,online) end
 

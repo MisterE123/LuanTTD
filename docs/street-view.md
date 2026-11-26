@@ -31,3 +31,7 @@ controls to swim and hold jump to surface and reach a bank.
 light showers and mist. These have no effects on vehicle operations,
 construction, simulation speed, or the world fog. It is a per-player
 presentation control and does not change the shared world.
+
+Country Airfield windsocks stream downwind and ripple in the breeze.
+They follow the prevailing cloud drift with small local variation.
+This is visual weather; it does not affect aircraft handling.

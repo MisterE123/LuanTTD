@@ -1155,8 +1155,15 @@ return function(api)
   end
   local lighthouse_beams=stock_scenery.lighthouse and dofile(modpath.."/lighthouse_beam_view.lua")(core,Sim)
   local street_lights=roadside_view and dofile(modpath.."/street_light_view.lua")(core,Sim,roadside_view.lamps)
-  function R.step_lighthouse_beams(dt,viewers)
-    if not (lighthouse_beams or street_lights) then return end
+  local windsocks=airfield_nodes.country and dofile(modpath.."/airport_windsock.lua")(
+    core,Sim,dofile(modpath.."/ambient_wind.lua"),function(id,x,z,field)
+      local _,base=terrain.tile(id)
+      local level=field.level or base
+      local node=level and core.get_node_or_nil({x=2*x,y=level+1,z=2*z})
+      if node and node.name==airfield_nodes.country[1][0] then return level end
+    end)
+  function R.step_local_optics(dt,viewers)
+    if not (lighthouse_beams or street_lights or windsocks) then return end
     if not viewers then
       viewers={}
       for _,player in ipairs(core.get_connected_players()) do
@@ -1166,7 +1173,10 @@ return function(api)
     end
     if lighthouse_beams then lighthouse_beams.step(dt,S,viewers) end
     if street_lights then street_lights.step(dt,S,viewers) end
+    if windsocks then windsocks.step(dt,S,viewers) end
+
   end
+  R.step_lighthouse_beams=R.step_local_optics -- existing native fixtures
   local river_view,river_revision,river_topology,river_directions
   if S.stock_generated_profile and S.stock_generated_profile.river_stats then
     river_view=dofile(modpath.."/river_presentation.lua")(Sim)

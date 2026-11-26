@@ -413,7 +413,7 @@ def hangar(m):
               (x+dx*1.176,zz,.949),.016,.014,8)
         B(m,"Open hall truss tie beam","dark_metal",x,zz,2.361,.032,.904,.935,.004)
 
-def wind(m):
+def wind(m, static_only=False):
     # Stock border grass may house fence/flag; only three low fence bays at
     # the sides north of the runway's entire 360-degree turn envelope.
     for x in (-.413,7.411):
@@ -426,27 +426,29 @@ def wind(m):
     x,z=-.282,1.815
     B(m,"Windsock poured footing","foundation",x,z,.125,.132,.003,.091,.012)
     T(m,"Windsock galvanized mast","dark_metal",(x,z,.07),(x,z,.91),.023,.017,10)
-    T(m,"Windsock swiveling brass support","ochre",(x,z,.898),(x+.042,z-.04,.898),.014,.014,8)
-    def ring(t,r):
-        xx=x+.04+t*.375
-        zz=z-.04-t*.32
-        h=.91-.105*t*t
-        return [(xx+sin(2*pi*j/12)*r*.58,zz+sin(2*pi*j/12)*r*.66,h+cos(2*pi*j/12)*r)
-                for j in range(12)]
-    for j in range(6):
-        a,b=j/6,(j+1)/6
-        l,r=ring(a,.101-.061*a),ring(b,.101-.061*b)
+    T(m,"Windsock brass swivel collar","ochre",(x,z,.884),(x,z,.928),.026,.026,10)
+    if not static_only:
+        T(m,"Windsock swiveling brass support","ochre",(x,z,.898),(x+.042,z-.04,.898),.014,.014,8)
+        def ring(t,r):
+            xx=x+.04+t*.375
+            zz=z-.04-t*.32
+            h=.91-.105*t*t
+            return [(xx+sin(2*pi*j/12)*r*.58,zz+sin(2*pi*j/12)*r*.66,h+cos(2*pi*j/12)*r)
+                    for j in range(12)]
+        for j in range(6):
+            a,b=j/6,(j+1)/6
+            l,r=ring(a,.101-.061*a),ring(b,.101-.061*b)
+            for i in range(12):
+                ids=(i,(i+1)%12)
+                q=(l[ids[0]],r[ids[0]],r[ids[1]],l[ids[1]])
+                face(m,"Open striped wind sleeve cloth","orange" if j%2==0 else "flag_bone",q)
+                # The folded inside face is real, dark inner textile rather than
+                # requiring an alpha texture or rendering back faces.
+                qi=tuple((a+.001,b+.001,c) for a,b,c in q[::-1])
+                face(m,"Dark unoccluded open sleeve underside","red" if j%2==0 else "board",qi)
+        ring_a=ring(0,.101)
         for i in range(12):
-            ids=(i,(i+1)%12)
-            q=(l[ids[0]],r[ids[0]],r[ids[1]],l[ids[1]])
-            face(m,"Open striped wind sleeve cloth","orange" if j%2==0 else "flag_bone",q)
-            # The folded inside face is real, dark inner textile rather than
-            # requiring an alpha texture or rendering back faces.
-            qi=tuple((a+.001,b+.001,c) for a,b,c in q[::-1])
-            face(m,"Dark unoccluded open sleeve underside","red" if j%2==0 else "board",qi)
-    ring_a=ring(0,.101)
-    for i in range(12):
-        T(m,"Windsock mouth brazed ring","red",ring_a[i],ring_a[(i+1)%12],.007,.007,7)
+            T(m,"Windsock mouth brazed ring","red",ring_a[i],ring_a[(i+1)%12],.007,.007,7)
     for x in (.36,3.22,4.62):
         lantern(m,x,1.272,.386,"Concourse pole lantern",True)
 
@@ -489,7 +491,7 @@ def atlas(dest):
 def export():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     m=mesh()
-    tarmac(m);terminal(m);hangar(m);wind(m)
+    tarmac(m);terminal(m);hangar(m);wind(m,static_only=True)
     mats=RAIL.materials()
     for i,n in enumerate(PAL):
         mats[i].name=n.replace("_"," ").title()

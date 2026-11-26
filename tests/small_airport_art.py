@@ -98,7 +98,7 @@ def footprint():
     assert all(len(all_parts[k])>10 for k in (
         "Flat_painted_runway_identifiers","Historic_corrugated_steel_hangar_roof",
         "Hangar_longitudinal_opaque_steel_walls","Open_bi-parting_door_leaves_against_flanks",
-        "Open_striped_wind_sleeve_cloth","Analog_clock_hour_indexes"))
+        "Windsock_brass_swivel_collar","Analog_clock_hour_indexes"))
     png=(ROOT/"mods/luanttd_core/textures/bl_small_airport_atlas.png").read_bytes()
     assert png[:8]==b"\x89PNG\r\n\x1a\n" and int.from_bytes(png[16:20],"big")>=256
     return all_parts

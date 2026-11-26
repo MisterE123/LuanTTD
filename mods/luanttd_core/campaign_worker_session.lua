@@ -120,7 +120,7 @@ return function(core,mod,api,ui,render,checkpoint,filename,bootstrap,callbacks)
     if api.farm_view then api.farm_view.step(dt,positions) end
     render.step_ambient_particles(dt,positions)
     render.step_worker_actors(dt)
-    render.step_lighthouse_beams(dt,positions)
+    render.step_local_optics(dt,positions)
     if api.coal_view then
       local sample=#positions>0 and H.solar_clock()
       api.coal_view.step(dt,#positions>0,sample and math.min(6,sample.rate*.55) or 0)

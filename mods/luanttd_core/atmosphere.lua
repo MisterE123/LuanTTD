@@ -49,6 +49,8 @@ end
 -- headlights, beacons, and other mods) match the authoritative sun.
 function A.start(core,calendar_phase,storage)
   local haze,moonlight=true,.53
+  local mod=(core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local Wind=dofile(mod.."/ambient_wind.lua")
   local key,fixed_sun="atmosphere_always_day_v1",.40
   local fixed=storage and storage:get_int(key)==1 or false
   local L={}
@@ -127,7 +129,7 @@ function A.start(core,calendar_phase,storage)
     p:set_moon({visible=true,scale=.79,texture="bl_coastal_moon.png",tonemap=""})
     p:set_stars({visible=true,count=720,scale=.78,star_color="#D6E4FFB5"})
     if haze then
-      p:set_clouds({density=.17,height=66,thickness=6,speed={x=1.1,z=.4},
+      p:set_clouds({density=.17,height=66,thickness=6,speed=Wind.prevailing,
         color="#E5ECE4D2",ambient="#243B58",shadow="#91A8B8"})
     end
     if p.set_lighting then
