@@ -40,8 +40,19 @@ assert(not s.tiles[a].rail_type and not s.tiles[a].rail_tracks)
 assert(c.cash==cash-660-200+140)
 local layout={axis=0,tracks=1,length=1,railtype=2}
 local before=c.cash
+s.sites={{id=1,kind="town",tile=Sim.id(33,32),name="Station Test"}}
+s.stock_road_town_policy={dist_local_authority=3}
+c.stock_town_authority_ratings={[1]=-200}
+local denied,reason=Tools.quote_station(owner,b,b,layout)
+assert(not denied and reason:find("local authority",1,true))
+assert(Tools.quote_depot(owner,Sim.id(36,31),2,2),"Depot is not governed by station permission")
+assert(Tools.quote_track(owner,Sim.id(32,31),Sim.id(32,31),X,false,2),"Track is independent of station permission")
+s.stock_road_town_policy.dist_local_authority=2
 local terminal=assert(Tools.quote_station(owner,b,b,layout))
 assert(terminal.price==510 and terminal.gauge==2)
+s.stock_road_town_policy.dist_local_authority=3
+assert(not Tools.build(owner,terminal) and c.cash==before,"An intervening town refusal must invalidate the rail ticket")
+s.stock_road_town_policy.dist_local_authority=2
 assert(Tools.build(owner,terminal))
 assert(s.tiles[b].rail_station_id and s.tiles[b].rail_type==2 and c.cash==before-510)
 local engine_shed=Sim.id(36,31)

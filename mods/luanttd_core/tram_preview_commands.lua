@@ -5,6 +5,7 @@ return function(api,N,Run)
   local errors={
     FLAT_LAND_REQUIRED="Rotate this tram facility so its entrances meet level ground, or choose another tile.",
     TRAM_STOP_ROAD_FOUNDATION="That road would need a different foundation for a level tram platform.",
+    LOCAL_AUTHORITY_REFUSES="The local council won't let your company build a station here.",
     TRAM_SITE_CLEARANCE="Choose a clear site away from overhead or underground structures.",
     PROTECTED_TILE="The tile is protected or has incompatible infrastructure.",
     VEHICLE_IN_THE_WAY="A vehicle occupies that tile.",

@@ -143,6 +143,9 @@ return function(Sim,T,Terrain,Span)
         if not matched then return nil,"TRAM_DRAG_NOT_CONNECTED" end
       end
     end
+    if kind=="drive_stop" and Sim.road_tree_authority and not Sim.road_tree_authority().new_station(s,owner,ids[1]) then
+      return nil,"LOCAL_AUTHORITY_REFUSES",ids[1]
+    end
     for _,id in ipairs(ids) do
       local request=arg or requests[id]
       if request==nil then return nil,"INVALID_PARAMETER" end

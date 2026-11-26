@@ -19,6 +19,13 @@ c.cash=100000
 c.stock_town_authority_ratings={[1]=-200}
 local p,err=A.quote(s,owner,tile(11,8),"country")
 assert(not p and err=="AIRPORT_AUTHORITY_RATING")
+s.stock_road_town_policy.dist_local_authority=3
+assert(A.quote(s,owner,tile(11,8),"country"),"Boundary must be excluded")
+s.stock_road_town_policy.dist_local_authority=nil
+s.stock_road_town_policy.station_noise_level=false
+assert(select(2,A.quote(s,owner,tile(11,8),"country"))=="AIRPORT_AUTHORITY_RATING",
+  "Town rating still applies with airport noise disabled")
+s.stock_road_town_policy.station_noise_level=true
 c.stock_town_authority_ratings[1]=-199
 local q,e=A.quote(s,owner,tile(11,8),"country")
 assert(q,e)

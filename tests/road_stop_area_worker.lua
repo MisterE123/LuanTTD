@@ -13,6 +13,12 @@ for z=10,12 do assert(S.build(s,own,"road",S.line(id(5,z),id(15,z)))) end
 local C=dofile(m.."campaign_road_construction.lua")(S,s)
 local r={tool="stock_stop_area",first=id(9,10),last=id(9,11),kind="bus",direction=0,through=true}
 local initial=p.cash
+s.sites={{id=1,name="North",kind="town",tile=id(9,7)}}
+s.stock_road_town_policy={dist_local_authority=4}
+p.stock_town_authority_ratings={[1]=-200}
+assert(select(2,C.quote(own,r))=="The local council won't let your company build a station here.")
+assert(p.cash==initial)
+s.stock_road_town_policy.dist_local_authority=3
 local q=assert(C.quote(own,r))
 assert(q.cost==400 and #q.tiles==2 and p.cash==initial)
 assert(C.commit(own,r,q))

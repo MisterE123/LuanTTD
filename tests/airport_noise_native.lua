@@ -80,6 +80,14 @@ local function begin()
                 p:set_pos({x=2*x-4,y=top+3.8,z=2*z-6})
                 p:set_look_horizontal(math.atan2(-4,6));p:set_look_vertical(.52)
                 core.after(1.5,function()
+                  local show=core.show_formspec
+                  core.show_formspec=function(name,form,body)
+                    if name==owner and form=="luanttd_core:town_authority" and body~="" then
+                      assert(body:find("New stations: your rating allows construction.",1,true))
+                      core.show_formspec=show
+                    end
+                    return show(name,form,body)
+                  end
                   ui.open_town_authority(p,best.id)
                   core.after(.6,function()
                     core.log("action","NATIVE AIRPORT NOISE FRAME")

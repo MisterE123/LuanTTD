@@ -3313,6 +3313,12 @@ function U.open_town_authority(p,town)
       end
       exit=exit+.85
     end
+    if row.new_stations~=nil then
+      local station=row.new_stations and "New stations: your rating allows construction." or
+        "New stations: refused at your current rating."
+      action=action..("label[.45,%g;%s]"):format(exit+.22,esc(station))
+      exit=exit+.61
+    end
     if row.airport_noise then
       local noise=row.airport_noise
       action=action..("label[.45,%g;%s]"):format(exit+.22,

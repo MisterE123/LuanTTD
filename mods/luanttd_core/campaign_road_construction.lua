@@ -29,7 +29,9 @@ return function(Sim,s,oneway,Bank,host)
       if not tr then return nil,"Tramway tools are unavailable in this campaign." end
       local busy=tr.busy_probe and tr.busy_probe() or tr.busy
       local changes,cost=tr.net.plan(s,player,request.kind,{first},request.direction,busy)
-      if not changes then return nil,cost end
+      if not changes then
+        return nil,cost=="LOCAL_AUTHORITY_REFUSES" and Sim.stock_road_terminal_error(cost) or cost
+      end
       local company=s.companies[player]
       if not company or cost>company.cash then return nil,"Not enough cash." end
       for _,c in ipairs(changes) do
@@ -118,6 +120,9 @@ return function(Sim,s,oneway,Bank,host)
         return nil,"No stock mail or freight service in this campaign."
       end
       if s.tiles[first].station then return nil,"Build a new truck stop rather than converting a station." end
+      if not Sim.road_tree_authority().new_station(s,player,first) then
+        return nil,Sim.stock_road_terminal_error("LOCAL_AUTHORITY_REFUSES")
+      end
       local changes,cost=Sim.plan(s,player,"road_station",{first})
       if not changes then return nil,cost end
       return {changes=changes,cost=cost}

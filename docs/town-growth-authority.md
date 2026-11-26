@@ -87,3 +87,20 @@ population. A second run vetoes the exact house after its real planner
 draws and proves no membership, map or house-count mutation and no
 retry. This is headless Lua host/source QA, not native visual or SQLite
 qualification and not full OpenTTD TownTick behavior.
+
+## Permission to build transport stations
+
+Bus and truck stops, tram stops, rail platforms, airports and shore
+docks use the same OpenTTD 16.0-RC1 check. A **Permissive** council
+skips this rating gate. Otherwise, if a town is strictly inside the
+local authority radius, it must rate the building company **above
+−200**. A town exactly on the radius does not govern the site. Ties go
+to the lower stock town ID. Tracks and depots are not stations, and
+airport noise is a separate restriction. The Local Authority panel
+shows whether your company's current rating allows new stations.
+
+The search indexes fixed town positions in generated maps and only
+looks in nearby buckets. Tests match all 512 full-map reference
+queries on a simulated 4096 × 4096 map, including edges and the strict
+radius. The quote and final construction both check the current
+rating, so a stale approval cannot spend company funds.

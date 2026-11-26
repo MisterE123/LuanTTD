@@ -2015,6 +2015,9 @@ function M.stock_road_terminal_error(why)
   return terminal_errors[why] or ("Cannot build the selected road terminal: "..tostring(why))
 end
 function M.stock_road_terminal_plan(s,owner,id,req)
+  if req.kind~="depot" and id and s.tiles[id] and not M.road_tree_authority().new_station(s,owner,id) then
+    return nil,"LOCAL_AUTHORITY_REFUSES"
+  end
   if not stock_road_terminals then
     load_road_rules()
     local path=debug and debug.getinfo(1,"S").source
@@ -2142,11 +2145,7 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
   local area,ids=road_stop_area.footprint(board,first,last,req.dir,req.through,12)
   if not area then return nil,ids end
   local policy=s.stock_road_town_policy or {}
-  local near=town_road_authority.nearest(s,area.tile)
-  if near and policy.tolerance~=3 and M.distance(near.tile,area.tile)<20 and
-      (company.stock_town_authority_ratings and company.stock_town_authority_ratings[near.id] or 500)<=-200 then
-    return nil,"LOCAL_AUTHORITY_REFUSES"
-  end
+  if not town_road_authority.new_station(s,owner,area.tile) then return nil,"LOCAL_AUTHORITY_REFUSES" end
   local function compatible(st)
     -- Road bus and truck facilities share the station; other modes
     -- have their own construction registries.

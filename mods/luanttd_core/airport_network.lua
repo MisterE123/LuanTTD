@@ -86,15 +86,11 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
       return nil,reasons[name] or "CITY_AIRPORT_NOT_INTRODUCED"
     end
     if not (s.corner_grid and origin and s.tiles[origin]) then return nil,"SELECT_AIRFIELD_ORIGIN" end
-    local town,distance=Sim.nearest_town(s,origin)
+    local town=Sim.nearest_town(s,origin)
     local policy=s.stock_road_town_policy or {}
     local tolerance=policy.tolerance or 0
-    local company=s.companies[owner]
-    if Noise and town and tolerance~=3 and distance<20 then
-      local ratings=company and company.stock_town_authority_ratings
-      if (ratings and ratings[town.id] or 500)<=-200 then
-        return nil,"AIRPORT_AUTHORITY_RATING"
-      end
+    if not Sim.road_tree_authority().new_station(s,owner,origin) then
+      return nil,"AIRPORT_AUTHORITY_RATING"
     end
     local x,z=Sim.xy(origin)
     local airport={owner=owner,origin=origin,x=x*16,z=z*16,rotation=0,

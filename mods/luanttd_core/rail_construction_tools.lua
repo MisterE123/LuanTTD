@@ -228,6 +228,10 @@ return function(api,Lab,Track,Run,prices)
     local plan,why=quote_pieces(owner,list,false,#list>1,gauge)
     return plan,why,list
   end
+  local station_authority_error="The local authority refuses a platform at your current company rating."
+  local function station_allowed(owner,id)
+    return not Sim.road_tree_authority or Sim.road_tree_authority().new_station(S,owner,id)
+  end
   local StationPlacement=dofile(upstream.."rail_station_placement.lua")
   function R.quote_station(owner,first,last,layout)
     if R.busy() then return nil,blocked() end
@@ -243,6 +247,7 @@ return function(api,Lab,Track,Run,prices)
       end
     end
     if #group~=area.w*area.h then return nil,"The station footprint is outside playable land.",group end
+    if not station_allowed(owner,group[1]) then return nil,station_authority_error,group end
     for _,id in ipairs(group) do
       local why=live_edit_guard(id);if why then return nil,why,group end
       if S.tiles[id].stock_void then return nil,"The station footprint is outside playable land.",group end
@@ -526,6 +531,7 @@ return function(api,Lab,Track,Run,prices)
     if not plan or plan.owner~=owner or plan.topology~=S.topology or R.busy() then
       return false,"The railway changed. Select the construction again."
     end
+    if plan.kind=="platform" and not station_allowed(owner,plan.ids[1]) then return false,station_authority_error end
     if plan.price>company(owner).cash then return false,"Your company cannot afford that railway work." end
     for _,id in ipairs(plan.ids or {}) do
       if plan.kind~="depot" then

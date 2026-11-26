@@ -41,6 +41,13 @@ assert(R.tram.net.construct(s,owner,"road",Sim.line(at(10,12),at(18,12))))
 if not mixed then assert(R.tram.net.construct(s,owner,"drive_stop",{east},0)) end
 local stations_before=s.next_station
 local request={tool="tram_facility",kind="drive_stop",first=west,direction=0}
+local nearest=assert(Sim.road_tree_authority().nearest(s,west))
+s.stock_road_town_policy={dist_local_authority=100}
+c.stock_town_authority_ratings={[nearest.id]=-200}
+local refusal=A.road_quote(owner,request)
+assert(not refusal.ok and refusal.why=="The local council won't let your company build a station here.")
+assert(R.tram.net.plan(s,owner,"depot",{depot},F.SE),"Tram depot does not request station permission")
+c.stock_town_authority_ratings[nearest.id]=-199
 local q=A.road_quote(owner,request)
 assert(q.ok and s.next_station==stations_before and not s.tiles[west].tram.tram_station)
 local placed=A.road_place(owner,request,q.value)

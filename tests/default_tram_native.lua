@@ -6,7 +6,8 @@
 local step_tram=assert(api.tram_clock)
 api.tram_clock=function() end
 local owner="Default Tram QA"
-local player={get_player_name=function() return owner end}
+local player={get_player_name=function() return owner end,
+  get_look_dir=function() return {x=-1,y=0,z=0} end}
 local function id(x,z) return assert(Sim.id(x,z)) end
 local function audit()
   assert(api.generated_world and settings:get("bayline_stock_workbenches")==nil and settings:get("bayline_tram_preview")==nil)
@@ -126,7 +127,20 @@ local function main(x,z,level)
   end
   local plat=id(rx,rz)
   assert(not S.tiles[plat].rail_tracks)
-  select_("rail_platform");click(plat);click(plat)
+  select_("rail_platform")
+  local council=Sim.road_tree_authority()
+  local town,distance=council.nearest(S,plat)
+  local saved_policy=S.stock_road_town_policy
+  local saved_ratings=c.stock_town_authority_ratings
+  S.stock_road_town_policy={tolerance=0,dist_local_authority=distance+1}
+  c.stock_town_authority_ratings={[town.id]=-200}
+  local cash=c.cash
+  local _,permitted,why=ui.preview(player,plat)
+  assert(not permitted and why:find("local authority",1,true))
+  ui.build_world(player,plat)
+  assert(not S.tiles[plat].rail_station_id and c.cash==cash,"A refusal may not spend or build")
+  S.stock_road_town_policy,c.stock_town_authority_ratings=saved_policy,saved_ratings
+  click(plat);click(plat)
   assert(S.tiles[plat].rail_station_id and S.tiles[plat].rail_tracks==1,"No direct platform placement")
   core.log("action","DEFAULT_RAIL_STATION_DIRECT_PASS Rail Station placed from the actual workshop on clean terrain")
 
