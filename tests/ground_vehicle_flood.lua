@@ -29,3 +29,19 @@ end
 assert(F.train_victims(0,99,true)==2 and F.train_victims(2^32-1,99,true)==101)
 assert(F.train_victims(2^31,9,false)==5)
 print("PASS stock ordered ground-body flood, two bridge ends, randomized victims, and per-vehicle wreck clock")
+
+-- RoadVehicle::Crash adds one driver, and retires much earlier than rail.
+assert(F.road_victims(0,99,true)==1 and F.road_victims(2^32-1,99,true)==100)
+assert(F.road_victims(2^31,9,false)==5 and F.road_victims(2^32-1,0,true)==1)
+assert(F.road_crash_age(true)==2000 and F.road_crash_age(false)==1)
+for started=0,31 do
+  local age,first=F.road_crash_age(true),nil
+  for tick=started+1,started+260 do
+    local due
+    age,due=F.road_wreck_tick(age,tick)
+    assert(age==2000+tick-started and due==(age>=2220 and tick%32==0))
+    if due and not first then first=age end
+  end
+  assert(first>=2220 and first<=2251)
+end
+print("PASS stock road casualties and one-body flood wreck retirement timing")

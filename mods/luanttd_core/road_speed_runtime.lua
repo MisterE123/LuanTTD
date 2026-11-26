@@ -350,12 +350,12 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     table.sort(ids)
     local function sample(id,k)
       local v=s.fleet[id]
-      local route,c=v.road_motion_frames,v.road_speed_state
+      local route,c=v and v.road_motion_frames,v and v.road_speed_state
       local frame
-      if v.route and route then
+      if v and v.route and route then
         c=c or init(s,v,route)
         frame=visible(c,route)
-      elseif v.road_stop_pose then frame=v.road_stop_pose end
+      elseif v then frame=v.road_stop_pose end
       local a=view[id]
       if not a then a={frames={},cursors={}};view[id]=a end
       a.frames[k]=frame or blank
@@ -371,14 +371,19 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       local records={}
       for _,id in ipairs(ids) do
         local v=s.fleet[id]
-        local f,c
-        if v.route and v.road_motion_frames then
-          c=init(s,v,v.road_motion_frames)
-          f=visible(c,v.road_motion_frames)
-        else f=v.road_stop_pose end
-        local rec=record_for(v,c)
-        records[id]=rec
-        if f then W.put(rec,f,c and c.lane_pose~=nil) end
+        if v and hooks.retire then
+          if hooks.retire(v,tick) then s.fleet[id]=nil;v=nil end
+        end
+        if v then
+          local f,c
+          if v.route and v.road_motion_frames then
+            c=init(s,v,v.road_motion_frames)
+            f=visible(c,v.road_motion_frames)
+          else f=v.road_stop_pose end
+          local rec=record_for(v,c)
+          records[id]=rec
+          if f then W.put(rec,f,c and c.lane_pose~=nil) end
+        end
       end
       local companion=hooks.companion
       local external=companion and companion.seed(s,W,tick,k)
@@ -391,33 +396,35 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
           next_external=next_external+1
         end
         local v=s.fleet[id]
-        local held=hooks.before(v,tick,ready[id])==true
-        local frames=v.road_motion_frames
-        if v.route and frames then
-          local c=init(s,v,frames)
-          local rec=records[id]
-          rec.clock=c
-          rec.stopped=v.running==false
-          local front=visible(c,frames)
-          if front and not rec.tile then W.put(rec,front,c.lane_pose~=nil) end
-          worked[id]=true
-          if v.running and not held then
-            local moving={v=v,c=c,frames=frames,record=rec}
-            step(s,W,moving,board,hooks.exited,tick)
-            frames=moving.frames
-          end
-          v.progress=1+(#v.route-1)*(c.index-1)/math.max(1,#frames-1)
-          if c.index>=#frames and not held then
-            local arrived,hidden=hooks.arrive(v,tick,frames[#frames])
-            if arrived then
-              rec.clock=nil
-              -- Loading occupies the station. Stock depot entry hides the
-              -- vehicle immediately and removes its visible lane obstacle.
-              if hidden then W.erase(rec) else W.put(rec,frames[#frames]) end
+        if v then
+          local held=hooks.before(v,tick,ready[id])==true
+          local frames=v.road_motion_frames
+          if v.route and frames then
+            local c=init(s,v,frames)
+            local rec=records[id]
+            rec.clock=c
+            rec.stopped=v.running==false
+            local front=visible(c,frames)
+            if front and not rec.tile then W.put(rec,front,c.lane_pose~=nil) end
+            worked[id]=true
+            if v.running and not held then
+              local moving={v=v,c=c,frames=frames,record=rec}
+              step(s,W,moving,board,hooks.exited,tick)
+              frames=moving.frames
+            end
+            v.progress=1+(#v.route-1)*(c.index-1)/math.max(1,#frames-1)
+            if c.index>=#frames and not held then
+              local arrived,hidden=hooks.arrive(v,tick,frames[#frames])
+              if arrived then
+                rec.clock=nil
+                -- Loading occupies the station. Stock depot entry hides the
+                -- vehicle immediately and removes its visible lane obstacle.
+                if hidden then W.erase(rec) else W.put(rec,frames[#frames]) end
+              end
             end
           end
+          hooks.age(v,tick)
         end
-        hooks.age(v,tick)
         sample(id,k)
       end
       while external and external[next_external] do

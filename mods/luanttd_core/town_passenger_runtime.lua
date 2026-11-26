@@ -62,7 +62,7 @@ return function(Sim,H,Packets,Rating,Mail)
         for dz=0,area-1 do for dx=0,area-1 do
           if Sim.id(x+1+dx,z+1+dz) and Sim.road_stop_covers(s,st,x+1+dx,z+1+dz,H.bus_catchment) then covered=true end
         end end
-        if covered then
+        if covered and s.stations[st.id]==st then
           local rating=Rating.offer(s,st)
           if rating then list[#list+1]={st=st,rating=rating} end
         end

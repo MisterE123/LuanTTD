@@ -347,7 +347,7 @@ return function(Sim,mod,s,cap)
   N.demolition=dofile(mod.."/campaign_demolition_runtime.lua")(Sim,mod,N,Slope)
   N.transport=dofile(mod.."/campaign_transport_commands.lua")(Sim,N)
   N.news=dofile(mod.."/campaign_news.lua")(Sim,mod,N,cap)
-  Sim.mount_news(s,N.news.arrive)
+  Sim.mount_news(s,N.news.arrive,N.news.road_flood)
   if N.rail then
     N.rail.run.news_collision=N.news.rail_collision
     N.rail.run.news_flood=N.news.rail_flood

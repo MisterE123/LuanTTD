@@ -417,18 +417,29 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     table.sort(departures)
     return departures,rounds
   end
-  function M.leave(s,v,tick)
+  function M.leave(s,v,tick,destroyed)
     local l=v.load_state
     if not l then return false end
     local st=assert(s.stations[l.station],"Cannot remove an occupied stock station")
     local api=opts(s,tick,v.cargo=="coal",timber_cargo(v.cargo))
-    Loading.leave(st,v,api)
+    Loading.leave(st,v,api,destroyed)
     if api.station_done then api.station_done(st) end
-    v.stock_loading_complete=st.id
+    v.stock_loading_complete=not destroyed and st.id or nil
     if v.stop_requested then
       v.stop_requested=nil;v.running=false;v.status="Stopped"
     end
     return true
+  end
+
+  -- Vehicle::Crash counts reserved passengers before destroying held
+  -- packets. Existing completed deliveries settle, with no new fare.
+  function M.crash(s,v,tick)
+    if v.crashed or not M.handles(s,v) then return end
+    local n=v.cargo=="passenger" and (v.units+(v.load_state and v.load_state.reserved_units or 0)) or 0
+    M.leave(s,v,tick,true)
+    v.crashed,v.running,v.stop_requested,v.stock_loading_complete=true,false,nil,nil
+    v.units,v.batches,v.status=0,{},"Flooded"
+    return n
   end
 
   -- Must replace s.daily legacy age for managed vehicles (including those

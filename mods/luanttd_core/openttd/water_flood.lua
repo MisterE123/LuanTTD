@@ -52,11 +52,14 @@ function F.visit(board,x,z)
       -- switch has no case; flat land delegates to LandscapeClear as WATER.
       if t and (t.kind=="clear" or t.kind=="trees" and not t.water_ground or t.kind=="rail" and not t.water_ground and board.flood_rail
           or t.kind=="rail_bridge" and t.slope==0 and board.flood_bridge
+          or t.kind=="through_stop" and t.slope==0 and board.flood_road_stop
           or t.kind=="object" and t.can_flood and t.slope==0)
           and (t.foundation_base or t.base)==0 and has(directions(t),opposite(dir)) then
         if t.kind=="rail" then
           local q=board.flood_rail(u,v,t)
           if q then changes[#changes+1]={x=u,z=v,from="rail",kind=q.kind,rail=q} end
+        elseif t.kind=="through_stop" then
+          if board.flood_road_stop(t) then changes[#changes+1]={x=u,z=v,from=t.kind,kind="sea"} end
         elseif t.kind=="rail_bridge" then
           if board.flood_bridge(t) then changes[#changes+1]={x=u,z=v,from=t.kind,kind="sea",span=t.span} end
         else

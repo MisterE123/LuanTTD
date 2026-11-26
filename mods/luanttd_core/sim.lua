@@ -14,8 +14,8 @@ M.dir = {{0,-1},{1,0},{0,1},{-1,0}}
 local town_growth_mount=setmetatable({},{__mode="k"})
 local foster_art_mount=setmetatable({},{__mode="k"})
 local road_faults_mount=setmetatable({},{__mode="k"})
-local news_mount=setmetatable({},{__mode="k"})
-function M.mount_news(s,arrival) news_mount[s]=arrival end
+local news_mount,road_flood_news=setmetatable({},{__mode="k"}),setmetatable({},{__mode="k"})
+function M.mount_news(s,arrival,road_flood) news_mount[s],road_flood_news[s]=arrival,road_flood end
 M.month_days = 30
 M.cargo = {
   mail={name="Mail",rate=11}, passenger={name="Passengers",rate=9},
@@ -533,6 +533,9 @@ local function coastal_visit(s)
     stock_tree_lifecycle=dofile(module_root.."tree_lifecycle_world.lua")(M,terrain_rules,rules)
   end
   local board=coastal_world.board(s)
+  if M.road_stock_service_active(s) then
+    board.road_stop_flood,board.clear_road_stop=M.coastal_road_stop_runtime(s)
+  end
   board.flood_vehicles=function(id,tick,other,water_z) return M.coastal_rail_flood(s,id,tick,other,water_z) end
   board.bridge_ends=function(id) return M.coastal_rail_bridge(s,id) end
   board.clear_bridge=function(id) return M.coastal_clear_rail_bridge(s,id) end
@@ -3390,7 +3393,7 @@ end
 function M.road_order_target(s,owner,id,station)
   local v=s.fleet[id]
   local st,waypoint=road_order_location(s,station)
-  if not v or not st or v.owner~=owner or st.owner~=owner or
+  if not v or v.crashed or not st or v.owner~=owner or st.owner~=owner or
       (waypoint and not is_road_vehicle(v) or not waypoint and st.mode~=M.vehicles[v.engine].mode) then
     return nil,"Choose a compatible terminal."
   end
@@ -3424,7 +3427,7 @@ end
 function M.edit_order(s,owner,id,index,op)
   local v=s.fleet[id]
   local o=v and v.orders[index]
-  if not v or v.owner~=owner or not o then return false,"Select one of your vehicle's orders." end
+  if not v or v.crashed or v.owner~=owner or not o then return false,"Select one of your vehicle's orders." end
   local road=is_road_vehicle(v)
   if not road and (v.running or v.route) then return false,"Stop at a terminal before changing orders." end
   if op=="skip" then
@@ -3489,6 +3492,7 @@ end
 function M.toggle(s,owner,id)
   local v=s.fleet[id]
   if not v or v.owner~=owner then return false,"Select your vehicle." end
+  if v.crashed then return false,"This vehicle is a wreck." end
   if v.road_return_depot then return false,"This vehicle is returning to its depot." end
   if v.stop_requested then v.stop_requested=nil;return true,"Scheduled stop cancelled." end
   if v.running then
@@ -3532,6 +3536,7 @@ end
 function M.sell(s,owner,id)
   local v=s.fleet[id]
   if not v or v.owner~=owner then return false,"Select your vehicle." end
+  if v.crashed then return false,"This vehicle is a wreck." end
   if v.running or v.route or v.units>0 then return false,"Stop and unload the vehicle before selling." end
   if v.road_bay_claim then return false,"A vehicle in an occupied two-bay terminus cannot be sold here." end
   local bus=stock_bus(v)
@@ -3546,7 +3551,7 @@ function M.sell(s,owner,id)
 end
 function M.service(s,owner,id)
   local v=s.fleet[id]
-  if not v or v.owner~=owner or v.route then return false,"Vehicle must be at a terminal." end
+  if not v or v.crashed or v.owner~=owner or v.route then return false,"Vehicle must be at a terminal." end
   if stock_bus(v) then return false,"Manual maintenance is not in the original-bus preview." end
   local c=M.company(s,owner);local amount=math.floor(M.vehicles[v.engine].cost*0.05)
   if c.cash<amount then return false,"Not enough cash." end
@@ -4870,7 +4875,7 @@ local function stock_managed(s,v)
 end
 function M.road_can_park(s,owner,id)
   local v=s.fleet[id]
-  if not (v and v.owner==owner and not v.running and not v.route and not v.depot and v.units==0 and
+  if not (v and v.owner==owner and not v.crashed and not v.running and not v.route and not v.depot and v.units==0 and
       v.road_stop_pose and s.stations[v.station] and M.road_stock_service_active(s)) then return false end
   passenger_modules()
   return stock_managed(s,v)
@@ -4895,6 +4900,85 @@ local function current_station_order(v,st)
   local i=v.orders[v.index] and v.orders[v.index].station==st.id and v.index or vehicle_order(v,st.id)
   return i,i and v.orders[i]
 end
+-- Native flat through-stop adapter for RC1 FloodVehicleProc and
+-- ClearTile_Station. The authoritative landscape loop can query several
+-- shore cells in one tick; read the road fleet only once on demand.
+local ground_flood_rules
+local function road_flood_rules()
+  ground_flood_rules=ground_flood_rules or dofile(module_root.."openttd/ground_vehicle_flood.lua")
+  return ground_flood_rules
+end
+function M.coastal_road_stop_runtime(s)
+  passenger_modules()
+  road_stop_members=road_stop_members or dofile(module_root.."road_stop_members.lua")(M)
+  local flood=road_flood_rules()
+  local stamp,by_tile
+  local function physical(tick)
+    if stamp==tick and by_tile then return by_tile end
+    stamp,by_tile=tick,{}
+    for id,v in pairs(s.fleet) do
+      local engine=M.vehicles[v.engine]
+      local pose=engine and engine.mode=="road" and M.road_motion_frame(s,v)
+      if pose and not (pose[10] or pose[12] or pose[13] or pose[14] or pose[16]) then
+        local tile=pose[4]
+        local row=by_tile[tile] or {}
+        by_tile[tile]=row
+        row[#row+1]=id
+      end
+    end
+    for _,row in pairs(by_tile) do table.sort(row) end
+    return by_tile
+  end
+  local function flood_at(id,tick)
+    for _,vid in ipairs(physical(tick)[id] or {}) do
+      local v=s.fleet[vid]
+      local t=s.tiles[id]
+      -- The mounted target is a flat through-stop, so its stock running
+      -- surface is at sea level; only its actual boarding body qualifies.
+      if v and v.home_depot and v.cargo=="passenger" and v.load_state and not v.route and
+          v.load_state.station==t.station and M.stock_road_frame_z(s,v.road_stop_pose)<=0 then
+        local n=station_service.crash(s,v,tick)
+        if n~=nil then
+          v.road_flood_age=flood.road_crash_age(true)
+          local victims=flood.road_victims(M.stock_random_u32(s),n,true)
+          if road_flood_news[s] then road_flood_news[s](id,victims) end
+        end
+      end
+    end
+  end
+  local function clear(id,apply,tick)
+    local t=s.tiles[id]
+    local station=t.station and s.stations[t.station]
+    if not station or station.mode~="road" or station.tram_only or not road_stop_members.current(station)[id] then return false end
+    if not apply and physical(tick)[id] then return false end
+    local result=road_stop_members.preview(station,{{id=id}})
+    for _,v in pairs(s.fleet) do
+      local e=M.vehicles[v.engine]
+      if e and e.mode=="road" then
+        for _,tile in ipairs(v.route or {}) do if tile==id then return false end end
+      end
+      if not result.spread or not result.road_stop_areas[v.cargo=="passenger" and "bus" or "truck"] then
+        for _,order in ipairs(v.orders or {}) do
+          if order.station==station.id then return false end
+        end
+      end
+      if v.station==station.id and not result.spread then return false end
+    end
+    if not apply then return true end
+    if result.spread then
+      road_stop_members.structural_apply(station,result)
+      refresh_road_station_sites(s,station)
+    else
+      M.retire_road_station(s,station.id)
+    end
+    t.build,t.owner,t.road_bits,t.road_town,t.roadside,t.stock_roadside_town=nil,nil,nil,nil,nil,nil
+    t.station,t.stop_axis,t.road_terminal_level,t.road_stop_type=nil,nil,nil,nil
+    t.road_disallowed,t.disallowed,t.roadworks,t.roadworks_counter=nil,nil,nil,nil
+    return true
+  end
+  return flood_at,clear
+end
+
 local function stock_next_plan(s,v,st)
   local i=current_station_order(v,st)
   local n=v.road_order_override or (i and i%#v.orders+1 or 1)
@@ -5095,8 +5179,17 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       if st then stock_seed_parked_pose(s,v,st) end
     end
   end
+  local coastal_road=s.stock_coastal_flood and road_flood_rules()
   local worked,samples=road_clock().live_day(s,clock,{
     companion=shared_tram_clock[s],
+    retire=coastal_road and function(v)
+      v.road_vehicle_ticks=(v.road_vehicle_ticks or 0)+1
+      if not v.road_flood_age then return false end
+      local remove
+      v.road_flood_age,remove=coastal_road.road_wreck_tick(v.road_flood_age,v.road_vehicle_ticks)
+      if remove and v.order_group then orders_module().release(s,v) end
+      return remove
+    end,
     economy=function(tick)
       local ready={}
       local ids=station_service.tick(s,tick)
