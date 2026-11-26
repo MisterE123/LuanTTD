@@ -17,6 +17,16 @@ company, order list and cargo rules, regardless of whether you pick in
 
 The order controls cover the shipped vehicle systems, not all OpenTTD order options. Some scenario-specific and inactive rail consists are read-only, and operations such as a plane already committed to landing or a freight train loading can defer or reject a change. Vehicle orders are saved with the world; follow camera is per player and not saved.
 
+## Start a train from its depot
+
+Open the rail depot. **Trains in this depot** lists owned trains; **Buy trains** opens the separate purchase catalogue. Use **Assemble wagons** in the roster to manage loose cars.
+
+1. Select the parked train, then **Set or review orders**.
+2. Select a station and click **Add selected destination**, or choose **Pick in world** and click the platforms you want to serve. Use **Done** to return to the list.
+3. Review the order, then click **Start service**. Closing the window without starting leaves the train parked and keeps the draft. Start requires at least two distinct stops, including a valid return to the first stop.
+
+This workflow covers supported passenger, Mail, and Coach/Mail trains. Industrial trains with specialized loading and delivery rules still use their dedicated depot route controls.
+
 ## Copy orders in a depot
 
 Select the receiving vehicle in its depot and choose **Copy orders…**.
@@ -25,8 +35,8 @@ selected orders**. This makes an independent list; editing either vehicle
 does not edit the other. Road vehicles can copy from a compatible road
 vehicle. Parked passenger, Mail and mixed Coach/Mail trains can copy a
 compatible town-rail station list, including every stop and its loading and
-unloading rules. Use **Review orders** to check the copy, then **Start
-copied orders** when the track is ready. A rejected start retains the
+unloading rules. Use **Set or review orders** to check the copy, then **Start service**
+when the track is ready. A rejected start retains the
 copied list, so you can fix the route and retry.
 
 Town rail follows the independent-copy branch of OpenTTD 16.0-RC1

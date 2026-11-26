@@ -325,6 +325,7 @@ return function(Sim,R)
           (cargo and " · "..(cargo=="mixed" and "Coach and Mail" or Sim.cargo[cargo].name) or "")..
           (wagon_count and wagon_count>0 and (" · "..wagon_count..(wagon_count==1 and " wagon" or " wagons")) or ""),cargo=cargo,unsupported=unsupported or nil,
           order_copy=unit.status=="depot" and (not cargo and R.rail.owned.passenger_consist(unit) or cargo=="mixed" or cargo=="mail") or nil,
+          draft_orders=R.rail.owned.can_edit_draft and R.rail.owned.can_edit_draft(s,owner,unit.id,key) or nil,
           copied=unit.order_draft and #unit.order_draft.orders,
           draft_revision=unit.order_draft and "rail-parked:"..unit.order_draft.revision,
           help=Help.describe("rail",cargo or Help.rail_cargo(unit.stock_ids[2]),engine.name,
@@ -465,7 +466,7 @@ return function(Sim,R)
         or "Test streetcar removed. Your tramway and stops remain."
       return ok,ok and note or why
     end
-    if req.mode=="rail" and req.copied==true and R.rail and R.rail.owned and id(req.vehicle) and tile(req.depot) then
+    if req.mode=="rail" and (req.copied==true or req.start_draft==true) and R.rail and R.rail.owned and id(req.vehicle) and tile(req.depot) then
       if type(req.draft_revision)~="string" or #req.draft_revision>32 then return false,"Invalid order list." end
       return R.rail.owned.start_copied_orders(s,owner,req.vehicle,req.depot,req.draft_revision)
     end

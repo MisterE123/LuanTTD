@@ -15,8 +15,20 @@ return function(client,mode)
       end)
     end
   end
-  function M.fetch(player,vehicle,done)
-    return client.query({kind="orders",player=player,mode=mode,vehicle=vehicle},function(r)
+  if mode=="rail" then
+    function M.start_draft(player,vehicle,depot,order_revision,done)
+      local revision=revision_by_player[player]
+      if revision==nil then return nil,"Open the current orders first." end
+      return client.query({kind="command",player=player,command={kind="transport_start",
+        mode="rail",vehicle=vehicle,depot=depot,start_draft=true,draft_revision=order_revision,
+        revision=revision}},function(r)
+        if r.revision~=nil then revision_by_player[player]=r.revision end
+        done(r.ok,r.why)
+      end)
+    end
+  end
+  function M.fetch(player,vehicle,done,page)
+    return client.query({kind="orders",player=player,mode=mode,vehicle=vehicle,page=page},function(r)
       if r.ok then
         revision_by_player[player]=r.revision
         done(r.value)

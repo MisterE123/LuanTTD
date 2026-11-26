@@ -400,6 +400,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return {kind="station",station=station,nonstop=1,stop_location=Speed.FAR}
   end
 
+  R.station_order=station_order
+
   local function next_passenger_order(run)
     if run.orders then
       if run.selected_after_loading then
@@ -1669,6 +1671,20 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local orders=current_order_list(r)
     if orders then return orders,"rail-active:"..(r.order_revision or 0) end
   end
+  function R.order_destinations(s,owner,depot,cargo)
+    local xy=Lab.board(s).xy
+    local stops={}
+    for id,st in pairs(s.stock_rail_stations or {}) do
+      local role=cargo and st[cargo.."_role"]
+      if st.owner==owner and st.tiles and #st.tiles>0 and (role or not cargo and not Freight.role(st)) then
+        local x,z=xy(st.tiles[1] or depot)
+        stops[#stops+1]={id=id,role=role,label=("%s (%d, %d)%s"):format(
+          st.name or ("Rail station "..id),x,z,role and (" · "..role) or "")}
+      end
+    end
+    table.sort(stops,function(a,b) return a.id<b.id end)
+    return stops
+  end
   function R.order_state(s,owner,id)
     local r=R.current_paid(s,id)
     if not r or not id or r.owner~=owner then return end
@@ -1683,20 +1699,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       out.orders[i]=o.station
       out.cargo[i]={load=o.load_type or 0,unload=o.unload_type or 0,summary=CargoOrder.summary(o)}
     end
-    local xy=Lab.board(s).xy
-    for station,t in pairs(s.stock_rail_stations or {}) do
-      local role
-      if r.freight then
-        role=t[(r.freight.cargo or "coal").."_role"]
-      end
-      if t.owner==owner and (r.freight and role or not r.freight and
-          not Freight.role(t)) then
-        local x,z=xy(t.tiles and t.tiles[1] or r.depot)
-        out.stops[#out.stops+1]={id=station,role=role,label=("Rail station %d (%d, %d)%s"):format(
-          station,x,z,role and (" · "..role) or "")}
-      end
-    end
-    table.sort(out.stops,function(a,b) return a.id<b.id end)
+    out.stops=R.order_destinations(s,owner,r.depot,r.freight and (r.freight.cargo or "coal"))
     return out
   end
 

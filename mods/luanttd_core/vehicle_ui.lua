@@ -269,10 +269,10 @@ return function(api)
     local cargo=data and data.cargo_rules
     local adapter=V.orders[kind]
     local toggle=adapter and adapter.toggle and data and data.can_toggle
-    local extended=cargo or toggle
-    local b=title(v.label,extended and 9).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
+    local extended=cargo or toggle or data and data.parked
+    local b=title(v.label,data and data.parked and cargo and 9.67 or extended and 9).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
     if note or data and data.summary then
-      b=b..("textarea[.45,%g;10,.63;;;%s]"):format(cargo and 7.56 or 6.35,esc(note or data.summary))
+      b=b..("textarea[.45,%g;10,.63;;;%s]"):format(data and data.parked and cargo and 8.10 or cargo and 7.56 or 6.35,esc(note or data.summary))
     end
     if data then
       local items,targets=data.items or {},data.targets or {}
@@ -286,9 +286,17 @@ return function(api)
         ("textlist[.45,1.30;%g,3.72;V_TOKEN_row;%s;%d;false]"):format(
           data.read_only and 10.10 or 4.98,texts(labels,"(No orders)"),row)
       if not data.read_only then
+        local paged=data.parked and data.target_count and data.target_count>#targets
         b=b.."label[5.65,1.05;Available destinations]"..
           ("textlist[5.55,1.30;5,%g;V_TOKEN_target;%s;%d;false]"):format(
-            (pick_append or pick_replace) and 3.08 or 3.72,texts(targets,"(No destinations)"),target)
+            paged and 2.50 or (pick_append or pick_replace) and 3.08 or 3.72,texts(targets,"(No destinations)"),target)
+        if paged then
+          local page,count=data.target_page or 1,data.target_count
+          local last=math.ceil(count/96)
+          b=b..("label[7.40,4.08;Page %d of %d]"):format(page,last)
+          if page>1 then b=b.."button[5.55,3.88;1.60,.48;V_TOKEN_targets_prev;Previous]" end
+          if page<last then b=b.."button[8.95,3.88;1.60,.48;V_TOKEN_targets_next;Next]" end
+        end
       end
       if pick_append then
         b=b..("button[5.55,4.43;%g,.57;V_TOKEN_pick_world;Pick in world]"):format(pick_replace and 2.37 or 5)
@@ -329,7 +337,8 @@ return function(api)
         for _,o in ipairs(targets) do eligible[o.id]=o.label end
       end
       prior={row=row,target=target,revision=data.revision,targets=targets,item_count=#items,cargo=cargo,
-        pick_append=pick_append,pick_replace=pick_replace,eligible=eligible}
+        pick_append=pick_append,pick_replace=pick_replace,eligible=eligible,
+        target_page=data.target_page,target_pages=data.target_count and math.ceil(data.target_count/96)}
     else
       if why=="ORDERS_UNAVAILABLE" then why="No orders yet. Open this vehicle from its depot to set up service." end
       b=b.."textarea[.45,1.22;10,1.35;;;"..esc(why or "Set initial orders from the depot. No editable orders are available for this vehicle yet.").."]"
@@ -340,8 +349,17 @@ return function(api)
     elseif kind=="road" and adapter and adapter.toggle and data then
       b=b.."box[.45,6.68;10.10,.57;#263949]label[.68,6.94;Start service: add at least two stops first]"
     end
+    if data and data.parked and adapter and adapter.start_draft then
+      if data.can_start then
+        b=b..("button[.45,%g;10.10,.52;V_TOKEN_start_draft;Start service]"):format(cargo and 7.52 or 7)
+      else
+        local y=cargo and 7.52 or 7
+        b=b..("box[.45,%g;10.10,.52;#263949]label[.68,%g;Start service: check the order list]"):format(y,y+.25)
+      end
+      prior.start_depot=data.can_start and data.depot
+    end
     prior.can_toggle=not not toggle
-    local footer=extended and 8.15 or 7.11
+    local footer=data and data.parked and cargo and 8.90 or extended and 8.15 or 7.11
     if back then b=b..("button[.45,%g;4.98,.57;V_TOKEN_depot;%s]"):format(footer,
       back.directory and "Company fleet" or back.return_ and "Back to depot" or "Depot vehicles") end
     b=b..("button_exit[5.55,%g;5,.57;V_TOKEN_close;Back to world]"):format(footer)
@@ -418,7 +436,7 @@ return function(api)
         end
         return draw_orders(p,v,kind,id,back,prior,note,data,why)
       end
-      local queued,why=a.fetch(n,id,loaded)
+      local queued,why=a.fetch(n,id,loaded,prior and prior.target_page)
       if not queued then loaded(nil,why or "Could not load vehicle orders.") end
       return true
     end
@@ -638,8 +656,24 @@ return function(api)
     end
     local a=V.orders[q.kind]
     if q.waiting or not a or not get(n,q.kind,q.id) then return true end
+    if q.target_page and q.target_pages and (field("targets_prev") or field("targets_next")) then
+      q.target_page=math.min(q.target_pages,math.max(1,q.target_page+(field("targets_prev") and -1 or 1)))
+      q.target=1
+      return V.open(p,q.kind,q.id,q.back,q)
+    end
     if field("pick_world") or field("replace_world") then
       return begin_world_orders(p,q,not not field("replace_world"))
+    end
+    if field("start_draft") and q.start_depot and a.start_draft then
+      if q.pending then return true end
+      q.pending=true
+      local function completed(ok,message)
+        if panels[n]~=q then return end
+        return V.open(p,q.kind,q.id,q.back,q,message or (ok and "Service started." or "This train could not start."))
+      end
+      local sent,why=a.start_draft(n,q.id,q.start_depot,q.revision,completed)
+      if not sent then completed(false,why) end
+      return true
     end
     if field("toggle") and q.can_toggle and a.toggle then
       if q.pending then return true end

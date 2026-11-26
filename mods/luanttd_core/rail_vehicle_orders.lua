@@ -11,7 +11,7 @@ return function(S,Owned,flags)
       items[i]={id=x,label=(labels[x] or ("Station #"..x))..(f and f.summary or ""),cargo=f}
     end
     local c=d.capabilities or {}
-    return {items=items,targets=d.read_only and {} or d.stops,active=d.active,revision=d.revision,read_only=d.read_only,can_insert=c.add==true,
+    return {items=items,targets=d.read_only and {} or d.stops,active=d.active,parked=d.parked,can_start=d.can_start,depot=d.depot,revision=d.revision,read_only=d.read_only,can_insert=c.add==true,
       can_reorder=c.move==true,can_remove=c.remove==true,can_skip=c.skip==true,can_replace=c.replace==true,summary=d.reason,
       cargo_rules=c.load and {load=flags.load,unload=flags.unload} or nil}
   end

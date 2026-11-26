@@ -275,6 +275,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     if r and tile and tile.owner==owner and tile.rail_depot_dir~=nil and r.depot==depot and r.status=="depot"
         and Run.owned_town_consist and Run.owned_town_consist(s,r) then return r end
   end
+  function O.can_edit_draft(s,owner,id,depot) return parked(s,owner,id,depot)~=nil end
   local function draft_revision(unit)
     return "rail-parked:"..(unit.order_draft and unit.order_draft.revision or 0)
   end
@@ -315,12 +316,12 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
       return false,"The orders changed. Review the latest lists and try again."
     end
     local ok,note=Fleet.write_order_draft(s,owner,id,depot,orders,cursor)
-    return ok,ok and ("Copied %d orders. Use Start copied orders when ready."):format(#orders) or note
+    return ok,ok and ("Copied %d orders. Open the train to review and start service."):format(#orders) or note
   end
-  function O.start_copied_orders(s,owner,id,depot,revision)
+  function O.start_draft_orders(s,owner,id,depot,revision)
     local dst=parked(s,owner,id,depot)
     local draft=dst and dst.order_draft
-    if not draft or revision~=draft_revision(dst) then return false,"Review the latest copied orders in your depot first." end
+    if not draft or revision~=draft_revision(dst) then return false,"Review the latest orders before starting this train." end
     local unit,note=Fleet.prepare_dispatch(s,owner,id,mounted_hooks())
     if not unit then return false,note end
     local ok,why,run=Run.start_owned_orders(s,owner,unit,draft.orders)
@@ -328,24 +329,59 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     assert(Fleet.bind_dispatch(s,owner,id,id))
     return true,why,run
   end
+  O.start_copied_orders=O.start_draft_orders
   function O.order_state(s,owner,id)
     local unit=Fleet.get(s,owner,id)
     if not unit then return end
     if unit.status=="dispatched" then return Run.order_state(s,owner,id) end
-    local d=unit.order_draft
-    if not d then return nil,"Copy orders or select destinations in the depot first." end
-    local out={orders={},cargo={},stops={},revision=draft_revision(unit),capabilities={},read_only=true,
-      reason="Copied independently. Start this list from the depot."}
+    if not parked(s,owner,id,unit.depot) then return nil,"Set up service from this train’s depot." end
+    local d=unit.order_draft or {orders={}}
+    local out={orders={},cargo={},stops=Run.order_destinations(s,owner,unit.depot),
+      depot=unit.depot,revision=draft_revision(unit),parked=true,
+      capabilities={add=true,move=true,remove=true,replace=true,load=true,unload=true}}
+    local ready=#d.orders>=2
     for i,o in ipairs(d.orders) do
+      local previous=d.orders[i==1 and #d.orders or i-1]
+      ready=ready and o.station~=previous.station and Run.usable_town_order(s,owner,o)
       out.orders[i]=o.station
-      local st=(s.stock_rail_stations or {})[o.station]
-      if st and st.name then out.stops[#out.stops+1]={id=o.station,label=st.name} end
       out.cargo[i]={load=o.load_type or 0,unload=o.unload_type or 0,summary=CargoOrder.summary(o)}
     end
+    out.can_start=not not ready
+    out.reason=ready and "Orders saved. The train stays in the depot until you start service."
+      or "Add at least two distinct stops. Consecutive stops, including the return, must differ."
     return out
+  end
+  local function edit_draft(s,owner,unit,revision,action,row,value)
+    if not parked(s,owner,unit.id,unit.depot) then return false,"Choose a compatible parked train." end
+    if revision~=draft_revision(unit) then return false,"Orders changed. Review the latest list and try again." end
+    local orders,cursor={}, {real=0,implicit=0}
+    if unit.order_draft then
+      local d=unit.order_draft
+      orders,cursor=OrderList.copy(d.orders,d.orders,d.cursor,function() return true end)
+    end
+    local slot=type(row)=="number" and row%1==0 and row-1 or nil
+    local changed
+    if action=="add" or action=="replace" then
+      local o=Run.station_order(value)
+      if not Run.usable_town_order(s,owner,o) then return false,"Choose a compatible owned rail station." end
+      if action=="add" then changed=OrderList.insert(orders,cursor,slot or #orders,o)
+      elseif slot and orders[slot+1] and orders[slot+1].station~=value then
+        orders[slot+1].station=value
+        changed=true
+      end
+    elseif action=="move" and slot and type(value)=="number" and value%1==0 then
+      changed=OrderList.move(orders,cursor,slot,value-1)
+    elseif action=="remove" and slot then
+      changed=OrderList.delete(orders,cursor,slot)
+    elseif (action=="load" or action=="unload") and slot and orders[slot+1] then
+      changed=CargoOrder.change(orders[slot+1],action,value)
+    end
+    if not changed then return false,"Choose a valid order edit." end
+    return Fleet.write_order_draft(s,owner,unit.id,unit.depot,orders,cursor)
   end
   function O.edit_orders(s,owner,id,revision,action,row,value)
     local unit=Fleet.get(s,owner,id)
+    if unit and unit.status=="depot" then return edit_draft(s,owner,unit,revision,action,row,value) end
     if not unit or unit.status~="dispatched" then return false,"Select an active owned train." end
     local view=Run.order_state(s,owner,id)
     local run=Run.current_paid(s,id)

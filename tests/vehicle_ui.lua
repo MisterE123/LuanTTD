@@ -282,3 +282,51 @@ do
   assert(depot_returns==1)
   print("PASS staged world orders reject foreign or repeated docks, start explicitly at fresh revision, and return to the same depot")
 end
+
+do
+  V.orders.rail=dofile("mods/luanttd_core/campaign_authority_order_proxy.lua")({
+    query=function(req,done) assert(not queued);queued={req,done};return true end,
+  },"rail")
+  V.install_worker({query=function(req,done)
+    assert(req.kind=="vehicle" and req.vehicle==1 and req.mode=="rail")
+    done({ok=true,value={mode="rail",id=1,owner="E",label="Train 1",depot=depot}})
+    return true
+  end})
+  local towns={{id=3,label="West"},{id=4,label="Central"},{id=5,label="East"}}
+  local function render_parked(items,targets,page,count)
+    return answer("orders",{ok=true,revision=32,value={items=items,targets=targets or towns,
+      parked=true,depot=depot,can_start=#items>=2,can_insert=true,revision="rail-parked:"..#items,
+      target_page=page or 1,target_count=count or #towns}})
+  end
+  V.open(p,"rail",1)
+  render_parked({},nil,1,99)
+  assert(not field(open,"start_draft") and field(open,"targets_next"))
+  fn(p,open.key,{[field(open,"targets_next")]=true})
+  assert(render_parked({},towns,2,99).page==2 and field(open,"targets_prev"))
+  fn(p,open.key,{[field(open,"append")]=true})
+  local change=answer("command",{ok=true,revision=33})
+  assert(change.command.operation=="append" and change.command.destination==3 and change.command.order_revision=="rail-parked:0")
+  assert(render_parked({towns[1]},towns,2,99).page==2 and not field(open,"start_draft"))
+  api.render={
+    host_tile=function(tile) return tile==50 and {rail_station_id=4} end,
+    host_record=function(reg,id)
+      assert(reg=="stock_rail_stations" and id==4)
+      return {owner="E",name="Central"}
+    end,
+  }
+  fn(p,open.key,{[field(open,"pick_world")]=true})
+  assert(V.world_order_preview(p,50)=="Add stop: Central")
+  V.pick_world_order(p,50)
+  local live=answer("command",{ok=true,revision=34,value={order_revision="rail-parked:2",count=2}})
+  assert(live.command.tile==50 and live.command.destination==nil)
+  V.finish_world_orders(p)
+  render_parked({towns[1],towns[2]},towns,2,99)
+  assert(field(open,"start_draft"))
+  fn(p,open.key,{[field(open,"start_draft")]=true})
+  local dispatch=answer("command",{ok=true,revision=35})
+  assert(dispatch.command.kind=="transport_start" and dispatch.command.start_draft and
+    dispatch.command.depot==depot and dispatch.command.draft_revision=="rail-parked:2")
+  answer("orders",{ok=true,revision=35,value={items={towns[1],towns[2]},targets=towns,active=1,revision=0}})
+  assert(not field(open,"start_draft") and open.b:find("Service started.",1,true))
+  print("PASS parked railway editor pages destinations, mixes the list with validated tile picks, and starts only on explicit click")
+end

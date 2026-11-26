@@ -23,6 +23,6 @@ for phase in start reload; do
   timeout 100 luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' > "$out/$phase.log" 2>&1 || {
     tail -80 "$out/$phase.log";exit 1;
   }
-  if [[ $phase == start ]]; then expected=RAIL_COPY_WORKER_NATIVE_SAVED; else expected=RAIL_COPY_WORKER_NATIVE_PASS; fi
+  if [[ $phase == start ]]; then grep RAIL_FRESH_DRAFT_NATIVE "$out/$phase.log"; expected=RAIL_COPY_WORKER_NATIVE_SAVED; else expected=RAIL_COPY_WORKER_NATIVE_PASS; fi
   grep "$expected" "$out/$phase.log"
 done
