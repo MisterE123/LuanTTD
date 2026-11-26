@@ -34,7 +34,7 @@ local function output(p,wet)
       local a,b=u,.54+.42*(1-v)
       if wall then
         a=max_u-min_u>=max_v-min_v and u or v
-        b=.06+.34*(heights[i]-lo)/(hi-lo)
+        b=wet and .06+.34*(heights[i]-lo)/(hi-lo) or .06+.125*heights[i]
       end
       out[#out+1]=("vt %.6f %.6f"):format(.02+.96*a,b)
       next_vertex=next_vertex+1
@@ -68,6 +68,10 @@ local function output(p,wet)
     if not wet or h[1]~=0 or h[2]~=0 or h[3]~=0 then face(tri,h) end
     local lo,ln=raw_height(p.raw_shape,tri[1]),raw_height(p.raw_shape,tri[2])
     assert(h[1]>=lo and h[2]>=ln,"Foundation cannot cut raw world below a shared edge")
+    -- The mesh replaces the raw ground, so dry masonry must cover the
+    -- entire exposed edge down to the fill below. Retain the actual raw
+    -- shoreline edge when wet so the low half stays navigable.
+    if not wet then lo,ln=0,0 end
     if h[1]>lo and h[2]>ln then face({tri[2],tri[1],tri[1],tri[2]},{h[2],h[1],lo,ln},true)
     elseif h[1]>lo then face({tri[2],tri[1],tri[1]},{h[2],h[1],lo},true)
     elseif h[2]>ln then face({tri[2],tri[1],tri[2]},{h[2],h[1],ln},true) end
