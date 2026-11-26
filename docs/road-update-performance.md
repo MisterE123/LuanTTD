@@ -385,3 +385,19 @@ took **7.39–8.80 → 5.83–6.32 ms** of worker CPU across four alternating
 samples. An ordinary mixed-fleet worker replay also kept drawing road
 traffic and acknowledged both durable construction commands. The
 batch timing is not a frame-rate or whole-day speedup.
+
+### Reuse the exact corner bytes while the owner grid is unchanged
+
+A warm sector no longer re-encodes its 33×33 shared corner heights
+when the worker's terrain revision is unchanged. The cache belongs to
+the bounded scene entries, not the whole map. Stock terrain commits
+invalidate it; replacing the grid or backing height array also does.
+An edit on the boundary refreshes both affected sectors, and other
+tile state still goes through the usual scene checks.
+
+On the nine-sector native worker fixture, warm corner encodes per
+batch dropped from **9 to 0**, with identical receipts. Median whole
+batch CPU was **7–12% lower** across three alternating runs. A real
+stock corner raise at a sector boundary produced the same updated
+bytes in both neighboring sectors as the original encoder. This does
+not measure renderer frame rate or save time.

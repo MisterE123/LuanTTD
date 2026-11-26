@@ -689,15 +689,27 @@ return function(Sim,R,max_days)
   -- Keep an exact, bounded scene cache in the worker. Topology alone
   -- misses houses, fields, wet corners and signal changes.
   local scenes,scene_count,scene_clock={},0,0
+  local corner_epoch=0
+  local corner_grid,corner_levels,corner_revision
+  local function observed_corners()
+    local grid=s.corner_grid
+    if not (R.versioned_terrain and grid and type(grid.revision)=="number") then return end
+    if grid~=corner_grid or grid.levels~=corner_levels or grid.revision~=corner_revision then
+      corner_grid,corner_levels,corner_revision=grid,grid.levels,grid.revision
+      corner_epoch=corner_epoch+1
+    end
+    return corner_epoch
+  end
   local function scene_key(x,z,w,h) return table.concat({x,z,w,h},":") end
-  local function snapshot(x,z,w,h,fraction,frame,known,include_vehicle_summary)
+  local function snapshot(x,z,w,h,fraction,frame,known,include_vehicle_summary,epoch)
     if not integer(x,1,Sim.W) or not integer(z,1,Sim.H)
       or not integer(w,1,32) or not integer(h,1,32) or x+w-1>Sim.W or z+h-1>Sim.H then
       return reply(false,"INVALID_INTEREST_WINDOW")
     end
     local projection=R.terrain_projection
-    local corners=projection and projection.corners(R.terrain,s.corner_grid,x,z,w,h)
-    local old=known and scenes[scene_key(x,z,w,h)]
+    local old=(known or epoch) and scenes[scene_key(x,z,w,h)]
+    local cached=epoch and old and old.corner_epoch==epoch
+    local corners=projection and (cached and old.corners or projection.corners(R.terrain,s.corner_grid,x,z,w,h))
     local dikes=R.canal_dikes and R.canal_dikes.mask or function() end
     local wires=R.rail_wire_mask or function() end
     local pylons=R.rail_pylon or function() end
@@ -776,7 +788,7 @@ return function(Sim,R,max_days)
     for k in pairs(b) do if a[k]==nil then return false end end
     return true
   end
-  local function scene(packet,known)
+  local function scene(packet,known,epoch)
     local key=scene_key(packet.x,packet.z,packet.width,packet.height)
     local old=scenes[key]
     scene_clock=scene_clock+1
@@ -796,7 +808,7 @@ return function(Sim,R,max_days)
       old={key=scene_clock,tiles=packet.tiles,corners=packet.corners,registries=packet.registries}
       scenes[key]=old
     end
-    old.access=scene_clock
+    old.access,old.corner_epoch=scene_clock,epoch
     packet.scene=old.key
     if known==old.key then
       packet.tiles,packet.corners,packet.registries=nil,nil,nil
@@ -807,13 +819,14 @@ return function(Sim,R,max_days)
       return reply(false,"INVALID_INTEREST_BATCH")
     end
     local packets,frame={},{road={},rail={},whole_trains=true}
+    local epoch=observed_corners()
     for _,w in ipairs(windows) do
       if type(w)~="table" then return reply(false,"INVALID_INTEREST_WINDOW") end
       -- Browsing sectors consumes projected actors, not a second full
       -- scan and copy of the fleet registry for each window.
-      local r=snapshot(w.x,w.z,w.w,w.h,fraction,frame,w.scene)
+      local r=snapshot(w.x,w.z,w.w,w.h,fraction,frame,w.scene,false,epoch)
       if not r.ok then return r end
-      scene(r.value,w.scene)
+      scene(r.value,w.scene,epoch)
       if R.passengers then
         r.value.boardings,r.value.boarding_cursor,r.value.fares=R.passengers.events({w},w.after_boarding)
       end

@@ -52,12 +52,14 @@ function M.matches_tile(real,projected)
   end
   return true
 end
+local char,unpack_=string.char,unpack or table.unpack
 function M.corners(terrain,grid,x,z,w,h)
-  local rows={}
+  local rows,row={},{}
   for dz=0,h do
-    local row={}
-    for dx=0,w do row[dx+1]=string.char(assert(terrain.corner(grid,x+dx,z+dz))) end
-    rows[dz+1]=table.concat(row)
+    -- Keep the exact height source, byte layout and inclusive shared
+    -- edges. A 32-tile sector needs 33 char calls, not 33 × 33.
+    for dx=0,w do row[dx+1]=assert(terrain.corner(grid,x+dx,z+dz)) end
+    rows[dz+1]=char(unpack_(row,1,w+1))
   end
   return table.concat(rows)
 end

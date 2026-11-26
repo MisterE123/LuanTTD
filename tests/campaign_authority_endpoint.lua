@@ -169,6 +169,30 @@ s.tiles[Sim.id(3,6)].variant=19
 local c=assert(A.snapshots({interest},.7).value)[1]
 assert(topology==s.topology and c.scene~=a.scene and c.tiles[1].surface.variant==19)
 print("PASS clean scene sends actor-only deltas; non-command scene edits invalidate the exact bounded cache")
+do
+  local original=runtime.terrain_projection.corners
+  local encoded=0
+  runtime.terrain_projection.corners=function(...)
+    encoded=encoded+1
+    return original(...)
+  end
+  local window={x=34,z=25,w=4,h=4}
+  local first=assert(A.snapshots({window}).value)[1]
+  window.scene=first.scene
+  local warm=assert(A.snapshots({window}).value)[1]
+  assert(encoded==1 and not warm.corners)
+  local old_revision=s.corner_grid.revision
+  -- Even the shared eastern edge affects this sector, not just its tiles.
+  local plan=assert(T.plan(s.corner_grid,window.x+window.w-1,window.z,1,true))
+  assert(T.apply(s.corner_grid,plan) and s.corner_grid.revision>old_revision)
+  local fresh=assert(A.snapshots({window}).value)[1]
+  assert(encoded==2 and fresh.scene~=first.scene and fresh.corners~=first.corners)
+  assert(fresh.corners==original(T,s.corner_grid,window.x,window.z,window.w,window.h))
+  window.scene=fresh.scene
+  assert(not assert(A.snapshots({window}).value)[1].corners and encoded==2)
+  runtime.terrain_projection.corners=original
+  print("PASS warm sector reuses corner bytes; actual shared-corner edit invalidates the packet")
+end
 s.road_economy,s.road_stock_clock=true,true
 local sign={tool="oneway",first=Sim.id(8,19),last=Sim.id(13,19),axis=0,start_half=false,end_half=true}
 local company=assert(A.company(john).value)
