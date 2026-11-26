@@ -42,3 +42,33 @@ for _,r in ipairs(shortened) do
   assert(r.name~="Distant Mill" and r.name~="Outside")
 end
 print("PASS one small margin beyond effective view, fog and send caps, 3D cutoff, and matching worker query radius")
+local function same(expected,actual)
+  assert(#expected==#actual,("expected %d results, got %d"):format(#expected,#actual))
+  for i,v in ipairs(expected) do
+    for _,k in ipairs({"id","tile","kind","name","population","y"}) do assert(v[k]==actual[i][k],k) end
+  end
+end
+local index=L.site_index(Sim,board)
+local function query(x,z,d)
+  local plain=L.describe(Sim,board,x,z,peek,d)
+  local indexed=L.describe(Sim,board,x,z,peek,d,index)
+  same(plain,indexed)
+  return indexed
+end
+for x=-50,544,19 do
+  for z=-33,300,41 do for _,r in ipairs({31,128,384}) do query(x,z,r) end end
+end
+local old=board.sites[1]
+old.population,old.name=819,"Upland Borough"
+assert(query(26,18,3)[1].name=="Upland Borough")
+old.closed=true
+for _,row in ipairs(query(26,18,3)) do assert(row.id~=1) end
+local far=Sim.id(454,408)
+board.sites[281]={id=281,tile=far,name="Farthest Canal",kind="factory"}
+board.tiles[far]={h=7}
+assert(query(908,816,5)[1].id==281)
+board.sites[281]={id=281,tile=id,name="Returned Canal",kind="factory"}
+assert(#query(908,816,5)==0)
+board.sites[281]=nil
+assert(#query(908,816,5)==0)
+print("PASS indexed and full-scan labels agree across bucket boundaries, ties, cap, append, closure, and live names/heights")

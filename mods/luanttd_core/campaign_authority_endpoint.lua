@@ -10,6 +10,7 @@ return function(Sim,R,max_days)
   local order_target=dofile(mod.."/campaign_order_target.lua")
   local styles=dofile(mod.."/bridge_style_assets.lua")
   local place_labels=dofile(mod.."/world_place_labels.lua")
+  local place_index=place_labels.site_index(Sim,s)
   local Lift=dofile(mod.."/openttd/town_lift.lua")
   local TownFoundation=dofile(mod.."/openttd/town_foundation.lua")
   local front_steps=dofile(mod.."/house_front_steps.lua").make(dofile(mod.."/house_frontage.lua"))
@@ -367,7 +368,7 @@ return function(Sim,R,max_days)
       local _,_,y=R.terrain.tile(s.corner_grid,u,v)
       return y
     end
-    return reply(true,nil,place_labels.describe(Sim,s,x,z,top,range))
+    return reply(true,nil,place_labels.describe(Sim,s,x,z,top,range,place_index))
   end
   function A.jump_map(name,zoom,here,focus)
     if not owner(name) or not s.companies[name] or here~=nil and not tile_id(here)
