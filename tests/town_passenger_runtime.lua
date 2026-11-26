@@ -31,3 +31,22 @@ for _,p in ipairs(inside.stock.passenger) do
 end
 assert(s.passenger_house_clock.counter==220*74)
 print("PASS: authored house mapping on stock cadence; actual three-tile diagonal catchment, packet source and selective service")
+
+-- The sign is not the physical catchment. A distant joined member can
+-- put a station into a new sector, and removing it clears those bounds.
+do
+  local selector=dofile(root.."road_house_catchments.lua")
+  local sign,member=Sim.id(4,4),Sim.id(18,4)
+  local st=terminal(4,4,4)
+  st.road_members={[sign]="bus",[member]="bus"}
+  local near=selector(Sim,{st},H.bus_catchment)
+  assert(near(s,16,3,2)[1].value==st)
+  assert(Sim.road_stop_covers(s,st,17,4,H.bus_catchment))
+  st.road_members={[sign]="bus"}
+  s.topology=s.topology+1
+  assert(#near(s,16,3,2)==0)
+  s.stations[4]=nil
+  s.topology=s.topology+1
+  assert(#near(s,3,3,1)==0)
+end
+print("PASS joined road catchment bounds use physical membership and invalidate on removal")

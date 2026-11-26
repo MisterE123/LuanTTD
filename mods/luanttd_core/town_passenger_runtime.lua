@@ -2,8 +2,10 @@
 -- production and catchment, not town expansion or visual buildings.
 local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
 local Lift=dofile(path.."openttd/town_lift.lua")
+local road_candidates=dofile(path.."road_house_catchments.lua")
 return function(Sim,H,Packets,Rating,Mail)
   local M={}
+  local road_indexes=setmetatable({},{__mode="k"})
   local axis_log={[64]=6,[128]=7,[256]=8,[512]=9,[1024]=10,[2048]=11,[4096]=12}
   local archetype={[0]=0x19,0x18,0x1A,0x06}
   function M.stamp(s,t,id)
@@ -36,9 +38,18 @@ return function(Sim,H,Packets,Rating,Mail)
     local shared_mail=hooks and hooks.mail
     local mail=s.road_mail and Mail
     local truck_stops=not shared_mail and mail and mail.stops(s)
-    local stops={}
-    for _,st in pairs(s.stations) do if st.mode=="road" and st.stop_type~="truck" then stops[#stops+1]=st end end
-    table.sort(stops,function(a,b) return a.id<b.id end)
+    local nearby
+    if not (hooks and hooks.passenger) then
+      local r=road_indexes[s]
+      if not r or r.stations~=s.stations or r.topology~=s.topology or s.topology==nil then
+        local stops={}
+        for _,st in pairs(s.stations) do if st.mode=="road" and st.stop_type~="truck" then stops[#stops+1]=st end end
+        table.sort(stops,function(a,b) return a.id<b.id end)
+        r={stations=s.stations,topology=s.topology,nearby=road_candidates(Sim,stops,H.bus_catchment)}
+        road_indexes[s]=r
+      end
+      nearby=r.nearby
+    end
     local function house(x,z)
       local id=Sim.id(x+1,z+1)
       local t=id and s.tiles[id]
@@ -57,7 +68,8 @@ return function(Sim,H,Packets,Rating,Mail)
       if hooks and hooks.passenger then return hooks.passenger(s,amount,x,z,record,tick) end
       local list={}
       local area=record.area or 1
-      for _,st in ipairs(stops) do
+      for _,row in ipairs(nearby(s,x,z,area)) do
+        local st=row.value
         local covered=false
         for dz=0,area-1 do for dx=0,area-1 do
           if Sim.id(x+1+dx,z+1+dz) and Sim.road_stop_covers(s,st,x+1+dx,z+1+dz,H.bus_catchment) then covered=true end

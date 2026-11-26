@@ -2,6 +2,8 @@
 -- Bridge one OpenTTD 14.1 house tile-loop event to one station contest.
 -- Keep the road and pilot save schemas; no second source or parallel
 -- allocation pass is allowed while the mounted source owns this event.
+local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+local sector=dofile(mod.."/catchment_sectors.lua")
 return function(Sim,Catchment,Packets,RoadRating,StockRating)
   local M={}
   local geometry=setmetatable({},{__mode="k"})
@@ -122,57 +124,18 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
   -- facility squares. This index only picks coarse candidates, with no
   -- changes to town rights, active ratings, packet math, or tie order.
   local buckets_by_context=setmetatable({},{__mode="k"})
-  local sector_size=16
   local function index_for(s,service,ctx)
     local q=buckets_by_context[ctx]
-    if q and q.s==s and q.native==(service and service.stations) and q.topology==s.topology then return q end
-    local sectors={}
-    local columns=math.ceil(ctx.width/sector_size)
-    local ordinal=0
+    if q and q.s==s and q.native==(service and service.stations) and q.topology==s.topology then return q.index end
+    local index=sector(ctx.width,ctx.height)
     each_station(s,service,ctx,function(kind,st,tiles)
       local key=station_key(ctx,kind,st)
       local c=view_geometry(st,key,tiles,ctx)
-      local box=c.bounds
-      if not box then return end
-      ordinal=ordinal+1
-      local entry={kind=kind,station=st,key=key,coverage=c,ordinal=ordinal}
-      for z=math.floor(box.top/sector_size),math.floor(box.bottom/sector_size) do
-        for x=math.floor(box.left/sector_size),math.floor(box.right/sector_size) do
-          local at=z*columns+x
-          local list=sectors[at]
-          if not list then list={};sectors[at]=list end
-          list[#list+1]=entry
-        end
-      end
+      if c.bounds then index.add(c.bounds,{kind=kind,station=st,key=key,coverage=c}) end
     end)
-    q={s=s,native=service and service.stations,topology=s.topology,sectors=sectors,columns=columns}
+    q={s=s,native=service and service.stations,topology=s.topology,index=index}
     buckets_by_context[ctx]=q
-    return q
-  end
-  local function nearby(s,service,e,ctx,add)
-    local q=index_for(s,service,ctx)
-    local minx,maxx=math.max(0,e.x),math.min(ctx.width-1,e.x+(e.area or 1)-1)
-    local minz,maxz=math.max(0,e.y),math.min(ctx.height-1,e.y+(e.area or 1)-1)
-    if minx>maxx or minz>maxz then return end
-    local left,right=math.floor(minx/sector_size),math.floor(maxx/sector_size)
-    local top,bottom=math.floor(minz/sector_size),math.floor(maxz/sector_size)
-    local function use(entry)
-      add(entry.kind,entry.station,entry.key,entry.coverage)
-    end
-    if left==right and top==bottom then
-      local rows=q.sectors[top*q.columns+left]
-      if rows then for _,entry in ipairs(rows) do use(entry) end end
-      return
-    end
-    local rows,seen={},{}
-    for z=top,bottom do for x=left,right do
-      local list=q.sectors[z*q.columns+x]
-      if list then for _,entry in ipairs(list) do
-        if not seen[entry] then seen[entry]=true;rows[#rows+1]=entry end
-      end end
-    end end
-    table.sort(rows,function(a,b) return a.ordinal<b.ordinal end)
-    for _,entry in ipairs(rows) do use(entry) end
+    return index
   end
 
   local function gather(s,service,e,ctx)
@@ -189,7 +152,11 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
       goods_by_key[key]=assert(st.passenger_rating_state,"Missing station passenger rating")
     end
     if ctx.index_passenger_catchments then
-      nearby(s,service,e,ctx,add)
+      local index=index_for(s,service,ctx)
+      for _,row in ipairs(index.query(e.x,e.y,e.area)) do
+        local entry=row.value
+        add(entry.kind,entry.station,entry.key,entry.coverage)
+      end
     else
       each_station(s,service,ctx,function(kind,st,tiles)
         local key=station_key(ctx,kind,st)

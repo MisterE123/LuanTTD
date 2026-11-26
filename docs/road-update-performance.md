@@ -242,3 +242,22 @@ allocation benchmark measures one stage, not the entire simulation.
 tests/passenger_supply_spatial_bench_native.sh "$(command -v luantiserver)" \
   /tmp/luanttd-passenger-index
 ```
+
+### Before the first train or airport is built
+
+Road-only games now share the same coarse catchment lookup. The road
+index uses physical stop membership, the stock catchment radius, and the
+day's ordered station catalog. It is reused while construction topology is
+unchanged. A candidate still needs to pass the exact road coverage and
+rating checks, and removing a joined member updates the index.
+
+In two native batches of a 12-day road-only house loop with 512 stops,
+the median was **114 → 93 ms** and **117 → 100 ms**. Both versions
+credited 7,598 identical waiting passenger units. A separate native
+77-day ordinary worker replay used 128 paid buses and no alternate
+passenger service; actual cash and stop queues also matched.
+
+```sh
+tests/passenger_supply_spatial_bench_native.sh "$(command -v luantiserver)" \
+  /tmp/luanttd-road-house --road-only aff651a24de6d7090893a256d95d252d1c206090
+```
