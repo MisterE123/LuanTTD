@@ -7,8 +7,19 @@ not be backface-culled on one approach, and must have consistent course height.
 from collections import defaultdict
 from pathlib import Path
 
+from PIL import Image
+
 models = Path(__file__).resolve().parents[1] / "mods/luanttd_core/models"
 perimeter_count = 0
+textures = models.parent / "textures"
+brick = Image.open(textures / "bl_road_surface_retaining.png").convert("RGB")
+assert brick.size == (32, 32)
+for stem in ("rail_split_foundation_atlas", "rail_split_foundation_barren_atlas"):
+    atlas = Image.open(textures / f"bl_{stem}.png").convert("RGB")
+    assert atlas.size == (128, 256)
+    for x in range(0, 128, 32):
+        for y in range(128, 256, 32):
+            assert atlas.crop((x, y, x + 32, y + 32)).tobytes() == brick.tobytes(), stem
 
 for pattern, expects in (("bl_rail_inclined_*.obj", 16), ("bl_rail_foundation_split_*.obj", 40)):
     paths = [p for p in sorted(models.glob(pattern)) if not p.stem.endswith("_wet")]
@@ -28,22 +39,31 @@ for pattern, expects in (("bl_rail_inclined_*.obj", 16), ("bl_rail_foundation_sp
                 if all(v[1] > .5 for v in tex):
                     caps.append(face)
                 else:
-                    assert all(abs(t[1] - (.06 + .125 * (v[1] + .5))) < .000002
+                    assert all(abs(t[1] - (.125 + .125 * (v[1] + .5))) < .000002
                                for v, t in zip(face, tex)), model.name
-                    walls.append(face)
+                    walls.append((face, tex))
         assert caps and walls, model.name
         lo_x = min(v[0] for v in vertices)
         hi_x = max(v[0] for v in vertices)
         lo_z = min(v[2] for v in vertices)
         hi_z = max(v[2] for v in vertices)
         edges = defaultdict(list)
-        for face in walls:
+        for face, tex in walls:
             for dim, edge, sign in ((0, lo_x, -1), (0, hi_x, 1), (2, lo_z, -1), (2, hi_z, 1)):
                 if all(v[dim] == edge for v in face):
                     a, b, c = face[:3]
                     u, v = [b[k] - a[k] for k in range(3)], [c[k] - a[k] for k in range(3)]
                     normal = (u[1]*v[2] - u[2]*v[1], 0, u[0]*v[1] - u[1]*v[0])
                     assert normal[dim] * sign > 0, (model.name, face, "inward normal")
+                    # Engine OBJ import mirrors X. On normal cube sides U
+                    # increases in world +X on -Z and +Z on +X, the other
+                    # two faces reversing. Validate its phase, not just span.
+                    if dim == 0:  # wall extends along Z
+                        along = lambda point: ((point[2] - lo_z) if sign == -1 else (hi_z - point[2]))
+                    else:  # wall extends along X
+                        along = lambda point: ((hi_x - point[0]) if sign == -1 else (point[0] - lo_x))
+                    assert all(abs(t[0] - (.25 + .25 * along(p))) < .000002
+                               for p, t in zip(face, tex)), (model.name, face, "brick phase")
                     edges[dim, edge].append(set(face))
         for face in caps:
             for a, b in zip(face, face[1:] + face[:1]):
@@ -60,4 +80,4 @@ for pattern, expects in (("bl_rail_inclined_*.obj", 16), ("bl_rail_foundation_sp
             for d, e in ((0, lo_x), (0, hi_x), (2, lo_z), (2, hi_z))
             if a[d] == b[d] == e and max(a[1], b[1]) > -.5
         ), model.name
-print(f"PASS 56 dry rail foundations: {perimeter_count} sealed, outward-facing, consistently UV-mapped perimeter walls")
+print(f"PASS 56 dry rail foundations: {perimeter_count} sealed, outward-facing perimeter walls at the flat brick texture’s exact phase and scale")

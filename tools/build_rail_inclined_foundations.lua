@@ -4,6 +4,7 @@ local d="mods/luanttd_core/"
 local Track=dofile(d.."openttd/rail_track.lua")
 local Slope=dofile(d.."openttd/slope.lua")
 local Lab=dofile(d.."trackworks.lua")({},Track,nil,Slope)
+local UV=dofile("tools/rail_foundation_uv.lua")
 local corners={{0,0},{1,0},{1,1},{0,1}}
 local check=arg[1]=="--check"
 local files,walls=0,0
@@ -16,18 +17,15 @@ local function build(raw,base,profile)
     new[i]=Slope.surface(c[1],c[2],profile)
     assert(new[i]+1e-8>=raw_edge,"a rail foundation cannot cut below the raw edge")
   end
-  local function face(indices,levels,masonry)
+  local function face(indices,levels,first,last)
     local refs={}
     for i,j in ipairs(indices) do
       local u,v=unpack(corners[j])
       local h=levels[i]
       outline[#outline+1]=("v %.6f %.6f %.6f"):format(.5-u*2,h-.5,v*2-.5)
-      local a,b=u,.54+.42*(1-v)
-      if masonry then
-        a=corners[indices[1]][1]~=corners[indices[2]][1] and u or v
-        b=.06+.125*h
-      end
-      outline[#outline+1]=("vt %.6f %.6f"):format(.02+.96*a,b)
+      local a,b=UV.top(u,v)
+      if first then a,b=UV.wall(corners[first],corners[last],corners[j],h) end
+      outline[#outline+1]=("vt %.6f %.6f"):format(a,b)
       n=n+1;refs[#refs+1]=n.."/"..n
     end
     outline[#outline+1]="f "..table.concat(refs," ")
@@ -41,11 +39,11 @@ local function build(raw,base,profile)
     local j=i%4+1
     local h0,h1=new[i],new[j]
     if h0>0 and h1>0 then
-      face({j,i,i,j},{h1,h0,0,0},true)
+      face({j,i,i,j},{h1,h0,0,0},i,j)
     elseif h0>0 then
-      face({j,i,i},{h1,h0,0},true)
+      face({j,i,i},{h1,h0,0},i,j)
     elseif h1>0 then
-      face({j,i,j},{h1,h0,0},true)
+      face({j,i,j},{h1,h0,0},i,j)
     end
     if h0>0 or h1>0 then count=count+1 end
   end

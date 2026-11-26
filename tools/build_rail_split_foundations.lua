@@ -6,6 +6,7 @@ local Slope=dofile(d.."openttd/slope.lua")
 local H=dofile(d.."openttd/rail_height.lua")(Track,Slope)
 local Split=dofile(d.."rail_split_profile.lua")(Track,H)
 local RailWater=dofile(d.."openttd/rail_half_water.lua")(Track,Slope)
+local UV=dofile("tools/rail_foundation_uv.lua")
 local check=arg[1]=="--check"
 local n,wet_n=0,0
 local seen,wet_seen={},{}
@@ -17,26 +18,15 @@ local function output(p,wet)
   local face_count=0
   local function face(points,heights,wall)
     local ids={}
-    local lo,hi=math.huge,-math.huge
-    local min_u,max_u,min_v,max_v=math.huge,-math.huge,math.huge,-math.huge
-    if wall then
-      for i,q in ipairs(points) do
-        lo,hi=math.min(lo,heights[i]),math.max(hi,heights[i])
-        min_u,max_u=math.min(min_u,q[1]),math.max(max_u,q[1])
-        min_v,max_v=math.min(min_v,q[2]),math.max(max_v,q[2])
-      end
-      assert(hi>lo)
-    end
     for i,q in ipairs(points) do
       local u,v=q[1],q[2]
       out[#out+1]=("v %.6f %.6f %.6f"):format(1.5-2*u,heights[i]-.5,2*v-.5)
-      -- Atlas: upper half carries grass, lower half carries the cut stone.
-      local a,b=u,.54+.42*(1-v)
+      local a,b=UV.top(u,v)
       if wall then
-        a=max_u-min_u>=max_v-min_v and u or v
-        b=wet and .06+.34*(heights[i]-lo)/(hi-lo) or .06+.125*heights[i]
+        local first,last=wall==1 and points[2] or points[1],wall==1 and points[1] or points[2]
+        a,b=UV.wall(first,last,q,heights[i])
       end
-      out[#out+1]=("vt %.6f %.6f"):format(.02+.96*a,b)
+      out[#out+1]=("vt %.6f %.6f"):format(a,b)
       next_vertex=next_vertex+1
       ids[#ids+1]=next_vertex.."/"..next_vertex
     end
@@ -72,9 +62,9 @@ local function output(p,wet)
     -- entire exposed edge down to the fill below. Retain the actual raw
     -- shoreline edge when wet so the low half stays navigable.
     if not wet then lo,ln=0,0 end
-    if h[1]>lo and h[2]>ln then face({tri[2],tri[1],tri[1],tri[2]},{h[2],h[1],lo,ln},true)
-    elseif h[1]>lo then face({tri[2],tri[1],tri[1]},{h[2],h[1],lo},true)
-    elseif h[2]>ln then face({tri[2],tri[1],tri[2]},{h[2],h[1],ln},true) end
+    if h[1]>lo and h[2]>ln then face({tri[2],tri[1],tri[1],tri[2]},{h[2],h[1],lo,ln},1)
+    elseif h[1]>lo then face({tri[2],tri[1],tri[1]},{h[2],h[1],lo},1)
+    elseif h[2]>ln then face({tri[2],tri[1],tri[2]},{h[2],h[1],ln},1) end
   end
   for i,w in ipairs(wedges) do
     local neighbor=wedges[(i+2)%4+1]
@@ -82,9 +72,9 @@ local function output(p,wet)
     local h,k=w.h,neighbor.h
     -- Emit from the wedge above the seam, toward the lower one.
     assert((h[1]-k[2])*(h[3]-k[3])>=0,"Crossed rail foundation wall")
-    if h[1]>k[2] and h[3]>k[3] then face({a,b,b,a},{h[1],h[3],k[3],k[2]},true)
-    elseif h[1]>k[2] then face({a,b,a},{h[1],h[3],k[2]},true)
-    elseif h[3]>k[3] then face({a,b,b},{h[1],h[3],k[3]},true) end
+    if h[1]>k[2] and h[3]>k[3] then face({a,b,b,a},{h[1],h[3],k[3],k[2]},2)
+    elseif h[1]>k[2] then face({a,b,a},{h[1],h[3],k[2]},2)
+    elseif h[3]>k[3] then face({a,b,b},{h[1],h[3],k[3]},2) end
   end
   return table.concat(out,"\n").."\n",face_count
 end
