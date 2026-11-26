@@ -11,8 +11,7 @@ R=W.R
 # Original elrail_data.h PCP and PPP pixel coordinates, mapped to 2 nodes.
 CASES=((0,12,0,8),(12,16,8,16),(16,4,16,8),(4,0,8,0))
 
-def model(edge):
-    px,pz,cx,cz=CASES[edge]
+def model(px,pz,cx,cz):
     foot=((px-8)/8,(pz-8)/8)
     contact=((cx-8)/8,(cz-8)/8)
     x,z=foot
@@ -33,7 +32,7 @@ def main():
     authored=[]
     for edge in range(4):
         name=f"bl_rail_edge_pylon_{edge}"
-        p=model(edge)
+        p=model(*CASES[edge])
         authored.append((name,p))
         export=deepcopy(p)
         xoff,zoff=(1,0) if edge<2 else (0,1)

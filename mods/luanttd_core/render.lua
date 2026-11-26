@@ -1126,19 +1126,17 @@ return function(api)
     local wires={}
     local pylon=dofile(modpath.."/openttd/rail_pylon.lua")(rail_track,dofile(modpath.."/openttd/rail_pylon_tables.lua"))
     local stock=dofile(modpath.."/rail_edge_pylon.lua")(Sim,rail_track,pylon,terrain_view)
-    local poles={}
-    for edge=0,3 do
-      local name="rail_edge_pylon_"..edge
-      poles[edge]=architecture(name,name,"rail_catenary_atlas")
+    local poles={{},{}}
+    for slot,choices in ipairs(stock.poles) do
+      for id,name in pairs(choices) do poles[slot][id]=architecture(name,name,"rail_catenary_atlas") end
     end
     function stock_scenery.stock_pylon(id,t)
       if projected then return S.rail_pylon[id] end
       return stock.at(S,id,t)
     end
-    function stock_scenery.pylon_node(t,profile,x,z)
-      local axis=t.rail_tracks==1 and 0 or 1
-      if x%2==1 and z%2==0 and profile%2==1 then return poles[axis] end
-      if x%2==0 and z%2==1 and profile>=2 then return poles[axis+2] end
+    function stock_scenery.pylon_node(profile,x,z)
+      if x%2==1 and z%2==0 then return poles[1][profile%33] end
+      if x%2==0 and z%2==1 then return poles[2][math.floor(profile/33)] end
     end
     for _,mask in ipairs(Turnout.masks) do
       local name="rail_turnout_catenary_"..mask
@@ -1146,7 +1144,6 @@ return function(api)
     end
     function stock_scenery.rail_wire(id,t,x,z,under,stock_profile)
       local bits=t.rail_tracks
-      if stock_profile~=nil then return stock_scenery.catenary[bits][0] end
       if Turnout.supported(bits) then
         local selected
         if projected then selected=S.rail_wire[id] else selected=Turnout.at(S,id,t) end
@@ -1162,7 +1159,7 @@ return function(api)
       local family=under and stock_scenery.catenary_under[t.rail_tracks]
         or mode~=0 and stock_scenery.catenary_eased[t.rail_tracks][mode]
         or stock_scenery.catenary[t.rail_tracks]
-      return family[art.pole and not signal and 1 or 0]
+      return family[stock_profile==nil and art.pole and not signal and 1 or 0]
     end
     for _,mask in ipairs({1,2,4,8,16,32}) do
       local family={}
@@ -1980,7 +1977,7 @@ return function(api)
             and not t.rail_depot_dir and stock_scenery.catenary then
           local stock_profile=stock_scenery.stock_pylon(id,t)
           if stock_profile~=nil then
-            local pole=stock_scenery.pylon_node(t,stock_profile,x,z)
+            local pole=stock_scenery.pylon_node(stock_profile,x,z)
             if pole then return pole end
           end
           local deck=Sim.bridge_deck_at(S,id)

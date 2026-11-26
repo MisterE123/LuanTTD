@@ -2,13 +2,21 @@
 -- transitions, terrain grades and signal masts to their own art.
 return function(Sim,Track,Kernel,terrain)
   local V={}
-  V.directions={[0]=3,[1]=5,[2]=7,[3]=1}
+  local edges={[1]={0,2},[2]={1,3},[4]={0,3},[8]={1,2},[16]={2,3},[32]={0,1}}
+  V.poles={{},{}}
+  local place={{0,3,0,0},{1,5,0,1},{2,7,1,2},{3,1,1,3},
+    {0,4,0},{0,6,0},{1,0,0},{1,5,1},{1,6,1},{2,0,1},{2,2,0},{2,7,0},{3,2,1},{3,4,1}}
+  for _,rule in ipairs(place) do
+    local edge,dir,slot,standard=unpack(rule)
+    V.poles[slot+1][edge*8+dir+1]=standard and "rail_edge_pylon_"..standard or
+      ("rail_curve_pylon_%d_%d_%d"):format(edge,dir,slot)
+  end
   function V.at(s,id,t)
-    if not t or t.rail_type~=1 or t.rail_tracks~=1 and t.rail_tracks~=2 then return end
+    if not t or t.rail_type~=1 or not edges[t.rail_tracks] then return end
     local d=s.stock_rail_dispatch
     local signals=d and d.signals and d.signals.records
     local function plain(i,b)
-      if not i or not b or b.build~="stock_rail" or b.rail_type~=1 or b.rail_tracks~=1 and b.rail_tracks~=2
+      if not i or not b or b.build~="stock_rail" or b.rail_type~=1 or not edges[b.rail_tracks]
           or b.rail_station_id or b.rail_depot_dir~=nil or b.rail_waypoint_id or b.level_crossing or b.rail_span_id
           or b.signal or signals and signals[i] then return end
       if Sim.bridge_deck_at(s,i) then return end
@@ -21,9 +29,7 @@ return function(Sim,Track,Kernel,terrain)
     local x,z=Sim.xy(id)
     local group=(x-1)%2*2+(z-1)%2
     local bits=0
-    local axis=t.rail_tracks==1 and 0 or 1
-    for i=0,1 do
-      local edge=axis+i*2
+    for slot,edge in ipairs(edges[t.rail_tracks]) do
       local j=Sim.adjacent(id,4-edge)
       local n=j and s.tiles[j]
       local other=plain(j,n)
@@ -31,8 +37,9 @@ return function(Sim,Track,Kernel,terrain)
       if j and terrain.tile(j)~=0 then return end
       local dir=Kernel.choose(edge,group,home,other)
       if dir~=nil then
-        if dir~=V.directions[edge] then return end
-        bits=bits+2^i
+        local code=edge*8+dir+1
+        if not V.poles[slot][code] then return end
+        bits=bits+code*(slot==1 and 1 or 33)
       end
     end
     return bits
