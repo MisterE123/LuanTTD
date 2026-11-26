@@ -79,3 +79,27 @@ are exploratory timings on the shared Linux runner, not fixed targets:
 The underlying update got faster, but it is still possible to exhaust the
 host's interpolation history. No visible position prediction or simulation
 rate change is included.
+
+## Shorter synchronous checkpoint pauses
+
+A second diagnostic timed the worker phases in the same 192-bus campaign
+at 4×. The two observed synchronous checkpoints occupied the owner for
+256 and 354 ms. The saved route geometry contains many small integer
+fields. Emitting their already-known tag and varint as one fragment
+reduces Lua calls and intermediate entries without changing a single
+byte in the checkpoint.
+
+```sh
+tests/campaign_checkpoint_perf_native.sh "$(command -v luantiserver)" \
+  836aa19ebc3acf1e867803d6352060ce00f955f4 \
+  /tmp/luanttd-pose-gaps/after/luanttd-wide-campaign.chk /tmp/luanttd-checkpoint-bench
+```
+
+On a 192-bus checkpoint with 6,314,769 uncompressed bytes, eight runs per
+implementation in each of two runs gave median encoding wall times of
+257 → 218 ms and 240 → 177 ms (15% and 26%), with similar CPU times.
+The packed bytes matched exactly, and the saved file reopened with both
+codecs. This
+does not change when saves occur or how they are committed; compression,
+hash validation, and the atomic write are unchanged. It shortens one
+blocking part of a save, rather than removing synchronous pauses.

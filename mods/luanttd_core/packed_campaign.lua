@@ -10,6 +10,14 @@ local MAX_INT=9007199254740991
 local symbols={}
 for n=0,255 do symbols[n]=char(n) end
 local END,NIL,FALSE,TRUE,UINT,SINT,NUM,STR,STRREF,TAB,TABREF,ARRAY,TILE=0,1,2,3,4,5,6,7,8,9,10,11,12
+-- Stock routes and terrain arrays contain many compact non-negative
+-- integers. Reuse their exact tag+varint bytes instead of dispatching to the
+-- generic emitter and appending each constituent byte one at a time.
+-- This changes neither the graph ordering nor the on-disk format.
+local short_uint={}
+for n=0,8191 do
+  short_uint[n]=n<128 and char(UINT,n) or char(UINT,128+n%128,floor(n/128))
+end
 local terrains={"grass","hill","water"}
 local terrain_codes={grass=1,hill=2,water=3}
 local waters={"sea","river"}
@@ -91,7 +99,9 @@ function M.encode(root,pulse)
         else
           for i=1,n do
             if pulse and i%8192==0 then pulse() end
-            write(rawget(value,i))
+            local member=rawget(value,i)
+            local bytes=short_uint[member]
+            if bytes then put(bytes) else write(member) end
           end
         end
       else tag(TAB) end
@@ -105,7 +115,9 @@ function M.encode(root,pulse)
       string_count=string_count+1;strings[value]=string_count
       tag(STR);str(value)
     elseif kind=="number" then
-      if value==floor(value) and abs(value)<=MAX_INT then
+      local bytes=short_uint[value]
+      if bytes then put(bytes)
+      elseif value==floor(value) and abs(value)<=MAX_INT then
         tag(value<0 and SINT or UINT);uint(abs(value))
       else
         tag(NUM)

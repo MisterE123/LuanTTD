@@ -42,3 +42,14 @@ assert(not pcall(P.decode,enc.."\0"))
 assert(not pcall(P.decode,"\10\1")) -- unknown table reference
 assert(not pcall(P.encode,{bad=function() end}))
 print(("PASS packed campaign graph without Lua recompilation: %d cells, %d bytes before compression"):format(#root.tiles,#enc))
+-- Precombined UINT fragments still use the original tag and base-128
+-- representation at the one-byte, two-byte and uncached boundaries.
+local values={0,127,128,8191,8192,16383,16384,1,-1,1.5,false,"1"}
+local expected={11,12,4,0,4,127,4,128,1,4,255,63,4,128,64,4,255,127,4,128,128,1,
+  4,1,5,1,6,3,49,46,53,2,7,1,49,0}
+assert(P.encode(values)==string.char(unpack(expected)))
+local numeric={}
+for n=0,25000 do numeric[n]=(n%7==0 and -n or n) end
+local roundtrip=P.decode(P.encode(numeric))
+for n=0,25000 do assert(roundtrip[n]==numeric[n]) end
+print("PASS packed integer fragment cache retains exact existing checkpoint bytes and numeric keys")
