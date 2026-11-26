@@ -54,7 +54,7 @@ lines=["# Original sightseeing cockpit; local -Z forward.","o Sightseeing_Sampso
 i=0
 # Luanti 5.10's first-person camera follows the parent's real origin,
 # not its attach offset. Export the cabin from the measured eye anchor.
-SEAT = (0, 4.30, -2.45)
+SEAT = (0, 4.30, -.50)
 
 def poly(v, color=None, coords=None):
     global i
@@ -94,37 +94,35 @@ def bar(p,q,width,key):
 for sign in (-1,1):
     x=2.49*sign
     top=(x,6.37,-6.79)
-    bottom=(x,4.02,-7.29)
+    bottom=(x,3.32,-7.29)
     pillar=(2.81*sign,6.48,-3.97)
-    sill=(2.81*sign,3.91,-3.85)
+    sill=(2.81*sign,3.15,-3.85)
     far=(2.87*sign,6.49,-.40)
-    far_sill=(2.89*sign,3.83,-.40)
+    far_sill=(2.89*sign,3.06,-.40)
     for a,b,w,key in ((top,bottom,.23,"inside"),(top,pillar,.20,"inside"),(bottom,sill,.21,"edge"),
                       (pillar,sill,.18,"inside"),(pillar,far,.21,"inside"),(sill,far_sill,.21,"edge"),
                       (far,far_sill,.28,"inside")):
         bar(a,b,w,key)
     poly([bottom,sill,far_sill,(2.90*sign,2.46,1.5),(x,2.65,-7.0)],"leather")
-    bar((2.75*sign,4.02,-5.80),(2.80*sign,4.00,-4.64),.14,"rubber")
 bar((-2.49,6.37,-6.79),(2.49,6.37,-6.79),.25,"outer")
-bar((-2.49,4.02,-7.29),(2.49,4.02,-7.29),.18,"outer")
-bar((0,4.03,-7.28),(0,6.36,-6.80),.16,"inside")
-poly([(-2.52,6.46,-6.79),(2.52,6.46,-6.79),(2.92,6.54,1.2),(-2.92,6.54,1.2)],"tan")
+bar((-2.49,3.32,-7.29),(2.49,3.32,-7.29),.12,"outer")
+
 bar((-2.50,6.39,-6.83),(2.50,6.39,-6.83),.10,"rubber")
 # Full-width upper bench and angled front panel; camera is in the cabin,
 # not in front of this mesh. Instruments are close but below eyeline.
-poly([(-2.51,3.99,-7.19),(2.51,3.99,-7.19),(2.61,3.99,-5.56),(-2.61,3.99,-5.56)],"shadow")
-poly([(-2.61,3.97,-5.55),(2.61,3.97,-5.55),(2.55,2.40,-5.17),(-2.55,2.40,-5.17)],
+poly([(-2.51,3.29,-7.19),(2.51,3.29,-7.19),(2.61,3.15,-5.56),(-2.61,3.15,-5.56)],"shadow")
+poly([(-2.61,3.13,-5.55),(2.61,3.13,-5.55),(2.55,2.40,-5.17),(-2.55,2.40,-5.17)],
      coords=[(3/256,1-43/256),(252/256,1-43/256),(252/256,1-125/256),(3/256,1-125/256)])
-bar((-2.62,4.02,-5.54),(2.62,4.02,-5.54),.10,"edge")
+bar((-2.62,3.18,-5.54),(2.62,3.18,-5.54),.10,"edge")
 # Visible yoke and throttle quadrant give the seat a cockpit silhouette.
-bar((0,2.67,-4.34),(0,3.47,-4.93),.19,"metal")
-bar((-.76,3.48,-4.89),(.76,3.48,-4.89),.14,"metal")
+bar((0,2.67,-4.34),(0,2.97,-5.43),.19,"metal")
+bar((-.76,2.98,-5.39),(.76,2.98,-5.39),.14,"metal")
 for s in (-1,1):
-    bar((s*.76,3.39,-4.90),(s*.76,3.83,-4.91),.20,"rubber")
+    bar((s*.76,2.89,-5.40),(s*.76,3.33,-5.41),.20,"rubber")
 box(.89,2.96,-4.75,1.64,3.17,-4.21,"mahogany")
 for x in (1.04,1.27,1.48):
-    bar((x,3.13,-4.44),(x,3.55,-4.58),.09,"brass")
-    box(x-.08,3.52,-4.66,x+.08,3.62,-4.50,"rubber")
+    bar((x,3.13,-4.44),(x,3.23,-4.78),.09,"brass")
+    box(x-.08,3.20,-4.86,x+.08,3.30,-4.70,"rubber")
 
 (root/"models"/"bl_sightseeing_plane_cockpit.obj").write_text("\n".join(lines)+"\n")
 im.save(root/"textures"/"bl_sightseeing_plane_cockpit_atlas.png", optimize=True)

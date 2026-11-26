@@ -12,9 +12,12 @@ return function(api,W)
   local third_person=exterior.."_third_person"
   -- Fit the instrument room within the original Sampson body envelope.
   -- Scale around the pilot eye, so the first-person perspective is kept.
-  local cockpit_scale=.35
-  local seat_offset={x=0,y=.353,z=-.30}
+  local cockpit_scale=.29
+  local seat_offset={x=0,y=.332,z=-.165}
   local cabin="luanttd_core:sightseeing_plane_cockpit"
+  local anchor="luanttd_core:sightseeing_plane_anchor"
+  local invisible="bl_sightseeing_hidden_player.png"
+  local anchor_mesh="bl_sightseeing_plane_anchor.obj"
   local art=api.airframe_art and api.airframe_art[215]
   local Sim,R=api.Sim,api.render
   local function cell(x,z) return Sim.id(math.floor((x+.5)/2),math.floor((z+.5)/2)) end
@@ -48,10 +51,48 @@ return function(api,W)
   end
   local samples={{0,0,.015},{.79,0,.19},{-.76,0,.26},{0,.89,.34},{0,-.89,.34},
     {.35,.60,.34},{.35,-.60,.34},{0,0,.51}}
-  local function clear(p,heading,r,pitch,bank)
-    -- Luanti scenery meshes (e.g. factories and terminals) may have no
-    -- native walking collision. Check their authoritative tile footprint
-    -- conservatively as well as exposed native solid voxels.
+  local wheels={{0,0},{.28,.25},{.28,-.25},{-.42,0}}
+  local obstacle="Terrain or an obstacle ahead. S to reverse, E to return."
+  local loading="Terrain still loading. Hold position or press E."
+  local function surface(id,t,x,z)
+    local a=t.airfield
+    return a and (a.level or t.h)+.5 or R.surface(id,x,z) or t.h+.5
+  end
+  local function ground(p,heading)
+    local sx,cz=math.sin(heading),math.cos(heading)
+    local top,bottom=-math.huge,math.huge
+    local level={}
+    for i,o in ipairs(wheels) do
+      local x,z=p.x+sx*o[1]+cz*o[2],p.z+cz*o[1]-sx*o[2]
+      local id=cell(x,z)
+      if not id then return nil,obstacle end
+      local t=tile(id)
+      if not t then return nil,loading end
+      if t.stock_void or (R.walk_waterline and R.walk_waterline(id,x,z)) then
+        return nil,"The sightseeing plane cannot taxi on water. S to reverse, E to return."
+      end
+      local y=surface(id,t,x,z)
+      level[i]=y
+      top,bottom=math.max(top,y),math.min(bottom,y)
+    end
+    if top-bottom>.41 then return nil,"Slope or ledge too steep. S to reverse, E to return." end
+    local pitch=math.atan2((level[2]+level[3])*.5-level[4],.70)
+    -- The prop/radiator protrudes beyond the wheels. Use an approach
+    -- sample at the nose so the slope seam cannot catch it while the
+    -- front wheels are still on the shallow end of the incline.
+    local x,z=p.x+.79*sx,p.z+.79*cz
+    local id=cell(x,z)
+    local nose=tile(id)
+    if nose then
+      local rise=surface(id,nose,x,z)-level[1]
+      if rise>0 and rise<=.45 then
+        pitch=math.max(pitch,math.asin(math.max(0,(rise-.17)/.79)))
+      end
+    end
+    local bank=math.atan2(level[3]-level[2],.50)
+    return level[1]+.023,nil,pitch,bank
+  end
+  local function clear(p,heading,r,pitch,bank,on_ground)
     local sx,cz=math.sin(heading),math.cos(heading)
     local rise,tilt=math.sin(pitch or 0),math.sin(bank or 0)
     for _,o in ipairs(samples) do
@@ -59,14 +100,14 @@ return function(api,W)
       local id=cell(x,z)
       if not id then return false,"Map boundary. E to recover." end
       local t=tile(id)
-      if not t then return false,"Terrain still loading. Hold position or press E." end
-      local level=R.surface(id,x,z) or t.h+.5
+      if not t then return false,loading end
+      local level=surface(id,t,x,z)
       local y=p.y+o[3]+rise*o[1]-tilt*o[2]
       local height=0
       local a=t.airfield
       if a then
-        -- The runway and adjacent final City taxiway row are flat.
-        -- Reject the remaining apron/terminal volume conservatively.
+        -- Protect apron/terminal volume conservatively, leaving the
+        -- runway and the final City taxiway row clear.
         if a.z<(a.layout=="city" and 4 or 2) then height=1.45 end
       elseif t.stock_landmark then height=5
       elseif t.wood then height=3.6
@@ -75,17 +116,24 @@ return function(api,W)
       elseif t.signal or t.tram then height=1.35 end
       local deck=R.host_deck and R.host_deck(id)
       if type(deck)=="number" and y<deck+.6 then height=math.max(height,deck+.60-level) end
-      if y<=level+height+.004 then return false,"Terrain or an obstacle ahead. E to recover." end
+      if y<=level+height+.004 then return false,obstacle end
       local n=solids({x=x,y=y,z=z})
-      if n==nil then return false,"Terrain still loading. Hold position or press E." end
-      if n then return false,"Terrain or an obstacle ahead. E to recover." end
+      if n==nil then return false,loading end
+      if n then
+        -- Terrain mesh collision has voxel steps. Close to a dry
+        -- taxiable slope, trust the actual rendered corner surface
+        -- rather than that staircase, never bypass scenery nodes.
+        local plain=n:match("^luanttd_core:stock_clear_") or n:match("^luanttd_core:slope_%d+_%d+$") or
+          n:match("^luanttd_core:grass") or n:match("^luanttd_core:road")
+        if not (on_ground and height==0 and plain and y-level<.55) then return false,obstacle end
+      end
     end
     return true
   end
-  local world={runway_at=runway,clear=clear}
+  local world={runway_at=runway,clear=clear,ground=ground}
   local function hud(p,q)
     local f=q.flight
-    local mode=({ready="Runway ready",takeoff="Takeoff roll",air=f.speed<4.5 and "STALL: add power" or "In flight",
+    local mode=({ready="Ready to taxi",taxi=f.speed<0 and "Reversing" or "Taxi / takeoff roll",takeoff="Takeoff roll",air=f.speed<4.5 and "STALL: add power" or "In flight",
       rollout="Landed · braking",short="Runway ended"})[f.mode]
     local x=q.origin.x+q.origin.dx*q.origin.length/2-f.pos.x
     local z=q.origin.z+q.origin.dz*q.origin.length/2-f.pos.z
@@ -93,12 +141,12 @@ return function(api,W)
     local way=math.abs(bearing)<.32 and "ahead" or math.abs(bearing)>2.85 and "behind"
       or bearing<0 and "left" or "right"
     local text=("%s  ·  %d km/h  ·  Power %d%%  ·  Height %+.0f m  ·  Runway %.0f m %s"):
-      format(mode,math.floor(f.speed*18+.5),math.floor(f.throttle*100+.5),(f.pos.y-q.origin.y)*5,
+      format(mode,math.floor(math.abs(f.speed)*18+.5),math.floor(f.throttle*100+.5),(f.pos.y-q.origin.y)*5,
         F.distance(f,q.origin)*5,way)
     if text~=q.text then q.text=text;p:hud_change(q.status,"text",text) end
-    local hint=q.blocked or (f.mode=="air" and "Landing: line up with the runway, descend gently at 55–110 km/h."
+    local hint=q.blocked or (f.mode=="air" and "Landing: descend gently onto a runway or clear, dry ground."
       or f.mode=="rollout" and "Safe landing. Press E for a new takeoff, or leave in Inventory."
-      or "Hold W to build power and Space to lift off. The runway is short.")
+      or "A/D steer. S brakes, then reverses. Hold W + Space to lift off.")
     if hint~=q.hint_text then q.hint_text=hint;p:hud_change(q.hint,"text",hint) end
   end
   local function aim(p,f)
@@ -111,7 +159,7 @@ return function(api,W)
     -- First-person in Luanti follows the actual attachment origin.
     -- OBJ cockpit coordinates are exported relative to this same seat.
     local seat=vector.add(f.pos,vector.rotate(seat_offset,rotation))
-    for _,row in ipairs({{q.object,seat},{q.exterior,f.pos}}) do
+    for _,row in ipairs({{q.object,seat},{q.interior,seat},{q.exterior,f.pos}}) do
       local object,at=row[1],row[2]
       if snap then object:set_pos(at) else object:move_to(at,true) end
       object:set_rotation(rotation)
@@ -125,6 +173,7 @@ return function(api,W)
       for _,id in ipairs({q.status,q.hint,q.controls}) do p:hud_remove(id) end
     end
     if q.shell and q.shell:get_pos() then q.shell:remove() end
+    if q.interior and q.interior:get_pos() then q.interior:remove() end
     if q.object and q.object:get_pos() then q.object:remove() end
     if q.exterior and q.exterior:get_pos() then q.exterior:remove() end
   end
@@ -159,27 +208,29 @@ return function(api,W)
     local avatar,note=W.begin_avatar(p,"plane")
     if not avatar then return false,note end
     local q={flight=f,origin=strip}
-    q.object=core.add_entity(f.pos,cabin)
+    q.object=core.add_entity(f.pos,anchor)
+    q.interior=core.add_entity(f.pos,cabin)
     q.exterior=core.add_entity(f.pos,exterior)
     q.shell=q.exterior and core.add_entity(f.pos,third_person)
-    if not q.object or not q.exterior or not q.shell then
+    if not q.object or not q.interior or not q.exterior or not q.shell then
       release(q,p);W.end_avatar(p,"plane");return false,"Could not attach to the aircraft yet."
     end
     -- Only the pilot sees the cabin. Luanti's native camera mode shows
     -- its exterior child in chase view, without ever occluding the glass
     -- in first person. Other observers retain the normal exterior.
     q.object:set_observers({[n]=true})
+    q.interior:set_observers({[n]=true})
     q.shell:set_observers({[n]=true})
     observe_exterior(n,q)
     p:set_physics_override({gravity=0,speed=0,jump=0,sneak=false,speed_walk=0,speed_crouch=0})
-    p:set_properties({eye_height=.08*cockpit_scale,visual="sprite",textures={"bl_sightseeing_hidden_player.png"},
-      visual_size={x=.001,y=.001,z=.001}})
+    p:set_properties({eye_height=.08*cockpit_scale,visual="mesh",mesh=anchor_mesh,textures={invisible},
+      use_texture_alpha=true,visual_size={x=1,y=1,z=1}})
     p:set_eye_offset({x=0,y=0,z=0},{x=0,y=8,z=0},{x=0,y=9,z=0})
     p:set_attach(q.object,"",{x=0,y=0,z=0},{x=0,y=0,z=0})
     q.shell:set_attach(p,"",vector.multiply(seat_offset,-10),{x=0,y=0,z=0},false)
     q.status=text(p,.118,0x25281c,"")
     q.hint=text(p,.165,0x26312c,"")
-    q.controls=text(p,.212,0x26312c,"W/S power · A/D bank · Space/Shift pitch · E recover · Inventory: leave cockpit")
+    q.controls=text(p,.212,0x26312c,"W/S power · A/D steer or bank · Space/Shift pitch · E return to runway · Inventory: exit")
     players[n]=q
     q.audio=Effects.start(n)
     pose(p,q,true)
@@ -199,7 +250,7 @@ return function(api,W)
     local n=p:get_player_name()
     local q=players[n]
     if not q then return end
-    if not q.object:get_pos() or not q.exterior:get_pos() or not q.shell:get_pos() or p:get_attach()~=q.object then
+    if not q.object:get_pos() or not q.interior:get_pos() or not q.exterior:get_pos() or not q.shell:get_pos() or p:get_attach()~=q.object then
       Plane.toggle(p)
       core.chat_send_player(n,"Aircraft view lost. Returned to your previous view.")
       return
@@ -220,7 +271,7 @@ return function(api,W)
     if q.flight.mode=="air" and q.flight.pos.y>95 then
       keys={up=keys.up,down=keys.down,left=keys.left,right=keys.right,sneak=true}
     end
-    if not q.blocked then
+    if not q.blocked or q.flight.mode~="air" then
       local previous=q.flight.pitch
       local d,why=F.step(q.flight,keys,dt,world)
       q.blocked=why
@@ -245,6 +296,12 @@ return function(api,W)
     end
     register_exterior(exterior)
     register_exterior(third_person)
+    -- Luanti attaches children to the visual mesh, inheriting its
+    -- scale. A .29-scale cockpit must not be the shell's ancestor:
+    -- otherwise the tiny third-person fuselage renders through it.
+    core.register_entity(anchor,{initial_properties={physical=false,pointable=false,collide_with_objects=false,
+      static_save=false,visual="mesh",mesh=anchor_mesh,textures={invisible},use_texture_alpha=true,
+      visual_size={x=1,y=1,z=1}}})
     core.register_entity(cabin,{initial_properties={physical=false,pointable=false,collide_with_objects=false,
       static_save=false,visual="mesh",mesh="bl_sightseeing_plane_cockpit.obj",
       textures={"bl_sightseeing_plane_cockpit_atlas.png"},shaded=false,backface_culling=false,

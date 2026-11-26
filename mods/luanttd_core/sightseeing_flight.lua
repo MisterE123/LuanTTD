@@ -39,7 +39,52 @@ function F.distance(q,r)
   local x,z=q.pos.x-(r.x+r.dx*r.length/2),q.pos.z-(r.z+r.dz*r.length/2)
   return math.sqrt(x*x+z*z)
 end
+-- The original autopilot-like strip roll cannot recover once a wheel
+-- leaves the centerline. The sightseeing aircraft now drives on a
+-- sampled surface, with a forward roll and a slow reverse at idle.
+local function taxi(q,k,dt,world)
+  local old=q.pos
+  local rollout=q.mode=="rollout"
+  local steer=(k.right and 1 or 0)-(k.left and 1 or 0)
+  local power=(k.up and 1 or 0)-(k.down and 1 or 0)
+  q.throttle=rollout and 0 or clamp(q.throttle+power*dt*1.45,0,1)
+  local reversing=not rollout and k.down and not k.up and q.throttle==0 and q.speed<=.13
+  local target=rollout and 0 or reversing and -1.05 or q.throttle*8
+  local rate=rollout and 4.8 or k.down and 5.8 or 3.9
+  q.speed=approach(q.speed,target,dt*rate)
+  local pivot=abs(q.speed)<.13 and .64 or clamp(1.3-abs(q.speed)*.14,.25,1.3)
+  local heading=wrap(q.heading+(rollout and 0 or steer*pivot*dt*(reversing and -1 or 1)))
+  local pitch,bank=q.pitch,q.bank
+  local elevator=approach(q.elevator or 0,k.jump and .18 or 0,dt*.8)
+  local nextpos={x=old.x+sin(heading)*q.speed*dt,y=old.y,z=old.z+cos(heading)*q.speed*dt}
+  local takeoff=q.speed>=4.05 and elevator>=.08 and not rollout
+  local lift=0
+  if takeoff then
+    pitch,bank=max(pitch,elevator),0
+    lift=max(.32,q.speed*sin(pitch))
+    nextpos.y=old.y+lift*dt
+  else
+    local next_y,why,slope,camber=world.ground(nextpos,heading)
+    if not next_y then return 0,why end
+    -- Differences within a normal slope are continuous across steps;
+    -- don't pop wheels up a retaining wall or drop off a ledge.
+    if abs(next_y-old.y)>.105+abs(q.speed)*dt*.58 then
+      return 0,"Slope or ledge too steep. S to reverse, E to return."
+    end
+    nextpos.y=next_y
+    pitch,bank=(slope or 0)+elevator*.40,camber or 0
+  end
+  local clear,why=world.clear(nextpos,heading,nil,pitch,bank,not takeoff)
+  if not clear then return 0,why end
+  local turn=wrap(heading-q.heading)
+  q.pos,q.heading,q.pitch,q.bank,q.vertical,q.elevator=nextpos,heading,pitch,bank,lift,elevator
+  q.mode=takeoff and "air" or rollout and abs(q.speed)>.02 and "rollout"
+    or abs(q.speed)>.02 and "taxi" or "ready"
+  return turn
+end
+
 local function advance(q,k,dt,world)
+  if world.ground and q.mode~="air" then return taxi(q,k,dt,world) end
   local landing_roll=q.mode=="rollout"
   local airborne=q.mode=="air"
   local pitch_input=(k.jump and 1 or 0)-(k.sneak and 1 or 0)
@@ -109,6 +154,20 @@ local function advance(q,k,dt,world)
       end
       return 0,"Landing missed: line up, slow down and touch down earlier."
     end
+    -- An airport strip still uses its alignment and stopping-distance
+    -- rules. A controlled landing can also put wheels on open dry land.
+    if world.ground and not distance and q.vertical<0 then
+      local y=world.ground(nextpos,q.heading)
+      if y and old.y>y and nextpos.y<=y and abs(q.bank)<.25 and
+          q.vertical>=-1.4 and q.speed>=2.4 and q.speed<=5.7 then
+        nextpos.y=y
+        local clear,why=world.clear(nextpos,q.heading,nil,0,0,true)
+        if not clear then return 0,why end
+        q.pos,q.mode=nextpos,"rollout"
+        q.throttle,q.vertical,q.bank,q.pitch=0,0,0,0
+        return wrap(q.heading-old_heading)
+      end
+    end
   end
   local clear,why=world.clear(nextpos,q.heading,not airborne and r or nil,q.pitch,q.bank)
   if not clear then return 0,why or "Terrain or obstacle ahead." end
@@ -130,6 +189,10 @@ function F.step(q,keys,dt,world)
         -- A rejected substep must not turn, gain speed, or change phase
         -- while the aircraft is stopped at its last clear position.
         q.throttle,q.speed,q.pitch,q.bank,q.heading,q.vertical,q.mode=throttle,speed,pitch,bank,heading,vertical,mode
+      end
+      if world.ground and q.mode~="air" then
+        q.throttle,q.speed,q.vertical=0,0,0
+        q.mode,q.elevator="ready",0
       end
       return turned,why
     end

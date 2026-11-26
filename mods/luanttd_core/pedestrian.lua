@@ -57,7 +57,7 @@ function P.capture(p)
   local props=p:get_properties()
   local avatar={}
   for _,key in ipairs({"eye_height","collisionbox","stepheight","visual","mesh","textures",
-      "visual_size","is_visible","backface_culling"}) do avatar[key]=copy(props[key]) end
+      "visual_size","is_visible","backface_culling","use_texture_alpha"}) do avatar[key]=copy(props[key]) end
   return {pos=copy(p:get_pos()),yaw=p:get_look_horizontal(),pitch=p:get_look_vertical(),
     props=avatar,physics=copy(p:get_physics_override()),flags=copy(p:hud_get_flags()),
     eye=copy({p:get_eye_offset()}),animation=p.get_animation and copy({p:get_animation()}),
