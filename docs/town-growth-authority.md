@@ -111,8 +111,13 @@ checks the actual radius, active-station, growth eligibility, counter, and
 per-town tick functions. It covers 18,628 cases, including 128 consecutive
 twelve-window traces with changing service, funding and recorded growth
 outcomes. It verifies the RNG draw count and which tick calls for growth,
-not which tile OpenTTD will build. The isolated house-selector
-differential is still pinned to 14.1.
+not which tile OpenTTD will build. A separate [house choice comparison](../tests/town_house_selection_rc1.py)
+compiles current RC1 TryBuildTownHouse and the original stock specs. It
+matches 12,000 controlled Temperate lots on house ID, origin, appearance
+bits and random draws across all built-in road layouts. It checks
+eligible but sloped lots, protected plots, equal-height foundations,
+year windows, unique buildings, and all stock multi-tile footprints.
+It does not compare the world walk or the host's final placement command.
 
 On Better Roads and 3×3 Grid, a successful extra house can count as a
 successful growth attempt even if the main roadside lot is already

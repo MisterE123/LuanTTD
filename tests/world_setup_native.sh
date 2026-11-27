@@ -12,7 +12,15 @@ if [[ -n ${LUANTTD_NATIVE_MEDIA_CACHE:-} ]]; then
   cp -al "$LUANTTD_NATIVE_MEDIA_CACHE/." "$out/cache/"
 fi
 cp game.conf "$game/"
-cp -al mods "$game/"
+if ! cp -al mods "$game/" 2>/dev/null; then
+  rm -rf -- "$game/mods" # only this fixture's incomplete copy
+  cp -a mods "$game/"
+fi
+# The fixture measures reconnect and live projection, not bulk transfer;
+# preload the exact content hashes without duplicating same-mount media.
+if [[ -z ${LUANTTD_NATIVE_MEDIA_CACHE:-} ]]; then
+  python3 tests/cache_luanti_game_media.py "$game" "$out/cache" --hardlink
+fi
 if [[ ${BAYLINE_QA_OWNER:-0} == 1 ]]; then
   printf 'return function() return {authoritative_boot=true,interval=.23} end
 ' >"$game/mods/luanttd_core/qa_layout.lua"
@@ -282,7 +290,7 @@ cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$disp" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!
 client=""
-trap 'if [[ -n "$client" ]]; then kill "$client" 2>/dev/null || true; wait "$client" 2>/dev/null || true; fi; kill "$xv" 2>/dev/null || true; wait "$xv" 2>/dev/null || true' EXIT
+trap 'rc=$?; if (( rc )); then tail -30 "$out/client.log" "$out/xvfb.log" 2>/dev/null || true; fi; if [[ -n "$client" ]]; then kill "$client" 2>/dev/null || true; wait "$client" 2>/dev/null || true; fi; kill "$xv" 2>/dev/null || true; wait "$xv" 2>/dev/null || true' EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 "${BAYLINE_LUANTI_CLIENT:-luanti}" --go --world "$out/world" --gameid luanttd --config "$out/local.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!

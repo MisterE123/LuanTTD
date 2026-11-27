@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""Compile stock RC1 house choice and multi-tile siting, independent of Luanti art."""
+from hashlib import sha256
+from pathlib import Path
+from random import Random
+import os
+import re
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
+
+from rc1_rail_foundation_shim import source_block
+
+src = Path(sys.argv[1]) / "src"
+lua = sys.argv[2] if len(sys.argv) > 2 else "lua5.1"
+assert sha256((src / "town_cmd.cpp").read_bytes()).hexdigest() == (
+    "9483d2c1b188f62241de9a4aef682db940592eb7bf0b40086c4af7b7da77a7e0"
+)
+cpp = r"""
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <initializer_list>
+#include <iostream>
+#include <vector>
+using uint=unsigned; using TileIndex=int; using HouseID=uint16_t;
+template<class E> constexpr int to_underlying(E e){return int(e);}
+template<class E> struct Flags {
+    unsigned value=0;
+    constexpr Flags()=default;
+    constexpr Flags(E e):value(1u<<int(e)){}
+    constexpr Flags(std::initializer_list<E> items){for(E e:items) Set(e);}
+    constexpr void Set(E e){value|=1u<<int(e);}
+    constexpr void Set(Flags f){value|=f.value;}
+    constexpr bool Test(E e)const{return value&(1u<<int(e));}
+    constexpr bool Any(Flags f)const{return (value&f.value)!=0;}
+    constexpr bool All(Flags f)const{return (value&f.value)==f.value;}
+};
+"""
+for enum in ("BuildingFlag", "HouseZone"):
+    cpp += source_block(src, "house.h", rf"^enum class {enum} :")
+cpp += source_block(src, "town_type.h", r"^enum class TownLayout :")
+cpp += r"""
+using BuildingFlags=Flags<BuildingFlag>;
+using HouseZones=Flags<HouseZone>;
+constexpr int NUM_HOUSE_ZONES=int(HouseZone::TownEnd);
+constexpr auto HZ_ZONE_ALL=std::array{HouseZone::TownEdge,HouseZone::TownOutskirt,
+    HouseZone::TownOuterSuburb,HouseZone::TownInnerSuburb,HouseZone::TownCentre};
+enum class TownFlag {HasChurch,HasStadium};
+using TownFlags=Flags<TownFlag>;
+enum class TownExpandMode {Buildings,Roads};
+using TownExpandModes=Flags<TownExpandMode>;
+enum class LandscapeType{Temperate,Arctic,Tropic,Toyland};
+enum class GameMode{Normal,Editor};
+struct{struct{LandscapeType landscape=LandscapeType::Temperate;}game_creation;} _settings_game;
+GameMode _game_mode=GameMode::Normal;
+bool _generating_world=false;
+struct CalendarTime{static constexpr int MAX_YEAR=5000000;};
+struct TimerGameCalendar{static inline int year;};
+enum class HouseExtraFlag{BuildingIsHistorical};
+enum class HouseCallbackMask{AllowConstruction};
+constexpr int HOUSE_NO_CLASS=0,INVALID_HOUSE_ID=65535,CALLBACK_FAILED=65535,CBID_HOUSE_ALLOW_CONSTRUCTION=0;
+struct HouseSpec{
+    int min_year,max_year,population;
+    BuildingFlags building_flags;
+    HouseZones building_availability;
+    bool enabled=true;
+    struct{int override_id=INVALID_HOUSE_ID,grffile=0;}grf_prop;
+    int class_id=HOUSE_NO_CLASS,probability=16;
+    Flags<HouseExtraFlag> extra_flags;
+    Flags<HouseCallbackMask> callback_mask;
+    HouseID Index()const;
+    static const HouseSpec* Get(HouseID);
+    static const auto& Specs();
+};
+#define MS(mnd,mxd,p,rc,bn,rr,mg,ca1,ca2,ca3,bf,ba,cg1,cg2,cg3) {mnd,mxd,p,bf,ba}
+"""
+rows = re.findall(r"^\s+(MS\(.*?\)),\s*// [A-F0-9]{2}", (src/"table/town_land.h").read_text(), re.M|re.S)
+assert len(rows)==110
+cpp += "static const HouseSpec specs[] = {\n" + ",\n".join(rows) + "};\n"
+cpp += r"""
+HouseID HouseSpec::Index()const{return this-specs;}
+const HouseSpec *HouseSpec::Get(HouseID i){return specs+i;}
+const auto& HouseSpec::Specs(){return specs;}
+struct Town{
+    int xy=0,fund_buildings_months=0;
+    TownLayout layout{};
+    TownFlags flags;
+    struct{uint num_houses=0;std::array<uint32_t,NUM_HOUSE_ZONES>squared_town_zone_radius{};
+        struct{uint16_t id_count[110]{},class_count[1]{};}building_counts;}cache;
+};
+enum class DiagDirection{NE,SE,SW,NW,End};
+DiagDirection operator++(DiagDirection &d,int){auto was=d;d=DiagDirection(int(d)+1);return was;}
+DiagDirection ReverseDiagDir(DiagDirection d){return DiagDirection((int(d)+2)%4);}
+auto EnumRange(DiagDirection from,DiagDirection to){
+    assert(from==DiagDirection::SE && to==DiagDirection::End);
+    return std::array{DiagDirection::SE,DiagDirection::SW,DiagDirection::NW};
+}
+int TileOffsByDiagDir(DiagDirection d){return std::array<int,4>{-1,64,1,-64}[int(d)];}
+int TileX(int tile){return tile%64;} int TileY(int tile){return tile/64;}
+uint DistanceSquare(int a,int b){auto x=TileX(a)-TileX(b),y=TileY(a)-TileY(b);return x*x+y*y;}
+struct TileIndexDiffC{int x,y;};
+TileIndexDiffC TileIndexToTileIndexDiffC(int a,int b){return {TileX(a)-TileX(b),TileY(a)-TileY(b)};}
+using Slope=int;
+constexpr int SLOPE_FLAT=0;
+int base;
+std::array<int,9> local_map;
+int state(TileIndex tile){
+    int x=TileX(tile)-TileX(base),y=TileY(tile)-TileY(base);
+    return x>=-1 && x<=1 && y>=-1 && y<=1 ? local_map[(y+1)*3+x+1] : 1;
+}
+Slope GetTileSlope(TileIndex tile){return state(tile)==3 ? 17 : state(tile)==4 ? 3 : 0;}
+int GetTileMaxZ(TileIndex tile){return state(tile)==2 || state(tile)==4 ? 8 : 0;}
+bool IsSteepSlope(Slope s){return s&16;}
+bool IsBridgeAbove(TileIndex tile){return state(tile)==5;}
+bool RoadTypesAllowHouseHere(TileIndex tile){return state(tile)!=6;}
+enum class Commands{LandscapeClear};
+enum class DoCommandFlag{Auto,NoWater};
+struct Quote{bool ok;bool Succeeded()const{return ok;}};
+template<Commands c>struct Command{
+    static Quote Do(std::initializer_list<DoCommandFlag>,TileIndex tile){return {state(tile)!=1};}
+};
+bool TownAllowedToBuildRoads(TownExpandModes modes){return modes.Test(TownExpandMode::Roads);}
+int HighestSnowLine(){return 255;}
+uint16_t GetHouseCallback(int,int,int,int,Town*,int,std::initializer_list<int>,bool,uint8_t){assert(false);return CALLBACK_FAILED;}
+bool Convert8bitBooleanCallback(int,int,uint16_t){return true;}
+std::array<uint32_t,33> rng;
+size_t draws=0;
+uint32_t Random(){assert(draws<rng.size());return rng[draws++];}
+uint32_t RandomRange(uint32_t n){return (uint64_t(Random())*n)>>32;}
+int result_id,result_tile,result_word;
+void BuildTownHouse(Town *,int tile,const HouseSpec*,HouseID id,uint8_t random_bits,bool p,bool q){
+    assert(!p && !q);result_id=id;result_tile=tile;result_word=random_bits;
+}
+"""
+for name in ("UpdateTownRadius","GetTownRadiusGroup","CanBuildHouseHere","CheckBuildHouseSameZ",
+             "CheckFree2x2Area","TownLayoutAllowsHouseHere","TownLayoutAllows2x2HouseHere",
+             "CheckTownBuild2House","CheckTownBuild2x2House","TryBuildTownHouse"):
+    cpp += source_block(src,"town_cmd.cpp",rf"^(?:static )?(?:inline )?\w+ {name}\([^;\n]*\)\n")
+cpp += r"""
+int main(){
+    Town t;
+    int dx,dz,layout,roads,church,stadium,blocked;
+    while(std::cin>>t.cache.num_houses>>dx>>dz>>layout>>roads>>church>>stadium>>blocked
+             >>TimerGameCalendar::year>>t.fund_buildings_months){
+        t.xy=32+32*64;t.layout=TownLayout(layout);
+        t.flags={};
+        if(church)t.flags.Set(TownFlag::HasChurch);
+        if(stadium)t.flags.Set(TownFlag::HasStadium);
+        if(blocked>=0)t.cache.building_counts.id_count[blocked]=65535;
+        base=t.xy+dx+dz*64;
+        for(auto &tile:local_map)std::cin>>tile;
+        for(auto &word:rng)std::cin>>word;
+        result_id=result_word=-1;result_tile=t.xy;draws=0;
+        UpdateTownRadius(&t);
+        TownExpandModes modes{TownExpandMode::Buildings};
+        if(roads)modes.Set(TownExpandMode::Roads);
+        auto ok=TryBuildTownHouse(&t,base,modes);
+        assert(ok==(result_id>=0));
+        std::cout<<result_id<<" "<<(result_tile%64-32)<<" "<<(result_tile/64-32)
+            <<" "<<result_word<<" "<<draws<<"\n";
+        if(blocked>=0)t.cache.building_counts.id_count[blocked]=0;
+    }
+}
+"""
+program=r"""
+local p="mods/luanttd_core/openttd/"
+local G=dofile(p.."town_growth.lua")
+local B=dofile(p.."town_growth_build.lua")(G,dofile(p.."town_growth_houses.lua"))
+for line in io.lines() do
+  local a={}
+  for n in line:gmatch("%S+") do a[#a+1]=tonumber(n) end
+  local n,x,z,layout,roads,church,stadium,blocked,year,fund=unpack(a)
+  local t=G.new(1,32,32,{num_houses=n,layout=({"original","better","grid2","grid3"})[layout+1],
+     fund_buildings_months=fund})
+  t.unique={church=church==1,stadium=stadium==1}
+  t.house_counts={[blocked]=65535}
+  x,z=x+32,z+32
+  local function kind(u,v)
+    local dx,dz=u-x,v-z
+    return math.abs(dx)<=1 and math.abs(dz)<=1 and a[11+(dz+1)*3+dx+1] or 1
+  end
+  local board={tile=function(u,v)
+    local k=kind(u,v)
+    return {kind="clear",slope=k==3 and 17 or k==4 and 3 or 0,
+      max_z=(k==2 or k==4) and 8 or 0,bridge_above=k==5}
+  end,clear_quote=function(u,v) return kind(u,v)~=1 end,
+  house_roadtypes=function(u,v) return kind(u,v)~=6 end}
+  local draws=0
+  local q=B.house(t,board,x,z,{allow_roads=roads==1,year=year},function()
+    draws=draws+1
+    return assert(a[19+draws])
+  end)
+  if q then print(q.id,q.x-32,q.z-32,q.random_bits,draws) else print(-1,0,0,-1,draws) end
+end
+"""
+rng=Random(16003)
+cases=[]
+for _ in range(12000):
+    cases.append([rng.randrange(1,180),rng.randrange(-8,9),rng.randrange(-8,9),rng.randrange(4),
+        rng.randrange(2),rng.randrange(2),rng.randrange(2),rng.choice([-1]*3+[rng.randrange(41)]),
+        rng.randrange(1900,2051),rng.choice([0]*4+[1]),
+        *[rng.choice([0]*12+[1,2,3,4,5,6]) for _ in range(9)],
+        *[rng.getrandbits(32) for _ in range(33)]])
+data="".join(" ".join(map(str,row))+"\n" for row in cases)
+with TemporaryDirectory(prefix="town-house-rc1-") as work:
+    d=Path(work)
+    (d/"ref.cpp").write_text(cpp)
+    (d/"test.lua").write_text(program)
+    subprocess.run([os.environ.get("CXX","c++"),"-std=c++20","-O2",d/"ref.cpp","-o",d/"ref"],check=True)
+    ref=subprocess.check_output([d/"ref"],text=True,input=data).splitlines()
+    port=subprocess.check_output([lua,d/"test.lua"],text=True,input=data).splitlines()
+    assert len(ref)==len(port)==len(cases)
+    selected={int(line.split()[0]) for line in ref}
+    assert len(selected)>=30 and {-1,0x07,0x14,0x20,0x28}<=selected, selected
+    errors=[(i,cases[i][:19],a,b) for i,(a,b) in enumerate(zip(ref,port)) if a.split()!=b.split()]
+    assert not errors,(len(errors),errors[:6])
+print(f"PASS {len(cases)} exact RC1 house choice, footprint, appearance bits and RNG cases")
