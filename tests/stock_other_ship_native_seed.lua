@@ -4,19 +4,29 @@ return function(core,Sim,checkpoint,mod)
   if not checkpoint or checkpoint.read() then return end
   local T=dofile(mod.."/openttd/terrain.lua")
   local s=Sim.new(1751)
-  s.stock_generated_profile={version=1,width=64,depth=64,terrain="native tanker contract"}
+  s.stock_generated_profile={version=1,width=64,depth=64,terrain="native stock ship contract"}
+  local cargo=core.settings:get("luanttd_qa_other_ship_cargo")
+  local heavy=cargo=="iron_ore" or cargo=="steel"
+  local coast=heavy and 20 or 33
   Sim.W,Sim.H=64,64
   s.sites,s.tiles={},{}
-  s.corner_grid=T.new(64,64,function(_,z) return z<33 and 1 or 0 end)
+  s.corner_grid=T.new(64,64,function(_,z) return z<coast and 1 or 0 end)
   for z=1,64 do for x=1,64 do
-    s.tiles[Sim.id(x,z)]={h=z<33 and 1 or 0,variant=1,terrain=z<33 and "grass" or "water",
-      water_class=z>=33 and "sea" or nil}
+    s.tiles[Sim.id(x,z)]={h=z<coast and 1 or 0,variant=1,terrain=z<coast and "grass" or "water",
+      water_class=z>=coast and "sea" or nil}
   end end
   s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading,s.road_economy=true,true,true,true
   s.ship_paid_service=true
   local stock=tonumber(core.settings:get("luanttd_qa_other_ship")) or 212
-  local cargo=core.settings:get("luanttd_qa_other_ship_cargo")
-  if cargo=="grain" or cargo=="livestock" then
+  local cal=dofile(mod.."/openttd/stock_engine_calendar.lua")
+  local year=tonumber(core.settings:get("bayline_stock_bus_start_year")) or 1950
+  if heavy then
+    Sim.mount_road_bus_market(s,cal,year,true,true,{iron_mps=true})
+    local Q=dofile(mod.."/qa_dry_heavy_fixture.lua")
+    Q.place(Sim,T,s)
+    if cargo=="steel" then s.qa_ore_supplier=Q.supply(Sim,s) end
+    s.speed=4
+  elseif cargo=="grain" or cargo=="livestock" then
     s.ship_coal_service,s.road_farm,s.stock_farm_frozen=true,true,true
     local W,rng=Sim.mount_farm_world(s,T,true)
     assert(W.seed(s,Sim.id(10,25),Sim.id(32,27),rng))
@@ -56,8 +66,6 @@ return function(core,Sim,checkpoint,mod)
     local world=dofile(mod.."/coal_industry_world.lua")(Sim,T,coal)
     assert(world.seed(s,Sim.id(12,28),Sim.id(31,28)))
   end
-  local cal=dofile(mod.."/openttd/stock_engine_calendar.lua")
-  local year=tonumber(core.settings:get("bayline_stock_bus_start_year")) or 1950
-  Sim.mount_road_bus_market(s,cal,year,true)
+  if not heavy then Sim.mount_road_bus_market(s,cal,year,true) end
   checkpoint.write_state(s)
 end

@@ -389,6 +389,7 @@ jobs:
           lua5.1 tests/ship_goods_ordinary_worker.lua
           for cargo in grain livestock; do lua5.1 tests/ship_farm_ordinary_worker.lua "$cargo"; done
           lua5.1 tests/ship_wood_ordinary_worker.lua
+          for cargo in iron_ore steel; do lua5.1 tests/ship_heavy_ordinary_worker.lua "$cargo"; done
           lua5.1 tests/stock_dock_tree_authority.lua
           lua5.1 tests/town_council_index.lua
           python3 tests/rail_compound_wire_art.py

@@ -9,6 +9,8 @@ return function(Sim,Services,Timber,Farm,Catchment,debit)
     grain={name="Grain",load="Farm",unload="Factory",sink="factory",family="farm"},
     livestock={name="Livestock",load="Farm",unload="Factory",sink="factory",family="farm"},
     wood={name="Wood",load="Forest",unload="Sawmill",sink="sawmill",family="timber"},
+    iron_ore={name="Iron Ore",load="Iron Ore Mine",unload="Steel Mill",sink="steel mill",family="heavy"},
+    steel={name="Steel",load="Steel Mill",unload="Factory",sink="factory",family="heavy",accept_family="farm"},
   }
   function M.profile(s,cargo)
     local p=profiles[cargo]
@@ -44,8 +46,9 @@ return function(Sim,Services,Timber,Farm,Catchment,debit)
       local tile=s.tiles[Sim.id(x+1,z+1)]
       return tile and tile.house and tile.source_house or nil
     end
-    local chain=profile.family=="farm" and assert(Farm()) or Timber
-    local inds=profile.family and (s["stock_"..profile.family.."_industries"] or {}) or {}
+    local family=profile.accept_family or profile.family
+    local chain=family and family~="timber" and assert(Farm()) or Timber
+    local inds=family and Sim["road_"..family.."_active"](s) and (s["stock_"..family.."_industries"] or {}) or {}
     local accepted=chain.acceptance(st,cover,cargo,inds,house)
     local sources={}
     for _,kind in ipairs(profile.family and {profile.family} or registries) do
