@@ -74,7 +74,7 @@ return function(Sim,World)
     if has_crossing(s) then return World.refresh_all(s,R.context(s,rail)) end
     return {}
   end
-  function R.quote(s,owner,id,request,rail)
+  local function construction_context(s,id,rail)
     if not (s.road_economy and s.road_stock_clock) then return nil,"NEEDS_STOCK_ROAD_CLOCK" end
     if s.stock_rail_run then return nil,"CLEAR_EXCLUSIVE_RAIL_PILOT" end
     for _,v in pairs(s.fleet) do
@@ -82,7 +82,17 @@ return function(Sim,World)
         for _,i in ipairs(v.route) do if i==id then return nil,"ROAD_POSE_UNKNOWN" end end
       end
     end
-    return World.quote(s,owner,id,request,R.context(s,rail))
+    return R.context(s,rail)
+  end
+  function R.quote(s,owner,id,request,rail)
+    local ctx,why=construction_context(s,id,rail)
+    if not ctx then return nil,why end
+    return World.quote(s,owner,id,request,ctx)
+  end
+  function R.town_quote(s,town,id,pieces,rail)
+    local ctx,why=construction_context(s,id,rail)
+    if not ctx then return nil,why end
+    return World.town_quote(s,town,id,pieces,ctx)
   end
   function R.apply(s,p,rail)
     return World.apply(s,p,R.context(s,rail))

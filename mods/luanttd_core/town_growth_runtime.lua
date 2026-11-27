@@ -175,7 +175,9 @@ return function(Sim,Terrain,G,B,H)
       elseif t.wood then kind="trees"
       elseif available(s,id,t) then kind="clear"
       else kind="object" end
-      return {kind=kind,slope=slope,base=base,max_z=top*8,road_bits=road_bits,
+      local plain_track=kind=="rail" and t.build=="stock_rail" and not t.rail_station_id and
+        not t.rail_depot_dir and not t.rail_waypoint_id and not t.rail_span_id and not t.signal and t.rail_tracks or nil
+      return {kind=kind,slope=slope,base=base,max_z=top*8,road_bits=road_bits,plain_track=plain_track,crossing=t.level_crossing~=nil,
         road_town=t.road_town,road_disallowed=t.road_disallowed or t.disallowed,
         owner=t.owner,axis=axis,entrance=entrance,coast=kind=="water" and t.coastal_water,
         sea=kind=="water" and t.water_class=="sea" and not t.coastal_water,
@@ -342,12 +344,16 @@ return function(Sim,Terrain,G,B,H)
         return commit(s,t,proposal,view,tick,write_house)
       end
       local proposal,extra_built=B.grow(t,brd,{year=Sim.date(s),allow_roads=not not expand,
-        build_on_slopes=not policy or policy.build_on_slopes~=false,extra_house=expand and write or nil},random)
+        build_on_slopes=not policy or policy.build_on_slopes~=false,
+        allow_level_crossings=not policy or policy.allow_town_level_crossings~=false,
+        extra_house=expand and write or nil},random)
       if not proposal then return not not extra_built end
       if proposal.kind=="house" then return write(proposal) or not not extra_built end
       local id=Sim.id(proposal.x,proposal.z)
       if proposal.kind=="road" then
-        if not available(s,id,s.tiles[id]) or not Sim.town_road_piece(s,t.id,id,proposal.bits,true) then return false end
+        local tile=s.tiles[id]
+        if not (tile and tile.build=="stock_rail" or available(s,id,tile)) or
+            not Sim.town_road_piece(s,t.id,id,proposal.bits,true) then return false end
         visual_changed(s,id)
         Sim.invalidate_live_sea_near(s,id)
         return true

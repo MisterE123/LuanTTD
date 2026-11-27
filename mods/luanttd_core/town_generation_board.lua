@@ -9,6 +9,7 @@ local path=(core and core.get_modpath and core.get_modpath("luanttd_core") and c
 local art=dofile(path.."stock_town_art.lua")
 local Road=dofile(path.."openttd/road_slope.lua")
 local Slope=dofile(path.."openttd/slope.lua")
+local RailTrack=dofile(path.."openttd/rail_track.lua")
 local TownSpans=dofile(path.."openttd/town_spans.lua")
 local RoadGrade=dofile(path.."openttd/town_road_grade.lua")
 local dx,dz={[0]=-1,0,1,0},{[0]=0,1,0,-1}
@@ -98,13 +99,21 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
         local t=B.tile(x+dx[d],z+dz[d])
         local useful=t and (t.kind=="clear" or t.kind=="road" or t.kind=="trees" or t.coast
           or (t.inside and t.inside==d))
+        if t and t.crossing then useful=has(t.road_bits or 0,2^((3-d+2)%4)) end
+        -- RC1 road.cpp IsPossibleCrossing: geometrical connectivity,
+        -- not affordability, occupancy or town construction policy.
+        if t and t.kind=="rail" and t.plain_track==2^(1-d%2) then
+          local foundation=RailTrack.foundation(t.slope,t.plain_track)
+          useful=foundation~="invalid" and Slope.foundation(t.slope,foundation)==0
+        end
         if not useful then bits=bits-b end
       end
     end
     return bits
   end
   function B.road_quote(town,x,z,bits)
-    if live and not live.roadable(x,z) then return end
+    local t=B.tile(x,z)
+    if live and not live.roadable(x,z) and not (t and t.kind=="rail" and t.plain_track) then return end
     return Sim.town_road_piece(s,town.id,Sim.id(x,z),bits,false)
   end
   function B.parallel_bridge(x,z,distance,facing)

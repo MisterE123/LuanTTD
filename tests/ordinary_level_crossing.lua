@@ -395,3 +395,36 @@ for i,bits in ipairs({4,8,16,32,3,6,24,63}) do
 end
 print("PASS AutoRoad preview rejects live-world curves and junctions without touching reservation bits")
 dofile("tests/tram_crossing_live.lua")
+
+-- OWNER_TOWN may safely cross another company's plain railway on the
+-- perpendicular axis without acquiring the rail or billing anyone.
+local town_rail=rail(7,20,Track.Y)
+s.stock_town_growth={towns={[1]={id=1}}}
+s.stock_rail_dispatch={life={bits={[town_rail]=2}},runs={}}
+assert(Sim.town_road_piece(s,1,at(6,20),10,true))
+assert(Sim.town_road_piece(s,1,at(8,20),10,true))
+local after_rail=money.cash
+s.stock_road_town_policy={allow_town_level_crossings=false}
+assert(not Sim.town_road_piece(s,1,town_rail,10,true))
+s.stock_road_town_policy.allow_town_level_crossings=true
+assert(not Sim.town_road_piece(s,2,town_rail,10,true))
+assert(not Sim.town_road_piece(s,1,town_rail,5,true))
+s.stock_rail_dispatch.runs={{id=17,owner=owner,consist={parts={{tile=town_rail,pose={x=0,y=0}}}}}}
+assert(not Sim.town_road_piece(s,1,town_rail,10,true),"Must not create a level crossing below a train")
+s.stock_rail_dispatch.runs={}
+local q=assert(Sim.town_road_piece(s,1,town_rail,2,false))
+assert(q.road_bits==10 and q.crossing_quote.crossing.reserved)
+assert(s.tiles[town_rail].rail_tracks==2 and not s.tiles[town_rail].level_crossing)
+assert(Sim.town_road_piece(s,1,town_rail,2,true))
+local t=s.tiles[town_rail]
+assert(t.road_town==1 and t.road_bits==10 and not t.owner and money.cash==after_rail)
+assert(t.level_crossing.rail_owner==owner and t.level_crossing.road_owner=="town" and t.level_crossing.town==1)
+assert(s.stock_rail_dispatch.life.bits[town_rail]==2 and t.level_crossing.barred)
+s.stock_rail_dispatch.life.bits[town_rail]=nil
+Sim.refresh_crossing_construction(s)
+assert(not t.level_crossing.barred)
+local removal=assert(Sim.crossing_rail_remove_plan(s,owner,town_rail))
+World.rail_remove_apply(s,removal)
+assert(Sim.road_connected(s,at(6,20),2) and Sim.road_connected(s,town_rail,2))
+assert(not t.level_crossing and t.road_town==1 and not t.owner and t.road_bits==10 and t.build=="road")
+print("PASS municipality adds a public level crossing across company rail, preserves reservation and does not debit")

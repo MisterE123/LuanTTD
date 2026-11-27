@@ -18,6 +18,7 @@ s.stock_town_growth={version=1,order={1},towns={}}
 local mode=core.settings:get("luanttd_qa_municipal_kind") or "road"
 local span=mode=="bridge" or mode=="tunnel"
 local reseed=mode=="reseed"
+local crossing=mode=="crossing"
 local foreignhouse=mode=="foreignhouse"
 local woodhouse=mode=="woodhouse" or foreignhouse
 if span then s.passenger_rating_rng={3,3} end -- exercise the stock two-word RNG
@@ -25,6 +26,7 @@ local cx,cz=span and 13 or 11,span and 17 or 12
 local center,protected=S.id(cx,cz),S.id(cx,cz+(woodhouse and 3 or 1))
 local target=not span and "road" or "stock_road_"..mode
 s.sites={{id=1,kind="town",name="Grid Town",tile=center,population=0,stock={},produced={},received={}}}
+local rail_cell=S.id(cx+1,cz)
 local town=G.new(1,cx,cz,{layout="grid2",grow_counter=0})
 town.growing,town.growth_rate=true,(reseed or woodhouse) and 15000 or 0
 s.stock_town_growth.towns[1]=town
@@ -46,6 +48,16 @@ else
   if woodhouse then for _,dz in ipairs{-1,1} do s.tiles[S.id(cx,cz+dz)].wood=1 end end
 end
 s.tiles[protected].stock_industry={id=77}
+local rail_cash
+if crossing then
+  local company=S.company(s,"Rail Builder")
+  rail_cash=company.cash
+  local t=s.tiles[rail_cell]
+  t.build,t.rail_tracks,t.owner,t.rail_type="stock_rail",2,"Rail Builder",0
+  -- Prevent another new street from ending the first growth attempt.
+  s.tiles[S.id(cx-1,cz)].stock_industry={id=78}
+  s.tiles[S.id(cx,cz-1)].stock_industry={id=79}
+end
 if mode=="bridge" then
   for x=cx+2,cx+3 do
     local t=s.tiles[S.id(x,cz)];t.terrain,t.water_class="water","river"
@@ -70,7 +82,9 @@ local function ask()
     for _,row in ipairs(r.value[1].tiles) do
       if row.id==center then junction=row.surface end
       if row.id==protected then guard=row.surface end
-      if woodhouse then
+      if crossing then
+        if row.id==rail_cell and row.surface.level_crossing then newroad=row.id end
+      elseif woodhouse then
         if row.surface.source_house and row.surface.source_house.root then newroad=row.id end
       elseif row.id~=center and row.surface.build==target and row.surface.road_town==1 then newroad=row.id end
     end
@@ -104,6 +118,12 @@ core.register_on_mods_loaded(function()
     else
       assert(created.build==target and created.road_town==1 and (not created.owner or created.owner=="town"))
     end
+    if crossing then
+      assert(newroad==rail_cell and created.level_crossing)
+      local c=created.level_crossing
+      assert(c.rail_owner=="Rail Builder" and c.rail_axis==1 and c.road_axis==0 and c.town==1)
+      assert(next_.companies["Rail Builder"].cash==rail_cash and not next_.companies.town)
+    end
     if span then
       local _,book=next(next_["stock_road_"..mode.."s"])
       assert(book.town==1 and #book.middle>=1)
@@ -119,10 +139,10 @@ core.register_on_mods_loaded(function()
         assert(r.ok and r[mode] and r.tile==a.other)
       end
     elseif not woodhouse then assert(created.road_bits>0) end
-    assert(not next(next_.companies) and next_.tiles[protected].stock_industry.id==77)
+    assert((crossing or not next(next_.companies)) and next_.tiles[protected].stock_industry.id==77)
     if reseed then
       assert(not created.wood and not next_.tiles[center].build)
-    elseif not span and not woodhouse then assert(next_.tiles[center].road_bits~=10) end
+    elseif not span and not woodhouse and not crossing then assert(next_.tiles[center].road_bits~=10) end
     cap.autoplay=false
     assert(client.start(cap,function(ready)
       assert(ready.ready and ready.day==day)
@@ -130,7 +150,8 @@ core.register_on_mods_loaded(function()
         local found=false
         for _,row in ipairs(r.value[1].tiles) do
           if row.id==newroad then
-            if woodhouse then assert(row.surface.source_house.id==created.source_house.id and not row.surface.wood)
+            if crossing then assert(row.surface.level_crossing.rail_owner=="Rail Builder" and row.surface.road_town==1)
+            elseif woodhouse then assert(row.surface.source_house.id==created.source_house.id and not row.surface.wood)
             else assert(row.surface.road_bits==created.road_bits and row.surface.road_town==1) end
             found=true
           end

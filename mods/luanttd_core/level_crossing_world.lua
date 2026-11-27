@@ -67,13 +67,18 @@ return function(Sim,Terrain,Crossing,Track)
     return a
   end
   local function physical(v) return not v.wormhole and not v.hidden end
-  function W.quote(s,owner,id,r,ctx)
+  local function quote(s,owner,id,r,ctx,municipal)
     if not s.level_crossing_enabled then return nil,"LEVEL_CROSSING_DISABLED" end
     local t=tile(s,id)
     if not t or not r or (r.kind~="road" and r.kind~="rail" and r.kind~="tram") then return nil,"INVALID_PARAMETER" end
     local existing=t.level_crossing
     local company=s.companies and s.companies[owner]
-    if not company then return nil,"OWNED_BY_ANOTHER" end
+    if municipal then
+      if r.kind~="road" or t.build~="stock_rail" or existing or
+          not (s.stock_town_growth and s.stock_town_growth.towns[municipal]) then
+        return nil,"INVALID_PARAMETER"
+      end
+    elseif not company then return nil,"OWNED_BY_ANOTHER" end
     if existing then
       if r.kind=="rail" or r.kind=="road" and existing.roadtype~=nil or r.kind=="tram" and existing.tramtype~=nil then
         return nil,"ALREADY_BUILT"
@@ -92,17 +97,19 @@ return function(Sim,Terrain,Crossing,Track)
         prior_bits=existing.road_bits or 0,prior_tram_bits=existing.tram_bits or 0,crossing=plan}
     end
     local tram=r.kind=="rail" and t.tram and t.tram.kind=="road" and t.tram or nil
-    if (t.owner or tram and tram.tram_owner)~=owner or t.road_town then return nil,"OWNED_BY_ANOTHER" end
+    if not municipal and ((t.owner or tram and tram.tram_owner)~=owner or t.road_town) then
+      return nil,"OWNED_BY_ANOTHER"
+    end
     if occupied_layer(s,id,t,tram) then return nil,"PROTECTED_TILE" end
     local slope,base,top=shape(s,id)
     if slope==nil then return nil,"NEEDS_SHARED_CORNERS" end
     local present=observe(ctx,id)
     if not present then return nil,"OCCUPANCY_UNKNOWN" end
-    local base_record={owner=owner,slope=slope,base=base,top=top}
+    local base_record={owner=municipal and t.owner or owner,slope=slope,base=base,top=top}
     -- Construction's EnsureNoVehicleOnGround does not count wormhole/hidden parts.
     for _,v in ipairs(present) do if physical(v) then base_record.occupied=true;break end end
     local req=copy(r)
-    req.owner=owner
+    req.owner,req.town=owner,municipal or req.town
     if r.kind=="rail" and (t.build=="road" or tram) and not t.rail_tracks then
       local gauge=r.railtype or 0
       if not admitted(s,gauge) then return nil,unsupported(gauge) end
@@ -134,11 +141,16 @@ return function(Sim,Terrain,Crossing,Track)
       if b==nil then return nil,"RESERVATION_UNKNOWN" end
       base_record.reserved_bits=b and 2^axis or 0
     else return nil,"NEEDS_PLAIN_ROAD_OR_RAIL" end
-    local out,err=Crossing.quote(base_record,req,{cash=company.cash})
+    local out,err=Crossing.quote(base_record,req,{cash=company and company.cash})
     if not out then return nil,err end
-    return {id=id,owner=owner,topology=s.topology,request=req,price=out.cost,
+    return {id=id,owner=owner,municipal=municipal,topology=s.topology,request=req,price=out.cost,
       prior_build=t.build,prior_bits=base_record.road_bits or base_record.trackbits,
       prior_tram_bits=base_record.tram_bits or 0,crossing=out}
+  end
+  function W.quote(s,owner,id,r,ctx) return quote(s,owner,id,r,ctx) end
+  function W.town_quote(s,town,id,pieces,ctx)
+    if not town then return nil,"INVALID_PARAMETER" end
+    return quote(s,"town",id,{kind="road",pieces=pieces},ctx,town)
   end
   -- RC1 RemoveRoad, RoadTileType::Crossing: the road's whole axis
   -- goes away even when the drag selects a single half. The separate
@@ -211,6 +223,7 @@ return function(Sim,Terrain,Crossing,Track)
     t.build=edit.roadtype~=nil and "road" or nil
     t.road_bits=edit.roadtype~=nil and edit.road_bits or nil
     t.roadtype,t.owner=edit.roadtype,edit.road_owner
+    if t.road_town and edit.road_owner=="town" then t.owner=nil end
     if edit.tramtype~=nil then
       t.tram={kind="road",tramtype=edit.tramtype,tram_bits=edit.tram_bits,tram_owner=edit.tram_owner}
     end
@@ -247,6 +260,7 @@ return function(Sim,Terrain,Crossing,Track)
     if s.stock_generated_profile and not t.level_crossing then
       t.roadside,t.stock_roadside_town="barren",nil
     end
+    if q.municipal then t.owner,t.road_town=nil,q.municipal end
     t.level_crossing=a
     index[q.id]=true
     return a

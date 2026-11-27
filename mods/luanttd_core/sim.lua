@@ -1763,6 +1763,25 @@ end
 -- writable here. Player/reserved facilities are not silently altered.
 function M.town_road_piece(s,town,id,bits,execute)
   local t=id and s.tiles[id]
+  if t and t.build=="stock_rail" and t.rail_tracks then
+    local c=crossing_bindings[s]
+    local policy=s.stock_road_town_policy
+    if not c or policy and policy.allow_town_level_crossings==false or
+        c.survey_clear and not c.survey_clear() then return end
+    local rail=c.rail(s)
+    local quote=c.runtime.town_quote(s,town,id,bits,rail)
+    if not quote then return end
+    local r={id=id,build="road",road_town=town,road_bits=quote.crossing.road_bits,
+      h=t.h,level_crossing=quote.crossing,crossing_quote=quote}
+    if linking_errors(s,{[id]=r,order={id}}) then return end
+    if execute then
+      c.runtime.apply(s,quote,rail)
+      s.has_town_roads=true
+      s.topology=(s.topology or 0)+1
+      c.runtime.refresh(s,c.rail(s))
+    end
+    return r
+  end
   if not t or t.stock_void or t.stock_object or t.owner or t.tram or t.station or t.road_waypoint_id or
       t.level_crossing or t.rail_tracks or t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or
       (t.build and t.build~="road") or (t.road_town and t.road_town~=town) then return end

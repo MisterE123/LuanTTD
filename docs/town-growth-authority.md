@@ -152,7 +152,17 @@ map generation.
 Only an admitted native command writes terrain, municipal road bits,
 bridge geometry, or a tunnel. There is no player payment, and the town
 cannot clear a private lot, an active industry, protected railway, or
-occupied transport facility. The supported spans preserve open river
+occupied transport facility. Towns can also add a perpendicular road crossing to a compatible plain
+railway, without taking its rail ownership, releasing its reservation or
+charging a company. A train physically on the tile blocks construction.
+The stock setting **Allow towns to build level crossings** defaults to
+on; turning it off stops new municipal crossings. The [compiled RC1
+railway branch comparison](../tests/town_crossing_rc1.py) checks 15,848
+cases, and a native worker test verifies that the two owners survive a
+checkpoint and reopen. Incompatible track and protected facilities are
+not demolished to force a crossing.
+
+The supported spans preserve open river
 water below a bridge and surface roads above a bore. Changed cells
 invalidate the nearby sea cache rather than restarting it for the map.
 The original option that forbids town road construction still applies.
@@ -171,7 +181,7 @@ routing through both public portals after a checkpoint. In native
 Luanti the worker writes, projects and reopens an extended street, a
 river bridge and a road tunnel without any company construction input.
 The test uses controlled starting terrain to exercise each obstacle. This does not implement town
-rail crossings, excavation through protected parcels, or unrestricted
+excavation through protected parcels, or unrestricted
 replacement of player infrastructure.
 
 A native 1024×1024 generated campaign had 832 towns and started the
