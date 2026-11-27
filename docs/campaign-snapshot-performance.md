@@ -113,3 +113,26 @@ percentiles were roughly 116 ms and 114 ms. This is a small
 replay comparison, not an FPS claim; allocation, compression and
 file writes can still block individual samples. The codec also
 matched the complete packed bytes of the same active fixture.
+
+## Do not stage offscreen road actors
+
+A viewport packet can request up to nine sectors. It now builds the
+union of their 32-tile road bucket coordinates before staging actor
+records. The worker still reads each road vehicle's actual horizontal
+pose once, and uses the same exact bounds for every returned sector.
+Actors outside the union need no staging row. Overlapping and
+nonaligned windows, hidden state, and the simulation itself are
+unchanged.
+
+A native worker fixture bought and routed 960 buses. The unmodified
+and scoped projections returned identical static scenes, live poses
+and interpolated poses for single, overlapping, separated, and empty
+windows. Temporary Lua allocation across 20 observations fell from
+4,446 to about 1,700 KiB for a narrow populated sector, and from
+6,514 to 4,098 KiB for overlapping sectors. The empty window fell
+from 3,135 to about 50 KiB. CPU timings varied by view; these are
+worker allocation results, not client FPS numbers.
+
+```sh
+tests/campaign_actor_interest_native.sh luantiserver 1bbd702 /tmp/actor-interest
+```

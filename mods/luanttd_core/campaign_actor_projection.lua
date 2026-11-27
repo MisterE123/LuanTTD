@@ -58,6 +58,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     -- The sampling fraction and world state are shared by the entire
     -- viewport reply, including overlapping and nonaligned sectors.
     local size,floor=32,math.floor
+    local want=frame.road_interest
     local buckets=frame.road_buckets
     if not buckets then
       buckets={}
@@ -73,13 +74,17 @@ return function(Sim,R,x,z,w,h,fraction,frame)
         end
         if u and u>=1 and u<=Sim.W and b>=1 and b<=Sim.H then
           local bu,bb=floor((u-1)/size),floor((b-1)/size)
-          local row=buckets[bb]
-          if not row then row={};buckets[bb]=row end
-          local bucket=row[bu]
-          if not bucket then bucket={};row[bu]=bucket end
-          -- A compact record stores the horizontal pose and its last
-          -- logical tile separately. Cache a detached actor on first use.
-          bucket[#bucket+1]={u,b,id,v,at,px,pz,yaw,bridge,bore_height}
+          local interest=want and want[bb]
+          if not want or interest and interest[bu] then
+            local row=buckets[bb]
+            if not row then row={};buckets[bb]=row end
+            local bucket=row[bu]
+            if not bucket then bucket={};row[bu]=bucket end
+            -- Never allocate a pose record for a bucket outside this
+            -- packet's entire interest union. Finish actual poses on
+            -- demand after testing the exact rectangle as before.
+            bucket[#bucket+1]={u,b,id,v,at,px,pz,yaw,bridge,bore_height}
+          end
         end
       end
     end

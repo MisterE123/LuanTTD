@@ -10,7 +10,7 @@ return function(mod)
     for k,v in pairs(value) do out[k]=copy(v) end
     return out
   end
-  function F.make(lines,count,prepare,choose,size)
+  function F.make(lines,count,prepare,choose,size,lines_per_company)
     Sim.W,Sim.H=size or 128,size or 128
     local s=Sim.new(1751)
     s.sites={}
@@ -23,7 +23,7 @@ return function(mod)
     s.day=9000
     local route={}
     for line=1,lines do
-      local owner="Fleet Company "..math.floor((line-1)/6)
+      local owner="Fleet Company "..math.floor((line-1)/(lines_per_company or 6))
       Sim.company(s,owner).cash=100000000
       local z=4+line*4
       local a,b,d=Sim.id(12,z),Sim.id(97,z),Sim.id(17,z+1)

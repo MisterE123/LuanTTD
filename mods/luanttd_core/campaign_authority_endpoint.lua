@@ -822,11 +822,29 @@ return function(Sim,R,max_days)
       packet.tiles,packet.corners,packet.registries=nil,nil,nil
     end
   end
+  local function road_interest(windows)
+    local mask={}
+    for _,w in ipairs(windows) do
+      if type(w)~="table" or not integer(w.x,1,Sim.W) or not integer(w.z,1,Sim.H)
+        or not integer(w.w,1,32) or not integer(w.h,1,32) or w.x+w.w-1>Sim.W or w.z+w.h-1>Sim.H then
+        return
+      end
+      -- The actor projection uses these same 32-tile buckets, even
+      -- when a requested rectangle straddles an alignment boundary.
+      for z=math.floor((w.z-1)/32),math.floor((w.z+w.h-2)/32) do
+        local row=mask[z]
+        if not row then row={};mask[z]=row end
+        for x=math.floor((w.x-1)/32),math.floor((w.x+w.w-2)/32) do row[x]=true end
+      end
+    end
+    return mask
+  end
   function A.snapshots(windows,fraction,players,live_tick)
     if type(windows)~="table" or #windows<1 or #windows>9 then
       return reply(false,"INVALID_INTEREST_BATCH")
     end
-    local packets,frame={},{road={},rail={},whole_trains=true,live_tick=live_tick}
+    local interest=R.road_coordinates and R.road_finish and road_interest(windows)
+    local packets,frame={},{road={},rail={},whole_trains=true,live_tick=live_tick,road_interest=interest}
     local epoch=observed_corners()
     for _,w in ipairs(windows) do
       if type(w)~="table" then return reply(false,"INVALID_INTEREST_WINDOW") end
@@ -862,7 +880,8 @@ return function(Sim,R,max_days)
       return reply(false,"INVALID_INTEREST_BATCH")
     end
     fraction=type(fraction)=="number" and fraction>=0 and fraction<=1 and fraction or 1
-    local packets,frame={},{road={},rail={},whole_trains=true,live_tick=live_tick}
+    local interest=R.road_coordinates and R.road_finish and road_interest(windows)
+    local packets,frame={},{road={},rail={},whole_trains=true,live_tick=live_tick,road_interest=interest}
     for i,w in ipairs(windows) do
       if type(w)~="table" or not integer(w.x,1,Sim.W) or not integer(w.z,1,Sim.H)
         or not integer(w.w,1,32) or not integer(w.h,1,32) or w.x+w.w-1>Sim.W or w.z+w.h-1>Sim.H then
