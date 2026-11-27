@@ -26,7 +26,7 @@ assert(v.reliability==original-80)
 B.economy_day(v,{difficulty=B.NORMAL,cur_speed=4},forbidden)
 B.economy_day(v,{difficulty=B.NORMAL,cur_speed=64,stopped=true},forbidden)
 B.economy_day(v,{difficulty=B.NORMAL,cur_speed=64,menu=true},forbidden)
-assert(v.reliability==original-4*80 and v.breakdown_chance==0)
+assert(v.reliability==original-3*80 and v.breakdown_chance==0)
 
 -- The low byte threshold is checked after decay and after the 1/25
 -- chance boost. High random bits are used once for both durations.
@@ -99,4 +99,13 @@ assert(B.economy_day(v,{difficulty=B.NORMAL,cur_speed=40},no_boost))
 v.breakdown_ctr=2
 local hidden=B.tick(v,{cur_speed=25,hidden=true})
 assert(hidden.started and hidden.hold_motion and hidden.cur_speed==0 and hidden.smoke_animation_state==nil)
+-- RC1 skips the entire draw and wear when Reduced vehicles are loading.
+-- Menus also skip wear, and a company reaching a different engine
+-- reliability curve cannot retain a value above the current engine cap.
+v=B.new(51851,80,100,0,0)
+B.economy_day(v,{difficulty=B.REDUCED,cur_speed=25,loading=true},function() error("loading RNG") end)
+B.economy_day(v,{difficulty=B.NORMAL,cur_speed=25,menu=true},function() error("menu RNG") end)
+assert(v.reliability==51851 and v.breakdown_chance==0)
+B.economy_day(v,{difficulty=B.NORMAL,cur_speed=0,engine_reliability=51001},function() error("idle RNG") end)
+assert(v.reliability==51001 and v.breakdown_chance==0)
 print("PASS: stock road chronology, difficulty/entropy, exact failure and restart across reload, service, and over-age decay")

@@ -1,15 +1,15 @@
 # Stock road vehicle reliability and breakdowns
 
-This OpenTTD 14.1 port covers conventional road reliability aging,
+The ordinary OpenTTD 16.0-RC1 campaign implementation covers conventional road reliability aging,
 scheduling a breakdown, timing the actual stop and recovery, and
 resetting the correct fields when serviced.
 
 ## In the game
 
-Use a fresh world with `bayline_stock_bus_catalog = true`. Set
-`bayline_stock_bus_breakdowns = 1` (reduced) or `2` (normal); the
-default for the development preview is `0` (off). Only those original
-catalogue buses are affected. The vehicle inspector shows reliability
+Ordinary campaigns default to RC1's Reduced setting, including its rule
+that a loading bus does not lose reliability. The equivalent OpenTTD
+difficulty option is `bayline_stock_bus_breakdowns`: `0` Off, `1` Reduced,
+or `2` Normal. The original catalogue buses are affected. The vehicle inspector shows reliability
 and reports an actual stoppage as **Broken down**. The vehicle waits in
 its real lane, keeps the same route/orders and recovers by stock ticks.
 A saved failure continues to repair even when you turn off new failures.
@@ -20,8 +20,10 @@ automatic engine replacement, articulated road model, or separate
 wallclock economy/calendar. Short, local smoke puffs identify a true
 active repair, not a traffic wait; they are cosmetic and stay paused
 with the sim. The game uses the campaign's
-seeded shared RNG and 74-tick clock, not a claim of complete global
-OpenTTD RNG replay.
+seeded shared RNG and 74-tick clock. In generated worlds each stock bus
+uses its own road pool slot for calendar aging and economy servicing,
+not one global daily batch. See the [active town comparison](town-growth-authority.md#active-rc1-bus-comparison).
+This is not complete global RNG or mixed-mode pool parity.
 
 ## Mounting contract
 

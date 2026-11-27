@@ -264,14 +264,17 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       return false -- stop this movement budget until the stock depot-exit tick
     end
     W.put(record,b,state.lane_pose~=nil,actual_z)
-    if state.index==#frames then state.speed=0 end
+    if state.index==#frames and not a.stock_stop then state.speed=0 end
     return true
   end
 
   local function move_frame(state,a)
     local s,W,v,frames,record,old,roof,board=a.s,a.W,a.v,a.frames,a.record,a.old,a.roof,a.board
     local nominal=frames[state.index+1]
-    if not nominal then return false end
+    if not nominal then
+      if a.stock_stop then state.arrival_ready=true;state.speed=0 end
+      return false
+    end
     local b=nominal
     if Pass then
       b=Pass.next(v,state,old,nominal,roof,board)
@@ -349,12 +352,17 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     return commit_frame(a,state,b,nominal,actual_z,bay_commit,entering)
   end
 
-  local function step(s,W,a,board,on_exit,tick)
-    local v,c,frames,record=a.v,a.c,a.frames,a.record
-    if c.index>=#frames then return end
-    local old=pose(c,frames)
-    local use_realistic=s.stock_generated_profile and s.stock_bus_market and
+  local function stock_realistic(s,v)
+    return s.stock_generated_profile and s.stock_bus_market and
       s.stock_road_acceleration_model~=0 and v.stock_bus and realistic[v.engine]
+  end
+  local function step(s,W,a,board,on_exit,tick,stock_stop,realistic_profile)
+    local v,c,frames,record=a.v,a.c,a.frames,a.record
+    if c.index>=#frames and not stock_stop then return end
+    local old=pose(c,frames)
+    local use_realistic=realistic_profile
+    if use_realistic==nil then use_realistic=stock_realistic(s,v) end
+    a.stock_stop=stock_stop
     if old[16] then
       -- RoadVehLeaveDepot (RC1) checks the proposed outward point before
       -- unhiding, services the same physical vehicle, sets its speed to
@@ -530,14 +538,19 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
             local front=visible(c,frames)
             if front and not rec.tile then W.put(rec,front,c.lane_pose~=nil) end
             worked[id]=true
+            -- RoadVehController reaches the stock stop frame on one
+            -- movement step, then enters loading on the next attempted
+            -- step from that frame. Both can fit in the same tick.
+            local realistic_profile=stock_realistic(s,v)
+            local stock_stop=v.dest~=nil and not v.road_return_depot and not not realistic_profile
             if v.running and not held then
               moving.v,moving.c,moving.frames,moving.record=v,c,frames,rec
-              step(s,W,moving,board,hooks.exited,tick)
+              step(s,W,moving,board,hooks.exited,tick,stock_stop,realistic_profile or false)
               frames=moving.frames
             end
             v.progress=1+(#v.route-1)*(c.index-1)/math.max(1,#frames-1)
-            if c.index>=#frames and not held then
-              local arrived,hidden=hooks.arrive(v,tick,frames[#frames])
+            if c.index>=#frames and not held and (not stock_stop or c.arrival_ready) then
+              local arrived,hidden=hooks.arrive(v,tick,frames[#frames],stock_stop and c or nil)
               if arrived then
                 rec.clock=nil
                 -- Loading occupies the station. Stock depot entry hides the

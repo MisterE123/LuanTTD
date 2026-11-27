@@ -85,7 +85,10 @@ def read(path, with_board):
                 for row in town['supplied']},
         houses=houses,roads=roads,stops=stops,goods=goods,cash=tables[b'PLYR'][0]['money'],
         settings=[config[k] for k in ('economy.town_growth_rate','construction.extra_tree_placement')],
-        bus=pos,motion=[state,frame],bus_tick=bus_tick)
+        bus=pos,motion=[state,frame],bus_tick=bus_tick,
+        day_state=[tables[b'PLYR'][0]['money_fraction'],*[raw[k] for k in
+                   ('running_ticks','day_counter','cargo_age_counter','reliability','reliability_spd_dec',
+                    'age','max_age','date_of_last_service','date_of_last_service_newgrf','breakdown_chance')]])
     return opening,runs
 
 def main():

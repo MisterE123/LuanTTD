@@ -50,10 +50,10 @@ end
 function B.charge(annual_fp,ticks)
   return floor(annual_fp*ticks/(B.DAYS_IN_YEAR*B.DAY_TICKS))
 end
-function B.day(f,balance)
+function B.day(f,balance,annual_fp)
   f.day=f.day+1
   if f.day%B.DEPRECIATION_INTERVAL==0 then f.value=f.value-floor(f.value/256) end
-  local fixed=B.charge(f.annual_fp,f.ticks-f.charged_ticks)
+  local fixed=B.charge(annual_fp or f.annual_fp,f.ticks-f.charged_ticks)
   f.charged_ticks,f.running_fp=f.ticks,f.running_fp+fixed
   local next_balance=balance-fixed
   return -floor(next_balance/256),next_balance%256

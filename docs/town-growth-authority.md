@@ -466,3 +466,24 @@ tick. The separately tested Luanti client sees the generated-campaign Regal
 running depot orders with its native mesh. This verifies physical motion before
 the first stop; it does not certify active-station timing, mixed vehicle
 clocks, full cargo/economy parity, or identical growth over a served month.
+
+
+The next [active road economy replay](../tests/stock_road_day_live.lua)
+ports the live calendar/economy phase separation from `vehicle.cpp`:
+calendar aging precedes the landscape; wear, Reduced loading immunity,
+depot checks and running costs occur after the tile loop and before
+station load/unload. Each front uses its own road slot's fraction of the
+74-tick day. The ordinary bus rate uses the stock Low running-cost base.
+The original controller also boards only when it attempts to move from
+the stop frame, and carries the blocked movement remainder into the next
+leg rather than resetting both fractions at every departure.
+
+The comparison reopens the active campaign before mid-January. The same
+source snapshots independently verify both RNG words, reliability, road
+station ratings, town passenger and mail production, and integer balances
+through tick 2,509. Both February and March match the stock growth
+interval and countdown; at the February boundary the stock seven paid
+passengers, ratings and ages at both stops also match. This does not imply
+full town parity: later RNG, cargo, finance and the March rebuilding
+countdown still differ. It verifies the road pool in this road-only case,
+not stock global VehicleID allocation across other modes.

@@ -125,7 +125,7 @@ do
   for _,part in ipairs({"models","textures"}) do
     for _,name in ipairs(core.get_dir_list(mod.."/"..part,false)) do files[name]=true end
   end
-  api.bus_breakdowns=tonumber(settings:get("bayline_stock_bus_breakdowns")) or 2
+  api.bus_breakdowns=tonumber(settings:get("bayline_stock_bus_breakdowns")) or 1
   api.bus_service_interval=tonumber(settings:get("bayline_stock_bus_service_interval")) or 150
   local capabilities={
     start_year=world_options and world_options.year or tonumber(settings:get("bayline_stock_bus_start_year")) or 1950,

@@ -18,20 +18,28 @@ return function(Kernel,Sim,s,difficulty,random32)
   function F.purchased(v)
     attach(v)
   end
+  function F.calendar(v)
+    local f=attach(v)
+    if f then Kernel.calendar_day(f,{front=true}) end
+  end
+  function F.economy(v,date,after)
+    local f=attach(v)
+    if not f then return end
+    local c=v.road_speed_state
+    local eng=Sim.stock_road_offer(s,v.engine,date)
+    Kernel.economy_day(f,{blocked_ctr=c and c.blocked_ctr or 0,
+      cur_speed=c and c.speed or 0, stopped=not v.running, difficulty=difficulty,
+      loading=v.load_state~=nil,engine_reliability=eng and eng.reliability},random32)
+    if after then after(v,f,difficulty,date,random32) end
+  end
   function F.daily(after)
     local ids={}
     for id,v in pairs(s.fleet) do if v.stock_bus then ids[#ids+1]=id end end
     table.sort(ids)
     for _,id in ipairs(ids) do
       local v=s.fleet[id]
-      local f=attach(v)
-      if f then
-        local c=v.road_speed_state
-        Kernel.economy_day(f,{blocked_ctr=c and c.blocked_ctr or 0,
-          cur_speed=c and c.speed or 0, stopped=not v.running, difficulty=difficulty},random32)
-        Kernel.calendar_day(f,{front=true})
-        if after then after(v,f,difficulty,now(),random32) end
-      end
+      F.economy(v,now(),after)
+      F.calendar(v)
     end
   end
   function F.tick(v,tick)
@@ -54,12 +62,13 @@ return function(Kernel,Sim,s,difficulty,random32)
     end
     return result.hold_motion
   end
-  function F.service(v,tick)
+  function F.service(v,tick,date)
     local f=v.road_fault
     if not f then return end
-    local e=Sim.stock_road_offer(s,v.engine)
+    date=date or now()
+    local e=Sim.stock_road_offer(s,v.engine,date)
     if not e then return end
-    Kernel.service(f,e.reliability,now(),now(),difficulty)
+    Kernel.service(f,e.reliability,date,date,difficulty)
     f.services=(f.services or 0)+1;f.last_service_tick=tick
   end
   function F.report(v)

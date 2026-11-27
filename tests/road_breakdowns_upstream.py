@@ -237,7 +237,9 @@ def scenarios():
         for j in range(rng.randint(1,10)):
             op = rng.choice(("E","E","E","T","T","C","S"))
             if op=="E":
-                flags=rng.choice([0,1,1,1,1,1,2,3,4,5,8,9,15])
+                # 16.0-RC1 skips menu wear before decrementing. Keep this
+                # 14.1 oracle limited to the shared ordinary world.
+                flags=rng.choice([0,1,1,1,1,1,2,3,8,9,11])
                 word=rng.choice([0,2620,2621,2622,2**32-1,rng.randrange(2**32)])
                 yield "E",rng.randrange(3),flags,rng.choice([0,0,0,1,65535]),rng.choice([0,1,4,5,6,127,65535]),word
             elif op=="T":

@@ -1,5 +1,5 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Copyright OpenTTD contributors. OpenTTD 14.1 vehicle.cpp (road branch
+-- Copyright OpenTTD contributors. OpenTTD 16.0-RC1 vehicle.cpp (road branch
 -- of CheckVehicleBreakdown, HandleBreakdown, AgeVehicle and depot service)
 -- and ordering from roadveh_cmd.cpp. No path, storage backend or clock owner.
 local B={VERSION=1,OFF=0,REDUCED=1,NORMAL=2}
@@ -43,15 +43,16 @@ end
 -- supplied on the day they apply; a pending breakdown isn't cancelled by
 -- changing difficulty.
 function B.economy_day(s,ctx,random32)
-  if ctx.front==false or (ctx.blocked_ctr or 0)~=0 then return false,false end
+  if ctx.front==false or ctx.menu or (ctx.blocked_ctr or 0)~=0 then return false,false end
   local difficulty=validate_difficulty(ctx.difficulty)
+  if difficulty==B.REDUCED and ctx.loading then return false,false end
   local dirty=false
   if ctx.no_servicing_if_no_breakdowns==false or difficulty~=B.OFF then
     local old=s.reliability
-    s.reliability=max(old-s.reliability_spd_dec,0)
+    s.reliability=min(ctx.engine_reliability or 65535,max(old-s.reliability_spd_dec,0))
     dirty=floor(old/256)~=floor(s.reliability/256)
   end
-  if s.breakdown_ctr~=0 or ctx.stopped or difficulty==B.OFF or ctx.cur_speed<5 or ctx.menu then
+  if s.breakdown_ctr~=0 or ctx.stopped or difficulty==B.OFF or ctx.cur_speed<5 then
     return false,dirty
   end
   local r=random32()

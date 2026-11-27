@@ -3337,13 +3337,13 @@ end
 function M.foster_art_ready(s)
   return foster_art_mount[s]
 end
-function M.stock_road_offer(s,engine)
+function M.stock_road_offer(s,engine,date)
   local market=s.stock_bus_market
   local id=market and road_bus_catalog().stock_id(engine)
   if not id then return end
   if engine=="foster_bus" and not M.foster_art_ready(s) then return end
   if engine=="foster_mk2_bus" and not (extra_road_art[s] and extra_road_art[s][engine]) then return end
-  return assert(M.engine_calendar.snapshot(market.models[id],market.epoch+s.day))
+  return assert(M.engine_calendar.snapshot(market.models[id],date or market.epoch+s.day))
 end
 function M.vehicle_offer(s,engine)
   if s.stock_bus_market and M.road_stock_service_active(s) then
@@ -4988,7 +4988,13 @@ end
 local function launch(s,v,route,dest,index,arrival_td,route_cost,frames,bays)
   v.road_via_pending=nil
   v.home_depot=v.home_depot or v.depot
+  local depart=v.road_stop_motion
+  v.road_stop_motion=nil
   v.road_motion_frames=frames;v.road_stop_pose=nil;v.road_speed_state=nil;v.stock_loading_complete=nil
+  if depart and frames then
+    v.road_speed_state={index=1,heading=frames[1][3],speed=0,subspeed=depart.subspeed,
+      progress=depart.progress,incline=depart.incline,ticks=depart.ticks}
+  end
   v.road_leg_td=arrival_td;v.road_route_cost=route_cost
   v.road_bay_branch=bays
   v.route=route;v.dest=dest;v.dest_index=index;v.progress=1;v.station=nil;v.depot=nil;v.wait=0;v.loaded_at=nil;v.status="En route"
@@ -5258,7 +5264,7 @@ local function automatic_road_service(s,faults,v,f,difficulty,date,random)
   if v.road_via_pending then return end
   local cfg=faults.auto
   if not cfg or v.stop_requested or v.road_return_depot and not v.road_auto_service then return end
-  local engine=M.stock_road_offer(s,v.engine)
+  local engine=M.stock_road_offer(s,v.engine,date)
   if not engine then return end
   local c=v.road_speed_state
   local frame=c and M.road_motion_frame(s,v)
@@ -5287,7 +5293,7 @@ local function automatic_road_service(s,faults,v,f,difficulty,date,random)
       return {tile=nearest,depot=nearest,cost=cost,path=path,td=td,frames=frames}
     end})
   if plan.kind=="service_here" then
-    faults.service(v,s.stock_load_tick or s.day*74)
+    faults.service(v,s.stock_load_tick or s.day*74,date)
   elseif plan.kind=="route" and plan.route.path then
     if old and old.depot==plan.dest_tile then return end
     local target,idx=old and old.station or v.dest,old and old.index or v.dest_index
@@ -5339,9 +5345,13 @@ local function rail_tick_broker(s)
   return register,advance,function() return flushed end
 end
 
-local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse,month_tick)
+local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse,month_tick,daily_road)
   local clock
   local faults=road_faults_mount[s]
+  local initial_tick=daily_road and s.passenger_house_clock and s.passenger_house_clock.counter
+  local function fault_date(tick)
+    if initial_tick then return s.stock_bus_market.epoch+s.day-(tick<initial_tick+74 and 1 or 0) end
+  end
   local freight_ready,ship_ready,industry_ready,tanker_ready
   local growth=town_growth_mount[s]
   local growth_random=growth and function() return rating_runtime.random_u32(s) end
@@ -5350,7 +5360,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
   if s.road_stock_house_supply then
     town_passengers.start(s)
     clock=function(callback)
-      if not commercial and not coal and not timber and not growth and not tide and not month_tick then return town_passengers.day(s,callback,{traverse=traverse,tick_pulse=tick_pulse}) end
+      if not commercial and not coal and not timber and not growth and not tide and not month_tick and not daily_road then return town_passengers.day(s,callback,{traverse=traverse,tick_pulse=tick_pulse}) end
       local works=growth and growth.world.reconstruction
       local work_state=works and s.stock_town_growth.reconstruction
       local road_ground,road_tick
@@ -5401,8 +5411,10 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
           if item then visit_timber(item,source,tick,offer_rig) end
         elseif timber then timber.tile_visit(x,z,tick,offer_rig) end
       end
-      local month_at=month_tick and clock.counter+rating_runtime.day_ticks-1
+      local before_tick=clock.counter
+      local month_at=month_tick and before_tick+rating_runtime.day_ticks-1
       town_passengers.day(s,function(tick,finish_rating)
+        if daily_road then daily_road((tick-before_tick)%74,false) end
         local ready,events
         if commercial then ready,events=commercial.before(tick) end
         if freighter then freighter.rating(tick) end
@@ -5439,9 +5451,10 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       end,{passenger=commercial and commercial.hooks.passenger,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
         growth=growth and growth.world,traverse=traverse,tick_pulse=tick_pulse,
-        before_landscape=(month_tick or machines or timber and timber.animate) and function(tick)
+        before_landscape=(month_tick or daily_road or machines or timber and timber.animate) and function(tick)
           if machines then machines.animate(tick) end
           if timber and timber.animate then timber.animate(tick) end
+          if daily_road then daily_road((tick-before_tick+1)%74,true) end
           if tick==month_at then
             local changed=month_tick()
             if changed then
@@ -5578,8 +5591,8 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       v.road_via_pending=#vias>0 and vias or nil
       v.last_departure=s.day;v.last_departure_tick=tick
     end,
-    exited=faults and function(v,tick) faults.service(v,tick) end or nil,
-    arrive=function(v,tick,frame)
+    exited=faults and function(v,tick) faults.service(v,tick,fault_date(tick)) end or nil,
+    arrive=function(v,tick,frame,stop_motion)
       if not stock_managed(s,v) then return false end
       if v.road_return_depot then
         local depot=assert(depot_endpoint(s,v.owner,v.road_return_depot),"Ordered road depot changed during its protected approach")
@@ -5591,7 +5604,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         v.road_auto_service=nil
         if auto then v.road_depot_resume=auto.index end
         v.progress,v.running,v.status=0,auto~=nil,auto and "Serviced; resuming route" or "Stopped in depot"
-        if faults then faults.service(v,tick) end
+        if faults then faults.service(v,tick,fault_date(tick)) end
         return true,true
       end
       if s.stock_road_bays then road_clock().bay.arrive(s,v,frame) end
@@ -5600,6 +5613,10 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       v.last_road_arrival_tick=tick
       v.road_arrival_td,v.road_leg_td=v.road_leg_td,nil
       v.road_stop_pose=frame
+      if stop_motion then
+        v.road_stop_motion={subspeed=stop_motion.subspeed,progress=stop_motion.progress,
+          incline=stop_motion.incline,ticks=stop_motion.ticks}
+      end
       v.road_motion_frames=nil;v.road_speed_state=nil;v.road_bay_branch=nil
       v.route=nil;v.dest=nil;v.dest_index=nil;v.progress=0
       local st=s.stations[v.station]
@@ -5752,10 +5769,13 @@ function M.daily(s,traverse,tick_pulse,openings)
   s.day=s.day+1
   if s.retired_road_stations or s.retired_road_waypoints then M.road_station_retirement().expire(s) end
   local faults=road_faults_mount[s]
-  if faults and M.road_stock_service_active(s) then
-    faults.daily(faults.auto and function(v,f,diff,date,rnd)
-      automatic_road_service(s,faults,v,f,diff,date,rnd)
-    end or nil)
+  local stock_dates=s.stock_generated_profile and s.stock_bus_market and s.road_stock_house_supply
+    and M.road_stock_service_active(s)
+  local automatic=faults and faults.auto and function(v,f,diff,date,rnd)
+    automatic_road_service(s,faults,v,f,diff,date,rnd)
+  end or nil
+  if faults and not stock_dates and M.road_stock_service_active(s) then
+    faults.daily(automatic)
   end
   local y,month,calendar_day=M.date(s)
   local new_month=s.stock_bus_market and calendar_day==1 or not s.stock_bus_market and s.day%30==0
@@ -5846,17 +5866,50 @@ function M.daily(s,traverse,tick_pulse,openings)
     end
     s.stock_load_tick=nil
   end
-  -- Charge the preceding stock day, once per active serial, in fleet
-  -- order. The company retains the same money fraction as other modes.
+  local function settle_bus(v)
+    local c=M.company(s,v.owner)
+    local account=stock_bus(v)
+    -- economy.cpp RecomputePrices: RC1's default Low running-cost
+    -- category is 6/8 of the normalised Medium base.
+    local annual_fp=stock_dates and math.floor(account.annual_fp*6/8) or nil
+    local whole,remainder=road_bus_catalog().day(account,c.stock_money_fraction or 0,annual_fp)
+    c.stock_money_fraction=remainder
+    if whole~=0 then debit(c,whole,"road_run");v.expense=v.expense+whole;HQStats.record(s,v,-whole) end
+  end
   local regal_ids={}
   for id,v in pairs(s.fleet) do if stock_bus(v) then regal_ids[#regal_ids+1]=id end end
   table.sort(regal_ids)
-  for _,id in ipairs(regal_ids) do
-    local v=s.fleet[id]
-    local c=M.company(s,v.owner)
-    local whole,remainder=road_bus_catalog().day(stock_bus(v),c.stock_money_fraction or 0)
-    c.stock_money_fraction=remainder
-    if whole~=0 then debit(c,whole,"road_run");v.expense=v.expense+whole;HQStats.record(s,v,-whole) end
+  local daily_road
+  if stock_dates then
+    local slot={}
+    for _,id in ipairs(regal_ids) do
+      local phase=(id-1)%74
+      local group=slot[phase] or {};slot[phase]=group
+      group[#group+1]=id
+    end
+    if next(slot) then
+      -- RunCalendar/EconomyVehicleDayProc in vehicle.cpp. A campaign day
+      -- represents phase 1..73 of yesterday, then phase 0 of its new date.
+      -- Ordinary road IDs are one-based in this adapter.
+      local new_date=s.stock_bus_market.epoch+s.day
+      daily_road=function(phase,calendar)
+        local group=slot[phase]
+        if not group then return end
+        for _,id in ipairs(group) do
+          local v=s.fleet[id]
+          if v then
+            if calendar then
+              if faults then faults.calendar(v) end
+            else
+              if faults then faults.economy(v,new_date-(phase==0 and 0 or 1),automatic) end
+              settle_bus(v)
+            end
+          end
+        end
+      end
+    end
+  else
+    for _,id in ipairs(regal_ids) do settle_bus(s.fleet[id]) end
   end
   local stock_work,month_tick,industries_rolled
   if exact_economy and (openings or town_month or new_month and (industry.coal or industry.timber)) then
@@ -5891,7 +5944,7 @@ function M.daily(s,traverse,tick_pulse,openings)
     passenger_modules()
     town_passengers.start(s)
     M.bind_stock_industry_ships(s,industry,first,live,false)
-    stock_work=stock_station_day(s,road_supply,commercial,industry.coal,industry.freight,industry.timber,industry.freighter,industry.industry_train,industry.tanker,traverse,tick_pulse,month_tick)
+    stock_work=stock_station_day(s,road_supply,commercial,industry.coal,industry.freight,industry.timber,industry.freighter,industry.industry_train,industry.tanker,traverse,tick_pulse,month_tick,daily_road)
   elseif commercial then
     town_passengers.day(s,function(tick)
       local ready,events=commercial.before(tick)
