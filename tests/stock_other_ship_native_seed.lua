@@ -21,6 +21,12 @@ return function(core,Sim,checkpoint,mod)
     local W,rng=Sim.mount_farm_world(s,T,true)
     assert(W.seed(s,Sim.id(10,25),Sim.id(32,27),rng))
     s.speed=4
+  elseif cargo=="wood" then
+    s.ship_coal_service,s.road_timber=true,true
+    local W=dofile(mod.."/timber_world.lua")(Sim,T,Sim.timber_rules())
+    for name,p in pairs(W.facilities) do Sim.facilities[name]=p end
+    assert(W.seed(s,Sim.id(10,25),Sim.id(32,27)))
+    s.speed=4
   elseif cargo=="goods" then
     s.ship_coal_service,s.road_oil=true,true
     local W=assert(Sim.mount_oil_world(s,T,true))

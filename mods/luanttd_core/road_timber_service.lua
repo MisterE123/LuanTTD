@@ -31,7 +31,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
       end
     end
     for _,st in ipairs(options.ship_stations or {}) do
-      assert(not by_id[st.id] and st.mode=="ship" and st.freight_cargo=="goods" and not st.neutral_rig)
+      assert(not by_id[st.id] and st.mode=="ship" and Rules.cargo[st.freight_cargo] and not st.neutral_rig)
       local x,z=xy(st.tile)
       st.stock_timber,st.goods=st.stock_timber or {},st.goods or {}
       local point={id=st.id,st=st,tile=st.tile,x=x-1,z=z-1,town=st.town,owner=st.owner,

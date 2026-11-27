@@ -3902,7 +3902,7 @@ local function passenger_modules()
     rating_runtime,income_rules,loading_factory,timing)
   local make_dry=dofile(base.."ship_goods_service.lua")
   local dry_ports={}
-  for _,cargo in ipairs({"goods","grain","livestock"}) do
+  for _,cargo in ipairs({"goods","grain","livestock","wood"}) do
     dry_ports[cargo]=make_dry(M,ships,passenger_rules,kernel,loading_factory,timing,cargo)
   end
   local dry=dofile(base.."ship_goods_runtime.lua")(M,dry_ports,timber_rules,function() return farm.rules end,catchment,debit)

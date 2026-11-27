@@ -7,6 +7,13 @@ export PATH="/usr/games:$PATH"
 export TMPDIR="$(mktemp -d "${GITHUB_WORKSPACE:-$PWD}/.native-ci.XXXXXX")"
 trap 'rm -rf -- "$TMPDIR"' EXIT
 case "${1:-}" in
+  stock-dry-ships)
+    export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/ship-stock-media"
+    python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE" --hardlink
+    for cargo in goods grain livestock wood; do
+      LUANTTD_QA_OTHER_SHIP=211 LUANTTD_QA_OTHER_SHIP_YEAR=1950 LUANTTD_QA_OTHER_SHIP_CARGO="$cargo" bash tests/stock_other_ship_native.sh
+    done
+    ;;
   startup)
     luantiserver --version
     bash tests/default_stock_terrain_native.sh
@@ -114,9 +121,6 @@ case "${1:-}" in
     bash tests/stock_oil_rig_art_native.sh
     lua5.1 tests/coal_ship_ordinary_worker.lua 211
     lua5.1 tests/coal_ship_ordinary_worker.lua 212
-    for cargo in goods grain livestock; do
-      LUANTTD_QA_OTHER_SHIP=211 LUANTTD_QA_OTHER_SHIP_YEAR=1950 LUANTTD_QA_OTHER_SHIP_CARGO="$cargo" bash tests/stock_other_ship_native.sh
-    done
     lua5.1 tests/rail_paid_runtime.lua 208
     python3 tests/stock_hovercraft_art.py
     python3 tests/stock_bakewell_cargo_art.py
