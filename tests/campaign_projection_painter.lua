@@ -41,3 +41,43 @@ present(tile(1,8),tile(33,3),tile(65,4))
 callbacks[8](false,"retry")
 assert(M.step() and maps[9].x==33)
 print("PASS continuous neighbor changes and failed paints cannot starve older waiting sectors")
+
+-- A cancellation caused by two emerge threads on one mapchunk is not
+-- success until the affected block is loaded. Actual errors still fail.
+local function emerge_case(actions,loaded_at,expected,reads)
+  local queue,t,checked,actual,progress={},0,0,nil,{}
+  local core={EMERGE_CANCELLED=0,EMERGE_ERRORED=1}
+  function core.after(dt,fn,...)
+    queue[#queue+1]={dt=dt,fn=fn,args={...}}
+  end
+  function core.emerge_area(_,_,on_block)
+    for i,action in ipairs(actions) do
+      on_block({x=-1,y=0,z=1},action,#actions-i)
+    end
+  end
+  function core.get_node_or_nil(pos)
+    assert(pos.x==-7 and pos.y==2 and pos.z==16)
+    checked=checked+1
+    if checked<loaded_at then return checked%2==1 and {name="ignore"} or nil end
+    return {name="air"} -- legitimate loaded air also counts
+  end
+  local emerge=dofile("mods/luanttd_core/campaign_emerge_region.lua")(core)
+  emerge({x=-7,y=2,z=2},{x=0,y=3,z=20},function(ok)
+    assert(actual==nil)
+    actual=ok
+  end,function(left) progress[#progress+1]=left end)
+  assert(actual==nil and #progress==#actions and progress[#actions]==0)
+  for i=1,4 do
+    local q=table.remove(queue,1)
+    if not q then break end
+    t=t+q.dt;q.fn(unpack(q.args))
+  end
+  assert(actual==expected and checked==reads and #queue==0 and t<.23)
+end
+emerge_case({3,2},0,true,0)
+emerge_case({0,3},1,true,1)
+emerge_case({3,0},3,true,3)
+emerge_case({0,0},4,true,5) -- one canceled block may appear ahead of another
+emerge_case({3,0},99,false,3)
+emerge_case({0,1,3},1,false,0)
+print("PASS canceled mapblocks are verified after the callback; missing blocks and engine errors retain retry")

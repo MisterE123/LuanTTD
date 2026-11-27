@@ -49,3 +49,19 @@ more. These tests measure server-side terrain painting, not simulation
 throughput or client frame rate.
 
 Reproduce with `BAYLINE_PAINT_INDEX=true bash tests/campaign_paint_bench_native.sh 32d9b84`.
+
+## Concurrent mapblock emergence
+
+On Luanti 5.15.2, a viewport request can receive a cancellation while
+another engine thread is still generating the mapchunk containing that
+block. Previously, any cancellation discarded the whole paint request.
+The painter now checks only the canceled blocks after emergence. It
+waits briefly for overlapping work and still rejects an unreadable or
+errored region, which retains the existing retry path. This does not
+skip lighting, generation, or terrain writes.
+
+In a native farm-scene replay, the old renderer reported failed viewport
+placement twice while leaving and reentering a farm. The updated renderer
+loaded the crops and stock fence again without a failed placement.
+`tests/campaign_projection_painter.lua` separately covers a canceled
+block that never loads and an actual engine error.

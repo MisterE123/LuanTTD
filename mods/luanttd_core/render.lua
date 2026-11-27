@@ -2327,21 +2327,21 @@ return function(api)
   -- so their on_generated hooks will not run on the next startup.
   -- Explicitly paint authoritative campaign terrain into the existing
   -- chunks as well as the newly emerged ones, before enabling the camera.
-  local function place_region(low,high,done,notify)
-    local failed,total,reported=false,nil,-1
+  local place_region=(function(emerge_region) return function(low,high,done,notify)
+    local total,reported=nil,-1
     local function update(f,stage)
       if notify then notify(f,stage) end
     end
-    core.emerge_area(low,high,function(_,action,remaining)
-      if action==core.EMERGE_CANCELLED or action==core.EMERGE_ERRORED then failed=true end
+    local function progress(remaining)
       total=total or remaining+1
       local percent=math.floor(35*(total-remaining)/total)
       if percent>reported then
         reported=percent
         core.after(0,update,percent/100,"Loading the starting area")
       end
-      if remaining~=0 then return end
-      if failed then core.after(0,done,false,"Luanti could not emerge part of the starting area.");return end
+    end
+    emerge_region(low,high,function(loaded)
+      if not loaded then done(false,"Luanti could not emerge part of the starting area.");return end
       local x,z=low.x,low.z
       local batches=math.ceil((high.x-low.x+1)/64)*math.ceil((high.z-low.z+1)/64)
       local done_batches=0
@@ -2360,9 +2360,9 @@ return function(api)
         if x>high.x then x=low.x;z=z+64 end
         if z>high.z then done(true) else core.after(0,batch) end
       end
-      core.after(0,batch)
-    end)
-  end
+      batch()
+    end,notify and progress or nil)
+  end end)(dofile(modpath.."/campaign_emerge_region.lua")(core))
   -- Draw exactly the same stock nodes from a sparse worker projection.
   -- Loading order stays asynchronous; unhydrated cells are never painted.
   function R.use_worker_projection(projection)
