@@ -20,6 +20,11 @@ return function(Sim,Terrain,Rules)
       bridge_above=s.bridge_above and s.bridge_above[id] or s.rail_bridge_above and s.rail_bridge_above[id]
         or s.aqueduct_above and s.aqueduct_above[id]}
   end
+  local function visit_neighbor(d,s,x,z)
+    local u,v=x+1+dx[d],z+1+dz[d]
+    local key=Sim.id(u,v)
+    return key and tile(s,u,v,key)
+  end
   function W.visit(s,x,z,tick,random)
     local id=Sim.id(x,z)
     local t=id and s.tiles[id]
@@ -41,15 +46,13 @@ return function(Sim,Terrain,Rules)
       end
       return
     end
-    local target_id
-    local next_tree,event=Rules.visit(t.wood,x-1,z-1,tick,s.stock_extra_tree_placement,random,function(d)
-      local u,v=x+dx[d],z+dz[d]
-      target_id=Sim.id(u,v)
-      return target_id and tile(s,u,v,target_id)
-    end)
+    -- The RC1 RNG chooses a neighbor only on actual spread attempts.
+    -- Pass the shared resolver rather than allocating one closure per tree.
+    local next_tree,event=Rules.visit(t.wood,x-1,z-1,tick,s.stock_extra_tree_placement,random,visit_neighbor,s)
     t.wood=next_tree
     if event and event.kind=="plant" then
-      local next_tile=assert(s.tiles[target_id])
+      local d=event.direction
+      local next_tile=assert(s.tiles[Sim.id(x+dx[d],z+dz[d])])
       next_tile.stock_clear_density,next_tile.stock_clear_visits=nil,nil
       next_tile.wood=event.tree
     elseif event and event.kind=="clear" and event.ground~=3 then

@@ -9,7 +9,7 @@ return function(Worldgen)
     for k,v in pairs(old) do copy[k]=v end
     return copy
   end
-  function T.visit(tree,x,z,tick,setting,random,neighbor)
+  function T.visit(tree,x,z,tick,setting,random,neighbor,context)
     setting=setting or T.SPREAD_ALL
     local cycle=11*x+9*z+math.floor(tick/256)
     local new=tree
@@ -28,7 +28,7 @@ return function(Worldgen)
         new.count,new.growth=tree.count+1,0
       elseif (choice==1 or choice==2) and spread then
         local d=math.floor(random()/536870912)
-        local target=neighbor(d)
+        local target=neighbor(d,context,x,z)
         if Worldgen.can_plant(target,false) and not (target.class==0 and
            (target.ground or 0)==0 and target.density~=3) then
           local g=target.class==6 and SHORE or target.ground==1 and ROUGH or GRASS

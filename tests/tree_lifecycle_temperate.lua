@@ -103,3 +103,23 @@ local draws=0
 assert(not Adapter.global_tick(s,0,function() draws=draws+1;return roll end))
 assert(not bare.wood and draws==1)
 print("PASS global tree clock: immature clear grass, facility exclusion, checkpoint continuation and single stock RNG draw")
+
+-- The shared neighbor resolver gets a fresh state and exact tile for
+-- each call, and the planting write lands on the queried tile.
+local dx,dz={[0]=-1,-1,-1,0,1,1,1,0},{[0]=-1,0,1,1,1,0,-1,-1}
+for d=0,7 do
+  local world=Sim.new(2001+d)
+  world.corner_grid=Terrain.new(Sim.W,Sim.H,function() return 1 end)
+  local x,z=8+d*5,10+d
+  local src,dst=Sim.id(x,z),Sim.id(x+dx[d],z+dz[d])
+  world.tiles[src]={terrain="grass",h=1,wood={class=4,type=d,ground=0,density=3,growth=3,count=1}}
+  world.tiles[dst]={terrain="grass",h=1}
+  local draws=0
+  local event=assert(Adapter.visit(world,x,z,due(x,z),function()
+    draws=draws+1
+    return draws==1 and 2 or d*536870912
+  end))
+  assert(draws==2 and event.direction==d and world.tiles[dst].wood==event.tree)
+  assert(world.tiles[dst].wood.type==d and world.tiles[src].wood.growth==3)
+end
+print("PASS live neighboring spread resolves and writes all eight directions across distinct tiles/worlds")

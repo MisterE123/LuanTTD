@@ -100,3 +100,20 @@ IDs and phases for all 12 TreeTypes. Finished art still uses four native
 families, and is not credited for the missing stock silhouettes.
 Source by OpenTTD
 contributors, GPL-2.0-only (see `COPYING.OpenTTD.md`).
+
+## Live worker tree visits
+
+Each tree visit now passes a shared neighbor resolver and its current
+coordinates to the RC1 rules rather than allocating a Lua closure. As in
+the source, only a spread attempt reads a neighbor. The RNG draws,
+direction choice, plantability, ground density and writes are unchanged.
+An adapter regression exercises actual planting in all eight directions,
+including consecutive visits in different worlds.
+
+Four alternating native worker runs from the same generated 1024×1024
+checkpoint measured days 18–25 after one warm-up day each. The median
+simulation CPU time per day fell from 900 to 746 ms (17%); the mean
+fell from 869 to 738 ms (15%). Both candidate replays produced the
+same durable day-25 game state, including the shared RNG and every tile.
+These timings cover simulation stepping in this world, not autosave,
+networking, rendering or a guaranteed speedup on other maps.
