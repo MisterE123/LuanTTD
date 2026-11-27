@@ -154,14 +154,14 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     r.freight.charged_running_ticks=ticks
     r.freight.running_expense=(r.freight.running_expense or 0)+whole
   end
-  function R.day(s,Run,first_tick,b,live)
+  function R.day(s,Run,first_tick,b,live,refresh)
     if not (R.active(s,Run) and b) then return end
     local state=assert(s[storage])
     local r=run_of(s,Run)
     local f=frame(s)
     local id=r and r.fleet_id
     f.serial=id
-    f.samples=not live and {samples(s,Run,r)} or nil
+    if not refresh then f.samples=not live and {samples(s,Run,r)} or nil end
     local function motion(list,tick)
       for _,e in ipairs(list or {}) do
         e.world_tick,e.cargo=tick,cargo;push(f.motion,e)
@@ -179,7 +179,7 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
         assert(v,why)
       end
       assert(state.vehicle.id==id and state.vehicle.owner==r.owner,"Only one bought "..cargo.." carrier can own this save")
-      charge(s,r)
+      if not refresh then charge(s,r) end
       if not (r.freight.complete or r.failure) then
         local a,z=b.report(r.freight.mine),b.report(r.freight.power)
         if not a or a.role~="load" or a.station.owner~=r.owner then

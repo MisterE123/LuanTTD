@@ -332,7 +332,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods,Ma
     local pos,yaw=Run.pose(p)
     return pos and {pos=pos,yaw=yaw} or false
   end
-  function M.day(s,first_tick,live)
+  function M.day(s,first_tick,live,refresh)
     if not M.active(s) then return end
     local spec=bindings[s]
     local run=spec.run.current(s)
@@ -341,7 +341,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods,Ma
     if state.loading_tick and state.loading_tick<first_tick-1 then
       state.loading_tick,state.post_tick=first_tick-1,first_tick-1
     end
-    b.economy_day(s.day)
+    if not refresh then b.economy_day(s.day) end
     if not run.failure then
       for _,o in ipairs(run.transport_orders or {{id=run.first,cargo_order="full"},{id=run.second,cargo_order="no_load"}}) do
         local dock=b.report(o.id)
@@ -351,7 +351,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods,Ma
       if run.failure then run.phase="blocked" end
     end
     local view=frame(s)
-    view.samples=not live and {sample(spec.run,run)} or nil
+    if not refresh then view.samples=not live and {sample(spec.run,run)} or nil end
     local function before(tick)
       if run.transport_cancel_full then b.cancel_full();run.transport_cancel_full=nil end
       local ok,why=b.loading_tick(tick,run.stopped or run.phase=="blocked",run.dock_forced_leave)
@@ -394,19 +394,19 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods,Ma
     end
     return {extend=b.extend,before=before,after=after,rating=rating}
   end
-  function M.goods_day(s,pipe,first_tick,live)
+  function M.goods_day(s,pipe,first_tick,live,refresh)
     if not industry_cargo(s) then return end
     local spec=bindings[s]
     local run=spec and spec.run.current(s)
     if not run or spec.ready and not spec.ready(s.stock_coal_ship.engine) then return end
     local view=frame(s)
-    view.samples=not live and {sample(spec.run,run)} or nil
+    if not refresh then view.samples=not live and {sample(spec.run,run)} or nil end
     return Goods.day(s,spec.run,pipe,first_tick,live,function()
       view.samples[#view.samples+1]=sample(spec.run,run)
     end,function(e)
       view.events[#view.events+1]=e
       if #view.events>4096 then table.remove(view.events,1) end
-    end)
+    end,refresh)
   end
   function M.status(s)
     local craft=s.stock_coal_ship

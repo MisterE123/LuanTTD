@@ -73,7 +73,7 @@ return function(Sim,Services,Timber,Farm,Catchment,debit)
     accepted.sources=sources
     return accepted
   end
-  function M.day(s,Run,pipe,first_tick,live,sample,emit)
+  function M.day(s,Run,pipe,first_tick,live,sample,emit,refresh)
     local b=pipe and pipe.goods_ship_binding
     local state=s.stock_goods_ship_service
     local p=Run.current(s)
@@ -105,7 +105,7 @@ return function(Sim,Services,Timber,Farm,Catchment,debit)
           owner=v.owner,vehicle=v.id,day=s.day,units=data.units,amount=data.amount})
       end,
     })
-    D.settle(s.day,s.stock_ship_running_base)
+    if not refresh then D.settle(s.day,s.stock_ship_running_base) end
     if not p.failure then
       for _,o in ipairs(p.transport_orders or {{id=p.first,cargo_order="full"},{id=p.second,cargo_order="no_load"}}) do
         local report=D.report(o.id)

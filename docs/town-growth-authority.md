@@ -321,8 +321,12 @@ on that same tick. The generated-world test checks ten actual industry
 cargo histories in January's final 73 ticks and at February's first tick.
 Station acceptance keeps the stock last-month flag separately from
 lifetime acceptance and rotates a shared physical goods record once.
-The daily industry opening scheduler and subsidies are still separate
-from this verified month-boundary sequence.
+New industry placement now runs at the same economy boundary, with
+the Day placement before Month quotas and any other monthly work.
+A newly opened offshore rig is physically present and runs its first
+industry tick immediately. Refreshing the affected transport bindings
+preserves running charges and existing presentation samples. Global
+industry ordering and live subsidies still need broader comparisons.
 
 The [numeric snapshots](../tests/fixtures/town-growth-rc1-1950.lua) can be
 regenerated with [the reference extractor](../tools/record_rc1_town_reference.py)

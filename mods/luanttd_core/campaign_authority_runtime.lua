@@ -415,9 +415,8 @@ return function(Sim,mod,s,cap)
           advertise=N.news.industry_opened})
   end
   function N.day(tick_pulse)
-    Sim.daily(s,nil,tick_pulse)
+    Sim.daily(s,nil,tick_pulse,openings)
     if Clock then Clock() end
-    if openings and openings() then Sim.clear_live_sea_cache(s) end
     N.news.day()
   end
   return N

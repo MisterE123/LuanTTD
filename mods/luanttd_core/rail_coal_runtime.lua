@@ -141,13 +141,13 @@ return function(Sim,Service,Roster,debit,credit,receive)
     return out
   end
 
-  function R.day(s,Run,first_tick,live)
+  function R.day(s,Run,first_tick,live,refresh)
     if not R.active(s,Run) then return end
     local b,state=bind(s)
     local run=run_of(s,Run)
     local frame=cache(s)
     frame.serial=run and run.fleet_id
-    frame.samples=not live and {sample(s,Run,run)} or nil
+    if not refresh then frame.samples=not live and {sample(s,Run,run)} or nil end
     local id=frame.serial
     if id and not state.vehicles[id] then
       assert(b.vehicle({id=id,owner=run.owner,stock_id=run.stock_wagon,length=run.total_length,
@@ -158,7 +158,7 @@ return function(Sim,Service,Roster,debit,credit,receive)
       -- cargo ages, without simulating fictional paused movement.
       state.loading_tick,state.post_tick=first_tick-1,first_tick-1
     end
-    debit_previous_day(s,run)
+    if not refresh then debit_previous_day(s,run) end
     if run and run.freight.repeat_route and not (run.freight.complete or run.failure) then
       local a,z=b.report(run.freight.mine),b.report(run.freight.power)
       local why

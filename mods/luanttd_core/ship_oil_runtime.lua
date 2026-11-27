@@ -174,7 +174,7 @@ return function(Sim,Service,Roster,Calendar,Rules,Catchment,debit)
     local list,by=Service.bind_stations(s,state,map,function(id) return meta.run.ordered_dock(p,id) end)
     return list,by,map
   end
-  function M.day(s,pipe,first_tick,live)
+  function M.day(s,pipe,first_tick,live,refresh)
     if not (M.active(s) and pipe and pipe.oil_ship_binding) then return end
     local meta=get(s)
     local p=meta.run.current(s)
@@ -204,13 +204,13 @@ return function(Sim,Service,Roster,Calendar,Rules,Catchment,debit)
       end
       if p.failure then p.phase="blocked" end
     end
-    v.settle(s.day,s.stock_ship_running_base)
-    local points=not live and {} or nil
+    if not refresh then v.settle(s.day,s.stock_ship_running_base) end
+    local points=refresh and views[s] or not live and {} or nil
     local function sample()
       local pos,yaw=meta.run.pose(p)
       points[#points+1]=pos and {pos=pos,yaw=yaw} or false
     end
-    if points then sample() end
+    if points and not refresh then sample() end
     views[s]=points
     return {before=function(tick)
       if p.transport_cancel_full then v.cancel_full();p.transport_cancel_full=nil end

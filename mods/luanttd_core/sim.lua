@@ -5342,12 +5342,16 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       local coal_tiles,visit_coal
       local timber_tiles,visit_timber,fields,regrowth,visit_field
       local offer_rig=commercial and commercial.offer_rig_passengers
-      if exact then
-        if coal then coal_tiles,visit_coal=coal.landscape(width,height) end
-        if timber and timber.landscape then
-          timber_tiles,visit_timber,fields,regrowth,visit_field=timber.landscape(width,height)
+      local function industry_footprints()
+        coal_tiles,visit_coal,timber_tiles,visit_timber,fields,regrowth,visit_field=nil,nil,nil,nil,nil,nil,nil
+        if exact then
+          if coal then coal_tiles,visit_coal=coal.landscape(width,height) end
+          if timber and timber.landscape then
+            timber_tiles,visit_timber,fields,regrowth,visit_field=timber.landscape(width,height)
+          end
         end
       end
+      industry_footprints()
       local function landscape(x,z,tick,source)
         local work
         if work_state and (work_state.funded>0 or work_state.active>0) then
@@ -5413,7 +5417,15 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         before_landscape=(month_tick or machines or timber and timber.animate) and function(tick)
           if machines then machines.animate(tick) end
           if timber and timber.animate then timber.animate(tick) end
-          if tick==month_at then month_tick() end
+          if tick==month_at then
+            local changed=month_tick()
+            if changed then
+              coal,freight,timber,freighter,industry_train,tanker=changed.coal,changed.freight,changed.timber,
+                changed.freighter,changed.industry_train,changed.tanker
+              machines=s.stock_generated_profile and s.stock_coal_industries and M.industry_machinery(s)
+              industry_footprints()
+            end
+          end
         end})
     end
   else
@@ -5643,7 +5655,74 @@ function M.stock_industry_month(s,coal,timber,y,month)
     end
   end
 end
-function M.daily(s,traverse,tick_pulse)
+-- Binding a freshly placed industry must not rerun economy-day vehicle
+-- charges, nor reset the first 73 ticks of presentation samples.
+function M.bind_stock_industry_day(s,first,live,refresh)
+  coal_day_bindings[s],timber_day_bindings[s]=nil,nil
+  local coal,freight,timber,freighter,industry_train
+  if M.rail_coal_active(s) then
+    town_passengers.start(s)
+    freight=rail_coal.day(s,paid_rail_runs[s],first or s.passenger_house_clock.counter+1,live,refresh)
+  end
+  if M.ship_coal_active(s) then
+    town_passengers.start(s)
+    freighter=ship_coal.day(s,first or s.passenger_house_clock.counter+1,live,refresh)
+  end
+  if M.road_coal_active(s) or freight or freighter then
+    passenger_modules()
+    coal=coal_binding(s,true,freight,freighter)
+    coal_day_bindings[s]=coal
+  end
+  if M.road_timber_active(s) or M.road_farm_active(s) or M.road_oil_active(s) or M.road_heavy_active(s) or M.road_bank_active(s) then
+    passenger_modules()
+    timber=timber_binding(s)
+    timber_day_bindings[s]=timber
+    if timber and timber.rail then
+      town_passengers.start(s)
+      first=first or s.passenger_house_clock.counter+1
+      if timber.mixed or timber.rail_multi then
+        local rail=timber.rail
+        local days={}
+        if rail.oil then days[#days+1]=oil.runtime.day(s,paid_rail_runs[s],first,rail.oil,live,refresh) end
+        if rail.goods then days[#days+1]=goods.runtime.day(s,paid_rail_runs[s],first,rail.goods,live,refresh) end
+        for _,cargo in ipairs(FreightKinds.profile_order) do
+          if rail[cargo] then days[#days+1]=profiled.runtime[cargo].day(s,paid_rail_runs[s],first,rail[cargo],live,refresh) end
+        end
+        if #days>0 then
+          industry_train={
+            before=function(tick)
+              local ready={}
+              for i,q in ipairs(days) do ready[i]=q.before(tick) end
+              return ready
+            end,
+            after=function(tick,ready,register)
+              for i,q in ipairs(days) do q.after(tick,ready[i],register) end
+            end,
+            post=function(tick)
+              for _,q in ipairs(days) do q.post(tick) end
+            end,
+          }
+        end
+      else
+        local controller=M.rail_goods_active(s) and goods.runtime or oil.runtime
+        industry_train=controller.day(s,paid_rail_runs[s],first,timber.rail,live,refresh)
+      end
+    end
+  end
+  return {coal=coal,freight=freight,timber=timber,freighter=freighter,industry_train=industry_train}
+end
+function M.bind_stock_industry_ships(s,industry,first,live,refresh)
+  local timber=industry.timber
+  local tanker=oil.ship and timber and oil.ship.day(s,timber,first,live,refresh)
+  local dry=ship_coal and ship_coal.goods_day(s,timber,first,live,refresh)
+  if dry and tanker then
+    local oil_day=tanker
+    tanker={before=function(tick) return {oil_day.before(tick),dry.before(tick)} end,
+      after=function(tick,ready) oil_day.after(tick,ready[1]);dry.after(tick,ready[2]) end}
+  elseif dry then tanker=dry end
+  industry.tanker=tanker
+end
+function M.daily(s,traverse,tick_pulse,openings)
   local live=tick_pulse~=nil
   s.day=s.day+1
   if s.retired_road_stations or s.retired_road_waypoints then M.road_station_retirement().expire(s) end
@@ -5690,61 +5769,14 @@ function M.daily(s,traverse,tick_pulse)
       end
     end
   end
-  local coal,freight,timber,freighter,industry_train
-  if M.rail_coal_active(s) then
-    town_passengers.start(s)
-    freight=rail_coal.day(s,paid_rail_runs[s],s.passenger_house_clock.counter+1,live)
-  end
-  if M.ship_coal_active(s) then
-    town_passengers.start(s)
-    freighter=ship_coal.day(s,s.passenger_house_clock.counter+1,live)
-  end
-  if M.road_coal_active(s) or freight or freighter then
-    passenger_modules()
-    coal=coal_binding(s,true,freight,freighter)
-    coal_day_bindings[s]=coal
-  end
-  if M.road_timber_active(s) or M.road_farm_active(s) or M.road_oil_active(s) or M.road_heavy_active(s) or M.road_bank_active(s) then
-    passenger_modules()
-    timber=timber_binding(s)
-    timber_day_bindings[s]=timber
-    if timber and timber.rail then
-      town_passengers.start(s)
-      local first=s.passenger_house_clock.counter+1
-      if timber.mixed or timber.rail_multi then
-        local rail=timber.rail
-        local days={}
-        if rail.oil then days[#days+1]=oil.runtime.day(s,paid_rail_runs[s],first,rail.oil,live) end
-        if rail.goods then days[#days+1]=goods.runtime.day(s,paid_rail_runs[s],first,rail.goods,live) end
-        for _,cargo in ipairs(FreightKinds.profile_order) do
-          if rail[cargo] then days[#days+1]=profiled.runtime[cargo].day(s,paid_rail_runs[s],first,rail[cargo],live) end
-        end
-        if #days>0 then
-          industry_train={
-            before=function(tick)
-              local ready={}
-              for i,q in ipairs(days) do ready[i]=q.before(tick) end
-              return ready
-            end,
-            after=function(tick,ready,register)
-              for i,q in ipairs(days) do q.after(tick,ready[i],register) end
-            end,
-            post=function(tick)
-              for _,q in ipairs(days) do q.post(tick) end
-            end,
-          }
-        end
-      else
-        local controller=M.rail_goods_active(s) and goods.runtime or oil.runtime
-        industry_train=controller.day(s,paid_rail_runs[s],first,timber.rail,live)
-      end
-    end
-  end
+  if stock_service then passenger_modules();town_passengers.start(s) end
+  local first=s.passenger_house_clock and s.passenger_house_clock.counter+1
+  local industry=M.bind_stock_industry_day(s,first,live,false)
   for _,v in pairs(s.fleet) do
     if coal_engine(v.engine) or industry_truck(v.engine) or priced_mail(v.engine) then
       local is_timber=industry_truck(v.engine)
       local is_mail=priced_mail(v.engine)
-      local enabled=(is_mail and road_mail(s,v)) or (not is_timber and not is_mail and coal) or is_timber and timber and
+      local enabled=(is_mail and road_mail(s,v)) or (not is_timber and not is_mail and industry.coal) or is_timber and industry.timber and
         (M.road_farm_active(s) and farm_engine(v.engine) or M.road_timber_active(s) and timber_engine(v.engine)
           or M.road_oil_active(s) and oil_engine(v.engine) or
             (M.road_heavy_active(s) or M.road_bank_active(s)) and heavy_engine(v.engine))
@@ -5800,30 +5832,39 @@ function M.daily(s,traverse,tick_pulse)
     if whole~=0 then debit(c,whole,"road_run");v.expense=v.expense+whole;HQStats.record(s,v,-whole) end
   end
   local stock_work,month_tick,industries_rolled
-  if exact_economy and (town_month or new_month and (coal or timber)) then
+  if exact_economy and (openings or town_month or new_month and (industry.coal or industry.timber)) then
     -- Advance the 74-tick batch into the new date after animation, before
     -- the same tick's tile, loading, vehicle and town work.
     month_tick=function()
+      local first_on_new_date=s.passenger_house_clock.counter+1
+      local opened=openings and openings("day")
+      if opened then
+        M.clear_live_sea_cache(s)
+        industry=M.bind_stock_industry_day(s,first_on_new_date,live,true)
+      end
+      local topology=s.topology
       if new_month then
-        M.stock_industry_month(s,coal,timber,y,month)
+        if openings then openings("month") end
+        M.stock_industry_month(s,industry.coal,industry.timber,y,month)
         industries_rolled=true
       end
+      if s.topology~=topology then
+        -- Closures can invalidate a station's accepting catchment.
+        M.clear_live_sea_cache(s)
+        industry=M.bind_stock_industry_day(s,first_on_new_date,live,true)
+        opened=true
+      end
+      if opened then M.bind_stock_industry_ships(s,industry,first_on_new_date,live,true) end
       if town_month then roll_town_month() end
+      return opened and industry or nil
     end
   end
   local commercial=paid_transport_day(s,live)
   if stock_service then
     passenger_modules()
     town_passengers.start(s)
-    local first_tick=s.passenger_house_clock.counter+1
-    local tanker=oil.ship and timber and oil.ship.day(s,timber,first_tick,live)
-    local dry=ship_coal and ship_coal.goods_day(s,timber,first_tick,live)
-    if dry and tanker then
-      local oil_day=tanker
-      tanker={before=function(tick) return {oil_day.before(tick),dry.before(tick)} end,
-        after=function(tick,ready) oil_day.after(tick,ready[1]);dry.after(tick,ready[2]) end}
-    elseif dry then tanker=dry end
-    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse,month_tick)
+    M.bind_stock_industry_ships(s,industry,first,live,false)
+    stock_work=stock_station_day(s,road_supply,commercial,industry.coal,industry.freight,industry.timber,industry.freighter,industry.industry_train,industry.tanker,traverse,tick_pulse,month_tick)
   elseif commercial then
     town_passengers.day(s,function(tick)
       local ready,events=commercial.before(tick)
@@ -5937,7 +5978,7 @@ function M.daily(s,traverse,tick_pulse)
     if v.route then v.last_departure=s.day end
   end
   if new_month then
-    if not industries_rolled then M.stock_industry_month(s,coal,timber,y,month) end
+    if not industries_rolled then M.stock_industry_month(s,industry.coal,industry.timber,y,month) end
     s.changed=s.changed or {}
     for _,site in ipairs(s.sites) do
       if not growth and site.population and site.service>=12 then
@@ -6014,6 +6055,7 @@ function M.daily(s,traverse,tick_pulse)
       end
     end
   end
+  if openings and not exact_economy and openings() then M.clear_live_sea_cache(s) end
   coal_day_bindings[s]=nil
   timber_day_bindings[s]=nil
   if s.retired_ship_stations then M.road_station_retirement().expire(s) end

@@ -142,7 +142,11 @@ return function(Sim,mod,s,adapters,Industry,ctx)
     return add(placed,cells)
   end
   local last_month
-  return function()
+  -- The authority will invoke daily opening on the real date tick,
+  -- then apply its monthly quotas before each industry rolls production.
+  -- Old direct harnesses may call both phases together.
+  return function(phase)
+    assert(phase==nil or phase=="day" or phase=="month")
     opened=false
     counts,ordered,desc=contents()
     local year,month,day=Sim.date(s)
@@ -176,8 +180,11 @@ return function(Sim,mod,s,adapters,Industry,ctx)
     end
     -- TimerGameEconomy::IncreaseDate dispatches Day before Month
     -- even when both fire at the same date boundary.
-    Schedule.day(state,api)
-    if day==1 and state.month~=ordinal and ordinal~=last_month then
+    if phase~="month" and state.last_economy_day~=s.day then
+      state.last_economy_day=s.day
+      Schedule.day(state,api)
+    end
+    if phase~="day" and day==1 and state.month~=ordinal and ordinal~=last_month then
       last_month,state.month=ordinal,ordinal
       Schedule.month(state,api)
     end
