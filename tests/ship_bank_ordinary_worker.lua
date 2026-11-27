@@ -60,10 +60,19 @@ local started=A.command(owner,{kind="transport_start",mode="ship",vehicle="coal"
 assert(started.ok,started.why)
 local packing=m("packed_campaign")
 local saved=false
-local interest=0
+-- Q.fund mounts the ordinary generated campaign profile. Its company
+-- pays the stock 2% prorated interest and $25 fixed overhead per month.
+assert(s.stock_generated_profile and s.companies[owner].loan==50000)
+local monthly_fees,months=0,0
 for _=1,1200 do
+  assert(s.companies[owner].cash>0,"fixture must not owe overdrawn interest")
   rt.day()
-  if select(3,Sim.date(s))==1 then interest=interest+200 end
+  local _,month,day=Sim.date(s)
+  if day==1 then
+    local yearly=1000 -- 2% on the fixed $50,000 loan
+    monthly_fees=monthly_fees+math.floor(yearly*month/12)-math.floor(yearly*(month-1)/12)+25
+    months=months+1
+  end
   local v=rt.water.coal.status(s)
   assert(not v.failure,v.failure)
   if not saved and v.loading and v.onboard>0 and v.onboard<160 then
@@ -78,7 +87,8 @@ for _=1,1200 do
     assert(saved and v.fare>0 and banks[0x5000].town~=banks[0x5001].town)
     assert(((banks[0x5000].received or {}).valuables or 0)==0 and banks[0x5001].received.valuables==160)
     assert(c.cash==100000+c.revenue-c.expense and c.paid_units==160 and c.revenue==v.fare)
-    assert(c.expense==build_cost+32500+507+v.running_expense+interest)
+    assert(months==5 and monthly_fees==542,"source fees from February through June")
+    assert(c.expense==build_cost+32500+507+v.running_expense+monthly_fees)
     print(("PASS stock Yate %s refit: 160 units/$%d to a different Bank through packed mid-load reopen"):format(cargo,v.fare))
     return
   end
