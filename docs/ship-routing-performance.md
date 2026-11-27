@@ -81,3 +81,21 @@ ferry with the original network-change error.
 ```sh
 tests/ship_checked_leg_perf_native.sh luantiserver d0ece7c ../live-ship-leg-perf
 ```
+
+## Avoid testing for berths on ordinary sailing tiles
+
+The stock destination predicate requires a neighboring physical dock or
+oil-rig facility. The regular world board now checks for such a raw
+record before constructing full terrain, bridge and navigation
+descriptors. A plausible neighbor still goes through the same live
+berth checks; decorated test or planning boards stay on the full path.
+
+A headless ferry crossing matched all 439 sampled ferry states and its
+arrival. It made the same 468 follower calls, but terrain descriptor
+reads dropped from **41,958 to 23,934**. Across eight alternating pairs of
+voyages median movement CPU was **64 → 57 ms**. Individual measurements
+overlapped. This covers worker movement, not frame rate.
+
+```sh
+tests/ship_berth_perf_native.sh luantiserver 78edeed ../ship-berth-perf
+```

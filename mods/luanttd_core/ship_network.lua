@@ -128,6 +128,18 @@ return function(Sim,Terrain,Water,Facilities)
       if t and t.kind=="ship_depot" then return s.stock_ship_depots[t.depot] end
     end
     function B.is_docking(id)
+      if id==nil then return false end
+      if B.tile==tile and B.adjacent==adjacent then
+        -- No neighbor can be a dock or rig without a raw facility.
+        -- Skip terrain and bridge descriptors on ordinary sailing pixels.
+        local nearby
+        for d=0,3 do
+          local at=adjacent(id,d)
+          local other=at and s.tiles[at]
+          if other and (other.ship or other.stock_industry) then nearby=true;break end
+        end
+        if not nearby then return false end
+      end
       local t=B.tile(id)
       if not t or (t.kind=="lock" and t.part=="middle") or Water.at(B,id)==0 then return false end
       for d=0,3 do

@@ -42,6 +42,14 @@ end
 -- reject even one missing water track or non-flat corner in the square.
 local plain=N.board(s)
 local sea=id(31,28)
+assert(not plain.is_docking(sea))
+local native=plain.tile
+plain.tile=function(at)
+  if at==id(32,28) then return {kind="dock",water_part=true,station=99} end
+  return native(at)
+end
+assert(plain.is_docking(sea),"A decorated board must still use the full live berth test")
+plain.tile=native
 assert(plain:solid_plain_sea(17,17,16) and not plain:solid_plain_sea(1,1,16))
 local overlay=setmetatable({tile=function() return nil end},{__index=plain})
 assert(not overlay:solid_plain_sea(17,17,16))
