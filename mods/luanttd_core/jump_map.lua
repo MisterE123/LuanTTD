@@ -10,9 +10,10 @@ return function(api)
     "#E9B991","#E9D394","#AABCC9","#FFE185","#D58F50","#EAD893","#FFF8DF",
   }
   local C={void=1,sea=2,river=3,wood=4,house=12,road=13,rail=14,station=15,industry=16,landmark=17,you=18}
-  local rgba={}
+  local rgba,pixel_byte={},{}
   for i,hex in ipairs(palette) do
-    rgba[string.char(i)]=string.char(tonumber(hex:sub(2,3),16),tonumber(hex:sub(4,5),16),tonumber(hex:sub(6,7),16),255)
+    pixel_byte[i]=string.char(i)
+    rgba[pixel_byte[i]]=string.char(tonumber(hex:sub(2,3),16),tonumber(hex:sub(4,5),16),tonumber(hex:sub(6,7),16),255)
   end
   local function classify(t,id)
     if not t or t.stock_void then return C.void,-1 end
@@ -88,51 +89,73 @@ return function(api)
     local x,z,w,h,wide=layout(zoom,focus or here)
     local pw,ph,raster_stride=resolution(w,h,RASTER)
     local cols,rows,stride=resolution(w,h,HITS)
-    local pixels,targets,fallback={},{},{}
-    local function sample_tile(a,b)
+    local pixels,targets={},{}
+
+    -- Hit areas are usually playable via their normal center or edge
+    -- probes. Only unfilled areas need a fallback from the fine raster.
+    local function playable(a,b)
       local id=Sim.id(a,b)
-      local color,rank=classify(S.tiles[id],id)
-      return color,rank,a,b,id
+      local t=S.tiles[id]
+      return t and not t.stock_void and id or nil
     end
-    -- At most four samples per raster pixel regardless of world size;
-    -- 64 and 128 maps get actual, unsampled one-pixel-per-tile.
-    local function strongest(color,rank,a,b,id,c,r,u,v,i)
-      if r>rank then return c,r,u,v,i end
-      return color,rank,a,b,id
-    end
-    for row=0,ph-1 do
-      local zs,ze=sample(bounds(z,h,row,ph))
-      for col=0,pw-1 do
-        local xs,xe=sample(bounds(x,w,col,pw))
-        local color,rank,a,b,id=sample_tile(xs,zs)
-        if xe~=xs then color,rank,a,b,id=strongest(color,rank,a,b,id,sample_tile(xe,zs)) end
-        if ze~=zs then color,rank,a,b,id=strongest(color,rank,a,b,id,sample_tile(xs,ze)) end
-        if xe~=xs and ze~=zs then color,rank,a,b,id=strongest(color,rank,a,b,id,sample_tile(xe,ze)) end
-        pixels[#pixels+1]=string.char(color)
-        if rank>=0 then
-          -- Map a known playable sample to its own hit region. This is
-          -- an escape hatch for thin coasts missed by center/edge probes.
-          local ix,iz=math.ceil((a-x+1)*cols/w),math.ceil((b-z+1)*rows/h)
-          fallback[(iz-1)*cols+ix]=id
-        end
-      end
-    end
+    local gaps=false
     for row=0,rows-1 do for col=0,cols-1 do
       local lo,hi=bounds(x,w,col,cols)
       local north,south=bounds(z,h,row,rows)
       local u,v=math.floor((lo+hi+1)/2),math.floor((north+south+1)/2)
-      local function playable(a,b)
-        local id=Sim.id(a,b)
-        local t=S.tiles[id]
-        return t and not t.stock_void and id or nil
-      end
-      -- A nearby tile within the same clicked area, not a distant
-      -- higher-ranked building. Keep wholly void areas non-interactive.
       local id=playable(u,v) or playable(lo,v) or playable(hi,v) or playable(u,north) or playable(u,south)
         or playable(lo,north) or playable(hi,north) or playable(lo,south) or playable(hi,south)
-      local region=row*cols+col+1
-      targets[region]=id or fallback[region]
+      targets[row*cols+col+1]=id
+      if not id then gaps=true end
     end end
+    local fallback=gaps and {}
+    local ax,bx,left_hit,right_hit={},{},{},{}
+    for col=0,pw-1 do
+      local a,b=sample(bounds(x,w,col,pw))
+      ax[col],bx[col]=a,b
+      if gaps then
+        left_hit[col]=math.ceil((a-x+1)*cols/w)
+        right_hit[col]=math.ceil((b-x+1)*cols/w)
+      end
+    end
+    local function sample_tile(a,b)
+      local id=Sim.id(a,b)
+      local color,rank=classify(S.tiles[id],id)
+      return color,rank,id
+    end
+    -- Preserve strict tie priority (northwest, northeast, southwest,
+    -- southeast), including the last playable sample per missing hit.
+    for row=0,ph-1 do
+      local zs,ze=sample(bounds(z,h,row,ph))
+      local north,south
+      if gaps then
+        north=(math.ceil((zs-z+1)*rows/h)-1)*cols
+        south=(math.ceil((ze-z+1)*rows/h)-1)*cols
+      end
+      for col=0,pw-1 do
+        local xs,xe=ax[col],bx[col]
+        local color,rank,id=sample_tile(xs,zs)
+        local east,southern
+        if xe~=xs then
+          local c,r,i=sample_tile(xe,zs)
+          if r>rank then color,rank,id,east=c,r,i,true end
+        end
+        if ze~=zs then
+          local c,r,i=sample_tile(xs,ze)
+          if r>rank then color,rank,id,east,southern=c,r,i,false,true end
+          if xe~=xs then
+            c,r,i=sample_tile(xe,ze)
+            if r>rank then color,rank,id,east,southern=c,r,i,true,true end
+          end
+        end
+        pixels[#pixels+1]=pixel_byte[color]
+        if gaps and rank>=0 then
+          local hit=(southern and south or north)+(east and right_hit[col] or left_hit[col])
+          if not targets[hit] then fallback[hit]=id end
+        end
+      end
+    end
+    if gaps then for hit,id in pairs(fallback) do targets[hit]=id end end
     local marker
     if here then
       local u,v=Sim.xy(here)

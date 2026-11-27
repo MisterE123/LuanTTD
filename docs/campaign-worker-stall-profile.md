@@ -226,3 +226,38 @@ The p95 gap between host actor receipts fell from **463 to 162 ms**
 in that paired run. These are callback timings, not a client FPS
 benchmark. The separate native place label test verifies names,
 height, bounding radius and labels outside loaded terrain.
+
+### Jump Map reads the current tick and reuses sampling work
+
+Opening the overview, panning detail, and looking up a landing point
+read the last complete stock tick; none needs to finish a simulation
+day. Like viewport reads, bounded Jump Map calls can be served between
+checkpoint encoding chunks without passing a queued edit. The server
+still uses current terrain and bridge heights for a landing. The client
+owns the teleport and does not reset the look angle.
+
+For the raster, sample positions for a column are computed once. The
+center and edge probes still choose the ordinary click target for each
+area; fine samples are only used to fill the otherwise unclickable
+areas. This preserves the previous pixel priority and the last sampled
+playable fallback, including thin disconnected coastlines.
+
+Across four alternating pairs of 128 mixed overview and detail
+snapshots of the active 1024×1024 fixture, median LuaJIT CPU went from
+approximately **1.89 to 1.26 seconds**. Raster bytes, hit targets,
+markers, and town lists matched. The differential also checks several
+rectangular world sizes and edited tiles up to 4096×4096. This is map
+generation CPU, not frame rate.
+
+```sh
+git show 953dcd5:mods/luanttd_core/jump_map.lua > /tmp/old-jump-map.lua
+lua5.1 tests/jump_map.lua /tmp/old-jump-map.lua
+```
+
+In native 4× playback on that same world, a stress probe alternated
+overview and detail requests every 1.35 s while observing all four
+transport modes. Baseline medians were 354 and 369 ms; the final
+candidate median was 51 ms. Candidate p95 was 101 ms (19 observations).
+A real Luanti client also opened Survey → Jump Map, zoomed to an area
+without moving the camera, then clicked a town marker and landed at its
+exact center without changing the view angle.

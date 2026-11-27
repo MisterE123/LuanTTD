@@ -118,3 +118,48 @@ p=M.snapshot(false,nil)
 assert(#M.labels(p,6.5,2.46,.16,10.38,{.52,2.46,13.76,12.84})==1,
   "narrow rectangular world cannot lose all map labels")
 print("PASS 4096²: bounded tile reads, 20.8 KiB max raster, at most 576 area buttons and 96 detached labels")
+
+-- Optional differential oracle from before the render sampling refactor.
+-- Compare every returned byte and every destination, including mixed
+-- void/land coastlines and rectangles that alternate which axis straddles
+-- fine raster cells. Then mutate the sampled land and render again.
+if arg and arg[1] then
+  local Old=dofile(arg[1])({Sim=Sim,s=S})
+  local tiles={
+    {stock_void=true},{stock_void=true},{terrain="water"},
+    {terrain="water",water_class="river"},{terrain="grass",h=8},
+    {terrain="grass",h=15,wood=true},{terrain="grass",rail_tracks=1},
+    {terrain="grass",road_bits=3},{terrain="grass",house=true},
+    {terrain="grass",station=7},{terrain="grass",stock_landmark=true},
+  }
+  local function eq(a,b)
+    if type(a)~="table" then return a==b end
+    if type(b)~="table" then return false end
+    for k,v in pairs(a) do if not eq(v,b[k]) then return false end end
+    for k in pairs(b) do if a[k]==nil then return false end end
+    return true
+  end
+  local edits
+  S.tiles=setmetatable({},{__index=function(_,id)
+    if edits and id%63<10 then return tiles[1] end
+    local x,z=Sim.xy(id)
+    local key=(x*11+z*3+math.floor(x/7)*math.floor(z/5))%#tiles+1
+    return tiles[key]
+  end})
+  S.sites={}
+  local count=0
+  for _,shape in ipairs({{64,128},{128,512},{256,1024},{2048,128},{4096,4096},{64,4096}}) do
+    Sim.W,Sim.H=unpack(shape)
+    local here,far=Sim.id(3,3),Sim.id(Sim.W-1,Sim.H-1)
+    S.sites[1]={name="Bright Quay",tile=here,kind="town",population=1}
+    S.sites[2]={name="Dune End",tile=far,kind="town",population=100}
+    for _,m in ipairs({false,true}) do
+      edits=m
+      for _,req in ipairs({{false,here,far},{true,here,far},{true,here,here}}) do
+        assert(eq(Old.snapshot(unpack(req)),M.snapshot(unpack(req))),"Map pixels, priority or hit target changed")
+        count=count+1
+      end
+    end
+  end
+  print("PASS exact jump map differential, "..count.." rectangles/edge crops with live edits")
+end

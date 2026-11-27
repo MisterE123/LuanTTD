@@ -35,7 +35,7 @@ if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
   t=$(realpath "$BAYLINE_NATIVE_TOOLS")
   export PATH="$t/run/bin:$t/usr/bin:$PATH" LD_LIBRARY_PATH="$t/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
-export DISPLAY="127.0.0.1:$display" HOME="$out/home" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1
+export DISPLAY="127.0.0.1:$display" HOME="$out/home" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1 ALSOFT_DRIVERS=null
 export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
@@ -66,7 +66,8 @@ select_slot(){
   done
   mark "$wait_for"
 }
-select_slot 5 'JUMP_NATIVE_NAV_SLOT'
+survey=$(awk '/JUMP_NATIVE_HOTBAR/{print $NF;exit}' "$out/server.log")
+select_slot "$survey" 'JUMP_NATIVE_NAV_SLOT'
 mark 'JUMP_NATIVE_NAV_SLOT'
 slot=$(awk '/JUMP_NATIVE_NAV_SLOT/{print $NF;exit}' "$out/server.log")
 select_slot "$slot" 'JUMP_NATIVE_RENDER overview'

@@ -67,14 +67,18 @@ local function jump_native_probe()
     core.after(.2,jump_native_probe);return
   end
   p:set_look_horizontal(.83);p:set_look_vertical(.56)
-  core.log("action","JUMP_NATIVE_HOTBAR")
+  local function slot_for(item)
+    local inv=p:get_inventory()
+    for slot in ipairs(world.hotbar_layout(p)) do
+      if inv:get_stack("main",slot):get_name()=="luanttd_core:menu_"..item then return slot end
+    end
+  end
+  core.log("action","JUMP_NATIVE_HOTBAR "..assert(slot_for("section_survey"),"Main toolbar didn't expose Survey"))
   local function nav()
-    if world.menu(p)=="navigation" then
+    if world.menu(p)=="survey" then
       JumpProbe.origin=p:get_pos()
-      for slot,logical in ipairs(world.hotbar_layout(p)) do
-        if logical==5 then core.log("action","JUMP_NATIVE_NAV_SLOT "..slot);return end
-      end
-      error("Navigation didn't expose Jump map")
+      core.log("action","JUMP_NATIVE_NAV_SLOT "..assert(slot_for("jump"),"Survey didn't expose Jump map"))
+      return
     end
     core.after(.12,nav)
   end
