@@ -77,12 +77,19 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   local dirty=true
   local presentation_only={snapshot=true,snapshots=true,actor_frames=true,clock=true}
   local live_view={snapshots=true,actor_frames=true}
-  local function ordinary_road_hover(q)
-    -- Only these inspected planners read the already-open company's
-    -- cash, geometry and occupancy without touching the saved graph.
-    -- Keep facility planners and explicit quotes on their normal turn.
-    return q.kind=="road_quote" and q.peek==true and type(q.request)=="table" and
-      (q.request.tool=="drag" or q.request.tool=="bend")
+  local function read_only_hover(q)
+    -- These two inspected planners read live geometry, occupancy and
+    -- cash without changing the saved graph or making a commit ticket.
+    -- Facility planners and explicit quotes keep their normal turn.
+    if q.peek~=true or type(q.request)~="table" then return false end
+    local tool=q.request.tool
+    if q.kind=="road_quote" then return tool=="drag" or tool=="bend" end
+    if q.kind=="rail_quote" then return tool=="autotrack" end
+    return false
+  end
+  local function sample_hover(q)
+    if q.kind=="rail_quote" then return A.rail_quote(q.player,q.request,true) end
+    return A.road_quote(q.player,q.request)
   end
   local long_turn_us=150000 -- longer than a normal mailbox poll and host frame
   local function advance(dt)
@@ -121,15 +128,15 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       local q=core.ipc_get(inbox)
       if not q then return end
       -- Encoding reads one stable graph. Bounded viewport reads and
-      -- ordinary road hovers can use it between encoding chunks.
+      -- road and AutoRail hovers can use it between encoding chunks.
       -- Never read past any edit, shutdown, or other waiting request.
-      local road_hover=ordinary_road_hover(q)
-      if q.seq~=seq+1 or not (live_view[q.kind] or road_hover) then blocked=true;return end
+      local hover=read_only_hover(q)
+      if q.seq~=seq+1 or not (live_view[q.kind] or hover) then blocked=true;return end
       heartbeat=now
       core.ipc_set(inbox,nil)
       seq=q.seq
       local r
-      if road_hover then r=A.road_quote(q.player,q.request)
+      if hover then r=sample_hover(q)
       else r=sample_view(q,auto.sample((now-prior)/1000000)) end
       send(q,r,now)
     end)
@@ -165,7 +172,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       local boundary_view=q and q.seq==seq+1 and live_view[q.kind] and
         (s.speed or 0)>0 and auto.sample(dt)==1
       if tick_mode then
-        if q and not (presentation_only[q.kind] or ordinary_road_hover(q)) then
+        if q and not (presentation_only[q.kind] or read_only_hover(q)) then
           -- Cached daily bindings cannot tolerate a mutable command
           -- midway through the stock loop. Complete that transaction,
           -- then service this one request before starting another day.
@@ -188,7 +195,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         seq=q.seq
         -- Do not assume an uncommon panel or command cannot lazily
         -- touch saved state. Only skip the proven display-only traffic.
-        if not presentation_only[q.kind] and not ordinary_road_hover(q) then dirty=true end
+        if not presentation_only[q.kind] and not read_only_hover(q) then dirty=true end
         if q.kind=="snapshot" then
           r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction,tick_mode and {road={},rail={},live_tick=true} or nil)
         elseif live_view[q.kind] then

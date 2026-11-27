@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Compare ordinary Road quotes during autosave and while paused. Provide an unused
+# Compare ordinary Road (or LUANTTD_QA_AUTORAIL_HOVER=true) quotes during autosave and while paused. Provide an unused
 # output directory and a prepared generated campaign (prefer 1024x1024).
 if [[ $# != 5 ]]; then
   echo "usage: $0 LUANTI_SERVER BASELINE_REV FIXTURE_WORLD CONFIG NEW_OUTPUT_DIR" >&2
@@ -41,15 +41,17 @@ s=s.replace(line,'''    local a,cpu=core.get_us_time(),os.clock()
 '''+line+'''
     core.log("action",("PROBE_SAVE_END %d us=%d wall=%.2f cpu=%.2f"):format(s.day,core.get_us_time(),
       (core.get_us_time()-a)/1000,(os.clock()-cpu)*1000))''',1)
-if '      if road_hover then r=A.road_quote' in s:
-    s=s.replace('      if road_hover then r=A.road_quote',
-      '      if road_hover then core.log("action",("PROBE_ENCODE_HOVER %d us=%d day=%d"):format(seq,now,s.day));r=A.road_quote',1)
+for line in ('      if road_hover then r=A.road_quote','      if hover then r=sample_hover'):
+    if line in s:
+        head,tail=line.split(' then ')
+        s=s.replace(line,head+' then core.log("action",("PROBE_ENCODE_HOVER %d us=%d day=%d"):format(seq,now,s.day));'+tail,1)
 p.with_suffix('.next').write_text(s);p.with_suffix('.next').replace(p)
 PY
  w="$d/$side";mkdir "$w"
  cp "$seed/luanttd-campaign-owner.chk" "$seed/world.mt" "$w/"
  sed -E '/^[[:space:]]*(port|bind_address|dedicated_server_step|server_announce)[[:space:]]*=/d' "$config" > "$w/conf"
  printf '\nport = %s\nbind_address = 127.0.0.1\nserver_announce = false\ndedicated_server_step = .025\n' "${BAYLINE_NATIVE_PORT:-44339}" >> "$w/conf"
+ printf 'luanttd_qa_autorail_hover = %s\n' "${LUANTTD_QA_AUTORAIL_HOVER:-false}" >> "$w/conf"
  timeout 80 "$server" --world "$w" --gameid luanttd --config "$w/conf" --logfile '' > "$w/log" 2>&1 || { tail -35 "$w/log";exit 1; }
  grep -E 'PROBE_SAVE|PROBE_HOVER_PAUSED|PROBE_HOVER_FINISH' "$w/log"
  grep -q 'PROBE_HOVER_FINISH' "$w/log"

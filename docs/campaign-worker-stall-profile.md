@@ -134,3 +134,31 @@ encoded graph, level 1 was about 5% larger than level 3 (4.21 vs 4.00
 MB) and restored to identical bytes. Whole-day traffic and worst reply
 times still varied. Native save/reopen and settlement tests cover the
 new path independently from the timing observations.
+
+### AutoRail ghost while the worker is busy
+
+Native Luanti 5.15.2, generated 1024×1024 Temperate checkpoint, two stable
+11-tile Autorail gestures, baseline/candidate/candidate/baseline. The preview
+includes the actual priced footprint and mesh list. Before this change, even
+a hover finished the rest of a partial simulation day; a hover also waited
+for a full periodic save if it arrived during encoding.
+
+| Sample | Baseline | Between ticks and save phases |
+| --- | --- | --- |
+| All running hovers, p90 | 585–632 ms | 76 ms |
+| Hovers submitted during a save, median | 1,291–1,475 ms | 25–76 ms |
+| Hovers answered during encoding | 0 | 12–13 per replay |
+
+Medians for *all* running hovers remained about 25 ms. The slowest sampled
+candidate took 279 ms; an individual compression/write phase still blocks.
+Preview samples did not spend money, and explicit rail commits still finish
+the day, recheck the visible ticket and save before acknowledging the edit.
+These measurements describe construction feedback, not frame rate or
+vehicle-pose animation.
+
+Reproduce with:
+
+```sh
+LUANTTD_QA_AUTORAIL_HOVER=true tests/campaign_save_road_hover_native.sh \
+  luantiserver 35ffba3 GENERATED_WORLD CONFIG NEW_OUTPUT_DIRECTORY
+```

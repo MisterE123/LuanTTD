@@ -1,6 +1,7 @@
--- Read-only pricing under the normal generated campaign's autosave.
+-- Read-only Road/AutoRail pricing under the generated campaign's autosave.
 -- Loaded only in an isolated copy of the game.
-local owner="Road Hover QA"
+local owner="Construction Hover QA"
+local rail=core.settings:get_bool("luanttd_qa_autorail_hover",false)
 local function start()
   if not (authority and authority.status()=="owned") then core.after(.1,start);return end
   local view=assert(OwnerCheckpoint.read())
@@ -25,6 +26,9 @@ local function start()
     if first then break end
   end
   assert(first,"No empty flat road quote field")
+  local function rail_point(id)
+    return {x=((id-1)%w+1)*16+8,z=(math.floor((id-1)/w)+1)*16+8}
+  end
   view=nil
   local function ask(q,cb)
     q.player=owner
@@ -37,6 +41,13 @@ local function start()
     {tool="drag",first=first,last=last,axis=0,start_half=false,end_half=true},
     {tool="bend",first=first,last=bend},
   }
+  if rail then
+    specs={
+      {tool="autotrack",start=rail_point(first),finish=rail_point(last)},
+      {tool="autotrack",start=rail_point(first+w),finish=rail_point(last+w)},
+    }
+  end
+  local kind=rail and "rail_quote" or "road_quote"
   ask({kind="command",command={kind="company_open"}},function(opened)
     local stage,from,round="running",core.get_us_time(),0
     local quoted,paused_cash={},nil
@@ -44,10 +55,11 @@ local function start()
       round=round+1
       local i=1+round%2
       local sent=core.get_us_time()
-      ask({kind="road_quote",peek=true,request=specs[i]},function(r)
+      ask({kind=kind,peek=true,request=specs[i]},function(r)
         local received=core.get_us_time()
         local q=assert(r.value)
         assert(q.ticket and q.cost>0 and #q.tiles>=10 and r.actor_us==nil)
+        if rail then assert(#q.draw==#q.tiles,"AutoRail ghost is not the quoted track") end
         if quoted[i] then assert(q.ticket==quoted[i].ticket and q.cost==quoted[i].cost)
         else quoted[i]=q end
         core.log("action",("PROBE_HOVER %d %s send=%d receive=%d day=%d cost=%d tiles=%d"):format(
@@ -66,7 +78,7 @@ local function start()
         elseif stage=="paused" and received-from>=10500000 then
           core.log("action","PROBE_HOVER_END us="..received)
           ask({kind="company"},function(company)
-            assert(company.value.cash==paused_cash,"road hovers charged the paused company")
+            assert(company.value.cash==paused_cash,"construction hovers charged the paused company")
             core.log("action","PROBE_HOVER_FINISH day="..company.day)
             core.request_shutdown("Road autosave hover benchmark complete",false,0)
           end)
