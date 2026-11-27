@@ -143,3 +143,29 @@ a native restart. A native rail-farm restart likewise settled exactly
 ```sh
 tests/freight_catchment_perf_native.sh luantiserver 0f12322 /tmp/freight-catchment
 ```
+
+### Advance quiet industry counters without calling every producer
+
+OpenTTD 16.0-RC1's `ProduceIndustryGoods` checks the 64-tick sound
+phase before decrementing the unsigned counter, then checks the
+256-tick production and special-effect phase after the decrement.
+For the mounted mixed stock industries, a counter whose low six
+bits are greater than one cannot hit either phase this tick.
+Update only its counter and the existing replay receipt. At all
+other phases, on wrap, and whenever editor or cargo-scale callbacks
+are supplied, run the original full producer in IndustryID order.
+
+Twelve alternating native Lua worker comparisons of 768 mixed
+industries took about 18.8 ms per 256-tick batch before, and 9.0 ms
+after, for ordinary production. Outputs remained exact across
+high and low counter starts, disabled firms, replayed pulses,
+38,116 RNG draws, 455 ambient events and 5,222 field probes.
+The custom editor/scale scenario also matched, using the full path.
+This is the isolated production phase, not whole-day throughput.
+A separate 36-day 1024×1024 replay matched all saved state and shared
+references, and the native rail-farm and oil/Goods services paid the
+same amounts after a server restart.
+
+```sh
+tests/industry_tick_perf_native.sh luantiserver 8b2f154 /tmp/industry-counter --ordinary
+```

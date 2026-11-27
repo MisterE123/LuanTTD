@@ -1,7 +1,8 @@
 local m=core.get_modpath("luanttd_core").."/"
 for _,name in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..name,"air") end
 core.after(0,function()
- assert(core.handle_async(function()
+ local ordinary=core.settings:get_bool("luanttd_qa_industry_ordinary",false)
+ assert(core.handle_async(function(ordinary)
   local m=core.get_modpath("luanttd_core").."/"
   local function D(k) return dofile(m..k..".lua") end
   local P,Ra,I=D("openttd/passengers"),D("openttd/station_rating"),D("openttd/income")
@@ -23,15 +24,18 @@ core.after(0,function()
     local rows={{"forest",Timber},{"sawmill",Timber},{"farm",Farm},{"factory",Farm},{"oil_well",Oil},{"oil_refinery",Oil}}
     for id=1,768 do
       local p=rows[(id-1)%#rows+1]
+      local counter=id%256
+      if ordinary and id%2==1 then counter=65535-counter end
       s.industry[id]=p[2].new(p[1],id,((id-1)%32)*16+8,math.floor((id-1)/32)*16+8,
-        {completed=true,counter=id%256,original=true,generating_world=true})
+        {completed=true,counter=counter,original=true,generating_world=true})
+      if ordinary and id%51==0 then s.industry[id].removed=true end
     end
     s.ledger=Adapter.new()
     local B=Adapter.bind(s,s.ledger,{width=512,height=512,xy=function(id)return id%512,math.floor(id/512)end,
       industries=s.industry,stations={},random_u32=rnd,
       field_board={width=512,height=512,tile=function() s.attempts=s.attempts+1;return {kind="protected"} end},
       ambient=function()s.ambient=s.ambient+1 end,
-      opts={editor=function(_,tick)return tick%131==0 end,scale=function(_,tick)return 90+tick%21 end}})
+      opts=ordinary and {} or {editor=function(_,tick)return tick%131==0 end,scale=function(_,tick)return 90+tick%21 end}})
     return s,B
   end
   local function same(a,b)
@@ -76,5 +80,5 @@ core.after(0,function()
   assert(rows and #rows==12)
   for i,r in ipairs(rows) do core.log("action",("INDUSTRY PERF %d cpu=%.3f->%.3f draws=%d ambient=%d tiles_seen=%d"):format(i,unpack(r))) end
   core.request_shutdown("Industry profile complete",false,0)
- end))
+ end,ordinary))
 end)

@@ -49,7 +49,10 @@ return function(Timber,Farm,Oil,Fields,Runtime,Catchment)
   local M={}
   function M.new() return Runtime(K,Catchment).new() end
   function M.bind(s,ledger,ctx)
-    local A=setmetatable({}, {__index=K})
+    -- These three stock kernels share ProduceIndustryGoods's 16-bit
+    -- clock. Off the sound/production phases the counter is their
+    -- only write; no industry callback is mounted for these firms.
+    local A=setmetatable({counter_only_quiet_slot=true}, {__index=K})
     local board=ctx.field_board
     local attempt=board and function(farm,rnd) Fields.random(farm,board,rnd) end
     function A.production_tick(i,opts)

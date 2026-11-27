@@ -147,6 +147,7 @@ return function(Rules,Catchment)
     function B.produce_all(tick)
       assert(uint(tick))
       local options=production_options()
+      local quiet=Rules.counter_only_quiet_slot and not (opts.editor or opts.scale)
       for _,ind in ipairs(industries) do
         -- Recheck the phase in case a client callback opens a station
         -- scan. The saved per-industry replay guard remains authoritative.
@@ -154,8 +155,16 @@ return function(Rules,Catchment)
         local id=ind.id
         local last=ledger.production[id]
         if not last or tick>last then
-          options.field_attempt=nil
-          produce(ind,id,tick,options)
+          local c=quiet and ind.counter
+          if type(c)=="number" and c>1 and c<65536 and c%64>1 and not ind.removed then
+            -- The source pre-decrement 64-phase sound and
+            -- post-decrement 256-phase production cannot run here.
+            ind.counter=c-1
+            ledger.production[id],ledger.industry_phase_tick=tick,tick
+          else
+            options.field_attempt=nil
+            produce(ind,id,tick,options)
+          end
         end
       end
     end

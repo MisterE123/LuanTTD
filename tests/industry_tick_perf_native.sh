@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Native Industry::OnTick adapter workload, not an FPS or worldgen test.
 set -euo pipefail
-[[ $# == 3 ]] || { echo "usage: $0 LUANTI_SERVER BASELINE_GIT_REV NEW_OUTPUT_DIR" >&2; exit 64; }
+[[ $# == 3 || $# == 4 && $4 == --ordinary ]] || { echo "usage: $0 LUANTI_SERVER BASELINE_GIT_REV NEW_OUTPUT_DIR [--ordinary]" >&2; exit 64; }
 server=$1
 if [[ "$server" == */* ]]; then server=$(realpath "$server"); fi
 mkdir "$3"
@@ -21,6 +21,7 @@ git show "$2:mods/luanttd_core/combined_industry_runtime.lua" > "$mod/baseline-c
 git show "$2:mods/luanttd_core/timber_industry_runtime.lua" > "$mod/baseline-runtime.lua"
 cp tests/industry_tick_perf_native.lua "$mod/init.lua"
 printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\n' "${BAYLINE_NATIVE_PORT:-44346}" > "$out/conf"
+if [[ $# == 4 ]]; then echo 'luanttd_qa_industry_ordinary = true' >> "$out/conf"; fi
 export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 timeout 60 "$server" --world "$out/world" --gameid industrybench --config "$out/conf" --logfile '' > "$out/log" 2>&1 ||
   { tail -45 "$out/log";exit 1; }
