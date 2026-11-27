@@ -103,14 +103,14 @@ return function(Sim,Terrain,G,B,H)
         st.town_growth_service_clock=true
       end
     end
-    local views
     local month,first=math.floor(s.day/30),s.day%30==0
     if s.stock_bus_market then
       local y,m,d=Sim.date(s)
       month,first=y*12+m,d==1
     end
     if want_new and first and state.last_month~=month then
-      views=services(s)
+      local views=services(s)
+      if #state.order>=8 then views.count_near=G.index_active_stations(views) end
       local ratings=authority.station_view(s)
       for _,id in ipairs(state.order) do
         local t=state.towns[id]

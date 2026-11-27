@@ -68,3 +68,4 @@ print("PASS host keeps its simulation lease with no viewers and no terrain traff
 dofile("tests/campaign_step.lua")
 dofile("tests/campaign_tick_step.lua")
 dofile("tests/town_municipal_roads.lua")
+dofile("tests/town_station_index.lua")

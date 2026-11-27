@@ -5,7 +5,7 @@
 -- Temperate, ordinary vanilla houses and stations, no stock calendar shim.
 local G={TOWN_TICKS=70,STATION_TICKS=185,ACTIVE_AGE=20,NONE=65535,MAX_TOWN_TICKS=930,
   WINTER=4294967294,DESERT=4294967295}
-local floor,min,abs=math.floor,math.min,math.abs
+local floor,min,abs,sqrt=math.floor,math.min,math.abs,math.sqrt
 local zones={
   [0]={4,0,0,0,0},{16,0,0,0,0},{25,0,0,0,0},{36,0,0,0,0},
   {49,0,4,0,0},{64,0,4,0,0},{64,0,9,0,1},{64,0,9,0,4},{64,0,16,0,4},
@@ -56,9 +56,56 @@ end
 -- Supply actual Station entries from the stock-like index (not
 -- waypoints/depots). A disused-but-still-indexed station can count until
 -- stock deletes it; missing timers mean no demonstrated service.
+local function has_position(st)
+  return st.indexed~=false and not st.waypoint and st.x~=nil and st.z~=nil
+end
+local function recently_served(st)
+  return (st.time_since_load or 255)<=G.ACTIVE_AGE or (st.time_since_unload or 255)<=G.ACTIVE_AGE
+end
+
+-- One transient index per monthly station snapshot, not per town or
+-- per placement. Pass it only while those station ages are unchanged.
+-- The stock rectangle is radiusSquared/2; intersecting it with the
+-- bounding square of DistanceSquare cannot drop a qualifying tile.
+local function station_bucket(coord) return floor(coord/16) end
+function G.index_active_stations(stations)
+  if #stations<32 then return nil end
+  local buckets={}
+  for _,st in ipairs(stations) do
+    if has_position(st) and recently_served(st) then
+      local x,z=station_bucket(st.x),station_bucket(st.z)
+      local row=buckets[z]
+      if not row then row={};buckets[z]=row end
+      local cells=row[x]
+      if not cells then cells={};row[x]=cells end
+      cells[#cells+1]=st
+    end
+  end
+  return function(x,z,limit)
+    local range=min(floor(limit/2),floor(sqrt(limit)))
+    local n=0
+    for bz=station_bucket(z-range),station_bucket(z+range) do
+      local row=buckets[bz]
+      if row then
+        for bx=station_bucket(x-range),station_bucket(x+range) do
+          local cells=row[bx]
+          if cells then
+            for _,st in ipairs(cells) do
+              local dx,dz=st.x-x,st.z-z
+              if abs(dx)<=range and abs(dz)<=range and square(dx,dz)<=limit then n=n+1 end
+            end
+          end
+        end
+      end
+    end
+    return n
+  end
+end
+
 function G.active_stations(t,stations)
   local n=0
   local limit=(t.radii or G.radii(t.num_houses))[1]
+  if stations.count_near then return stations.count_near(t.x,t.z,limit) end
   local search=floor(limit/2)
   for _,st in ipairs(stations) do
     if st.indexed~=false and not st.waypoint and st.x~=nil and st.z~=nil then
