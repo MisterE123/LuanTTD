@@ -19,6 +19,7 @@ local mode=core.settings:get("luanttd_qa_municipal_kind") or "road"
 local span=mode=="bridge" or mode=="tunnel"
 local reseed=mode=="reseed"
 local crossing=mode=="crossing"
+local companyroad=mode=="companyroad"
 local foreignhouse=mode=="foreignhouse"
 local woodhouse=mode=="woodhouse" or foreignhouse
 if span then s.passenger_rating_rng={3,3} end -- exercise the stock two-word RNG
@@ -48,7 +49,12 @@ else
   if woodhouse then for _,dz in ipairs{-1,1} do s.tiles[S.id(cx,cz+dz)].wood=1 end end
 end
 s.tiles[protected].stock_industry={id=77}
-local rail_cash
+local rail_cash,road_cash
+if companyroad then
+  local c=S.company(s,"Road Builder")
+  road_cash=c.cash
+  s.tiles[center].owner,s.tiles[center].road_town="Road Builder",nil
+end
 if crossing then
   local company=S.company(s,"Rail Builder")
   rail_cash=company.cash
@@ -82,14 +88,18 @@ local function ask()
     for _,row in ipairs(r.value[1].tiles) do
       if row.id==center then junction=row.surface end
       if row.id==protected then guard=row.surface end
-      if crossing then
+      if companyroad then
+        if row.id==center and row.surface.road_bits~=10 then newroad=row.id end
+      elseif crossing then
         if row.id==rail_cell and row.surface.level_crossing then newroad=row.id end
       elseif woodhouse then
         if row.surface.source_house and row.surface.source_house.root then newroad=row.id end
       elseif row.id~=center and row.surface.build==target and row.surface.road_town==1 then newroad=row.id end
     end
     assert(guard and guard.stock_industry.id==77 and not guard.build)
-    if reseed then
+    if companyroad then
+      assert(junction and junction.build=="road" and junction.owner=="Road Builder" and not junction.road_town)
+    elseif reseed then
       assert(not junction or not junction.build)
       if newroad then assert(newroad==wooded) end
     else
@@ -110,7 +120,10 @@ core.register_on_mods_loaded(function()
     local next_=assert(disk.read())
     assert(next_.day==day and next_.passenger_house_clock.counter==day*74)
     local created=assert(next_.tiles[newroad])
-    if woodhouse then
+    if companyroad then
+      assert(newroad==center and created.build=="road" and created.road_bits~=10)
+      assert(created.owner=="Road Builder" and not created.road_town and next_.companies["Road Builder"].cash==road_cash)
+    elseif woodhouse then
       assert(newroad==S.id(cx,cz-1) or newroad==S.id(cx,cz+1))
       assert(not created.wood and created.house and created.source_house.town==1 and not created.owner)
       assert(next_.tiles[center].road_town==(foreignhouse and 2 or 1) and next_.tiles[center].road_bits==10)
@@ -139,7 +152,7 @@ core.register_on_mods_loaded(function()
         assert(r.ok and r[mode] and r.tile==a.other)
       end
     elseif not woodhouse then assert(created.road_bits>0) end
-    assert((crossing or not next(next_.companies)) and next_.tiles[protected].stock_industry.id==77)
+    assert((crossing or companyroad or not next(next_.companies)) and next_.tiles[protected].stock_industry.id==77)
     if reseed then
       assert(not created.wood and not next_.tiles[center].build)
     elseif not span and not woodhouse and not crossing then assert(next_.tiles[center].road_bits~=10) end
@@ -150,7 +163,8 @@ core.register_on_mods_loaded(function()
         local found=false
         for _,row in ipairs(r.value[1].tiles) do
           if row.id==newroad then
-            if crossing then assert(row.surface.level_crossing.rail_owner=="Rail Builder" and row.surface.road_town==1)
+            if companyroad then assert(row.surface.owner=="Road Builder" and row.surface.road_bits==created.road_bits)
+            elseif crossing then assert(row.surface.level_crossing.rail_owner=="Rail Builder" and row.surface.road_town==1)
             elseif woodhouse then assert(row.surface.source_house.id==created.source_house.id and not row.surface.wood)
             else assert(row.surface.road_bits==created.road_bits and row.surface.road_town==1) end
             found=true
@@ -161,7 +175,7 @@ core.register_on_mods_loaded(function()
       end))
     end,function(reason)
       assert(reason=="stopped")
-      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and displayed public %s tile %d, preserved private clearance, reopened geometry"):format(woodhouse and "house on former woodland at" or mode,newroad))
+      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and projected %s tile %d, preserved private clearance, reopened geometry"):format(woodhouse and "house on former woodland at" or companyroad and "new junction on company road at" or mode,newroad))
       core.request_shutdown("Native municipal road proof passed",false,0)
     end,file))
   end,file))

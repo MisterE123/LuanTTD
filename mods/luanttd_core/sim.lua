@@ -1758,9 +1758,19 @@ local function linking_errors(s,proposed)
     end
   end
 end
--- Municipal construction runs the normal geometry/clearance quote but
--- has no company ledger. Only its own normal road and clear land are
--- writable here. Player/reserved facilities are not silently altered.
+-- CmdBuildRoad can add bits to company pavement. Its existing road
+-- owner is preserved (SetRoadOwner only runs when there were no bits).
+function M.town_company_road(s,id)
+  local t=id and s.tiles[id]
+  return t and t.owner and s.companies[t.owner] and not t.road_town and t.build=="road" and
+    (not t.roadtype or t.roadtype==0) and t.road_bits and t.road_bits~=0 and
+    not (t.stock_void or t.stock_object or t.stock_landmark or t.stock_industry or t.site or t.house or
+      t.tram or t.station or t.road_waypoint_id or t.level_crossing or t.rail_tracks or t.rail_span_id or
+      t.road_bridge_id or t.road_tunnel_id or t.ship or t.airfield)
+end
+
+-- A municipal write owns its paid-free action; it may not demolish a
+-- company facility. Eligible company pavement keeps its current owner.
 function M.town_road_piece(s,town,id,bits,execute)
   local t=id and s.tiles[id]
   if t and t.build=="stock_rail" and t.rail_tracks then
@@ -1782,13 +1792,17 @@ function M.town_road_piece(s,town,id,bits,execute)
     end
     return r
   end
-  if not t or t.stock_void or t.stock_object or t.owner or t.tram or t.station or t.road_waypoint_id or
+  local company_road=M.town_company_road(s,id)
+  if not t or t.stock_void or t.stock_object or t.owner and not company_road or t.tram or t.station or t.road_waypoint_id or
       t.level_crossing or t.rail_tracks or t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or
       (t.build and t.build~="road") or (t.road_town and t.road_town~=town) then return end
   load_road_rules()
-  local r,c=road_piece_plan(s,nil,id,t,bits,M.road_piece_occupancy(s))
+  local occupied=M.road_piece_occupancy(s)
+  -- EnsureNoVehicleOnGround applies even when the foundation is unchanged.
+  if t.build=="road" and occupied(id,false) then return end
+  local r,c=road_piece_plan(s,company_road and t.owner or nil,id,t,bits,occupied)
   if not r or c==0 then return end
-  r.road_town=town
+  if not company_road then r.road_town=town end
   if linking_errors(s,{[id]=r,order={id}}) then return end
   if execute then
     if r.clear_road_coast then coastal_world.clear_apply(s,id) end
@@ -1796,7 +1810,7 @@ function M.town_road_piece(s,town,id,bits,execute)
       t.wood,t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,nil,nil,nil
       if s.stock_farm_fields then s.stock_farm_fields[id]=nil end
     end
-    t.build,t.road_town,t.road_bits="road",town,r.road_bits
+    t.build,t.road_town,t.road_bits="road",r.road_town,r.road_bits
     s.has_town_roads=true
     s.topology=(s.topology or 0)+1
   end

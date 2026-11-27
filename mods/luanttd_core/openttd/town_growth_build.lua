@@ -129,9 +129,9 @@ return function(G,catalog)
     if rb==0 or not board.road_quote then return end
     local current=board.tile(x,z)
     local rail=current and current.kind=="rail"
-    if disallowed(current) or current.occupied or (current.road_disallowed or 0)~=0 or
+    if disallowed(current) or current.occupied or
       current.kind~="road" and current.kind~="clear" and current.kind~="trees" and not current.coast and not rail or
-      current.road_town and current.road_town~=t.id or current.owner and not rail then return end
+      current.road_town and current.road_town~=t.id or current.owner and not rail and not current.company_road then return end
     if d~=nil then
       if not board.clean_road_bits then return end
       rb=board.clean_road_bits(t,x,z,rb,d)

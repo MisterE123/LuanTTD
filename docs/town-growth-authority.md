@@ -149,10 +149,13 @@ can make the live-only 1-in-10 downhill attempt, with the original
 road waits for a later attempt. These draws are not added to startup
 map generation.
 
-Only an admitted native command writes terrain, municipal road bits,
-bridge geometry, or a tunnel. There is no player payment, and the town
-cannot clear a private lot, an active industry, protected railway, or
-occupied transport facility. Towns can also add a perpendicular road crossing to a compatible plain
+Only an admitted native command writes terrain, road bits, bridge geometry
+or a tunnel. The town cannot clear a private lot, active industry or
+protected/occupied facility. As in RC1 CmdBuildRoad, it can add pieces
+to eligible ordinary company pavement without transferring its ownership
+or debiting the company. Road works, vehicles on the tile, and turning
+one-way pavement into a junction still block that edit. The native
+worker test checks the junction and the original owner after reopen. Towns can also add a perpendicular road crossing to a compatible plain
 railway, without taking its rail ownership, releasing its reservation or
 charging a company. A train physically on the tile blocks construction.
 The stock setting **Allow towns to build level crossings** defaults to

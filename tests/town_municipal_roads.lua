@@ -174,3 +174,26 @@ end
 wooded_house(false)
 wooded_house(true)
 print("PASS RC1 town writes on ordinary woods; private wooded lots remain intact")
+
+-- CmdBuildRoad accepts an addition to ordinary company pavement without
+-- replacing its owner, and still forbids a junction on one-way pavement.
+do
+  local s,t,center=fixture()
+  local cell=s.tiles[center]
+  cell.owner,cell.road_town="Carriers",nil
+  local company=S.company(s,cell.owner)
+  local cash=company.cash
+  s.fleet[7]={engine=1,depot=center}
+  assert(not S.town_road_piece(s,1,center,5,true) and cell.road_bits==10)
+  s.fleet[7]=nil
+  cell.road_disallowed=1
+  assert(not S.town_road_piece(s,1,center,5,true) and cell.road_bits==10 and cell.road_disallowed==1)
+  cell.road_disallowed=nil
+  cell.roadworks=true
+  assert(not S.town_road_piece(s,1,center,5,true) and cell.road_bits==10)
+  cell.roadworks=nil
+  W.tick(s,1,draw)
+  assert(cell.road_bits==15 and cell.owner=="Carriers" and cell.road_town==nil)
+  assert(company.cash==cash and s.changed[1]==center)
+end
+print("PASS live growth extends eligible company road without taking ownership or billing, rejects active traffic and works")

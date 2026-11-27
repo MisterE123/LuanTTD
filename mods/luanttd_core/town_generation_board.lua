@@ -113,7 +113,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
   end
   function B.road_quote(town,x,z,bits)
     local t=B.tile(x,z)
-    if live and not live.roadable(x,z) and not (t and t.kind=="rail" and t.plain_track) then return end
+    if live and not live.roadable(x,z) and not (t and (t.kind=="rail" and t.plain_track or t.company_road)) then return end
     return Sim.town_road_piece(s,town.id,Sim.id(x,z),bits,false)
   end
   function B.parallel_bridge(x,z,distance,facing)

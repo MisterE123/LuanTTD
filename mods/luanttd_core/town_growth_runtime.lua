@@ -178,6 +178,7 @@ return function(Sim,Terrain,G,B,H)
       local plain_track=kind=="rail" and t.build=="stock_rail" and not t.rail_station_id and
         not t.rail_depot_dir and not t.rail_waypoint_id and not t.rail_span_id and not t.signal and t.rail_tracks or nil
       return {kind=kind,slope=slope,base=base,max_z=top*8,road_bits=road_bits,plain_track=plain_track,crossing=t.level_crossing~=nil,
+        company_road=Sim.town_company_road(s,id) or nil,
         road_town=t.road_town,road_disallowed=t.road_disallowed or t.disallowed,
         owner=t.owner,axis=axis,entrance=entrance,coast=kind=="water" and t.coastal_water,
         sea=kind=="water" and t.water_class=="sea" and not t.coastal_water,
@@ -352,7 +353,7 @@ return function(Sim,Terrain,G,B,H)
       local id=Sim.id(proposal.x,proposal.z)
       if proposal.kind=="road" then
         local tile=s.tiles[id]
-        if not (tile and tile.build=="stock_rail" or available(s,id,tile)) or
+        if not (tile and tile.build=="stock_rail" or available(s,id,tile) or Sim.town_company_road(s,id)) or
             not Sim.town_road_piece(s,t.id,id,proposal.bits,true) then return false end
         visual_changed(s,id)
         Sim.invalidate_live_sea_near(s,id)
