@@ -15,12 +15,10 @@ return function(Rules,Fields,IndustryRuntime,Catchment)
       end
     end
     local adapted=setmetatable({}, {__index=Rules})
+    local board=ctx.field_board
+    local attempt=board and function(farm,rnd) Fields.random(farm,board,rnd) end
     function adapted.production_tick(ind,opts)
-      if ctx.field_board then
-        opts.field_attempt=function(farm,rnd) Fields.random(farm,ctx.field_board,rnd) end
-      else
-        opts.field_attempt=ctx.field_attempt
-      end
+      opts.field_attempt=attempt or ctx.field_attempt
       return Rules.production_tick(ind,opts)
     end
     local B=IndustryRuntime(adapted,Catchment).bind(world,ledger,ctx)

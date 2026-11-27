@@ -102,14 +102,14 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
 
   -- Source Industry::OnTick. Caller owns global IndustryID order and
   -- provides a physical farm-field planting hook where there is a map.
-  function F.production_tick(ind,opts)
+  function F.production_tick(ind,opts,silent)
     opts=opts or {}
     if opts.editor or ind.removed then return 0 end
     local rnd=opts.random_u32
     local spec=F.spec[ind.kind]
     if ind.counter%64==0 and rnd then
       local r=rnd()
-      if opts.ambient and Commons.chance(14,r) then
+      if not silent and opts.ambient and Commons.chance(14,r) then
         for _,p in ipairs(ind.produced) do
           if p.last.production>0 then
             opts.ambient(ind,floor(floor(r/65536)*spec.sounds/65536)+1);break

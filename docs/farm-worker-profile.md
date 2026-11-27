@@ -42,3 +42,26 @@ compiles the stock clear-tile loop and compares fences, crop stages,
 editor behavior, orphan expiry and regrowth with the native board.
 Those are scoped source comparisons, not a claim that every OpenTTD
 industry, climate map, sound, or NewGRF callback is mounted.
+
+## Mixed industry production ticks
+
+The farm planting hook is bound once per active ledger, rather than
+allocated on every production tick. Oil's shared production routine
+no longer copies its options table merely to suppress an ambient
+sound. As in RC1's `ProduceIndustryGoods`, it still takes the scheduled
+random draw even if no sound plays. Industry ID order, production
+counters, RNG state, and farm placement attempts are unchanged.
+
+Two native Luanti worker comparisons of 768 mixed industries measured
+196,608 production visits per batch. After warm-up, median CPU dropped
+from **97.0 to 75.8 ms** and **84.7 to 67.6 ms** in the two series.
+The states matched after every batch, including all 38,730 random draws,
+458 ambient emissions, and 5,970 farm-tile probes. A separate 1024×1024
+campaign comparison matched every durable field and table alias at
+the same finished day, excluding wall-clock presentation fraction.
+Seven real farm, timber, and oil freight services also delivered
+265 units for $3,869 across a native restart without double payment.
+
+```sh
+tests/industry_tick_perf_native.sh luantiserver a1d8907 /tmp/industry-tick-bench
+```

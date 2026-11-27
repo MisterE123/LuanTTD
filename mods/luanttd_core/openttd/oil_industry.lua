@@ -108,11 +108,9 @@ return function(SharedFactory,Packets,Catchment,Rating,Income,Commons,Timber)
   end
 
   function O.production_tick(ind,opts)
-    local o={}
     -- Source draws the ambient sample on schedule even if an industry
     -- has no sounds; suppress emission only, not the shared RNG draw.
-    for k,v in pairs(opts or {}) do if k~="ambient" then o[k]=v end end
-    return shared_produce(ind,o)
+    return shared_produce(ind,opts,true)
   end
   function O.tile_loop(ind,tile,opts,offer)
     opts=opts or {}

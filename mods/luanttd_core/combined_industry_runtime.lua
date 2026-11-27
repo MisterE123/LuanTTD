@@ -50,10 +50,10 @@ return function(Timber,Farm,Oil,Fields,Runtime,Catchment)
   function M.new() return Runtime(K,Catchment).new() end
   function M.bind(s,ledger,ctx)
     local A=setmetatable({}, {__index=K})
+    local board=ctx.field_board
+    local attempt=board and function(farm,rnd) Fields.random(farm,board,rnd) end
     function A.production_tick(i,opts)
-      if i.kind=="farm" and ctx.field_board then
-        opts.field_attempt=function(farm,rnd) Fields.random(farm,ctx.field_board,rnd) end
-      end
+      if i.kind=="farm" and attempt then opts.field_attempt=attempt end
       return assert(by_kind[i.kind]).production_tick(i,opts)
     end
     function A.tile_loop(i,t,opts,offer)
