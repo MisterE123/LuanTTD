@@ -30,47 +30,60 @@ return function(record,decode_cell,encode,decode)
       if previous then duplicate[i]=previous else seen[tile]=i end
     end
     -- Only the array's pointer sequence is pinned. This does not pin a
-    -- tile's fields or nested woodland. First and synchronous captures
+    -- tile's fields or nested woodland. Setup and synchronous captures
     -- still reclassify the whole surface. Only the autonomous owner can
     -- advance an already exact immutable page set between checkpoints.
+    local arena=observer and {} or nil
+    local function classify(pages,rich,shared_wood,seen_wood,pulse)
+      local cells={}
+      for first=1,n,block do
+        local last=min(first+block-1,n)
+        for i=first,last do
+          local t=slots[i]
+          if t~=witness[i] or getmetatable(t)~=nil then return end
+          local raw
+          if not duplicate[i] then
+            if type(t.wood)=="table" and getmetatable(t.wood)~=nil then return end
+            raw=record(t)
+            if raw then
+              if #raw==width then
+                local tree=t.wood
+                local other=seen_wood[tree]
+                if other then shared_wood[i]=other else seen_wood[tree]=i end
+              else raw=raw..pad end
+            else rich[i]=t end
+          end
+          cells[i-first+1]=raw or blank
+        end
+        pages[#pages+1]=concat(cells,"",1,last-first+1)
+        if pulse then pulse() end
+      end
+      return true
+    end
     local surface
     if observer and not next(duplicate) then
       local mod=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
       local pages=dofile(mod.."/checkpoint_pages.lua")
       surface=dofile(mod.."/checkpoint_surface_pages.lua")(pages,record).new(root,slots,witness,n,74)
+      -- Prime the exact physical rows during ownership setup, before
+      -- game time and movement advance. Paid saves still read live rows.
+      local boot_tick=root.passenger_house_clock and root.passenger_house_clock.counter
+      local ground,rich,shared,trees={},{},{},{}
+      if boot_tick and classify(ground,rich,shared,trees) and not next(shared) then
+        surface.adopt(boot_tick,ground,block,rich,trees)
+      end
       observer.touch,observer.finish,observer.invalidate=surface.touch,surface.finish,surface.invalidate
     end
     return function(current,pulse)
       if current~=root or current.tiles~=slots or #slots~=n or getmetatable(slots)~=nil then return end
-      local pages,cells={""},{}
+      local pages={""}
       local rich,shared_wood,seen_wood={},{},{}
       local external_tile,external_wood={},{}
       local tick=current.passenger_house_clock and current.passenger_house_clock.counter
       local staged=pulse and surface and not observer.disabled
       local reused=staged and surface.capture(tick,pages,rich)
       if not reused then
-        for first=1,n,block do
-          local last=min(first+block-1,n)
-          for i=first,last do
-            local t=slots[i]
-            if t~=witness[i] or getmetatable(t)~=nil then return end
-            local raw
-            if not duplicate[i] then
-              if type(t.wood)=="table" and getmetatable(t.wood)~=nil then return end
-              raw=record(t)
-              if raw then
-                if #raw==width then
-                  local tree=t.wood
-                  local other=seen_wood[tree]
-                  if other then shared_wood[i]=other else seen_wood[tree]=i end
-                else raw=raw..pad end
-              else rich[i]=t end
-            end
-            cells[i-first+1]=raw or blank
-          end
-          pages[#pages+1]=concat(cells,"",1,last-first+1)
-          if pulse then pulse() end
-        end
+        if not classify(pages,rich,shared_wood,seen_wood,pulse) then return end
       end
       -- Dense vectors may still carry non-array fields. Preserve them in
       -- the same graph object that will become the restored tile vector.
@@ -82,11 +95,11 @@ return function(record,decode_cell,encode,decode)
       end
       local view={}
       for key,value in pairs(root) do if key~="tiles" then view[key]=value end end
-      local graph,ids=encode({campaign=view,rich=rich},pulse,function(value)
+      local graph,ids,offset=encode({campaign=view,rich=rich},pulse,function(value)
         if value==root then return view end
         if value==slots then return rich end
         return value
-      end)
+      end,staged and arena)
       -- The rich graph already interned references from stations,
       -- routes, or any other data that share a literal tile/tree. Use
       -- those exact identities rather than reconstructing a second object.
@@ -98,10 +111,10 @@ return function(record,decode_cell,encode,decode)
         end
         if not rich[i] and not duplicate[i] then
           local key=ids[t]
-          if key then external_tile[i]=key
+          if key and key>offset then external_tile[i]=key-offset
           elseif type(t.wood)=="table" then
             key=ids[t.wood]
-            if key then external_wood[i]=key end
+            if key and key>offset then external_wood[i]=key-offset end
           end
         end
         if pulse and i%8192==0 then pulse() end

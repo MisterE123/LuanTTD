@@ -92,7 +92,7 @@ do
         passengers={frame=noop,collect=noop,collect_fares=noop}}
     end,
     ["/campaign_authority_endpoint.lua"]=function()
-      return {
+      return {readonly_speed=function() return false end,
         actor_frames=function(_,fraction) assert(fraction==1);return {ok=true} end,
         command=function() s.authority_revision=1;add("edit:"..s.day);return {ok=true,revision=1} end,
       }
@@ -166,7 +166,7 @@ do
           passengers={frame=noop,collect=noop,collect_fares=noop}}
       end,
       ["/campaign_authority_endpoint.lua"]=function()
-        return {snapshots=read,actor_frames=read,road_quote=read,command=function()
+        return {readonly_speed=function() return false end,snapshots=read,actor_frames=read,road_quote=read,command=function()
           s.authority_revision=s.authority_revision+1
           return {ok=true,revision=s.authority_revision}
         end}
@@ -232,7 +232,7 @@ local function scenario(kind,quick)
     campaign_authority_runtime=function()return runtime end,
     campaign_authority_endpoint=function()
       local function observed() return {ok=true,day=state.day} end
-      return {actor_frames=observed,snapshots=observed,
+      return {readonly_speed=function() return false end,actor_frames=observed,snapshots=observed,
         command=function()
           record("command")
           state.authority_revision=1
@@ -313,7 +313,7 @@ do
         passengers={frame=noop,collect=noop,collect_fares=noop}}
     end,
     campaign_authority_endpoint=function()
-      return {actor_frames=observe,snapshots=observe,road_quote=function(player,request)
+      return {readonly_speed=function() return false end,actor_frames=observe,snapshots=observe,road_quote=function(player,request)
         assert(player=="QA" and request.tool=="drag" and state.authority_revision==0 and state.day==9)
         return {ok=true,revision=0,value={cost=190}}
       end,command=function()
@@ -374,7 +374,7 @@ do
         frame=noop,passengers={frame=noop,collect=noop,collect_fares=noop}}
     end,
     campaign_authority_endpoint=function()
-      return {
+      return {readonly_speed=function() return false end,
         actor_frames=function(_,fraction)
           assert(fraction==1 and state.day==6,"frame must sample the previous complete trajectory")
           return {ok=true}

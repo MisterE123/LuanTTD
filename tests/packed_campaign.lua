@@ -296,15 +296,28 @@ do
     end
     return r
   end
-  assert(observer.touch and not observer.finish(1280))
-  assert(exact(staged(world,noop)).tiles[9].wood.growth==6)
-  -- A nonvisual woodland counter still belongs to the exact checkpoint.
+  assert(observer.touch)
+  -- The first stable tick can update the post-mount pages before the
+  -- first periodic save. A woodland counter is not renderer dirtiness.
   tree.growth=3;observer.touch(9)
   world.tiles[24].stock_clear_ground=0;observer.touch(24)
   world.passenger_house_clock.counter=1354
   assert(observer.finish(1354))
   local r=exact(staged(world,noop))
   assert(r.tiles[9].wood.growth==3 and r.tiles[24].stock_clear_ground==0)
+  -- IDs from a preceding periodic graph cannot attach old references
+  -- to the new graph after the live scene removes its last external link.
+  local links=world.inspect
+  world.inspect={unrelated={value=true}}
+  world.tiles[9].wood.count=3;observer.touch(9)
+  world.passenger_house_clock.counter=1428
+  assert(observer.finish(1428))
+  local later=P.decode_wide(staged(world,noop))
+  assert(later.inspect.unrelated.value and later.tiles[9].wood.count==3)
+  assert(later.inspect.root==nil and later.inspect.cell==nil and later.inspect.tree==nil)
+  -- Retaining the live pointers can link them again in a third epoch.
+  world.inspect=links
+  assert(exact(staged(world,noop)).tiles[9].wood.count==3)
   -- The synchronous writer takes fresh rows regardless of cached pages.
   world.tiles[23].h=12
   assert(exact(staged(world)).tiles[23].h==12)

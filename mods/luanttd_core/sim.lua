@@ -4404,11 +4404,14 @@ function M.hq_production(s,mark,random)
   local _,K=company_hqs()
   return K.produce(mark.stage,random(),s.stock_recession or s.stock_coal_recession)
 end
-function M.company_hq_status(s,owner)
+function M.company_hq_status(s,owner,midday)
   if not (s.stock_generated_profile and s.companies[owner]) then return end
   local _,K=company_hqs()
   local c=s.companies[owner]
-  local stats=company_hq_stats(s,owner)
+  -- A UI read halfway through a stock day must not cache provisional
+  -- finance inputs for a later paid headquarters decision.
+  local stats=midday and (HQStats.collect(s)[owner] or {vehicles={},stations={},min_age=HQStats.min_age})
+    or company_hq_stats(s,owner)
   local p=s.stock_company_hqs and s.stock_company_hqs[owner]
   local score=K.score(c,stats.vehicles,stats.stations,c.stock_quarters or {},stats.min_age)
   return {tile=p and p.origin,stage=p and p.stage,score=score,value=K.value(c,stats.vehicles,stats.stations)}

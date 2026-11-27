@@ -616,3 +616,19 @@ do
   assert(sea_invalidations==rolling)
   print("PASS the ocean cache is not invalidated by playback or road orders; paid terrain and road edits still invalidate")
 end
+
+do
+  local company=A.company(john)
+  local read={kind="speed",speed=company.value.speed,revision=company.revision}
+  assert(A.readonly_speed(read))
+  local already=A.command(john,read)
+  assert(already.ok and already.revision==company.revision and already.tick==company.tick)
+  assert(not A.command("NotChair",read).ok)
+  read.revision=company.revision-1
+  assert(A.command(john,read).why=="STALE_COMMAND")
+  read.revision=company.revision
+  read.speed=company.value.speed==2 and 1 or 2
+  assert(not A.readonly_speed(read))
+  assert(A.command(john,read).revision==company.revision+1)
+  print("PASS re-selecting current speed is authorized and idempotent, while real changes retain revision fencing")
+end

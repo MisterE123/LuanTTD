@@ -327,13 +327,13 @@ return function(Sim,R,max_days)
     end
     return reply(true,nil,row)
   end
-  function A.company(name)
+  function A.company(name,midday)
     if not owner(name) then return reply(false,"INVALID_REQUEST") end
     local c=s.companies[name]
     if not c then return reply(false,"COMPANY_NOT_OPEN") end
     local year,month,day=Sim.date(s)
     return reply(true,nil,{cash=c.cash,loan=c.loan,revenue=c.revenue,expense=c.expense,
-      month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,hq=Sim.company_hq_status(s,name),
+      month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,hq=Sim.company_hq_status(s,name,midday),
       rail_maglev=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,3) or false,
       rail_mono=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,2) or false,
       news_head=R.news and R.news.head(),
@@ -446,9 +446,22 @@ return function(Sim,R,max_days)
   -- direct placement RPCs below flow through this same handler.
   local keeps_sea={company_open=true,company_loan=true,speed=true,
     road_buy=true,road_order_add=true,road_toggle=true}
+  local function valid_speed(speed)
+    return speed==0 or speed==1 or speed==2 or speed==4
+  end
+  local function speed_note(speed)
+    return speed==0 and "Simulation paused." or ("Simulation at "..speed.."×.")
+  end
+  function A.readonly_speed(c)
+    return type(c)=="table" and c.kind=="speed" and valid_speed(c.speed) and c.speed==s.speed
+  end
   function A.command(name,c)
     if not owner(name) or type(c)~="table" then return reply(false,"INVALID_REQUEST") end
     if c.kind~="company_open" and c.revision~=authority_revision then return reply(false,"STALE_COMMAND") end
+    if A.readonly_speed(c) then
+      if s.chair~=name and c.admin~=true then return reply(false,"Only the first company or a server admin can change speed.") end
+      return reply(true,speed_note(c.speed))
+    end
     local road_orders=c.mode=="road" and (c.kind=="vehicle_order" or c.kind=="depot_copy_orders")
     if R.invalidate_sea and not (keeps_sea[c.kind] or road_orders) then R.invalidate_sea() end
     local ok,note,value
@@ -592,10 +605,10 @@ return function(Sim,R,max_days)
       if ok and c.cargo=="coal" then
         st.coal_stage_tile,st.coal_stage_mirror=c.tile,c.mirror==true
       end
-    elseif c.kind=="speed" and (c.speed==0 or c.speed==1 or c.speed==2 or c.speed==4) then
+    elseif c.kind=="speed" and valid_speed(c.speed) then
       if s.chair~=name and c.admin~=true then return reply(false,"Only the first company or a server admin can change speed.") end
       s.speed=c.speed
-      ok,note=true,c.speed==0 and "Simulation paused." or ("Simulation at "..c.speed.."×.")
+      ok,note=true,speed_note(c.speed)
     elseif c.kind=="town_fund_buildings" and index(c.town) then
       ok,note,value=Sim.fund_town_buildings(s,name,c.town,c.cost)
     elseif c.kind=="town_fund_roads" and index(c.town) then

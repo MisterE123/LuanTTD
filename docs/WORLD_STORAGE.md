@@ -112,12 +112,15 @@ prove that an older staged autosave cannot replace a newer acknowledged edit.
 
 For ordinary worlds with 262,144 to 1,048,576 cells, the owner can pack
 scalar terrain into a fixed-record raster and serialize the remaining state
-as a reference-preserving graph. A fresh periodic checkpoint classifies
-every live cell and seeds immutable pages from those exact bytes. The
+as a reference-preserving graph. Before normal play begins, the owner
+can classify every live cell and seed immutable pages from those bytes;
+a subsequent full periodic scan can reseed after an edit. The
 ordinary stock clock updates those pages from committed land-edit receipts
 and explicit nonvisual woodland, coastal and clear-ground changes. Later
 periodic saves can reuse a page only at the latest completed stock day, and
-still validate physical slots and serialize the live reference graph. An
+still validate physical slots and serialize the live reference graph.
+The periodic encoder reuses weak-key index capacity, but fresh numeric
+epochs give that graph its own reference IDs on every save. An
 unrecognized operation discards the page mirror, and an active preview
 clock outside the stock day uses the full scan. Synchronous saves never
 depend on the mirror. New autonomous terrain writers must emit a

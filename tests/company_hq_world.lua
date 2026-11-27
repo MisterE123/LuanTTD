@@ -35,3 +35,17 @@ assert(#changed==6 and not s.tiles[start].owner and not s.tiles[start].stock_lan
 assert(s.stock_company_hqs[owner].origin==nextsite and s.stock_company_hqs[owner].stage==0)
 assert(s.tiles[Sim.id(12,11)].stock_landmark.part==4)
 print("PASS four-tile company HQ purchase, owner checks, one-way stage growth and overlapping relocation")
+
+do
+  -- A source-tick finance panel sees provisional input, but must not
+  -- replace the stable HQ accounting cache used by an authority edit.
+  company.cash=company.loan+10000
+  local first=assert(Sim.company_hq_status(s,owner)).value
+  s.fleet[77]={owner=owner,engine="bus",bought=s.day,stock_purchase_value=19000}
+  local live=assert(Sim.company_hq_status(s,owner,true)).value
+  assert(live==first+28500)
+  assert(Sim.company_hq_status(s,owner).value==first)
+  s.authority_revision=(s.authority_revision or 0)+1
+  assert(Sim.company_hq_status(s,owner).value==live)
+  print("PASS finance reads between source ticks do not overwrite the HQ accounting cache")
+end

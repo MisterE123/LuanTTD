@@ -195,7 +195,10 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     local now=core.get_us_time()
     if core.ipc_get(cancel) then break end
     local deferred
-    local read=q and (presentation_only[q.kind] or read_only_hover(q) or passive_news(q))
+    -- Neither a finance view nor an idempotent speed selection needs
+    -- to finish the day early and borrow up to 74 future motion ticks.
+    local read=q and (presentation_only[q.kind] or read_only_hover(q) or passive_news(q)
+      or q.kind=="company" or q.kind=="command" and A.readonly_speed(q.command))
     if auto then
       local dt=(now-prior)/1000000
       if (s.speed or 0)>0 then dirty=true end
@@ -274,7 +277,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         elseif q.kind=="transport_quote" then r=A.transport_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="terrain_quote" then r=A.terrain_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="town_authority" then r=A.town_authority(q.player,q.town)
-        elseif q.kind=="company" then r=A.company(q.player)
+        elseif q.kind=="company" then r=A.company(q.player,tick_mode and auto.partial())
         elseif q.kind=="news" then r=sample_news(q)
         elseif q.kind=="lesson_progress" then r=A.lesson_progress(q.player,q.lesson)
         elseif navigation[q.kind] then r=sample_navigation(q)

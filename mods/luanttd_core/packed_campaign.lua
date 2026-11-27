@@ -89,14 +89,14 @@ end
 -- Unknown, nested or externally interned fields use the general graph.
 local crop_fields={kind=true,ground=true,variant=true,industry=true,counter=true,fences=true,
   slope=true,base=true,last_tick=true}
-local function crop_bytes(t,table_bucket)
+local function crop_bytes(t,table_bucket,offset)
   if type(t)~="table" or getmetatable(t)~=nil or t.kind~="clear" or t.ground~="field" then return end
   local bucket=table_bucket(t)
-  if bucket[t] then return end
+  if (bucket[t] or 0)>offset then return end
   local f=t.fences
   if type(f)~="table" or getmetatable(f)~=nil then return end
   local fences=table_bucket(f)
-  if fences[f] then return end
+  if (fences[f] or 0)>offset then return end
   for k in next,t do if not crop_fields[k] then return end end
   local v,c,b,s=t.variant,t.counter,t.base,t.slope
   local i,l=t.industry,t.last_tick
@@ -181,10 +181,23 @@ end
 
 -- The caller owns a stable snapshot for the entire encode. Periodic
 -- pulses may service read-only queries but must not mutate that graph.
-local function encode(root,pulse,identity)
+local function encode(root,pulse,identity,arena)
   local chunks,fragment={},{}
   local fragment_count=0
   local tables,strings={},{}
+  local stride,offset=1073741824,0
+  -- Only periodic raster captures can reuse the owner-private weak-key
+  -- table. Each invocation compares its numeric epoch before using IDs.
+  -- The wire IDs and prior decoded checkpoints are unchanged.
+  if arena then
+    offset=(arena.offset or 0)+stride
+    if not arena.tables or offset>=9007199254740992-stride then
+      offset=stride
+      arena.tables=setmetatable({},{__mode="k"})
+    end
+    arena.offset=offset
+    tables=arena.tables
+  end
   local table_count,string_count=0,0
   local tiles=type(root)=="table" and root.tiles
   local campaign=identity and root.campaign
@@ -236,8 +249,8 @@ local function encode(root,pulse,identity)
       if identity then value=identity(value) end
       local bucket=table_bucket(value)
       local id=bucket[value]
-      if id then tag(TABREF);uint(id);return end
-      table_count=table_count+1;bucket[value]=table_count
+      if id and id>offset then tag(TABREF);uint(id-offset);return end
+      table_count=table_count+1;bucket[value]=offset+table_count
       local n=#value
       -- Only omit array keys when every member through #value exists.
       -- Most campaign tiles are records, not arrays.
@@ -284,10 +297,10 @@ local function encode(root,pulse,identity)
           local key=strings[k]
           if key then put(key) else write(k) end
           local payload,bucket,f,fences
-          if value==crops then payload,bucket,f,fences=crop_bytes(v,table_bucket) end
+          if value==crops then payload,bucket,f,fences=crop_bytes(v,table_bucket,offset) end
           if payload then
-            table_count=table_count+1;bucket[v]=table_count
-            table_count=table_count+1;fences[f]=table_count
+            table_count=table_count+1;bucket[v]=offset+table_count
+            table_count=table_count+1;fences[f]=offset+table_count
             put(payload)
           else write(v) end
         end
@@ -313,6 +326,7 @@ local function encode(root,pulse,identity)
     else error("Unsupported packed campaign value: "..kind) end
   end
   write(root)
+  if arena then assert(table_count<stride,"Too many objects in a staged checkpoint graph") end
   if fragment_count~=0 then
     chunks[#chunks+1]=table.concat(fragment,"",1,fragment_count)
   end
@@ -322,7 +336,7 @@ local function encode(root,pulse,identity)
     -- Detached rich graph wrapper has no physical slot vector; this
     -- dictionary has one namespace and is only read during capture.
     assert(not tiles)
-    return output,tables
+    return output,tables,offset
   end
   return output
 end
