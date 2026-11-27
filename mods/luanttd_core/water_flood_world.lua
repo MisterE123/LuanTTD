@@ -205,11 +205,16 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     local changes=Flood.scan(B,x,z)
     if not changes then return 0 end
     s.changed=s.changed or {}
-    local cleared_spans,applied={},0
+    local cleared_spans,applied,plain={},0,true
     for _,change in ipairs(changes) do
       local id=Sim.id(change.x,change.z)
       local t=assert(s.tiles[id])
       local actual=class(s,id,t)
+      -- Plain shore, land, and wooded ground have no road junction or
+      -- bay to invalidate. All facility, span and object clears may
+      -- trigger additional edits, so leave their topology change visible.
+      plain=plain and not t.build and not t.road_stop_pair and
+        (actual=="sea" or actual=="coast" or actual=="clear" or actual=="trees")
       local changed=true
       -- Several adjacent eligible parcels of one HQ may have been
       -- quoted before the first parcel cleared the whole building.
@@ -274,7 +279,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       if changed then s.changed[#s.changed+1]=id;applied=applied+1 end
     end
     if applied>0 then s.topology=(s.topology or 0)+1 end
-    return applied
+    return applied,applied>0 and plain
   end
 
   function W.is_water(t)

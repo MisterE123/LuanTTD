@@ -5,7 +5,7 @@ local base=source and source:match("^@(.*/)road_speed_runtime%.lua$")
 base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
 local Wormhole=dofile(base.."road_bridge_motion.lua")
 return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,crossing_step,oneway_guard,oneway_replan,Bay,Junction,tile_xy)
-  local R={bay=Bay}
+  local R={bay=Bay,preserve_after_tide=Junction and Junction.preserve_after_tide}
   local Pass
   if make_overtake_board then
     local m=base.."openttd/"

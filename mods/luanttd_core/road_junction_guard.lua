@@ -10,9 +10,8 @@ return function(Sim,Presentation)
   -- Max horizontal extents of the shipped coach and freight meshes,
   -- rounded upward; the extra margin covers in-between render yaw.
   local radius=sqrt(.38*.38+.14*.14)+.065
-  local function is_junction(s,id)
-    local t=s.tiles[id]
-    if not t or t.build~="road" or t.level_crossing or t.road_disallowed or t.road_bridge_id or t.road_tunnel_id then return false end
+  local function is_junction(s,id,t)
+    if t.level_crossing or t.road_disallowed or t.road_bridge_id or t.road_tunnel_id then return false end
     local bits=Sim.road_bits(s,id)
     local n=0
     for i=1,4 do n=n+floor(bits/2^(i-1))%2 end
@@ -21,11 +20,16 @@ return function(Sim,Presentation)
   local function board(s)
     local prev=cache[s]
     if prev and prev.topology==s.topology then return prev end
-    local junctions,I,near={},{},{}
-    for id in ipairs(s.tiles) do
-      if is_junction(s,id) then junctions[id]=true end
+    local junctions,ordered,I,near={},{},{},{}
+    -- Only visit actual junctions in the second pass. The order is still
+    -- ascending tile ID, including the start of every connected region.
+    for id,t in ipairs(s.tiles) do
+      if t and t.build=="road" and is_junction(s,id,t) then
+        junctions[id]=true
+        ordered[#ordered+1]=id
+      end
     end
-    for id in ipairs(s.tiles) do if junctions[id] and not I[id] then
+    for _,id in ipairs(ordered) do if not I[id] then
       local cluster={tile={},scan={}}
       local marked={}
       local queue={id}
@@ -58,6 +62,12 @@ return function(Sim,Presentation)
     prev={topology=s.topology,junctions=I,near=near,aprons={}}
     cache[s]=prev
     return prev
+  end
+  -- Only carry the graph over a specifically proven unrelated write.
+  -- A mismatched previous revision might also contain a paid road edit.
+  function G.preserve_after_tide(s,previous)
+    local c=cache[s]
+    if c and previous~=nil and c.topology==previous and s.topology==previous+1 then c.topology=s.topology end
   end
   local function center(f)
     return Presentation.xy(f[1],f[2],f[5])

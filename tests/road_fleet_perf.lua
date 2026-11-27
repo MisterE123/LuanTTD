@@ -10,8 +10,8 @@ return function(mod)
     for k,v in pairs(value) do out[k]=copy(v) end
     return out
   end
-  function F.make(lines,count,prepare,choose)
-    Sim.W,Sim.H=128,128
+  function F.make(lines,count,prepare,choose,size)
+    Sim.W,Sim.H=size or 128,size or 128
     local s=Sim.new(1751)
     s.sites={}
     for _,t in ipairs(s.tiles) do

@@ -123,6 +123,31 @@ also exercise bridges, tunnels, opposite lanes, on-road bays, road/tram
 crossings and save/reload. These results measure worker processing, not
 frame rate or a guarantee against live checkpoint-related stutters.
 
+### Do not rebuild the road junction index after unrelated tides
+
+The authoritative tide increments the general terrain revision for each
+batch of physical changes. The native 3D junction guard used to rebuild
+its index after each such batch whenever a vehicle next needed it,
+scanning the entire map twice even when the shore was far from the
+roads. Plain sea, shore, open land, and tree changes with no structure
+or road facility can now carry the last known junction index forward
+one revision. An intervening road edit, or a flood touching a facility,
+span, or object, still invalidates the index. A necessary rebuild scans
+the map once and visits only actual junctions in the second pass, in
+the same tile order. No vehicle occupancy, admission, or tide rules
+change.
+
+On a 512×512 native Luanti worker with 96 paid buses and an actively
+flooding separate shelf, two eight-day comparisons gave median CPU
+**305–307 ms → 68–70 ms** per simulated day. The tide made 209–361 map
+revisions per day; all world values and every vehicle timeline
+matched, including the first 12 station arrivals. This is a benchmark
+with frequent coastal changes, not a general FPS measurement.
+
+```sh
+tests/coastal_road_network_perf_native.sh luantiserver 1cd8c30 ../coastal-road-perf
+```
+
 ## Reuse identical stock road geometry, not pathfinding decisions
 
 In a 192-bus live checkpoint, 144 vehicles held a second copy of an

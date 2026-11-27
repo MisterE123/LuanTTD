@@ -555,7 +555,10 @@ local function coastal_visit(s)
   local trees=s.stock_generated_profile and stock_tree_lifecycle
   local random=trees and function() return M.stock_random_u32(s) end
   local function water(x,z,tick)
-    return coastal_world.visit(s,x+1,z+1,board,tick)
+    local previous=s.topology
+    local changed,plain=coastal_world.visit(s,x+1,z+1,board,tick)
+    if plain then M.preserve_road_junctions_after_tide(s,previous) end
+    return changed
   end
   local sea=live_sea[s]
   if sea and sea.resume_day and s.day<sea.resume_day then sea=nil end
@@ -3005,6 +3008,9 @@ local function road_clock()
       one_way_pose,function(...) return road_replan(...) end,Bay,Junction,M.xy)
   end
   return source_speed
+end
+function M.preserve_road_junctions_after_tide(s,previous)
+  if source_speed then source_speed.preserve_after_tide(s,previous) end
 end
 function M.install_road_bay(s,id) road_clock().bay.install(s,id) end
 function M.road_bay_status(s,id) return s.stock_road_bays and road_clock().bay.report(s,id) end

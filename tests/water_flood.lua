@@ -136,3 +136,19 @@ do
   assert(b.tile(2,9).kind=="void" and not b.flood_target(2,9))
 end
 print("PASS water-target prefilter is identical to full stock classification at the shore")
+
+
+-- The road-admission cache may retain its graph only for other surface
+-- writes that provably did not touch any infrastructure.
+for _,object in ipairs({false,true}) do
+  local s=F.seed(Sim.new(1751))
+  s.corner_grid=T.new(Sim.W,Sim.H,function() return 0 end)
+  local ground=s.tiles[ids(3,10)]
+  if object then ground.stock_landmark={kind="statue",town=1,owner="Survey"} end
+  local before=s.topology
+  local changed,plain=W.visit(s,2,10)
+  assert(changed>0 and ground.terrain=="water" and s.topology==before+1)
+  assert(plain==not object,"Only simple neighbor floods can preserve the junctions")
+  assert(not ground.stock_landmark)
+end
+print("PASS real plain land floods preserve road geometry fingerprints; a flooded town object does not")

@@ -45,9 +45,22 @@ assert(G.check(s,W,{id=2},prev,far,nil,z_at) and reads==0)
 assert(G.check(s,W,{id=1},prev,enter,nil,z_at) and reads==0)
 local clear,height=G.check(s,W,{id=2},prev,enter,nil,z_at)
 assert(not clear and height==0 and reads==1)
+local road_bits=Sim.road_bits
+local checks=0
+Sim.road_bits=function(...) checks=checks+1;return road_bits(...) end
+local before=s.topology
+s.topology=before+1 -- plain tide is known not to touch roads or bays
+G.preserve_after_tide(s,before)
+assert(not G.check(s,W,{id=2},prev,enter,0) and checks==0,
+  "A plain tide should not rescan the road network")
 local old_bits=s.tiles[joint].road_bits
 s.tiles[joint].road_bits=2;s.topology=s.topology+1
-assert(G.check(s,W,{id=2},prev,enter,nil,z_at) and reads==1,"removed junction retained a stale halo")
+before=s.topology
+s.topology=before+1
+G.preserve_after_tide(s,before) -- must not acknowledge the intervening road edit
+assert(G.check(s,W,{id=2},prev,enter,nil,z_at) and reads==1 and checks>0,
+  "Removed junction retained a stale halo through a later tide")
+Sim.road_bits=road_bits
 s.tiles[joint].road_bits=old_bits;s.topology=s.topology+1
 assert(not G.check(s,W,{id=2},prev,enter,nil,z_at) and reads==2,"rebuilt junction missed its halo")
 
