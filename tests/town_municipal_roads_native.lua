@@ -10,7 +10,7 @@ local S,T,G=load_("sim"),load_("openttd/terrain"),load_("openttd/town_growth")
 S.W,S.H=64,64
 local s=S.new(1751)
 s.corner_grid=T.new(64,64,function() return 1 end)
-s.stock_generated_profile={width=64,depth=64,map_height_limit=30}
+s.stock_generated_profile={version=1,width=64,depth=64,map_height_limit=30}
 S.mount_road_bus_market(s,load_("openttd/stock_engine_calendar"),1950)
 s.speed,s.day=1,4
 s.passenger_house_clock=load_("openttd/town_passengers").new_clock(6,6,nil,4*74)
@@ -22,8 +22,10 @@ local crossing=mode=="crossing"
 local companyroad=mode=="companyroad"
 local foreignhouse=mode=="foreignhouse"
 local farmhouse=mode=="farmhouse"
+local rail_underhouse=mode=="railunderhouse"
+local underhouse=mode=="underhouse" or rail_underhouse
 local woodhouse=mode=="woodhouse" or foreignhouse
-local natural_house=woodhouse or farmhouse
+local natural_house=woodhouse or farmhouse or underhouse
 if span then s.passenger_rating_rng={3,3} end -- exercise the stock two-word RNG
 local cx,cz=span and 13 or 11,span and 17 or 12
 local center,protected=S.id(cx,cz),S.id(cx,cz+(natural_house and 3 or 1))
@@ -56,6 +58,39 @@ else
         variant=5,industry=12301,counter=0,fences={[1]=2},slope=0,base=1}
     end
   end
+end
+local under_bore
+local function mount_rail(s)
+  return load_("campaign_simulation_bindings")(S,m).networks(s,load_("openttd/slope"),function(at)
+    local x,z=S.xy(at);return T.tile(s.corner_grid,x,z)
+  end)
+end
+if underhouse then
+  local z=cz-1
+  local x1,x2=cx-3,cx+3
+  for _,corner_z in ipairs{z,z+1} do
+    s.corner_grid.levels[(corner_z-1)*65+x1]=0
+    s.corner_grid.levels[(corner_z-1)*65+x2+1]=0
+  end
+  local start=S.id(x1,z)
+  local layer,book,cash
+  if rail_underhouse then
+    local N=mount_rail(s)
+    local q=assert(N.spans.quote_tunnel(s,"Rail Builder",start))
+    local ok,why=N.spans.commit(s,"Rail Builder",q)
+    assert(ok,why)
+    cash=S.company(s,"Rail Builder").cash
+    layer,book="rail_tunnel_below","stock_rail_spans"
+  else
+    local ok,why=S.road_tunnel(s,"town",start,false,1)
+    assert(ok,why)
+    layer,book="tunnel_below","stock_road_tunnels"
+  end
+  local key=assert(s[layer][S.id(cx,z)])
+  local record=s[book][key]
+  assert(record.start==start and record["end"]==S.id(x2,z) and record.base==0)
+  under_bore={key=key,start=start,finish=record["end"],target=S.id(cx,z),layer=layer,book=book,cash=cash}
+  s.tiles[S.id(cx,cz+1)].stock_industry={id=79}
 end
 s.tiles[protected].stock_industry={id=77}
 local rail_cash,road_cash,paver_cash
@@ -140,6 +175,28 @@ core.register_on_mods_loaded(function()
       local untouched=newroad==S.id(cx,cz-1) and S.id(cx,cz+1) or S.id(cx,cz-1)
       if farmhouse then
         assert(not next_.stock_farm_fields[newroad] and next_.stock_farm_fields[untouched].industry==12301)
+      elseif underhouse then
+        assert(newroad==under_bore.target and next_[under_bore.layer][newroad]==under_bore.key)
+        local bore=assert(next_[under_bore.book][under_bore.key])
+        assert(bore.start==under_bore.start and bore["end"]==under_bore.finish and bore.base==0)
+        if rail_underhouse then
+          assert(S.company(next_,"Rail Builder").cash==under_bore.cash)
+          local N=mount_rail(next_)
+          local rail=N.spans.board(next_,N.lab.board(next_),true)
+          for _,portal in ipairs{bore.start,bore["end"]} do
+            local a=rail.tile(portal)
+            local r=N.follow.follow(rail,{owner="Rail Builder",compatible={[0]=true}},portal,N.track.diagonal_trackdir(a.dir))
+            assert(r.ok and r.tunnel and r.tile==a.other)
+          end
+        else
+          local F=load_("openttd/yapf_road_follow")
+          local road=load_("road_yapf_board")(S,next_,F)
+          for _,portal in ipairs{bore.start,bore["end"]} do
+            local a=road.tile(portal)
+            local r=F.follow(road,{owner="Carrier"},portal,F.direction_trackdir(a.dir))
+            assert(r.ok and r.tunnel and r.tile==a.other)
+          end
+        end
       else assert(next_.tiles[untouched].wood) end
     else
       assert(created.build==target and created.road_town==1 and (not created.owner or created.owner=="town"))
@@ -165,7 +222,7 @@ core.register_on_mods_loaded(function()
         assert(r.ok and r[mode] and r.tile==a.other)
       end
     elseif not natural_house then assert(created.road_bits>0) end
-    assert((crossing or companyroad or not next(next_.companies)) and next_.tiles[protected].stock_industry.id==77)
+    assert((crossing or companyroad or rail_underhouse or not next(next_.companies)) and next_.tiles[protected].stock_industry.id==77)
     if reseed then
       assert(not created.wood and not next_.tiles[center].build)
     elseif not span and not natural_house and not crossing then assert(next_.tiles[center].road_bits~=10) end
@@ -174,6 +231,10 @@ core.register_on_mods_loaded(function()
       assert(ready.ready and ready.day==day)
       assert(client.query({kind="snapshots",windows=view},function(r)
         local found=false
+        if underhouse then
+          local data=r.value[1].registries
+          assert(data[under_bore.layer][newroad]==under_bore.key and data[under_bore.book][under_bore.key].base==0)
+        end
         if farmhouse then
           local fields=assert(r.value[1].registries.stock_farm_fields)
           local untouched=newroad==S.id(cx,cz-1) and S.id(cx,cz+1) or S.id(cx,cz-1)
@@ -213,7 +274,7 @@ core.register_on_mods_loaded(function()
         assert(company.cash==paver_cash-80 and company.stock_town_authority_ratings[1]==482)
         assert(reopened.companies["Rail Builder"].cash==rail_cash)
       end
-      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and projected %s tile %d, preserved private clearance, reopened geometry"):format(farmhouse and "house on former farmland at" or woodhouse and "house on former woodland at" or companyroad and "new junction on company road at" or mode,newroad))
+      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and projected %s tile %d, preserved private clearance, reopened geometry"):format(underhouse and (rail_underhouse and "house above a functioning rail tunnel at" or "house above a functioning road tunnel at") or farmhouse and "house on former farmland at" or woodhouse and "house on former woodland at" or companyroad and "new junction on company road at" or mode,newroad))
       core.request_shutdown("Native municipal road proof passed",false,0)
     end,file))
   end,file))

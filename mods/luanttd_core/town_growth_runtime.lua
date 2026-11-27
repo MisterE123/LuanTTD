@@ -17,12 +17,15 @@ return function(Sim,Terrain,G,B,H)
   local Worldgen=dofile(path.."openttd/town_worldgen.lua")(G,B)
   local function at(layer,id) return layer and layer[id] end
   local function record(t) return t and t.house and t.source_house or nil end
-  local function protected(s,id,t)
+  local function underground(s,id)
+    return at(s.tunnel_below,id) or at(s.rail_tunnel_below,id)
+  end
+  local function protected(s,id,t,above_tunnel)
     return t.stock_canal or t.rail_tracks or t.rail_station_id or t.rail_depot_dir or
       t.level_crossing or t.road_waypoint_id or t.rail_span_id or t.road_tunnel_id or t.road_bridge_id or
       t.stock_industry or t.stock_landmark or t.ship or t.airfield or t.tram or t.signal or
-      at(s.level_crossing_tiles,id) or at(s.bridge_above,id) or at(s.tunnel_below,id) or
-      at(s.rail_bridge_above,id) or at(s.rail_tunnel_below,id) or at(s.aqueduct_above,id)
+      at(s.level_crossing_tiles,id) or at(s.bridge_above,id) or at(s.rail_bridge_above,id) or
+      at(s.aqueduct_above,id) or (not above_tunnel and underground(s,id))
   end
   local function clear_levels(s,id,allow_cover,allow_coast)
     local tile=at(s.tiles,id)
@@ -30,7 +33,7 @@ return function(Sim,Terrain,G,B,H)
     if not tile or tile.terrain~="grass" and tile.terrain~="hill" and not coast or tile.owner or tile.site or
       tile.stock_void or tile.stock_object or (not allow_cover and at(s.stock_farm_fields,id)) or
       tile.wood and not allow_cover or tile.house or tile.source_house or tile.build or tile.station or tile.parcel or
-      tile.road_bits or tile.road_town or protected(s,id,tile) then return end
+      tile.road_bits or tile.road_town or protected(s,id,tile,allow_cover) then return end
     local x,z=Sim.xy(id)
     local slope,base,top=Terrain.tile(s.corner_grid,x,z)
     if slope and slope<16 and (not coast or Sim.town_clear_coast(s,id,false)) then return top,slope,base end
@@ -180,7 +183,7 @@ return function(Sim,Terrain,G,B,H)
       elseif t.build=="road" or t.level_crossing then kind,road_bits="road",Sim.road_bits(s,id)
       elseif t.terrain=="water" then kind="water"
       elseif t.wood then kind="trees"
-      elseif available(s,id,t) then kind="clear"
+      elseif available(s,id,t) or underground(s,id) and clear_levels(s,id,true,true) then kind="clear"
       else kind="object" end
       local plain_rail=kind=="rail" and t.build=="stock_rail" and not t.rail_station_id and
         not t.rail_depot_dir and not t.rail_waypoint_id and not t.rail_span_id

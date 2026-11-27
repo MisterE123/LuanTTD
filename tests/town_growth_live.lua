@@ -210,3 +210,27 @@ do
     and s.tiles[id].stock_clear_density==0 and s.corner_grid.revision==rev+1)
   print("PASS municipal crop-field grading charges stock clear prices against its cap and clears only modified fields")
 end
+
+
+-- Living above an underground span does not authorize grading through
+-- its roof or building beneath a separate overpass.
+do
+  local s=world()
+  local x,z=32,32
+  local id=Sim.id(x,z)
+  s.corner_grid=Terrain.new(Sim.W,Sim.H,function()return 2 end)
+  s.stock_generated_profile={map_height_limit=30}
+  for dx=-2,2 do for dz=-2,2 do s.tiles[Sim.id(x+dx,z+dz)]={h=2,terrain="hill"} end end
+  s.tunnel_below={[id]=1}
+  s.rail_tunnel_below={}
+  local b=W.road_board(s)
+  assert(b.clear_quote(x,z,"house"))
+  assert(not b.terraform_land(x,z,15,false,false) and s.corner_grid.revision==0 and s.tunnel_below[id]==1)
+  s.tunnel_below[id]=nil
+  s.rail_tunnel_below[id]=2
+  assert(b.clear_quote(x,z,"house"))
+  assert(not b.terraform_land(x,z,15,false,false) and s.corner_grid.revision==0 and s.rail_tunnel_below[id]==2)
+  s.bridge_above={[id]=3}
+  assert(not b.clear_quote(x,z,"house"))
+  print("PASS municipal houses can sit above road or rail bores while grading and overhead bridges remain protected")
+end

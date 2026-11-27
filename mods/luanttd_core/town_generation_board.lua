@@ -160,6 +160,11 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
           if not t or (t.kind~="clear" and t.kind~="trees") or t.owner or t.bridge_above or
               live and not live.houseable(u,v) then return nil,"TOWN_PROTECTED_TERRAIN" end
           local id=Sim.id(u,v)
+          -- A house can occupy the independent surface over a bore.
+          -- Grading must still preserve its cover and remains excluded.
+          if (s.tunnel_below and s.tunnel_below[id]) or (s.rail_tunnel_below and s.rail_tunnel_below[id]) then
+            return nil,"TOWN_PROTECTED_TERRAIN"
+          end
           return Sim.road_site_clear_cost(s.tiles[id],s.stock_farm_fields and s.stock_farm_fields[id])
         end,
       })

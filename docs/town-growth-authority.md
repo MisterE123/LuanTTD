@@ -136,6 +136,13 @@ The field and its fence disappear only from cleared tiles; the farm
 and neighboring fields remain. A native worker builds on a crop field
 and reopens the checkpoint with the house and adjacent field intact.
 
+An underground road or railway does not occupy its surface tile.
+Ordinary live housing can grow above either bore on clear land;
+grading that could alter its roof and construction beneath an
+overhead bridge remain blocked. Separate native worker replays
+grow a house above each mode, reopen both layers and check routing
+through both portals without changing the infrastructure owner.
+
 Completed houses age on the stock year boundary and cap at 255; unfinished
 buildings do not age. The rebuild check uses the saved completion year to
 calculate the same age without a map-wide scan. The native generator test
