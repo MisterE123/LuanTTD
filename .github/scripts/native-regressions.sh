@@ -17,6 +17,7 @@ case "${1:-}" in
   startup)
     luantiserver --version
     lua5.1 tests/town_growth_stock_replay.lua
+    lua5.1 tests/town_industry_month_order.lua
     lua5.1 tests/road_stock_loading_live.lua
     lua5.1 tests/timber_industry.lua
     lua5.1 tests/town_municipal_roads.lua

@@ -106,8 +106,10 @@ return function(Sim,H,Packets,Rating,Mail)
       Stats.supply(s,record,cargo,0,moved)
     end
     local random=function() return Rating.random_u32(s) end
-    local update_rating=function() Rating.advance(s,1,mail and mail.step_rating or nil) end
     local clock=s.passenger_house_clock
+    local function update_rating(tick)
+      Rating.advance(s,1,mail and mail.step_rating or nil,tick or clock.counter)
+    end
     local physical=Sim.W==2^clock.log_x and Sim.H==2^clock.log_y and s.tiles
     local lift_registry=s.stock_town_lifts
     local settings={}
@@ -139,7 +141,7 @@ return function(Sim,H,Packets,Rating,Mail)
     end
     local rated=not animate and update_rating or function(tick)
       animate(tick)
-      update_rating()
+      update_rating(tick)
     end
     local landscape_visit=hooks and hooks.landscape_tile
     local landscape_tile=landscape_visit

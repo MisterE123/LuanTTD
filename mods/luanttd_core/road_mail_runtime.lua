@@ -7,6 +7,7 @@
 -- stations, and the game-wide price and RNG streams remain host concerns.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local sector=dofile(mod.."/catchment_sectors.lua")
+local history=dofile(mod.."/openttd/station_acceptance_history.lua")
 return function(Sim,H,Packets,Income,Kernel,Station)
   local M={}
   M.cargo={key="mail",id=2,bitnum=2,label="MAIL",weight_sixteenths=4,
@@ -88,6 +89,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     end
     return g
   end
+  function M.accepted(st) history.record(goods(st)) end
   function M.offer(st)
     if not M.truck_stop(st) then return end
     local g=goods(st)

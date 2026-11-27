@@ -316,6 +316,13 @@ loop of the last tick in the 74-tick batch entering the new month.
 Funding and roadwork expiry, station service ages and authority ratings
 no longer start 73 ticks early. An expiry probe observes the actual
 tick callbacks on both sides of the boundary.
+The mounted Industry and Station monthly handlers now run before Town
+on that same tick. The generated-world test checks ten actual industry
+cargo histories in January's final 73 ticks and at February's first tick.
+Station acceptance keeps the stock last-month flag separately from
+lifetime acceptance and rotates a shared physical goods record once.
+The daily industry opening scheduler and subsidies are still separate
+from this verified month-boundary sequence.
 
 The [numeric snapshots](../tests/fixtures/town-growth-rc1-1950.lua) can be
 regenerated with [the reference extractor](../tools/record_rc1_town_reference.py)

@@ -91,6 +91,8 @@ end
 
 return function(Sim,Kernel,Packets)
   local R={day_ticks=Kernel.day_ticks,random_u32=random_u32,random_range=mul_high,truncate=truncate}
+  local base=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+  local history=dofile(base.."/openttd/station_acceptance_history.lua")
   -- Cache units from the authored engines, shared in value with road YAPF.
   -- The Town Flyer uses stock MPS Regal 112 / 2; the other visual road models
   -- are LuanTTD variants. Vehicle purchase date is our build date.
@@ -137,6 +139,7 @@ return function(Sim,Kernel,Packets)
   end
   function R.loaded(st) st.time_since_load=0;st.last_vehicle_type="road" end
   function R.unloaded(st) st.time_since_unload=0 end
+  function R.accepted(s,st) history.record(goods(s,st)) end
 
   function R.offer(s,st)
     if st.mode~="road" or st.stop_type=="truck" then return end
@@ -187,10 +190,17 @@ return function(Sim,Kernel,Packets)
     return Kernel.modify_around(rows,owner,x,y,-160,30)
   end
 
-  function R.advance(s,ticks,other_goods)
+  function R.advance(s,ticks,other_goods,absolute_tick)
     local events={}
     for _,st in pairs(s.stations) do
       if st.mode=="road" then
+        if absolute_tick and (absolute_tick+(st.stock_station_id or st.id-1))%250==0 then
+          if st.passenger_rating_state then history.big_tick(st.passenger_rating_state) end
+          if st.mail_rating_state then history.big_tick(st.mail_rating_state) end
+          for _,entry in pairs(st.goods or {}) do
+            if type(entry)=="table" then history.big_tick(entry) end
+          end
+        end
         local phase=st.passenger_rating_phase or 0
         -- Generate and merge each station's events in chronological order.
         -- Pool IDs break ties as stock BaseStation::Iterate() does.

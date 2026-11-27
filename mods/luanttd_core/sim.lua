@@ -3773,6 +3773,7 @@ local function passenger_modules()
   base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
   passenger_rules=dofile(base.."openttd/passengers.lua")
   income_rules=dofile(base.."openttd/income.lua")
+  M.stock_station_acceptance_history=dofile(base.."openttd/station_acceptance_history.lua")
   local kernel=dofile(base.."openttd/station_rating.lua")
   local house=dofile(base.."openttd/town_passengers.lua")
   rating_runtime=dofile(base.."station_rating_runtime.lua")(M,kernel,passenger_rules)
@@ -5324,7 +5325,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
   if s.road_stock_house_supply then
     town_passengers.start(s)
     clock=function(callback)
-      if not commercial and not coal and not timber and not growth and not tide then return town_passengers.day(s,callback,{traverse=traverse,tick_pulse=tick_pulse}) end
+      if not commercial and not coal and not timber and not growth and not tide and not month_tick then return town_passengers.day(s,callback,{traverse=traverse,tick_pulse=tick_pulse}) end
       local works=growth and growth.world.reconstruction
       local work_state=works and s.stock_town_growth.reconstruction
       local road_ground,road_tick
@@ -5600,6 +5601,48 @@ function M.position(s,v)
   end
   return v.depot or (s.stations[v.station] and s.stations[v.station].tile)
 end
+-- RC1 Industry monthly timer rolls production and closure before the
+-- Station and Town timers on the same economy tick.
+function M.stock_industry_month(s,coal,timber,y,month)
+  if coal then coal.month(y,{frozen=s.stock_coal_frozen}) end
+  -- The placed forest/sawmill preview keeps its scenario industries
+  -- active. Dynamic site opening/closure is a separate world command.
+  if timber then
+    if timber.mixed then
+      local oil_month={smooth=true,frozen=s.stock_oil_frozen==true}
+      local farm_month={smooth=s.stock_farm_smooth~=false,frozen=s.stock_farm_frozen==true}
+      local timber_month={frozen=true}
+      timber.month(y*12+month,y,{policy={oil_well=oil_month,oil_refinery=oil_month,
+        farm=farm_month,factory=farm_month,forest=timber_month,sawmill=timber_month}})
+      if M.road_oil_active(s) then
+        s.changed=s.changed or {}
+        for _,id in ipairs(oil.world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+      end
+      if M.road_heavy_active(s) then
+        s.changed=s.changed or {}
+        for _,id in ipairs(farm.heavy.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+      end
+      if M.road_farm_active(s) then
+        s.changed=s.changed or {}
+        for _,id in ipairs(farm_world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+      end
+    elseif M.road_oil_active(s) then
+      s.stock_oil_month=(s.stock_oil_month or 0)+1
+      timber.month(s.stock_oil_month,y,{smooth=true,frozen=s.stock_oil_frozen==true})
+      s.changed=s.changed or {}
+      for _,id in ipairs(oil.world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+    elseif M.road_farm_active(s) then
+      s.stock_farm_month=(s.stock_farm_month or 0)+1
+      timber.month(s.stock_farm_month,y,{smooth=s.stock_farm_smooth~=false,frozen=s.stock_farm_frozen==true})
+      s.changed=s.changed or {}
+      for _,id in ipairs(farm_world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+    else
+      -- Calendar months are not 30 days long when the stock vehicle
+      -- market is mounted. One stable ordinal for the actual month.
+      timber.month(y*12+month,y,{frozen=true})
+    end
+  end
+end
 function M.daily(s,traverse,tick_pulse)
   local live=tick_pulse~=nil
   s.day=s.day+1
@@ -5610,26 +5653,21 @@ function M.daily(s,traverse,tick_pulse)
       automatic_road_service(s,faults,v,f,diff,date,rnd)
     end or nil)
   end
+  local y,month,calendar_day=M.date(s)
+  local new_month=s.stock_bus_market and calendar_day==1 or not s.stock_bus_market and s.day%30==0
+  local stock_service=M.road_stock_service_active(s)
+  local exact_economy=s.stock_generated_profile and s.stock_bus_market and s.road_stock_house_supply and stock_service
   local growth=town_growth_mount[s]
-  local month_tick
+  local town_month
   if growth then
-    local world=growth.world
-    world.prepare_day(s)
-    local month=growth.new and world.month_due(s)
-    if month then
-      local function run_month()
-        world.month(s,month,function() return rating_runtime.random_u32(s) end)
-      end
-      if s.stock_generated_profile and s.stock_bus_market and s.road_stock_house_supply and M.road_stock_service_active(s) then
-        -- RC1 GameLoop: animate, advance economy date and run the
-        -- monthly timers, then visit tiles/vehicles/town on that tick.
-        -- Sim.daily batches the 74 ticks ending on the new date.
-        month_tick=run_month
-      else
-        run_month()
-      end
-    end
+    growth.world.prepare_day(s)
+    town_month=growth.new and growth.world.month_due(s)
   end
+  local function roll_town_month()
+    M.stock_station_acceptance_history.rotate_host(s,FreightKinds.all)
+    growth.world.month(s,town_month,function() return rating_runtime.random_u32(s) end)
+  end
+  if town_month and not exact_economy then roll_town_month() end
   if s.corner_grid then
     load_road_rules()
     for _,c in pairs(s.companies) do
@@ -5652,7 +5690,6 @@ function M.daily(s,traverse,tick_pulse)
       end
     end
   end
-  local stock_service=M.road_stock_service_active(s)
   local coal,freight,timber,freighter,industry_train
   if M.rail_coal_active(s) then
     town_passengers.start(s)
@@ -5762,7 +5799,18 @@ function M.daily(s,traverse,tick_pulse)
     c.stock_money_fraction=remainder
     if whole~=0 then debit(c,whole,"road_run");v.expense=v.expense+whole;HQStats.record(s,v,-whole) end
   end
-  local stock_work
+  local stock_work,month_tick,industries_rolled
+  if exact_economy and (town_month or new_month and (coal or timber)) then
+    -- Advance the 74-tick batch into the new date after animation, before
+    -- the same tick's tile, loading, vehicle and town work.
+    month_tick=function()
+      if new_month then
+        M.stock_industry_month(s,coal,timber,y,month)
+        industries_rolled=true
+      end
+      if town_month then roll_town_month() end
+    end
+  end
   local commercial=paid_transport_day(s,live)
   if stock_service then
     passenger_modules()
@@ -5888,47 +5936,8 @@ function M.daily(s,traverse,tick_pulse)
     local v=s.fleet[id];idle_or_plan(s,v,traffic)
     if v.route then v.last_departure=s.day end
   end
-  local y,month,calendar_day=M.date(s)
-  local new_month=s.stock_bus_market and calendar_day==1 or not s.stock_bus_market and s.day%30==0
   if new_month then
-    if coal then coal.month(M.date(s),{frozen=s.stock_coal_frozen}) end
-    -- The placed forest/sawmill preview keeps its scenario industries
-    -- active. Dynamic site opening/closure is a separate world command.
-    if timber then
-      if timber.mixed then
-        local oil_month={smooth=true,frozen=s.stock_oil_frozen==true}
-        local farm_month={smooth=s.stock_farm_smooth~=false,frozen=s.stock_farm_frozen==true}
-        local timber_month={frozen=true}
-        timber.month(y*12+month,y,{policy={oil_well=oil_month,oil_refinery=oil_month,
-          farm=farm_month,factory=farm_month,forest=timber_month,sawmill=timber_month}})
-        if M.road_oil_active(s) then
-          s.changed=s.changed or {}
-          for _,id in ipairs(oil.world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
-        end
-        if M.road_heavy_active(s) then
-          s.changed=s.changed or {}
-          for _,id in ipairs(farm.heavy.sweep_closed(s)) do s.changed[#s.changed+1]=id end
-        end
-        if M.road_farm_active(s) then
-          s.changed=s.changed or {}
-          for _,id in ipairs(farm_world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
-        end
-      elseif M.road_oil_active(s) then
-        s.stock_oil_month=(s.stock_oil_month or 0)+1
-        timber.month(s.stock_oil_month,y,{smooth=true,frozen=s.stock_oil_frozen==true})
-        s.changed=s.changed or {}
-        for _,id in ipairs(oil.world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
-      elseif M.road_farm_active(s) then
-        s.stock_farm_month=(s.stock_farm_month or 0)+1
-        timber.month(s.stock_farm_month,y,{smooth=s.stock_farm_smooth~=false,frozen=s.stock_farm_frozen==true})
-        s.changed=s.changed or {}
-        for _,id in ipairs(farm_world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
-      else
-        -- Calendar months are not 30 days long when the stock vehicle
-        -- market is mounted. One stable ordinal for the actual month.
-        timber.month(y*12+month,y,{frozen=true})
-      end
-    end
+    if not industries_rolled then M.stock_industry_month(s,coal,timber,y,month) end
     s.changed=s.changed or {}
     for _,site in ipairs(s.sites) do
       if not growth and site.population and site.service>=12 then

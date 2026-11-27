@@ -122,6 +122,8 @@ for _,town in pairs(s.stock_town_growth.towns) do
 end
 assert(received==s.companies.Test.paid_units and accepted==received and received>0,
   "Genuine road unloading must report each paid passenger exactly once")
+assert(s.stations[s.tiles[B].station].passenger_rating_state.current_month,
+  "Actual passenger unloading must set the stock station acceptance bit")
 print(("PASS: native 74-tick clock one bay blocked across reload, bus arrival %d, payout %d, and same-day onward departure")
   :format(arrival_tick,first_fare_tick))
 

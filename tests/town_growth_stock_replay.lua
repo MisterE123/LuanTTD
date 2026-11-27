@@ -223,16 +223,32 @@ local previous_rate=town.growth_rate
 local before=s.passenger_house_clock.counter
 local old_month=s.stock_town_growth.last_month
 local seen=0
+local goods_entry=load_module("openttd/station_rating").new()
+goods_entry.ever_accepted,goods_entry.current_month=true,true
+-- A road/combined facade may refer to the same shared GoodsEntry in two
+-- views. The Station timer rotates that actual entry once. The fixture
+-- adds no service or transport course to the stock route replay above.
+local station={id=999,tile=1,mode="road",stock={},last_service={},goods={passenger=goods_entry},
+  passenger_rating_state=goods_entry}
+s.stations[station.id]=station
 Sim.daily(s,nil,function(tick)
   seen=seen+1
   if tick<before+74 then
     assert(s.stock_town_growth.last_month==old_month and town.fund_buildings_months==1 and town.growing,
       "Funding expired before the economy date changed")
     assert(town.grow_counter==1000-(tick-before),"Pre-rollover growth countdown did not run")
+    assert(goods_entry.current_month and not goods_entry.last_month)
   else
     assert(tick==before+74 and s.stock_town_growth.last_month==old_month+1)
     assert(town.fund_buildings_months==0 and not town.growing,"Month failed to expire funding on its boundary tick")
+    assert(not goods_entry.current_month and goods_entry.last_month and goods_entry.ever_accepted)
   end
 end)
 assert(seen==74 and town.grow_counter==G.adjust_counter(1000-73,town.growth_rate,previous_rate))
+for _=1,31 do
+  if s.stock_town_growth.last_month~=old_month+1 then break end
+  Sim.daily(s)
+end
+assert(s.stock_town_growth.last_month==old_month+2 and not goods_entry.last_month and goods_entry.ever_accepted,
+  "After a month with no new deliveries the previous acceptance must expire")
 print("PASS ordinary expiry preserves the first 73 growth ticks, then runs before the stock month-boundary tick")
