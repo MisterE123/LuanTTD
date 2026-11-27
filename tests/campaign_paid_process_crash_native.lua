@@ -90,29 +90,43 @@ local function receive_ready()
     assert(phase=="abort")
     ask({kind="command",command={kind="company_open"}},function()
       ask({kind="company"},function(c)
-        local w
-        for z=2,62 do
-          for x=2,57 do
+        -- Generation is allowed to change which straight strips are
+        -- usable. Only the authoritative quote can prove a candidate has
+        -- five billable changes (not a partial drag alongside an obstacle).
+        local x,z=1,2
+        local function next_candidate()
+          while z<=62 do
+            x=x+1
+            if x>57 then x,z=2,z+1 end
+            if z>62 then break end
             local first=Sim.id(x,z)
             local good=true
             for d=0,4 do
               local t=S.tiles[first+d]
               if not t or t.terrain=="water" or t.wood or t.house or t.build or t.site or t.stock_industry
-                  or api.terrain.tile(first+d)~=0 then good=false;break end
+                  or t.stock_landmark or t.stock_object or api.terrain.tile(first+d)~=0 then
+                good=false;break
+              end
             end
-            if good then w={x=x,z=z,first=first,before=c.value.cash};break end
+            if good then return x,z,first end
           end
-          if w then break end
         end
-        assert(w,"no flat unoccupied generated corridor")
-        local req={tool="drag",first=w.first,last=w.first+4,axis=0,start_half=false,end_half=true}
-        ask({kind="road_quote",request=req},function(q)
-          w.build=q.value.cost
-          assert(w.build>0 and #q.value.tiles==5)
-          write_witness(w)
-          ask({kind="command",command={kind="road_commit",revision=q.revision,request=req,quote=q.value}},
-            function()error("unpublished fixture unexpectedly acknowledged placement")end)
-        end)
+        local function probe()
+          local u,v,first=next_candidate()
+          assert(first,"No authoritative five-tile construction corridor on generated terrain")
+          local req={tool="drag",first=first,last=first+4,axis=0,start_half=false,end_half=true}
+          assert(worker.query({kind="road_quote",player=owner,request=req},function(q)
+            local value=q.ok and q.value
+            if not value or value.cost<=0 or #value.tiles~=5 then return probe() end
+            local footprint={}
+            for _,id in ipairs(value.tiles) do footprint[id]=true end
+            for d=0,4 do if not footprint[first+d] then return probe() end end
+            write_witness({x=u,z=v,first=first,before=c.value.cash,build=value.cost})
+            ask({kind="command",command={kind="road_commit",revision=q.revision,request=req,quote=value}},
+              function()error("unpublished fixture unexpectedly acknowledged placement")end)
+          end))
+        end
+        probe()
       end)
     end)
   end
