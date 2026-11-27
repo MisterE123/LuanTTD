@@ -509,7 +509,7 @@ uses **one stock RC1 executable run**, not separate paused games. A
 normal 64×64 Temperate town has two drive-through stations served by an
 MPS Regal. Each numeric observation is taken after a complete tick.
 Starting with its actual January state and loan, the normal LuanTTD
-runtime matches six full checkpoints through June 1: both RNG words,
+runtime matches seven full checkpoints through July 1: both RNG words,
 every recorded town house and road, the common height grid, growth and
 rebuild countdowns, town ratings and cargo effects, both station
 clocks and ratings, house Passenger and Mail generation/collection,
@@ -528,9 +528,11 @@ invented balance percentage and full-map per-tile upkeep scan.
 12,012 cases. Source inflation, bankruptcy and optional
 infrastructure maintenance are separate systems.
 
-July 1 matches the physical town and its clocks: the original
-10-house town gains the same 11th house on the same parcel, with
-identical construction state. The July figures are **not** a full
-economy match yet; stock has delivered 119 paying passengers
-and the host has 121. The game is still being compared across longer
-and multi-mode runs, not declared completely stock.
+By July 1 the original 10-house town gains the same 11th house on
+the same parcel, with identical construction state. Both have
+delivered 119 paying passengers. The June maintenance visit also
+matches: the fixture restores the stock 150-day interval and actual
+engine reliability curve rather than using a fresh engine model.
+Service dates, wear and breakdown state agree with the original
+alongside the full town and economic checks. This is a road-only
+Temperate baseline, not full cross-mode or new-game parity.

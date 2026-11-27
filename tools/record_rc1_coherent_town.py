@@ -38,6 +38,8 @@ def record(path):
     received=town['received'][1]
     observations.update(
         rating=town['ratings'][0],
+        vehicle_service=[v[k] for k in ('date_of_last_service','date_of_last_service_newgrf',
+                                         'breakdowns_since_last_service')],
         accepted=[e['accepted'] for e in town_passenger['history'][:2]] if town_passenger else [0,0],
         received=[received[k] for k in ('new_act','old_act','new_max','old_max')],
         quarters=quarters, lifetime=sum(r[2] for r in quarters),
@@ -59,6 +61,20 @@ def main():
     assert first[0]==1354
     initial,runs=read(a.snapshots[0],True)
     initial['quarter']=first[1]['quarters'][0]
+    company=decode_tables(a.snapshots[0].read_bytes(),(b'PLYR',))[b'PLYR'][0]
+    saved_options=company['settings'][0]
+    initial['service_options']={
+        'interval':saved_options['settings.vehicle.servint_roadveh'],
+        'percent':saved_options['settings.vehicle.servint_ispercent'],
+    }
+    e=decode_tables(a.snapshots[0].read_bytes(),(b'ENGN',))[b'ENGN'][116]
+    assert e['flags'] & 1 and e['company_avail'] & 1
+    initial['engine']={
+        'startup_age':e['age'],'intro_date':e['intro_date'],
+        'phase1':e['duration_phase_1'],'phase2':e['duration_phase_2'],'phase3':e['duration_phase_3'],
+        'reliability_start':e['reliability_start'],'reliability_max':e['reliability_max'],
+        'reliability_final':e['reliability_final'],'reliability_decay':e['reliability_spd_dec'],
+    }
     for _,state,heights in (first,*rest):
         state['grade_changes']={i:h for i,h in enumerate(heights) if h!=first[2][i]}
     header="""-- One continuous run of OpenTTD 16.0-RC1 07b339c0aaeb0a87be9490b2f1c3f17c6b00b837.

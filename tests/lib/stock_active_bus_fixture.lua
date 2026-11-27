@@ -6,6 +6,10 @@ local Art=load_module("stock_town_art")
 local calendar=load_module("openttd/stock_engine_calendar")
 local bind=load_module("campaign_simulation_bindings")(Sim,m:sub(1,-2))
 local first_tick=1354
+local function road_opts(stock)
+  return {start_year=1950,breakdowns=1,service_interval=stock and stock.interval or 0,
+          service_percent=stock ~= nil and stock.percent==1}
+end
 
 -- GetHouseNorthPart, town_cmd.cpp. Offsets follow the stock 1x2 and
 -- four-tile record order, not the Luanti artwork's part indices.
@@ -115,8 +119,15 @@ local function initialize(ref,with_faults)
   s.passenger_rating_rng={opening.clock[4],opening.clock[5]}
   s.stock_tree_tick_counter,s.stock_extra_tree_placement=a.clock[6],a.settings[2]
   s.passenger_house_clock=H.new_clock(6,6,opening.clock[3],first_tick)
-  if with_faults then bind.road(s,{start_year=1950,breakdowns=1,service_interval=0})
+  if with_faults then bind.road(s,road_opts(ref.service_options))
   else Sim.mount_road_bus_market(s,calendar,1950) end
+  if a.engine then
+    -- Engine reliability phases depend on startup randomisation, a
+    -- separate input from the saved vehicle's actual reliability.
+    local model=s.stock_bus_market.models[116]
+    for key,value in pairs(a.engine) do model[key]=value end
+    model.expiry_age=model.phase1+model.phase2+model.phase3
+  end
   s.day=opening.clock[2]-712223
   s.road_economy,s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading=true,true,true,true
   for k,id in ipairs(pending_stops) do
@@ -182,10 +193,10 @@ function F.open(initial,with_faults)
   end
   return s,towns,v,owner
 end
-function F.reopen(s,with_faults)
+function F.reopen(s,with_faults,service_options)
   local Codec=load_module("packed_campaign")
   local next=Codec.decode(Codec.encode(s))
-  if with_faults then bind.road(next,{start_year=1950,breakdowns=1,service_interval=0})
+  if with_faults then bind.road(next,road_opts(service_options))
   else Sim.mount_road_bus_market(next,calendar,1950) end
   bind.towns(next)
   bind.flood(next)
