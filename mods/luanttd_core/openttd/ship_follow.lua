@@ -65,11 +65,14 @@ return function(Track)
   end
   W.exit_direction=Track.exit_side
 
-  function W.at(board,id,side)
+  local function track_tile(board,id,side)
     local t=id~=nil and board.tile(id) or nil
     if not t then return 0 end
     local x,z=board.xy(id)
-    return W.status(t,x,z,side)
+    return W.status(t,x,z,side),t
+  end
+  function W.at(board,id,side)
+    return (track_tile(board,id,side))
   end
 
   -- CFollowTrackWater: ships allow 90-degree transitions, have no forced
@@ -79,11 +82,11 @@ return function(Track)
     local exit=Track.valid_trackdir(td) and Track.exit_side(td) or nil
     local r={old_tile=old_id,old_td=td,exit=exit,tile=nil,trackdirs=0,skip=0,
       bridge=false,tunnel=false,station=false,error=W.EC_NONE,ok=false}
-    if exit==nil or not Track.has(W.at(board,old_id),td) then
-      r.error=W.EC_NO_WAY
-      return r
-    end
-    local old=board.tile(old_id)
+    if exit==nil then r.error=W.EC_NO_WAY;return r end
+    -- The native board resolves shared corners and water facilities to
+    -- make this record. Use that same read for geometry and track mask.
+    local old_dirs,old=track_tile(board,old_id)
+    if not Track.has(old_dirs,td) then r.error=W.EC_NO_WAY;return r end
     if old.kind=="aqueduct" and old.dir==exit then
       r.tile=old.other
       r.skip=old.skip or 0
@@ -91,13 +94,12 @@ return function(Track)
     else
       r.tile=board.adjacent(old_id,exit)
     end
-    local trackdirs=W.at(board,r.tile)
+    local trackdirs,next_tile=track_tile(board,r.tile)
     r.trackdirs=Track.intersect(trackdirs,Track.reachable(exit))
     if r.trackdirs==0 then
       r.error=W.EC_NO_WAY
       return r
     end
-    local next_tile=board.tile(r.tile)
     if next_tile.kind=="aqueduct" and not r.bridge and next_tile.dir~=exit then
       r.error=W.EC_NO_WAY
       return r

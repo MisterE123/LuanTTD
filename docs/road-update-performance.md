@@ -510,3 +510,27 @@ about 25 ms, and the 95th percentile varied between runs. This is a
 tail-latency safeguard, not a simulation CPU gain or a renderer test.
 The owner-loop regression covers the same save-plus-day sequence with
 a deterministic clock, including fast views and durable edits.
+
+### Reuse the stock follower while rating ship path nodes
+
+OpenTTD 16.0-RC1 passes a track follower from
+`CYapfBaseT::AddMultipleNodes` to `AddNewNode` and then to the ship's
+`PfCalcCost`. The Lua port now does the same instead of reading and
+following the same movement edge again for every possible child. The
+follower also reuses its physical tile descriptions for geometry and
+track masks. Trace reconstruction still resolves the original edge,
+including skipped aqueduct tiles; the shared road search is unchanged.
+
+On a native Luanti async worker, eight alternating batches of 22 searches
+with real map reads and trace reconstruction took a median **3.47 s →
+2.11 s** (about 39% less elapsed time). The routes, costs, search limits
+and closed-node counts matched on those searches. Separate tests cover
+locks, aqueducts, alternate berths and commercial service with a saved
+cargo load. This fixture measures route planning, not the whole
+simulation or the rendering rate. To rerun it against the pre-change
+version:
+
+```sh
+tests/ship_yapf_perf_native.sh "$(command -v luantiserver)" \
+  f38b4d8d934b3904555b24f8a9a3570dfac46183 /tmp/ship-routing-bench
+```

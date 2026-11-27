@@ -72,12 +72,12 @@ return function(Track,Water,SearchFactory)
     return node.cost+math.min(dx,dz)*C.TILE_CORNER_LENGTH+(math.abs(dx-dz)-1)*(C.TILE_LENGTH/2)
   end
 
-  -- YAPF ships have one tile per node (except for a structure skip).
-  -- The shared stock base's existing Lua API doesn't pass the follower
-  -- result to the cost callback, so recompute the same pure transition.
-  function C.calc(board,v,_,node,settings,max_cost,record)
+  -- RC1 YapfShip::PfCalcCost charges skipped aqueduct tiles from the
+  -- same follower that expanded this node. Trace replay can reconstruct
+  -- its one transition because it receives no live follower.
+  function C.calc(board,v,_,node,settings,max_cost,record,follower)
     local parent=node.parent
-    local f=Water.follow(board,v,parent.last_tile,parent.last_td)
+    local f=follower or Water.follow(board,v,parent.last_tile,parent.last_td)
     if not f.ok or f.tile~=node.tile or not Track.has(f.trackdirs,node.td) then return false end
     node.cost=parent.cost+C.tile_cost(board,v,node.tile,node.td,parent.last_td,f.skip,settings)
     if max_cost and max_cost>0 and node.cost>max_cost then return false end

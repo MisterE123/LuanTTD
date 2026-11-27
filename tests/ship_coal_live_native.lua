@@ -85,13 +85,14 @@ local function qa()
   local a=assert(N.build(S,owner,"dock",id(8,32)))
   local z=assert(N.build(S,owner,"dock",id(5,32)))
   local d=assert(N.build(S,owner,"depot",id(12,34),0))
-  local conflict=assert(N.build(S,owner,"dock",id(6,32)))
+  local conflict=assert(N.build(S,owner,"dock",id(6,32),nil,{adjacent=true}))
   local conflict_depot=assert(N.build(S,owner,"depot",id(15,34),0))
   assert(C.dock(a.id).sources[1]==mine.id and C.dock(z.id).accepts)
   -- North inlet passenger pilot remains a separate actor; its private
   -- catalogue and saved identity must not be overwritten by the Yate.
   local fa=assert(N.build(S,ferry_owner,"dock",id(29,3)))
-  local fz=assert(N.build(S,ferry_owner,"dock",id(29,4)))
+  -- This test needs two orders, not two piers in one station.
+  local fz=assert(N.build(S,ferry_owner,"dock",id(29,4),nil,{adjacent=true}))
   local fd=assert(N.build(S,ferry_owner,"depot",id(24,4),0))
   assert(not api.shipyard.start(ferry_owner,fd.id,fa.id,fz.id))
   local fc=Sim.company(S,ferry_owner)

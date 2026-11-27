@@ -72,6 +72,20 @@ local found,best=S.find(B,ship,id(9,12),T.trackdirbit(sw),d)
 assert(found and best.cost==1400)
 local route=S.trace(B,ship,d,best)
 assert(#route==4 and route[2].tile==a and route[3].tile==z)
+do
+  local tile,follow=B.tile,W.follow
+  local reads,calls=0,0
+  B.tile=function(id) reads=reads+1;return tile(id) end
+  local across=follow(B,ship,a,sw)
+  assert(across.ok and across.skip==4 and reads==2,"Read each end of an aqueduct once")
+  assert(select("#",W.at(B,a))==1)
+  W.follow=function(...) calls=calls+1;return follow(...) end
+  local hit,again,result=S.find(B,ship,id(9,12),T.trackdirbit(sw),d)
+  assert(hit and again.cost==best.cost and calls<=result.closed_count+1,
+    "Cost evaluation must reuse the expansion follower")
+  W.follow,B.tile=follow,tile
+end
+
 
 -- Stock line choice reacts to speed fractions and penalized turns, not
 -- just shortest tiles. All water by the 'southern' curve is a canal.

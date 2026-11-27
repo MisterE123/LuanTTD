@@ -71,8 +71,10 @@ return function(F,C)
       n.key=key(td)
       if not (open[origin] and open[origin][n.key]) then include(n) end
     end
-    local function add(n)
-      if not C.calc(board,vehicle,destination,n,settings,options.max_cost) then return end
+    local function add(n,follower)
+      -- RC1 CYapfBaseT::AddNewNode passes the existing track follower
+      -- to PfCalcCost; road cost can still follow its longer segment.
+      if not C.calc(board,vehicle,destination,n,settings,options.max_cost,nil,follower) then return end
       n.estimate=C.estimate(board,destination,n)
       if C.detect(board,destination,n.last_tile,n.last_td) then
         if not best_dest or n.estimate<best_dest.estimate then best_dest=n end
@@ -109,7 +111,7 @@ return function(F,C)
         for _,td in ipairs(tds) do
           local child=new_node(n,f.tile,td,#tds>1)
           child.key=key(td)
-          add(child)
+          add(child,f)
         end
       end
       if cap==0 or closed_count<cap then
