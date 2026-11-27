@@ -82,13 +82,32 @@ core.register_on_mods_loaded(function()
     -- Obstruct the exact atomic destination, not the source or existing
     -- world. The worker must not report success for lost prepared data.
     prepared.clear()
-    assert(core.mkdir(core.get_worldpath().."/luanttd-prepared-campaign.chk"))
-    assert(prepare(cfg,function() end,function(saved,err)
-      assert(not saved and type(err)=="string" and err:find("Could not commit",1,true),tostring(err))
-      assert(not prepared.read())
-      core.log("action",("PASS NATIVE GENERATION: exact %d×%d campaign and shared graph; %d server steps during job; blocked checkpoint failed closed; only progress/status across threads")
-        :format(cfg.width,cfg.depth,steps))
-      core.request_shutdown("Async generation parity passed",false,0)
+    local custom=assert(Setup.parse(cfg,{setup_towns="5",setup_custom_towns="3",
+      setup_larger_towns="1",setup_initial_city_size="3",setup_town_min_distance="28"}))
+    assert(prepare(custom,function() end,function(custom_ok,custom_error)
+      assert(custom_ok,custom_error)
+      local custom_state=assert(prepared.read())
+      local town_opts=custom_state.stock_generated_profile.town_settings
+      assert(town_opts.custom_count==3 and town_opts.larger_towns==1 and
+        town_opts.initial_city_size==3 and town_opts.separation==28)
+      local settlements=custom_state.stock_town_growth.towns
+      assert(#custom_state.stock_town_growth.order==3)
+      for id,town in pairs(settlements) do
+        assert(town.larger_town and town.num_houses>0)
+        for other_id,other in pairs(settlements) do
+          if other_id~=id then assert(math.abs(town.x-other.x)+math.abs(town.z-other.z)>=28) end
+        end
+      end
+      core.log("action","PASS NATIVE TOWN PLACEMENT OPTIONS: three cities, requested starting size, distances and target persisted")
+      prepared.clear()
+      assert(core.mkdir(core.get_worldpath().."/luanttd-prepared-campaign.chk"))
+      assert(prepare(cfg,function() end,function(saved,err)
+        assert(not saved and type(err)=="string" and err:find("Could not commit",1,true),tostring(err))
+        assert(not prepared.read())
+        core.log("action",("PASS NATIVE GENERATION: exact %d×%d campaign and shared graph; %d server steps during job; blocked checkpoint failed closed; only progress/status across threads")
+          :format(cfg.width,cfg.depth,steps))
+        core.request_shutdown("Async generation parity passed",false,0)
+      end))
     end))
   end))
   assert(not prepare(cfg,function()error("duplicate progress")end,function()error("duplicate reply")end))

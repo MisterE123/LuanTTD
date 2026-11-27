@@ -12,7 +12,11 @@ bayline_generated_variety (Generated regional landscape variety) int 0 0 5
 bayline_generated_sea (Generated landscape sea level) int 0 0 3
 bayline_generated_rivers (Generated rivers: 0 none, 1 few, 2 normal, 3 many) int 2 0 3
 bayline_generated_min_river_length (Generated minimum river length) int 16 2 255
-bayline_generated_towns (Generated town density) int 2 0 3
+bayline_generated_towns (Generated town density: 4 Custom) int 2 0 4
+bayline_generated_custom_towns (Custom town count) int 1 1 5000
+bayline_generated_larger_towns (Every Nth town is a city: 0 None) int 4 0 255
+bayline_generated_initial_city_size (Initial city size multiplier) int 2 1 10
+bayline_generated_town_min_distance (Minimum town separation in tiles) int 20 10 500
 bayline_generated_town_layout (Generated town layout) enum original original,better,grid2,grid3,random
 bayline_generated_industries (Generated industry density) int 4 0 6
 bayline_generated_industry_count (Generated custom industry target at density 6) int 1 1 64

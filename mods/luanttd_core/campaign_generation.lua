@@ -54,7 +54,11 @@ return function(core,mod,Sim,Settings)
       dofile(src.."stock_town_name.lua"),G,B,{
       layout=cfg and cfg.layout or settings:get("bayline_generated_town_layout") or "original",
       growth_setting=option("growth_rate","luanttd_town_growth_rate",2),
-      difficulty=option("towns","bayline_generated_towns",2),larger_towns=4,initial_city_size=2,year=Sim.date(S),
+      difficulty=option("towns","bayline_generated_towns",2),
+      custom_count=option("custom_towns","bayline_generated_custom_towns",1),
+      larger_towns=option("larger_towns","bayline_generated_larger_towns",4),
+      separation=option("town_min_distance","bayline_generated_town_min_distance",20),
+      initial_city_size=option("initial_city_size","bayline_generated_initial_city_size",2),year=Sim.date(S),
       progress=function(i,n) progress(62+math.floor(9*i/math.max(1,n)),"Building towns and roads",true) end,
     })
     assert(towns,why)

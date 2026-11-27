@@ -20,6 +20,12 @@ town is created, the hard pass tries one name against up to 10,000
 positions. The failed soft-pass names do not reserve names in the hard
 pass.
 
+In New World, choose **Custom** under Town density to use a specific count
+from 1 to 5,000. In Advanced options, set that count, the stock city
+frequency (0 disables cities), initial city-size multiplier, and minimum
+town separation. The custom count is a target: unsuitable sites are
+still rejected, so a small or very wet map may place fewer towns.
+
 ## Interface
 
 Load `openttd/town_worldgen.lua` with the existing `town_growth.lua`

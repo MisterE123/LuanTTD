@@ -59,19 +59,55 @@ return function(Growth,Build,Names)
     if opts.number then return math.max(1,min(W.POOL_MAX,opts.number)) end
     local diff=opts.difficulty or 2
     uint(diff,0,4,"Unknown stock town-number setting")
-    if diff==4 then return uint(opts.custom_count or 1,1,W.POOL_MAX,"Custom town count") end
+    if diff==4 then return uint(opts.custom_count or 1,1,5000,"Custom town count") end
     local size=board.width*board.height
     local scaled=ceil(initial[diff]*size/65536)+random()%8
     return math.max(1,min(W.POOL_MAX,floor(scaled*(board.initial_land_count or size)/size)))
   end
 
-  function W.can_place(board,towns,x,z,surrounding,separation)
+  -- Equivalent to the stock Manhattan k-d query. Each bucket spans
+  -- one separation radius, so only the surrounding nine can conflict.
+  local function settlement_index(separation)
+    local rows={}
+    local function add(t)
+      local ix,iz=floor(t.x/separation),floor(t.z/separation)
+      local row=rows[iz]
+      if not row then row={};rows[iz]=row end
+      local bucket=row[ix]
+      if not bucket then bucket={};row[ix]=bucket end
+      bucket[#bucket+1]=t
+    end
+    local function close(x,z)
+      local ix,iz=floor(x/separation),floor(z/separation)
+      for v=iz-1,iz+1 do
+        local row=rows[v]
+        if row then
+          for u=ix-1,ix+1 do
+            local bucket=row[u]
+            if bucket then
+              for _,t in ipairs(bucket) do
+                if abs(t.x-x)+abs(t.z-z)<separation then return true end
+              end
+            end
+          end
+        end
+      end
+      return false
+    end
+    return add,close
+  end
+
+  function W.can_place(board,towns,x,z,surrounding,separation,close)
     if min(x,z,board.width-1-x,board.height-1-z)<W.EDGE then
       return false,"TOO_CLOSE_TO_EDGE"
     end
     -- Upstream's town k-d tree is exactly Manhattan, not square/radius.
-    for _,t in ipairs(towns) do
-      if abs(t.x-x)+abs(t.z-z)<(separation or W.SEPARATION) then return false,"TOO_CLOSE_TO_ANOTHER_TOWN" end
+    if close then
+      if close(x,z) then return false,"TOO_CLOSE_TO_ANOTHER_TOWN" end
+    else
+      for _,t in ipairs(towns) do
+        if abs(t.x-x)+abs(t.z-z)<(separation or W.SEPARATION) then return false,"TOO_CLOSE_TO_ANOTHER_TOWN" end
+      end
     end
     local t=board.tile(x,z)
     if not t or (t.kind~="clear" and t.kind~="trees") or t.slope~=0 then return false,"SITE_UNSUITABLE" end
@@ -139,7 +175,7 @@ return function(Growth,Build,Names)
     end
     return 127
   end
-  function W.coast(board,x,z,layout,towns,separation)
+  function W.coast(board,x,z,layout,towns,separation,close)
     local function clear(a,b)
       local t=board.tile(a,b)
       return t and t.kind=="clear"
@@ -153,7 +189,7 @@ return function(Growth,Build,Names)
       local t=board.tile(a,b)
       local aa,bb=W.align(a,b,layout)
       if t and t.kind=="clear" and t.slope==0 and aa==a and bb==b and
-          W.can_place(board,towns or board.towns or {},a,b,true,separation) then
+          W.can_place(board,towns or board.towns or {},a,b,true,separation,close) then
         local d=W.water_distance(board,a,b)
         if d>distance then bx,bz,distance=a,b,d end
       end
@@ -241,8 +277,10 @@ return function(Growth,Build,Names)
     local total=W.count(board,opts,random)
     local separation=uint(opts.separation or W.SEPARATION,10,500,"Minimum town distance")
     local towns,created,existing_names,used={},{},{},{}
+    local index_town,near_town=settlement_index(separation)
     for _,t in ipairs(board.towns or {}) do
       towns[#towns+1]=t
+      index_town(t)
       if t.name then existing_names[t.name]=true;used[t.name]=true end
     end
     local result={target=total,attempted_positions=0,soft_positions=0,hard_positions=0,
@@ -257,13 +295,21 @@ return function(Growth,Build,Names)
         if result.fallback then result.hard_positions=result.hard_positions+1
         else result.soft_positions=result.soft_positions+1 end
         local t=board.tile(x,z)
-        if t and t.kind=="water" then x,z=W.coast(board,x,z,layout,towns,separation) end
-        if x~=nil and W.can_place(board,towns,x,z,true,separation) then
+        local valid
+        if t and t.kind=="water" then
+          x,z=W.coast(board,x,z,layout,towns,separation,near_town)
+          valid=x~=nil
+        else
+          valid=W.can_place(board,towns,x,z,true,separation,near_town)
+        end
+        if valid then
           local candidate={x=x,z=z,city=city,larger_town=city,layout=W.resolve_layout(x,z,layout),
             size="random",nameparts=parts,name=display,manual=false,editor=not not opts.editor}
           local record=opts.create(candidate,random)
           if record and (record.population or 0)>0 then
-            towns[#towns+1]={x=x,z=z,name=display}
+            local center={x=x,z=z,name=display}
+            towns[#towns+1]=center
+            index_town(center)
             existing_names[display]=true
             created[#created+1]=record
             return record

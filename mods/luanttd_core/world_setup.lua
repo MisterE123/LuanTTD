@@ -16,8 +16,8 @@ local items={
     labels={"Very low","Low","Medium","High"}},
   {key="rivers",setting="bayline_generated_rivers",default=2,values={0,1,2,3},
     labels={"None","Few","Normal","Many"}},
-  {key="towns",setting="bayline_generated_towns",default=2,values={0,1,2,3},
-    labels={"Very low","Low","Normal","High"}},
+  {key="towns",setting="bayline_generated_towns",default=2,values={0,1,2,3,4},
+    labels={"Very low","Low","Normal","High","Custom"}},
   {key="layout",setting="bayline_generated_town_layout",default="original",
     values={"original","better","grid2","grid3","random"},
     labels={"Original","Better roads","2 x 2 grid","3 x 3 grid","Random"}},
@@ -36,6 +36,13 @@ local items={
     labels={"None","Slow","Normal","Fast","Very fast"},advanced="Town growth speed"},
   {key="variety",setting="bayline_generated_variety",default=0,values={0,1,2,3,4,5},
     labels={"None","Very low","Low","Medium","High","Very high"},advanced="Regional variety"},
+}
+-- 16.0-RC1 economy_settings.ini and world_settings.ini.
+local town_numbers={
+  {key="custom_towns",setting="bayline_generated_custom_towns",label="Custom town count",min=1,max=5000,default=1},
+  {key="larger_towns",setting="bayline_generated_larger_towns",label="Every Nth town is a city",min=0,max=255,default=4},
+  {key="initial_city_size",setting="bayline_generated_initial_city_size",label="Initial city size multiplier",min=1,max=10,default=2},
+  {key="town_min_distance",setting="bayline_generated_town_min_distance",label="Minimum town separation (tiles)",min=10,max=500,default=20},
 }
 local function index(values,v)
   for i,value in ipairs(values) do if value==v then return i end end
@@ -81,6 +88,10 @@ function M.defaults(settings,fresh)
       out[item.key]=index(item.values,v) and v or item.default
     end
   end
+  for _,item in ipairs(town_numbers) do
+    local value=tonumber(settings:get(item.setting))
+    out[item.key]=integer(value,item.min,item.max) and value or item.default
+  end
   local width,depth=M.dimensions(settings)
   if not M.supports_size(width,depth) then width,depth=64,64 end
   set_size(out,width,depth)
@@ -93,6 +104,14 @@ function M.parse(current,fields)
     local v=item.values[tonumber(field) or 0]
     if field~=nil and v==nil then return nil,"Choose a valid generator option." end
     out[item.key]=v or current[item.key]
+  end
+  for _,item in ipairs(town_numbers) do
+    local value=fields["setup_"..item.key]
+    value=value==nil and (current[item.key] or item.default) or tonumber(value)
+    if not integer(value,item.min,item.max) then
+      return nil,("%s must be a whole number from %d to %d."):format(item.label,item.min,item.max)
+    end
+    out[item.key]=value
   end
   local legacy=fields.setup_size
   if legacy~=nil then
@@ -136,6 +155,10 @@ function M.read(core,storage)
     if item.advanced and cfg[item.key]==nil then cfg[item.key]=item.default end
     if not index(item.values,cfg[item.key]) then return end
   end
+  for _,item in ipairs(town_numbers) do
+    if cfg[item.key]==nil then cfg[item.key]=item.default end
+    if not integer(cfg[item.key],item.min,item.max) then return end
+  end
   return cfg
 end
 local function formspec(core,cfg,advanced,note)
@@ -150,7 +173,7 @@ local function formspec(core,cfg,advanced,note)
     "field_close_on_enter[setup_seed;false]",
     "button[5.04,2.15;2.40,.54;setup_random;Randomize]",
   }
-  out[#out+1]="button[8.43,2.15;3.47,.54;setup_advanced;"..
+  out[#out+1]="button[8.43,2.03;3.47,.46;setup_advanced;"..
     (advanced and "Basic options" or "Advanced options").."]"
   local labels={"Map width (tiles)","Map depth (tiles)","Terrain relief","Sea level","Rivers","Town density","Town roads","Industry density","Tree placement"}
   local n=0
@@ -163,9 +186,10 @@ local function formspec(core,cfg,advanced,note)
   if cfg.scenario=="generated" then
     for i,item in ipairs(items) do
       if advanced==not not item.advanced then
-        local x,y=n%2==0 and .49 or 6.43,3.59+math.floor(n/2)*.76
-        out[#out+1]=("label[%g,%g;%s]dropdown[%g,%g;5.46,.50;setup_%s;%s;%d;true]")
-          :format(x,y,item.advanced or labels[i],x,y+.20,item.key,table.concat(item.labels,","),index(item.values,cfg[item.key]))
+        local x,y=n%2==0 and .49 or 6.43,3.59+math.floor(n/2)*(advanced and .84 or .76)
+        out[#out+1]=("label[%g,%g;%s]dropdown[%g,%g;5.46,%g;setup_%s;%s;%d;true]")
+          :format(x,y,item.advanced or labels[i],x,y+.20,advanced and .44 or .50,
+            item.key,table.concat(item.labels,","),index(item.values,cfg[item.key]))
         n=n+1
       end
     end
@@ -174,8 +198,15 @@ local function formspec(core,cfg,advanced,note)
       out[#out+1]="label[6.43,6.91;"..
         (big and "High RAM use. May run out of memory." or "Larger maps need more RAM.").."]"
     else
-      out[#out+1]="label[.49,5.81;Choose which edges to shape into sea, or let TerraGenesis choose.]"
-      out[#out+1]="label[.49,6.13;No forced coast still allows inland water and sea-level terrain.]"
+      for _,item in ipairs(town_numbers) do
+        local x,y=n%2==0 and .49 or 6.43,3.59+math.floor(n/2)*.84
+        local label=item.key=="larger_towns" and item.label.." (0 = no cities)" or item.label
+        out[#out+1]=("label[%g,%g;%s]field[%g,%g;5.46,.43;setup_%s;;%d]field_close_on_enter[setup_%s;false]")
+          :format(x,y,label,x,y+.20,item.key,cfg[item.key],item.key)
+        n=n+1
+      end
+      out[#out+1]="label[.49,6.97;Custom town count applies only when Town density is set to Custom.]"
+      out[#out+1]="label[.49,7.32;No forced coast still allows inland water and sea-level terrain.]"
     end
   elseif cfg.scenario=="original" then
     out[#out+1]="label[.49,3.86;Survey map side length]"
