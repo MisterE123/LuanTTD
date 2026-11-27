@@ -5302,7 +5302,7 @@ local function rail_tick_broker(s)
   return register,advance,function() return flushed end
 end
 
-local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse)
+local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse,month_tick)
   local clock
   local faults=road_faults_mount[s]
   local freight_ready,ship_ready,industry_ready,tanker_ready
@@ -5360,6 +5360,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
           if item then visit_timber(item,source,tick,offer_rig) end
         elseif timber then timber.tile_visit(x,z,tick,offer_rig) end
       end
+      local month_at=month_tick and clock.counter+rating_runtime.day_ticks-1
       town_passengers.day(s,function(tick,finish_rating)
         local ready,events
         if commercial then ready,events=commercial.before(tick) end
@@ -5397,9 +5398,10 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       end,{passenger=commercial and commercial.hooks.passenger,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
         growth=growth and growth.world,traverse=traverse,tick_pulse=tick_pulse,
-        before_landscape=(machines or timber and timber.animate) and function(tick)
+        before_landscape=(month_tick or machines or timber and timber.animate) and function(tick)
           if machines then machines.animate(tick) end
           if timber and timber.animate then timber.animate(tick) end
+          if tick==month_at then month_tick() end
         end})
     end
   else
@@ -5598,8 +5600,24 @@ function M.daily(s,traverse,tick_pulse)
     end or nil)
   end
   local growth=town_growth_mount[s]
+  local month_tick
   if growth then
-    growth.world.prepare_day(s,function() return rating_runtime.random_u32(s) end,growth.new)
+    local world=growth.world
+    world.prepare_day(s)
+    local month=growth.new and world.month_due(s)
+    if month then
+      local function run_month()
+        world.month(s,month,function() return rating_runtime.random_u32(s) end)
+      end
+      if s.stock_generated_profile and s.stock_bus_market and s.road_stock_house_supply and M.road_stock_service_active(s) then
+        -- RC1 GameLoop: animate, advance economy date and run the
+        -- monthly timers, then visit tiles/vehicles/town on that tick.
+        -- Sim.daily batches the 74 ticks ending on the new date.
+        month_tick=run_month
+      else
+        run_month()
+      end
+    end
   end
   if s.corner_grid then
     load_road_rules()
@@ -5746,7 +5764,7 @@ function M.daily(s,traverse,tick_pulse)
       tanker={before=function(tick) return {oil_day.before(tick),dry.before(tick)} end,
         after=function(tick,ready) oil_day.after(tick,ready[1]);dry.after(tick,ready[2]) end}
     elseif dry then tanker=dry end
-    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse)
+    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse,month_tick)
   elseif commercial then
     town_passengers.day(s,function(tick)
       local ready,events=commercial.before(tick)

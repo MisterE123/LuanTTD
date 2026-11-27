@@ -111,34 +111,42 @@ return function(Sim,Terrain,G,B,H)
     return options and options.growth_setting or 2
   end
 
-  function W.prepare_day(s,random,want_new)
-    local state=W.start(s)
+  function W.prepare_day(s)
+    W.start(s)
     for _,st in pairs(s.stations) do
       if st.mode=="road" and not st.town_growth_service_clock then
         st.time_since_load,st.time_since_unload=255,255
         st.town_growth_service_clock=true
       end
     end
+  end
+
+  function W.month_due(s)
     local month,first=math.floor(s.day/30),s.day%30==0
     if s.stock_bus_market then
       local y,m,d=Sim.date(s)
       month,first=y*12+m,d==1
     end
-    if want_new and first and state.last_month~=month then
-      local views=services(s,true)
-      if #state.order>=8 then views.count_near=G.index_active_stations(views) end
-      local ratings=authority.station_view(s,views)
-      for _,id in ipairs(state.order) do
-        local t=state.towns[id]
-        local was_funded=t.road_build_months==1
-        local _,reason=G.month(t,views,growth_setting(s),random)
-        if was_funded then W.reconstruction.expired(s,t) end
-        t.reason=reason
-        t.last_active=G.active_stations(t,views)
-        authority.month(s,t,ratings)
-      end
-      state.last_month=month
+    local state=s.stock_town_growth
+    return first and state and state.last_month~=month and month or nil
+  end
+
+  function W.month(s,month,random)
+    local state=s.stock_town_growth
+    if not state or not month or state.last_month==month then return end
+    local views=services(s,true)
+    if #state.order>=8 then views.count_near=G.index_active_stations(views) end
+    local ratings=authority.station_view(s,views)
+    for _,id in ipairs(state.order) do
+      local t=state.towns[id]
+      local was_funded=t.road_build_months==1
+      local _,reason=G.month(t,views,growth_setting(s),random)
+      if was_funded then W.reconstruction.expired(s,t) end
+      t.reason=reason
+      t.last_active=G.active_stations(t,views)
+      authority.month(s,t,ratings)
     end
+    state.last_month=month
   end
 
   function W.fund_buildings(s,id)

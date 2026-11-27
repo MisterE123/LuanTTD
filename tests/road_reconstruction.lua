@@ -108,7 +108,7 @@ do
   end
   for month=1,6 do
     s.day=month*30
-    b.prepare_day(s,zero,true)
+    b.prepare_day(s);b.month(s,b.month_due(s),zero)
     assert(s.stock_town_growth.towns[1].road_build_months==6-month)
   end
   assert(s.stock_town_growth.reconstruction.funded==0 and s.stock_town_growth.reconstruction.active==1)

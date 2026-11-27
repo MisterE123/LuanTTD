@@ -309,7 +309,7 @@ if authority then
     local Build=dofile(root.."openttd/town_growth_build.lua")(Growth,dofile(root.."openttd/town_growth_houses.lua"))
     local Houses=dofile(root.."openttd/town_passengers.lua")
     local W=dofile(root.."town_growth_runtime.lua")(Sim,Terrain,Growth,Build,Houses)
-    W.prepare_day(monthly,function() error("Live monthly service must skip the lottery") end,true)
+    W.prepare_day(monthly);W.month(monthly,W.month_due(monthly),function() error("Live monthly service must skip the lottery") end)
     assert(town.growing and town.reason=="serviced" and town.last_active==1)
   end
   local port=known.ship.id

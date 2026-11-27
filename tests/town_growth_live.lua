@@ -99,7 +99,7 @@ do
   Sim.mount_stock_town_growth(restored,W)
   for month=1,3 do
     restored.day=month*30
-    W.prepare_day(restored,function()return 65535 end,true)
+    W.prepare_day(restored);W.month(restored,W.month_due(restored),function()return 65535 end)
     assert(restored.stock_town_growth.towns[id].fund_buildings_months==3-month)
   end
   print("PASS normal town funding uses exact stock base cost, three live growth months, saved payments and expiry")
@@ -113,7 +113,7 @@ for setting=0,4 do
   local id=s.stock_town_growth.order[1]
   local t=s.stock_town_growth.towns[id]
   local rolls=0
-  W.prepare_day(s,function() rolls=rolls+1;return 0 end,true)
+  W.prepare_day(s);W.month(s,W.month_due(s),function() rolls=rolls+1;return 0 end)
   assert(t.growing==(setting~=0),"monthly setting "..setting)
   assert(t.growth_rate==G.normal_rate(t,0,setting))
   if setting==0 then assert(rolls==0) end
