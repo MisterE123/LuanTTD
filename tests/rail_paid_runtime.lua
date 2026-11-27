@@ -276,6 +276,51 @@ assert(s.stock_passenger_mux.consumed and not s.stock_passenger_mux.pending)
 assert(s.stock_ship_commercial.service.companies.Rail.cash==fares.Rail)
 assert(s.stock_ship_commercial.service.companies.Ferry.cash==fares.Ferry)
 assert(s.fleet[bus].delivered==counts.Coach)
+if authority then
+  local Stations=dofile(root.."town_station_services.lua")(Sim)
+  local Growth=dofile(root.."openttd/town_growth.lua")
+  local known={}
+  for _,st in ipairs(Stations.view(s)) do
+    local age=math.min(st.time_since_load or 255,st.time_since_unload or 255)
+    if age<=Growth.ACTIVE_AGE then
+      local town=Growth.new(1,st.x,st.z,{layout="grid2",num_houses=5})
+      local okay,reason=Growth.update(town,{st},2,function() error("Serviced town does not draw lottery") end)
+      assert(okay and reason=="serviced")
+      known[st.mode]=st
+    end
+  end
+  for _,mode in ipairs({"road","rail","ship","air"}) do
+    local st=assert(known[mode],mode.." real transfer did not become town service")
+    -- Isolate just this real station's held ages, as they would appear at
+    -- the monthly gate. Cash, routes and the running fixture stay intact.
+    local monthly=clone(s)
+    monthly.stock_bus_market=nil;monthly.day=30
+    local tile=Sim.id(st.x,st.z)
+    local town=Growth.new(1,st.x,st.z,{layout="grid2",num_houses=5})
+    monthly.sites={{id=1,kind="town",name="Growth witness",tile=tile,population=0}}
+    monthly.stock_town_growth={version=1,order={1},towns={[1]=town}}
+    for id,row in pairs(monthly.stations) do
+      if mode~="road" or row.id~=st.id then monthly.stations[id]=nil end
+    end
+    local commercial=monthly.stock_ship_commercial.service.stations
+    for id,row in pairs(commercial) do
+      if row.host_mode~=mode or row.host_id~=st.id then commercial[id]=nil end
+    end
+    local Build=dofile(root.."openttd/town_growth_build.lua")(Growth,dofile(root.."openttd/town_growth_houses.lua"))
+    local Houses=dofile(root.."openttd/town_passengers.lua")
+    local W=dofile(root.."town_growth_runtime.lua")(Sim,Terrain,Growth,Build,Houses)
+    W.prepare_day(monthly,function() error("Live monthly service must skip the lottery") end,true)
+    assert(town.growing and town.reason=="serviced" and town.last_active==1)
+  end
+  local port=known.ship.id
+  local physical=s.stock_ship_stations[port]
+  s.stock_ship_stations[port]=nil
+  for _,st in ipairs(Stations.view(s)) do
+    assert(st.mode~="ship" or st.id~=port,"Demolished dock is not still counted")
+  end
+  s.stock_ship_stations[port]=physical
+  print("PASS real paid loading and unloading in four modes feed stock town growth; stale commercial dock ignored")
+end
 local paused=Sim.rail_paid_status(s)
 s.rail_paid_service=false
 daily(false)

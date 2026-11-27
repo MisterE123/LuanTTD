@@ -55,25 +55,7 @@ return function(Sim,Terrain,G,B,H)
   end
   function W.eligible_site(s,x,z) return clear_levels(s,Sim.id(x,z)) end
 
-  -- Only stock road station records have authoritative ages in all
-  -- supported combinations of this preview. Do not infer other modes
-  -- from UI visits or from s.site.service (a legacy delivered-unit sum).
-  local function services(s)
-    local out={}
-    for _,st in pairs(s.stations) do
-      if st.mode=="road" and at(s.tiles,st.tile) and st.town_growth_service_clock then
-        out[#out+1]=st
-      end
-    end
-    table.sort(out,function(a,b) return a.id<b.id end)
-    local list={}
-    for i,st in ipairs(out) do
-      local x,z=Sim.xy(st.tile)
-      list[i]={x=x,z=z,time_since_load=st.time_since_load,time_since_unload=st.time_since_unload}
-    end
-    return list
-  end
-
+  local services=dofile(path.."town_station_services.lua")(Sim).view
   function W.start(s)
     if s.stock_town_growth then
       assert(s.stock_town_growth.version==1,"Unsupported town growth save")

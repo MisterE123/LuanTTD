@@ -145,3 +145,20 @@ A native 1024×1024 generated campaign had 832 towns and started the
 observation with 24,052 municipal street tiles. Over the next 22
 simulation days it reached 24,094 without player construction.
 The existing 58 public bridges and one tunnel were preserved.
+
+## Served rail, ferry, and airport stations
+
+The town's growth check uses the station sign and the same load/unload
+timers that drive stock rating. A physically present passenger platform,
+dock, or airport now participates in the same RC1 growth check as a bus
+or tram stop. An actual load or unload within 20 station age steps can
+count; merely passing, arriving empty, or buying a vehicle does not.
+Two separate facilities with the same number in different mode books
+do not hide one another, and a stale dock receipt cannot count after the
+physical facility is removed.
+
+The native fixture earns real road, rail, ferry, and air receipts,
+isolates each live station at a monthly town check, and verifies that
+each one independently skips the unserviced-town lottery. The port
+does not yet merge all separate freight-only station-age ledgers or
+port every mode's effect on company council rating.
