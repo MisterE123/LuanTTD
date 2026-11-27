@@ -947,3 +947,20 @@ overtakes. The timing is a dense-road workload, not a client FPS claim.
 tests/road_overtake_sqlite.sh luantiserver
 lua5.1 tests/road_traffic_runtime.lua
 ```
+
+### Fetch automatic newspaper headlines between completed ticks
+
+The automatically displayed headline stream follows the worker's
+published news cursor. Reading the stream does not force the worker to
+finish a whole day, and it can run during a stable checkpoint encoding
+pulse. Explicit newspaper history and “Last message” keep their usual
+behavior. Station arrival order, saved news data, and expiry rules are
+unchanged; the headline reply contains detached, filtered rows.
+
+In a native Luanti 5.15.2 test with four active transport modes on a
+1024×1024 map at 4× speed, 19 repeated requests on each side simulated
+fresh HUD subscribers. Median reply time fell from **253 to 51 ms**;
+the longest reply fell from **1,063 to 52 ms**. The requests were
+intentionally more frequent than automatic headlines in normal play.
+This removes one source of worker pauses during headline retrieval, not
+the autosave pause or the steady cost of the landscape loop.

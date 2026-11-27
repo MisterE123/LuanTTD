@@ -91,6 +91,15 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     if q.kind=="rail_quote" then return tool=="autotrack" end
     return false
   end
+  local function passive_news(q)
+    -- Automatic headlines follow the already-published HUD head. This
+    -- bounded stream detaches rows and neither advances the news clock
+    -- nor changes order/finance state. Explicit history stays unchanged.
+    return q.kind=="news" and q.page==nil and q.action==nil and type(q.after)=="number"
+  end
+  local function sample_news(q)
+    return A.news(q.player,q.page,q.after,q)
+  end
   local function sample_navigation(q)
     if q.kind=="place_labels" then return A.place_labels(q.player,q.x,q.z,q.range) end
     if q.kind=="jump_map" then return A.jump_map(q.player,q.zoom,q.here,q.focus) end
@@ -140,14 +149,15 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       -- reads and inspected hovers can use it between encoding chunks.
       -- Never read past any edit, shutdown, or other waiting request.
       local hover=read_only_hover(q)
-      local nav=navigation[q.kind]
-      if q.seq~=seq+1 or not (live_view[q.kind] or hover or nav) then blocked=true;return end
+      local nav,news=navigation[q.kind],passive_news(q)
+      if q.seq~=seq+1 or not (live_view[q.kind] or hover or nav or news) then blocked=true;return end
       heartbeat=now
       core.ipc_set(inbox,nil)
       seq=q.seq
       local r
       if hover then r=sample_hover(q)
       elseif nav then r=sample_navigation(q)
+      elseif news then r=sample_news(q)
       else r=sample_view(q,auto.sample((now-prior)/1000000)) end
       send(q,r,now)
     end)
@@ -170,6 +180,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     local now=core.get_us_time()
     if core.ipc_get(cancel) then break end
     local deferred
+    local read=q and (presentation_only[q.kind] or read_only_hover(q) or passive_news(q))
     if auto then
       local dt=(now-prior)/1000000
       if (s.speed or 0)>0 then dirty=true end
@@ -189,7 +200,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       local boundary_view=q and q.seq==seq+1 and live_view[q.kind] and
         (s.speed or 0)>0 and auto.sample(dt)==1
       if tick_mode then
-        if q and not (presentation_only[q.kind] or read_only_hover(q)) then
+        if q and not read then
           -- Cached daily bindings cannot tolerate a mutable command
           -- midway through the stock loop. Complete that transaction,
           -- then service this one request before starting another day.
@@ -212,7 +223,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         seq=q.seq
         -- Do not assume an uncommon panel or command cannot lazily
         -- touch saved state. Only skip the proven display-only traffic.
-        if not presentation_only[q.kind] and not read_only_hover(q) then dirty=true end
+        if not read then dirty=true end
         if q.kind=="snapshot" then
           r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction,tick_mode and {road={},rail={},live_tick=true} or nil)
         elseif live_view[q.kind] then
@@ -236,7 +247,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         elseif q.kind=="terrain_quote" then r=A.terrain_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="town_authority" then r=A.town_authority(q.player,q.town)
         elseif q.kind=="company" then r=A.company(q.player)
-        elseif q.kind=="news" then r=A.news(q.player,q.page,q.after,q)
+        elseif q.kind=="news" then r=sample_news(q)
         elseif q.kind=="lesson_progress" then r=A.lesson_progress(q.player,q.lesson)
         elseif navigation[q.kind] then r=sample_navigation(q)
         elseif q.kind=="rail_assembly" then r=A.rail_assembly(q.player,q.depot)

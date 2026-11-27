@@ -45,3 +45,16 @@ N.push(isolated,{kind="advice",economy=0,headline="Test private",owner=name,priv
 local outsider,count=N.history(isolated,"Other",1,8)
 assert(count==1023 and outsider[1].seq==1100)
 print("PASS physical bus arrives once at each stop, station removal deletes reference, hard cap and per-company privacy")
+
+-- The HUD stream can be read from an owner tick or a stable autosave
+-- pulse without writing the journal or the campaign graph.
+local P=dofile(mod.."packed_campaign.lua")
+local before=P.encode(s)
+local stream=assert(A.news(name,nil,0).value)
+assert(stream.cursor==stream.head and stream.economy==s.day and #stream.items==1)
+assert(stream.items[1].tile==b and not stream.items[1].owner)
+assert(#A.news(name,nil,stream.cursor).value.items==0)
+stream.items[1].headline="Client-owned copy"
+assert(A.news(name,nil,0).value.items[1].headline~="Client-owned copy")
+assert(P.encode(s)==before)
+print("PASS HUD newspaper receipts are detached and read-only")
