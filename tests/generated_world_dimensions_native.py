@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SIZES = ((512, 512), (1024, 1024), (4096, 64), (64, 4096))
 CHECK = r"""
 local Codec=dofile("mods/luanttd_core/packed_campaign.lua")
-local s=Codec.decode(io.read("*a"))
+local read=os.getenv("TEST_RASTER")=="1" and Codec.decode_wide or Codec.decode
+local s=read(io.read("*a"))
 local p=assert(s.stock_generated_profile)
 local w,h=tonumber(os.getenv("TEST_WIDTH")),tonumber(os.getenv("TEST_DEPTH"))
 assert(p.width==w and p.depth==h)
@@ -87,11 +88,12 @@ def native_session(world, config, out, env):
 def checkpoint(world, env, w, h):
     path = world / "luanttd-campaign-owner.chk"
     signature, digest, payload = path.read_bytes().split(b"\n", 2)
-    assert signature == b"LUANTTD-WIDE-CAMPAIGN-3-STATE"
+    raster = signature == b"LUANTTD-WIDE-CAMPAIGN-4-RASTER"
+    assert raster or signature == b"LUANTTD-WIDE-CAMPAIGN-3-STATE"
     assert hashlib.sha256(payload).hexdigest().encode() == digest
     data = subprocess.run(("zstd", "-dc"), input=payload, capture_output=True, check=True).stdout
     result = subprocess.run(("lua5.1", "-e", CHECK), cwd=ROOT, input=data, capture_output=True,
-                            env={**env, "TEST_WIDTH": str(w), "TEST_DEPTH": str(h)})
+                            env={**env, "TEST_WIDTH": str(w), "TEST_DEPTH": str(h), "TEST_RASTER": str(int(raster))})
     if result.returncode:
         raise RuntimeError(result.stderr.decode())
     return (*map(int, result.stdout.split()), path.stat().st_size)

@@ -15,6 +15,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   if cap.road_town_policy then s.stock_road_town_policy=cap.road_town_policy end
   local Sim=dofile(mod.."/sim.lua")
   local runtime=mounts(Sim,mod,s,cap)
+  if storage.prepare_state then storage.prepare_state(s) end
   if cap.autoplay and s.stock_generated_profile then
     Sim.mount_live_sea_cache(s)
     runtime.invalidate_sea=function() Sim.clear_live_sea_cache(s) end

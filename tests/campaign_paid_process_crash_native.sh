@@ -36,6 +36,8 @@ source tests/native_processes.sh
 server=
 trap 'native_stop_children "$server"' EXIT
 port=${BAYLINE_NATIVE_PORT:-42637}
+axis=${LUANTTD_QA_CRASH_AXIS:-64}
+[[ $axis == 64 || $axis == 512 ]]
 for phase in abort place remove verify; do
   log="$out/$phase.log"
   cat >"$out/native.conf" <<CONF
@@ -44,8 +46,8 @@ bind_address = 127.0.0.1
 prometheus_listener_address = 127.0.0.1:$port
 server_announce = false
 server_map_save_interval = 600
-bayline_generated_map_width = 64
-bayline_generated_map_depth = 64
+bayline_generated_map_width = $axis
+bayline_generated_map_depth = $axis
 bayline_generated_relief = 0
 bayline_generated_coasts = 0
 luanttd_qa_paid_crash_phase = $phase
@@ -79,6 +81,11 @@ CONF
     test "$code" = 0
   else
     test "$code" = 137
+    if [[ $axis == 512 ]]; then
+      # The large fixture must actually exercise the new writer,
+      # not accidentally pass through the general-format fallback.
+      head -n 1 "$out/world/qa-paid-process-crash.chk" | grep -qx 'LUANTTD-WIDE-CAMPAIGN-4-RASTER'
+    fi
   fi
   if grep -E 'ServerError|stack traceback' "$log"; then exit 1; fi
 done

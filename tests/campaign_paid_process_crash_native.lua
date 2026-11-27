@@ -125,6 +125,7 @@ function hooks.stopped(why,_,_,detail)
   assert(why=="stopped" or why=="cancelled",detail or why)
 end
 core.after(0,function()
-  assert(S.stock_generated_profile and S.stock_generated_profile.width==64)
+  local width=tonumber(core.settings:get("bayline_generated_map_width"))
+  assert(S.stock_generated_profile and S.stock_generated_profile.width==width and S.stock_generated_profile.depth==width)
   assert(worker.start(caps,Sim.W,Sim.H))
 end)

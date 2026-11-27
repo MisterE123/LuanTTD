@@ -6,8 +6,13 @@ return function(core,codec,filename)
   local path=dir.."/"..name
   local prefix="LUANTTD-WIDE-CAMPAIGN-1"
   local state_prefix="LUANTTD-WIDE-CAMPAIGN-3-STATE"
+  local raster_prefix="LUANTTD-WIDE-CAMPAIGN-4-RASTER"
+  local raster
   local M={}
-  function M.clear() os.remove(path) end
+  function M.prepare_state(state)
+    if codec and codec.prepare_wide then raster=codec.prepare_wide(state) end
+  end
+  function M.clear() raster=nil;os.remove(path) end
   function M.read()
     local found=false
     for _,file in ipairs(core.get_dir_list(dir,false)) do
@@ -22,12 +27,12 @@ return function(core,codec,filename)
     -- Never silently roll back to SQLite if the canonical file exists
     -- but is damaged or was created by an unsupported format.
     local damaged="The wide campaign checkpoint is damaged or has an unsupported format."
-    assert((signature==prefix or signature==state_prefix) and payload and #payload>0
+    assert((signature==prefix or signature==state_prefix or signature==raster_prefix) and payload and #payload>0
       and digest==core.sha256(payload),damaged)
     if signature==prefix then return payload end
     local ok,value=pcall(core.decompress,payload,"zstd")
     assert(ok and type(value)=="string" and #value>0,damaged)
-    local valid,state=pcall(assert(codec).decode,value)
+    local valid,state=pcall(signature==raster_prefix and assert(codec).decode_wide or assert(codec).decode,value)
     assert(valid and type(state)=="table",damaged)
     return state
   end
@@ -40,7 +45,9 @@ return function(core,codec,filename)
     return write(prefix,payload)
   end
   function M.write_state(state,pulse)
-    local bytes=assert(codec).encode(state,pulse)
+    local bytes=raster and raster(state,pulse)
+    local signature=bytes and raster_prefix or state_prefix
+    if not bytes then bytes=assert(codec).encode(state,pulse) end
     -- Periodic saves can serve bounded read-only queries while the
     -- graph is stable. Service the mailbox at native phase boundaries
     -- too, not just during the Lua traversal.
@@ -48,7 +55,7 @@ return function(core,codec,filename)
     local payload=core.compress(bytes,"zstd",pulse and 1 or 3)
     bytes=nil
     if pulse then pulse() end
-    return write(state_prefix,payload)
+    return write(signature,payload)
   end
   return M
 end

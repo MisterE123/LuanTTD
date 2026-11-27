@@ -27,7 +27,7 @@ local function string_ref(n)
   while n>=128 do result=result..symbols[128+n%128];n=floor(n/128) end
   return result..symbols[n]
 end
-local WOODED_TILE=13
+local WOODED_TILE,CROP=13,14
 local terrains={"grass","hill","water"}
 local terrain_codes={grass=1,hill=2,water=3}
 local waters={"sea","river"}
@@ -82,6 +82,35 @@ local function tile_bytes(t,table_bucket)
     return char(WOODED_TILE,h,flags,presence,c or 0,r or 0,class,kind,count,ground,density,growth,salt and 1 or 0),wood,wood_bucket
   end
   return char(TILE,h,flags,presence,c or 0,r or 0)
+end
+
+-- A stock crop's compact payload contains fixed kind/ground strings,
+-- a small record of scalar growth state and a sparse fence table.
+-- Unknown, nested or externally interned fields use the general graph.
+local crop_fields={kind=true,ground=true,variant=true,industry=true,counter=true,fences=true,
+  slope=true,base=true,last_tick=true}
+local function crop_bytes(t,table_bucket)
+  if type(t)~="table" or getmetatable(t)~=nil or t.kind~="clear" or t.ground~="field" then return end
+  local bucket=table_bucket(t)
+  if bucket[t] then return end
+  local f=t.fences
+  if type(f)~="table" or getmetatable(f)~=nil then return end
+  local fences=table_bucket(f)
+  if fences[f] then return end
+  for k in next,t do if not crop_fields[k] then return end end
+  local v,c,b,s=t.variant,t.counter,t.base,t.slope
+  local i,l=t.industry,t.last_tick
+  if not (tiny_int(v,255) and tiny_int(c,255) and tiny_int(b,255) and tiny_int(s,255)
+      and (i==nil or tiny_int(i,65535)) and (l==nil or tiny_int(l,4294967295))) then return end
+  local mask=0
+  for k,value in next,f do
+    if not tiny_int(k,3) or not tiny_int(value,255) then return end
+    mask=mask+2^k
+  end
+  mask=mask+(i and 16 or 0)+(l and 32 or 0)
+  i,l=i or 0,l or 0
+  return char(CROP,v,c,b,s,mask,i%256,floor(i/256),l%256,floor(l/256)%256,
+    floor(l/65536)%256,floor(l/16777216),f[0] or 0,f[1] or 0,f[2] or 0,f[3] or 0),bucket,f,fences
 end
 
 local function decode_cell(source,at,tag)
@@ -152,12 +181,14 @@ end
 
 -- The caller owns a stable snapshot for the entire encode. Periodic
 -- pulses may service read-only queries but must not mutate that graph.
-function M.encode(root,pulse)
+local function encode(root,pulse,identity)
   local chunks,fragment={},{}
   local fragment_count=0
   local tables,strings={},{}
   local table_count,string_count=0,0
   local tiles=type(root)=="table" and root.tiles
+  local campaign=identity and root.campaign
+  local crops=campaign and rawget(campaign,"stock_farm_fields")
   local function table_bucket() return tables end
   if type(tiles)=="table" and #tiles>=262144 then
     -- Dense terrain used to resize one million-key reference hash in
@@ -202,6 +233,7 @@ function M.encode(root,pulse)
   write=function(value)
     local kind=type(value)
     if kind=="table" then
+      if identity then value=identity(value) end
       local bucket=table_bucket(value)
       local id=bucket[value]
       if id then tag(TABREF);uint(id);return end
@@ -251,7 +283,13 @@ function M.encode(root,pulse)
         if not dense or type(k)~="number" or k<1 or k>n or k%1~=0 then
           local key=strings[k]
           if key then put(key) else write(k) end
-          write(v)
+          local payload,bucket,f,fences
+          if value==crops then payload,bucket,f,fences=crop_bytes(v,table_bucket) end
+          if payload then
+            table_count=table_count+1;bucket[v]=table_count
+            table_count=table_count+1;fences[f]=table_count
+            put(payload)
+          else write(v) end
         end
       end
       tag(END)
@@ -279,10 +317,17 @@ function M.encode(root,pulse)
     chunks[#chunks+1]=table.concat(fragment,"",1,fragment_count)
   end
   if pulse then pulse() end
-  return table.concat(chunks)
+  local output=table.concat(chunks)
+  if identity then
+    -- Detached rich graph wrapper has no physical slot vector; this
+    -- dictionary has one namespace and is only read during capture.
+    assert(not tiles)
+    return output,tables
+  end
+  return output
 end
 
-function M.decode(source)
+local function decode(source,identity)
   assert(type(source)=="string" and #source>0,"Missing packed campaign data")
   local tables,strings={},{}
   local at=1
@@ -340,6 +385,20 @@ function M.decode(source)
       tables[#tables+1]=t
       if t.wood then tables[#tables+1]=t.wood end
       return t
+    elseif tag==CROP then
+      local v,c,b,s,mask,i0,i1,t0,t1,t2,t3,f0,f1,f2,f3=byte(source,at,at+14)
+      assert(f3 and mask<=63,"Invalid packed campaign field record")
+      at=at+15
+      local f={}
+      if mask%2==1 then f[0]=f0 end
+      if floor(mask/2)%2==1 then f[1]=f1 end
+      if floor(mask/4)%2==1 then f[2]=f2 end
+      if floor(mask/8)%2==1 then f[3]=f3 end
+      local t={kind="clear",ground="field",variant=v,counter=c,base=b,slope=s,fences=f,
+        industry=floor(mask/16)%2==1 and i0+i1*256 or nil,
+        last_tick=mask>=32 and t0+t1*256+t2*65536+t3*16777216 or nil}
+      tables[#tables+1]=t;tables[#tables+1]=f
+      return t
     elseif tag==STR then
       local value=str()
       strings[#strings+1]=value
@@ -364,8 +423,39 @@ function M.decode(source)
   -- Resolved references already point at their decoded objects. Drop
   -- the decoder's temporary graph and input bytes explicitly: on
   -- Luanti's LuaJIT, recursive decode state can outlive this return.
+  if identity then
+    local key=tables
+    tables,strings,source,read=nil,nil,nil,nil
+    return root,key
+  end
   tables,strings,source,read=nil,nil,nil,nil
   return root
 end
 
+-- The public graph primitives retain their original bytes. Only a
+-- wide checkpoint chooses the independent, alias-aware raster format.
+function M.encode(state,pulse) return encode(state,pulse) end
+function M.decode(source) return decode(source) end
+local raster
+local function wide()
+  if not raster then
+    local path=core and core.get_modpath and core.get_modpath("luanttd_core")
+      or "mods/luanttd_core"
+    raster=dofile(path.."/checkpoint_raster.lua")(tile_bytes,decode_cell,encode,decode)
+  end
+  return raster
+end
+function M.prepare_wide(state)
+  local grid=state.stock_generated_profile and state.corner_grid
+  if type(grid)~="table" or not tiny_int(grid.width,4096) or not tiny_int(grid.depth,4096)
+      or grid.width<64 or grid.depth<64 then return end
+  local n=grid.width*grid.depth
+  -- Leave small worlds and larger, unqualified memory footprints on the
+  -- general graph path. Both paths preserve the same authoritative state.
+  if n<262144 or n>1048576 then return end
+  return wide().prepare(state,n)
+end
+function M.decode_wide(source)
+  return wide().restore(source)
+end
 return M

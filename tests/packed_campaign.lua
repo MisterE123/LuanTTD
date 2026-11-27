@@ -217,3 +217,52 @@ do
   assert(table.concat(seen,",")=="encode,compress3,hash,commit")
   print("PASS periodic checkpoint yields at safe phase boundaries and commits the full state once")
 end
+
+-- The wide checkpoint's terrain raster is an exact view of the current
+-- authoritative objects, including alias edges into and out of the plane.
+do
+  local s={tiles={},corner_grid={width=512,depth=512},stock_generated_profile=true,other={}}
+  local a={h=4,variant=0,terrain="grass"}
+  local b={h=5,variant=1,terrain="hill"}
+  local c={h=5,variant=2,terrain="hill"}
+  local d={h=3,variant=2,terrain="hill",unknown={}}
+  local wood={class=4,type=3,count=1,ground=0,density=3,growth=6}
+  local crop={kind="clear",ground="field",variant=0,base=255,slope=15,counter=0,
+    fences={[0]=0,[2]=7},last_tick=4294967295,industry=0}
+  local beyond={kind="clear",ground="field",variant=1,base=5,slope=0,counter=3,
+    fences=crop.fences,last_tick=4294967296,extra=s}
+  s.self=s
+  s.other.vector=s.tiles
+  s.other[a]=d
+  s.other[c]=s.tiles
+  s.other.wood=wood
+  s.stock_farm_fields={[40]=crop,[60]=beyond}
+  s.tiles[1],s.tiles[2],s.tiles[3],s.tiles[4]=a,b,c,d
+  for i=5,512*512 do s.tiles[i]=a end
+  s.tiles[a]=b
+  s.tiles[false]="non-array metadata"
+  b.wood=wood
+  local capture=assert(P.prepare_wide(s))
+  -- State changes after the stable vector was prepared must be captured.
+  a.h=9;c.wood=wood
+  local pulses=0
+  local raw=assert(capture(s,function()pulses=pulses+1 end))
+  assert(pulses>=128)
+  local recovered=P.decode_wide(raw)
+  local tiles=recovered.tiles
+  assert(#tiles==512*512 and recovered.self==recovered and recovered.other.vector==tiles)
+  assert(tiles[1].h==9 and tiles[1]==tiles[#tiles] and recovered.other[tiles[1]]==tiles[4])
+  assert(recovered.other[tiles[3]]==tiles and tiles[tiles[1]]==tiles[2] and tiles[false]=="non-array metadata")
+  assert(tiles[2].wood==tiles[3].wood and tiles[3].wood==recovered.other.wood)
+  local new_crop,new_beyond=recovered.stock_farm_fields[40],recovered.stock_farm_fields[60]
+  assert(new_crop.industry==0 and new_crop.last_tick==4294967295 and new_crop.fences[0]==0)
+  assert(new_beyond.fences==new_crop.fences and new_beyond.last_tick==4294967296 and new_beyond.extra==recovered)
+  assert(not pcall(P.decode_wide,raw:sub(1,7)) and not pcall(P.decode_wide,raw:sub(1,-2)))
+  -- An unexpected physical replacement cannot leave the prior identity
+  -- in the file: this capture declines, while the usual graph stays exact.
+  s.tiles[9]=c
+  assert(not capture(s))
+  local general=P.decode(P.encode(s))
+  assert(general.tiles[9]==general.tiles[3] and general.tiles[9]~=general.tiles[#general.tiles])
+  print("PASS raster checkpoint preserves live fields, shared ground/wood and full graph cycles, with exact fallback")
+end

@@ -19,6 +19,7 @@ case "${1:-}" in
     bash tests/hotbar_task_native.sh
     bash tests/campaign_worker_recovery_native.sh
     bash tests/campaign_paid_process_crash_native.sh
+    LUANTTD_QA_CRASH_AXIS=512 bash tests/campaign_paid_process_crash_native.sh
     bash tests/daylight_native.sh
     LUANTTD_QA_HOUSE_AUTOSLOPE=true bash tests/stock_town_city_native.sh
     export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/residential-cache"
