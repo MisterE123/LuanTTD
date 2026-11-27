@@ -340,13 +340,9 @@ return function(Sim,mod,s,cap)
   function N.actors(x,z,w,h,fraction,frame) return project(Sim,N,x,z,w,h,fraction,frame) end
   if s.stock_generated_profile and s.stock_generated_profile.river_stats then
     local rivers=dofile(mod.."/river_presentation.lua")(Sim)
-    local cached,revision,topology
-    function N.river_direction(id)
-      if not cached or revision~=grid.revision or topology~=s.topology then
-        cached,revision,topology=rivers.routes(s),grid.revision,s.topology
-      end
-      return cached[id]
-    end
+    local flow=rivers.cached()
+    N.river_direction=function(id) return flow.at(s,id) end
+    Sim.mount_river_tide_observer(s,flow.after_plain_flood)
   end
   if N.rail and N.rail.owned then
     N.orders.rail=dofile(mod.."/rail_vehicle_orders.lua")(s,N.rail.owned,dofile(source.."rail_order_cargo.lua"))

@@ -529,6 +529,8 @@ function M.clear_live_sea_cache(s)
   local sea=live_sea[s]
   if sea then sea.reset();sea.resume_day=s.day+2 end
 end
+M.river_tide_observers=setmetatable({},{__mode="k"})
+function M.mount_river_tide_observer(s,observe) M.river_tide_observers[s]=observe end
 local function coastal_visit(s)
   if not coastal_active(s) then return end
   load_road_rules()
@@ -554,10 +556,14 @@ local function coastal_visit(s)
   board.clear_platform=function(id,apply) return M.coastal_clear_rail_platform(s,id,apply) end
   local trees=s.stock_generated_profile and stock_tree_lifecycle
   local random=trees and function() return M.stock_random_u32(s) end
+  local river_tide=M.river_tide_observers[s]
   local function water(x,z,tick)
     local previous=s.topology
-    local changed,plain=coastal_world.visit(s,x+1,z+1,board,tick)
-    if plain then M.preserve_road_junctions_after_tide(s,previous) end
+    local changed,plain,first=coastal_world.visit(s,x+1,z+1,board,tick)
+    if plain then
+      M.preserve_road_junctions_after_tide(s,previous)
+      if river_tide then river_tide(s,previous,first) end
+    end
     return changed
   end
   local sea=live_sea[s]

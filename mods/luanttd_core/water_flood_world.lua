@@ -205,7 +205,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
     local changes=Flood.scan(B,x,z)
     if not changes then return 0 end
     s.changed=s.changed or {}
-    local cleared_spans,applied,plain={},0,true
+    local cleared_spans,applied,plain,first={},0,true,#s.changed+1
     for _,change in ipairs(changes) do
       local id=Sim.id(change.x,change.z)
       local t=assert(s.tiles[id])
@@ -279,7 +279,7 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       if changed then s.changed[#s.changed+1]=id;applied=applied+1 end
     end
     if applied>0 then s.topology=(s.topology or 0)+1 end
-    return applied,applied>0 and plain
+    return applied,applied>0 and plain,first
   end
 
   function W.is_water(t)

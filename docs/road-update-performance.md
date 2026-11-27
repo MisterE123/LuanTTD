@@ -148,6 +148,27 @@ with frequent coastal changes, not a general FPS measurement.
 tests/coastal_road_network_perf_native.sh luantiserver 1cd8c30 ../coastal-road-perf
 ```
 
+### Do not recompute river directions after remote tide changes
+
+A river's projected flow depends on each river tile and its adjacent
+water outlets. On generated worlds the owner now retains directions
+after a plain flood only when the actual changed tiles are outside that
+dependency set. Tides at an outlet, geometry edits, and gaps in the
+revision sequence still force a rebuild. This affects the direction
+sent to views, not the river or navigation rules.
+
+In the 512×512 native probe, comparing directions for all 66 river
+tiles after each of 73 real stock floods matched exactly. In four
+alternating samples the accumulated direction-query CPU time went
+from about **33–36 ms to 0.7–1.4 ms**. This measures only the
+river-direction work, not full snapshot latency. The ordinary
+generated-world worker also returned the same direction through ten
+real snapshots.
+
+```sh
+tests/river_tide_perf_native.sh luantiserver ../river-tide-perf
+```
+
 ## Reuse identical stock road geometry, not pathfinding decisions
 
 In a 192-bus live checkpoint, 144 vehicles held a second copy of an
