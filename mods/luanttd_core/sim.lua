@@ -5324,9 +5324,11 @@ local function automatic_road_service(s,faults,v,f,difficulty,date,random)
   -- is hidden: being on the physical depot tile is already enough.
   local depot_on_tile=tile and depot_endpoint(s,v.owner,tile)
   local parked_in_depot=v.depot~=nil
-  local plain=frame and s.tiles[tile].build=="road" and not c.depot_wait and not c.lane_pose and
-    not frame[10] and not frame[12] and not frame[13] and not frame[14] and not s.tiles[tile].level_crossing
-  if not depot_on_tile and not plain then return end
+  local cell=frame and s.tiles[tile]
+  local routeable=cell and (cell.build=="road" or cell.build=="road_station" and frame[6]>=64 and frame[6]<80)
+    and not c.depot_wait and not c.lane_pose and not frame[10] and not frame[12] and not frame[13] and not frame[14]
+    and not cell.level_crossing
+  if not depot_on_tile and not routeable then return end
   local order=v.load_state and {kind="loading"} or v.road_auto_service and v.road_auto_service.order
     or {kind="goto_station"}
   local routing
@@ -5343,8 +5345,10 @@ local function automatic_road_service(s,faults,v,f,difficulty,date,random)
       v.dest and s.stations[v.dest] and s.stations[v.dest].tile,orders=v.orders},
     {random32=random,nearest=function()
       local path,nearest,td,cost,frames=query()
-      if not path then return end
-      return {tile=nearest,depot=nearest,cost=cost,path=path,td=td,frames=frames}
+      if path then return {tile=nearest,depot=nearest,cost=cost,path=path,td=td,frames=frames} end
+      if old and frame then
+        return source_route.reversing_depot_choice(s,v,frame,routing.occupancy(M,s))
+      end
     end})
   if plan.kind=="service_here" then
     faults.service(v,s.stock_load_tick or s.day*74,date)

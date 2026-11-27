@@ -583,7 +583,17 @@ The town then adds a curved street beside the active stop.
 or depot instead of treating the facility as a solid wall. The next
 bus drives onto the new municipal tile in both games. The
 [ordinary replay](../tests/town_growth_rc1_two_buses.lua) matches all
-11,026 logical ticks through June 1, both buses and passenger queues,
-both shared random words, the actual streets and growth counters,
-103 paid deliveries and the finances across two reopens. This covers one
-active two-bus town; it does not imply larger or mixed-mode parity.
+26,862 logical ticks through the following January 1, including both
+buses, passenger queues, shared random words, actual streets and growth
+counters, 293 paid deliveries and the finances across three reopens.
+
+Both buses actually service twice. The source allows a non-loading bus
+to take up an automatic service order from inside a drive-through lane;
+later, it performs the stock active-depot recheck while the bus reverses,
+using its logical Trackdir without interrupting the physical turn. At
+the preferred stop frame, a moving leader must clear before the follower
+starts taking passengers. These situations now run in the same stock
+sequence, not as route-specific time adjustments. The verified recheck
+is for an existing detour to the same depot; a different depot chosen
+during a U-turn is not covered. This is still one active Temperate town,
+not proof of multi-town or mixed-mode parity.

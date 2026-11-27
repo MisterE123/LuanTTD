@@ -176,16 +176,18 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     return path,best.last_td,cost,frames,bays
   end
   -- From the exact front position on an ordinary road in mid-leg.
-  -- Warehouse stops, tunnel/bridge interiors and a temporary passing lane
-  -- have distinct controller states; never snap them to an invented road
-  -- origin. The caller can retry after a real ordinary position is reached.
+  -- A drive-through station uses the straight approach Trackdir even
+  -- while physically inside the stop. Bays, spans and passing lanes
+  -- still need their own controller states.
   function R.from_live_frame(s,vehicle,frame,target_station,occupancy,waypoints)
     if not frame or not vehicle or vehicle.road_speed_state and vehicle.road_speed_state.lane_pose then return end
     local board=Board(Sim,s,F,occupancy)
     local id,td=frame[4],frame[6]
     local source=board.tile(id)
-    if not source or source.kind~="road" or not F.has_trackdir(F.status(source,false),td)
+    if not source or (source.kind~="road" and source.kind~="drive_stop")
         or frame[10] or frame[12] or frame[13] or frame[14] then return end
+    if source.kind=="drive_stop" and td>=64 and td<80 then td=td-64 end
+    if not F.has_trackdir(F.status(source,false),td) then return end
     local bus=vehicle.cargo=="passenger"
     local v={owner=vehicle.owner,bus=bus,tile=id,display_max_speed=speed[vehicle.engine]}
     if not v.display_max_speed then return end
@@ -212,6 +214,27 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
       if path[#path]~=piece.tile then path[#path+1]=piece.tile end
     end
     return path,last.tile,best.last_td,cost,frames,bays
+  end
+
+  -- RoadVehicle::GetVehicleTrackdir exposes a logical straight
+  -- state during the mechanical U-turn. Keep path scoring separate
+  -- from splicing a new route into the pixels of an already committed
+  -- turn. An existing detour still needs its stock daily recheck.
+  function R.reversing_depot_choice(s,vehicle,frame,occupancy)
+    local state=frame[6]
+    if state~=6 and state~=7 and state~=14 and state~=15 then return end
+    local board=Board(Sim,s,F,occupancy)
+    local id,td=frame[4],state-6
+    local origin=board.tile(id)
+    if not origin or not F.has_trackdir(F.tile_trackdirs(origin,false),td) then return end
+    local v={owner=vehicle.owner,bus=vehicle.cargo=="passenger",tile=id,display_max_speed=speed[vehicle.engine]}
+    if not v.display_max_speed then return end
+    local trace,_,cost=through(board,v,id,2^td,nil,{kind="any_depot"})
+    local last=trace and trace[#trace]
+    local dest=last and board.tile(last.tile)
+    if dest and dest.kind=="depot" and dest.owner==vehicle.owner then
+      return {tile=last.tile,depot=last.tile,cost=cost}
+    end
   end
 
   -- OpenTTD 14.1 YapfRoadVehicleFindNearestDepot: exact current trackdir

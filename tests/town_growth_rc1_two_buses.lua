@@ -25,14 +25,21 @@ local function observe(tick)
   hash(1,tick,unpack(s.passenger_rating_rng))
   for id=1,2 do
     local v=s.fleet[id]
-    local frame=assert(Sim.road_motion_frame(s,v),"source keeps both buses visible for this window")
+    local frame=Sim.road_motion_frame(s,v)
     local moving=v.road_speed_state
     local c=moving or assert(v.road_stop_motion)
-    local actual={frame[4]-1,frame[1]-16,frame[2]-16,Sim.stock_road_frame_z(s,frame),frame[3],
-      c.progress,moving and c.speed or 0,c.subspeed}
+    local actual
+    if frame then
+      actual={frame[4]-1,frame[1]-16,frame[2]-16,Sim.stock_road_frame_z(s,frame),frame[3],
+        c.progress,moving and c.speed or 0,c.subspeed}
+    else
+      assert(c.depot and v.depot and v.last_depot_entry_tick==tick)
+      actual={v.depot-1,-1,-1,-1,-1,c.progress,0,c.subspeed}
+    end
     hash(2,tick,id-1,unpack(actual))
-    if ref.motion[tick] and id==(tick==3968 and 1 or 2) then
-      for i,n in ipairs(ref.motion[tick]) do eq("source queued bus/municipal road frame "..tick.."/"..i,actual[i],n) end
+    local row=ref.motion[tick]
+    if row and id==row[1] then
+      for i=2,#row do eq("source shared-stop/depot frame "..tick.."/"..i,actual[i-1],row[i]) end
       if tick==3047 then
         eq("loading began at frame 3",frame[15],3)
         eq("at actual station",v.load_state.station,2)
@@ -41,6 +48,15 @@ local function observe(tick)
         eq("departure from the same lane pixel",frame[15],3)
       elseif tick==3968 then
         eq("municipal tile 2192 retained both road connections",s.tiles[2193].road_bits,9)
+      elseif tick==12603 then
+        eq("automatic service starts in the live station lane",v.road_return_depot,2383)
+      elseif tick==24073 then
+        eq("automatic service continues after reversing recheck",v.road_return_depot,2383)
+        eq("mechanical reversal uninterrupted",frame[6],14)
+      elseif tick==26401 then
+        eq("hold before loading until the rolling bus leaves proximity",v.load_state,nil)
+      elseif tick==26402 then
+        eq("load the following tick",v.load_state.station,2)
       end
     end
     local st=s.stations[id]
@@ -110,10 +126,10 @@ local function compare(tick)
   print(("Matched two-bus RC1 day %d: %d passengers delivered"):format(a.day,paid))
 end
 compare(first)
-for day=3,151 do
-  if day==32 or day==91 then s=F.reopen(s,true,ref.start.service_options) end
+for day=3,365 do
+  if day==32 or day==91 or day==305 then s=F.reopen(s,true,ref.start.service_options) end
   Sim.daily(s,nil,observe)
   compare(s.passenger_house_clock.counter)
 end
-assert(checked==6 and traced==11026 and s.tiles[2193].road_bits==9)
-print("PASS two buses sharing stock drive-through stops: 11,026 ticks, six town/company snapshots, two packed reopens")
+assert(checked==13 and traced==26862 and s.fleet[1].road_fault.services>=4 and s.fleet[2].road_fault.services>=4)
+print("PASS two buses sharing stock drive-through stops: 26,862 ticks, thirteen town/company snapshots, three packed reopens")

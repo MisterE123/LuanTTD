@@ -12,10 +12,10 @@ for _,engine in ipairs(Buses.order) do
 end
 return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,crossing_step,oneway_guard,oneway_replan,Bay,Junction,tile_xy)
   local R={bay=Bay,preserve_after_tide=Junction and Junction.preserve_after_tide}
-  local Pass
+  local Pass,Motion
   if make_overtake_board then
     local m=base.."openttd/"
-    local Motion=dofile(m.."road_motion.lua")(dofile(m.."road_motion_data.lua"))
+    Motion=dofile(m.."road_motion.lua")(dofile(m.."road_motion_data.lua"))
     Pass=dofile(base.."road_pass_runtime.lua")(Motion,dofile(m.."road_overtake.lua"),
       dofile(m.."yapf_road_follow.lua"),make_overtake_board)
   end
@@ -199,8 +199,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       return not leader.stopped and leader.clock and leader.clock.speed or 0
     end
     local v=s.fleet[leader.id]
-    local moving=v and not leader.stopped and leader.clock and
-      leader.clock.index<#(v.road_motion_frames or {})
+    local moving=v and not leader.stopped and leader.clock
     return moving and leader.clock.speed or 0
   end
   local function board_for(s,W)
@@ -286,7 +285,24 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         end
         return true
       end
-      if a.stock_stop then state.arrival_ready=true;state.speed=0 end
+      if a.stock_stop then
+        if Motion and old[6]>=64 and old[6]<80 then
+          -- IndividualRoadVehicleController checks proximity before
+          -- handling frame 11, even at the designated platform. A
+          -- rolling leader delays loading; a stationary one doesn't.
+          local kind,dx,dy=Motion.sample(old[6],1,old[15]+1)
+          if kind=="position" then
+            local x=old[1]-old[1]%16+dx
+            local y=old[2]-old[2]%16+dy
+            local leader=W.find(record,state,x,y,old[3])
+            if leader then
+              state.waiting,state.speed="road",leader_speed(s,leader)
+              if state.speed>0 then return false end
+            end
+          end
+        end
+        state.arrival_ready=true;state.speed=0
+      end
       return false
     end
     local b=nominal
