@@ -19,5 +19,6 @@ printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\n' "${BAYLI
 export HOME="$o/home" LUANTI_GAME_PATH="$o/games" MINETEST_GAME_PATH="$o/games"
 timeout 120 "$server" --world "$o/world" --config "$o/conf" --gameid shiptide --logfile '' > "$o/log" 2>&1 || { tail -40 "$o/log";exit 1; }
 test "$(grep -c 'NATIVE SOLID SEA REGIONS' "$o/log")" = 4
-grep -E 'NATIVE (SOLID SEA REGIONS|FIRST FERRY ROUTE)' "$o/log"
+test "$(grep -c 'NATIVE MIXED SHIP REGIONS' "$o/log")" = 4
+grep -E 'NATIVE (SOLID SEA REGIONS|MIXED SHIP REGIONS|FIRST FERRY ROUTE)' "$o/log"
 ! grep -q 'ERROR\[' "$o/log"

@@ -76,6 +76,53 @@ core.after(0,function()
       assert(n>m and e>200 and c==0)
       out[i]=("NATIVE SOLID SEA REGIONS batch=%d baseline=%.3f candidate=%.3f followers=%d/%d flat=%d"):format(i,a,b,n,m,e)
     end
+    -- A mixed 128x128 board in which every region contains a rocky
+    -- shallows, slope, coast, or artificial waterway. In each build the
+    -- stock follower may examine one physical tile from several headings
+    -- and both sides of a region boundary. Count raw descriptor reads.
+    for z=1,128,16 do for x=1,128,16 do
+      t(x+6,z+6).stock_water_rocks=true
+      if (x+z)%32==2 then t(x+7,z+6).terrain="grass" end
+    end end
+    local sampler=W.region_sampler
+    assert(sampler)
+    local function coastal(opt)
+      W.region_sampler=opt and sampler or nil
+      local board=Net.board(s)
+      local reads=0
+      local tile=board.tile
+      board.tile=function(i) reads=reads+1;return tile(i) end
+      local regions=Regions(Track,W,board,{width=128,height=128,x0=1,z0=1})
+      collectgarbage("collect")
+      local start=os.clock()
+      for z=0,7 do for x=0,7 do regions.info(x,z) end end
+      local elapsed=(os.clock()-start)*1000
+      W.region_sampler=sampler
+      return regions,elapsed,reads
+    end
+    for i=1,4 do
+      local a,b,p,q,n,m
+      if i%2==0 then b,q,m=coastal(true);a,p,n=coastal(false)
+      else a,p,n=coastal(false);b,q,m=coastal(true) end
+      assert(m*4<n,"cold shoreline descriptor reads were not reduced")
+      equal(a,b,128,128)
+      out[#out+1]=("NATIVE MIXED SHIP REGIONS batch=%d baseline=%.3f candidate=%.3f reads=%d/%d"):format(i,p,q,n,m)
+    end
+    local a=coastal(false)
+    local b=coastal(true)
+    local point=id(32,32)
+    t(32,32).stock_water_rocks=true
+    W.region_sampler=nil
+    a.invalidate(point)
+    a.region_patch(point)
+    -- The bridge crosses region boundaries; trust only the rebuilt
+    -- source and neighboring patches, never the preceding sampler.
+    a.info(2,1);a.info(1,2)
+    W.region_sampler=sampler
+    b.invalidate(point)
+    equal(a,b,128,128)
+    assert(b.region_patch(point)==0)
+
     -- Rebuild the controller per query, as when planning its first
     -- voyage. The route crosses open water rather than hugging a coast.
     S.W,S.H=128,128
@@ -127,7 +174,7 @@ core.after(0,function()
     end
     return out
   end,function(out)
-    assert(out and #out==8)
+    assert(out and #out==12)
     for _,l in ipairs(out) do core.log("action",l) end
     core.request_shutdown("Water regions match cold and mixed cases",false,0)
   end))

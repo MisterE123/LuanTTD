@@ -71,6 +71,9 @@ return function(Track,Water,board,layout)
     local full=solid_region(rx,rz)
     if full then return full end
     local r={labels={},edge={[0]=0,0,0,0},cross_aqueduct=false,count=0,x=rx,z=rz}
+    -- ForceUpdate is a synchronous read-only walk over this board.
+    -- DFS order, stock follower, edges and aqueduct handling stay as-is.
+    local sample=Water.region_sampler and Water.region_sampler(board)
     local stack={}
     for y=0,15 do for x=0,15 do
       local start=local_tile(rx,rz,x,y)
@@ -80,12 +83,12 @@ return function(Track,Water,board,layout)
         local id=stack[#stack];stack[#stack]=nil
         local i=local_index(id,rx,rz)
         if not r.labels[i] then
-          local status=Water.at(board,id)
+          local status=sample and sample(id) or Water.at(board,id)
           if status~=0 then
             r.labels[i]=label
             r.count=label
             for _,td in ipairs(Water.trackdirs(status)) do
-              local f=Water.follow(board,nil,id,td)
+              local f=Water.follow(board,nil,id,td,sample)
               local fx,fz=region_xy(f.tile)
               if f.ok and fx~=nil then
                 if fx==rx and fz==rz then

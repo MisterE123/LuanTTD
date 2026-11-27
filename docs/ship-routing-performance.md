@@ -61,6 +61,23 @@ coast-only trips do not see that speedup.
 tests/ship_solid_region_perf_native.sh luantiserver ../solid-sea-perf
 ```
 
+## Sample each tile once when rebuilding a mixed water region
+
+Sampling the native board resolves shared corner heights, bridge layers
+and water facilities. In a mixed 16×16 region, the stock flood fill
+asks about the same parcel from several headings. The worker now shares
+the track mask and tile descriptor only for the duration of one region
+rebuild. It still runs the same follower in the same order for every
+track direction. Neighboring tiles and far aqueduct mouths are sampled
+on first use; nothing from the sampler survives to the next rebuild.
+
+The native worker benchmark compared every patch label, edge bit and
+ordered neighbor before and after adding a rock at a region corner.
+Across four alternating batches of 64 mixed regions, descriptor reads
+went from **405,484 to 20,180** and median cold-build CPU from
+**403 to 155 ms**. This measures rebuilding water regions, not the
+whole simulation or frame rate.
+
 ## Keep the checked sailing leg through unrelated floods
 
 The worker previously verified every remaining edge of an active route

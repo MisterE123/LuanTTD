@@ -75,17 +75,35 @@ return function(Track)
     return (track_tile(board,id,side))
   end
 
+  -- Reuse immutable tile descriptors only inside one synchronous
+  -- WaterRegion::ForceUpdate. Neighbor and remote aqueduct exit reads
+  -- belong to this same build, never to the lifetime of the region.
+  function W.region_sampler(board)
+    local status,tiles={},{}
+    return function(id)
+      if id==nil then return 0 end
+      local mask=status[id]
+      if mask==nil then
+        local t
+        mask,t=track_tile(board,id)
+        status[id],tiles[id]=mask,t
+      end
+      return mask,tiles[id]
+    end
+  end
+
   -- CFollowTrackWater: ships allow 90-degree transitions, have no forced
   -- in-follower reversal (even on depot tiles), no owner check, and do
   -- not use the road/rail reservation mask. Reverse planning is external.
-  function W.follow(board,vehicle,old_id,td)
+  function W.follow(board,vehicle,old_id,td,sample)
     local exit=Track.valid_trackdir(td) and Track.exit_side(td) or nil
     local r={old_tile=old_id,old_td=td,exit=exit,tile=nil,trackdirs=0,skip=0,
       bridge=false,tunnel=false,station=false,error=W.EC_NONE,ok=false}
     if exit==nil then r.error=W.EC_NO_WAY;return r end
     -- The native board resolves shared corners and water facilities to
     -- make this record. Use that same read for geometry and track mask.
-    local old_dirs,old=track_tile(board,old_id)
+    local old_dirs,old
+    if sample then old_dirs,old=sample(old_id) else old_dirs,old=track_tile(board,old_id) end
     if not Track.has(old_dirs,td) then r.error=W.EC_NO_WAY;return r end
     if old.kind=="aqueduct" and old.dir==exit then
       r.tile=old.other
@@ -94,7 +112,8 @@ return function(Track)
     else
       r.tile=board.adjacent(old_id,exit)
     end
-    local trackdirs,next_tile=track_tile(board,r.tile)
+    local trackdirs,next_tile
+    if sample then trackdirs,next_tile=sample(r.tile) else trackdirs,next_tile=track_tile(board,r.tile) end
     r.trackdirs=Track.intersect(trackdirs,Track.reachable(exit))
     if r.trackdirs==0 then
       r.error=W.EC_NO_WAY
