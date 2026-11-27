@@ -96,6 +96,15 @@ function begin()
     if p and visual and paid and paid>(saved and saved.paid or 0) and p.arrivals>=(saved and saved.arrivals+1 or 2) then
       assert(state.stock_owned_ferry.engine_id==207 and p.owned and company.revenue>0)
       inspect(state)
+      local generated,moved=0,0
+      for _,town in pairs(state.stock_town_growth.towns) do
+        local cargo=town.supplied.passenger or {}
+        generated=generated+(cargo.new_max or 0)+(cargo.old_max or 0)
+        moved=moved+(cargo.new_act or 0)+(cargo.old_act or 0)
+      end
+      assert(moved>0 and generated>=moved,
+        "Natural ferry stations failed to credit the original towns' passenger supply")
+      core.log("action",("NATIVE TOWN CARGO: %d passengers allocated out of %d generated"):format(moved,generated))
       if not reopened then storage:set_string("rocky_coast_ferry_qa",core.serialize({paid=paid,arrivals=p.arrivals})) end
       core.log("action",("PASS NATIVE ROCKY FERRY %s: alternative path %d -> %d, %d paid passengers, $%d")
         :format(reopened and "REOPEN" or "SERVICE",short,long,paid,company.revenue))

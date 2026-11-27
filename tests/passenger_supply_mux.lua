@@ -11,12 +11,12 @@ local Catchment=mod("openttd/station_catchment")(P,Rating,
 local Service=mod("passenger_station_service")(Catchment,P,Income,Rating,Roads,
   mod("road_loading_runtime"),mod("openttd/loading_timing"))
 local Cross=mod("passenger_supply_mux")(Sim,Catchment,P,Roads,Rating)
-local mail_events=0
+local mail_events,mail_production=0,0
 local mail_tap={
   stops=function() return {} end,
   from_house=function(_,amount)
     assert(amount>0)
-    mail_events=mail_events+1
+    mail_events=mail_events+1;mail_production=mail_production+amount
   end,
   step_rating=function() end,
 }
@@ -140,11 +140,15 @@ authored.tiles[src].parcel="shop"
 authored.stations=s.stations
 s=authored
 s.road_mail=true
-local emits,moved_sum=0,0
+Town.start(s)
+local source=s.tiles[src].source_house.town
+s.stock_town_growth={towns={[source]={supplied={}}}}
+local supplied=s.stock_town_growth.towns[source].supplied
+local emits,moved_sum,produced=0,0,0
 local fixed_parts=0
 local hooks={passenger=function(world,amount,u,v,rec,tick)
   assert(u==x and v==y and Cross.town_hooks.passenger(world,amount,u,v,rec,tick))
-  emits=emits+1
+  emits=emits+1;produced=produced+amount
 end}
 ctx.production=function(service,tick)
   local n,shares=Cross.consume(s,service,tick,ctx)
@@ -168,6 +172,16 @@ bus,train,ferry=sums()
 assert(emits>0 and bus>0 and train>0 and ferry>0 and mail_events>0)
 assert(s.passenger_house_clock.counter==a.tick and a.tick==100*74)
 assert(bus+train+ferry==moved_sum)
+assert(supplied.passenger.new_max==produced and supplied.passenger.new_act==moved_sum)
+assert(supplied.mail.new_max==mail_production and (supplied.mail.new_act or 0)==0)
+local Stats=mod("openttd/town_cargo_stats")
+local town=s.stock_town_growth.towns[source]
+supplied.passenger.old_max,supplied.passenger.old_act=100,16
+assert(Stats.last_month_percent(town,"passenger")==40 and Stats.last_month_percent(town,"mail")==0)
+Stats.supply(s,{source=source,source_type="industry"},"passenger",10000,400)
+assert(supplied.passenger.new_max==produced and supplied.passenger.new_act==moved_sum)
+local restored=mod("packed_campaign").decode(mod("packed_campaign").encode(s))
+exact(restored.stock_town_growth.towns[source].supplied,supplied)
 assert(moved_sum*256+s.stations[1].passenger_fraction+a.stations[1].passenger_fraction+a.stations[2].passenger_fraction==fixed_parts)
 assert(s.stock_passenger_mux.pending==nil and s.stock_passenger_mux.consumed.town==s.tiles[src].source_house.town)
 print(string.format("PASS: %d real house emissions through one cross-mode contest: road %d, rail %d, ferry %d",

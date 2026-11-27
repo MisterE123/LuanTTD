@@ -13,6 +13,7 @@ return function(Sim,R,max_days)
   local place_index=place_labels.site_index(Sim,s)
   local Lift=dofile(mod.."/openttd/town_lift.lua")
   local TownFoundation=dofile(mod.."/openttd/town_foundation.lua")
+  local TownCargo=dofile(mod.."/openttd/town_cargo_stats.lua")
   local front_steps=dofile(mod.."/house_front_steps.lua").make(dofile(mod.."/house_frontage.lua"))
   local function steps_at(id,t,slope,level)
     if not (t and t.house and t.source_house and Sim.road_surface and Sim.road_bits) then return end
@@ -322,6 +323,14 @@ return function(Sim,R,max_days)
     row.funding=Sim.quote_town_buildings(s,name,id)
     row.reconstruction=Sim.quote_road_reconstruction(s,name,id)
     row.statue=Sim.quote_town_statue(s,name,id)
+    local stock=s.stock_town_growth and s.stock_town_growth.towns[id]
+    if stock then
+      row.last_month={}
+      for _,cargo in ipairs({"passenger","mail"}) do
+        local generated,transported=TownCargo.last_month(stock,cargo)
+        row.last_month[cargo]={generated=generated,transported=transported}
+      end
+    end
     if R.air and R.air.network and R.air.network.town_noise then
       row.airport_noise=R.air.network.town_noise(s,id)
     end

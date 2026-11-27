@@ -3325,6 +3325,12 @@ function U.open_town_authority(p,town)
         esc(("Airport noise: %d / %d"):format(noise.used,noise.limit)))
       exit=exit+.63
     end
+    if row.last_month then
+      local pax,mail=row.last_month.passenger,row.last_month.mail
+      action=action..("label[.45,%g;Passengers last month: %d of %d transported]"):format(exit+.22,pax.transported,pax.generated)
+      action=action..("label[.45,%g;Mail last month: %d of %d bags transported]"):format(exit+.64,mail.transported,mail.generated)
+      exit=exit+1.03
+    end
     local size=exit+.92
     core.show_formspec(n,"luanttd_core:town_authority",
       ("formspec_version[7]size[10.6,%g]bgcolor[#152334;false]"):format(size)..

@@ -2,6 +2,7 @@
 -- production and catchment, not town expansion or visual buildings.
 local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
 local Lift=dofile(path.."openttd/town_lift.lua")
+local Stats=dofile(path.."openttd/town_cargo_stats.lua")
 local road_candidates=dofile(path.."road_house_catchments.lua")
 return function(Sim,H,Packets,Rating,Mail)
   local M={}
@@ -60,9 +61,16 @@ return function(Sim,H,Packets,Rating,Mail)
     end
     local function emit(cargo,amount,x,z,record,tick)
       if record.town_growth and not record.first_cargo_tick then record.first_cargo_tick=tick end
+      -- Production counts even with no eligible station. The transported
+      -- increment is only the integer amount added to station waiting
+      -- cargo, including its existing per-station fraction.
+      Stats.supply(s,record,cargo,amount,0)
       if cargo=="mail" then
-        if shared_mail then return shared_mail(s,amount,x,z,record,tick) end
-        if mail then return mail.from_house(s,amount,x,z,record,truck_stops) end
+        local moved
+        if shared_mail then moved=shared_mail(s,amount,x,z,record,tick)
+        elseif mail then moved=mail.from_house(s,amount,x,z,record,truck_stops) end
+        Stats.supply(s,record,cargo,0,moved or 0)
+        return moved
       end
       if cargo~="passenger" or amount<=0 then return end
       if hooks and hooks.passenger then return hooks.passenger(s,amount,x,z,record,tick) end
@@ -85,14 +93,17 @@ return function(Sim,H,Packets,Rating,Mail)
       end
       if not list then return end
       Packets.allocate(amount,list)
+      local moved=0
       for _,entry in ipairs(list) do
         local st=entry.st
         local units=Packets.whole_units(st,entry.fixed)
         if units>0 then
           Packets.enqueue(st,{units=units,source=record.source or record.town,source_type=record.source_type,origin_station=st.id,age=0})
           Rating.generated(s,st,units)
+          moved=moved+units
         end
       end
+      Stats.supply(s,record,cargo,0,moved)
     end
     local random=function() return Rating.random_u32(s) end
     local update_rating=function() Rating.advance(s,1,mail and mail.step_rating or nil) end

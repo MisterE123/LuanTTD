@@ -4,6 +4,7 @@
 -- allocation pass is allowed while the mounted source owns this event.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local sector=dofile(mod.."/catchment_sectors.lua")
+local Stats=dofile(mod.."/openttd/town_cargo_stats.lua")
 return function(Sim,Catchment,Packets,RoadRating,StockRating)
   local M={}
   local geometry=setmetatable({},{__mode="k"})
@@ -204,6 +205,7 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
       result[#result+1]={station=entry.st.id,kind=destination.kind,
         local_id=st.id,fixed=entry.fixed,units=units}
     end
+    Stats.supply(s,e,"passenger",0,total)
     return total
   end
 

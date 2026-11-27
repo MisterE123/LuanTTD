@@ -312,6 +312,21 @@ the RNG at February's monthly lottery, which the replay deliberately
 disables rather than mimicking with extra draws.
 
 
+### Town cargo supply
+
+Every ordinary house emission credits its original town with the amount
+produced, including houses outside station coverage. Only the whole
+units actually added to station waiting cargo count as transported,
+including the stock per-station rounding carry. The shared passenger
+contest credits the town once across road, rail, ships and aircraft.
+Mail uses the same source accounting with its separate station queues.
+The Local Authority panel shows the worker's previous-month totals, not
+an estimate based on current population or paid arrivals. Both months
+persist through an owner restart. The vanilla replay now compares these
+raw totals as well; the native ferry fixture verifies nonzero counts at
+naturally generated ports through a paid service and reopen.
+
+
 ### Recovering a roadless town
 
 The stock roadless fallback searches from the town center in RC1's

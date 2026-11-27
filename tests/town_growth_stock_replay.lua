@@ -48,6 +48,12 @@ local function initialize(ref)
       fund_buildings_months=c.fund_buildings_months,road_build_months=c.road_build_months,
       layout=({[0]="original","better","grid2","grid3"})[c.layout]})
     town.house_counts={}
+    for cargo,name in pairs({[0]="passenger",[2]="mail"}) do
+      local raw=opening.supply[id][cargo]
+      if raw then
+        town.supplied[name]={new_max=raw[1],new_act=raw[2],old_max=raw[3],old_act=raw[4]}
+      end
+    end
     town.unique={church=math.floor(c.flags/2)%2==1,stadium=math.floor(c.flags/4)%2==1}
     towns[id],order[id]=town,id
     s.sites[id]={id=id,kind="town",name="RC1 comparison "..id,tile=c.xy+1,population=0,
@@ -130,6 +136,14 @@ local function replay(file,expected,expected_days)
       eq(town.grow_counter,e[2],"growth countdown: "..id)
       eq(town.growth_rate,e[3],"growth rate: "..id)
       eq(town.time_until_rebuild,e[4],"rebuild countdown: "..id)
+      for cargo,name in pairs({[0]="passenger",[2]="mail"}) do
+        local got=town.supplied[name] or {}
+        local want=sample.supply[id][cargo] or {0,0,0,0}
+        eq(got.new_max or 0,want[1],"current town production: "..id.."/"..name)
+        eq(got.new_act or 0,want[2],"current moved town cargo: "..id.."/"..name)
+        eq(got.old_max or 0,want[3],"last month town production: "..id.."/"..name)
+        eq(got.old_act or 0,want[4],"last month moved town cargo: "..id.."/"..name)
+      end
     end
     for id,t in ipairs(s.tiles) do
       local i=id-1
@@ -176,7 +190,7 @@ local function replay(file,expected,expected_days)
   local samples=0
   for _ in pairs(ref.stock) do samples=samples+1 end
   assert(count==samples and count==expected)
-  print(("PASS %d real RC1 snapshots (%s): exact RNG, towns, road and house owners, and house construction clocks"):format(count,file))
+  print(("PASS %d real RC1 snapshots (%s): exact RNG, owners, construction clocks and town cargo totals"):format(count,file))
   return s,towns
 end
 

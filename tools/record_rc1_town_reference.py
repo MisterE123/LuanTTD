@@ -56,6 +56,17 @@ def keyed(mapping):
     return '{' + ','.join(f'[{i}]={array(row)}' for i, row in mapping.items()) + '}'
 
 
+
+def supply(town):
+    result = {}
+    for row in town['supplied']:
+        cargo = row['cargo']
+        assert cargo in (0, 2), 'Unsupported house cargo in Temperate reference'
+        new, old = row['history'][:2]
+        result[cargo] = (new['production'], new['transported'], old['production'], old['transported'])
+    return keyed(result)
+
+
 def write(output, initial, paths):
     first = sample(initial)
     towns, date, settings, rows, _, _ = first
@@ -92,6 +103,7 @@ return {
             out.write(f'    [{tick}]={{clock={array(clock)},\n')
             out.write('      towns={' + ','.join(array(t[k] for k in TOWN_FIELDS[1:5])
                                                for t in towns.values()) + '},\n')
+            out.write('      supply={' + ','.join(supply(t) for t in towns.values()) + '},\n')
             out.write(f'      roads={keyed(roads)},\n      houses={keyed(houses)},\n')
             if len(towns) == 1 and tick in (4410, 4411):
                 grade = {i: (rows[i][0], rows[i][1], rows[i][3]) for i in (2127, 2128, 2191, 2192)}

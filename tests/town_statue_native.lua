@@ -3,7 +3,9 @@ local funds,request,ready,approached,form_y
 local town,position,plinth
 local raw_show=core.show_formspec
 core.show_formspec=function(name,form,text)
-  if name=="SteelReview" and form=="luanttd_core:town_authority" then
+  if name=="SteelReview" and form=="luanttd_core:town_authority" and text~="" then
+    assert(text:match("Passengers last month: %d+ of %d+ transported"))
+    assert(text:match("Mail last month: %d+ of %d+ bags transported"))
     local y=text:match("button%[%.45,([%d.]+);9%.7,%.57;build_statue;")
     local height=text:match("size%[10%.6,([%d.]+)%]")
     if y and height and not form_y then
