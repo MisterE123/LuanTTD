@@ -2,6 +2,7 @@
 -- action and watch a real existing parcel turn over, not scripted tiles.
 local owner="StockResidentialQA"
 local Terrain=dofile(mod.."/openttd/terrain.lua")
+local Art=dofile(mod.."/stock_town_art.lua")
 local function begin()
   local player=core.get_player_by_name(owner)
   if not (player and authority and authority.status()=="owned" and #world.hotbar_layout(player)>0) then
@@ -19,16 +20,26 @@ local function begin()
       local _,_,top=Terrain.tile(live.corner_grid,x,z)
       player:set_pos({x=2*x-3,y=top+4,z=2*z-5})
       player:set_look_horizontal(math.atan2(-3.5,5.5));player:set_look_vertical(.62)
+      local asset=h.asset_root and ("%s_%d"):format(Art.asset_name(h.asset_root,0),h.asset_part)
+        or Art.asset_name(h.id,Art.look(h.id,x,z))
+      local actual={}
       if h.completed then
-        local Front=dofile(mod.."/house_frontage.lua")
-        local dx,dz=Front.placement(Sim,live,saved.id,live.tiles[saved.id],false,h.render_parcel)
-        local node=core.get_node_or_nil({x=2*x+dx,y=top+1,z=2*z+dz})
-        if node and node.name==("luanttd_core:town_stock_%02x"):format(saved.expected) then
-          core.log("action","PASS NATIVE TOWN REBUILD REOPEN: replacement finished and was physically rendered after restart")
-          return
-        end
+        -- Different stock parcel looks use distinct registered meshes.
+        -- Match the exact asset on the same tile, regardless of the
+        -- entrance anchor chosen by the separate frontage renderer.
+        local name="luanttd_core:"..asset
+        for dx=0,1 do for dz=0,1 do
+          local node=core.get_node_or_nil({x=2*x+dx,y=top+1,z=2*z+dz})
+          if node and node.name==name then
+            assert(core.registered_nodes[name].mesh=="bl_"..asset..".obj")
+            core.log("action","PASS NATIVE TOWN REBUILD REOPEN: same parcel finished and rendered "..asset)
+            return
+          end
+          actual[#actual+1]=node and node.name or "unloaded"
+        end end
       end
-      assert(left>0,"The original replacement never completed after reopening")
+      assert(left>0,("Replacement %d after reopen: completed=%s expected=%s actual=%s")
+        :format(saved.id,tostring(h.completed),asset,table.concat(actual,",")))
       core.after(.35,function() verify(left-1) end)
     end
     core.after(.45,function()verify(145)end)
