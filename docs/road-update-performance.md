@@ -493,6 +493,32 @@ The standard 64×64 session also passed. To repeat the larger test:
 LUANTTD_NATIVE_SESSION_SIZE=512 tests/campaign_worker_session_native.sh
 ```
 
+### Release the dense host view before opening the worker
+
+On a normal large campaign, the host freezes edits and seals the complete
+checkpoint before replacing its dense bootstrap tiles with the compact
+coordinate fallback. It now collects the discarded host records before
+starting the worker's independent decode, rather than holding both dense
+copies until the ready receipt. The fallback, disk format, and authoritative
+world are unchanged. A failed initial save leaves the dense host data
+unmodified; recovery uses the already-sealed file and does not recompact or
+rewrite the presentation snapshot.
+
+On Luanti 5.15.2 Linux, two 1024×1024 boots retained about 167 MiB on the
+host at worker launch instead of 435 MiB. Measured *process* high-water
+RSS at readiness was about **67–71 MiB lower**; the 512×512 comparison
+saved **24–30 MiB**. The collection adds a short wait during 1024×1024
+startup, not during simulation. A real graphical 512×512 session joined,
+accepted movement, issued a durable company command, streamed a remote
+sector, and reopened it with the same company and clock.
+
+```sh
+tests/campaign_worker_boot_memory_native.sh luantiserver 3007565 \
+  /path/to/disposable-fixture-world /path/to/fixture.conf /tmp/owner-boot-memory
+lua5.1 tests/campaign_worker_session_bootstrap.lua
+LUANTTD_NATIVE_SESSION_SIZE=512 tests/campaign_worker_session_native.sh
+```
+
 ### Avoid rewriting an unchanged paused campaign
 
 Once the worker has checkpointed a paused campaign, ordinary viewport
