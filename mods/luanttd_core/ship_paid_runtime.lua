@@ -313,7 +313,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     return a
   end
 
-  function F.day(s,Ship,Rail,Air,first_tick)
+  function F.day(s,Ship,Rail,Air,first_tick,live)
     local c=commercial(s)
     local service=c.service
     local active={ship=Ship and enabled(s,"ship"),rail=Rail and enabled(s,"rail"),air=Air and enabled(s,"air")}
@@ -342,13 +342,19 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     if ship_ready and Ship.settle_owned_day then Ship.settle_owned_day(s,p) end
     local run=p and p.paid_clock
     local frame=view(s)
-    frame.ship_samples={Ship and ship_sample(Ship,run and p or nil) or false}
-    frame.rail_samples={}
-    for _,r in ipairs(rails) do
-      frame.rail_samples[rail_key(r.paid_clock)]={rail_sample(s,Rail,r)}
+    if live then
+      -- Only presentation strips are omitted. Keep the same raw dock,
+      -- collision and financial events for all live services.
+      frame.ship_samples,frame.rail_samples,frame.air_samples,frame.ship_serial=nil,nil,nil,nil
+    else
+      frame.ship_samples={Ship and ship_sample(Ship,run and p or nil) or false}
+      frame.rail_samples={}
+      for _,r in ipairs(rails) do
+        frame.rail_samples[rail_key(r.paid_clock)]={rail_sample(s,Rail,r)}
+      end
+      frame.air_samples={}
+      for _,a in ipairs(aircraft) do frame.air_samples[air_key(a.paid_clock)]={ship_sample(Air,a)} end
     end
-    frame.air_samples={}
-    for _,a in ipairs(aircraft) do frame.air_samples[air_key(a.paid_clock)]={ship_sample(Air,a)} end
     local function reconcile(key,id,def)
       if c[key]==id then return end
       if c[key] then
@@ -487,16 +493,18 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       while #frame.air_motion>4096 do table.remove(frame.air_motion,1) end
       Service.post_motion_tick(service,tick,ctx)
       flash(s,c,events)
-      frame.ship_samples[#frame.ship_samples+1]=Ship and ship_sample(Ship,run and p or nil) or false
-      for _,r in ipairs(rails) do
-        local row=frame.rail_samples[rail_key(r.paid_clock)]
-        row[#row+1]=rail_sample(s,Rail,r)
+      if not live then
+        frame.ship_samples[#frame.ship_samples+1]=Ship and ship_sample(Ship,run and p or nil) or false
+        for _,r in ipairs(rails) do
+          local row=frame.rail_samples[rail_key(r.paid_clock)]
+          row[#row+1]=rail_sample(s,Rail,r)
+        end
+        for _,a in ipairs(aircraft) do
+          local row=frame.air_samples[air_key(a.paid_clock)]
+          row[#row+1]=ship_sample(Air,a)
+        end
+        frame.ship_serial=run
       end
-      for _,a in ipairs(aircraft) do
-        local row=frame.air_samples[air_key(a.paid_clock)]
-        row[#row+1]=ship_sample(Air,a)
-      end
-      frame.ship_serial=run
     end
     return {before=before,after=after,hooks=hooks,offer_rig_passengers=function(ind,amount)
       return Service.offer_industry_passengers(service,ind,amount,ctx)

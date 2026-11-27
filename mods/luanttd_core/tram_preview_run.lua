@@ -194,14 +194,14 @@ return function(Network,Trip,Speed,shared,Passenger)
   function R.traffic(z)
     local C={}
     local ordered={}
-    function C.seed(s,W,_,k)
+    function C.seed(s,W,_,k,keep)
       if k==1 or ordered.world~=s then ordered={world=s,runs=R.all(s)} end
       if #ordered.runs==0 then return end
       local records={}
       for _,p in ipairs(ordered.runs) do
         local id=Index.serial(p)
         if R.current(s,id)==p then
-          if k==1 then timelines[p]={frames={R.frame(p) or false}} end
+          if k==1 then timelines[p]=keep~=false and {frames={R.frame(p) or false}} or nil end
           local record={id=id,first=id,type="road",companion=true,
             clock=p,max_speed=speed_cap,stopped=p.phase~="running"}
           local f=R.frame(p)

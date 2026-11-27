@@ -141,13 +141,13 @@ return function(Sim,Service,Roster,debit,credit,receive)
     return out
   end
 
-  function R.day(s,Run,first_tick)
+  function R.day(s,Run,first_tick,live)
     if not R.active(s,Run) then return end
     local b,state=bind(s)
     local run=run_of(s,Run)
     local frame=cache(s)
     frame.serial=run and run.fleet_id
-    frame.samples={sample(s,Run,run)}
+    frame.samples=not live and {sample(s,Run,run)} or nil
     local id=frame.serial
     if id and not state.vehicles[id] then
       assert(b.vehicle({id=id,owner=run.owner,stock_id=run.stock_wagon,length=run.total_length,
@@ -189,7 +189,7 @@ return function(Sim,Service,Roster,debit,credit,receive)
         for _,e in ipairs(moved or {}) do
           e.world_tick,e.cargo=tick,"coal";push(frame.motion,e)
         end
-        frame.samples[#frame.samples+1]=sample(s,Run,run)
+        if frame.samples then frame.samples[#frame.samples+1]=sample(s,Run,run) end
       end
       if not id then return finish() end
       local v=state.vehicles[id]
@@ -231,7 +231,7 @@ return function(Sim,Service,Roster,debit,credit,receive)
     local r=run_of(s,Run)
     if not r then return end
     local frame=frames[s]
-    if not R.active(s,Run) or not frame or frame.serial~=r.fleet_id or #frame.samples<2 then
+    if not R.active(s,Run) or not frame or frame.serial~=r.fleet_id or not frame.samples or #frame.samples<2 then
       local a,b,c,w
       if native and Run.presentation_sample then a,b,c,w=Run.presentation_sample(s,r,part)
       else a,b,c,w=Run.sample(r,part) end

@@ -154,14 +154,14 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     r.freight.charged_running_ticks=ticks
     r.freight.running_expense=(r.freight.running_expense or 0)+whole
   end
-  function R.day(s,Run,first_tick,b)
+  function R.day(s,Run,first_tick,b,live)
     if not (R.active(s,Run) and b) then return end
     local state=assert(s[storage])
     local r=run_of(s,Run)
     local f=frame(s)
     local id=r and r.fleet_id
     f.serial=id
-    f.samples={samples(s,Run,r)}
+    f.samples=not live and {samples(s,Run,r)} or nil
     local function motion(list,tick)
       for _,e in ipairs(list or {}) do
         e.world_tick,e.cargo=tick,cargo;push(f.motion,e)
@@ -217,7 +217,8 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
       end,
       after=function(tick,ready,register)
         local function finish(moved)
-          motion(moved,tick);f.samples[#f.samples+1]=samples(s,Run,r)
+          motion(moved,tick)
+          if f.samples then f.samples[#f.samples+1]=samples(s,Run,r) end
         end
         if not r or blocked or r.failure then return finish() end
         local v=state.vehicle
@@ -272,7 +273,7 @@ return function(profile,Sim,Service,RailStation,Roster,debit,credit)
     local r=run_of(s,Run)
     if not r then return end
     local f=frames[s]
-    if not R.active(s,Run) or not f or f.serial~=r.fleet_id or #f.samples<2 then
+    if not R.active(s,Run) or not f or f.serial~=r.fleet_id or not f.samples or #f.samples<2 then
       local a,b,c,w
       if native and Run.presentation_sample then a,b,c,w=Run.presentation_sample(s,r,part)
       else a,b,c,w=Run.sample(r,part) end

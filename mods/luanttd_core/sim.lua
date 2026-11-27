@@ -4239,11 +4239,11 @@ function M.air_paid_motion_events(s)
   if not paid_air_runs[s] then return {} end
   return paid_ferry.take_air_motion(s)
 end
-local function paid_transport_day(s)
+local function paid_transport_day(s,live)
   local Ship,Rail,Air=paid_ferry_runs[s],paid_rail_runs[s],paid_air_runs[s]
   if not ((Ship or Rail or Air) and paid_ferry.active(s,Ship,Rail,Air)) then return end
   town_passengers.start(s)
-  return paid_ferry.day(s,Ship,Rail,Air,s.passenger_house_clock.counter+1)
+  return paid_ferry.day(s,Ship,Rail,Air,s.passenger_house_clock.counter+1,live)
 end
 function M.mount_stock_town_growth(s,world,want_new)
   assert(s.corner_grid and s.road_stock_clock and s.road_stock_house_supply and s.road_stock_loading and s.road_economy,
@@ -5324,6 +5324,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
   end
   local coastal_road=s.stock_coastal_flood and road_flood_rules()
   local worked,samples=road_clock().live_day(s,clock,{
+    live_projection=tick_pulse~=nil,
     companion=shared_tram_clock[s],
     retire=coastal_road and function(v)
       v.road_vehicle_ticks=(v.road_vehicle_ticks or 0)+1
@@ -5481,6 +5482,7 @@ function M.position(s,v)
   return v.depot or (s.stations[v.station] and s.stations[v.station].tile)
 end
 function M.daily(s,traverse,tick_pulse)
+  local live=tick_pulse~=nil
   s.day=s.day+1
   if s.retired_road_stations or s.retired_road_waypoints then M.road_station_retirement().expire(s) end
   local faults=road_faults_mount[s]
@@ -5519,11 +5521,11 @@ function M.daily(s,traverse,tick_pulse)
   local coal,freight,timber,freighter,industry_train
   if M.rail_coal_active(s) then
     town_passengers.start(s)
-    freight=rail_coal.day(s,paid_rail_runs[s],s.passenger_house_clock.counter+1)
+    freight=rail_coal.day(s,paid_rail_runs[s],s.passenger_house_clock.counter+1,live)
   end
   if M.ship_coal_active(s) then
     town_passengers.start(s)
-    freighter=ship_coal.day(s,s.passenger_house_clock.counter+1)
+    freighter=ship_coal.day(s,s.passenger_house_clock.counter+1,live)
   end
   if M.road_coal_active(s) or freight or freighter then
     passenger_modules()
@@ -5540,10 +5542,10 @@ function M.daily(s,traverse,tick_pulse)
       if timber.mixed or timber.rail_multi then
         local rail=timber.rail
         local days={}
-        if rail.oil then days[#days+1]=oil.runtime.day(s,paid_rail_runs[s],first,rail.oil) end
-        if rail.goods then days[#days+1]=goods.runtime.day(s,paid_rail_runs[s],first,rail.goods) end
+        if rail.oil then days[#days+1]=oil.runtime.day(s,paid_rail_runs[s],first,rail.oil,live) end
+        if rail.goods then days[#days+1]=goods.runtime.day(s,paid_rail_runs[s],first,rail.goods,live) end
         for _,cargo in ipairs(FreightKinds.profile_order) do
-          if rail[cargo] then days[#days+1]=profiled.runtime[cargo].day(s,paid_rail_runs[s],first,rail[cargo]) end
+          if rail[cargo] then days[#days+1]=profiled.runtime[cargo].day(s,paid_rail_runs[s],first,rail[cargo],live) end
         end
         if #days>0 then
           industry_train={
@@ -5562,7 +5564,7 @@ function M.daily(s,traverse,tick_pulse)
         end
       else
         local controller=M.rail_goods_active(s) and goods.runtime or oil.runtime
-        industry_train=controller.day(s,paid_rail_runs[s],first,timber.rail)
+        industry_train=controller.day(s,paid_rail_runs[s],first,timber.rail,live)
       end
     end
   end
@@ -5626,10 +5628,10 @@ function M.daily(s,traverse,tick_pulse)
     if whole~=0 then debit(c,whole,"road_run");v.expense=v.expense+whole;HQStats.record(s,v,-whole) end
   end
   local stock_work
-  local commercial=paid_transport_day(s)
+  local commercial=paid_transport_day(s,live)
   if stock_service then
     passenger_modules()
-    local tanker=oil.ship and timber and oil.ship.day(s,timber,s.passenger_house_clock.counter+1)
+    local tanker=oil.ship and timber and oil.ship.day(s,timber,s.passenger_house_clock.counter+1,live)
     stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse)
   elseif commercial then
     town_passengers.day(s,function(tick)

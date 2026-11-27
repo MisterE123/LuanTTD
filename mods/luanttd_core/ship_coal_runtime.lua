@@ -241,7 +241,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
     local pos,yaw=Run.pose(p)
     return pos and {pos=pos,yaw=yaw} or false
   end
-  function M.day(s,first_tick)
+  function M.day(s,first_tick,live)
     if not M.active(s) then return end
     local spec=bindings[s]
     local run=spec.run.current(s)
@@ -260,7 +260,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
       if run.failure then run.phase="blocked" end
     end
     local view=frame(s)
-    view.samples={sample(spec.run,run)}
+    view.samples=not live and {sample(spec.run,run)} or nil
     local function before(tick)
       if run.transport_cancel_full then b.cancel_full();run.transport_cancel_full=nil end
       local ok,why=b.loading_tick(tick,run.stopped or run.phase=="blocked",run.dock_forced_leave)
@@ -280,7 +280,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
         })
         b.after_motion(tick)
       end
-      view.samples[#view.samples+1]=sample(spec.run,run)
+      if view.samples then view.samples[#view.samples+1]=sample(spec.run,run) end
     end
     local function rating(tick)
       for _,st in ipairs(b.stations) do

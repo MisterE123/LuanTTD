@@ -93,3 +93,25 @@ train order edits, station picking, bus dispatch, and fresh join/reopen.
 lua5.1 tests/campaign_tick_step.lua
 tests/campaign_tick_motion_native.sh "$(command -v luantiserver)" /tmp/live-stock-motion
 ```
+
+## Don't rebuild an unused day's worth of vehicle poses
+
+The paced owner already samples the current road, train, tram, ship
+and aircraft state. It no longer builds a second parallel playback
+history inside each stock day. Alternate daily playback still records
+its original timeline. Route initialization, authoritative vehicle
+and train ordering, and all loading, financial and sound events remain
+on the same source tick.
+
+In two alternating native 256×256 campaign measurements with 128 active
+road vehicles and two stock freight trains, median temporary allocations
+per simulated day fell from **2,788 → 2,455 KiB** and **2,802 → 2,443
+KiB**. The same-day complete checkpoint and shared references matched,
+including 65,536 map tiles. Ordinary uninstrumented CPU medians also
+fell in the two series, but tail timings varied enough that this is
+primarily evidence of less allocation, not a guaranteed FPS change.
+
+Four-mode native motion and exact economic replay passed again. The
+native Linux oil tanker was visible at the correct berth and delivered
+220 kL for $1,970. Actual paid tram, rail-coal, ship-coal, and multi-ore
+order/load/payment tests ran with the history disabled.

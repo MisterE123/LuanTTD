@@ -404,7 +404,9 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
   -- new leg during the same day. A single timeline samples actual poses
   -- rather than assuming that all 74 samples reference one saved leg.
   function R.live_day(s,clock,hooks)
-    local ids,worked,view,timelines={},{},{},{}
+    local ids,worked={},{}
+    local keep=not hooks.live_projection
+    local view,timelines=keep and {} or nil,keep and {} or nil
     for id,v in pairs(s.fleet) do
       if limit[v.engine] then ids[#ids+1]=id end
     end
@@ -415,8 +417,11 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       local frame
       if v and v.route and route then
         c=c or init(s,v,route)
-        frame=visible(c,route)
-      elseif v then frame=v.road_stop_pose end
+        if keep then frame=visible(c,route) end
+      elseif v and keep then frame=v.road_stop_pose end
+      -- Preserve route-state initialization: the first economy step
+      -- must see the same controller, even with no playback history.
+      if not keep then return end
       local a=view[id]
       if not a then a={frames={},cursors={}};view[id]=a end
       a.frames[k]=frame or blank
@@ -458,7 +463,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         end
       end
       local companion=hooks.companion
-      local external=companion and companion.seed(s,W,tick,k)
+      local external=companion and companion.seed(s,W,tick,k,keep)
       if external and external.id then external={external} end
       local next_external=1
       k=k+1
