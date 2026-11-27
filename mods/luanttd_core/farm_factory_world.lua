@@ -134,8 +134,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
       if not id then return protected end
       local r=records[id]
       if r then
-        local slope,base=Terrain.tile(s.corner_grid,x+1,z+1)
-        if r.slope==slope and r.base==base then return r end
+        if Terrain.matches(s.corner_grid,x+1,z+1,r.slope,r.base) then return r end
       end
       return t
     end
@@ -200,8 +199,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     local t=valid_id(id) and s.tiles[id]
     if not r or not t or t.stock_void or occupied(s,id,t,true,true) then return end
     local x,z=Sim.xy(id)
-    local slope,base=Terrain.tile(s.corner_grid,x,z)
-    if slope==r.slope and base==r.base then return r end
+    if Terrain.matches(s.corner_grid,x,z,r.slope,r.base) then return r end
   end
 
   local function writes(s,plans,random_u32,generation)

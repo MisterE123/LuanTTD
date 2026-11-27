@@ -80,3 +80,24 @@ after (17–26% less CPU in this isolated phase). Each batch compared the full
 production state, ledger, ambient events and field-attempt RNG. This is not a
 26% gain for the whole simulation. A focused farm/factory and timber cargo
 regression tests production, delivery, payment and restart as separate steps.
+
+### Match a field's recorded slope using the actual four corners
+
+Field visits and the neighbor checks for fences used to recompute both
+the slope mask and the height extrema even when the terrain had not
+changed. The board now compares the four **live** corner heights against
+the normalized corner tuple for the field's recorded stock slope and
+base. All legal slopes, including steep cases, have distinct tuples.
+If the fast comparison cannot confirm a match, the original classifier
+still decides. There is no new persisted state or stale terrain cache.
+
+On the generated 1024×1024 fixture with four paid transport modes and
+4× playback, the two baseline runs completed 28 and 34 simulation days
+in the same 26-second observation window. The two candidate runs
+completed 40 and 36. A separate fixed-length LuaJIT replay took
+11.86–12.26 s of CPU before and 10.41–10.69 s after on that fixture.
+These are throughput measurements, not an FPS comparison. A separate
+2,664-stock-tick replay matched all 1,048,576 tiles and 1,560,572 shared
+records, including the vehicle orders and RNG state. The exact RC1
+fixtures also matched 10,528 field maintenance visits and 600 planting
+scenarios, including field fences and grass regrowth.

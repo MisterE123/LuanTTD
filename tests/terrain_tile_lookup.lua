@@ -28,4 +28,16 @@ for _,measure in ipairs({{4,7},{64,32},{13,91}}) do
   local zero={levels={[1]=0}}
   check(g,zero)
 end
+-- The lookup only fast-accepts the exact recorded normalized corners.
+-- Even malformed input keeps the old classifier fallback semantics.
+local g=T.new(1,1)
+for n=0,3 do for w=0,3 do for e=0,3 do for s=0,3 do
+  g.levels[1],g.levels[2],g.levels[3],g.levels[4]=n,w,e,s
+  local mask,base=T.tile(g,1,1)
+  assert(T.matches(g,1,1,mask,base))
+  assert(not T.matches(g,1,1,mask,base+1))
+  assert(not T.matches(g,1,1,mask,tostring(base)))
+  assert(not T.matches(g,1,1,(mask+1)%32,base))
+end end end end
+assert(not T.matches(g,0,1,0,0) and T.matches(g,0,1,nil,nil))
 print("PASS direct stock terrain lookup agrees with independent corners, edges and staged writes")

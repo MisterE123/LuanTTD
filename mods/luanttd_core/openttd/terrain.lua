@@ -73,6 +73,28 @@ function T.tile(g,x,z,plan)
   return mask,base,math.max(hn,hw,he,hs)
 end
 
+-- Field writes remember their exact shared-corner surface. For each
+-- legal sampled shape the four normalized corner heights are unique.
+local native_corners={}
+for n=0,2 do for w=0,2 do for e=0,2 do for s=0,2 do
+  if math.min(n,w,e,s)==0 and slope.valid(n,w,e,s) then
+    local mask=slope.classify(n,w,e,s)
+    assert(not native_corners[mask])
+    native_corners[mask]={n,w,e,s}
+  end
+end end end end
+function T.matches(g,x,z,expected_mask,expected_base)
+  local levels=native_corners[expected_mask]
+  local i=levels and type(expected_base)=="number" and index(g,x,z)
+  if i and x<=g.width and z<=g.depth then
+    local heights,stride=g.levels,g.width+1
+    if heights[i]==expected_base+levels[1] and heights[i+1]==expected_base+levels[2]
+       and heights[i+stride]==expected_base+levels[3] and heights[i+stride+1]==expected_base+levels[4] then return true end
+  end
+  local mask,base=T.tile(g,x,z)
+  return mask==expected_mask and base==expected_base
+end
+
 function T.normalized_height(mask,base,u,v)
   if not mask then return nil end
   return base+slope.surface(u,v,mask)
