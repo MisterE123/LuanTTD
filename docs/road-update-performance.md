@@ -666,3 +666,24 @@ This measures only RNG cost, not the full simulation day.
 ```sh
 tests/stock_rng_perf_native.sh luantiserver 51c69d2 /tmp/stock-rng-bench
 ```
+
+### Dense station packet queues
+
+OpenTTD 16.0-RC1's `StationCargoList::ShiftCargo` erases the
+consumed FIFO prefix without shifting later packets after each move.
+The Lua adapter now compacts a long array once per multi-packet load
+or reservation. Short queues and a single complete or partial head
+still use the existing path. Packet order, identity, split age and
+feeder share, callback order, and remaining station stock are unchanged.
+
+Two native Luanti worker comparisons of 31 independent 1,536-packet
+queues measured full-load reservations at **1.62 → 0.28 ms** and
+**1.72 → 0.30 ms** CPU. Results matched for gradual pickup and full
+reservations in passenger, mail, and goods across empty, short and
+long queues. These are loading-kernel timings, not whole-day or FPS
+figures. Native road, rail, ferry, air, and save/reload smoke tests
+ran against the same candidate.
+
+```sh
+tests/cargo_queue_perf_native.sh luantiserver 6228420 /tmp/cargo-queue-bench
+```

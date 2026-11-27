@@ -146,4 +146,23 @@ L.begin(st,v,31,{},ops)
 events,time=run(st,fleet,ops,40)
 same(events[1].loaded,13)
 same(time,14)
+-- Dense source queue: two whole packets and part of the third move
+-- in order. Keep the partial packet in the same queue and retain all
+-- tail identities, cargo accounting, and proportional feeder shares.
+do
+  local waiting={}
+  for i=1,40 do waiting[i]=packet(i==3 and 9 or 2,100+i,200+i) end
+  local partial,tail=waiting[3],waiting[40]
+  partial.feeder_share=90
+  local st,v=fixture(waiting)
+  local picked={}
+  local ops={slice=5,pickup=function(_,_,p) picked[#picked+1]=p.source end}
+  L.begin(st,v,32,{},ops)
+  local pulse=L.body_round(st,v,ops)
+  same(pulse.loaded,5);same(v.units,5)
+  same(picked[1],201);same(picked[2],202);same(picked[3],203);same(#picked,3)
+  same(#waiting,38);same(waiting[1],partial);same(waiting[38],tail)
+  same(partial.units,8);same(partial.feeder_share,80)
+  same(v.batches[3].units,1);same(v.batches[3].feeder_share,10)
+end
 print("PASS: stock road loading clocks, unload-first order, reservations, full/no-load, feeder settlement, acceptance changes and late timetable waits")

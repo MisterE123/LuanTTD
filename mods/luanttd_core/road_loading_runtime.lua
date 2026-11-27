@@ -48,6 +48,26 @@ return function(Timing,Packets)
     return take
   end
   local function shift(q,n,move)
+    local size=#q
+    if size>=32 and n>=2 and q[1].units<n then
+      -- RC1 StationCargoList::ShiftCargo pulls a FIFO prefix (and
+      -- possibly part of its next packet). Its list erases do not move
+      -- the entire waiting tail for each boarded packet. The two live
+      -- destinations are the vehicle's batches/reservations; callbacks
+      -- never modify this distinct source queue during a move.
+      local left,i=n,1
+      while left>0 and i<=size do
+        local p=q[i]
+        local part=take_packet(p,min(left,p.units))
+        if part==p then i=i+1 end
+        move(part)
+        left=left-part.units
+      end
+      local removed=i-1
+      for j=i,size do q[j-removed]=q[j] end
+      for j=size-removed+1,size do q[j]=nil end
+      return n-left
+    end
     local left=n
     while left>0 and #q>0 do
       local p=q[1]
