@@ -123,13 +123,13 @@ function C.platform_penalty(length,platform,s)
   return 0
 end
 
-function C.reservation_cost(board,n,id,td,skip,s)
+function C.reservation_cost(board,n,id,td,skip,s,t)
   if n.signals>=floor(setting(s,"rail_look_ahead_max_signals")/2) or not is_pbs(n.last_type) then return 0 end
-  local t=board.tile(id)
+  t=t or board.tile(id)
   if t.kind=="station" then
     local k=id
-    for _=0,skip do
-      if board.tile(k).reserved then return setting(s,"rail_pbs_station_penalty")*(skip+1) end
+    for i=0,skip do
+      if (i==0 and t or board.tile(k)).reserved then return setting(s,"rail_pbs_station_penalty")*(skip+1) end
       k=board.adjacent(k,reverse(T.exit_side(td)))
     end
   end
@@ -141,8 +141,8 @@ function C.reservation_cost(board,n,id,td,skip,s)
   return 0
 end
 
-function C.signal_cost(board,n,id,td,s,options)
-  local t=board.tile(id)
+function C.signal_cost(board,n,id,td,s,options,t)
+  t=t or board.tile(id)
   local along,against,typ,green=signal(t,td)
   if against and not along and typ~=C.PBS then
     n.reason=bor(n.reason,C.DEAD_END)
@@ -294,18 +294,21 @@ function C.calc(board,v,d,n,tf,s,options,record)
   local prev,ptd=parent and parent.last_tile,parent and parent.last_td
   local cur,td=n.tile,n.td
   local segment,entry,extra=0,0,0
+  -- 16.0-RC1 PfCalcCost advances prev = cur; cur = next. Keep the
+  -- same descriptors for the Lua board adapter, only within this segment.
+  local tile=assert(board.tile(cur))
+  local previous=prev and (prev==cur and tile or board.tile(prev))
   local reason
   n.reason=0
   while true do
-    local tile=assert(board.tile(cur))
     if prev then
-      local transition=C.curve_cost(ptd,td,s)+C.switch_cost(board.tile(prev),tile,T.exit_side(ptd),s)
+      local transition=C.curve_cost(ptd,td,s)+C.switch_cost(previous,tile,T.exit_side(ptd),s)
       if segment==0 then entry=transition else segment=segment+transition end
     end
     if record then record(cur,td,tf) end
     segment=segment+C.one_tile(tile,td,s)+100*tf.skip+C.slope_cost(tile,td,s)
-    segment=segment+C.signal_cost(board,n,cur,td,s,options)
-    segment=segment+C.reservation_cost(board,n,cur,td,tf.skip,s)
+    segment=segment+C.signal_cost(board,n,cur,td,s,options,tile)
+    segment=segment+C.reservation_cost(board,n,cur,td,tf.skip,s,tile)
     reason=n.reason
     if cur==prev then
       assert(tile.kind=="depot")
@@ -325,7 +328,8 @@ function C.calc(board,v,d,n,tf,s,options,record)
       if yes and not is_pbs(typ) then reason=bor(reason,C.SAFE_TILE) end
     end
     if n.signals<setting(s,"rail_look_ahead_max_signals") then
-      local limit,min_speed=F.speed_limit(board,board.tile(tf.old_tile))
+      local old=tf.old_tile==prev and previous or tf.old_tile==cur and tile or board.tile(tf.old_tile)
+      local limit,min_speed=F.speed_limit(board,old)
       local speed=min(v.max_speed,v.order_max_speed or 65535)
       if limit<speed then extra=extra+floor(100*(speed-limit)*(4+tf.skip)/speed) end
       if min_speed>speed then extra=extra+100*(min_speed-speed) end
@@ -333,7 +337,8 @@ function C.calc(board,v,d,n,tf,s,options,record)
     if options.max_cost and options.max_cost>0 and (parent and parent.cost or 0)+entry+segment>options.max_cost then
       reason=bor(reason,C.PATH_TOO_LONG)
     end
-    tf=F.follow(board,v,cur,td,s)
+    local dst
+    tf,dst=F.follow(board,v,cur,td,s,tile)
     if not tf.ok then
       reason=bor(reason,tf.error==F.EC_RAIL_ROAD_TYPE and C.RAIL_TYPE or C.DEAD_END)
       if options.mask_reserved then
@@ -344,7 +349,7 @@ function C.calc(board,v,d,n,tf,s,options,record)
     end
     if count_at_least_two(tf.trackdirs) then reason=bor(reason,C.CHOICE_FOLLOWS);break end
     local nxt,ntd=tf.tile,first_dir(tf.trackdirs)
-    local dst=board.tile(nxt)
+    dst=dst or board.tile(nxt)
     if options.mask_reserved and railway(dst) then
       local along,back,typ=signal(dst,ntd)
       if along and is_pbs(typ) then
@@ -358,8 +363,8 @@ function C.calc(board,v,d,n,tf,s,options,record)
     if nxt==n.tile and ntd==n.td then reason=bor(reason,C.INFINITE_LOOP);break end
     if segment>10000 and railway(dst) then reason=bor(reason,C.SEGMENT_TOO_LONG);break end
     if reason~=0 then break end
-    prev,ptd=cur,td
-    cur,td=nxt,ntd
+    prev,ptd,previous=cur,td,tile
+    cur,td,tile=nxt,ntd,dst
   end
   if band(reason,C.PATH_TOO_LONG)~=0 then return false end
   local target=band(reason,POSSIBLE_TARGET)~=0 and C.detect(board,d,cur,td,s)
@@ -372,7 +377,7 @@ function C.calc(board,v,d,n,tf,s,options,record)
       elseif not is_pbs(n.last_red_type) then extra=extra+setting(s,"rail_lastred_penalty") end
     end
     if band(reason,C.STATION)~=0 then
-      local length=F.platform(board,cur,reverse(T.exit_side(td)))
+      local length=F.platform(board,cur,reverse(T.exit_side(td)),tile)
       extra=extra-setting(s,"rail_station_penalty")*length+C.platform_penalty(v.length,length,s)
     end
   end

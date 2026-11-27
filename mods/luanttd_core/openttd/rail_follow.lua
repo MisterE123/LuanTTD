@@ -55,21 +55,27 @@ R.disallow_90=disallow_90
 
 -- Inclusive count and ending tile of a stock directional station platform.
 -- Rail waypoints report a single tile even when their order spans many tiles.
-function R.platform(board,first,dir)
-  local start=board.tile(first)
+function R.platform(board,first,dir,start)
+  start=start or board.tile(first)
+  local last_record=start
   local last,length=first,1
   local after=board.adjacent(last,dir)
-  while after~=nil and continues(board,start,board.tile(after)) do
+  while after~=nil do
+    local candidate=board.tile(after)
+    if not continues(board,start,candidate) then break end
+    last_record=candidate
     last,length=after,length+1
     after=board.adjacent(last,dir)
   end
-  return length,last
+  return length,last,last_record
 end
 
 -- Returns all CFollowTrack fields for a fresh attempt. opts.forbid_90 picks
 -- the No90 specialization fallback, overridden by railtype flags.
-function R.follow(board,v,old_id,old_td,opts)
-  local old=board.tile(old_id)
+-- Optional current record and second return let a read-only YAPF
+-- segment reuse descriptors. Neither record is put in the follower result.
+function R.follow(board,v,old_id,old_td,opts,old)
+  old=old or board.tile(old_id)
   local res={old_tile=old_id,old_td=old_td,tile=nil,trackdirs=0,
     exit=T.exit_side(old_td),skip=0,station=false,bridge=false,tunnel=false,
     error=R.EC_NONE,ok=false}
@@ -81,7 +87,7 @@ function R.follow(board,v,old_id,old_td,opts)
   if old.kind=="depot" and old.dir~=res.exit then
     res.tile=old_id;res.trackdirs=T.trackdirbit(T.reverse_trackdir(old_td))
     res.exit=old.dir;res.reversed=true;res.ok=true
-    return res
+    return res,old
   end
 
   if span(old) and old.dir==res.exit then
@@ -105,19 +111,19 @@ function R.follow(board,v,old_id,old_td,opts)
     return fail(R.EC_NO_WAY)
   end
 
+  local finish=enter
   if res.station then
     res.station_entry=res.tile
     local length
-    length,res.tile=R.platform(board,res.tile,res.exit)
+    length,res.tile,finish=R.platform(board,res.tile,res.exit,enter)
     res.skip=length-1
   end
-  local finish=board.tile(res.tile)
   if disallow_90(board,old.railtype,finish.railtype,opts and opts.forbid_90 or false) then
     res.trackdirs=remove(res.trackdirs,T.crossing_trackdirs(old_td))
     if res.trackdirs==0 then return fail(R.EC_90DEG) end
   end
   res.ok=true
-  return res
+  return res,finish
 end
 
 -- Stock CFollowTrackFreeRail::MaskReservedTracks is explicit, after Follow.
