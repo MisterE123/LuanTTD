@@ -57,7 +57,9 @@ return function(Sim,mod,s,cap)
     auxiliary[#auxiliary+1]=dofile(mod.."/aux_transport_clock.lua")(s,interval,active,tick)
   end
   function N.frame(dt)
-    for _,tick in ipairs(auxiliary) do tick(dt) end
+    local changed=false
+    for _,tick in ipairs(auxiliary) do if tick(dt) then changed=true end end
+    return changed
   end
   if s.ship_paid_service then
     local _,follow,net,roster,run,depot,freight,coal,tanker,tanker_run=B.water(s,network.track,function(id) return cap.ferry[id]==true end)

@@ -11,6 +11,7 @@ return function(s,seconds_per_day,active,advance)
     if ticks>0 then
       advance(ticks)
       accumulated=accumulated-ticks
+      return true
     end
   end
 end

@@ -25,7 +25,7 @@ return function(Sim,Terrain,Rules)
     local key=Sim.id(u,v)
     return key and tile(s,u,v,key)
   end
-  function W.visit(s,x,z,tick,random)
+  function W.visit(s,x,z,tick,random,surface)
     local id=Sim.id(x,z)
     local t=id and s.tiles[id]
     if not t then return end
@@ -34,6 +34,7 @@ return function(Sim,Terrain,Rules)
       -- density increment, independent of placement date and tile phase.
       if t.stock_clear_density and clean(t) and t.terrain~="water"
           and (t.stock_clear_ground or 0)==0 and not (s.stock_farm_fields and s.stock_farm_fields[id]) then
+        if surface then surface(id) end
         local n=(t.stock_clear_visits or 0)+1
         if n==8 then
           local density=t.stock_clear_density+1
@@ -49,10 +50,13 @@ return function(Sim,Terrain,Rules)
     -- The RC1 RNG chooses a neighbor only on actual spread attempts.
     -- Pass the shared resolver rather than allocating one closure per tree.
     local next_tree,event=Rules.visit(t.wood,x-1,z-1,tick,s.stock_extra_tree_placement,random,visit_neighbor,s)
+    if surface and next_tree~=t.wood then surface(id) end
     t.wood=next_tree
     if event and event.kind=="plant" then
       local d=event.direction
-      local next_tile=assert(s.tiles[Sim.id(x+dx[d],z+dz[d])])
+      local destination=Sim.id(x+dx[d],z+dz[d])
+      local next_tile=assert(s.tiles[destination])
+      if surface then surface(destination) end
       next_tile.stock_clear_density,next_tile.stock_clear_visits=nil,nil
       next_tile.wood=event.tree
     elseif event and event.kind=="clear" and event.ground~=3 then
@@ -61,7 +65,7 @@ return function(Sim,Terrain,Rules)
     end
     return event
   end
-  function W.global_tick(s,tick,random)
+  function W.global_tick(s,tick,random,surface)
     local next_counter,i,tree=Rules.global_tick(s.stock_tree_tick_counter or 0,Sim.W*Sim.H,tick,
       s.stock_extra_tree_placement,random,function(i)
         local x,z=Sim.xy(i+1)
@@ -72,6 +76,7 @@ return function(Sim,Terrain,Rules)
       local t=s.tiles[i+1]
       t.stock_clear_density,t.stock_clear_visits=nil,nil
       t.wood=tree
+      if surface then surface(i+1) end
     end
     return i and i+1,tree
   end

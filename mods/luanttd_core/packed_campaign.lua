@@ -445,7 +445,7 @@ local function wide()
   end
   return raster
 end
-function M.prepare_wide(state)
+function M.prepare_wide(state,observer)
   local grid=state.stock_generated_profile and state.corner_grid
   if type(grid)~="table" or not tiny_int(grid.width,4096) or not tiny_int(grid.depth,4096)
       or grid.width<64 or grid.depth<64 then return end
@@ -453,7 +453,7 @@ function M.prepare_wide(state)
   -- Leave small worlds and larger, unqualified memory footprints on the
   -- general graph path. Both paths preserve the same authoritative state.
   if n<262144 or n>1048576 then return end
-  return wide().prepare(state,n)
+  return wide().prepare(state,n,observer)
 end
 function M.decode_wide(source)
   return wide().restore(source)

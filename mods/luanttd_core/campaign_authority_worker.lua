@@ -15,7 +15,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   if cap.road_town_policy then s.stock_road_town_policy=cap.road_town_policy end
   local Sim=dofile(mod.."/sim.lua")
   local runtime=mounts(Sim,mod,s,cap)
-  if storage.prepare_state then storage.prepare_state(s) end
+  local observer={}
   if cap.autoplay and s.stock_generated_profile then
     Sim.mount_live_sea_cache(s)
     runtime.invalidate_sea=function() Sim.clear_live_sea_cache(s) end
@@ -24,6 +24,8 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   local auto,interval
   local tick_mode=cap.autoplay and s.stock_generated_profile and s.passenger_house_clock and
     Sim.road_stock_service_active(s)
+  if storage.prepare_state then storage.prepare_state(s,tick_mode and observer or nil) end
+  if observer.touch then Sim.mount_checkpoint_surface_observer(s,observer.touch) end
   if cap.autoplay then
     interval=cap.seconds_per_day or 1.25
     assert(type(interval)=="number" and interval>=.05 and interval<=15,"invalid worker day interval")
@@ -50,6 +52,14 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         Sim.air_paid_motion_events(s)
         if runtime.water and runtime.water.coal then
           runtime.passengers.collect_fares(runtime.water.coal.take(s),"ship")
+        end
+        if observer.touch and not observer.disabled then
+          -- The completed stock day collects committed land edits
+          -- (growth, foundations, industries, floods and road works).
+          -- Woodland/clear-ground counters also emit a separate signal
+          -- even on visits that leave the rendered tile unchanged.
+          for _,id in ipairs(s.changed or {}) do observer.touch(id) end
+          observer.finish(s.passenger_house_clock.counter)
         end
       end,
       refresh=function() end,
@@ -189,7 +199,13 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     if auto then
       local dt=(now-prior)/1000000
       if (s.speed or 0)>0 then dirty=true end
-      runtime.frame(dt)
+      if runtime.frame(dt) and observer.invalidate and not observer.disabled then
+        -- Preview/auxiliary motion comes from outside the stock day.
+        -- Do not assume new pilot adapters respect this terrain lease.
+        -- A session with an active preview stays on the exact scan.
+        observer.disabled=true
+        observer.invalidate()
+      end
       runtime.passengers.frame(dt)
       -- Already at a completed day with more overdue work. Reply from
       -- this stable boundary before starting the next full batch.
@@ -228,7 +244,14 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         seq=q.seq
         -- Do not assume an uncommon panel or command cannot lazily
         -- touch saved state. Only skip the proven display-only traffic.
-        if not read then dirty=true end
+        if not read then
+          dirty=true
+          -- Unknown ambient/explicit operations may change physical
+          -- rows. Never retain the autonomous lease over these calls.
+          if observer.invalidate and not (q.kind=="command" and type(q.command)=="table" and q.command.kind=="speed") then
+            observer.invalidate()
+          end
+        end
         if q.kind=="snapshot" then
           r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction,tick_mode and {road={},rail={},live_tick=true} or nil)
         elseif live_view[q.kind] then

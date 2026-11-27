@@ -266,3 +266,49 @@ do
   assert(general.tiles[9]==general.tiles[3] and general.tiles[9]~=general.tiles[#general.tiles])
   print("PASS raster checkpoint preserves live fields, shared ground/wood and full graph cycles, with exact fallback")
 end
+
+dofile("tests/checkpoint_surface_pages.lua")
+
+-- Test the real raster and unchanged canonical format both with and
+-- without the stock owner's completed-day surface acceleration.
+do
+  local n=512*512
+  local world={tiles={},corner_grid={width=512,depth=512},stock_generated_profile=true,
+    passenger_house_clock={counter=1280}}
+  for i=1,n do world.tiles[i]={h=i%5,variant=i%4,terrain="grass"} end
+  local cell,tree=world.tiles[9],{class=4,type=2,count=1,ground=0,density=3,growth=6}
+  cell.wood=tree
+  world.inspect={cell=cell,tree=tree,slots=world.tiles,root=world}
+  local observer={}
+  local staged=assert(P.prepare_wide(world,observer))
+  local reference=assert(P.prepare_wide(world))
+  local noop=function() end
+  local function exact(raw)
+    local base=reference(world)
+    local size=8+n*13
+    assert(raw:sub(9,size)==base:sub(9,size),"staged surface differs from exact capture")
+    local r=P.decode_wide(raw)
+    assert(r.inspect.cell==r.tiles[9] and r.inspect.tree==r.tiles[9].wood)
+    assert(r.inspect.root==r and r.inspect.slots==r.tiles)
+    for i=1,n do
+      local a,b=r.tiles[i],world.tiles[i]
+      assert(a.h==b.h and a.variant==b.variant and a.terrain==b.terrain)
+    end
+    return r
+  end
+  assert(observer.touch and not observer.finish(1280))
+  assert(exact(staged(world,noop)).tiles[9].wood.growth==6)
+  -- A nonvisual woodland counter still belongs to the exact checkpoint.
+  tree.growth=3;observer.touch(9)
+  world.tiles[24].stock_clear_ground=0;observer.touch(24)
+  world.passenger_house_clock.counter=1354
+  assert(observer.finish(1354))
+  local r=exact(staged(world,noop))
+  assert(r.tiles[9].wood.growth==3 and r.tiles[24].stock_clear_ground==0)
+  -- The synchronous writer takes fresh rows regardless of cached pages.
+  world.tiles[23].h=12
+  assert(exact(staged(world)).tiles[23].h==12)
+  observer.invalidate()
+  assert(exact(staged(world,noop)).tiles[23].h==12)
+  print("PASS periodic surface staging and fresh synchronous writes share the exact raster and graph identities")
+end

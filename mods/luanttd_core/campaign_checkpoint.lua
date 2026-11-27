@@ -9,8 +9,8 @@ return function(core,codec,filename)
   local raster_prefix="LUANTTD-WIDE-CAMPAIGN-4-RASTER"
   local raster
   local M={}
-  function M.prepare_state(state)
-    if codec and codec.prepare_wide then raster=codec.prepare_wide(state) end
+  function M.prepare_state(state,observer)
+    if codec and codec.prepare_wide then raster=codec.prepare_wide(state,observer) end
   end
   function M.clear() raster=nil;os.remove(path) end
   function M.read()

@@ -537,7 +537,12 @@ function M.clear_live_sea_cache(s)
 end
 M.plain_tide_observers=setmetatable({},{__mode="k"})
 function M.mount_plain_tide_observer(s,observe) M.plain_tide_observers[s]=observe end
+M.checkpoint_surface_observers=setmetatable({},{__mode="k"})
+function M.mount_checkpoint_surface_observer(s,observer)
+  M.checkpoint_surface_observers[s]=observer
+end
 local function coastal_visit(s)
+  local observer=M.checkpoint_surface_observers[s]
   if not coastal_active(s) then return end
   load_road_rules()
   if not stock_rail_ground then
@@ -566,6 +571,7 @@ local function coastal_visit(s)
   local function water(x,z,tick)
     local previous=s.topology
     local changed,plain,first=coastal_world.visit(s,x+1,z+1,board,tick)
+    if observer and changed>0 then observer(M.id(x+1,z+1)) end
     if plain then
       M.preserve_road_junctions_after_tide(s,previous)
       if plain_tide then plain_tide(s,previous,first) end
@@ -574,8 +580,8 @@ local function coastal_visit(s)
   end
   local sea=live_sea[s]
   if sea and sea.resume_day and s.day<sea.resume_day then sea=nil end
-  local visit_tree=trees and function(x,z,tick) return trees.visit(s,x,z,tick,random) end
-  local new_tree=trees and function(tick) return trees.global_tick(s,tick,random) end
+  local visit_tree=trees and function(x,z,tick) return trees.visit(s,x,z,tick,random,observer) end
+  local new_tree=trees and function(tick) return trees.global_tick(s,tick,random,observer) end
   return function(x,z,tick)
     local u,v=x+1,z+1
     local id=M.id(u,v)

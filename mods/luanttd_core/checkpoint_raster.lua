@@ -1,6 +1,6 @@
--- Save projection, not a second simulation. Capture every scalar and
--- rich cell at the same owner boundary; no reliance on visual dirty
--- lists, read-side caches or a guessed set of terrain mutation sites.
+-- Save projection, not a second simulation. Serialize at an exact
+-- authority boundary. Only the stock owner may carry compact values
+-- between boundaries, using its own receipts rather than renderer dirtiness.
 return function(record,decode_cell,encode,decode)
   local M={}
   local min,floor=math.min,math.floor
@@ -18,7 +18,7 @@ return function(record,decode_cell,encode,decode)
     return a+256*b+65536*c+16777216*d
   end
 
-  function M.prepare(root,n)
+  function M.prepare(root,n,observer)
     local slots=root.tiles
     if type(slots)~="table" or slots==root or getmetatable(root)~=nil or getmetatable(slots)~=nil or #slots~=n then return end
     local witness,duplicate,seen={},{},{}
@@ -30,35 +30,47 @@ return function(record,decode_cell,encode,decode)
       if previous then duplicate[i]=previous else seen[tile]=i end
     end
     -- Only the array's pointer sequence is pinned. This does not pin a
-    -- tile's fields or nested woodland. Each save validates the vector
-    -- again and recomputes the complete live surface. If a slot has
-    -- changed identity, the caller uses the exact general graph codec.
+    -- tile's fields or nested woodland. First and synchronous captures
+    -- still reclassify the whole surface. Only the autonomous owner can
+    -- advance an already exact immutable page set between checkpoints.
+    local surface
+    if observer and not next(duplicate) then
+      local mod=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+      local pages=dofile(mod.."/checkpoint_pages.lua")
+      surface=dofile(mod.."/checkpoint_surface_pages.lua")(pages,record).new(root,slots,witness,n,74)
+      observer.touch,observer.finish,observer.invalidate=surface.touch,surface.finish,surface.invalidate
+    end
     return function(current,pulse)
       if current~=root or current.tiles~=slots or #slots~=n or getmetatable(slots)~=nil then return end
       local pages,cells={""},{}
       local rich,shared_wood,seen_wood={},{},{}
       local external_tile,external_wood={},{}
-      for first=1,n,block do
-        local last=min(first+block-1,n)
-        for i=first,last do
-          local t=slots[i]
-          if t~=witness[i] or getmetatable(t)~=nil then return end
-          local raw
-          if not duplicate[i] then
-            if type(t.wood)=="table" and getmetatable(t.wood)~=nil then return end
-            raw=record(t)
-            if raw then
-              if #raw==width then
-                local tree=t.wood
-                local other=seen_wood[tree]
-                if other then shared_wood[i]=other else seen_wood[tree]=i end
-              else raw=raw..pad end
-            else rich[i]=t end
+      local tick=current.passenger_house_clock and current.passenger_house_clock.counter
+      local staged=pulse and surface and not observer.disabled
+      local reused=staged and surface.capture(tick,pages,rich)
+      if not reused then
+        for first=1,n,block do
+          local last=min(first+block-1,n)
+          for i=first,last do
+            local t=slots[i]
+            if t~=witness[i] or getmetatable(t)~=nil then return end
+            local raw
+            if not duplicate[i] then
+              if type(t.wood)=="table" and getmetatable(t.wood)~=nil then return end
+              raw=record(t)
+              if raw then
+                if #raw==width then
+                  local tree=t.wood
+                  local other=seen_wood[tree]
+                  if other then shared_wood[i]=other else seen_wood[tree]=i end
+                else raw=raw..pad end
+              else rich[i]=t end
+            end
+            cells[i-first+1]=raw or blank
           end
-          cells[i-first+1]=raw or blank
+          pages[#pages+1]=concat(cells,"",1,last-first+1)
+          if pulse then pulse() end
         end
-        pages[#pages+1]=concat(cells,"",1,last-first+1)
-        if pulse then pulse() end
       end
       -- Dense vectors may still carry non-array fields. Preserve them in
       -- the same graph object that will become the restored tile vector.
@@ -80,6 +92,10 @@ return function(record,decode_cell,encode,decode)
       -- those exact identities rather than reconstructing a second object.
       for i=1,n do
         local t=witness[i]
+        if reused and (rawget(slots,i)~=t or getmetatable(t)~=nil or
+          type(t.wood)=="table" and getmetatable(t.wood)~=nil) then
+          surface.invalidate();return nil
+        end
         if not rich[i] and not duplicate[i] then
           local key=ids[t]
           if key then external_tile[i]=key
@@ -91,6 +107,9 @@ return function(record,decode_cell,encode,decode)
         if pulse and i%8192==0 then pulse() end
       end
       local links=encode({external_tile,external_wood,duplicate,shared_wood},pulse)
+      if staged and not reused and not next(shared_wood) then
+        surface.adopt(tick,pages,block,rich,seen_wood)
+      end
       pages[1]=u32(n*width)..u32(#graph)
       pages[#pages+1]=graph
       pages[#pages+1]=links
