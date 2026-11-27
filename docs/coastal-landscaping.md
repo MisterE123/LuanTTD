@@ -136,3 +136,23 @@ under the exposed crest. The four rock arrangements vary by tile and
 direction. The ordinary water surface still rolls over the same geometry
 when waves are turned on. This is presentation only; the rock tile's
 shipping, flooding and clearance rules are unchanged.
+
+## Live tile-loop dispatch cost
+
+The simulation reads the live tile kind before entering the separate
+flood, rail ground, and tree/grass handlers. For example, plain dry
+ground with no grass regrowth does not need to enter those handlers
+only to return immediately. An actual water visit rereads the source
+tile before the next handler, so a dried coast or affected rail
+parcel is still handled in the same order. Every stock tile slot is
+visited and current neighbors are read directly, without a cached
+shoreline mask.
+
+In two alternating native comparisons using the same stock 1024×1024
+world, mean CPU per day across 32 warm observations per version went
+from **776 to 747 ms**. The median went from **767 to 719 ms**; there
+was overlap across runs. The saved day-25 states matched for all
+1,048,576 tiles and their graph aliases, excluding the wall-clock
+display fraction. Flooded road and tram stops, shore woods and
+recovery, fresh grass, rocks, and ordered initial landscape checks
+also pass. These measurements are for this world, not an FPS claim.

@@ -551,11 +551,18 @@ local function coastal_visit(s)
   local new_tree=trees and function(tick) return trees.global_tick(s,tick,random) end
   return function(x,z,tick)
     local u,v=x+1,z+1
-    local rail=s.tiles[M.id(u,v)]
-    local was_wet=rail and rail.rail_ground==13
-    water(x,z,tick)
-    if not was_wet then stock_rail_ground.visit(s,u,v) end
-    if visit_tree and tick then visit_tree(u,v,tick) end
+    local id=M.id(u,v)
+    local tile=id and s.tiles[id]
+    if not tile then return end
+    local was_wet=tile.rail_ground==13
+    if was_wet or tile.terrain=="water" then
+      water(x,z,tick)
+      tile=s.tiles[id]
+    end
+    -- RC1 dispatches these tile loops by the surface record. A water
+    -- visit can change it (e.g. dry up shores or flood a rail half).
+    if not was_wet and tile.rail_tracks then stock_rail_ground.visit(s,u,v) end
+    if visit_tree and tick and (tile.wood or tile.stock_clear_density) then visit_tree(u,v,tick) end
   end,new_tree,water,visit_tree
 end
 local function machine_rules()
