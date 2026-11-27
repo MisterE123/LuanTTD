@@ -12,13 +12,15 @@ local Slope=dofile(path.."openttd/slope.lua")
 local RailTrack=dofile(path.."openttd/rail_track.lua")
 local TownSpans=dofile(path.."openttd/town_spans.lua")
 local RoadGrade=dofile(path.."openttd/town_road_grade.lua")
+local HouseRoadTypes=dofile(path.."openttd/town_house_roadtypes.lua")
 local dx,dz={[0]=-1,0,1,0},{[0]=0,1,0,-1}
 local function has(bits,bit) return math.floor(bits/bit)%2~=0 end
 local function difference(mask) return 15-mask%16 end
 
 return function(Sim,Terrain,s,G,Worldgen,read,live)
   local policy=s.stock_road_town_policy
-  local B={town_level_crossings=not policy or policy.allow_town_level_crossings~=false}
+  local B={town_level_crossings=not policy or policy.allow_town_level_crossings~=false,
+    house_roadtypes=HouseRoadTypes.on_board(Sim,s)}
   local Spans,Grade=TownSpans(G),RoadGrade(G.chance)
   function B.tile(x,z)
     local t=read(x,z)

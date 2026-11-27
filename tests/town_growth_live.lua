@@ -121,3 +121,26 @@ for setting=0,4 do
   assert(t.growth_rate==G.normal_rate(t,0,setting))
 end
 print("PASS five saved growth modes reach the worker; funding overrides None as in RC1")
+
+-- The ordinary worker's board applies the RC1 rule before spending a
+-- house-choice RNG draw; one eligible diagonal road allows the lot.
+do
+  local s=world()
+  local x,z=5,15
+  local town=s.stock_town_growth.towns[s.stock_town_growth.order[1]]
+  for dx=-1,1 do for dz=-1,1 do s.tiles[Sim.id(x+dx,z+dz)]={terrain="grass"} end end
+  local track=s.tiles[Sim.id(x+1,z)]
+  track.tram={kind="road",tramtype=1,tram_bits=10}
+  local board=W.road_board(s)
+  assert(not board.house_roadtypes(x,z))
+  local draws=0
+  local function random() draws=draws+1;return 0 end
+  local opts={year=1950,allow_roads=false}
+  assert(not B.house(town,board,x,z,opts,random) and draws==0)
+  local diag=s.tiles[Sim.id(x-1,z-1)]
+  diag.build,diag.road_bits="road",10
+  assert(board.house_roadtypes(x,z))
+  B.house(town,board,x,z,opts,random)
+  assert(draws>0,"Ordinary road should allow the stock lot selection")
+  print("PASS ordinary live house growth: no lots beside only tram, allowed beside a diagonal road")
+end

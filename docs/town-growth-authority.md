@@ -288,3 +288,15 @@ at each nearby owned station, then clamps once after the station loop;
 the ordinary low-rating recovery runs first. A cleared station without a
 physical tile is outside this adapter. This is not the complete
 OpenTTD authority, rating UI, or deletion lifecycle.
+
+## Road types and house lots
+
+The RC1 house lot test checks the eight surrounding tiles before choosing
+a building. Empty land with no nearby road is allowed. A lot next to only
+electric tramway, tram stops or tram depots is not. A nearby ordinary road
+or road stop, including one sharing a tramway, makes the lot eligible,
+even diagonally. Bridges, tunnels and waypoints do not count as the
+road layer for this test. Initial growth, live growth and house
+replacement share the same check. The oracle compares all 6,561 ordinary
+road/tram/empty arrangements and 1,024 mixed-facility arrangements with
+the RC1 function.

@@ -11,6 +11,7 @@ return function(Sim,Terrain,G,B,H)
   local names=dofile(path.."stock_town_art.lua")
   local Lift=dofile(path.."openttd/town_lift.lua")
   local Rebuild=dofile(path.."openttd/town_rebuild.lua")
+  local HouseRoadTypes=dofile(path.."openttd/town_house_roadtypes.lua")
   local authority=dofile(path.."town_road_authority.lua")(Sim,dofile(path.."openttd/road_town_permission.lua"))
   local roads=dofile(path.."town_generation_board.lua")
   local Worldgen=dofile(path.."openttd/town_worldgen.lua")(G,B)
@@ -52,6 +53,7 @@ return function(Sim,Terrain,G,B,H)
       end,
       clear_quote=function(x,z,kind) return kind=="house" and clear_levels(s,Sim.id(x,z),allow_tree)~=nil end,
       house_supported=function(id) return names[id]~=nil end,
+      house_roadtypes=HouseRoadTypes.on_board(Sim,s),
     }
   end
   function W.eligible_site(s,x,z) return clear_levels(s,Sim.id(x,z)) end
