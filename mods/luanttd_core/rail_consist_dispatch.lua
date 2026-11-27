@@ -59,7 +59,8 @@ return function(Motion,Life)
     if not move then return nil,why,part end
     -- Ordinary within-tile steps do not touch occupancy, even when a
     -- hidden wagon becomes visible inside the depot.
-    if #move.transitions==0 then
+    local hides=move.depot_hides
+    if #move.transitions==0 and (not hides or #hides==0) then
       local ok,reason=Motion.commit(consist,move)
       if not ok then return nil,reason end
       return {events={},reveals=move.reveals}
@@ -81,6 +82,10 @@ return function(Motion,Life)
       if not ok then return nil,result,t.index end
       for _,event in ipairs(result) do events[#events+1]=event end
     end
+    for _,part in ipairs(hides or {}) do
+      local ok,reason=Life.hide_returning(board,staged,id,part.index,part.tile)
+      if not ok then return nil,reason,part.index end
+    end
     local function commit()
       local ok,reason=Motion.commit(consist,move)
       if not ok then return nil,reason end
@@ -88,10 +93,29 @@ return function(Motion,Life)
       -- early exit may leak a front claim, a wagon release, or an event.
       publish_bits();publish_claims()
       state.trains[id]=train
-      return {events=events,reveals=move.reveals}
+      return {events=events,reveals=move.reveals,depot_hides=hides}
     end
-    if arbitrate then return arbitrate(move.transitions,commit) end
+    if arbitrate and #move.transitions>0 then return arbitrate(move.transitions,commit) end
     return commit()
+  end
+  -- VehicleEnterDepot is not an ordinary reversal: it resets the
+  -- departing heading and releases the depot reservation only once
+  -- every returned body is hidden. The original body lengths persist.
+  function D.stow_return(board,state,id,consist,depot)
+    local lengths={}
+    for i,p in ipairs(consist.parts) do
+      if not p.hidden or p.wormhole or p.tile~=depot then return false,"tail_not_in_depot" end
+      local n=consist.driving_backwards and #consist.parts-i+1 or i
+      lengths[n]=p.length
+    end
+    local stowed,why=Motion.seed_depot(board,depot,lengths)
+    if not stowed then return false,why end
+    local ok,reason=Life.finish_returning(board,state,id,depot)
+    if not ok then return false,reason end
+    consist.parts=stowed.parts
+    consist.serial=consist.serial+1
+    consist.driving_backwards,consist.reversed=nil,nil
+    return true
   end
   return D
 end

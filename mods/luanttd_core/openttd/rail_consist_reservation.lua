@@ -140,6 +140,39 @@ return function(T,F,PBS)
     return true
   end
 
+  -- VehicleEnterTile_Rail hides each returning part separately. Do not
+  -- release the shared depot bit until the last physical part has entered.
+  function R.hide_returning(board,state,train_id,index,depot_id)
+    local train=state.trains[train_id]
+    local part=train and train.parts[index]
+    local depot=tile(board,depot_id)
+    if not part or not depot or depot.kind~="depot" or depot.owner~=train.owner or
+        part.tile~=depot_id or part.in_depot or T.exit_side(part.td)~=rev(depot.dir) then
+      return false,"invalid_returning_depot_part"
+    end
+    for i=1,index-1 do
+      if not train.parts[i].in_depot or train.parts[i].tile~=depot_id then return false,"depot_entry_order" end
+    end
+    train.parts[index]={tile=depot_id,td=part.td,in_depot=true}
+    return true
+  end
+  function R.finish_returning(board,state,train_id,depot_id)
+    local train=state.trains[train_id]
+    local depot=tile(board,depot_id)
+    if not train or not depot or depot.kind~="depot" or depot.owner~=train.owner then
+      return false,"invalid_depot"
+    end
+    for _,part in ipairs(train.parts) do
+      if not part.in_depot or part.tile~=depot_id then return false,"tail_not_in_depot" end
+    end
+    local td=T.diagonal_trackdir(depot.dir)
+    if R.claim_owner(state,depot_id,T.track(td))==train_id then
+      if not release(board,state,train,depot_id,T.track(td)) then return false,"missing_depot_claim" end
+    end
+    for i=1,#train.parts do train.parts[i]={tile=depot_id,td=td,in_depot=true} end
+    return true
+  end
+
   -- Stock chosen_track for a wagon whose predecessor already occupies the
   -- next tile or is one tile beyond it. Only the ordinary branch is here.
   function R.connecting_track(enterdir,exitdir)

@@ -610,26 +610,32 @@ infrastructure and consist through the authority commands. It does not
 read a save or change the stock layout.
 
 The [comparison](../tests/town_growth_rc1_mixed_road_rail.lua) follows
-both services for 11,248 consecutive ticks, from January 4 through
-June 5, including a stock train failure and recovery. It checks both
-random words, the bus motion, the train and carriage positions and
-fixed-point speeds, carried passengers, the mechanical health of the
-train, and the waiting, fractions and ratings of all four stops. Two packed saves are reopened during the replay. Five
-monthly observations also check town streets, houses and construction
-states, growth timers, cargo supply, and paid passenger totals. The
-[reference extractor](../tools/record_rc1_mixed_town.py) records only
-numbers from the original execution.
+both services for 26,788 consecutive ticks, from January 4 through the
+following January 1. This includes a train breakdown and recovery and
+two automatic train depot services. The YAPF nearest-depot order,
+inbound engine and carriage latches, depot track release, service
+reliability, per-body Depot random triggers and departure all share the
+actual worker motion and reservation code. No load or port checkpoint
+teleports the train to the yard. The original passenger orders resume
+after each service. The replay opens the packed world four times,
+including while the train is heading for the first depot.
+
+Both random words, bus motion, the train and carriage positions and
+fixed-point speeds, carried passengers, mechanical train health, and the
+waiting, fractions and ratings of all four stops match throughout.
+Twelve monthly observations also check town streets, houses and
+construction ages, growth timers, passenger/mail supply, and paid
+passenger totals. The [reference extractor](../tools/record_rc1_mixed_town.py)
+records only numbers from the original execution.
 
 Realistic acceleration is the normal RC1 rule for new campaign
 services. The [compiled force comparison](../tests/rail_acceleration_rc1.py)
 checks 15,120 cases covering cargo mass, rolling resistance, inclines,
 tunnel drag, magnetic rail and braking against the original method.
 In this town comparison the train's source VehicleID, rail StationIDs,
-saved mechanical state, and per-body random-trigger state are
-restored numerically. Those mounted hooks do not yet establish a
-general shared pool (including effects, other modes, and buy, sell
-and depot operations) for a fresh stock game. This window intentionally
-ends before the first automatic service diversion: original RC1
-selects its depot at tick 12,751; the LuanTTD train does not do that
-yet. A fully autonomous year, broader layouts and climates, and
-tram, water and aviation competition are not claimed here.
+saved mechanical state, initial engine calendar, and per-body random
+state are restored numerically. The same-runtime proof does not yet
+establish a general shared vehicle/station pool (including effects,
+other modes, buying, selling, and depot operations) and activation
+from ordinary new worlds. Broader layouts, climates, and tram, water
+and aviation competition are not claimed here.

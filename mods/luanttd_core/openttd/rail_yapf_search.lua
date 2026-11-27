@@ -134,20 +134,26 @@ function S.find(board,v,origin,dest,s,opts)
     local n=heap[1]
     if not n or best_dest and best_dest.cost<n.estimate then break end
     if opts.visit then opts.visit(n) end
-    local f=F.follow(board,view,n.last_tile,n.last_td,s)
-    if use_mask and f.ok then f=F.mask_reserved(board,f) end
-    if f.ok then
-      local count=0
-      for td=0,13 do if T.has(f.trackdirs,td) then count=count+1 end end
-      for td=0,13 do if T.has(f.trackdirs,td) then add(C.node(n,f.tile,td,count>1),f) end end
-    end
-    if cap==0 or closed_count<cap then
+    if opts.detect_origin and not n.parent and C.detect(board,dest,n.tile,n.td,s) then
+      if not best_dest or n.cost<best_dest.cost then best_dest=n end
       remove(n)
-      at(closed,n.tile)[n.td]=n
-      closed_count=closed_count+1
+      if n.cost==0 then break end
     else
-      flags.capped=true
-      break
+      local f=F.follow(board,view,n.last_tile,n.last_td,s)
+      if use_mask and f.ok then f=F.mask_reserved(board,f) end
+      if f.ok then
+        local count=0
+        for td=0,13 do if T.has(f.trackdirs,td) then count=count+1 end end
+        for td=0,13 do if T.has(f.trackdirs,td) then add(C.node(n,f.tile,td,count>1),f) end end
+      end
+      if cap==0 or closed_count<cap then
+        remove(n)
+        at(closed,n.tile)[n.td]=n
+        closed_count=closed_count+1
+      else
+        flags.capped=true
+        break
+      end
     end
   end
   flags.closed_count=closed_count

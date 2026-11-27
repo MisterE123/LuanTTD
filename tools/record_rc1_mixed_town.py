@@ -57,7 +57,20 @@ for i,r in raw[b'STNN'].items():
  goods[i]=[st['time_since_load'],st['time_since_unload'],p['rating'],p['last_age'],p['last_speed'],
      p['time_since_pickup'],p['amount_fract'],p['status'],st['base'][0]['delete_ctr']]
 model=raw[b'ENGN'][116]
+rail_model=raw[b'ENGN'][0]
+train_service={
+ 'interval':company['settings'][0]['settings.vehicle.servint_trains'],
+ 'percent':bool(company['settings'][0]['settings.vehicle.servint_ispercent']),
+ 'breakdowns':opts['difficulty.vehicle_breakdowns'],
+ 'no_servicing_if_no_breakdowns':bool(opts['order.no_servicing_if_no_breakdowns'])}
+assert train_service['interval']==150 and train_service['breakdowns']==1
+train_engine=dict(version=1,stock_id=0,climate_matches=True,startup_public=True,startup_date=712223,
+  aging_stop_year=2050,**{k:rail_model[n] for k,n in dict(startup_age='age',phase1='duration_phase_1',
+    phase2='duration_phase_2',phase3='duration_phase_3',intro_date='intro_date',reliability_decay='reliability_spd_dec',
+    reliability_start='reliability_start',reliability_max='reliability_max',reliability_final='reliability_final').items()})
+train_engine['expiry_age']=sum(train_engine[f'phase{i}'] for i in range(1,4))
 opening=dict(
+ train_service=train_service,train_engine=train_engine,
  clock=[game[k] for k in ('tick_counter','date','cur_tileloop_tile','random_state[0]','random_state[1]','trees_tick_counter')],
  town={k:town[k] for k in TOWN_FIELDS},
  supply={row['cargo']:[e[k] for e in row['history'][:2] for k in ('production','transported')] for row in town['supplied']},
@@ -96,22 +109,28 @@ for line in Path(sys.argv[2]).read_text().splitlines():
  tag=words[0] if words else ""
  if tag not in {"LTTD_RNG_WORDS","LTTD_TRAIN","LTTD_MULTI_BUS_FRAME","LTTD_FINAL_WAIT"}: continue
  t=int(words[1])
- if not 1502<t<=12750: continue # stop before the first automatic train depot order
+ if not 1502<t<=28290: continue
  row=ticks.setdefault(t,{})
  if tag=="LTTD_FINAL_WAIT":
   row.setdefault(tag,{})[int(words[2])]=words[3:6]
  else: row[tag]=words
-assert sorted(ticks)==list(range(1503,12751))
+assert sorted(ticks)==list(range(1503,28291))
+periods=(3574,5646,7940,10160,12454,14674,16968,19262,21482,23776,25996,28290)
 checked={}
+actual_services=[]
 state=[1,1,1,1]
 for t,row in sorted(ticks.items()):
  train=row["LTTD_TRAIN"]
  state[0]=digest(state[0],t,*row["LTTD_RNG_WORDS"][2:])
- state[1]=digest(state[1],t,*row["LTTD_MULTI_BUS_FRAME"][3:11])
+ bus=row["LTTD_MULTI_BUS_FRAME"]
+ fixed=bus[3:11] if int(bus[11])!=254 else [bus[3],-1,-1,-1,-1,bus[8],0,bus[10]]
+ state[1]=digest(state[1],t,*fixed)
+ if int(train[10])==5: actual_services.append(t)
  state[2]=digest(state[2],t,*(train[i] for i in (2,3,4,7,8,9,12,13,14,15,17,18,19)))
  for station,stats in sorted(row["LTTD_FINAL_WAIT"].items()):
   state[3]=digest(state[3],t,station,*stats)
- if t in (3574,5646,7940,10160,12454,12750): checked[t]=state.copy()
+ if t in periods: checked[t]=state.copy()
+assert actual_services==[12922,24415]
 checkpoints={}
 for path in map(Path,sys.argv[4:]):
  blob=path.read_bytes()
@@ -129,7 +148,7 @@ for path in map(Path,sys.argv[4:]):
    htype=int.from_bytes(g[b"MAP8"][2*i:2*i+2],"big")&4095
    done=bool(g[b"M3LO"][i]&128);m5=g[b"MAP5"][i]
    th=digest(th,i,typ,htype,int(done),3 if done else (m5>>3)&3,0 if done else m5&7,m5 if done else 0,g[b"MAPO"][i])
- history=[co["cur_economy"][0],*co["old_economy"][:1]]
+ history=[co["cur_economy"][0],*co["old_economy"][:4]]
  checkpoints[tick]={
   "town":[tz[k] for k in ("grow_counter","growth_rate","time_until_rebuild")],
   "supply":{c:[a[k] for a in ent["history"][:2] for k in ("production","transported")]
@@ -137,12 +156,12 @@ for path in map(Path,sys.argv[4:]):
   "map":th,
   "paid":sum(q["delivered_cargo"][0] for q in history)
  }
-assert sorted(checkpoints)==[3574,5646,7940,10160,12454]
+assert sorted(checkpoints)==list(periods)
 header="""-- Numeric observations from OpenTTD 16.0-RC1 (07b339c0aaeb0a87be9490b2f1c3f17c6b00b837).
 -- Stock 64x64 Temperate seed 1751. One Regal bus, one Kirby with a real coach,
 -- two road stops and two separate rail platforms, one company and one town.
 -- Exact original scenario has its stock subsidy duration set to zero.
--- Captured through the tick before the first automatic train depot order.
+-- Captured continuously from January 4 to the following January 1.
 -- No stock save files, graphics, or text strings are redistributed.
 """
-out.write_text(header+"return {start="+lua(opening)+",digest="+lua(checked)+",checks="+lua(checkpoints)+"}\n")
+out.write_text(header+"return {start="+lua(opening)+",digest="+lua(checked)+",checks="+lua(checkpoints)+",services="+lua(actual_services)+"}\n")

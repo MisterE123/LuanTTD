@@ -18,6 +18,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local Types=dofile(upstream.."rail_types.lua")
   local Realistic=dofile(upstream.."rail_acceleration_rc1.lua")
   local Fault=dofile(upstream.."road_breakdowns.lua")
+  local Auto=dofile(upstream.."rail_auto_service_rc1.lua")
+  local Trigger=dofile(upstream.."vehicle_random_trigger.lua")
   local acceleration_models,curve_advantage={},{}
   for gauge=0,3 do
     local spec=Types.entry(gauge)
@@ -313,8 +315,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   end
   local function search(board,run,tile,td)
     local v=vehicle(run,tile)
-    local box,sign=board.station_area(run.order.station,run.order.kind)
-    if not box and sign==nil then return end
+    if run.order.kind~="depot" then
+      local box,sign=board.station_area(run.order.station,run.order.kind)
+      if not box and sign==nil then return end
+    end
     local dest=Costs.destination(board,v,run.order)
     local found,best=Search.find(board,v,{tile=tile,td=td},dest,settings)
     if found then return best,v end
@@ -409,7 +413,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           not has(Track.status(tile),r.td) or seen[r.tile] then return false,"Unsupported or disconnected railway at "..where(r.tile).."." end
       seen[r.tile]=true
       if tile.kind=="depot" then
-        if i~=1 or tile.dir~=Track.exit_side(r.td) then return false end
+        local outbound=i==1 and tile.dir==Track.exit_side(r.td)
+        local inbound=i==#route and run.service_depot==r.tile and tile.dir==Track.entry_side(r.td)
+        if not outbound and not inbound then return false end
       elseif tile.kind=="signals" then
         if Signal.oneway_blocking(tile,r.td) or
             (not run.block and not run.local_signals and Signal.on_track(tile,Track.track(r.td)) and
@@ -429,7 +435,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           return false,"The planned railway does not connect at "..where(n.tile).."."
         end
         if run.span and not jump and board.span_seam and not board.span_seam(r.tile,r.td,n.tile,n.td) then return false end
-      elseif tile.kind~="station" or tile.station~=run.station then return false,"The route does not reach the selected platform."
+      elseif run.service_depot and r.tile~=run.service_depot or not run.service_depot and
+             (tile.kind~="station" or tile.station~=run.station) then
+        return false,"The route does not reach the selected station or depot."
       elseif not run.ordinary_unreserved and not run.local_signals and not run.platform_lookahead and not Costs.safe_waiting(board,vehicle(run,r.tile),r.tile,r.td,true,settings) then
         return false,unsafe_platform(board,r)
       end
@@ -1333,7 +1341,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     run.live_order_origin=nil
     run.reserved_through_station=nil
     if run.ordered_tiles then for _,step in ipairs(route) do run.ordered_tiles[step.tile]=true end end
-    run.speed=0;run.subspeed=0;run.wait_counter=0;run.stuck=false
+    run.stock_continue_after_loading=not flip and run.stock_realistic or nil
+    run.speed=0
+    if not run.stock_continue_after_loading then run.subspeed=0 end
+    run.wait_counter=0;run.stuck=false
     -- TrainLocoHandler's ProcessOrders/CheckReverseTrain clears speed
     -- and subspeed, not the current fractional progress.
     if not run.stock_realistic then run.progress=0 end
@@ -1504,6 +1515,35 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return hit
   end
 
+  local function engine_reliability(run,date)
+    local engine=run.stock_fault_engine
+    if type(engine)=="number" then return engine end
+    return engine and Calendar.snapshot(engine,date).reliability
+  end
+
+  local function complete_service(s,base,d,run,events)
+    local depot=run.service_depot
+    assert(Dispatch.stow_return(base,d.life,run.id,run.consist,depot))
+    local h=run.stock_fault
+    local day=run.stock_last_economy_date
+    local reliability=assert(engine_reliability(run,day))
+    Fault.service(h,reliability,day,day,run.stock_breakdowns)
+    if run.stock_random_parts then
+      Trigger.chain(run.stock_random_parts,1,"depot",function() return R.stock_random(s) end)
+    end
+    run.order=run.order_before_service
+    run.order_before_service,run.service_depot=nil,nil
+    local head=run.consist.parts[1]
+    local board=viewed(base,d)
+    local best,v=search(board,run,depot,head.pose.td)
+    local route=best and dense_route(board,v,best,run.span)
+    if not route or #route<2 then return halt(d,run,events,"No route from the serviced depot to the original order.") end
+    run.route,run.index,run.phase,run.direction,run.speed,run.wait_counter=
+      route,1,"depot",head.pose.direction,0,0
+    run.pending_depot_entry_tick=run.vehicle_ticks
+    emit(d,run,events,"serviced",{tile=depot})
+  end
+
   local function handle_fault(run)
     local h=run.stock_fault
     if not h or h.breakdown_ctr==0 then return false end
@@ -1515,8 +1555,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return result.hold_motion
   end
 
-  local function pass(s,base,d,run,events,mode,paid,service)
-    if handle_fault(run) then return end
+  local function pass(s,base,d,run,events,mode,paid,service,already_handled_fault)
+    if not already_handled_fault and handle_fault(run) or
+       run.pending_depot_entry_tick==run.vehicle_ticks then return end
     local head=run.consist.parts[1]
     if run.phase=="depot" then
       run.wait_counter=run.wait_counter+1
@@ -1610,6 +1651,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         distance,in_depot,run.visible_bridge_speed,run.order_max_speed,not run.consist.driving_backwards or run.consist.last_can_lead)
       minimum=brake and 0 or 2
     end
+    local motion_settings=run.service_depot and {forbid_90=settings.forbid_90,inbound_depot=run.service_depot} or settings
     Speed.move_pass(run,function()
       local old_parts=run.consist.parts
       local old,next_=old_parts[1],run.route[run.index+1]
@@ -1656,7 +1698,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
       local function try_step()
         if run.block then return block_step(base,d,run,board,entry,choose) end
-        return Dispatch.step(board,d.life,run.id,run.consist,choose,settings,function(_,_,t)
+        return Dispatch.step(board,d.life,run.id,run.consist,choose,motion_settings,function(_,_,t)
           local track=Track.track(t.td)
           -- The consist journal still follows real front/tail occupancy.
           -- No ahead-of-train reservation is created on the unreserved branch.
@@ -1697,6 +1739,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         return "crashed" -- movement-loop interruption token, not an in-game crash.
       end
       local new=run.consist.parts[1]
+      if run.service_depot and r.depot_hides and #r.depot_hides>0 and run.consist.parts[#run.consist.parts].hidden then
+        complete_service(s,base,d,run,events)
+        return
+      end
       local entered=old.tile~=new.tile
       if entered then
         run.index=run.index+1;run.wait_counter=0
@@ -2105,7 +2151,6 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return whole,fixed,pending
   end
 
-  local Trigger=dofile(upstream.."vehicle_random_trigger.lua")
   function R.stock_cargo_random(s,run,part,kind)
     if run.stock_random_parts then
       Trigger.chain(run.stock_random_parts,part,kind,function() return R.stock_random(s) end)
@@ -2122,10 +2167,48 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         out[#out+1]={id=run.stock_pool_id,calendar=function()
           Fault.calendar_day(h,{front=true})
         end,economy=function(date)
-          local engine=run.stock_fault_engine
+          local reliability=engine_reliability(run,date)
+          run.stock_last_economy_date=date
+          local random=function() return R.stock_random(s) end
           Fault.economy_day(h,{cur_speed=run.speed,stopped=run.stopped,loading=run.phase=="dwell",
-            difficulty=run.stock_breakdowns,engine_reliability=engine and Calendar.snapshot(engine,date).reliability},
-            function() return R.stock_random(s) end)
+            difficulty=run.stock_breakdowns,engine_reliability=reliability},random)
+          local cfg=run.stock_train_service_opts
+          if not cfg or not reliability or not run.shuttle or run.block then return end
+          local head,back=run.consist.parts[1],run.consist.parts[#run.consist.parts]
+          local access={stopped=run.stopped,crashed=run.crashed,loading=run.phase=="dwell",
+            depot_target=run.service_depot,depot_service=run.service_depot~=nil,
+            all_in_depot=back.hidden and head.hidden and not head.wormhole and head.tile==back.tile,
+            date_of_last_service=h.date_of_last_service,reliability=h.reliability}
+          if not Auto.due(access,cfg,reliability,date) then return end
+          local base=rail_board(s,run.span)
+          local board=viewed(base,state)
+          local decision=Auto.decision(access,cfg,function(cap,penalty)
+            local v=vehicle(run,head.tile)
+            local found,best=Search.find(board,v,{tile=head.tile,td=head.pose.td},
+              Costs.destination(board,v,{kind="any_depot"}),settings,{
+                max_cost=cap,detect_origin=true,treat_first_red=true,reverse_origin={tile=back.tile,td=Track.reverse_trackdir(back.pose.td)},reverse_penalty=penalty})
+            if found then
+              local route=dense_route(board,v,best,run.span)
+              if route then return {tile=best.last_tile,cost=best.cost,route=route} end
+            end
+          end,random)
+          if not decision then return end
+          if decision.kind=="service_here" then
+            Fault.service(h,reliability,date,date,run.stock_breakdowns)
+          elseif decision.kind=="go_to_depot" then
+            if #decision.route==1 then return end -- front is already entering this depot
+            run.order_before_service=run.order_before_service or run.order
+            run.service_depot=decision.tile
+            run.order,run.route,run.index={kind="depot",tile=decision.tile,nonstop=1},decision.route,1
+            run.live_order_origin=true
+            if run.ordered_tiles then for _,p in ipairs(decision.route) do run.ordered_tiles[p.tile]=true end end
+          elseif decision.kind=="cancel_depot" then
+            run.order,run.service_depot=run.order_before_service,nil
+            run.order_before_service=nil
+            local best,v=search(board,run,head.tile,head.pose.td)
+            local route=best and dense_route(board,v,best,run.span)
+            if route then run.route,run.index=route,1 else run.stuck=true end
+          end
         end}
       end
     end
@@ -2318,6 +2401,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
             end
           elseif callback and callback.leave(run) or not callback and d.ticks>=run.shuttle.dwell_until then
             switch_shuttle_order(base,d,run,events)
+            if d.failure then return events end
+          end
+          if run.stock_continue_after_loading then
+            -- The first locomotive pass clears OT_LEAVESTATION; if the
+            -- next order goes forward, the second immediately accelerates.
+            run.stock_continue_after_loading=nil
+            pass(s,base,d,run,events,true,callback,service,true)
             if d.failure then return events end
           end
         elseif run.phase~="arrived" and run.phase~="freight_complete" and run.phase~="passenger_complete" then

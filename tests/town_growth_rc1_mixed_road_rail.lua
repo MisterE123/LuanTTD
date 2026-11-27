@@ -81,6 +81,8 @@ for _,key in ipairs({"age","max_age","reliability","reliability_spd_dec","breakd
   h[key]=assert(lead[key])
 end
 run.stock_fault=h
+run.stock_fault_engine=ref.train_engine
+run.stock_train_service_opts=ref.train_service
 run.stock_random_parts={}
 for i,p in ipairs(ref.train) do
   run.stock_random_parts[i]={stock_waiting_random_triggers=p.waiting_triggers,stock_vehicle_random_bits=p.random_bits}
@@ -98,12 +100,12 @@ local function hash(h,...)
 end
 local function eq(tag,a,b) assert(a==b,("%s: LuanTTD %s vs RC1 %s"):format(tag,tostring(a),tostring(b))) end
 local hashes={1,1,1,1}
-local observations,checkpoints=0,0
+local observations,checkpoints,services=0,0,0
 local function observe(tick)
   observations=observations+1
   local front,tail=run.consist.parts[1],run.consist.parts[2]
   local f=s.fleet[1]
-  local frame=assert(S.road_motion_frame(s,f))
+  local frame=S.road_motion_frame(s,f)
   local motion=f.road_speed_state or f.road_stop_motion
   local service=s.stock_ship_commercial.service
   local actor=assert(service.vehicles[16384+run.paid_clock])
@@ -122,8 +124,18 @@ local function observe(tick)
     actor.cargo_age_counter=ref.train[2].cargo_age_counter-1
   end
   hashes[1]=hash(hashes[1],tick,unpack(s.passenger_rating_rng))
-  hashes[2]=hash(hashes[2],tick,frame[4]-1,frame[1]-16,frame[2]-16,S.stock_road_frame_z(s,frame),frame[3],
-    motion.progress,f.road_speed_state and motion.speed or 0,motion.subspeed)
+  if frame then
+    hashes[2]=hash(hashes[2],tick,frame[4]-1,frame[1]-16,frame[2]-16,S.stock_road_frame_z(s,frame),frame[3],
+      motion.progress,f.road_speed_state and motion.speed or 0,motion.subspeed)
+  else
+    assert(motion.depot and f.depot and f.last_depot_entry_tick==tick)
+    hashes[2]=hash(hashes[2],tick,f.depot-1,-1,-1,-1,-1,motion.progress,0,motion.subspeed)
+  end
+  if run.pending_depot_entry_tick==run.vehicle_ticks then
+    services=services+1
+    eq("stock automatic train depot arrival",tick,sample.services[services])
+    assert(front.hidden and tail.hidden and h.breakdown_chance==0)
+  end
   hashes[3]=hash(hashes[3],tick,front.tile-1,front.pose.x-16,front.pose.y-16,run.speed,run.subspeed,run.progress,
     h.reliability,h.breakdown_ctr,h.breakdown_chance,actor.units,
     tail.tile-1,tail.pose.x-16,tail.pose.y-16)
@@ -137,6 +149,7 @@ local function observe(tick)
     for i,want in ipairs(expected) do eq("mixed baseline digest "..i.." at "..tick,hashes[i],want) end
   end
 end
+local Rebuild=m("openttd/town_rebuild")
 local function check_town(tick)
   local expected=sample.checks[tick]
   if not expected then return end
@@ -150,7 +163,7 @@ local function check_town(tick)
   for id,tile in ipairs(s.tiles) do
     if tile.source_house then
       local house=tile.source_house
-      map=hash(map,id-1,3,house.id,house.completed and 1 or 0,house.stage,house.counter,house.age or 0,
+      map=hash(map,id-1,3,house.id,house.completed and 1 or 0,house.stage,house.counter,Rebuild.age(house,S.date(s)),
         assert(house.random_bits))
     elseif tile.road_bits and tile.build~="road_depot" and not tile.station then
       map=hash(map,id-1,2,tile.road_bits,(tile.road_town or 1)-1)
@@ -165,8 +178,8 @@ local function check_town(tick)
   if pending and pending.payment then paid=paid+pending.payment.delivered end
   eq("accounted passenger deliveries at "..tick,paid,expected.paid)
 end
-for day=1,152 do
-  if day==29 or day==88 then
+for day=1,362 do
+  if day==29 or day==88 or day==154 or day==312 then
     s=F.reopen(s,true,ref.service_options)
     m("campaign_authority_runtime")(S,mod,s,cap)
     run=assert(s.stock_rail_dispatch.runs[1]);h=assert(run.stock_fault)
@@ -174,5 +187,5 @@ for day=1,152 do
   S.daily(s,nil,observe)
   check_town(s.passenger_house_clock.counter)
 end
-assert(observations==11248 and checkpoints==5)
-print("PASS RC1 operating bus and train town, 11,248 ticks and five monthly observations")
+assert(observations==26788 and checkpoints==12 and services==2)
+print("PASS RC1 operating bus and train town, 26,788 ticks, twelve monthly observations, two returns to depot and four packed reopens")

@@ -3,11 +3,11 @@
 -- Ordinary consist movement from OpenTTD 14.1 TrainController,
 -- Train::CalcNextVehicleOffset, and VehicleEnter_Track/TicksToLeaveDepot.
 -- No rail-reservation writes, signal propagation, routing, reversals or spans.
+local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+local Depot=dofile(path.."rail_depot_entry_rc1.lua")
 return function(T,Motion,Follow,Lifecycle)
   local R={VERSION=1,MAX_PART_LENGTH=8}
   local floor,abs,max=math.floor,math.abs,math.max
-  local spawn_x,spawn_y={[0]=10,8,4,8},{[0]=8,4,8,10}
-  local dx,dy={[0]=-1,0,1,0},{[0]=0,1,0,-1}
   local function legal_length(n) return type(n)=="number" and n%1==0 and n>=1 and n<=R.MAX_PART_LENGTH end
 
   -- Stock treats odd lengths asymmetrically, at the coupling boundary.
@@ -21,18 +21,14 @@ return function(T,Motion,Follow,Lifecycle)
   -- depot. Positive means the count of steps before the predecessor
   -- proposed position flips the following wagon's DEPOT mode.
   function R.ticks_to_leave_depot(direction,x,y,length,next_length)
-    local n=R.next_offset(length,next_length)+1
-    return (spawn_x[direction]+n*dx[direction]-x%16)*dx[direction]+
-      (spawn_y[direction]+n*dy[direction]-y%16)*dy[direction]
+    return Depot.ticks_to_leave(direction,x,y,R.next_offset(length,next_length))
   end
 
   -- Stock VehicleEnter_Track compares both axes of the proposed position
   -- against the byte-coded leaving point, not just longitudinal distance.
   function R.depot_activation(direction,x,y,length,next_length)
     if not next_length then return false end
-    local n=R.next_offset(length,next_length)+1
-    return x%16==spawn_x[direction]+n*dx[direction] and
-      y%16==spawn_y[direction]+n*dy[direction]
+    return Depot.tile_event(direction,direction*2+1,x,y,R.next_offset(length,next_length),true)=="reveal"
   end
 
   function R.seed_depot(board,id,lengths)
@@ -42,12 +38,21 @@ return function(T,Motion,Follow,Lifecycle)
     local tx,ty=board.xy(id)
     local dir=depot.dir
     local out={version=R.VERSION,serial=0,parts={},owner=depot.owner}
+    local ex,ey=Depot.coordinates(dir)
     for i,n in ipairs(lengths) do
       if not legal_length(n) then return nil,"invalid_length" end
-      out.parts[i]={tile=id,length=n,hidden=true,pose={x=16*tx+spawn_x[dir],y=16*ty+spawn_y[dir],
+      out.parts[i]={tile=id,length=n,hidden=true,pose={x=16*tx+ex,y=16*ty+ey,
         tx=tx,ty=ty,td=T.diagonal_trackdir(dir),direction=dir*2+1}}
     end
     return out
+  end
+
+  function R.depot_event(depot,part,next_,candidate,return_target)
+    local old=part.pose
+    local returning=old.direction~=2*depot.dir+1
+    if returning and not return_target then return "forbidden" end
+    return Depot.tile_event(depot.dir,old.direction,candidate.x,candidate.y,
+      R.next_offset(part.length,next_ and next_.length),next_~=nil)
   end
 
   -- Caller handles CheckTrainStayInDepot (wait, block, order, reservations)
@@ -150,9 +155,13 @@ return function(T,Motion,Follow,Lifecycle)
   -- as transitions before committing this proposal. Station loading is a
   -- caller reaction to a successful front sample and does not skip wagons.
   function R.plan(board,consist,head_choice,settings)
-    if consist.version~=R.VERSION or consist.parts[1].hidden then return nil,"held_in_depot" end
+    local inbound=settings and settings.inbound_depot
+    local first=consist.parts[1]
+    if consist.version~=R.VERSION or first.hidden and not (inbound==first.tile and not consist.parts[#consist.parts].hidden) then
+      return nil,"held_in_depot"
+    end
     local parts=clone(consist.parts)
-    local transitions,reveals={},{}
+    local transitions,reveals,hides={},{},{}
     for i,v in ipairs(parts) do
       if not v.hidden then
         local old=v.pose
@@ -165,7 +174,7 @@ return function(T,Motion,Follow,Lifecycle)
           end
           local a,b=board.tile(v.tile),board.tile(into)
           if not stock_tile(a) or not stock_tile(b) or b.owner~=consist.owner or
-              b.kind=="depot" then
+              b.kind=="depot" and (into~=inbound or b.dir~=T.reverse_side(candidate.enterdir)) then
             return nil,"unsupported_track",i
           end
           local travel=candidate.enterdir
@@ -189,20 +198,22 @@ return function(T,Motion,Follow,Lifecycle)
           local tile=board.tile(v.tile)
           if not stock_tile(tile) or tile.owner~=consist.owner then return nil,"unsupported_track",i end
           if tile.kind=="depot" then
-            -- Outbound only. Entering/hiding the chain is a depot order
-            -- with a different lifecycle and is not enabled here.
-            if old.direction~=2*tile.dir+1 then return nil,"inbound_depot",i end
             local next_=parts[i+1]
-            if next_ and next_.hidden and R.depot_activation(tile.dir,candidate.x,candidate.y,v.length,next_.length) then
+            local event=R.depot_event(tile,v,next_,candidate,v.tile==inbound)
+            if event=="forbidden" or event=="blocked" then return nil,"inbound_depot",i end
+            if event=="reveal" and next_.hidden then
               next_.hidden=false
               reveals[#reveals+1]={index=i+1,tile=next_.tile}
+            elseif event=="hide" then
+              v.hidden=true
+              hides[#hides+1]={index=i,tile=v.tile}
             end
           end
           v.pose=candidate
         end
       end
     end
-    return {base_serial=consist.serial,parts=parts,transitions=transitions,reveals=reveals}
+    return {base_serial=consist.serial,parts=parts,transitions=transitions,reveals=reveals,depot_hides=hides}
   end
 
   function R.commit(consist,proposal)

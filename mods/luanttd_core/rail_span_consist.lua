@@ -62,8 +62,11 @@ return function(T,Raw,Follow,Consist,Life)
 
   function P.plan(board,consist,head_choice,settings)
     if not board.span_enabled then return Consist.plan(board,consist,head_choice,settings) end
-    if not consist.parts[1] or consist.parts[1].hidden and not consist.parts[1].wormhole then return nil,"held_in_depot" end
-    local parts,transitions,reveals={},{},{}
+    local inbound=settings and settings.inbound_depot
+    local first=consist.parts[1]
+    if not first or first.hidden and not first.wormhole and
+       not (inbound==first.tile and not consist.parts[#consist.parts].hidden) then return nil,"held_in_depot" end
+    local parts,transitions,reveals,hides={},{},{},{}
     for i,p in ipairs(consist.parts) do parts[i]=copy(p);parts[i].span_speed=nil;parts[i].span_prepared=nil end
     for i,v in ipairs(parts) do
       if not v.hidden or v.wormhole then
@@ -108,8 +111,8 @@ return function(T,Raw,Follow,Consist,Life)
           local next_=current
           if candidate.crossing then
             next_=dest and board.tile(dest)
-            if not stock_tile(next_) or next_.owner~=consist.owner or next_.kind=="depot" or
-                board.adjacent(v.tile,travel)~=dest then return nil,"unsupported_track",i end
+            if not stock_tile(next_) or next_.owner~=consist.owner or
+                next_.kind=="depot" and (dest~=inbound or next_.dir~=T.reverse_side(travel)) or board.adjacent(v.tile,travel)~=dest then return nil,"unsupported_track",i end
             local bits=T.intersect(T.status(next_,T.reverse_side(travel)),T.reachable(travel))
             if i==1 and Follow.disallow_90(board,current.railtype,next_.railtype,settings and settings.forbid_90 or false) then
               bits=T.remove(bits,T.crossing_trackdirs(old.td))
@@ -122,11 +125,15 @@ return function(T,Raw,Follow,Consist,Life)
             if not candidate then return nil,"invalid_boundary",i end
             logical_boundary(dest,candidate,travel)
           elseif current.kind=="depot" then
-            if old.direction~=2*current.dir+1 then return nil,"inbound_depot",i end
             local next_part=parts[i+1]
-            if next_part and next_part.hidden and Consist.depot_activation(current.dir,candidate.x,candidate.y,v.length,next_part.length) then
+            local event=Consist.depot_event(current,v,next_part,candidate,v.tile==inbound)
+            if event=="forbidden" or event=="blocked" then return nil,"inbound_depot",i end
+            if event=="reveal" and next_part.hidden then
               next_part.hidden=false
               reveals[#reveals+1]={index=i+1,tile=next_part.tile}
+            elseif event=="hide" then
+              v.hidden=true
+              hides[#hides+1]={index=i,tile=v.tile}
             end
           end
           local fresh=stock_height(board,v.tile,candidate)
@@ -153,7 +160,7 @@ return function(T,Raw,Follow,Consist,Life)
         end
       end
     end
-    return {base_serial=consist.serial,parts=parts,transitions=transitions,reveals=reveals}
+    return {base_serial=consist.serial,parts=parts,transitions=transitions,reveals=reveals,depot_hides=hides}
   end
   return P
 end
