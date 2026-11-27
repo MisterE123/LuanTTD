@@ -151,7 +151,10 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
         void=function(u,v) return s.tiles[Sim.id(u,v)].stock_void end,
         validate_tile=function(_,u,v)
           local t=B.tile(u,v)
-          if not t or t.kind~="clear" or t.owner or t.bridge_above or
+          -- RC1's tree terraform callback delegates to LandscapeClear.
+          -- Quote the stems before committing any shared corner. Leave
+          -- non-tree structures and protected company land alone.
+          if not t or (t.kind~="clear" and t.kind~="trees") or t.owner or t.bridge_above or
               live and not live.houseable(u,v) then return nil,"TOWN_PROTECTED_TERRAIN" end
           return Sim.road_site_clear_cost(s.tiles[Sim.id(u,v)])
         end,
@@ -164,7 +167,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
       if not t.stock_void then
         local _,base=Terrain.tile(s.corner_grid,d.x,d.z)
         t.terrain,t.h=base>0 and "hill" or "grass",base
-        t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,nil,nil
+        t.wood,t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,nil,nil,nil
       end
       if live then live.dirty(id) end
     end

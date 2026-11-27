@@ -141,7 +141,11 @@ saved per world and reaches the worker on monthly eligibility, funding,
 and house commits. None does not prevent initial towns from being
 founded, and Fund New Buildings can temporarily bypass it. The setup
 does not yet provide OpenTTD’s in-game change callback for existing
-worlds. Some construction branches still lack stock behavior, and we
+worlds. The native monthly worker test exercises the actual funding
+action with no vehicles, grows houses after a paid command with growth
+set to None, then verifies the three monthly decrements and no further
+building after two worker reopens. Some construction branches still
+lack stock behavior, and we
 have not yet proven whole-town placement/RNG parity.
 
 ## Municipal streets on ordinary generated maps
@@ -152,8 +156,10 @@ street walk, layout masks, road suitability, bridge and tunnel scouts
 select the work. `IsRoadAllowedHere` first considers the existing
 foundation and neighboring roads. Its 1-in-8 unsuitable-slope branch
 can make the live-only 1-in-10 downhill attempt, with the original
-1-in-16 corner choice. Successful grading is visible immediately; the
-road waits for a later attempt. These draws are not added to startup
+1-in-16 corner choice. Successful grading is visible immediately; the road waits for a later
+attempt. Eligible dry woodland uses RC1's tree-clearing quote as part
+of the same corner change; a denied quote leaves the trees and heights
+unchanged. These draws are not added to startup
 map generation.
 
 Only an admitted native command writes terrain, road bits, bridge geometry

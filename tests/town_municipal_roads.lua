@@ -224,3 +224,24 @@ do
   assert(S.road_bits(s,far_street)==old_road and s.stock_road_bridges[s.tiles[bridge.start].road_bridge_id]==bridge)
 end
 print("PASS houses-only stock policy follows an existing bridge and builds beyond it without changing roads")
+
+-- LevelTownLand quotes LandscapeClear on each affected tree tile, then
+-- clears the admitted footprint with the corner change. Paid land stays.
+do
+  local s,_,x,z=slope_fixture()
+  local id=S.id(x,z)
+  local board=W.road_board(s)
+  local company=S.company(s,"Neighbor")
+  local cash=company.cash
+  local grove={count=3}
+  s.tiles[id].wood=grove
+  s.tiles[id].owner="Neighbor"
+  local revision=s.corner_grid.revision
+  assert(not board.level_land(x,z))
+  assert(s.tiles[id].wood==grove and s.corner_grid.revision==revision)
+  s.tiles[id].owner=nil
+  assert(board.level_land(x,z))
+  assert(T.tile(s.corner_grid,x,z)==0 and not s.tiles[id].wood)
+  assert(s.corner_grid.revision==revision+1 and company.cash==cash)
+end
+print("PASS stock municipal grading levels an eligible wooded site without modifying protected land")

@@ -22,7 +22,7 @@ case "${1:-}" in
     bash tests/async_state_owner_native.sh "$(command -v luantiserver)" "$(mktemp -d)/ipc"
     bash tests/campaign_generation_async_native.sh "$(command -v luantiserver)" "$(mktemp -d)/generation"
     bash tests/campaign_tick_worker_native.sh "$(command -v luantiserver)" "$(mktemp -d)/ticks"
-    for mode in woodhouse foreignhouse crossing companyroad; do
+    for mode in woodhouse foreignhouse crossing companyroad months; do
       LUANTTD_QA_MUNICIPAL_KIND="$mode" bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" "$(mktemp -d)/$mode"
     done
     bash tests/campaign_ordinary_worker_native.sh
