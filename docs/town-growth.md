@@ -143,3 +143,26 @@ town road expansion, non-temperate goals, NewGRFs, and existing house
 replacement or decay. It returns one safe plan per attempt, even where the
 stock search can perform an extra-house build before continuing. Any broader live mount (road building, more house types or more station modes)
 needs independent timing, save/load and visual QA.
+
+## One growth callback per stock tick
+
+The live owner still checks every town in ascending TownID order on
+each stock tick. It now shares one callback across those checks, using
+the town argument supplied by the original growth countdown. The board
+and station view remain lazy and shared only for that tick. This does
+not change when a town can grow, add roads, or draw random numbers.
+
+On one generated 1024×1024 campaign, allocation tracing isolated
+**10.824 MiB → about 0.030 MiB** of temporary Lua allocation per game
+day in the town tick. Two alternating native Luanti 5.15.2 runs measured
+median overall daily worker CPU of **759 → 711 ms** and **772 → 680 ms**.
+At the same completed day, all 1,559,990 checked state tables and alias
+mappings, including 1,048,576 tiles, were equal. These are measurements
+for that campaign, not a claim about client frame rate.
+
+```sh
+lua5.1 tests/town_growth.lua
+lua5.1 tests/town_growth_live.lua
+lua5.1 tests/town_rebuild.lua
+tests/campaign_tick_worker_native.sh luantiserver /tmp/town-tick-check
+```

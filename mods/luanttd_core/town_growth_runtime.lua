@@ -272,17 +272,17 @@ return function(Sim,Terrain,G,B,H)
   function W.tick(s,tick,random,write_house)
     local state=s.stock_town_growth
     if not state then return end
-    local view
-    local brd
-    for _,id in ipairs(state.order) do
-      local t=state.towns[id]
-      G.tick(t,function()
-        view=view or services(s)
-        brd=brd or board(s)
-        local proposal=B.grow(t,brd,{year=Sim.date(s),allow_roads=false},random)
-        return commit(s,t,proposal,view,tick,write_house)
-      end)
+    local view,brd
+    -- OnTick_Town visits the same ordered towns even when no build is
+    -- due. G.tick supplies the town when its countdown actually expires;
+    -- share one callback and the lazy board for this source tick.
+    local function attempt(t)
+      view=view or services(s)
+      brd=brd or board(s)
+      local proposal=B.grow(t,brd,{year=Sim.date(s),allow_roads=false},random)
+      return commit(s,t,proposal,view,tick,write_house)
     end
+    for _,id in ipairs(state.order) do G.tick(state.towns[id],attempt) end
   end
   return W
 end
