@@ -296,6 +296,7 @@ jobs:
           python3 tests/rotary_motion_upstream.py "$src" lua5.1
           python3 tests/stock_tricario_art.py "$src/src/table/engines.h" lua5.1
           python3 tests/advanced_rail_roster_upstream.py "$src/src/table/engines.h" lua5.1
+          python3 tests/ship_complete_temperate_roster_rc1.py "$src/src/table/engines.h"
           python3 tests/guideway_types_rc1.py "$src"
           python3 tests/road_dead_end_rc1.py "$src"
           python3 tests/road_remove_rc1.py "$src"
@@ -384,6 +385,8 @@ jobs:
           lua5.1 tests/ship_paid_runtime.lua partial
           lua5.1 tests/coal_ship_ordinary_worker.lua 211 partial
           lua5.1 tests/oil_ship_ordinary_worker.lua 204 partial
+          lua5.1 tests/ship_goods_paid_contract.lua
+          lua5.1 tests/ship_goods_ordinary_worker.lua
           lua5.1 tests/stock_dock_tree_authority.lua
           lua5.1 tests/town_council_index.lua
           python3 tests/rail_compound_wire_art.py

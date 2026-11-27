@@ -15,7 +15,15 @@ return function(core,Sim,checkpoint,mod)
   s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading,s.road_economy=true,true,true,true
   s.ship_paid_service=true
   local stock=tonumber(core.settings:get("luanttd_qa_other_ship")) or 212
-  if stock==208 then
+  if core.settings:get("luanttd_qa_other_ship_cargo")=="goods" then
+    s.ship_coal_service,s.road_oil=true,true
+    local W=assert(Sim.mount_oil_world(s,T,true))
+    assert(W.place(s,assert(W.plan(s,12,28,31,28))))
+    local tc=Sim.id(51,28)
+    s.sites[1]={id=1,kind="town",name="Port Town",population=400,tile=tc,stock={},produced={},received={},service=0}
+    s.tiles[tc].house,s.tiles[tc].source_house=true,{id=18,town=1,completed=true}
+    s.speed=4
+  elseif stock==208 then
     for i,x in ipairs({12,31}) do
       local id=Sim.id(x,28)
       s.sites[i]={id=i,tile=id,kind="town",name=i==1 and "North Wharf" or "South Wharf",

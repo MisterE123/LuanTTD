@@ -114,6 +114,7 @@ case "${1:-}" in
     bash tests/stock_oil_rig_art_native.sh
     lua5.1 tests/coal_ship_ordinary_worker.lua 211
     lua5.1 tests/coal_ship_ordinary_worker.lua 212
+    LUANTTD_QA_OTHER_SHIP=211 LUANTTD_QA_OTHER_SHIP_YEAR=1950 LUANTTD_QA_OTHER_SHIP_CARGO=goods bash tests/stock_other_ship_native.sh
     lua5.1 tests/rail_paid_runtime.lua 208
     python3 tests/stock_hovercraft_art.py
     python3 tests/stock_bakewell_cargo_art.py

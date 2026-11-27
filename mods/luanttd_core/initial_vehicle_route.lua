@@ -30,7 +30,7 @@ function R.notice(mode,unit)
   return "Build two compatible company rail stations before starting this train."
 end
 function R.context(client,p,mode,depot,unit,data,from,to)
-  if not unit or unit.copied or not (mode=="rail" or mode=="ship" and unit.id=="ferry") then return end
+  if not unit or unit.copied or unit.parked==false or not (mode=="rail" or mode=="ship") then return end
   local name=p:get_player_name()
   local first,last=R.targets(mode,data,unit)
   local M={first=first,last=last,from=first[from or 0] and first[from].id,

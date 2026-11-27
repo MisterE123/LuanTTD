@@ -8,10 +8,14 @@ working ordinary paid service:
 - MPS and FFP passenger ferries, plus the Bakewell 300 Hovercraft: buy the
   appropriate dated hull, then select two owned passenger docks. The
   hovercraft's stock 224 speed and capacity of 100 are not a ferry reskin.
-- Yate and Bakewell cargo ships: buy a hull, select its **Coal** refit in
-  the same depot, then pick a dock near a mine and an accepting power
-  plant. The two carry 160 and 190 tonnes respectively. Their ordinary
-  Goods cargo and the remaining stock refit choices are not yet serviced.
+- Yate and Bakewell cargo ships carry **Goods** as purchased, 160 and 190
+  crates respectively. In a ship depot, buy the hull, open the vehicle,
+  and pick a loading dock near a Factory, Sawmill or Oil Refinery and a
+  delivery dock near enough town buildings that accept Goods. You can
+  choose from the same compatible docks in the list or pick them in 3D.
+  Choose **Start service** after reviewing both. For Coal, refit in the
+  same depot before dispatch, then pick a mine dock and an accepting
+  power plant. Both hulls retain their stock capacity when refitted.
 
 The actual stock ship controller, regional pathfinding, depot and approach
 tests, same-town queue production, preserved loading state and 8-bit
@@ -71,7 +75,16 @@ nearest-ID tests also match 7,096 compiled OpenTTD cases.
 
 QA: both cargo boats used real worker-authorized purchase, Coal refit,
 route and fare with the same stock mine and power plant after a partial
-load restore. The Bakewell cargo and hovercraft also ran as native Linux
-client projections and earned real fares. The exact source table check is
-tests/ship_complete_temperate_roster_rc1.py. See also the
+load restore. Separately, the 1950 Yate loaded real Goods from a refinery
+supplied by a tanker. Its own stock hold and order list survived a packed
+mid-load reopen and paid for each crate only once. The shared refinery,
+farm/factory and timber chains keep their existing production and station
+ledgers. An ordinary Linux client used the vehicle form and its in-world
+two-dock picker, saw the original hull, and made further paid deliveries
+after a separate SQLite restart. The Bakewell cargo ship and hovercraft
+also ran as native Linux client projections and earned real fares. The exact source table check is
+tests/ship_complete_temperate_roster_rc1.py. It checks the original cargo
+class allowlist, all nine equivalent dry cargo holds, and their refit
+prices against RC1. Only Goods and Coal are implemented for this hull in
+ordinary play; the other seven choices are not exposed. See also the
 [stock content inventory](stock-content-inventory.md).

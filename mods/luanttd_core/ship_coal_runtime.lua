@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Optional owned #211 coal service, one distinct stock motion actor.
-return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
+return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
   local M={}
   local bindings=setmetatable({},{__mode="k"})
   local frames=setmetatable({},{__mode="k"})
@@ -81,9 +81,34 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
       return check_pair(board,dep,a,z,Run.current(w))
     end
   end
+  local function coal_active(s)
+    return s.stock_coal_industries and next(s.stock_coal_industries)~=nil
+  end
+  function M.goods(s)
+    return Goods and Goods.enabled(s) or false
+  end
+  local function dry_goods(s)
+    local craft=s.stock_coal_ship
+    return Goods and craft and craft.cargo==Roster.default_cargo and M.goods(s)
+  end
   function M.active(s)
     return not not (bindings[s] and s.ship_coal_service and s.road_stock_house_supply and
-      s.stock_coal_industries and Sim.road_stock_service_active(s))
+      (s.stock_coal_industries or M.goods(s)) and Sim.road_stock_service_active(s))
+  end
+  function M.goods_stations(s)
+    if not dry_goods(s) then return end
+    local spec=bindings[s]
+    if spec then return Goods.stations(s,spec.run,spec.network) end
+  end
+  function M.goods_running(s,station)
+    if not dry_goods(s) then return false end
+    local spec=bindings[s]
+    local voyage=spec and spec.run.current(s)
+    return voyage and (not station or spec.run.ordered_dock(voyage,station)) or false
+  end
+  function M.cargo_key(s)
+    local craft=s.stock_coal_ship
+    return craft and Roster.cargo_key(craft.cargo)
   end
   local function model(s,preview)
     local spec=bindings[s]
@@ -167,40 +192,51 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
     s.stock_coal_ship=v
     return {id="coal",engine=v.engine,cost=v.purchase,cargo=v.cargo,capacity=q.capacity}
   end
-  function M.refit_quote(s,owner,dep)
+  function M.refit_quote(s,owner,dep,cargo)
     if not M.active(s) then return nil,"STOCK_COAL_SHIP_DISABLED" end
     local v=s.stock_coal_ship
     local d=v and depot(s,v.depot)
     if not (d and d.owner==owner and v.owner==owner and (dep==nil or dep==v.depot)) or bindings[s].run.current(s) then
       return nil,"OWN_SHIP_IN_DEPOT_REQUIRED"
     end
-    if v.cargo==Roster.coal then return nil,"SHIP_ALREADY_COAL_REFITTED" end
-    return Roster.quote(Roster.coal,s.stock_ship_purchase_base,v.cargo,v.engine)
+    cargo=cargo or "coal"
+    if cargo~="coal" and cargo~="goods" then return nil,"CARGO_NOT_REFITTABLE" end
+    if cargo=="goods" and not M.goods(s) then return nil,"NO_GOODS_INDUSTRY_AUTHORITY" end
+    if cargo=="coal" and not coal_active(s) then return nil,"DOCK_NEEDS_COAL_MINE" end
+    local id=Roster.cargo_id(cargo)
+    if v.cargo==id then return nil,cargo=="coal" and "SHIP_ALREADY_COAL_REFITTED" or "SHIP_ALREADY_CARRIES_GOODS" end
+    return Roster.quote(id,s.stock_ship_purchase_base,v.cargo,v.engine)
   end
-  function M.refit(s,owner,dep)
-    local q,why=M.refit_quote(s,owner,dep)
+  function M.refit(s,owner,dep,cargo)
+    local q,why=M.refit_quote(s,owner,dep,cargo)
     if not q then return nil,why end
     local v=s.stock_coal_ship
     local c=Sim.company(s,owner)
     if c.cash<q.refit then return nil,"NOT_ENOUGH_MONEY" end
     debit(c,q.refit)
-    v.cargo,v.refit=Roster.coal,q.refit
+    v.cargo,v.refit=q.cargo,q.refit
     return {id="coal",engine=v.engine,cost=v.refit,cargo=v.cargo,capacity=q.capacity}
   end
   function M.start(s,owner,a,z)
     if not M.active(s) then return nil,"STOCK_COAL_SHIP_DISABLED" end
     local spec=bindings[s]
     local v=s.stock_coal_ship
-    if not v or v.owner~=owner or v.cargo~=Roster.coal then return nil,"OWN_YATE_REFITTED_TO_COAL_REQUIRED" end
+    if not v or v.owner~=owner then return nil,"OWN_DRY_CARGO_SHIP_REQUIRED" end
+    if v.cargo==Roster.default_cargo and not dry_goods(s) then return nil,"NO_GOODS_INDUSTRY_AUTHORITY" end
+    if v.cargo~=Roster.coal and v.cargo~=Roster.default_cargo then return nil,"UNSUPPORTED_SHIP_CARGO" end
     if a==z or not a or not z then return nil,"OWN_DEPOT_AND_TWO_DOCKS_REQUIRED" end
     local candidate,why=spec.run.quote(s,owner,v.depot,a,z,nil,v.engine)
     if not candidate then return nil,why end
-    local b=model(s,true)
-    local source,dest=b.report(a),b.report(z)
-    if not source or #source.sources==0 then return nil,"DOCK_NEEDS_COAL_MINE" end
-    if not dest or not dest.accepts then return nil,"DOCK_NEEDS_POWER_STATION" end
+    local goods=dry_goods(s)
+    local source,dest=M.order_report(s,a),M.order_report(s,z)
+    if not source or #source.sources==0 then return nil,goods and "DOCK_NEEDS_GOODS_SOURCE" or "DOCK_NEEDS_COAL_MINE" end
+    if not dest or not dest.accepts then return nil,goods and "DOCK_NEEDS_GOODS_ACCEPTANCE" or "DOCK_NEEDS_POWER_STATION" end
     local run,why2=spec.run.start(s,owner,v.depot,a,z,nil,v.engine)
     if not run then return nil,why2 end
+    if goods then
+      Goods.install(s,v)
+      return run,"Goods ship dispatched."
+    end
     s.stock_ship_coal=Service.new()
     local live=model(s)
     assert(live.vehicle(v))
@@ -219,12 +255,18 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
     -- or stopped. An undispatched purchase only protects its depot.
     return s.stock_coal_ship_run~=nil
   end
-  function M.order_report(s,id)
+  function M.order_report(s,id,cargo)
+    if cargo=="goods" or cargo==nil and dry_goods(s) then
+      local spec=bindings[s]
+      return Goods and spec and Goods.report(s,spec.network,id)
+    end
+    if not s.stock_coal_industries then return end
     local b=model(s,true)
     return b and b.report(id)
   end
   function M.report(s,id)
     if not M.active(s) or type(id)~="number" or id<0 or id>=0x4000 or id%1~=0 then return end
+    if dry_goods(s) then return M.order_report(s,id,"coal") end
     local b=model(s)
     local report=b and b.report(id)
     if report then
@@ -245,7 +287,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
     if not M.active(s) then return end
     local spec=bindings[s]
     local run=spec.run.current(s)
-    if not run or spec.ready and not spec.ready(s.stock_coal_ship.engine) then return end
+    if not run or dry_goods(s) or spec.ready and not spec.ready(s.stock_coal_ship.engine) then return end
     local b,state,common=model(s)
     if state.loading_tick and state.loading_tick<first_tick-1 then
       state.loading_tick,state.post_tick=first_tick-1,first_tick-1
@@ -303,12 +345,26 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
     end
     return {extend=b.extend,before=before,after=after,rating=rating}
   end
+  function M.goods_day(s,pipe,first_tick,live)
+    if not dry_goods(s) then return end
+    local spec=bindings[s]
+    local run=spec and spec.run.current(s)
+    if not run or spec.ready and not spec.ready(s.stock_coal_ship.engine) then return end
+    local view=frame(s)
+    view.samples=not live and {sample(spec.run,run)} or nil
+    return Goods.day(s,spec.run,pipe,first_tick,live,function()
+      view.samples[#view.samples+1]=sample(spec.run,run)
+    end,function(e)
+      view.events[#view.events+1]=e
+      if #view.events>4096 then table.remove(view.events,1) end
+    end)
+  end
   function M.status(s)
     local craft=s.stock_coal_ship
     if not craft then return end
     local b=bindings[s]
     local p=b and b.run.current(s)
-    local c=s.stock_ship_coal
+    local c=craft.cargo==Roster.default_cargo and s.stock_goods_ship_service or s.stock_ship_coal
     local v=c and c.vehicle
     local mine,power
     if p and p.transport_orders then
@@ -324,7 +380,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
       depot=craft.depot,mine=mine or p and p.first,power=power or p and p.second,last_dock=p and p.last_dock,
       last_berth=p and p.last_berth,loading=v and v.load_state~=nil,
       visits=p and p.arrivals or 0,stopped=p and p.stopped or false,failure=p and p.failure,
-      paused=not M.active(s),tick=c and c.post_tick}
+      paused=not M.active(s),tick=c and (c.post_tick or c.post)}
   end
   function M.pose(s,f,live)
     local b=bindings[s]

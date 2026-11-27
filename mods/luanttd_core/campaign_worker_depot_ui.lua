@@ -83,7 +83,7 @@ return function(core,client,build,money,assembly)
     if roster and rail and #units>1 and not active then
       b[#b+1]="label[.5,6.49;Select the train you want to use.]"
     end
-    local route_ok=Route.possible(first,last) and not (p.mode=="rail" and active and active.parked==false)
+    local route_ok=Route.possible(first,last) and not (active and active.parked==false)
     local origin=p.mode=="air" and p.depot or (first[p.from or 1] or {}).id
     local default_to=last[1] and last[1].id==origin and 2 or 1
     if rail and active and active.draft_orders then

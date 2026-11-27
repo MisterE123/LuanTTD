@@ -39,7 +39,8 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
     -- Ship stations are bound into the same physical allocator as trucks
     -- and trains. Filter their capacity to their actual carried cargo.
     for _,st in ipairs(options.ship_stations or {}) do
-      assert(not by_id[st.id] and st.mode=="ship" and st.freight_cargo=="oil")
+      assert(not by_id[st.id] and st.mode=="ship" and pairs_by_cargo[st.freight_cargo] and
+        (not st.neutral_rig or st.freight_cargo=="oil"))
       st[queue_key]=st[queue_key] or {}
       st.goods=st.goods or {}
       local x,z=xy(st.tile)

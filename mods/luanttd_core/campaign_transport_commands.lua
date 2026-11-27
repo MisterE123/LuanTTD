@@ -128,11 +128,11 @@ return function(Sim,R)
       if not q then return nil,why end
       return {request={mode=mode,operation=op,depot=cmd.depot,parts=parts},price=q.price,tiles={cmd.depot}}
     elseif mode=="ship" and R.water and R.water.coal and id(cmd.depot) and
-      (op=="buy" and (cmd.engine==211 or cmd.engine==212) or op=="refit" and cmd.cargo=="coal") then
+      (op=="buy" and (cmd.engine==211 or cmd.engine==212) or op=="refit" and (cmd.cargo=="coal" or cmd.cargo=="goods")) then
       local service=R.water.coal
       local q,why
       if op=="buy" then q,why=service.quote(s,owner,cmd.depot,cmd.engine)
-      else q,why=service.refit_quote(s,owner,cmd.depot) end
+      else q,why=service.refit_quote(s,owner,cmd.depot,cmd.cargo) end
       if not q then return nil,why end
       return {request={mode=mode,operation=op,depot=cmd.depot,engine=cmd.engine,cargo=cmd.cargo},
         price=op=="buy" and q.purchase or q.refit,tiles={}}
@@ -188,7 +188,7 @@ return function(Sim,R)
       unit,msg=R.rail.owned.commit(s,owner,q)
     elseif req.mode=="ship" then
       if req.operation=="refit" then
-        unit,msg=R.water.coal.refit(s,owner,req.depot)
+        unit,msg=R.water.coal.refit(s,owner,req.depot,req.cargo)
       elseif req.engine==211 or req.engine==212 then
         unit,msg=R.water.coal.buy(s,owner,req.depot,req.engine)
       else
@@ -222,7 +222,7 @@ return function(Sim,R)
     local function ship_help(model,cargo,refit,needs_refit)
       model=model or {}
       return Help.describe("ship",cargo,model.name,{capacity=model.capacity,
-        capacity_unit=cargo=="oil" and "kL" or cargo=="coal" and "t of coal",
+        capacity_unit=cargo=="oil" and "kL" or cargo=="coal" and "t of coal" or cargo=="goods" and "crates",
         speed=model.max_speed and model.max_speed/2},nil,refit,needs_refit)
     end
     local function air_help(entry)
@@ -356,15 +356,17 @@ return function(Sim,R)
         local C=R.water.coal
         for _,engine in ipairs(C.catalog) do
           local model=C.model(engine)
-          add(model.name,{mode=mode,operation="buy",depot=key,engine=engine},ship_help(model,"goods",false,true))
+          add(model.name,{mode=mode,operation="buy",depot=key,engine=engine},ship_help(model,"goods",false,not C.goods(s)))
         end
         local c=C.status(s)
         if c and c.depot==key and c.owner==owner then
           local model=C.model(c.engine) or {name=c.name}
-          vehicles[#vehicles+1]={id="coal",label=c.name,cargo=c.cargo==1 and "coal" or "goods",
-            help=ship_help(model,c.cargo==1 and "coal" or "goods",false,c.cargo~=1)}
+          vehicles[#vehicles+1]={id="coal",label=c.name,cargo=c.cargo==1 and "coal" or "goods",parked=c.phase=="purchased",
+            help=ship_help(model,c.cargo==1 and "coal" or "goods",false,c.cargo~=1 and not C.goods(s))}
           if c.cargo~=1 then add("Refit "..c.name.." to Coal",{mode=mode,operation="refit",depot=key,cargo="coal"},
             ship_help(model,"coal",true)) end
+          if c.cargo==1 and C.goods(s) then add("Refit "..c.name.." to Goods",{mode=mode,operation="refit",depot=key,cargo="goods"},
+            ship_help(model,"goods")) end
         end
       end
       if R.water.tanker then
@@ -417,10 +419,18 @@ return function(Sim,R)
         targets[#targets+1]={id=key_,cargo=cargo,role=cargo and r[cargo.."_role"],label=(rig and rig.name or mode=="rail" and "Station" or mode=="air" and (r.layout=="city" and "City Airport" or r.layout=="international" and "International Airport" or r.layout=="intercontinental" and "Intercontinental Airport" or r.layout=="commuter" and "Commuter Airport" or r.layout=="metropolitan" and "Metropolitan Airport" or r.layout=="heliport" and "Heliport" or r.layout=="helidepot" and "Helidepot" or r.layout=="helistation" and "Helistation" or "Airfield") or "Dock")
           .." "..key_..(x and (" (%d, %d)"):format(x,z) or "")}
         if mode=="ship" and R.water.coal then
-          local report=R.water.coal.order_report(s,key_)
+          local C=R.water.coal
+          local report=C.order_report(s,key_,"coal")
           if report then
             if #report.sources>0 then targets[#targets+1]={id=key_,cargo="coal",role="load",label="Coal mine dock "..key_} end
             if report.accepts then targets[#targets+1]={id=key_,cargo="coal",role="unload",label="Power plant dock "..key_} end
+          end
+          if C.cargo_key(s)=="goods" and C.goods(s) then
+            local goods=C.order_report(s,key_,"goods")
+            if goods then
+              if #goods.sources>0 then targets[#targets+1]={id=key_,cargo="goods",role="load",label="Goods producer dock "..key_} end
+              if goods.accepts then targets[#targets+1]={id=key_,cargo="goods",role="unload",label="Goods delivery dock "..key_} end
+            end
           end
         end
         if mode=="ship" and R.water.tanker then
@@ -503,9 +513,10 @@ return function(Sim,R)
         local run,why=R.water.tanker.start(s,owner,req.depot,req.first,req.second)
         return run~=nil,why
       end
-      if req.cargo=="coal" and req.vehicle=="coal" and R.water.coal then
+      if (req.cargo=="coal" or req.cargo=="goods") and req.vehicle=="coal" and R.water.coal then
         local c=R.water.coal.status(s)
         if not c or c.depot~=req.depot then return false,"Choose the depot that owns this cargo ship." end
+        if R.water.coal.cargo_key(s)~=req.cargo then return false,"The ship's cargo changed. Refresh its depot." end
         local run,why=R.water.coal.start(s,owner,req.first,req.second)
         return run~=nil,why
       end

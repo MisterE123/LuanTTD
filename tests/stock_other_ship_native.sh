@@ -12,7 +12,11 @@ cp tests/stock_other_ship_native_seed.lua "$game/mods/luanttd_core/qa_tanker_see
 printf 'return function() return {interval=.05} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
-cat tests/stock_other_ship_native.lua >>"$game/mods/luanttd_core/init.lua"
+if [[ ${LUANTTD_QA_OTHER_SHIP_CARGO:-} == goods ]]; then
+  cat tests/stock_goods_ship_native.lua >>"$game/mods/luanttd_core/init.lua"
+else
+  cat tests/stock_other_ship_native.lua >>"$game/mods/luanttd_core/init.lua"
+fi
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
 port=${BAYLINE_NATIVE_PORT:-40024}
 display=${BAYLINE_NATIVE_DISPLAY:-199}
@@ -23,6 +27,7 @@ prometheus_listener_address = 127.0.0.1:$port
 server_announce = false
 bayline_stock_bus_start_year = ${LUANTTD_QA_OTHER_SHIP_YEAR:-1985}
 luanttd_qa_other_ship = ${LUANTTD_QA_OTHER_SHIP:-212}
+luanttd_qa_other_ship_cargo = ${LUANTTD_QA_OTHER_SHIP_CARGO:-stock}
 bayline_generated_map_width = 128
 bayline_generated_map_depth = 128
 bayline_generated_relief = 0
@@ -57,3 +62,22 @@ elif command -v magick-im7.q16 >/dev/null; then magick-im7.q16 import -window ro
 fi
 grep 'PASS NATIVE STOCK SHIP' "$out/server.log"
 ! grep -E 'ERROR\[|LuanTTD viewport placement:' "$out/server.log" "$out/client.log"
+if [[ ${LUANTTD_QA_OTHER_SHIP_CARGO:-} == goods ]]; then
+  kill "$client" 2>/dev/null || true; wait "$client" 2>/dev/null || true; client=
+  kill "$server"; wait "$server"; server=
+  luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/reopen.log" 2>&1 &
+  server=$!
+  for _ in {1..360}; do
+    grep -q 'listening on' "$out/reopen.log" && break
+    kill -0 "$server" 2>/dev/null || break;sleep .25
+  done
+  grep -q 'listening on' "$out/reopen.log" || { tail -70 "$out/reopen.log"; exit 1; }
+  luanti --go --address 127.0.0.1 --port "$port" --name ShipReview --password '' --config "$out/client.conf" --logfile '' >"$out/reopen-client.log" 2>&1 &
+  client=$!
+  for _ in {1..360}; do
+    grep -q 'PASS NATIVE GOODS SHIP REOPEN' "$out/reopen.log" && break
+    kill -0 "$server" 2>/dev/null || break;sleep .25
+  done
+  grep 'PASS NATIVE GOODS SHIP REOPEN' "$out/reopen.log" || { tail -70 "$out/reopen.log"; exit 1; }
+  ! grep -E 'ERROR\[|LuanTTD viewport placement:' "$out/reopen.log" "$out/reopen-client.log"
+fi

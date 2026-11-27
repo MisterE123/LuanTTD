@@ -105,6 +105,12 @@ return function(Sim)
         if Sim.ship_oil_active(s,st.host_id) then merge("ship",st) end
       end
     end
+    local dry=s.stock_goods_ship_service
+    if dry and Sim.ship_goods_active and Sim.ship_goods_active(s) then
+      for _,st in pairs(dry.stations or {}) do
+        if Sim.ship_goods_active(s,st.host_id) then merge("ship",st) end
+      end
+    end
     if include_idle then
       -- A new or unserved physical station can already affect council
       -- rating before any carrier has created a service ledger.

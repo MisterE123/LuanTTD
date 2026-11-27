@@ -243,6 +243,8 @@ if generated_world then
   if forest and mill then
     S.road_timber,S.rail_goods_service=true,true
   end
+  -- The stock dry cargo hull carries Goods before any Coal refit.
+  S.ship_coal_service=S.ship_coal_service or S.road_oil or S.road_farm or S.road_timber or S.road_heavy
 end
 api.road_bay_tools=Sim.road_stock_service_active(S)
 api.structure_tools,api.tram_tools,api.ship_tools,api.airport_tools=true,true,true,true

@@ -1,7 +1,8 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Stock OpenTTD 14.1 1950 temperate dry-cargo ship. Source: table/engines.h
--- MS #211 and SVI #7; newgrf.cpp CalculateRefitMasks; engine.cpp
--- GetCost/DetermineCapacity; ship_cmd.cpp Ship::Tick/OnNewEconomyDay.
+-- Stock OpenTTD 16.0-RC1 dry-cargo ships. Source: table/engines.h
+-- MS #211/#212 and SVI #7/#8; newgrf.cpp CalculateRefitMasks;
+-- engine.cpp GetCost/DetermineCapacity; vehicle_cmd.cpp GetRefitCost;
+-- ship_cmd.cpp Ship::Tick/OnNewEconomyDay.
 local R={
   id=211,local_id=7,image=0,name="Yate Cargo Ship",intro=2557,base_year=1920,
   life=30,base_life=55,decay=5,capacity=160,default_cargo=5,coal=1,
@@ -27,10 +28,30 @@ function R.model(id)
     return t
   end
 end
--- Temperate original cargo classes: all dry cargo except passengers.
-local mask={[1]=true,[2]=true,[4]=true,[5]=true,[6]=true,[7]=true,[8]=true,[9]=true,[10]=true}
-function R.accepts_refit(cargo)
-  return mask[cargo]==true
+-- The built-in Temperate slots from table/cargo_const.h, filtered by
+-- CalculateRefitMasks' cargo ship classes. Each row keeps the original
+-- slot, runtime cargo key and classes relevant to this filter.
+local climate={
+  [0]={"passenger","Passengers"}, [1]={"coal","Bulk"}, [2]={"mail","Mail"},
+  [3]={"oil","Liquid"}, [4]={"livestock","PieceGoods"}, [5]={"goods","Express"},
+  [6]={"grain","Bulk"}, [7]={"wood","PieceGoods"}, [8]={"iron_ore","Bulk"},
+  [9]={"steel","PieceGoods"}, [10]={"valuables","Armoured"},
+}
+local allowed={Mail=true,Armoured=true,Express=true,Bulk=true,PieceGoods=true}
+local excluded={Liquid=true,Passengers=true}
+local mask,by_key={},{}
+for id,row in pairs(climate) do
+  if allowed[row[2]] and not excluded[row[2]] then
+    mask[id],by_key[row[1]]=row[1],id
+  end
+end
+function R.accepts_refit(cargo) return mask[cargo]~=nil end
+function R.cargo_key(id) return mask[id] end
+function R.cargo_id(key) return by_key[key] end
+function R.refit_catalog()
+  local out={}
+  for id=0,10 do if mask[id] then out[#out+1]={id=id,cargo=mask[id]} end end
+  return out
 end
 function R.quote(cargo,buy_base,current_cargo,id)
   local ship=R.model(id)

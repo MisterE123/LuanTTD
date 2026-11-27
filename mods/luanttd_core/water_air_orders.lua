@@ -33,10 +33,11 @@ return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
     if mode=="coal" or mode=="oil" then
       local report=not saved_policy and (mode=="coal" and C.order_report(s,id) or mode=="oil" and Tanker.report(s,id))
       if check and (not report or #report.sources==0 and not report.accepts) then return end
+      local carrying_goods=mode=="coal" and C.cargo_key(s)=="goods"
       if saved_policy=="full" or report and #report.sources>0 then
-        o.cargo_order="full";title=rig and ("Full load at "..rig.name) or mode=="oil" and "Full load at oil dock" or "Full load at mine"
+        o.cargo_order="full";title=rig and ("Full load at "..rig.name) or mode=="oil" and "Full load at oil dock" or carrying_goods and "Full load Goods at producer" or "Full load at mine"
       elseif saved_policy=="no_load" or report and report.accepts then
-        o.cargo_order="no_load";title=mode=="oil" and "Unload at refinery" or "Unload at power station"
+        o.cargo_order="no_load";title=mode=="oil" and "Unload at refinery" or carrying_goods and "Deliver Goods to town" or "Unload at power station"
       end
     end
     return o,label(title,id,st.origin or st.land)
@@ -154,7 +155,9 @@ return function(s,Sim,O,Ship,Coal,C,Air,Oil,Tanker)
       end
       if n<2 or not second then return false,"Keep two different stations in this service." end
       if (mode=="coal" or mode=="oil") and not (has_full and has_unload) then
-        return false,mode=="oil" and "Keep an oil source and refinery order." or "Keep a mine loading order and a power-station unloading order."
+        return false,mode=="oil" and "Keep an oil source and refinery order." or
+          C.cargo_key(s)=="goods" and "Keep a Goods producer and an accepting destination." or
+          "Keep a mine loading order and a power-station unloading order."
       end
       if op=="append" and run.check_order then
         local ok,why=run.check_order(s,p,seq)

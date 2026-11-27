@@ -3674,7 +3674,10 @@ local function timber_binding(s,force)
     return oil.binding(s)
   end
   if farm_service and farm_world and s.stock_farm_industries and (force or M.road_farm_active(s)) then
-    return farm_service.bind(s,{credit=credit,field_board=farm_world.field_board(s)})
+    local list,ports=goods.berths(s)
+    local B=farm_service.bind(s,{credit=credit,field_board=farm_world.field_board(s),ship_stations=list})
+    B.goods_ship_binding=ports
+    return B
   end
   if not timber_service or not s.stock_timber_industries or not (force or M.road_timber_active(s)) then return end
   if M.rail_profile_active(s,"wood") then return profiled.timber_binding(s) end
@@ -3783,14 +3786,18 @@ local function passenger_modules()
   function profiled.timber_binding(s,cargo,probe)
     -- Single-chain Timber keeps its existing queues and receipt ledger.
     -- Goods and Wood share one station scan there, just as in mixed worlds.
-    local B=timber_service.bind(s,{credit=credit,station_union=rail_union(s,timber_order,timber_controllers,cargo,probe)})
-    B.rail_multi=true
+    local list,ports=goods.berths(s)
+    local B=timber_service.bind(s,{credit=credit,station_union=rail_union(s,timber_order,timber_controllers,cargo,probe),ship_stations=list})
+    B.rail_multi=true;B.goods_ship_binding=ports
     return B
   end
   function goods.binding(s,probe)
     if goods.mixed_enabled and goods.mixed_enabled(s) then return {rail=goods.mixed_binding(s,"goods",probe).rail.goods} end
     if M.rail_profile_active(s,"wood") then return {rail=profiled.timber_binding(s,"goods",probe).rail.goods} end
-    return timber_service.bind(s,{credit=credit,station_union=goods.runtime.union(s,paid_rail_runs[s],probe)})
+    local list,ports=goods.berths(s)
+    local B=timber_service.bind(s,{credit=credit,station_union=goods.runtime.union(s,paid_rail_runs[s],probe),ship_stations=list})
+    B.goods_ship_binding=ports
+    return B
   end
   oil.mount=function(Terrain)
     if oil.service then return end
@@ -3838,10 +3845,10 @@ local function passenger_modules()
     function oil.binding(s,probe)
       if goods.mixed_enabled and goods.mixed_enabled(s) then return {rail=goods.mixed_binding(s,"oil",probe).rail.oil} end
       local animated,each_tick=oil.animation(s)
-      local list,ports=oil.berths(s)
+      local list,ports,dry=goods.join_ports(s)
       local B=oil.service.bind(s,{credit=credit,station_union=oil.runtime.union(s,paid_rail_runs[s],probe),
         animated=animated,each_tick=each_tick,ship_stations=list,complete_rig=oil.completion(s)})
-      B.oil_ship_binding=ports
+      B.oil_ship_binding,B.goods_ship_binding=ports,dry
       return B
     end
   end
@@ -3881,19 +3888,32 @@ local function passenger_modules()
       local animated,tick
       if enabled.oil then animated,tick=oil.animation(s) end
       local station_union=rail_union(s,Freight.industry,rail_controllers,for_cargo,probe)
-      local list,ports=oil.berths(s)
+      local list,ports,dry=goods.join_ports(s)
       local B=union.bind(s,{credit=credit,industries=all,ship_stations=list,field_board=enabled.farm and farm_world.field_board(s),
         station_union=station_union,animated=animated,each_tick=tick,complete_rig=enabled.oil and oil.completion(s),forestry_changed=function(t)
           s.changed=s.changed or {};s.changed[#s.changed+1]=M.id(t.x+1,t.z+1)
         end})
-      B.mixed=true;B.oil_ship_binding=ports
+      B.mixed=true;B.oil_ship_binding,B.goods_ship_binding=ports,dry
       return B
     end
   end
   local ships=dofile(base.."openttd/ship_roster.lua")
   local coal_ship=dofile(base.."ship_coal_service.lua")(M,coal,catchment,ships,passenger_rules,kernel,
     rating_runtime,income_rules,loading_factory,timing)
-  ship_coal=dofile(base.."ship_coal_runtime.lua")(M,coal_ship,ships,kernel,debit,credit,received_coal,dofile(base.."openttd/stock_engine_calendar.lua"))
+  local dry_service=dofile(base.."ship_goods_service.lua")(M,ships,passenger_rules,kernel,loading_factory,timing)
+  local dry=dofile(base.."ship_goods_runtime.lua")(M,dry_service,timber_rules,catchment,debit)
+  ship_coal=dofile(base.."ship_coal_runtime.lua")(M,coal_ship,ships,kernel,debit,credit,received_coal,
+    dofile(base.."openttd/stock_engine_calendar.lua"),dry)
+  goods.berths=ship_coal.goods_stations
+  function goods.join_ports(s)
+    local list,oil_ports=oil.berths(s)
+    local dry_ports,goods_port=goods.berths(s)
+    if dry_ports then
+      list=list or {}
+      for _,p in ipairs(dry_ports) do list[#list+1]=p end
+    end
+    return list,oil_ports,goods_port
+  end
   local commercial=dofile(base.."passenger_station_service.lua")(catchment,passenger_rules,income_rules,kernel,
     rating_runtime,loading_factory,timing)
   local mux=dofile(base.."passenger_supply_mux.lua")(M,catchment,passenger_rules,rating_runtime,kernel)
@@ -4001,6 +4021,9 @@ function M.ship_oil_active(s,station)
   local Run=oil.ship.run(s)
   local voyage=Run and Run.current(s)
   return voyage and (not station or Run.ordered_dock(voyage,station)) or false
+end
+function M.ship_goods_active(s,station)
+  return ship_coal and ship_coal.goods_running(s,station) or false
 end
 function M.ship_coal_active(s)
   return ship_coal and ship_coal.active(s) or false
@@ -5652,7 +5675,15 @@ function M.daily(s,traverse,tick_pulse)
   local commercial=paid_transport_day(s,live)
   if stock_service then
     passenger_modules()
-    local tanker=oil.ship and timber and oil.ship.day(s,timber,s.passenger_house_clock.counter+1,live)
+    town_passengers.start(s)
+    local first_tick=s.passenger_house_clock.counter+1
+    local tanker=oil.ship and timber and oil.ship.day(s,timber,first_tick,live)
+    local dry=ship_coal and ship_coal.goods_day(s,timber,first_tick,live)
+    if dry and tanker then
+      local oil_day=tanker
+      tanker={before=function(tick) return {oil_day.before(tick),dry.before(tick)} end,
+        after=function(tick,ready) oil_day.after(tick,ready[1]);dry.after(tick,ready[2]) end}
+    elseif dry then tanker=dry end
     stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse)
   elseif commercial then
     town_passengers.day(s,function(tick)

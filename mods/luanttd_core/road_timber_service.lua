@@ -30,6 +30,14 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
         stations[#stations+1]=point;by_id[st.id]=point
       end
     end
+    for _,st in ipairs(options.ship_stations or {}) do
+      assert(not by_id[st.id] and st.mode=="ship" and st.freight_cargo=="goods" and not st.neutral_rig)
+      local x,z=xy(st.tile)
+      st.stock_timber,st.goods=st.stock_timber or {},st.goods or {}
+      local point={id=st.id,st=st,tile=st.tile,x=x-1,z=z-1,town=st.town,owner=st.owner,
+        stock=st.stock_timber,goods=st.goods,tiles=st.tiles,freight_cargo=st.freight_cargo}
+      stations[#stations+1]=point;by_id[st.id]=point
+    end
     table.sort(stations,function(a,b)return a.id<b.id end)
     local function house_at(x,z)
       local id=Sim.id(x+1,z+1)
@@ -45,7 +53,10 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
       if not saved or saved.topology~=s.topology or
           big_tick and (tick+st.id)%250==0 and saved.tick~=tick then
         saved={topology=s.topology,tick=tick,reports={}}
-        for _,cargo in ipairs(ordered) do saved.reports[cargo]=raw.report(st.id,cargo) end
+        for _,cargo in ipairs(ordered) do
+          if st.mode=="ship" and cargo==st.freight_cargo then saved.reports[cargo]=raw.report_with_sources(st.id,cargo)
+          else saved.reports[cargo]=raw.report(st.id,cargo) end
+        end
         st.timber_acceptance=saved
       end
       return saved.reports
@@ -84,7 +95,9 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
     else open(stations) end
     B.stations,B.industries=stations,raw.industries
     function B.report(st,cargo,tick)
-      if not (by_id[st.id] and Rules.cargo[cargo]) then return {accepts=false,eighths=0} end
+      if not (by_id[st.id] and Rules.cargo[cargo]) or st.freight_cargo and st.freight_cargo~=cargo then
+        return {accepts=false,eighths=0,sources={}}
+      end
       return refresh(st,tick)[cargo]
     end
     function B.tile_visit(x,z,tick)
@@ -151,7 +164,9 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
     function B.step_rating(st,dirty)
       if not by_id[st.id] then return dirty end
       dirty=not not dirty
-      for _,cargo in ipairs(ordered) do dirty=rate(st,Rules.goods(st,cargo),queue(st,cargo),cargo,dirty) end
+      for _,cargo in ipairs(ordered) do
+        if not st.freight_cargo or cargo==st.freight_cargo then dirty=rate(st,Rules.goods(st,cargo),queue(st,cargo),cargo,dirty) end
+      end
       return dirty
     end
     function B.step_rail_rating(st)
@@ -188,7 +203,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
       end
       local function actual_tile(v,st)
         local f=v.road_stop_pose
-        return f and f[4] or st.tile
+        return v.mode=="ship" and assert(v.cargo_tile) or f and f[4] or st.tile
       end
       return {
         accepts=function(st,v)return B.report(st,v.cargo,tick).accepts end,
@@ -200,11 +215,14 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
         end,
         attempt=function(st,v,capacity)
           local q=Rules.trucks[v.cargo]
-          Rating.observe_loading(Rules.goods(st,v.cargo),(Sim.vehicles[v.engine].display_speed or floor(q.speed/2)),
-            Sim.date(s)-Sim.date(s,v.bought or s.day),capacity)
+          local speed,age
+          if v.mode=="ship" then speed,age=v.cached_max_speed,Sim.date(s)-assert(v.built)
+          else speed,age=Sim.vehicles[v.engine].display_speed or floor(q.speed/2),Sim.date(s)-Sim.date(s,v.bought or s.day) end
+          Rating.observe_loading(Rules.goods(st,v.cargo),speed,age,capacity)
         end,
         loaded=function(st,v,n)
-          Station.loaded(st)
+          if v.mode=="ship" then st.time_since_load=0;st.last_vehicle_type="ship"
+          else Station.loaded(st) end
           st.last_service=st.last_service or {};st.last_service[v.cargo]=s.day
           event("board",st,v,{units=n})
         end,
