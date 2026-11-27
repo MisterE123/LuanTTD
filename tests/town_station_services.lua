@@ -42,6 +42,16 @@ assert(rows[2].id==2 and rows[2].time_since_unload==20)
 assert(rows[3].id==5 and rows[3].x==4 and rows[3].z==4)
 assert(rows[4].mode=="ship" and rows[4].id==9 and rows[4].time_since_load==8 and rows[4].time_since_unload==7)
 assert(G.month(town,rows,2,function()error("Recent real freight service must avoid unserviced lottery")end))
+local Stock=dofile(m.."openttd/road_town_permission.lua")
+local Authority=dofile(m.."town_road_authority.lua")(Sim,Stock)
+S.companies={A={stock_town_authority_ratings={[1]=100}},B={},C={}}
+local month_rows=M.view(S,true)
+assert(#month_rows==6 and G.active_stations(town,month_rows)==4,
+  "Fresh stations should be visible to council rating, but not count as served")
+Authority.month(S,town,Authority.station_view(S,month_rows))
+assert(S.companies.A.stock_town_authority_ratings[1]==126, "100+5+3*12-15; idle dock, three actual facilities")
+assert(S.companies.B.stock_town_authority_ratings[1]==485, "A foreign stale clock must not replace a real idle platform")
+assert(not S.companies.C.stock_town_authority_ratings,"Unrelated company ledger should stay untouched")
 S.stock_rail_wood.stations[1].time_since_unload=21
 S.tiles[52].ship=nil
 S.tiles[54].ship=nil

@@ -40,10 +40,10 @@ return function(Sim)
   local physical={rail=has_rail,ship=has_ship,air=has_air}
   local function project(id,mode,x,z,row)
     if not x or not z or not Sim.id(x,z) then return end
-    return {id=id,mode=mode,x=x,z=z,time_since_load=row.time_since_load,time_since_unload=row.time_since_unload}
+    return {id=id,mode=mode,x=x,z=z,owner=row.owner,time_since_load=row.time_since_load,time_since_unload=row.time_since_unload}
   end
   local active={coal=Sim.rail_coal_active,goods=Sim.rail_goods_active,oil=Sim.rail_oil_active}
-  function M.view(s)
+  function M.view(s,include_idle)
     local views={}
     local admitted={rail={},ship={},air={},rig={}}
     local function merge(mode,st,role)
@@ -74,10 +74,13 @@ return function(Sim)
       slot[id]=row
       views[#views+1]=row
     end
-    for _,st in pairs(s.stations) do
-      if st.mode=="road" and at(s.tiles,st.tile) and st.town_growth_service_clock then
+    for _,st in pairs(s.stations or {}) do
+      local t=at(s.tiles,st.tile)
+      if st.mode=="road" and t and (t.station==st.id or t.tram and t.tram.tram_station==st.id) and
+          (include_idle or st.town_growth_service_clock) then
         local x,z=Sim.xy(st.tile)
-        views[#views+1]=project(st.id,"road",x,z,st)
+        local clock=st.town_growth_service_clock and st or {owner=st.owner}
+        views[#views+1]=project(st.id,"road",x,z,clock)
       end
     end
     local commercial=s.stock_ship_commercial and s.stock_ship_commercial.service
@@ -100,6 +103,18 @@ return function(Sim)
     if tank and Sim.ship_oil_active and Sim.ship_oil_active(s) then
       for _,st in pairs(tank.stations or {}) do
         if Sim.ship_oil_active(s,st.host_id) then merge("ship",st) end
+      end
+    end
+    if include_idle then
+      -- A new or unserved physical station can already affect council
+      -- rating before any carrier has created a service ledger.
+      for _,mode in ipairs({"rail","ship","air"}) do
+        for id,record in pairs(s[books[mode]] or {}) do
+          local neutral=Rig.neutral_ref(s,record)
+          if not admitted[neutral and "rig" or mode][id] then
+            merge(mode,{host_id=id,owner=record.owner})
+          end
+        end
       end
     end
     table.sort(views,function(a,b)

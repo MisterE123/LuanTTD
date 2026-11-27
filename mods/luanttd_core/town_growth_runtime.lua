@@ -109,9 +109,9 @@ return function(Sim,Terrain,G,B,H)
       month,first=y*12+m,d==1
     end
     if want_new and first and state.last_month~=month then
-      local views=services(s)
+      local views=services(s,true)
       if #state.order>=8 then views.count_near=G.index_active_stations(views) end
-      local ratings=authority.station_view(s)
+      local ratings=authority.station_view(s,views)
       for _,id in ipairs(state.order) do
         local t=state.towns[id]
         local was_funded=t.road_build_months==1

@@ -21,10 +21,13 @@ local A=dofile("mods/luanttd_core/town_road_authority.lua")(Sim,R)
 local state=Sim.new(1751)
 local c=Sim.company(state,"a");local d=Sim.company(state,"b")
 c.stock_town_authority_ratings={[1]=100}
-local rail,road=Sim.id(11,10),Sim.id(10,10)
+local rail,road,other=Sim.id(11,10),Sim.id(10,10),Sim.id(9,10)
+state.tiles[road].station=1;state.tiles[other].station=2
+state.tiles[rail].rail_station_id=7;state.tiles[rail].owner="a"
+state.rail_paid_service=true
 state.stations[1]={id=1,tile=road,mode="road",owner="a",time_since_load=20,town_growth_service_clock=true}
-state.stations[2]={id=2,tile=road,mode="road",owner="b",time_since_load=21,town_growth_service_clock=true}
-state.stock_rail_stations={[7]={id=7,tile=rail,owner="a"}}
+state.stations[2]={id=2,tile=other,mode="road",owner="b",time_since_load=21,town_growth_service_clock=true}
+state.stock_rail_stations={[7]={id=7,tiles={rail},owner="a"}}
 state.stock_ship_commercial={service={stations={[24]={sign={x=11,y=10},host_mode="rail",host_id=7,owner="a",time_since_unload=8},
   [25]={sign={x=11,y=10},host_mode="rail",host_id=8,owner="b",time_since_unload=8}}}}
 A.month(state,{id=1,x=10,z=10,radii={4}},A.station_view(state))

@@ -2,6 +2,8 @@
 -- Uses the stock rating scale, never the older 0–100 delivery score.
 return function(Sim,Stock)
   local A={}
+  local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+  local Stations=dofile(path.."town_station_services.lua")(Sim)
   local CELL=16
   local function bucket(n) return math.floor(n/CELL) end
   function A.nearest(s,id)
@@ -145,35 +147,18 @@ return function(Sim,Stock)
     company.stock_town_authority_ratings=ledger
     for town,rating in pairs(ratings) do ledger[town]=rating end
   end
-  function A.station_view(s)
-    local rows={}
-    local function add(id,st,x,z,mode)
-      if not (st.owner and s.companies[st.owner] and x and z) then return end
-      rows[#rows+1]={owner=st.owner,x=x,z=z,time_since_load=st.time_since_load,
-        time_since_unload=st.time_since_unload,mode=mode,id=id}
-    end
-    for id,st in pairs(s.stations) do
-      if st.mode=="road" and st.town_growth_service_clock and s.tiles[st.tile] then
-        local x,z=Sim.xy(st.tile)
-        add(id,st,x,z,0)
-      end
-    end
-    local commercial=s.stock_ship_commercial and s.stock_ship_commercial.service
-    for id,st in pairs(commercial and commercial.stations or {}) do
-      local host=st.host_mode=="rail" and s.stock_rail_stations or st.host_mode=="ship" and s.stock_ship_stations or
-        st.host_mode=="air" and s.stock_small_airports
-      if host and host[st.host_id] and st.sign then add(st.tick_index or id,st,st.sign.x,st.sign.y,1) end
-    end
-    table.sort(rows,function(a,b) if a.mode~=b.mode then return a.mode<b.mode end return a.id<b.id end)
+  function A.station_view(s,rows)
     local index={}
-    for order,row in ipairs(rows) do
-      row.order=order
-      local x,z=bucket(row.x),bucket(row.z)
-      local column=index[x] or {}
-      index[x]=column
-      local cell=column[z] or {}
-      column[z]=cell
-      cell[#cell+1]=row
+    for order,row in ipairs(rows or Stations.view(s,true)) do
+      if row.owner and s.companies[row.owner] then
+        local x,z=bucket(row.x),bucket(row.z)
+        local column=index[x]
+        if not column then column={};index[x]=column end
+        local cell=column[z]
+        if not cell then cell={};column[z]=cell end
+        cell[#cell+1]={owner=row.owner,x=row.x,z=row.z,order=order,
+          time_since_load=row.time_since_load,time_since_unload=row.time_since_unload}
+      end
     end
     return index
   end

@@ -167,5 +167,13 @@ represent one physical station, the youngest valid load and unload ages
 are combined and that StationID counts once. A neutral oil rig's dock
 and helipad share that same station identity. Released freight designations,
 detached oil berths and demolished or foreign facilities cannot qualify
-from stale transport records. This is the RC1 **growth** check; company
-council-rating integration for all freight modes is still separate.
+from stale transport records.
+
+Monthly council ratings use this same physical station view. An idle
+owned platform, dock or airport is included even before its first
+vehicle starts, and an owner-neutral oil rig does not alter a company's
+rating. RC1 applies +12 for recent service or -15 for no recent service
+at each nearby owned station, then clamps once after the station loop;
+the ordinary low-rating recovery runs first. A cleared station without a
+physical tile is outside this adapter. This is not the complete
+OpenTTD authority, rating UI, or deletion lifecycle.

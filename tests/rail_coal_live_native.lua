@@ -1,5 +1,6 @@
 -- Appended only to the isolated test copy of init.lua. Two actual
 -- Luanti processes, one native save, actual purchased train and truck.
+local owner,truck_owner="Coal Kirby QA","Coal Truck QA"
 local town_services=dofile(mod.."/town_station_services.lua")(Sim)
 local function town_freight_clock(id)
   local row
@@ -10,8 +11,13 @@ local function town_freight_clock(id)
     end
   end
   assert(row and (row.time_since_load or 255)<=20,"Paid freight load missing from the town's station clock")
+  local probe={companies={[owner]={}}}
+  local town={id=1,x=row.x,z=row.z,radii={0}}
+  local authority=Sim.road_tree_authority()
+  authority.month(probe,town,authority.station_view(S))
+  assert(probe.companies[owner].stock_town_authority_ratings[1]==512,
+    "A real load at this isolated sign must improve the owner's rating exactly once")
 end
-local owner,truck_owner="Coal Kirby QA","Coal Truck QA"
 local function place_tile(x) return Sim.id(x,15) end
 local mode=core.settings:get("bayline_rail_coal_qa_mode") or "legacy"
 assert(mode=="legacy" or mode=="repeat" or mode=="fault")

@@ -1,4 +1,5 @@
 -- Appended only to disposable native test game init.lua.
+local owner,road_owner,ferry_owner="Yate QA","Tipper QA","Ferry QA"
 local town_services=dofile(mod.."/town_station_services.lua")(Sim)
 local function town_freight_clock(id)
   local row
@@ -9,8 +10,13 @@ local function town_freight_clock(id)
     end
   end
   assert(row and (row.time_since_load or 255)<=20,"Paid freight load missing from the town's station clock")
+  local probe={companies={[owner]={}}}
+  local town={id=1,x=row.x,z=row.z,radii={0}}
+  local authority=Sim.road_tree_authority()
+  authority.month(probe,town,authority.station_view(S))
+  assert(probe.companies[owner].stock_town_authority_ratings[1]==512,
+    "A real load at this isolated sign must improve the owner's rating exactly once")
 end
-local owner,road_owner,ferry_owner="Yate QA","Tipper QA","Ferry QA"
 local function qa()
   local C=assert(api.ship_coal)
   local N=assert(api.shipyard.network)
