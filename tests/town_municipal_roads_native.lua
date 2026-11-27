@@ -19,7 +19,8 @@ local mode=core.settings:get("luanttd_qa_municipal_kind") or "road"
 local span=mode=="bridge" or mode=="tunnel"
 local reseed=mode=="reseed"
 local crossing=mode=="crossing"
-local companyroad=mode=="companyroad"
+local mixedroad=mode=="mixedroad"
+local companyroad=mode=="companyroad" or mixedroad
 local foreignhouse=mode=="foreignhouse"
 local farmhouse=mode=="farmhouse"
 local rail_underhouse=mode=="railunderhouse"
@@ -93,11 +94,15 @@ if underhouse then
   s.tiles[S.id(cx,cz+1)].stock_industry={id=79}
 end
 s.tiles[protected].stock_industry={id=77}
-local rail_cash,road_cash,paver_cash
+local rail_cash,road_cash,paver_cash,tram_cash
 if companyroad then
   local c=S.company(s,"Road Builder")
   road_cash=c.cash
   s.tiles[center].owner,s.tiles[center].road_town="Road Builder",nil
+end
+if mixedroad then
+  tram_cash=S.company(s,"Tram Builder").cash
+  s.tiles[center].tram={kind="road",tramtype=1,tram_bits=10,tram_owner="Tram Builder"}
 end
 if crossing then
   local company=S.company(s,"Rail Builder")
@@ -168,6 +173,10 @@ core.register_on_mods_loaded(function()
     if companyroad then
       assert(newroad==center and created.build=="road" and created.road_bits~=10)
       assert(created.owner=="Road Builder" and not created.road_town and next_.companies["Road Builder"].cash==road_cash)
+      if mixedroad then
+        assert(created.tram.tram_owner=="Tram Builder" and created.tram.tram_bits==10
+          and created.tram.tramtype==1 and next_.companies["Tram Builder"].cash==tram_cash)
+      end
     elseif natural_house then
       assert(newroad==S.id(cx,cz-1) or newroad==S.id(cx,cz+1))
       assert(not created.wood and created.house and created.source_house.town==1 and not created.owner)
@@ -242,7 +251,9 @@ core.register_on_mods_loaded(function()
         end
         for _,row in ipairs(r.value[1].tiles) do
           if row.id==newroad then
-            if companyroad then assert(row.surface.owner=="Road Builder" and row.surface.road_bits==created.road_bits)
+            if companyroad then
+              assert(row.surface.owner=="Road Builder" and row.surface.road_bits==created.road_bits)
+              if mixedroad then assert(row.surface.tram.tram_owner=="Tram Builder" and row.surface.tram.tram_bits==10) end
             elseif crossing then assert(row.surface.level_crossing.rail_owner=="Rail Builder" and row.surface.road_town==1)
             elseif natural_house then assert(row.surface.source_house.id==created.source_house.id and not row.surface.wood)
             else assert(row.surface.road_bits==created.road_bits and row.surface.road_town==1) end
@@ -274,7 +285,7 @@ core.register_on_mods_loaded(function()
         assert(company.cash==paver_cash-80 and company.stock_town_authority_ratings[1]==482)
         assert(reopened.companies["Rail Builder"].cash==rail_cash)
       end
-      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and projected %s tile %d, preserved private clearance, reopened geometry"):format(underhouse and (rail_underhouse and "house above a functioning rail tunnel at" or "house above a functioning road tunnel at") or farmhouse and "house on former farmland at" or woodhouse and "house on former woodland at" or companyroad and "new junction on company road at" or mode,newroad))
+      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and projected %s tile %d, preserved private clearance, reopened geometry"):format(underhouse and (rail_underhouse and "house above a functioning rail tunnel at" or "house above a functioning road tunnel at") or farmhouse and "house on former farmland at" or woodhouse and "house on former woodland at" or mixedroad and "new junction on independently owned road and tram layers at" or companyroad and "new junction on company road at" or mode,newroad))
       core.request_shutdown("Native municipal road proof passed",false,0)
     end,file))
   end,file))

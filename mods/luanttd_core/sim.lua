@@ -1765,6 +1765,17 @@ local function linking_errors(s,proposed)
     end
   end
 end
+-- Ordinary mixed road/tram tile: adding road bits changes only the
+-- road layer. Tram facilities and level crossings have separate rules.
+function M.town_mixed_road(s,id)
+  local t=id and s.tiles[id]
+  return not not (t and t.build=="road" and t.road_bits and t.road_bits~=0 and
+    t.tram and t.tram.kind=="road" and t.tram.tramtype==1 and (t.tram.tram_bits or 0)~=0 and
+    not (t.stock_void or t.stock_object or t.stock_landmark or t.stock_industry or t.site or t.house or
+       t.station or t.road_waypoint_id or t.level_crossing or t.rail_tracks or t.rail_span_id or
+       t.road_bridge_id or t.road_tunnel_id or t.ship or t.airfield))
+end
+
 -- CmdBuildRoad can add bits to company pavement. Its existing road
 -- owner is preserved (SetRoadOwner only runs when there were no bits).
 function M.town_company_road(s,id)
@@ -1772,8 +1783,8 @@ function M.town_company_road(s,id)
   return t and t.owner and s.companies[t.owner] and not t.road_town and t.build=="road" and
     (not t.roadtype or t.roadtype==0) and t.road_bits and t.road_bits~=0 and
     not (t.stock_void or t.stock_object or t.stock_landmark or t.stock_industry or t.site or t.house or
-      t.tram or t.station or t.road_waypoint_id or t.level_crossing or t.rail_tracks or t.rail_span_id or
-      t.road_bridge_id or t.road_tunnel_id or t.ship or t.airfield)
+      t.tram and not M.town_mixed_road(s,id) or t.station or t.road_waypoint_id or t.level_crossing or
+      t.rail_tracks or t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or t.ship or t.airfield)
 end
 
 -- A municipal write owns its paid-free action; it may not demolish a
@@ -1800,13 +1811,19 @@ function M.town_road_piece(s,town,id,bits,execute)
     return r
   end
   local company_road=M.town_company_road(s,id)
-  if not t or t.stock_void or t.stock_object or t.owner and not company_road or t.tram or t.station or t.road_waypoint_id or
-      t.level_crossing or t.rail_tracks or t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or
-      (t.build and t.build~="road") or (t.road_town and t.road_town~=town) then return end
+  local mixed=M.town_mixed_road(s,id)
+  if not t or t.stock_void or t.stock_object or t.owner and not company_road or t.tram and not mixed or
+      t.station or t.road_waypoint_id or t.level_crossing or t.rail_tracks or t.rail_span_id or
+      t.road_bridge_id or t.road_tunnel_id or (t.build and t.build~="road") or
+      (t.road_town and t.road_town~=town) then return end
   load_road_rules()
-  local occupied=M.road_piece_occupancy(s)
-  -- EnsureNoVehicleOnGround applies even when the foundation is unchanged.
-  if t.build=="road" and occupied(id,false) then return end
+  local check=M.road_piece_occupancy(s)
+  local function occupied(at,with_tram,actual_tram_only)
+    return check(at,with_tram,mixed or actual_tram_only)
+  end
+  -- The existing tile needs EnsureNoVehicleOnGround even if the
+  -- foundation doesn't change. A tram's future visits don't occupy it.
+  if t.build=="road" and occupied(id,mixed) then return end
   local r,c=road_piece_plan(s,company_road and t.owner or nil,id,t,bits,occupied)
   if not r or c==0 then return end
   if not company_road then r.road_town=town end

@@ -245,3 +245,30 @@ do
   assert(s.corner_grid.revision==revision+1 and company.cash==cash)
 end
 print("PASS stock municipal grading levels an eligible wooded site without modifying protected land")
+
+
+-- Municipal CmdBuildRoad modifies only the road layer of stock mixed
+-- pavement. A planned future tram visit is not ground occupancy.
+do
+  local s,t,center=fixture()
+  local cell=s.tiles[center]
+  local road=S.company(s,"Road Carrier")
+  local tram=S.company(s,"Tram Carrier")
+  local a,b=road.cash,tram.cash
+  cell.owner,cell.road_town="Road Carrier",nil
+  local rail={kind="road",tramtype=1,tram_bits=10,tram_owner="Tram Carrier"}
+  cell.tram=rail
+  local x,z=S.xy(center)
+  local other=S.id(x+1,z)
+  s.tiles[other].tram=rail
+  local board=W.road_board(s)
+  assert(not B.can_follow(board,x,z,2,true),"Town walks must not use a tram-only tile")
+  local frames={{[4]=center}}
+  s.stock_tram_fleet={[3]={phase="run",leg=1,index=1,legs={{path={center,other},frames=frames}}}}
+  assert(not S.town_road_piece(s,t.id,center,5,true) and cell.road_bits==10)
+  frames[1][4]=other
+  assert(S.town_road_piece(s,t.id,center,5,true))
+  assert(cell.road_bits==15 and cell.owner=="Road Carrier" and cell.tram==rail and
+    rail.tram_bits==10 and rail.tram_owner=="Tram Carrier" and road.cash==a and tram.cash==b)
+  print("PASS stock mixed town road adds only road bits; tram occupation, but not a future route, blocks the edit")
+end

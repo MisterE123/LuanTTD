@@ -187,7 +187,13 @@ protected/occupied facility. As in RC1 CmdBuildRoad, it can add pieces
 to eligible ordinary company pavement without transferring its ownership
 or debiting the company. Road works, vehicles on the tile, and turning
 one-way pavement into a junction still block that edit. The native
-worker test checks the junction and the original owner after reopen. Towns can also add a perpendicular road crossing to a compatible plain
+worker test checks the junction and the original owner after reopen. The same rule applies to normal roads that share a tile with stock tram
+tracks: both companies keep their independent layers, and the stock
+shared-foundation rules still apply. A tram on the tile blocks the
+edit, but a planned future visit does not. The town cannot use a
+tram-only tile as a road in its walk.
+
+Towns can also add a perpendicular road crossing to a compatible plain
 railway, without taking its rail ownership, releasing its reservation or
 charging a company. A train physically on the tile blocks construction.
 The stock setting **Allow towns to build level crossings** defaults to

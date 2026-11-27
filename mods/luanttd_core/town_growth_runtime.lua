@@ -180,7 +180,8 @@ return function(Sim,Terrain,G,B,H)
         end
       elseif t.stock_industry then kind="industry"
       elseif t.rail_tracks and not t.level_crossing then kind="rail"
-      elseif t.build=="road" or t.level_crossing then kind,road_bits="road",Sim.road_bits(s,id)
+      elseif t.build=="road" or t.level_crossing or t.tram and t.tram.kind=="road" then
+        kind,road_bits="road",Sim.road_bits(s,id)
       elseif t.terrain=="water" then kind="water"
       elseif t.wood then kind="trees"
       elseif available(s,id,t) or underground(s,id) and clear_levels(s,id,true,true) then kind="clear"
@@ -200,12 +201,15 @@ return function(Sim,Terrain,G,B,H)
     end
     local function roadable(x,z)
       local id=Sim.id(x,z)
-      return available(s,id,at(s.tiles,id))
+      return available(s,id,at(s.tiles,id)) or Sim.town_mixed_road(s,id)
     end
     return roads(Sim,Terrain,s,G,Worldgen,read,{
       houseable=function(x,z) return clear_levels(s,Sim.id(x,z),true,true)~=nil end,
       roadable=roadable,
-      span_ends=function(x,z,u,v) return roadable(x,z) and roadable(u,v) end,
+      span_ends=function(x,z,u,v)
+        local a,b=Sim.id(x,z),Sim.id(u,v)
+        return available(s,a,at(s.tiles,a)) and available(s,b,at(s.tiles,b))
+      end,
       bridge_clears=function(ids)
         -- A municipality may cross a structure at the stock clearance
         -- but may never clear a private parcel on the way. "town" in
@@ -381,7 +385,8 @@ return function(Sim,Terrain,G,B,H)
       local id=Sim.id(proposal.x,proposal.z)
       if proposal.kind=="road" then
         local tile=s.tiles[id]
-        if not (tile and tile.build=="stock_rail" or available(s,id,tile) or Sim.town_company_road(s,id)) or
+        if not (tile and tile.build=="stock_rail" or available(s,id,tile) or
+            Sim.town_mixed_road(s,id) or Sim.town_company_road(s,id)) or
             not Sim.town_road_piece(s,t.id,id,proposal.bits,true) then return false end
         visual_changed(s,id)
         Sim.invalidate_live_sea_near(s,id)
