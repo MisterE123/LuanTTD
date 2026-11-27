@@ -31,6 +31,16 @@ return function(Sim,H,Lift)
     local floor,width=math.floor,Sim.W
     local mod=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
     local sea=dofile(mod.."/stock_open_sea_cache.lua")(Sim,s)
+    local function record_produced(cargo,amount,_,_,h)
+      if amount<=0 then return end
+      local town=assert(source[h.town],"Generated house must have a source town")
+      local record=town.supplied[cargo] or {}
+      town.supplied[cargo]=record
+      -- TownGenerateCargo counts production even before the first
+      -- station. Do not fabricate transported cargo or delivery.
+      record.new_max=(record.new_max or 0)+amount
+      stats[cargo]=stats[cargo]+amount
+    end
     local function visit(tile,tick)
       local id=tile+1
       local t=tiles[id]
@@ -50,16 +60,7 @@ return function(Sim,H,Lift)
         end
         if h.completed then
           stats.houses=stats.houses+1
-          H.produce_tile(tile,tick,h,opts,random,function(cargo,amount)
-            if amount<=0 then return end
-            local town=assert(source[h.town],"Generated house must have a source town")
-            local record=town.supplied[cargo] or {}
-            town.supplied[cargo]=record
-            -- TownGenerateCargo counts production even before the first
-            -- station. Do not fabricate transported cargo or delivery.
-            record.new_max=(record.new_max or 0)+amount
-            stats[cargo]=stats[cargo]+amount
-          end)
+          H.produce_tile(tile,tick,h,opts,random,record_produced,x,z)
         end
       elseif t.build=="road" and t.road_town and not t.roadworks then
         if road_before[id]==nil then road_before[id]=t.roadside or false end

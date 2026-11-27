@@ -95,3 +95,28 @@ end
 local got=trace(1024)
 assert(got~="" and got==trace(128,true))
 print("PASS: exact stock house rates, default subcycle, recession/scale, completion, lift draws, map coverage and saved cadence")
+
+-- Both the ordinary and pregame tile loops forward context to their
+-- shared cargo sink. A direct sink still receives exactly two arguments.
+do
+  local row={id=0x06,completed=true}
+  local function run(with_context)
+    local draws,emissions=0,{}
+    local function random()
+      draws=draws+1
+      return 15
+    end
+    local function sink(...)
+      assert(select("#",...)==(with_context and 6 or 2))
+      local name,amount,x,z,house,tick=...
+      if with_context then assert(x==1 and z==0 and house==row and tick==256) end
+      emissions[#emissions+1]=name..":"..amount
+    end
+    local word=H.produce_tile(1,256,row,{},random,sink,with_context and 1 or nil,0)
+    return draws,table.concat(emissions,","),word
+  end
+  local d,c,w=run(false)
+  local d2,c2,w2=run(true)
+  assert(d==3 and d==d2 and w==w2 and c==c2 and c:match("^passenger:%d+,mail:%d+$"))
+end
+print("PASS house cargo sinks preserve both cargo emissions, exact context and RNG")

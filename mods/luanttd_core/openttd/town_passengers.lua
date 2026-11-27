@@ -285,12 +285,23 @@ H.specs={
   [0x6D]={18,7,0,0,0,5000000,1,1}, -- piggy_bank_1
 }
 
+-- Both original temperate cargo rates use the default 1:1 multiplier.
+-- Forward the tile context directly instead of closing over it twice
+-- for each occupied parcel. The two-argument standalone sink still works.
+local function emit_house_cargo(name,rate,generate,settings,random,emit,x,z,house,tick)
+  local amount=generate(rate,random(),1,1)
+  if amount==0 then return end
+  if settings.recession then amount=floor((amount+1)/2) end
+  amount=H.scale(amount,settings.percentage or 100,random)
+  if x==nil then emit(name,amount) else emit(name,amount,x,z,house,tick) end
+end
+
 -- Completed vanilla house visit, in source call order: optional lift draw,
 -- one unconditional town-tile random value (also used by rebuilding), then
 -- passengers and mail. Mail always consumes its stock draw even when the
 -- game adapter does not yet expose station mail. Return tile_rand so a future
 -- house-growth port can use the same draw rather than consuming it twice.
-function H.produce_tile(tile,tick,house,settings,random,emit)
+function H.produce_tile(tile,tick,house,settings,random,emit,x,z)
   if not house.completed then return end
   local spec=assert(H.specs[house.id],"Non-vanilla house production is not implemented")
   if spec[4]==1 and not house.lift_has_destination then
@@ -302,16 +313,8 @@ function H.produce_tile(tile,tick,house,settings,random,emit)
   assert(original or mode=="bitcount")
   if original or floor(tick/256)%4==tile%4 then
     local generate=original and H.original or H.binominal
-    local function cargo(name,rate,multiplier,divisor)
-      local amount=generate(rate,random(),multiplier,divisor)
-      if amount==0 then return end
-      if settings.recession then amount=floor((amount+1)/2) end
-      emit(name,H.scale(amount,settings.percentage or 100,random))
-    end
-    -- Vanilla temperate passengers and mail use the default multiplier,
-    -- exactly the divisor, so the ratio is represented by 1 / 1.
-    cargo("passenger",spec[1],1,1)
-    cargo("mail",spec[2],1,1)
+    emit_house_cargo("passenger",spec[1],generate,settings,random,emit,x,z,house,tick)
+    emit_house_cargo("mail",spec[2],generate,settings,random,emit,x,z,house,tick)
   end
   return tile_random
 end
@@ -331,9 +334,7 @@ function H.advance_houses(clock,ticks,map_house,settings,random,emit,before_tick
     if landscape_tile then landscape_tile(x,z,tick,tile) end
     local house=map_house(x,z)
     if house then
-      local word=H.produce_tile(tile,tick,house,settings,random,function(name,amount)
-        emit(name,amount,x,z,house,tick)
-      end)
+      local word=H.produce_tile(tile,tick,house,settings,random,emit,x,z)
       if word and settings.rebuild then settings.rebuild(house,tile+1,word,tick,random) end
     end
   end,before_tick)

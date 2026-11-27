@@ -166,3 +166,27 @@ lua5.1 tests/town_growth_live.lua
 lua5.1 tests/town_rebuild.lua
 tests/campaign_tick_worker_native.sh luantiserver /tmp/town-tick-check
 ```
+
+## House cargo without per-tile callbacks
+
+Pass the tile coordinates, house, and tick to a shared cargo sink rather
+than allocating a closure for every visited house and another for every
+production pass. The sink skips catchment lookup entirely when no bus
+stops exist and allocates a ratings list only when a stop qualifies.
+Stock random draw order, cargo scaling, and rebuild order are unchanged.
+
+On a generated 1024×1024 campaign, allocation traces removed roughly
+**2.0 MiB per simulated day**. Two 50-day alternating native Luanti
+5.15.2 runs measured median daily worker CPU of **627 → 539 ms** and
+**645 → 575 ms**, with peak process RSS about **124–127 MiB** lower.
+The longest single day was slower in the two optimized runs, so this
+is a steady-state gain rather than a guarantee against individual stalls.
+Complete saved state (including shared references) matched at the same
+completed day in the 1024×1024 campaign and a 128-vehicle mixed campaign.
+
+```sh
+lua5.1 tests/town_passengers.lua
+lua5.1 tests/town_passenger_runtime.lua
+lua5.1 tests/road_mail_runtime.lua
+lua5.1 tests/town_growth_live.lua
+```

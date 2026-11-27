@@ -45,7 +45,8 @@ return function(Sim,H,Packets,Rating,Mail)
         local stops={}
         for _,st in pairs(s.stations) do if st.mode=="road" and st.stop_type~="truck" then stops[#stops+1]=st end end
         table.sort(stops,function(a,b) return a.id<b.id end)
-        r={stations=s.stations,topology=s.topology,nearby=road_candidates(Sim,stops,H.bus_catchment)}
+        r={stations=s.stations,topology=s.topology,
+          nearby=#stops>0 and road_candidates(Sim,stops,H.bus_catchment) or nil}
         road_indexes[s]=r
       end
       nearby=r.nearby
@@ -66,7 +67,8 @@ return function(Sim,H,Packets,Rating,Mail)
       end
       if cargo~="passenger" or amount<=0 then return end
       if hooks and hooks.passenger then return hooks.passenger(s,amount,x,z,record,tick) end
-      local list={}
+      if not nearby then return end
+      local list
       local area=record.area or 1
       for _,row in ipairs(nearby(s,x,z,area)) do
         local st=row.value
@@ -76,10 +78,13 @@ return function(Sim,H,Packets,Rating,Mail)
         end end
         if covered and s.stations[st.id]==st then
           local rating=Rating.offer(s,st)
-          if rating then list[#list+1]={st=st,rating=rating} end
+          if rating then
+            list=list or {}
+            list[#list+1]={st=st,rating=rating}
+          end
         end
       end
-      if #list==0 then return end
+      if not list then return end
       Packets.allocate(amount,list)
       for _,entry in ipairs(list) do
         local st=entry.st
