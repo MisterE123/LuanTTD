@@ -51,9 +51,8 @@ return function(Sim,H,Packets,Rating,Mail)
       end
       nearby=r.nearby
     end
-    local function house(x,z)
-      local id=Sim.id(x+1,z+1)
-      local t=id and s.tiles[id]
+    local function house(x,z,id,t)
+      if id==nil then id=Sim.id(x+1,z+1);t=id and s.tiles[id] end
       if not t or not t.house then return end
       if not t.source_house then M.stamp(s,t,id) end
       if growth and growth.advance_house(s,id,t.source_house) then return end
@@ -98,6 +97,7 @@ return function(Sim,H,Packets,Rating,Mail)
     local random=function() return Rating.random_u32(s) end
     local update_rating=function() Rating.advance(s,1,mail and mail.step_rating or nil) end
     local clock=s.passenger_house_clock
+    local physical=Sim.W==2^clock.log_x and Sim.H==2^clock.log_y and s.tiles
     local lift_registry=s.stock_town_lifts
     local settings={}
     if s.stock_generated_profile and growth and growth.rebuild then
@@ -163,16 +163,16 @@ return function(Sim,H,Packets,Rating,Mail)
         if growth then
           -- Source OnTick_Town precedes OnTick_Station. The mounted
           -- adapter calls this rating hook after town and vehicle work.
-          H.advance_houses(clock,1,house,settings,random,emit,animate,landscape_tile,traverse)
+          H.advance_houses(clock,1,house,settings,random,emit,animate,landscape_tile,traverse,physical)
           after_tick(clock.counter,update_rating)
         else
-          H.advance_houses(clock,1,house,settings,random,emit,rated,landscape_tile,traverse)
+          H.advance_houses(clock,1,house,settings,random,emit,rated,landscape_tile,traverse,physical)
           after_tick(clock.counter)
         end
         if tick_pulse then tick_pulse(clock.counter) end
       end
     else
-      H.advance_houses(clock,H.day_ticks,house,settings,random,emit,rated,landscape_tile,traverse)
+      H.advance_houses(clock,H.day_ticks,house,settings,random,emit,rated,landscape_tile,traverse,physical)
     end
   end
   return M

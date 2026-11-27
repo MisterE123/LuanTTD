@@ -328,13 +328,21 @@ end
 -- index of this physical visit, for adapters using the same dimensions.
 -- before_tick is for running station rating before tile production at a
 -- given tick, as OpenTTD's tick timer runs before RunTileLoop.
-function H.advance_houses(clock,ticks,map_house,settings,random,emit,before_tick,landscape_tile,advance)
+-- When physical is an exact native raster, only occupied house parcels
+-- invoke map_house; its extra arguments are the native ID and live cell.
+function H.advance_houses(clock,ticks,map_house,settings,random,emit,before_tick,landscape_tile,advance,physical)
   local width=2^clock.log_x
   local traverse=advance or H.advance
   traverse(clock,ticks,function(tile,tick)
     local x,z=tile%width,floor(tile/width)
     if landscape_tile then landscape_tile(x,z,tick,tile) end
-    local house=map_house(x,z)
+    local house
+    if physical then
+      -- The exact generated raster shares RunTileLoop's row stride.
+      -- Look up the current cell *after* other landscape callbacks.
+      local t=physical[tile+1]
+      if t and t.house then house=map_house(x,z,tile+1,t) end
+    else house=map_house(x,z) end
     if house then
       local word=H.produce_tile(tile,tick,house,settings,random,emit,x,z)
       if word and settings.rebuild then settings.rebuild(house,tile+1,word,tick,random) end

@@ -192,3 +192,25 @@ lua5.1 tests/town_passenger_runtime.lua
 lua5.1 tests/road_mail_runtime.lua
 lua5.1 tests/town_growth_live.lua
 ```
+
+## Read the live house directly at its stock tile index
+
+On an exact generated raster, the landscape cursor already identifies
+the physical cell. The worker now makes the house callback only for
+a live house parcel, without recalculating and validating coordinates
+on every empty cell. It checks membership after the preceding effects
+of the same landscape visit. House growth, cargo, mail draws and
+rebuilds therefore keep their original order; other raster sizes still
+use the coordinate resolver.
+
+On the 1024×1024 fixture with four paid service modes, four alternating
+LuaJIT processes replayed the same 1,332 ticks. CPU was 11.20–11.59 s
+before and 9.92–10.03 s after. A longer exact comparison matched all
+2,664 ticks' final state, including the cursor, RNG, 1,048,576 tiles,
+vehicle orders and 1,560,572 shared records. The [same-tick
+regression](../tests/town_passengers.lua) creates and removes houses in
+the earlier phase of a visit to check that no cached membership is
+used. In two native 4× runs per side starting at day 16, the view and
+all four vehicle modes reached day 47–48 before and 50–51 after in
+the same 26-second window. These are worker CPU and throughput
+measurements, not client FPS results.

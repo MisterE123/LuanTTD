@@ -120,3 +120,42 @@ do
   assert(d==3 and d==d2 and w==w2 and c==c2 and c:match("^passenger:%d+,mail:%d+$"))
 end
 print("PASS house cargo sinks preserve both cargo emissions, exact context and RNG")
+
+-- The generated raster may check the current physical tile directly,
+-- but must still observe writes in the same source visit, not a list
+-- captured before the tide, town or industry callbacks ran.
+do
+  local function run(direct)
+    local made={id=0x06,town=2,completed=true}
+    local grid={[1]={house=true,source_house={id=0x18,town=3,completed=true}}}
+    local clock=H.new_clock(6,6,1,255)
+    local trace={}
+    local draws,lookups=0,0
+    local function lookup(x,z,id,t)
+      assert(x>=0 and x<64 and z>=0 and z<64)
+      if id then assert(id==z*64+x+1 and t==grid[id])
+      else t=grid[z*64+x+1] end
+      lookups=lookups+1
+      return t and t.house and t.source_house
+    end
+    H.advance_houses(clock,1,lookup,{rebuild=function(h,id,word,tick)
+        assert(h==made and id==2 and word==4294967295 and tick==256)
+        trace[#trace+1]="rebuild"
+      end},
+      function() draws=draws+1;return 4294967295 end,
+      function(cargo,n,x,z,h,tick)
+        assert(x==1 and z==0 and h==made and tick==256)
+        trace[#trace+1]=cargo..":"..n
+      end,nil,function(_,_,tick,tile)
+        assert(tick==256)
+        if tile==0 then grid[1]=nil end
+        if tile==1 then grid[2]={house=true,source_house=made} end
+      end,nil,direct and grid or nil)
+    return table.concat(trace,","),draws,lookups,clock.head,clock.counter
+  end
+  local a,ar,ac,ah,at=run(false)
+  local b,br,bc,bh,bt=run(true)
+  assert(a==b and a:find("rebuild",1,true) and ar==br and ar>0 and ah==bh and at==bt)
+  assert(ac==16 and bc==1,"The generated lookup should visit just the live house")
+end
+print("PASS physical house gate observes new and removed houses on the same source tick")
