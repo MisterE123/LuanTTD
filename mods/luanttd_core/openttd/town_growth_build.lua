@@ -166,7 +166,7 @@ return function(G,catalog)
       if not roads or from==nil then return nil,true end
       if q.kind=="rail" and opts.allow_level_crossings==false then return nil,true end
       if opts.build_on_slopes==false or G.chance(1,6,random()) then
-        if board.level_land then board.level_land(x,z);q=board.tile(x,z) end
+        if board.level_land then board.level_land(x,z,random);q=board.tile(x,z) end
       end
       local rcmd
       if grid[t.layout] then rcmd=B.grid_bits(t,x,z,from,q.slope)
@@ -223,7 +223,7 @@ return function(G,catalog)
     if board.house_roadtypes and not board.house_roadtypes(u,v) then permit=false end
     if permit then
       if h.kind~="house" then
-        if G.chance(1,6,random()) and board.level_land then board.level_land(u,v) end
+        if G.chance(1,6,random()) and board.level_land then board.level_land(u,v,random) end
         return B.house(t,board,u,v,opts,random),false,extra_built
       end
       return nil,false,extra_built

@@ -16,6 +16,9 @@ case "${1:-}" in
     ;;
   startup)
     luantiserver --version
+    lua5.1 tests/town_growth_stock_replay.lua
+    lua5.1 tests/town_municipal_roads.lua
+    lua5.1 tests/town_growth_live.lua
     bash tests/default_stock_terrain_native.sh
     python3 tests/generated_world_dimensions_native.py "$(mktemp -d)/worlds"
     bash tests/default_tram_native.sh

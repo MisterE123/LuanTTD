@@ -146,11 +146,12 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
   function B.road_span(town,x,z,d,random)
     return Spans.bridge(town,B,x,z,d,random) or Spans.tunnel(town,B,x,z,d)
   end
-  function B.terraform_land(x,z,mask,up,cost_limited)
+  function B.terraform_land(x,z,mask,up,cost_limited,random)
     if mask==0 then return false end
     local price=250 -- RC1 construction base terraform price for this economy.
+    local height_limit=s.stock_generated_profile.map_height_limit
     local p=Terrain.plan(s.corner_grid,x,z,mask,up,{
-        unit_cost=price,max_height=s.stock_generated_profile.map_height_limit,
+        unit_cost=price,max_height=height_limit,
         void=function(u,v) return s.tiles[Sim.id(u,v)].stock_void end,
         validate_tile=function(_,u,v)
           local t=B.tile(u,v)
@@ -169,6 +170,22 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
         end,
       })
     if not p or cost_limited and p.cost>=(price+2)*8 then return false end
+    -- CmdTerraformLand visits the sorted non-void tile set twice on
+    -- Execute. The validation pass still draws; only pass 1 clears.
+    local rock={}
+    if live then
+      assert(type(random)=="function","Live town earthworks must use the simulation RNG")
+      for pass=0,1 do
+        for _,d in ipairs(p.dirty) do
+          local id=Sim.id(d.x,d.z)
+          if not s.tiles[id].stock_void then
+            local _,_,top=Terrain.tile(s.corner_grid,d.x,d.z,p)
+            local make_rocks=G.range(height_limit,random())<=top
+            if pass==1 and not up and make_rocks then rock[id]=true end
+          end
+        end
+      end
+    end
     assert(Terrain.apply(s.corner_grid,p))
     for _,d in ipairs(p.dirty) do
       local id=Sim.id(d.x,d.z)
@@ -176,7 +193,8 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
       if not t.stock_void then
         local _,base=Terrain.tile(s.corner_grid,d.x,d.z)
         t.terrain,t.h=base>0 and "hill" or "grass",base
-        t.wood,t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,nil,nil,nil
+        t.wood,t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,rock[id] and 2 or nil,
+          live and not rock[id] and 0 or nil,nil
         if s.stock_farm_fields and s.stock_farm_fields[id] then
           Sim.mark_clear_land(s,id)
           if s.stock_farm_grass then s.stock_farm_grass[id]=nil end
@@ -187,11 +205,11 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
     if live then live.grade_changed() end
     return true
   end
-  function B.level_land(x,z)
+  function B.level_land(x,z,random)
     local cell=B.tile(x,z)
     if not cell or not cell.slope or cell.slope==0 or cell.kind=="house" then return false end
-    return B.terraform_land(x,z,difference(cell.slope),true,true) or
-      B.terraform_land(x,z,cell.slope%16,false,true)
+    return B.terraform_land(x,z,difference(cell.slope),true,true,random) or
+      B.terraform_land(x,z,cell.slope%16,false,true,random)
   end
   return B
 end

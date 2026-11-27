@@ -13,7 +13,7 @@ return function(chance)
       if not generating and chance(1,10,random()) then
         local low=slope%16 -- DoCommand applies only corner bits
         local mask=chance(1,16,random()) and low or 15-low
-        success=not not terraform(x,z,mask,false)
+        success=not not terraform(x,z,mask,false,nil,random)
       end
       if not success and chance(1,3,random()) then return room end
       return false

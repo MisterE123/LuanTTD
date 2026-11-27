@@ -59,12 +59,18 @@ local world,city,x,z=slope_fixture()
 local calls=0
 assert(W.road_board(world).road_allowed(city,x,z,0,function()
   calls=calls+1
-  return 0
+  -- Decisions at 1-3, four row-major validation draws at 4-7,
+  -- four clear flags at 8-11. Only draws 8 and 11 leave rock.
+  return (calls<=3 or calls==8 or calls==11) and 0 or 4294967295
 end)==false)
-assert(calls==3 and T.tile(world.corner_grid,x,z)==0 and world.corner_grid.revision==1)
+assert(calls==11 and T.tile(world.corner_grid,x,z)==0 and world.corner_grid.revision==1)
 local marked={}
 for _,id in ipairs(world.changed) do marked[id]=true end
 assert(marked[S.id(x,z)] and marked[S.id(x-1,z-1)])
+for _,d in ipairs({{-1,-1,true},{0,-1,false},{-1,0,false},{0,0,true}}) do
+  local t=world.tiles[S.id(x+d[1],z+d[2])]
+  assert(t.stock_clear_ground==(d[3] and 2 or nil) and t.stock_clear_density==(not d[3] and 0 or nil))
+end
 world,city,x,z=slope_fixture()
 local private=S.id(x-1,z-1)
 world.tiles[private].owner="RoadCo"
@@ -237,10 +243,10 @@ do
   s.tiles[id].wood=grove
   s.tiles[id].owner="Neighbor"
   local revision=s.corner_grid.revision
-  assert(not board.level_land(x,z))
+  assert(not board.level_land(x,z,draw))
   assert(s.tiles[id].wood==grove and s.corner_grid.revision==revision)
   s.tiles[id].owner=nil
-  assert(board.level_land(x,z))
+  assert(board.level_land(x,z,draw))
   assert(T.tile(s.corner_grid,x,z)==0 and not s.tiles[id].wood)
   assert(s.corner_grid.revision==revision+1 and company.cash==cash)
 end

@@ -205,7 +205,7 @@ do
   local rev=s.corner_grid.revision
   assert(not b.terraform_land(x,z,15,true,true) and s.corner_grid.revision==rev)
   assert(s.stock_farm_fields[id] and s.stock_farm_fields[other])
-  assert(b.terraform_land(x,z,15,true,false))
+  assert(b.terraform_land(x,z,15,true,false,function() return 4294967295 end))
   assert(not s.stock_farm_fields[id] and s.stock_farm_fields[other].industry==12301
     and s.tiles[id].stock_clear_density==0 and s.corner_grid.revision==rev+1)
   print("PASS municipal crop-field grading charges stock clear prices against its cap and clears only modified fields")

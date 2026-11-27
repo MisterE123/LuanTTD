@@ -275,6 +275,36 @@ in these controlled worlds. Station service and terrain results are
 still supplied as inputs; this is not yet an unrestricted month-by-month
 whole-game comparison with all transport and landscape actors running.
 
+### Three-month vanilla town replay
+
+The [live replay](../tests/town_growth_stock_replay.lua) starts from the
+exact January 2 layout, shared corners, landscape cursor, town and house
+state, and two RNG words of a real OpenTTD 16.0-RC1 run. The 64×64
+Temperate reference used seed 1751, one town, the original road layout,
+and the stock GameScript growth-rate command with a six-day setting.
+It has no industries, companies, initial forests, or subsidies. The
+same RNG follows normal tree activity and the ordinary town functions
+through April 1. At all 35 stock snapshots, LuanTTD matches the RNG,
+growth and rebuilding countdowns, and every road bit and house location,
+ID, age, and construction state. This includes a real street extension
+following a successful corner raise. Two snapshots straddle the precise
+earthwork tick and check bare ground beside the finished road. The
+[numeric snapshots](../tests/fixtures/town-growth-rc1-1950.lua) can be
+regenerated with [the reference extractor](../tools/record_rc1_town_reference.py)
+from the corresponding stock saves; no game assets are embedded.
+
+The live town terraform command now uses RC1's two sorted passes over
+each touched non-void tile. Each pass draws from the same world RNG; the
+first is validation, and only the second can leave rocks after lowering.
+A non-rocky live cut or raise starts as bare soil. Rejected quotes use
+no draws. This change is scoped to live municipal grading; it is not a
+claim of parity for pregame or player-initiated terraforming. Full
+growth parity still needs ordinary multi-town, industry, and serviced
+scenarios. Enabling stock subsidies in the vanilla control advances
+the RNG at February's monthly lottery, which the replay deliberately
+disables rather than mimicking with extra draws.
+
+
 ### Recovering a roadless town
 
 The stock roadless fallback searches from the town center in RC1's
