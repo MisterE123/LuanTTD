@@ -41,9 +41,26 @@ end
 -- Most cells are unimproved land/water. Skip only keys whose exact
 -- representation fits this layout; every amended cell still uses the
 -- general graph encoder. Fixed bytes reduce per-save GC pressure.
+local base_cells={}
+for h=0,255 do
+  for f=0,47 do base_cells[h*48+f]=char(TILE,h,f,0,0,0) end
+end
 local function tile_bytes(t,tables)
   local h,v,g,w=t.h,t.variant,terrain_codes[t.terrain],t.water_class
   if not (g and tiny_int(h,255) and tiny_int(v,3)) or w~=nil and not water_codes[w] then return end
+  -- These raw keys account for all fields in the ordinary record.
+  -- Same bytes as the full encoder; richer or decorated cells still
+  -- take the general branch so no special field disappears.
+  if getmetatable(t)==nil then
+    local a=next(t)
+    local b=next(t,a)
+    local c=next(t,b)
+    local d=next(t,c)
+    if d==nil and w==nil then return base_cells[h*48+g-1+4*v] end
+    if w~=nil and d~=nil and next(t,d)==nil then
+      return base_cells[h*48+g-1+4*v+16*water_codes[w]]
+    end
+  end
   local c,r=t.stock_clear_ground,t.stock_river_bits
   if c~=nil and not tiny_int(c,255) or r~=nil and not tiny_int(r,255) then return end
   local a,b,k=t.stock_void,t.coastal_water,t.stock_water_rocks

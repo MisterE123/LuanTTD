@@ -122,3 +122,36 @@ local prelinked={w,tiles={first}}
 local new=P.decode(P.encode(prelinked))
 assert(new[1]==new.tiles[1].wood)
 print("PASS compact woodland keeps nested graph IDs, restored sea-ground, aliases, unsupported fields")
+
+-- Pin ordinary tile bytes for every supported height, variant and water class.
+-- Extra keys (including false) must not be lost, and aliases must survive.
+do
+  local tile_matrix={}
+  local expected={}
+  for h=0,255 do
+    for v=0,3 do
+      for i,terrain in ipairs({"grass","hill","water"}) do
+        for w=0,2 do
+          local cell={h=h,variant=v,terrain=terrain,water_class=({"sea","river"})[w]}
+          tile_matrix[#tile_matrix+1]=cell
+          expected[#expected+1]=string.char(12,h,i-1+4*v+16*w,0,0,0)
+        end
+      end
+    end
+  end
+  local bytes=P.encode({tiles=tile_matrix})
+  local cells=table.concat(expected)
+  assert(bytes:find(cells,1,true),"ordinary tile wire format changed")
+  local decoded=P.decode(bytes)
+  assert(decoded.tiles[1].h==0 and decoded.tiles[#tile_matrix].h==255)
+  local extra={h=0,variant=1,terrain="water",water_class="sea",[false]=true}
+  local dry_extra={h=1,variant=2,terrain="grass",[false]="keep"}
+  local decorated=setmetatable({h=0,variant=2,terrain="water",water_class="river"},
+    {__index={coastal_water=true},__metatable=false})
+  local shared_cell={h=12,variant=0,terrain="grass"}
+  local unusual={tiles={extra,dry_extra,decorated,shared_cell,shared_cell}}
+  local round=P.decode(P.encode(unusual))
+  assert(round.tiles[1][false]==true and round.tiles[2][false]=="keep")
+  assert(round.tiles[3].coastal_water==true and round.tiles[3].water_class=="river")
+  assert(round.tiles[4]==round.tiles[5])
+end
