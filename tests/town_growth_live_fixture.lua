@@ -45,7 +45,7 @@ function F.first(Sim,s,check)
   assert(house.town_growth and not house.completed and not house.first_cargo_tick)
   assert(house.built_tick==t.last_build.tick and t.population==qa.initial_pop)
   assert(house.stage==0 and t.num_houses>=1)
-  for _=1,30 do
+  for _=1,42 do
     Sim.daily(s)
     if check then check() end
     assert(not house.completed and not house.first_cargo_tick and t.population==qa.initial_pop)
@@ -72,7 +72,7 @@ function F.second(Sim,s,qa,spec,check)
     assert(not house.first_cargo_tick and t.population==qa.initial_pop)
   end
   assert(house.completed and not house.first_cargo_tick and house.age==0)
-  assert(house.completed_tick-house.built_tick>=11*256 and house.completed_tick-house.built_tick<=12*256)
+  assert(house.completed_tick-house.built_tick>=23*256 and house.completed_tick-house.built_tick<=24*256)
   assert(s.sites[qa.town].population==qa.initial_pop+spec[house.id][1])
   for _=1,90 do
     Sim.daily(s)

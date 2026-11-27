@@ -92,8 +92,8 @@ assert(not B.house(t,board,12,13,{year=1950},rng({})))
 
 local stages={}
 local h=plan.parts[1]
-for i=1,11 do
-  assert(B.advance_house(h,plan.parts,H.specs,function() error("Matured before 12 physical visits") end))
+for i=1,23 do
+  assert(B.advance_house(h,plan.parts,H.specs,function() error("Matured before 24 physical visits") end))
   assert(not h.completed)
 end
 assert(B.advance_house(h,plan.parts,H.specs,function(p,pop) stages[#stages+1]={p.id,pop} end))
@@ -115,9 +115,9 @@ end
 B.house_committed(t,stadium,{c},2)
 assert(t.num_houses==27 and t.unique.stadium and t.house_counts[0x17]==1)
 local population=0
-for i=1,12 do
+for i=1,24 do
   assert(B.advance_house(stadium.parts[2],stadium.parts,H.specs))
-  assert(stadium.parts[2].counter==(i-1)%4)
+  assert(stadium.parts[2].counter==(i-1)%8)
   assert(B.advance_house(stadium.parts[1],stadium.parts,H.specs,function(_,n) population=population+n end))
 end
 assert(population==65)

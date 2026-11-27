@@ -25,7 +25,7 @@ bayline_generated_relief = 0
 bayline_generated_coasts = 0
 bayline_generated_towns = 3
 bayline_generated_town_layout = original
-bayline_seed = 1751
+bayline_seed = 1
 bayline_stock_bus_start_year = ${TOWN_CONSTRUCTION_YEAR:-1950}
 singleplayer_mode = false
 CONF

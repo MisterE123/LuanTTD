@@ -22,7 +22,7 @@ case "${1:-}" in
     bash tests/async_state_owner_native.sh "$(command -v luantiserver)" "$(mktemp -d)/ipc"
     bash tests/campaign_generation_async_native.sh "$(command -v luantiserver)" "$(mktemp -d)/generation"
     bash tests/campaign_tick_worker_native.sh "$(command -v luantiserver)" "$(mktemp -d)/ticks"
-    for mode in woodhouse farmhouse underhouse railunderhouse foreignhouse crossing companyroad mixedroad months; do
+    for mode in woodhouse farmhouse underhouse railunderhouse foreignhouse crossing companyroad mixedroad construction months; do
       LUANTTD_QA_MUNICIPAL_KIND="$mode" bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" "$(mktemp -d)/$mode"
     done
     bash tests/campaign_ordinary_worker_native.sh
@@ -35,6 +35,7 @@ case "${1:-}" in
     export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/residential-cache"
     python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
     BAYLINE_NATIVE_DISPLAY=355 BAYLINE_NATIVE_PORT=43372 timeout --kill-after=10s 155 bash tests/campaign_worker_stock_residential_native.sh
+    BAYLINE_NATIVE_DISPLAY=358 BAYLINE_NATIVE_PORT=43375 timeout --kill-after=10s 120 bash tests/campaign_worker_stock_construction_native.sh
     LUANTTD_QA_TOWN_LIFT=1 LUANTTD_QA_TOWN_YEAR=1985 LUANTTD_QA_TOWN_WIDTH=256 BAYLINE_NATIVE_DISPLAY=359 BAYLINE_NATIVE_PORT=43376 timeout --kill-after=10s 155 bash tests/campaign_worker_stock_residential_native.sh
     LUANTTD_QA_TOWN_REBUILD=1 BAYLINE_NATIVE_DISPLAY=361 BAYLINE_NATIVE_PORT=43378 timeout --kill-after=10s 160 bash tests/campaign_worker_stock_residential_native.sh
     ;;

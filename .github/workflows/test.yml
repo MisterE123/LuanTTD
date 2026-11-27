@@ -368,6 +368,7 @@ jobs:
           lua5.1 tests/town_growth_extra_house.lua
           python3 tests/town_reseed_rc1.py "$src" lua5.1
           python3 tests/town_house_selection_rc1.py "$src" lua5.1
+          python3 tests/town_house_construction_rc1.py "$src" lua5.1
           python3 tests/town_house_roadtypes_rc1.py "$src" lua5.1
           python3 tests/town_road_walk_rc1.py "$src" lua5.1
           python3 tests/town_crossing_rc1.py "$src" lua5.1

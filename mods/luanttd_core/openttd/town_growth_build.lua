@@ -320,6 +320,7 @@ return function(G,catalog)
     G.house_added(t,stations,setting)
   end
 
+  -- RC1 keeps a 3-bit counter: eight visits per construction stage.
   -- Root tile alone advances all the parts; the host calls this on the
   -- physical RunTileLoop visit BEFORE ordinary completed-house production.
   -- Returning true means this visit was construction-only, including the
@@ -328,7 +329,7 @@ return function(G,catalog)
     if h.completed then return false end
     if not h.root then return true end
     for _,p in ipairs(parts) do
-      p.counter=(p.counter+1)%4
+      p.counter=(p.counter+1)%8
       if p.counter==0 then
         p.stage=p.stage+1
         if p.stage==3 then

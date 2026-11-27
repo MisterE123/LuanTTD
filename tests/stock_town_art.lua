@@ -121,11 +121,11 @@ local before_pop=town.population
 for _,part in ipairs(members) do
   local p=part.record
   if p.completed then before_pop=before_pop-Passengers.specs[p.id][1] end
-  p.stage,p.counter,p.completed=2,3,false
+  p.stage,p.counter,p.completed=2,7,false
 end
 town.population=before_pop;s.sites[h.town].population=before_pop;s.changed={}
 assert(Runtime.advance_house(s,members[2].id,members[2].record))
-assert(not h.completed and h.counter==3 and #s.changed==0)
+assert(not h.completed and h.counter==7 and #s.changed==0)
 assert(Runtime.advance_house(s,members[1].id,h))
 assert(town.population==before_pop+65 and #s.changed==4)
 for _,part in ipairs(members) do assert(part.record.completed and part.record.completed_tick and part.record.stage==3) end

@@ -18,6 +18,7 @@ if ! cp -al mods/luanttd_core/openttd "$mod/" 2>/dev/null; then cp -a mods/luant
 rm "$mod/init.lua"
 fixture=tests/town_municipal_roads_native.lua
 if [[ ${LUANTTD_QA_MUNICIPAL_KIND:-} == months ]]; then fixture=tests/town_monthly_worker_native.lua; fi
+if [[ ${LUANTTD_QA_MUNICIPAL_KIND:-} == construction ]]; then fixture=tests/town_construction_worker_native.lua; fi
 cp "$fixture" "$mod/init.lua"
 printf 'gameid = municipalroad\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 port=$(printenv BAYLINE_NATIVE_PORT || printf '44583')

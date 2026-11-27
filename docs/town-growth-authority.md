@@ -143,6 +143,11 @@ overhead bridge remain blocked. Separate native worker replays
 grow a house above each mode, reopen both layers and check routing
 through both portals without changing the infrastructure owner.
 
+RC1's house construction counter uses three bits, not two. Each
+stage lasts eight visits to the root tile; a newly started house needs
+24 visits to finish. Multi-tile pieces advance together. The completion
+visit adds population but cannot produce cargo; a later visit does.
+
 Completed houses age on the stock year boundary and cap at 255; unfinished
 buildings do not age. The rebuild check uses the saved completion year to
 calculate the same age without a map-wide scan. The native generator test
