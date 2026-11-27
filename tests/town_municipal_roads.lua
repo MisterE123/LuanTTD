@@ -278,3 +278,38 @@ do
     rail.tram_bits==10 and rail.tram_owner=="Tram Carrier" and road.cash==a and tram.cash==b)
   print("PASS stock mixed town road adds only road bits; tram occupation, but not a future route, blocks the edit")
 end
+
+-- RC1 road.cpp CleanUpRoadBits preserves only the actual connection on
+-- an adjacent facility. Existing plain pavement and clear land differ.
+do
+  local s,t,center=fixture()
+  local x,z=S.xy(center)
+  local offsets={{-1,0},{0,1},{1,0},{0,-1}}
+  for d,offset in ipairs(offsets) do
+    local to=S.id(x+offset[1],z+offset[2])
+    local face=2^(4-d)
+    local outward=(d+1)%4+1
+    local reverse=2^(4-outward)
+    local axis=face+reverse
+    local tile=s.tiles[to]
+    local function clean()
+      return W.road_board(s).clean_road_bits(t,x,z,face)
+    end
+    assert(clean()==face,"clear land retains a forward extension")
+    tile.build,tile.road_bits,tile.owner="road_station",axis,"Road Carrier"
+    tile.stop_axis=axis
+    assert(clean()==face,"through terminal with the same axis retains the road")
+    tile.road_bits,tile.stop_axis=15-axis,15-axis
+    assert(clean()==0,"cannot connect to the side of a through terminal")
+    tile.road_bits,tile.stop_axis=reverse,reverse
+    assert(clean()==face,"bay entrance faces the growth")
+    tile.road_bits,tile.stop_axis=face,face
+    assert(clean()==0,"cannot connect to a bay back wall")
+    tile.build,tile.stop_axis,tile.depot_dir="road_depot",nil,5-outward
+    assert(clean()==face,"depot entrance faces the growth")
+    tile.depot_dir=5-d
+    assert(clean()==0,"cannot connect to a depot back wall")
+    tile.build,tile.road_bits,tile.owner,tile.depot_dir=nil,nil,nil,nil
+  end
+  print("PASS municipal road cleanup preserves through lanes and facing bay/depot entrances in every orientation")
+end

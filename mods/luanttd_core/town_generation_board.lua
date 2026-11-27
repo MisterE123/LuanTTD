@@ -102,7 +102,12 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
         local t=B.tile(x+dx[d],z+dz[d])
         local useful=t and (t.kind=="clear" or t.kind=="road" or t.kind=="trees" or t.coast
           or (t.inside and t.inside==d))
-        if t and t.crossing then useful=has(t.road_bits or 0,2^((3-d+2)%4)) end
+        local mirrored=2^((3-d+2)%4)
+        if t and (t.crossing or t.kind=="drive_stop") then
+          useful=has(t.road_bits or 0,mirrored)
+        elseif t and (t.kind=="depot" or t.kind=="bay_stop") then
+          useful=t.entrance~=nil and 2^(3-t.entrance)==mirrored
+        end
         -- RC1 road.cpp IsPossibleCrossing: geometrical connectivity,
         -- not affordability, occupancy or town construction policy.
         if t and t.kind=="rail" and t.plain_track==2^(1-d%2) then

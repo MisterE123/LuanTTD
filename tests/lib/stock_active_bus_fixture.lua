@@ -118,7 +118,7 @@ local function initialize(ref,with_faults)
   s.stock_town_growth={version=1,towns=towns,order=order}
   s.passenger_rating_rng={opening.clock[4],opening.clock[5]}
   s.stock_tree_tick_counter,s.stock_extra_tree_placement=a.clock[6],a.settings[2]
-  s.passenger_house_clock=H.new_clock(6,6,opening.clock[3],first_tick)
+  s.passenger_house_clock=H.new_clock(6,6,opening.clock[3],opening.clock[1])
   if with_faults then bind.road(s,road_opts(ref.service_options))
   else Sim.mount_road_bus_market(s,calendar,1950) end
   if a.engine then
@@ -143,55 +143,58 @@ end
 local F={Sim=Sim,first_tick=first_tick}
 function F.open(initial,with_faults)
   local s,towns=initialize(initial,with_faults)
-  assert(s.day==1 and s.next_station==3 and towns[1].population>0)
+  assert(s.day==(initial.clock[1]-first_tick)/74+1 and s.next_station==3 and towns[1].population>0)
   local owner="RC1 comparison company"
   local c=Sim.company(s,owner)
   c.cash=initial.cash+100000
   local depot=2383
-  local id,err=Sim.purchase(s,owner,"bus","passenger",nil,depot)
-  assert(id,err)
-  local v=s.fleet[id]
-  -- The source observation comes after the real build. Reconstructing
-  -- an owned actor here must not draw the already-recorded build twice.
-  s.passenger_rating_rng={initial.clock[4],initial.clock[5]}
-  v.stock_vehicle_random_bits=initial.day_state[12]
-  v.stock_waiting_random_triggers=initial.day_state[13]
-  assert(Sim.add_order(s,owner,id,1,"normal"))
-  assert(Sim.add_order(s,owner,id,2,"normal"))
-  assert(Sim.toggle(s,owner,id))
-  local route,td,cost,frames,bays=Sim.path(s,{tile=depot,mode="road",owner=owner},s.stations[1],"road",owner,nil,v)
-  assert(route and frames,"Stock initial depot route unavailable")
-  local raw=initial.bus
-  local hit
-  for i,f in ipairs(frames) do
-    if f[1]==raw[2]+16 and f[2]==raw[3]+16 and f[3]==raw[4] and f[4]==raw[1]+1 and f[6]==initial.motion[1] and f[15]==initial.motion[2] then
-      hit=i;break
+  for index,actor in ipairs(initial.actors or {initial}) do
+    local id,err=Sim.purchase(s,owner,"bus","passenger",nil,depot)
+    assert(id and id==index,err)
+    local v=s.fleet[id]
+    v.stock_vehicle_random_bits=actor.day_state[12]
+    v.stock_waiting_random_triggers=actor.day_state[13]
+    assert(Sim.add_order(s,owner,id,1,"normal"))
+    assert(Sim.add_order(s,owner,id,2,"normal"))
+    assert(Sim.toggle(s,owner,id))
+    local route,td,cost,frames,bays=Sim.path(s,{tile=depot,mode="road",owner=owner},s.stations[1],"road",owner,nil,v)
+    assert(route and frames,"Stock initial depot route unavailable")
+    local raw=actor.bus
+    local hit
+    for i,f in ipairs(frames) do
+      if f[1]==raw[2]+16 and f[2]==raw[3]+16 and f[3]==raw[4] and f[4]==raw[1]+1 and f[6]==actor.motion[1] and f[15]==actor.motion[2] then
+        hit=i;break
+      end
+    end
+    assert(hit,"The current port does not contain the recorded stock frame on the computed route")
+    v.route,v.dest,v.dest_index,v.depot,v.station,v.progress=route,1,1,nil,nil,1
+    v.road_leg_td,v.road_route_cost,v.road_motion_frames,v.road_bay_branch=td,cost,frames,bays
+    v.road_speed_state={index=hit,heading=raw[4],progress=raw[5],speed=raw[6],subspeed=raw[7],ticks=actor.bus_tick}
+    if with_faults then
+      local a=assert(actor.day_state)
+      v.stock_bus.ticks,v.stock_bus.day=a[2],a[3]
+      v.cargo_age_counter=a[4]
+      local f=assert(v.road_fault)
+      f.reliability,f.reliability_spd_dec,f.age,f.max_age=a[5],a[6],a[7],a[8]
+      f.date_of_last_service,f.date_of_last_service_newgrf=a[9],a[10]
+      f.tick_counter,f.breakdown_chance=actor.bus_tick,a[11]
     end
   end
-  assert(hit,"The current port does not contain the recorded stock frame on the computed route")
+  -- Restore both words after the already-recorded build commands, not
+  -- between replaying two actor purchases on the controlled board.
+  s.passenger_rating_rng={initial.clock[4],initial.clock[5]}
   for i,g in pairs(initial.goods) do
     local st=s.stations[i+1]
     st.time_since_load,st.time_since_unload,st.passenger_rating_phase=g[1],g[2],g[9]
+    st.passenger_fraction=g[7]
     st.passenger_rating_state={rating=g[3],last_age=g[4],last_speed=g[5],time_since_pickup=g[6],
       amount_fract=g[7],has_rating=math.floor(g[8]/2)%2==1,max_waiting_cargo=0}
   end
   c.cash,c.loan=initial.cash,initial.loan
   local q=initial.quarter
   if q then c.stock_quarter={income=q[1],expenses=q[2],delivered={passenger=q[3]}} end
-  v.route,v.dest,v.dest_index,v.depot,v.station,v.progress=route,1,1,nil,nil,1
-  v.road_leg_td,v.road_route_cost,v.road_motion_frames,v.road_bay_branch=td,cost,frames,bays
-  v.road_speed_state={index=hit,heading=raw[4],progress=raw[5],speed=raw[6],subspeed=raw[7],ticks=initial.bus_tick}
-  if with_faults then
-    local a=assert(initial.day_state)
-    c.stock_money_fraction=a[1]
-    v.stock_bus.ticks,v.stock_bus.day=a[2],a[3]
-    v.cargo_age_counter=a[4]
-    local f=assert(v.road_fault)
-    f.reliability,f.reliability_spd_dec,f.age,f.max_age=a[5],a[6],a[7],a[8]
-    f.date_of_last_service,f.date_of_last_service_newgrf=a[9],a[10]
-    f.tick_counter,f.breakdown_chance=initial.bus_tick,a[11]
-  end
-  return s,towns,v,owner
+  if with_faults then c.stock_money_fraction=initial.day_state[1] end
+  return s,towns,s.fleet[1],owner
 end
 function F.reopen(s,with_faults,service_options)
   local Codec=load_module("packed_campaign")

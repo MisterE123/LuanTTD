@@ -18,6 +18,7 @@ case "${1:-}" in
     luantiserver --version
     lua5.1 tests/town_growth_stock_replay.lua
     lua5.1 tests/town_growth_rc1_coherent.lua
+    lua5.1 tests/town_growth_rc1_two_buses.lua
     lua5.1 tests/world_startup_rc1.lua
     lua5.1 tests/stock_road_acceleration_live.lua
     lua5.1 tests/stock_road_day_live.lua

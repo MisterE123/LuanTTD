@@ -351,6 +351,14 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         else
           state.speed=speed
         end
+        -- IndividualRoadVehicleController may begin loading while
+        -- queued behind a stopped bus, before reaching frame 11.
+        -- Preserve the actual pixel; the next order departs from here.
+        local tile=s.tiles[old[4]]
+        if a.stock_stop and state.speed==0 and not entering and old[6]>=64 and old[6]<80
+            and tile.station==v.dest then
+          state.arrival_pose=old
+        end
         return false
       end
     end
@@ -564,13 +572,15 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
               frames=moving.frames
             end
             v.progress=1+(#v.route-1)*(c.index-1)/math.max(1,#frames-1)
-            if c.index>=#frames and not held and (not (stock_stop or depot_stop) or c.arrival_ready) then
-              local arrived,hidden=hooks.arrive(v,tick,frames[#frames],(stock_stop or depot_stop) and c or nil)
+            local arrived_pose=c.arrival_pose
+            if not held and (arrived_pose or c.index>=#frames and (not (stock_stop or depot_stop) or c.arrival_ready)) then
+              local stop=arrived_pose or frames[#frames]
+              local arrived,hidden=hooks.arrive(v,tick,stop,(stock_stop or depot_stop) and c or nil)
               if arrived then
                 rec.clock=nil
                 -- Loading occupies the station. Stock depot entry hides the
                 -- vehicle immediately and removes its visible lane obstacle.
-                if hidden then W.erase(rec) else W.put(rec,frames[#frames]) end
+                if hidden then W.erase(rec) else W.put(rec,stop) end
               end
             end
           end

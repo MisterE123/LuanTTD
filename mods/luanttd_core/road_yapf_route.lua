@@ -159,7 +159,17 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     local origin=source.pair and vehicle and vehicle.road_stop_pose
     local row=origin and origin[6]
     local origin_bay=row and row>=32 and row<48 and math.floor(row/2)%2 or nil
-    local frames,bays=ordinary_frames(s,board,trace,origin_bay,board.tile(trace[#trace].tile))
+    local queue_pose=source.kind=="drive_stop" and pose and pose[4]==from
+      and pose[15]~=Motion.DRIVE_THROUGH_STOP and pose or nil
+    local frames,bays
+    if queue_pose then
+      -- A queued bus can complete its station order from any physical
+      -- frame in the occupied lane, not just the ordinary stop frame.
+      frames,bays=R.frames(board,trace,queue_pose)
+      if not frames then return end
+    else
+      frames,bays=ordinary_frames(s,board,trace,origin_bay,board.tile(trace[#trace].tile))
+    end
     -- Do not fall back to a ground-plane line between bridgeheads if a
     -- stale or malformed span cannot produce its selected crossing.
     if (bridge or source.pair or dest.pair or waypoints and #waypoints>0) and not frames then return nil end

@@ -5673,7 +5673,8 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       v.station,v.index=v.dest,v.dest_index
       v.road_via_pending=nil
       v.last_road_arrival_tick=tick
-      v.road_arrival_td,v.road_leg_td=v.road_leg_td,nil
+      local td=frame[6]
+      v.road_arrival_td,v.road_leg_td=td>=64 and td<80 and td-64 or v.road_leg_td,nil
       v.road_stop_pose=frame
       if stop_motion then
         v.road_stop_motion={subspeed=stop_motion.subspeed,progress=stop_motion.progress,

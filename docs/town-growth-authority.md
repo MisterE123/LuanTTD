@@ -567,3 +567,23 @@ clock still consumes its reset draw as in RC1. This is not a port of
 active disasters or evidence of whole-world startup parity. See the
 [compiled-source launch values](../tests/world_startup_rc1.lua) and the
 [native generation comparison](../tests/campaign_generation_async_probe.lua).
+
+
+## Shared drive-through stops
+
+A second genuine RC1 run starts January 3 with two Regals serving both
+drive-through stops. As in `IndividualRoadVehicleController`, a bus
+blocked behind a stationary leader can load at its actual lane position
+instead of crossing to the preferred stop frame. The next order begins
+at that exact pixel and keeps the same spot in its movement budget.
+
+This interaction changes the town's real service and growth clock.
+The town then adds a curved street beside the active stop.
+`CleanUpRoadBits` checks the connection facing a through stop, bay
+or depot instead of treating the facility as a solid wall. The next
+bus drives onto the new municipal tile in both games. The
+[ordinary replay](../tests/town_growth_rc1_two_buses.lua) matches all
+11,026 logical ticks through June 1, both buses and passenger queues,
+both shared random words, the actual streets and growth counters,
+103 paid deliveries and the finances across two reopens. This covers one
+active two-bus town; it does not imply larger or mixed-mode parity.

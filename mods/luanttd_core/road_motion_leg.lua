@@ -45,7 +45,7 @@ return function(Motion,F,board)
     local v={direction=2*F.exit_direction(first.td)+1}
     local frame
     if origin then
-      if tile.kind~="road" or origin[4]~=first.tile or origin[6]~=first.td or
+      if (tile.kind~="road" and tile.kind~="drive_stop") or origin[4]~=first.tile or origin[6]~=state or
           origin[10] or origin[12] or origin[13] or origin[14] then return end
       frame,v.direction=origin[15],origin[3]
     elseif tile.kind=="depot" then
