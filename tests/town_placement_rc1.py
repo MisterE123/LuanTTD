@@ -151,6 +151,10 @@ for c in ("SpiralTileIterator","SpiralTileSequence"):
     cpp+=source_block(src,"tilearea_spiral.h",rf"^class {c} \{{")
 for method in (r"SpiralTileIterator\(TileIndex center, uint diameter\)",r"SkipOutsideMap\(",r"InitPosition\(",r"Increment\("):
     cpp+=source_block(src,"tilearea_spiral.cpp",r"^(?:void )?SpiralTileIterator::"+method)
+spiral_source=(src/"tilearea_spiral.cpp").read_text()
+start=spiral_source.index("SpiralTileIterator::SpiralTileIterator(TileIndex start_north")
+end=spiral_source.index("\n}",start)+2
+cpp+=spiral_source[start:end]+"\n"
 cpp+=source_block(src,"map.cpp",r"^uint GetClosestWaterDistance\(")
 cpp+=source_block(src,"map.cpp",r"^/\* static \*/ void Map::CountLandTiles\(")
 cpp+=source_block(src,"town_cmd.cpp",r"^static CommandCost TownCanBePlacedHere\([^;]*\)\n")
@@ -193,6 +197,11 @@ int main(){
      int p=FindNearestGoodCoastalTownSpot(at(test_x,test_z),TownLayout(layout));
      if(p==INVALID_TILE)std::cout<<"-1 -1 0\n";
      else std::cout<<X(p)<<" "<<Z(p)<<" "<<GetClosestWaterDistance(p,true)<<"\n";
+   }else if(mode==3){
+     int radius;
+     std::cin>>test_x>>test_z>>radius;
+     for(int p:SpiralTileSequence(at(test_x,test_z),radius,0,0))std::cout<<p<<" ";
+     std::cout<<"\n";
    }else{
      int surrounding;
      std::cin>>test_x>>test_z>>nearx>>nearz>>_settings_game.economy.town_min_distance>>surrounding;
@@ -239,6 +248,11 @@ for line in io.lines() do
    end
    local bx,bz,d=W.coast(board,x,z,({"original","grid2","grid3"})[layout+1],{{x=nx,z=nz}},dist)
    print(bx or -1,bz or -1,d or 0)
+ elseif kind==3 then
+   local x,z,radius=unpack(a,4,6)
+   local output={}
+   W.circular(board,x,z,radius*2,function(u,v) output[#output+1]=u+v*w;return false end)
+   print(table.concat(output," "))
  else
    local x,z,nx,nz,dist,near=unpack(a,4)
    board.tile=function(u,v)
@@ -284,6 +298,9 @@ for i in range(120):
                       2 if x>shore+8 and lot<4 else 1,int(lot==7)]
             line.extend(tile)
     cases.append(line)
+for _ in range(320):
+    w,h=rng.choice([32,64]),rng.choice([32,64])
+    cases.append([3,w,h,rng.randrange(w),rng.randrange(h),rng.randrange(2,12)])
 data="".join(" ".join(map(str,row))+"\n" for row in cases)
 with TemporaryDirectory(prefix="town-placement-rc1-") as d:
     d=Path(d)
@@ -294,4 +311,4 @@ with TemporaryDirectory(prefix="town-placement-rc1-") as d:
     assert len(a)==len(b)==len(cases)
     errors=[(i,cases[i][:13],x,y) for i,(x,y) in enumerate(zip(a,b)) if x.split()!=y.split()]
     assert not errors,(len(errors),errors[:8])
-print("PASS 256 RC1 town/city generation streams, 6000 founding-site eligibility cases and 120 coastal searches")
+print("PASS 256 RC1 town/city generation streams, 6000 founding-site eligibility cases, 120 coastal searches, and 320 exact bridge search spirals")

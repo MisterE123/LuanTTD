@@ -373,6 +373,7 @@ jobs:
           python3 tests/town_growth_visit_rc1.py "$src" lua5.1
           python3 tests/town_placement_rc1.py "$src" lua5.1
           python3 tests/town_spans_rc1.py "$src"
+          lua5.1 tests/town_span_board.lua
           lua5.1 tests/generated_town_grade_spans.lua
           python3 tests/town_foundation_rc1.py "$src"
           python3 tests/town_lift_rc1.py "$src"

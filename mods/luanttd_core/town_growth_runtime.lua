@@ -175,9 +175,13 @@ return function(Sim,Terrain,G,B,H)
       elseif t.wood then kind="trees"
       elseif available(s,id,t) then kind="clear"
       else kind="object" end
-      local plain_track=kind=="rail" and t.build=="stock_rail" and not t.rail_station_id and
-        not t.rail_depot_dir and not t.rail_waypoint_id and not t.rail_span_id and not t.signal and t.rail_tracks or nil
-      return {kind=kind,slope=slope,base=base,max_z=top*8,road_bits=road_bits,plain_track=plain_track,crossing=t.level_crossing~=nil,
+      local plain_rail=kind=="rail" and t.build=="stock_rail" and not t.rail_station_id and
+        not t.rail_depot_dir and not t.rail_waypoint_id and not t.rail_span_id
+      -- Bridge scouting counts ordinary railway even with signals. The
+      -- geometric level-crossing path still excludes signalled track.
+      local plain_track=plain_rail and not t.signal and t.rail_tracks or nil
+      return {kind=kind,slope=slope,base=base,max_z=top*8,road_bits=road_bits,plain_track=plain_track,
+        plain_rail=not not plain_rail,crossing=t.level_crossing~=nil,
         company_road=Sim.town_company_road(s,id) or nil,
         road_town=t.road_town,road_disallowed=t.road_disallowed or t.disallowed,
         owner=t.owner,axis=axis,entrance=entrance,coast=kind=="water" and t.coastal_water,

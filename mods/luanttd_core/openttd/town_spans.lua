@@ -40,7 +40,7 @@ function S.bridge(town,board,x,z,d,random)
     local q=board.tile(u,v)
     if not valid(q) then return end
     local crosses=q.kind=="water" and not q.coast and not q.water_rocks and (t.slope~=0 or not q.sea)
-      or q.kind=="rail" or (q.kind=="road" and (q.road_disallowed or 0)~=0)
+      or q.plain_rail or (q.kind=="road" and not q.crossing and (q.road_disallowed or 0)~=0)
     if not crosses then landing=n;break end
   end
   if not landing or landing==1 or not S.continues(town,board,u,v,d) then return end

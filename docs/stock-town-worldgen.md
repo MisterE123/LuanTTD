@@ -99,14 +99,17 @@ The growth walk uses the 16.0-RC1 `town_cmd.cpp` branches
 `IsRoadAllowedHere`, `LevelTownLand`, `CanRoadContinueIntoNextTile`,
 `GrowTownWithBridge` and `GrowTownWithTunnel`. The bridge scanner
 distinguishes clear river/canal water, sea, coast and rocky water; it
-preserves the source length budgets and bounded style lottery. The
+preserves the source length budgets and bounded style lottery. It searches
+the full RC1 radius for an existing parallel road bridge, distinguishes
+signalled track from rail depots and other facilities, and respects the
+stock level-crossing setting when checking a route beyond a span. The
 native build commands determine final foundation, bridge head and bore
 geometry. Failed candidates discard only their own municipal
 structures and leave legal grading already performed. Industry sites
 respect the original exclusion below a bridge.
 
 Tests compile the pinned continuation and both span searches across
-25,920 inputs with exact approach classifications, styles, endpoints and
+31,104 inputs with exact approach classifications, styles, endpoints and
 random draw counts. The fixed ordinary 256×256 seed 1 (Mountainous,
 water borders off, many rivers, high towns) exercises both built
 structures, regular sloped public streets, independent middle layers,

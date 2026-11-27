@@ -17,7 +17,8 @@ local function has(bits,bit) return math.floor(bits/bit)%2~=0 end
 local function difference(mask) return 15-mask%16 end
 
 return function(Sim,Terrain,s,G,Worldgen,read,live)
-  local B={}
+  local policy=s.stock_road_town_policy
+  local B={town_level_crossings=not policy or policy.allow_town_level_crossings~=false}
   local Spans,Grade=TownSpans(G),RoadGrade(G.chance)
   function B.tile(x,z)
     local t=read(x,z)
@@ -118,13 +119,13 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
   end
   function B.parallel_bridge(x,z,distance,facing)
     local board={width=Sim.W,height=Sim.H}
-    return Worldgen.circular(board,x-1,z-1,distance,function(u,v)
+    -- Stock uses the radius overload with an empty rectangle (0,0).
+    -- Its 2r × 2r window is not the centered diameter-r overload.
+    return Worldgen.circular(board,x-1,z-1,2*distance,function(u,v)
       local t=B.tile(u+1,v+1)
       if not t or t.kind~="bridge" then return false end
-      for _,bit in ipairs({1,2,4,8}) do
-        if has(t.slope,bit) and has(facing,bit) then return true end
-      end
-      return false
+      return has(t.slope,1) and has(facing,1) or has(t.slope,2) and has(facing,2)
+        or has(t.slope,4) and has(facing,4) or has(t.slope,8) and has(facing,8)
     end)~=nil
   end
   function B.bridge_quote(town,x,z,u,v,style)

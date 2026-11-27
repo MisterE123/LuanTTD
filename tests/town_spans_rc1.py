@@ -66,9 +66,9 @@ bool IsSlopeWithOneCornerRaised(Slope s){return s==1||s==2||s==4||s==8;}
 RoadBits GetTownRoadBits(int t){return {rows[t].roadbits};}
 bool IsWaterTile(int t){return rows[t].k==2||rows[t].k==3;}
 bool IsSea(int t){return rows[t].k==3;}
-bool IsPlainRailTile(int t){return rows[t].k==6;}
+bool IsPlainRailTile(int t){return rows[t].k==6||rows[t].k==15;}
 bool IsNormalRoadTile(int t){return rows[t].k==7||rows[t].k==8;}
-RoadBits GetDisallowedRoadDirections(int t){return {rows[t].k==8?1:0};}
+RoadBits GetDisallowedRoadDirections(int t){return {rows[t].k==8||rows[t].k==17?1:0};}
 bool IsBridgeTile(int t){return rows[t].k==9||rows[t].k==14;}
 TransportType GetTunnelBridgeTransportType(int t){return rows[t].k==14?TransportType::Rail:TransportType::Road;}
 DiagDirection GetTunnelBridgeDirection(int t){return DiagDirection(rows[t].dir);}
@@ -81,8 +81,8 @@ DiagDirection GetRoadDepotDirection(int t){return DiagDirection(rows[t].dir);}
 bool IsTileType(int t,TileType type) {
  const int k=rows[t].k;
  switch (type) {
-  case TileType::Road:return k==7||k==8||k==13;
-  case TileType::Railway:return k==6;
+  case TileType::Road:return k==7||k==8||k==13||k==17;
+  case TileType::Railway:return k==6||k==15||k==16;
   case TileType::Station:return k>=11&&k<=12;
   case TileType::TunnelBridge:return k==9||k==10||k==14;
   default:return false;
@@ -121,7 +121,7 @@ for name in ("CanRoadContinueIntoNextTile", "GrowTownWithBridge", "GrowTownWithT
 cpp += r"""
 int main() {
  for (int kind=0;kind<3;++kind) for(int d=0;d<4;++d)
- for(int obstruction=0;obstruction<=14;++obstruction) for(int length=1;length<=9;++length)
+ for(int obstruction=0;obstruction<=17;++obstruction) for(int length=1;length<=9;++length)
  for(int variant=0;variant<16;++variant) {
   for(auto &r:rows) r=Record{};
   int start=center,step=shifts[d];
@@ -161,7 +161,7 @@ lua = r"""
 local root="mods/luanttd_core/openttd/"
 local G=dofile(root.."town_growth.lua")
 local S=dofile(root.."town_spans.lua")(G)
-local kinds={[0]="void","clear","water","water","water","water","rail","road","road","bridge","tunnel","drive_stop","bay_stop","depot","rail_bridge"}
+local kinds={[0]="void","clear","water","water","water","water","rail","road","road","bridge","tunnel","drive_stop","bay_stop","depot","rail_bridge","rail","rail","road"}
 local slopes={[0]=12,6,3,9}
 local bits={[0]=8,4,2,1}
 local x={[0]=-1,0,1,0}
@@ -175,7 +175,8 @@ for row in io.lines() do
   local t={id=1,population=math.floor(v/2)*1400}
   local function read(i,kind,slope,base,bits,dir)
     q[i]={kind=kinds[kind],slope=slope or 0,base=base or 2,road_bits=bits or 0,
-      road_disallowed=kind==8 and 1 or 0,sea=kind==3,coast=kind==4,water_rocks=kind==5,
+      plain_rail=kind==6 or kind==15, crossing=kind==17,
+      road_disallowed=(kind==8 or kind==17) and 1 or 0,sea=kind==3,coast=kind==4,water_rocks=kind==5,
       inside=dir or 0,axis=(dir or 0)%2,entrance=dir or 0}
   end
   local function linearize(u,w) return u*x[d]+w*z[d] end
@@ -194,7 +195,7 @@ for row in io.lines() do
   function board.road_quote(_,u,w,piece)
     seen_request=piece
     local a=board.tile(u,w)
-    return v%2==1 and (a.kind=="clear" or a.coast or a.kind=="rail")
+    return v%2==1 and (a.kind=="clear" or a.coast or a.kind=="rail" and a.plain_rail and obs==6)
   end
   function board.parallel_bridge() return v>=8 end
   function board.bridge_quote(_,_,_,_,_,try) return try==(v%4==0 and 12 or 7) or nil end
@@ -216,7 +217,7 @@ for row in io.lines() do
   end
   count=count+1
 end
-assert(count==25920 and successes>0)
+assert(count==31104 and successes>0)
 print(("PASS %d compiled RC1 town continuation, bridge and tunnel decisions (%d spans); exact style draws and endpoints")
   :format(count,successes))
 """
