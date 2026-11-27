@@ -2030,7 +2030,7 @@ function M.register_tram_station(s,owner,id)
   local town=s.sites[best]
   s.stations[sid]={id=sid,tile=id,mode="road",owner=owner,tram_only=true,stop_type="bus",
     name=(town and town.name.." " or "").."Tram platform #"..sid,
-    site=best,served=served,stock={},last_service={}}
+    town=town and town.kind=="town" and best or nil,site=best,served=served,stock={},last_service={}}
   return sid
 end
 function M.tram_stop_id(t)
@@ -2902,7 +2902,8 @@ local function apply_build(s,owner,changes,cost)
           else
             s.next_station=s.next_station+1
             s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,
-              name=(site and site.name.." " or "")..label.." #"..sid,site=best,served=served,stock={},last_service={}}
+              name=(site and site.name.." " or "")..label.." #"..sid,
+              town=site and site.kind=="town" and best or nil,site=best,served=served,stock={},last_service={}}
           end
         end
         tile.station=sid
@@ -4013,6 +4014,16 @@ end
 function M.stock_random_u32(s)
   passenger_modules()
   return rating_runtime.random_u32(s)
+end
+function M.stock_town_accept(s,town,cargo,total,town_units)
+  if not s.stock_town_growth or not town or total==0 then return end
+  if not M.town_cargo_stats then
+    local source=debug and debug.getinfo(1,"S").source
+    local base=source and source:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    M.town_cargo_stats=dofile(base.."openttd/town_cargo_stats.lua")
+  end
+  return M.town_cargo_stats.accept(s,town,cargo,total,town_units)
 end
 function M.mount_oil_ship(s,net,run,ready,ferry,coal)
   if not oil.ship then return end

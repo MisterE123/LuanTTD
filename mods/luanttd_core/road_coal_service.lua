@@ -221,6 +221,7 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
             distance=distance,date=option("economy_date",tick) or s.day,
             current_payment=option("current_payment",tick),refused=ctx.refused,
           })
+          if Sim.stock_town_accept then Sim.stock_town_accept(s,st.town or st.site,"coal",result.accepted,0) end
           local l=assert(v.load_state)
           l.coal_accepted=(l.coal_accepted or 0)+result.accepted
           for _,destination in ipairs(result.plants) do

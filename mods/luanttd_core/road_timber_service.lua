@@ -66,6 +66,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
       assert(not raw,"The timber chain must have one shared station scan")
       raw=Adapter.bind(s,s.timber_transactions,{width=Sim.W,height=Sim.H,xy=xy,coverage=coverage,
         stations=scan_stations,industries=industry_at,house_at=options.house_at or house_at,
+        town_accept=Sim.stock_town_accept,
         random_u32=random,acceptance=function(st,cargo,tick)
           if by_id[st.id] then return refresh(st.st,tick)[cargo] end
           if cargo==st.freight_cargo then return st.acceptance end

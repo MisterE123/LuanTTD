@@ -163,6 +163,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         company.paid_units=company.paid_units+e.units
       elseif e.kind=="deliver" then
         if Sim.stock_economy_delivered then Sim.stock_economy_delivered(Sim.company(s,owner),e.cargo or "passenger",e.units) end
+        if sink and Sim.stock_town_accept then
+          Sim.stock_town_accept(s,sink.town,e.cargo or "passenger",e.units,e.units)
+        end
         local town=sink and s.sites[sink.town]
         if town then
           local cargo=e.cargo or "passenger"

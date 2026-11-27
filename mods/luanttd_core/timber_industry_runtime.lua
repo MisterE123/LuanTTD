@@ -245,6 +245,11 @@ return function(Rules,Catchment)
         distance=opts_.distance,current_payment=opts.current_payment and opts.current_payment(world,tick,packet.cargo),
         refuses=ctx.refuses,transfer=opts_.transfer,no_unload=opts_.no_unload,
       })
+      if ctx.town_accept and result.units>0 then
+        local industry_units=0
+        for _,industry in ipairs(result.industries) do industry_units=industry_units+industry.units end
+        ctx.town_accept(world,st.town,packet.cargo,result.units,result.units-industry_units)
+      end
       p.order[#p.order+1]=key
       p.receipts[key]={signature=signature,result=result}
       for _,i in ipairs(result.industries) do p.processors[i.id]=true end

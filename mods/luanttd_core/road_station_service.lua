@@ -272,6 +272,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
       deliver=function(st,v,p)
         if v.cargo=="coal" then return coal.deliver(st,v,p) end
         if timber_cargo(v.cargo) then return timber.deliver(st,v,p) end
+        if Sim.stock_town_accept then Sim.stock_town_accept(s,st.town or st.site,v.cargo,p.units,p.units) end
         local site=receiver(s,st,v.cargo)
         if site then
           site.received[v.cargo]=(site.received[v.cargo] or 0)+p.units

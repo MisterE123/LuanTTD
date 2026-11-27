@@ -51,7 +51,7 @@ function G.new(id,x,z,opts)
     fund_buildings_months=opts.fund_buildings_months or 0,
     road_build_months=opts.road_build_months or 0,exclusive_counter=opts.exclusive_counter or 0,
     exclusivity=opts.exclusivity,layout=opts.layout or "original",goal=opts.goal or {},
-    supplied=opts.supplied or {},received=opts.received or {}}
+    supplied=opts.supplied or {},received=opts.received or {},accepted=opts.accepted or {}}
 end
 
 -- Station's sign coordinate, not catchment polygon or linked town ID.
@@ -197,6 +197,7 @@ function G.month(t,stations,setting,random)
   end
   -- Stock rotates actual/max before checking received-cargo goals.
   month_rotate(t.supplied)
+  if t.accepted then month_rotate(t.accepted) end
   month_rotate(t.received)
   return G.update(t,stations,setting,random)
 end

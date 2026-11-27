@@ -113,6 +113,7 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
         local distance=Packets.distance(p,v.cargo_tile,xy)
         local result=Coal.delivery(st,B.report(st.host_id),p,{distance=distance,
           current_payment=option("current_payment",tick),date=option("economy_date",tick) or s.day,refused=ctx.refused})
+        if Sim.stock_town_accept then Sim.stock_town_accept(s,st.town,"coal",result.accepted,0) end
         local l=v.load_state
         l.coal_accepted=(l.coal_accepted or 0)+result.accepted
         for _,plant in ipairs(result.plants) do

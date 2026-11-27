@@ -301,6 +301,16 @@ match those stock snapshots. The original company never ran vehicles;
 this verifies funded town growth and persistence, not company finance or
 served-station parity.
 
+Cargo reception uses the stock split between a station's associated town
+and the industries it serves. A completed delivery counts toward that
+town's monthly growth effect; only units not consumed by an industry
+enter its town-only acceptance history. Covered houses can supply
+acceptance without changing the town to which the station belongs.
+Feeder transfers and replayed receipts do not count. The live bus
+simulation, graphical ferry test and shared Goods pipeline verify totals.
+The Goods test unlocks the stock growth gate on one month boundary and
+fails it again when the next month contains no deliveries.
+
 The monthly town callback now runs after animation and before the tile
 loop of the last tick in the 74-tick batch entering the new month.
 Funding and roadwork expiry, station service ages and authority ratings

@@ -8,6 +8,8 @@ local Coal=m("openttd/coal_industry")(P,K,A,I)
 local Goods=m("openttd/town_goods")
 local T=m("openttd/timber_industry")(P,A,K,I,Coal,Goods)
 local R=m("timber_industry_runtime")(T,A)
+local Town=m("openttd/town_growth")
+local Stats=m("openttd/town_cargo_stats")
 local function copy(v)
   if type(v)~="table" then return v end
   local x={}
@@ -26,6 +28,7 @@ local world={sites={
   {id=4,x=29,z=10,tile=id(29,10),town=73,owner="R",tiles={{x=29,y=10,kind="bus"}}},
 }}
 local ledger,clock=R.new(),H.new_clock(6,6)
+world.stock_town_growth={towns={[72]=Town.new(72,1,1),[73]=Town.new(73,2,2),[75]=Town.new(75,3,3)}}
 local houses={[id(30,10)]={id=0,town=75},[id(31,10)]={id=1,town=75,completed=false}}
 local a,b,source,sawmill,town
 local function bind()
@@ -33,6 +36,7 @@ local function bind()
   source,sawmill,town=world.stations[1],world.stations[2],world.stations[3]
   return R.bind(world,ledger,{width=64,height=64,xy=xy,stations=world.stations,
     industries=world.sites,random_u32=function()return 4294967295 end,
+    town_accept=Stats.accept,
     house_at=function(x,z)return houses[id(x,z)] end})
 end
 local B=bind()
@@ -103,6 +107,9 @@ local receipt=assert(B.finish(2,tick))
 assert(#receipt.deliveries==2 and receipt.conversion[1].consumed==20 and receipt.conversion[1].produced==20)
 assert(b.accepted.waiting==0 and b.produced.waiting==20 and b.was_cargo_delivered)
 assert(not B.finish(2,tick) and select(2,B.stage(2,tick,"late duplicate",p,sawmill.tile))=="STALE_STATION_SCAN")
+local processing_town=world.stock_town_growth.towns[72]
+assert(processing_town.received[0].new_act==20 and not processing_town.accepted.wood,
+  "Industrial acceptance has a town effect but must not credit town-only Goods history")
 assert(select(3,B.tile_visit(b.tiles[1].x,b.tiles[1].z,tick))=="LANDSCAPE_PHASE_CLOSED")
 assert(#T.queue(sawmill,"goods")==0,"Goods must not appear in the unload scan or same-tick terrain phase")
 B.produce(10,tick);B.produce(13,tick)
@@ -121,10 +128,22 @@ tick=clock.counter+1
 local paid=assert(B.stage(3,tick,"bus-no/stockgoods138",load,town.tile))
 assert(paid.units==14 and paid.remaining==0 and paid.town==73 and paid.distance==10 and paid.age==9)
 assert(paid.payment==I.regular(14,10,9,6144,5,28) and #paid.industries==0)
+local feeder=assert(B.stage(3,tick,"goods138/feeder",load,town.tile,{transfer=true}))
+assert(feeder.units==0 and feeder.payment==0)
 assert(B.finish(3,tick).deliveries[1].payment==paid.payment)
 assert(goods[1].units==6 and b.produced.current.transported==20 and b.produced.current.production==20)
 world,ledger=copy(world),copy(ledger);B=bind()
 assert(not B.finish(3,tick) and not B.stage(3,tick,"bus-no/stockgoods138",load,town.tile))
+local nearby=world.stock_town_growth.towns
+assert(nearby[73].received[3].new_act==14 and nearby[73].accepted.goods.new_act==14 and not nearby[75].received[3],
+  "Credit the station-associated town, not the houses that established acceptance")
+nearby[73].goal[3]=14
+assert(Town.month(nearby[73],{{x=2,z=2,time_since_load=0}},2),
+  "The stock growth gate must see the actual Goods receipt on the next month")
+assert(nearby[73].received[3].old_act==14 and nearby[73].received[3].new_act==0
+  and nearby[73].accepted.goods.old_act==14 and nearby[73].accepted.goods.new_act==0)
+assert(not Town.month(nearby[73],{{x=2,z=2,time_since_load=0}},2),
+  "Last month's Goods must not qualify a second month with no deliveries")
 
 -- Saturation, ordered distinct real tile batches, editor/closure and
 -- rainfall/economy changes are separate from a station's sale.

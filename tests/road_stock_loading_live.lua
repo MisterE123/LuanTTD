@@ -1,6 +1,7 @@
 local root="mods/luanttd_core/"
 local S=dofile(root.."sim.lua")
 local T=dofile(root.."openttd/terrain.lua")
+local G=dofile(root.."openttd/town_growth.lua")
 local function ck(a,b) assert(a==b,tostring(a).." != "..tostring(b)) end
 local function copy(x)
   if type(x)~="table" then return x end
@@ -42,6 +43,14 @@ ck(#S.road_loading_events(old),0)
 -- stopped first vehicle's used bay until it physically exits the box,
 -- including after serialized reload in mid full-load waiting.
 local s,A,B,spawn=campaign(true,false)
+local towns={}
+for _,site in ipairs(s.sites) do
+  if site.kind=="town" then
+    local x,z=S.xy(site.tile)
+    towns[site.id]=G.new(site.id,x,z)
+  end
+end
+s.stock_town_growth={towns=towns}
 local one,two=spawn("full"),spawn("normal")
 local departed,reloaded,blocked,boarding,arrival_tick,first_fare_tick=false,false,false,0
 local same_day=false
@@ -106,6 +115,13 @@ assert(boarding>=S.vehicles.bus.capacity)
 local v,w=s.fleet[one],s.fleet[two]
 assert(v.delivered>=S.vehicles.bus.capacity and v.last_fare.amount>0)
 assert(w.last_road_arrival_tick>arrival_tick and s.companies.Test.paid_units>=v.delivered)
+local received,accepted=0,0
+for _,town in pairs(s.stock_town_growth.towns) do
+  received=received+((town.received[1] or {}).new_act or 0)
+  accepted=accepted+((town.accepted.passenger or {}).new_act or 0)
+end
+assert(received==s.companies.Test.paid_units and accepted==received and received>0,
+  "Genuine road unloading must report each paid passenger exactly once")
 print(("PASS: native 74-tick clock one bay blocked across reload, bus arrival %d, payout %d, and same-day onward departure")
   :format(arrival_tick,first_fare_tick))
 
