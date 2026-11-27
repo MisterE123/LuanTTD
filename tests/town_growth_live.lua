@@ -144,3 +144,43 @@ do
   assert(draws>0,"Ordinary road should allow the stock lot selection")
   print("PASS ordinary live house growth: no lots beside only tram, allowed beside a diagonal road")
 end
+
+-- Use the real live board, house writer, coast clear command and native
+-- tile records. Drive only the initiating search result deterministically.
+do
+  local s=world()
+  s.stock_generated_profile={}
+  Sim.mount_coastal_flood(s)
+  local x,z=5,15
+  local id,river=Sim.id(x,z),Sim.id(x+1,z)
+  if Terrain.tile(s.corner_grid,x,z)==0 then
+    assert(Terrain.apply(s.corner_grid,assert(Terrain.plan(s.corner_grid,x,z,1,true,{freeform_edges=false}))))
+  end
+  local slope=Terrain.tile(s.corner_grid,x,z)
+  assert(slope==1 or slope==2 or slope==4 or slope==8)
+  local tile={terrain="water",water_class="sea",coastal_water=true,stock_water_rocks=true}
+  s.tiles[id]=tile
+  s.tiles[river]={terrain="water",water_class="river"}
+  local board=W.road_board(s)
+  assert(board.clear_quote(x,z,"house"))
+  assert(not board.clear_quote(x+1,z,"house"))
+  tile.owner="Private"
+  assert(not board.clear_quote(x,z,"house"))
+  tile.owner=nil
+  local tid=s.stock_town_growth.order[1]
+  local town=s.stock_town_growth.towns[tid]
+  local prior=B.grow
+  s.stock_town_growth.order={tid}
+  town.growing,town.grow_counter=true,0
+  B.grow=function(t,b,options,random)
+    assert(t==town and b.clear_quote(x,z,"house"))
+    return {kind="house",town=tid,id=6,x=x,z=z,random_bits=22,
+      parts={{town=tid,id=6,x=x,z=z,root=true,root_x=x,root_z=z,completed=false,stage=0,counter=0}}}
+  end
+  local previous=town.num_houses
+  W.tick(s,3000,function()return 0 end)
+  B.grow=prior
+  assert(tile.house and tile.source_house.id==6 and not tile.coastal_water and not tile.water_class
+    and tile.terrain~="water" and s.tiles[river].water_class=="river" and town.num_houses==previous+1)
+  print("PASS ordinary live town house clears only the selected unowned shore tile, preserving adjacent river")
+end

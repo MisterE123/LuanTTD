@@ -124,6 +124,11 @@ its trees, no company pays or receives a tree-clear rating penalty, and
 private trees and developed plots stay protected. Native Lua authority
 tests reopen the actual house and verify adjacent trees persist.
 
+Live house construction also accepts unowned coast and rocky coast when
+RC1's NoWater clear quote permits it. The municipal clear command
+applies only to the committed house footprint. Adjacent river or actual
+sea tiles and owned property are not cleared by this path.
+
 Completed houses age on the stock year boundary and cap at 255; unfinished
 buildings do not age. The rebuild check uses the saved completion year to
 calculate the same age without a map-wide scan. The native generator test

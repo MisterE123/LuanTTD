@@ -24,15 +24,16 @@ return function(Sim,Terrain,G,B,H)
       at(s.level_crossing_tiles,id) or at(s.bridge_above,id) or at(s.tunnel_below,id) or
       at(s.rail_bridge_above,id) or at(s.rail_tunnel_below,id) or at(s.aqueduct_above,id)
   end
-  local function clear_levels(s,id,allow_tree)
+  local function clear_levels(s,id,allow_tree,allow_coast)
     local tile=at(s.tiles,id)
-    if not tile or tile.terrain~="grass" and tile.terrain~="hill" or tile.owner or tile.site or
+    local coast=tile and allow_coast and tile.terrain=="water" and tile.coastal_water
+    if not tile or tile.terrain~="grass" and tile.terrain~="hill" and not coast or tile.owner or tile.site or
       tile.stock_void or tile.stock_object or at(s.stock_farm_fields,id) or
       tile.wood and not allow_tree or tile.house or tile.source_house or tile.build or tile.station or tile.parcel or
       tile.road_bits or tile.road_town or protected(s,id,tile) then return end
     local x,z=Sim.xy(id)
     local slope,base,top=Terrain.tile(s.corner_grid,x,z)
-    if slope and slope<16 then return top,slope,base end
+    if slope and slope<16 and (not coast or Sim.town_clear_coast(s,id,false)) then return top,slope,base end
   end
   local function board(s,allow_tree)
     return {
@@ -47,11 +48,15 @@ return function(Sim,Terrain,G,B,H)
               road_bits=t.road_bits or 0}
           end
         end
-        local top,slope=clear_levels(s,id,allow_tree)
-        if top then return {kind=t.wood and "trees" or "clear",slope=slope,max_z=top*8} end
+        local top,slope=clear_levels(s,id,allow_tree,allow_tree)
+        if top then
+          local coast=t.terrain=="water" and t.coastal_water
+          return {kind=coast and "water" or t.wood and "trees" or "clear",coast=coast,
+            slope=slope,max_z=top*8}
+        end
         return {kind=t.terrain=="water" and "water" or t.house and "house" or "object",protected=true}
       end,
-      clear_quote=function(x,z,kind) return kind=="house" and clear_levels(s,Sim.id(x,z),allow_tree)~=nil end,
+      clear_quote=function(x,z,kind) return kind=="house" and clear_levels(s,Sim.id(x,z),allow_tree,allow_tree)~=nil end,
       house_supported=function(id) return names[id]~=nil end,
       house_roadtypes=HouseRoadTypes.on_board(Sim,s),
     }
@@ -195,7 +200,7 @@ return function(Sim,Terrain,G,B,H)
       return available(s,id,at(s.tiles,id))
     end
     return roads(Sim,Terrain,s,G,Worldgen,read,{
-      houseable=function(x,z) return clear_levels(s,Sim.id(x,z),true)~=nil end,
+      houseable=function(x,z) return clear_levels(s,Sim.id(x,z),true,true)~=nil end,
       roadable=roadable,
       span_ends=function(x,z,u,v) return roadable(x,z) and roadable(u,v) end,
       bridge_clears=function(ids)
@@ -266,7 +271,7 @@ return function(Sim,Terrain,G,B,H)
     if not proposal or proposal.kind~="house" or proposal.town~=t.id then return false end
     local style=names[proposal.id]
     local allow_tree=s.stock_generated_profile and not write_house
-    local get_level=function(id) return clear_levels(s,id,allow_tree) end
+    local get_level=function(id) return clear_levels(s,id,allow_tree,allow_tree) end
     local parts,level=names.inspect(Sim,proposal,get_level)
     if not parts then return false end
     local root=parts[1]
@@ -278,8 +283,13 @@ return function(Sim,Terrain,G,B,H)
       wrote=true
       for _,part in ipairs(parts) do
         local tile=s.tiles[part.id]
-        local _,_,base=clear_levels(s,part.id,allow_tree)
-        if tile.wood then
+        local _,_,base=clear_levels(s,part.id,allow_tree,allow_tree)
+        local coast=tile.terrain=="water" and tile.coastal_water
+        if coast then
+          -- RC1's NoWater flag prohibits clearing actual water, not a
+          -- coast or rocky coast. Reuse the exact municipal clear quote.
+          assert(Sim.town_clear_coast(s,part.id,true))
+        elseif tile.wood then
           -- RC1 ClearTile_Trees: OWNER_TOWN does not debit or change
           -- the rating of a company; clear this exact footprint only.
           tile.wood,tile.stock_clear_ground,tile.stock_clear_density,tile.stock_clear_visits=nil,nil,nil,nil
@@ -288,6 +298,7 @@ return function(Sim,Terrain,G,B,H)
         tile.house,tile.source_house,tile.h=true,part.record,base
         if s.stock_town_lifts and Lift.supports(part.record) then Lift.install(s.stock_town_lifts,part.id,Sim) end
         visual_changed(s,part.id)
+        if coast then Sim.invalidate_live_sea_near(s,part.id) end
       end
       B.house_committed(t,proposal,views,growth_setting(s))
       t.last_build={tile=id,house=h.id,tick=tick,name=style.name}
