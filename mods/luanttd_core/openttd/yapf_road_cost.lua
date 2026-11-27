@@ -11,6 +11,11 @@ return function(F)
     road_stop_occupied_penalty=800,road_stop_bay_occupied_penalty=1500}
   local min,max,abs,floor=math.min,math.max,math.abs,math.floor
   local has=F.has_trackdir
+  -- RC1 Count() > 1 terminates the segment; GetNthSetBit(0) is only
+  -- needed for a one-bit mask. No enumeration or temporary list on a
+  -- through tile. Follow always returns at least one bit on success.
+  local single={}
+  for td=0,13 do single[2^td]=td end
   local function setting(settings,k)
     return settings and settings[k] or defaults[k]
   end
@@ -102,6 +107,7 @@ return function(F)
     local cost,tiles=0,0
     local tile,td=node.tile,node.td
     local parent_cost=node.parent and node.parent.cost or 0
+    local f,max_vehicle
     while true do
       if record then record(tile,td) end
       local old=board.tile(tile)
@@ -110,17 +116,21 @@ return function(F)
       if max_cost and max_cost>0 and parent_cost+cost>max_cost then return false end
       if old.kind=="depot" and td==F.direction_trackdir(F.reverse_direction(old.dir)) then break end
 
-      local f=F.follow(board,v,tile,td,old)
+      -- Segment cost consumes the follower synchronously before this
+      -- loop advances. Don't allocate a new result on every through tile.
+      f=F.follow(board,v,tile,td,old,f)
       if not f.ok then break end
-      local choices=F.trackdirs(f.trackdirs)
-      if #choices>1 then break end
-      local next_td=assert(choices[1])
+      local next_td=single[f.trackdirs]
+      if next_td==nil then
+        if f.trackdirs==0 then error("successful road follower has no trackdir") end
+        break
+      end
       if f.tile==node.tile and next_td==node.td then return false end
 
       cost=cost+f.skip*C.TILE_LENGTH
       tiles=tiles+f.skip+1
       cost=cost+C.slope(board,tile,f.tile,settings)
-      local max_vehicle=min(v.display_max_speed,(v.order_max_speed or 65535)*2)
+      max_vehicle=max_vehicle or min(v.display_max_speed,(v.order_max_speed or 65535)*2)
       local limit,min_speed=F.speed_limit(old,v.tram)
       if limit<max_vehicle then
         cost=cost+floor(C.TILE_LENGTH*(max_vehicle-limit)*(4+f.skip)/max_vehicle)

@@ -1362,18 +1362,25 @@ local function road_shape(s,id,t)
 end
 function M.road_surface(s,id) return road_shape(s,id,s.tiles[id]) end
 function M.road_bits(s,id) return bits_for(s,id,s.tiles[id]) end
-function M.road_center_z(s,id)
+function M.road_center_z(s,id,surface)
   load_road_rules()
-  local slope,base=road_shape(s,id,s.tiles[id])
+  local slope,base
+  if surface then slope,base=surface(id) else slope,base=road_shape(s,id,s.tiles[id]) end
   return base*8+slope_rules.pixel(8,8,slope)
 end
 function M.road_edge(s,id,d)
   local t=s.tiles[id]
   return road_flags[d] and has_edge(bits_for(s,id,t),d) or false
 end
-local function profiles_match(s,a,ta,b,tb,d)
-  local sa,ha=road_shape(s,a,ta)
-  local sb,hb=road_shape(s,b,tb)
+local function profiles_match(s,a,ta,b,tb,d,surface)
+  local sa,ha,sb,hb
+  if surface then
+    sa,ha=surface(a)
+    sb,hb=surface(b)
+  else
+    sa,ha=road_shape(s,a,ta)
+    sb,hb=road_shape(s,b,tb)
+  end
   if not sa or not sb then return false end
   -- Both edges are constant on a flat surface; only the two
   -- elevations matter. Keep the original tolerance.
@@ -1399,12 +1406,12 @@ local function connected(s,id,d,plan)
 end
 -- Used by the YAPF adapter. This deals only with actual connected
 -- surfaces; stock road-vehicle access gates belong to the stock follower.
-function M.road_geometry_connected(s,id,d,j)
+function M.road_geometry_connected(s,id,d,j,surface)
   if not j or adjacent(id,d)~=j then return false end
   local a,b=s.tiles[id],s.tiles[j]
   if not road_kind(a) or not road_kind(b) then return false end
   if not has_edge(bits_for(s,id,a),d) or not has_edge(bits_for(s,j,b),opposite(d)) then return false end
-  if s.corner_grid then return profiles_match(s,id,a,j,b,d) end
+  if s.corner_grid then return profiles_match(s,id,a,j,b,d,surface) end
   return a.h==b.h
 end
 function M.road_connected(s,id,d)

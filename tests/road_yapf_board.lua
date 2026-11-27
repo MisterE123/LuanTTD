@@ -135,3 +135,27 @@ for i=1,10 do
   end
 end
 print("PASS: source poses for depot, detour, bay turnaround, opposing lanes and inner corner")
+
+-- The live board caches geometry across expansion and trace only within
+-- one read-only traversal. A new search must see the edited infrastructure.
+do
+  local Terrain=dofile(root.."openttd/terrain.lua")
+  local world=Sim.new(1751)
+  world.corner_grid=Terrain.new(Sim.W,Sim.H,function() return 2 end)
+  local a,b=at(2,2),at(3,2)
+  world.tiles[a].build,world.tiles[a].road_bits="road",10
+  world.tiles[b].build,world.tiles[b].road_bits="road",10
+  local original=Sim.road_surface
+  local calls=0
+  Sim.road_surface=function(...) calls=calls+1;return original(...) end
+  local board=make_board(Sim,world,F)
+  assert(board.edge_available(a,b,F.SW) and board.edge_available(a,b,F.SW))
+  assert(not board.edge_available(a,b+1,F.SW),"the same direction must not admit a different neighbor")
+  assert(board.edge_available(b,a,F.NE) and board.center_z(a)==16 and board.center_z(b)==16 and calls==2)
+  world.tiles[b].road_bits=2
+  assert(not make_board(Sim,world,F).edge_available(a,b,F.SW),"new traversal must see the missing entrance edge")
+  world.tiles[b].road_bits=10
+  assert(make_board(Sim,world,F).edge_available(a,b,F.SW),"new traversal must not inherit a cached refusal")
+  Sim.road_surface=original
+end
+print("PASS read-only traversal shares real surface profiles and fresh searches see edits")

@@ -848,3 +848,33 @@ tests/road_fleet_perf_native.sh luantiserver a4b4e54 ../fleet-frame-perf
 lua5.1 tests/road_traffic_runtime.lua
 python3 tests/road_speed_upstream.py /path/to/OpenTTD-16.0-RC1/src
 ```
+
+## Share physical road profiles within one stock route search
+
+The read-only YAPF board now shares a road tile's foundation slope and
+base between its center-height query and neighboring edge checks.
+Directed edge checks (including refusals) are memoized only for that
+board, and still require the correct neighbor. A later route search
+builds a fresh board and sees completed construction, removal and
+terraforming. Live crossing reservations, ownership compatibility and
+one-way checks are not cached by this geometry path.
+
+The segment-cost loop also follows RC1's one-bit continuation test
+without building a trackdir list for every road tile, and reuses its
+private follower record on the same segment. A reused record clears
+bridge, tunnel, station, reversal and error fields before each step.
+
+In two native Luanti 5.15.2 async runs with a fresh board per search,
+median CPU for 32 routing and trace operations on a built 128×128
+grid was **2264 → 2008 ms** and **2313 → 1927 ms** (11–17% lower;
+first warm-up pair excluded). Every selected route, score, cap flag
+and the 94,825 closed nodes per batch matched. A separate 256×256
+replay with 128 road vehicles and two paid freight consists checked
+equal durable state and aliases on day 35. It is not a general FPS
+or map-generation benchmark.
+
+```sh
+tests/road_yapf_keys_perf_native.sh luantiserver db7b715 ../road-yapf-cached-geometry
+lua5.1 tests/yapf_road_follow.lua
+lua5.1 tests/road_yapf_board.lua
+```

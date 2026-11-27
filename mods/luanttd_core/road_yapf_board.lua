@@ -75,8 +75,26 @@ return function(Sim,s,F,occupancy)
   function B.adjacent(id,dir)
     return Sim.adjacent(id,4-dir)
   end
+  -- Membership and grade are independent of the vehicle within
+  -- this read-only board. Preserve the exact neighbor assertion on
+  -- every query, and keep false answers as well as valid edges.
+  local edges,slopes,bases={},{},{}
+  local function surface(id)
+    local h=bases[id]
+    if h~=nil then return slopes[id],h end
+    local shape,base=Sim.road_surface(s,id)
+    slopes[id],bases[id]=shape,base
+    return shape,base
+  end
   function B.edge_available(from,to,d)
-    return Sim.road_geometry_connected(s,from,4-d,to)
+    if not to or B.adjacent(from,d)~=to then return false end
+    local key=4*from+d
+    local value=edges[key]
+    if value==nil then
+      value=Sim.road_geometry_connected(s,from,4-d,to,surface)
+      edges[key]=value
+    end
+    return value
   end
   -- Like the tile descriptors above, this cache belongs only to the
   -- synchronous traversal (or the read-only passing board for one tick).
@@ -85,7 +103,7 @@ return function(Sim,s,F,occupancy)
   function B.center_z(id)
     local z=center_heights[id]
     if z==nil then
-      z=Sim.road_center_z(s,id)
+      z=Sim.road_center_z(s,id,surface)
       center_heights[id]=z
     end
     return z

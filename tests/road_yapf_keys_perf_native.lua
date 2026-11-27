@@ -25,7 +25,8 @@ core.after(0,function()
     local base_search,new_search=lib("old_search"),lib("openttd/yapf_road_search")
     local version={{old,base_search},{candidate,new_search}}
     local Sim,T=lib("sim"),lib("openttd/terrain")
-    Sim.W,Sim.H=128,128
+    local old_sim=lib("old_sim")
+    Sim.W,Sim.H,old_sim.W,old_sim.H=128,128,128,128
     local S=Sim.new(1751)
     S.sites={}
     S.corner_grid=T.new(128,128,function() return 1 end)
@@ -46,16 +47,19 @@ core.after(0,function()
     local expect={}
     local function roads(which)
       local f,factory=unpack(version[which])
-      local C=lib("openttd/yapf_road_cost")(f)
+      local C=lib(which==1 and "old_cost" or "openttd/yapf_road_cost")(f)
       local search=factory(f,C)
-      local board=lib("road_yapf_board")(Sim,S,f)
+      local make_board=lib(which==1 and "old_board" or "road_yapf_board")
+      local active_sim=which==1 and old_sim or Sim
       local t,c=core.get_us_time(),os.clock()
       local nodes=0
       for i=1,16 do
         local here,to=id(14,8+4*i),S.tiles[id(119,120-4*i)].station
         local v={tile=here,display_max_speed=112,bus=true,owner="High Street"}
-        local target=C.destination(board,v,{kind="station",station=to})
         for k=1,2 do
+          -- The live game binds a fresh read-only board for each search.
+          local board=make_board(active_sim,S,f)
+          local target=C.destination(board,v,{kind="station",station=to})
           local settings={disable_node_optimization=k==2}
           local hit,route,stats=search.find(board,v,here,2^f.direction_trackdir(f.SW),target,settings)
           assert(hit and route)

@@ -176,11 +176,18 @@ local function can_enter(board,v,entry,res)
   return true
 end
 
-function R.follow(board,v,old_id,old_td,source_record)
+function R.follow(board,v,old_id,old_td,source_record,scratch)
   local old=source_record or board.tile(old_id)
-  local res={old_tile=old_id,old_td=old_td,tile=nil,trackdirs=0,
-    exit=exitdir[old_td],skip=0,station=false,bridge=false,tunnel=false,
-    error=R.EC_NONE,ok=false}
+  local res=scratch
+  if res then
+    res.old_tile,res.old_td,res.tile,res.trackdirs=old_id,old_td,nil,0
+    res.exit,res.skip,res.station,res.bridge,res.tunnel=exitdir[old_td],0,false,false,false
+    res.error,res.ok,res.reversed=R.EC_NONE,false,nil
+  else
+    res={old_tile=old_id,old_td=old_td,tile=nil,trackdirs=0,
+      exit=exitdir[old_td],skip=0,station=false,bridge=false,tunnel=false,
+      error=R.EC_NONE,ok=false}
+  end
   if res.exit==nil or not (has(R.status(old,v.tram),old_td) or
       (v.tram and single_tram(old)~=nil)) then
     res.error=R.EC_NO_WAY

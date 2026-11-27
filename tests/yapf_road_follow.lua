@@ -56,3 +56,24 @@ tiles[2]=nil
 f=next_tile()
 assert(f.ok and f.tile==1 and f.reversed)
 print("PASS: directional road transitions, reversal, stop/depot orientation and grade adapter")
+
+-- Segment scratch must not leak the previous portal, reversal or failure.
+do
+  local scratch={}
+  local function compare(old_tile,td)
+    local old=Y.follow(board,bus,old_tile,td)
+    local now=Y.follow(board,bus,old_tile,td,nil,scratch)
+    assert(now==scratch)
+    for k,v in pairs(old) do assert(now[k]==v,k) end
+    for k,v in pairs(now) do assert(old[k]==v,k) end
+  end
+  tiles[1]={kind="bridge",dir=Y.SW,roadtype=0,other=2,skip=31,bridge_speed=64}
+  tiles[2]={kind="bridge",dir=Y.NE,roadtype=0,other=1,skip=31,bridge_speed=64}
+  compare(1,sw);assert(scratch.bridge and scratch.skip==31)
+  tiles[1],tiles[2]=road(10),nil
+  compare(1,sw);assert(scratch.reversed and not scratch.bridge and scratch.skip==0)
+  tiles[2]={kind="bay_stop",dir=Y.NE,roadtype=0,owner="A"}
+  compare(1,sw);assert(scratch.station and not scratch.reversed)
+  compare(1,15);assert(not scratch.ok and not scratch.station and scratch.tile==nil)
+end
+print("PASS reused stock follower fields match fresh results across bridge, reversal, stop and failure")
