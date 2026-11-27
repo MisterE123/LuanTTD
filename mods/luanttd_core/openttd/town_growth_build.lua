@@ -128,7 +128,7 @@ return function(G,catalog)
     if rb==0 or not board.road_quote then return end
     local current=board.tile(x,z)
     if disallowed(current) or current.occupied or (current.road_disallowed or 0)~=0 or
-      current.kind~="road" and current.kind~="clear" and not current.coast or current.road_town and current.road_town~=t.id
+      current.kind~="road" and current.kind~="clear" and current.kind~="trees" and not current.coast or current.road_town and current.road_town~=t.id
       or current.owner then return end
     if d~=nil then
       if not board.clean_road_bits then return end
@@ -273,8 +273,11 @@ return function(G,catalog)
     x,z=startx,startz
     for _,delta in ipairs(walk_seed) do
       local q=board.tile(x,z)
-      if not disallowed(q) and (q.kind=="clear" or q.coast) and not q.owner and not q.occupied and
-          (not board.clear_quote or board.clear_quote(x,z,"road")) then
+      -- GrowTown's roadless fallback uses the natural flatness, not
+      -- the foundation that an ordinary road command could build.
+      local seed_quote=board.seed_road_clear_quote or board.clear_quote
+      if not disallowed(q) and q.slope==0 and (q.kind=="clear" or q.kind=="trees" or q.coast) and
+          not q.owner and not q.occupied and (not seed_quote or seed_quote(x,z,"road")) then
         local r=random()
         local a,b=r%4,floor(r/256)%4
         if a==b then b=(b+2)%4 end

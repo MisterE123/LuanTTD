@@ -133,3 +133,22 @@ eq(B.grid_bits(t,12,12,2,0),15)
 eq(B.grid_bits(t,12,13,1,0),5)
 eq(B.grid_bits(t,13,12,2,0),10)
 print("PASS exact town service gate, month/fund/tick, nondestructive house selection, and physical construction to cargo")
+
+-- A town whose last street was demolished must ignore a slope that
+-- normally supports a road foundation, and can seed on flat trees.
+do
+  local t=G.new(1,12,12)
+  local tiles={}
+  tiles["12:12"]={kind="clear",slope=3}
+  tiles["11:12"]={kind="trees",slope=0}
+  local cleared={}
+  local board={tile=function(x,z) return tiles[x..":"..z] end,
+    seed_road_clear_quote=function(x,z) cleared[#cleared+1]={x,z}; return true end,
+    road_quote=function(_,x,z,bits)
+      assert(x==11 and z==12 and bits==10)
+      return {bits=bits}
+    end}
+  local road=assert(B.grow(t,board,{year=1950,allow_roads=true},rng({257})))
+  assert(road.x==11 and road.z==12 and road.bits==10)
+  assert(#cleared==1 and cleared[1][1]==11 and cleared[1][2]==12)
+end

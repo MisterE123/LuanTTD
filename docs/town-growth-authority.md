@@ -169,6 +169,18 @@ observation with 24,052 municipal street tiles. Over the next 22
 simulation days it reached 24,094 without player construction.
 The existing 58 public bridges and one tunnel were preserved.
 
+### Recovering a roadless town
+
+The stock roadless fallback searches from the town center in RC1's
+coordinate order. It skips non-flat natural ground even when a manually
+built road could use a foundation there. An eligible flat tree tile can
+be cleared for the first street. [8,192 comparisons](../tests/town_reseed_rc1.py)
+verify choice, road bits and RNG consumption against the compiled
+no-existing-street branch. A native worker test clears a flat wooded lot,
+leaves the neighboring slope and protected industry intact, and projects
+the new public road after reopening the checkpoint. This compares
+supported natural land and woods, not every stock clear command class.
+
 ## Served rail, ferry, and airport stations
 
 The town's growth check uses the station sign and the same load/unload

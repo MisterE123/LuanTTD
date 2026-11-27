@@ -47,6 +47,13 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
     if t.coast then return Sim.town_clear_coast(s,Sim.id(x,z),false)~=nil end
     return t.kind=="clear"
   end
+  function B.seed_road_clear_quote(x,z)
+    local t=B.tile(x,z)
+    if not t or t.slope~=0 or t.owner or t.bridge_above or
+        live and not live.roadable(x,z) then return false end
+    if t.kind=="trees" then return true end
+    return B.clear_quote(x,z,"road")
+  end
   function B.road_allowed(town,x,z,d,random)
     local t=B.tile(x,z)
     if not t or B.distance_to_edge(x,z)<=0 or t.road_town and t.road_town~=town.id then return false end

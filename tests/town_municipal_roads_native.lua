@@ -17,16 +17,24 @@ s.passenger_house_clock=load_("openttd/town_passengers").new_clock(6,6,nil,4*74)
 s.stock_town_growth={version=1,order={1},towns={}}
 local mode=core.settings:get("luanttd_qa_municipal_kind") or "road"
 local span=mode=="bridge" or mode=="tunnel"
+local reseed=mode=="reseed"
 if span then s.passenger_rating_rng={3,3} end -- exercise the stock two-word RNG
 local cx,cz=span and 13 or 11,span and 17 or 12
 local center,protected=S.id(cx,cz),S.id(cx,cz+1)
-local target=mode=="road" and "road" or "stock_road_"..mode
+local target=not span and "road" or "stock_road_"..mode
 s.sites={{id=1,kind="town",name="Grid Town",tile=center,population=0,stock={},produced={},received={}}}
 local town=G.new(1,cx,cz,{layout="grid2",grow_counter=0})
-town.growing,town.growth_rate=true,0
+town.growing,town.growth_rate=true,reseed and 15000 or 0
 s.stock_town_growth.towns[1]=town
 for id in ipairs(s.tiles) do s.tiles[id]={h=1,terrain="grass",variant=1} end
-assert(S.town_road_piece(s,1,center,10,true))
+local wooded=S.id(cx-1,cz)
+if reseed then
+  s.corner_grid.levels[(cz-1)*65+cx+1]=2
+  assert(T.tile(s.corner_grid,cx,cz)~=0 and T.tile(s.corner_grid,cx-1,cz)==0)
+  s.tiles[wooded].wood=1
+else
+  assert(S.town_road_piece(s,1,center,10,true))
+end
 s.tiles[protected].stock_industry={id=77}
 if mode=="bridge" then
   for x=cx+2,cx+3 do
@@ -54,7 +62,12 @@ local function ask()
       if row.id~=center and row.surface.build==target and row.surface.road_town==1 then newroad=row.id end
     end
     assert(guard and guard.stock_industry.id==77 and not guard.build)
-    assert(junction and junction.build=="road" and junction.road_town==1)
+    if reseed then
+      assert(not junction or not junction.build)
+      if newroad then assert(newroad==wooded) end
+    else
+      assert(junction and junction.build=="road" and junction.road_town==1)
+    end
     if newroad then
       assert(r.actor_tick>=s.passenger_house_clock.counter)
       closing=true
@@ -87,7 +100,9 @@ core.register_on_mods_loaded(function()
       end
     else assert(created.road_bits>0) end
     assert(not next(next_.companies) and next_.tiles[protected].stock_industry.id==77)
-    if not span then assert(next_.tiles[center].road_bits~=10) end
+    if reseed then
+      assert(not created.wood and not next_.tiles[center].build)
+    elseif not span then assert(next_.tiles[center].road_bits~=10) end
     cap.autoplay=false
     assert(client.start(cap,function(ready)
       assert(ready.ready and ready.day==day)
