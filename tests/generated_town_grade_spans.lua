@@ -12,7 +12,7 @@ local Generation=load("campaign_generation")({settings={get=function() return ni
     p:close()
     return names
   end},root:gsub("/$",""),Sim,load("world_setup"))
-local s=Generation.run({width=128,depth=128,seed=798,relief=3,sea=0,coast=0,rivers=2,towns=3})
+local s=Generation.run({width=256,depth=256,seed=1,relief=3,sea=0,coast=0,rivers=3,towns=3})
 assert(s.corner_grid.revision>0 and next(s.companies)==nil and s.chair==nil)
 local slopes,settled=0,0
 for id,t in ipairs(s.tiles) do
@@ -72,5 +72,5 @@ ok,price=Sim.remove_road_tunnel(s,owner,tunnel.start,true)
 assert(ok and price==(#tunnel.middle+2)*110 and company.cash==before)
 assert(Sim.remove_road_tunnel(s,owner,tunnel.start))
 assert(company.cash==before-price and not s.stock_road_tunnels[tunnel_id])
-print(("PASS RC1 seed 798: %d inclined streets, %d finished house parcels, %d river tiles under a public bridge, public bore, bidirectional route, exact save and council demolition")
+print(("PASS RC1 seed 1: %d inclined streets, %d finished house parcels, %d river tiles under a public bridge, public bore, bidirectional route, exact save and council demolition")
   :format(slopes,settled,wet))

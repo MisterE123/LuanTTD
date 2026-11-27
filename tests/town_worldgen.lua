@@ -16,7 +16,7 @@ local function tile(x,z)
 end
 local board={width=64,height=64,tile=tile}
 local roll,draws=list({7})
-assert(W.count(board,{difficulty=2},roll)==2 and draws()==1)
+assert(W.count(board,{difficulty=2},roll)==9 and draws()==1)
 assert(W.count(board,{difficulty=4,custom_count=3},roll)==3 and draws()==1)
 assert(W.count({width=128,height=64,tile=tile},{difficulty=4,editor=true},function()return 0 end)==1)
 assert(W.can_place(board,{},12,12))

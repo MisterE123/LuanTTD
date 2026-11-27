@@ -24,10 +24,13 @@ function M.landscape(Sim,Terrain,Generator,settings)
   local corner=Terrain.new(Sim.W,Sim.H,map.corner,{freeform_edges=settings.freeform_edges,max_height=255,
     pulse=settings.corner_progress})
   s.corner_grid=corner
+  local dry_count=0
   for z=1,Sim.H do
     if settings.host_progress and (z-1)%16==0 then settings.host_progress((z-1)/Sim.H) end
     for x=1,Sim.W do
       local kind,ground,clear_ground,water_rocks=Generator.describe(map.tile(x,z))
+      -- Map::CountLandTiles counts every non-water tile, including void.
+      if kind~=6 then dry_count=dry_count+1 end
       local _,base=Terrain.tile(corner,x,z)
       local t={h=base,variant=(3*x+5*z+math.floor(x*z/16))%4}
       if kind==7 then t.terrain="water";t.stock_void=true
@@ -47,6 +50,7 @@ function M.landscape(Sim,Terrain,Generator,settings)
   persisted.progress,persisted.corner_progress,persisted.host_progress=nil,nil,nil
   s.stock_generated_profile={version=1,width=Sim.W,depth=Sim.H,terrain="terragenesis-14.1",
     settings=persisted,terrain_rng=copy(map.rng_after),clear_attempts=map.clear_attempts,
+    initial_land_count=math.min(Sim.W*Sim.H,dry_count+math.floor(dry_count/12)),
     map_height_limit=settings.map_height_limit and settings.map_height_limit>0 and settings.map_height_limit or
       math.max(30,math.min(255,(map.estimated_max_height or 0)+15))}
   if map.river_tileloop_cursor then
@@ -75,7 +79,7 @@ local function get(Sim,Terrain,s,x,z)
   end
   local kind=t.build=="road" and "road" or t.house and "house" or t.build and "object" or t.wood and "trees" or "clear"
   return {kind=kind,slope=slope,base=base,max_z=8*top,road_bits=t.road_bits or 0,
-    road_town=t.road_town,owner=t.owner}
+    road_town=t.road_town,owner=t.owner,rough=t.stock_clear_ground==1}
 end
 
 function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
@@ -88,7 +92,8 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   local save={version=1,order={},towns={}}
   local lifts=Lift.new()
   local growth=growth_board(Sim,Terrain,s,G,Worldgen,function(x,z)return get(Sim,Terrain,s,x,z) end)
-  local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={}}
+  local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={},
+    initial_land_count=profile.initial_land_count}
   function board.tile(x,z) return get(Sim,Terrain,s,x+1,z+1) end
   local opts=copy(settings)
   opts.random,opts.name=random,Names.generate

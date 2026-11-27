@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Compile actual pinned 14.1 world-town placement, C++ shim against Lua.
+"""Historical oracle for the inherited 14.1 generation-time house stages.
 
 Usage: python3 tests/town_worldgen_upstream.py /path/to/OpenTTD [lua5.1]
-The C++ fixture supplies a terrain board, fake name catalog, and a deliberately
-controlled GrowTown result; genuine gameplay art/terrain is covered separately.
+Use town_placement_rc1.py for current initial-town count, founding sites,
+and coastal placement. They deliberately no longer match the 14.1 rules.
 """
 from hashlib import sha256
 from pathlib import Path
@@ -359,15 +359,6 @@ end
 cases=[]
 for i in range(64):
     cases.append(f"H {(223456789*i)%4294967296}")
-for layout in range(5):
-    for mode in (1,2,3,4):
-        for a,b in ((16,21),(31,45),(62,40),(0,0),(42,20)):
-            cases.append(f"C {mode} 64 64 1 {a} {b} {layout}")
-for i in range(30):
-    layout,editor=i%5,i%13==6
-    cases.append(f"G {1751+i*191} {i%3} {128 if i%4!=0 else 64} 64 {i%5} {i%6+1} {i%5} {i%3+1} {layout} {int(editor)} {i%2}")
-cases += ["G 1751 3 64 64 4 1 0 2 0 0 0","G 9911 4 64 64 4 1 4 2 0 1 0",
-          "G 45919 1 64 64 4 20 4 2 3 0 0"]
 test_data="\n".join(cases)+"\n"
 with tempfile.TemporaryDirectory(prefix="town-worldgen-14.1-") as d:
     directory=Path(d)
@@ -381,4 +372,4 @@ with tempfile.TemporaryDirectory(prefix="town-worldgen-14.1-") as d:
     assert len(got)==len(reference)==len(cases)
     for test,a,b in zip(cases,reference,got):
         assert a==b,(test,a,b)
-print(f"STOCK_TOWN_WORLDGEN_ORACLE_PASS: {len(cases)} pinned compiled cases; exact coast ranking, accepted/rejected towns, target counts, draw order and house stages.")
+print(f"STOCK_TOWN_WORLDGEN_ORACLE_PASS: {len(cases)} pinned compiled cases; exact construction-stage, counter, population and RNG results.")

@@ -1,16 +1,17 @@
 # Stock town world generation
 
 This is the temperate ordinary-OpenTTD town placement and creation
-controller. The source reference is
-[OpenTTD 14.1 `town_cmd.cpp`](https://github.com/OpenTTD/OpenTTD/blob/14.1/src/town_cmd.cpp)
-and [`map.cpp`](https://github.com/OpenTTD/OpenTTD/blob/14.1/src/map.cpp).
+controller. Placement targets [OpenTTD 16.0-RC1 `town_cmd.cpp`](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/town_cmd.cpp) and [`map.cpp`](https://github.com/OpenTTD/OpenTTD/blob/16.0-RC1/src/map.cpp); the placement module retains its 14.1 provenance for inherited helpers.
 
 The port preserves map-size-scaled suggestions or a configured custom
-count; the larger-town lottery; random tile wrapping; alignment for 2×2
+count; cyclic city allocation from a single random offset; random tile wrapping; alignment for 2×2
 and 3×3 road layouts; coordinate hash selection for randomized layout;
 distances to edges and other towns; and the two stock searches that move
 a water candidate to a coastal site. Flat clear and tree tiles are
-eligible. Distances use Manhattan geometry, including strict rejection
+eligible. World generation requires 12 of the surrounding 25 tiles to have
+non-rough, dry clear land or trees within the stock height band. Suggested
+counts scale to map size, add random variation, then scale by land coverage.
+Distances use Manhattan geometry, including default strict rejection
 only below 20 tiles between centers. A circular search takes the first
 match on a tie, preserving enumeration order. Towns that cannot grow a
 nonzero population are retried instead of leaving physically empty
@@ -27,7 +28,8 @@ board into `W.generate(board, opts)`.
 
 - `board.width` and `board.height` are powers of two between 64 and
   4096, `board.freeform` matches map settings, and
-  `board.tile(x, z)` supplies `kind` and `slope`. Optional
+  `board.tile(x, z)` supplies `kind`, `slope`, `base`, `max_z`, and `rough`.
+  The host may provide the stock-compensated `board.initial_land_count`. Optional
   `water_ground` models `HasTileWaterGround` for coast/locks and other
   tiles with water ground. Without it ordinary water tiles count as wet.
   Supply an exact `water_distance(x,z)` only if the host caches stock
@@ -61,14 +63,13 @@ board into `W.generate(board, opts)`.
 
 ```sh
 lua5.1 tests/town_worldgen.lua
-python3 tests/town_worldgen_upstream.py /path/to/openttd-14.1 lua5.1
+python3 tests/town_placement_rc1.py /path/to/openttd-16.0-RC1 lua5.1
 ```
 
-The Python test checks pinned file hashes and compiles the actual
-placement, circular search, coastal-distance and generation-loop
-functions from OpenTTD. It compares full accepted-town records and both
-RNG state words after each run. This oracle uses controlled terrain,
-names and `GrowTown` outcomes. The separate Lua test exercises the real
+The Python test compiles the pinned 16.0-RC1 town-count and generation-loop
+functions against controlled terrain, names and growth outcomes. It compares the
+accepted towns and random state over 256 generation traces and site admission
+over 6,000 cases, plus 120 coastal searches against the stock spiral and water-distance code. The separate Lua test exercises the real
 ported house/road proposal entry point as well as rollback and hard
 fallback. Neither test claims all OpenTTD house catalogs, foundations
 and population match a full upstream generated save. The current
@@ -100,15 +101,12 @@ respect the original exclusion below a bridge.
 
 Tests compile the pinned continuation and both span searches across
 25,920 inputs with exact approach classifications, styles, endpoints and
-random draw counts. The fixed ordinary 128×128 seed 798 (Mountainous,
-water borders off, river setting 2, high towns) exercises both built
+random draw counts. The fixed ordinary 256×256 seed 1 (Mountainous,
+water borders off, many rivers, high towns) exercises both built
 structures, regular sloped public streets, independent middle layers,
 bidirectional stock road routing, save/reopen and priced council
 demolition. The `LUANTTD_NATIVE_GENERATED_TOWN_SPANS=1` renderer replay
 views the actual freshly generated bridge and tunnel from a real
 Luanti client on the production campaign worker.
 
-This scope does not yet add live municipal road expansion, all supported
-foundation changes to public owned terrain, the native bore-exit
-excavation fallback or other climates. Initial town placement keeps
-the existing supported parcel and map classes.
+Live municipal road expansion is covered separately in [Town growth and authority](town-growth-authority.md). Some foundation changes, bore-exit excavation, and other climates remain outside this slice.

@@ -95,12 +95,12 @@ luanttd_native_bridge_ground_stop = $([[ ${LUANTTD_NATIVE_BRIDGE_GROUND_STOP:-0}
 EOF
 if [[ ${LUANTTD_NATIVE_GENERATED_TOWN_SPANS:-0} == 1 ]]; then
   cat >> "$out/server.conf" <<'EOF'
-bayline_seed = 798
-bayline_generated_map_width = 128
-bayline_generated_map_depth = 128
+bayline_seed = 1
+bayline_generated_map_width = 256
+bayline_generated_map_depth = 256
 bayline_generated_relief = 3
 bayline_generated_coasts = 0
-bayline_generated_rivers = 2
+bayline_generated_rivers = 3
 bayline_generated_towns = 3
 EOF
 fi
