@@ -3,6 +3,7 @@ local Sim=dofile(ROOT.."sim.lua")
 local Kernel=dofile(ROOT.."openttd/station_rating.lua")
 local Packets=dofile(ROOT.."openttd/passengers.lua")
 local R=dofile(ROOT.."station_rating_runtime.lua")(Sim,Kernel,Packets)
+dofile("tests/stock_rng_rc1_vectors.lua")(R)
 local function station(s,id)
   local st={id=id,mode="road",stock={},last_service={}}
   s.stations[id]=st

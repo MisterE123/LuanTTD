@@ -43,6 +43,7 @@ jobs:
             lua5.1 "tests/$t.lua"
           done
           lua5.1 tests/ground_vehicle_flood.lua
+          lua5.1 tests/station_rating_runtime.lua
           lua5.1 tests/depot_orientation.lua
           lua5.1 tests/road_proximity.lua
           lua5.1 tests/stock_road_coast.lua

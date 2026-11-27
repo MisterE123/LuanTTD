@@ -602,3 +602,21 @@ a copied stock generated checkpoint:
 tests/campaign_autosave_view_native.sh luantiserver 5d35bf8 \
   /path/to/fixture-world /path/to/fixture.conf /path/to/new-bench-dir
 ```
+
+### Use native bit rotations for the stock simulation RNG
+
+The shared stock generator uses LuaJIT's XOR and rotate instructions
+when available. Reducing signed intermediate values modulo 2³²
+preserves both saved unsigned words. Plain Lua uses the existing
+arithmetic fallback. The formula is OpenTTD 16.0-RC1's
+`Randomizer::Next`, not a different generator or a new draw order.
+
+In a native Luanti async VM, median CPU time for 262,144 draws went
+from **112.38 to 2.34 ms** over twelve alternating batches. Checksums,
+final states and 65,536 individually compared steps matched; both
+paths also match boundary vectors from the compiled 16.0-RC1 function.
+This measures only RNG cost, not the full simulation day.
+
+```sh
+tests/stock_rng_perf_native.sh luantiserver 51c69d2 /tmp/stock-rng-bench
+```

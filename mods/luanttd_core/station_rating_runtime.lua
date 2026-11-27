@@ -17,6 +17,18 @@ local function xor(x,y)
   return v
 end
 
+-- LuaJIT rotations produce signed words; reducing modulo 2^32 gives
+-- the same unsigned arithmetic that Randomizer::Next uses in RC1.
+local function next_words(a,b)
+  return (a+rotr(xor(b,0x1234567f),7)+1)%UINT,(rotr(a,3)-1)%UINT
+end
+if bit and bit.ror and bit.bxor then
+  local ror,bxor=bit.ror,bit.bxor
+  next_words=function(a,b)
+    return (a+ror(bxor(b,0x1234567f),7)+1)%UINT,(ror(a,3)-1)%UINT
+  end
+end
+
 -- Exact stock generator arithmetic. The current roadmap world does not yet
 -- run all of OpenTTD's other Random() callers. Keep this saved simulation
 -- stream separate, never claim matching seed traces across whole worlds.
@@ -28,8 +40,7 @@ local function random_u32(s)
     s.passenger_rating_rng=state
   end
   local a,b=state[1],state[2]
-  state[1]=(a+rotr(xor(b,0x1234567f),7)+1)%UINT
-  state[2]=(rotr(a,3)-1)%UINT
+  state[1],state[2]=next_words(a,b)
   return state[2]
 end
 
