@@ -33,13 +33,13 @@ end
 -- heading/speed and install a nonzero progress just as the source does.
 -- Callers supply the currently applicable stock track and order speed cap,
 -- and the block condition. Crossing collisions and physics are separate.
-function R.tick(v,limit,overtaking,move)
+function R.tick(v,limit,overtaking,move,context)
   local budget=R.update(v,overtaking and 512 or 256,0,limit)
   local step=R.advance_distance(v.heading)
   local blocked=false
   while budget>=step do
     budget=budget-step
-    if not move(v) then blocked=true;break end
+    if not move(v,context) then blocked=true;break end
     step=R.advance_distance(v.heading)
   end
   if v.progress==0 then v.progress=blocked and step-1 or budget end

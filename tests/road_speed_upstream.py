@@ -9,6 +9,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 CPP = r'''
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <cstdio>
 using uint = unsigned;
@@ -16,6 +17,7 @@ using byte = std::uint8_t;
 __DISTANCES__
 struct Vehicle {
   int direction, cur_speed, progress, subspeed;
+  __DIRECTION_METHODS__
   __BASE_METHODS__
   __DYNAMIC_METHOD__
 };
@@ -62,7 +64,25 @@ def main():
     lengths="\n".join(line for line in base.splitlines()
                        if line.startswith(("const uint TILE_AXIAL_DISTANCE","const uint TILE_CORNER_DISTANCE")))
     methods="\n".join(extract(base,s) for s in ("static inline uint GetAdvanceSpeed(","inline uint GetAdvanceDistance("))
-    shim=CPP.replace("__DISTANCES__",lengths).replace("__BASE_METHODS__",methods).replace("__DYNAMIC_METHOD__",extract(ground,"inline uint DoUpdateSpeed("))
+    direction_methods=""
+    if "this->GetMovingDirection()" in methods:
+        # RC1 obtains the heading through the chain. Stock road vehicles
+        # drive forward relative to their current heading; the shim does
+        # not model trains driving backward with fixed physical orientation.
+        direction=(a.source/"direction_func.h").read_text()
+        begin=direction.index("inline bool IsDiagonalDirection(Direction dir)")
+        diagonal=direction[begin:direction.index("\n}",begin)+2]
+        lengths+="\n"+"""
+using Direction = int;
+inline bool IsValidDirection(Direction d) { return d >= 0 && d < 8; }
+inline int to_underlying(Direction d) { return d; }
+inline Direction ReverseDir(Direction d) { return d ^ 4; }
+"""+diagonal
+        moving=next(line.strip() for line in base.splitlines()
+                    if line.strip().startswith("Direction GetMovingDirection() const"))
+        direction_methods="bool IsDrivingBackwards() const { return false; }\n"+moving
+    shim=(CPP.replace("__DISTANCES__",lengths).replace("__DIRECTION_METHODS__",direction_methods)
+          .replace("__BASE_METHODS__",methods).replace("__DYNAMIC_METHOD__",extract(ground,"inline uint DoUpdateSpeed(")))
     rng=random.Random(141)
     rows=[]
     for i in range(24000):

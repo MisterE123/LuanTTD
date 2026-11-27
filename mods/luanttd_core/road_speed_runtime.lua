@@ -201,6 +201,125 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     if Pass then return Pass.board(s,W) end
   end
 
+  -- Movement consumes zero or more pixels synchronously. Share the
+  -- callbacks instead of allocating them for every moving vehicle and
+  -- every pixel; keep the old pose current between pixels in one budget.
+  local function commit_frame(a,state,b,nominal,actual_z,bay_commit,entering)
+    local s,W,v,frames,record,old=a.s,a.W,a.v,a.frames,a.record,a.old
+    if bay_commit then Bay.commit(s,v,old,b,bay_commit,frames,state.index+1) end
+    state.waiting,state.oneway_reason,state.oneway_tile=nil,nil,nil
+    if v.status=="Waiting at one-way road" or v.status=="Waiting for roadworks" or v.status=="Waiting for junction clearance" then v.status="En route" end
+    local span_limit=bridge_limit(s,b)
+    local permitted=math.min(limit[v.engine],span_limit or math.huge)
+    if span_limit then state.speed=math.min(state.speed,permitted) end
+    if state.heading~=b[3] then state.heading=b[3];Speed.turn(state) end
+    if old[1]~=b[1] or old[2]~=b[2] then
+      actual_z=actual_z or W.height(s,b)
+      Speed.grade(state,record.z,actual_z,permitted)
+    end
+    state.index=state.index+1
+    if entering and v.road_via_pending then
+      local wp=s.tiles[b[4]].road_waypoint_id
+      local pending=v.road_via_pending
+      if wp and pending[1]==wp then
+        v.last_road_waypoint=wp
+        repeat table.remove(pending,1) until pending[1]~=wp
+        if #pending==0 then v.road_via_pending=nil end
+      end
+    end
+    a.old=b
+    if Pass then Pass.accept(state,b,nominal) end
+    if b[16] then
+      W.erase(record)
+      state.speed=0
+      return false -- stop this movement budget until the stock depot-exit tick
+    end
+    W.put(record,b,state.lane_pose~=nil,actual_z)
+    if state.index==#frames then state.speed=0 end
+    return true
+  end
+
+  local function move_frame(state,a)
+    local s,W,v,frames,record,old,roof,board=a.s,a.W,a.v,a.frames,a.record,a.old,a.roof,a.board
+    local nominal=frames[state.index+1]
+    if not nominal then return false end
+    local b=nominal
+    if Pass then
+      b=Pass.next(v,state,old,nominal,roof,board)
+      if not b then state.waiting="overtake geometry";return false end
+    end
+    local bay_commit
+    local pair=Bay and s.stock_road_bays and s.stock_road_bays.stops[b[4]]
+    if Bay and s.stock_road_bays and (v.road_bay_claim or pair) then
+      local original,why=b
+      b,bay_commit,why=Bay.propose(s,v,old,b,state.index+1)
+      if not b then state.waiting=why;state.speed=0;return false end
+      -- A different admissible parking row is not overtaking.
+      if b~=original then nominal=b end
+    end
+    if oneway_guard then
+      local ok,why,tile=oneway_guard(s,old,b)
+      if not ok then
+        local works=why=="ROADWORKS_IN_PROGRESS"
+        state.waiting,state.speed,state.oneway_reason,state.oneway_tile=works and "roadworks" or "oneway",0,why,tile
+        v.status=works and "Waiting for roadworks" or "Waiting at one-way road"
+        return false
+      end
+    end
+    local entering=b[9] or old[4]~=b[4]
+    if entering and not pair and bay_tile(s,b[4]) and W.bay(b[4]) and W.bay(b[4])~=v.id then
+      state.waiting="bay";state.speed=0
+      return false
+    end
+    local actual_z
+    if Junction and s.road_junction_clearance then
+      if Bay and not Junction.bay_clearance(s,W,v,old,b,bay_commit and bay_commit.action,Bay) then
+        state.waiting,state.speed="bay",0
+        v.road_bay_guard_waits=(v.road_bay_guard_waits or 0)+1
+        return false
+      end
+      local clear
+      clear,actual_z=Junction.check(s,W,record,old,b,nil,W.height)
+      if not clear then
+        state.waiting,state.speed="junction",0
+        v.status="Waiting for junction clearance"
+        v.road_junction_waits=(v.road_junction_waits or 0)+1
+        return false
+      end
+    end
+    if Pass and (state.lane_pose or b~=nominal or W.exposed()) then
+      actual_z=actual_z or W.height(s,b)
+      if not Pass.clear(W,record,old,b,nominal,actual_z) then
+        state.waiting="road"
+        return false
+      end
+    end
+    if entering or not bay_tile(s,old[4]) then
+      local leader=W.find(record,state,b[7] or b[1],b[8] or b[2],b[3])
+      if leader then
+        state.waiting="road"
+        local speed=leader_speed(s,leader)
+        if Pass and not entering then
+          Pass.control(v,state,board,frames,old,roof,leader,speed,
+            math.min(leader.max_speed,bridge_limit(s,leader.frame) or math.huge))
+        else
+          state.speed=speed
+        end
+        return false
+      end
+    end
+    if crossing_step and old[4]~=b[4] then
+      -- A crossing transaction owns the movement callback until it
+      -- returns; ordinary pixels have no transaction to allocate.
+      local ok=crossing_step(s,W,old[4],b[4],b[6],function()
+        return commit_frame(a,state,b,nominal,actual_z,bay_commit,entering)
+      end)
+      if not ok then state.waiting="crossing";state.speed=0 end
+      return ok
+    end
+    return commit_frame(a,state,b,nominal,actual_z,bay_commit,entering)
+  end
+
   local function step(s,W,a,board,on_exit,tick)
     local v,c,frames,record=a.v,a.c,a.frames,a.record
     if c.index>=#frames then return end
@@ -235,114 +354,8 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       end
     end
     local roof=math.min(limit[v.engine],bridge_limit(s,old) or math.huge)
-    Speed.tick(c,roof,Pass and Pass.active(c),function(state)
-      local nominal=frames[state.index+1]
-      if not nominal then return false end
-      local b=nominal
-      if Pass then
-        b=Pass.next(v,state,old,nominal,roof,board)
-        if not b then state.waiting="overtake geometry";return false end
-      end
-      local bay_commit
-      local pair=Bay and s.stock_road_bays and s.stock_road_bays.stops[b[4]]
-      if Bay and s.stock_road_bays and (v.road_bay_claim or pair) then
-        local original,why=b
-        b,bay_commit,why=Bay.propose(s,v,old,b,state.index+1)
-        if not b then state.waiting=why;state.speed=0;return false end
-        -- A different admissible parking row is not overtaking.
-        if b~=original then nominal=b end
-      end
-      if oneway_guard then
-        local ok,why,tile=oneway_guard(s,old,b)
-        if not ok then
-          local works=why=="ROADWORKS_IN_PROGRESS"
-          state.waiting,state.speed,state.oneway_reason,state.oneway_tile=works and "roadworks" or "oneway",0,why,tile
-          v.status=works and "Waiting for roadworks" or "Waiting at one-way road"
-          return false
-        end
-      end
-      local entering=b[9] or old[4]~=b[4]
-      if entering and not pair and bay_tile(s,b[4]) and W.bay(b[4]) and W.bay(b[4])~=v.id then
-        state.waiting="bay";state.speed=0
-        return false
-      end
-      local actual_z
-      if Junction and s.road_junction_clearance then
-        if Bay and not Junction.bay_clearance(s,W,v,old,b,bay_commit and bay_commit.action,Bay) then
-          state.waiting,state.speed="bay",0
-          v.road_bay_guard_waits=(v.road_bay_guard_waits or 0)+1
-          return false
-        end
-        local clear
-        clear,actual_z=Junction.check(s,W,record,old,b,nil,W.height)
-        if not clear then
-          state.waiting,state.speed="junction",0
-          v.status="Waiting for junction clearance"
-          v.road_junction_waits=(v.road_junction_waits or 0)+1
-          return false
-        end
-      end
-      if Pass and (state.lane_pose or b~=nominal or W.exposed()) then
-        actual_z=actual_z or W.height(s,b)
-        if not Pass.clear(W,record,old,b,nominal,actual_z) then
-          state.waiting="road"
-          return false
-        end
-      end
-      if entering or not bay_tile(s,old[4]) then
-        local leader=W.find(record,state,b[7] or b[1],b[8] or b[2],b[3])
-        if leader then
-          state.waiting="road"
-          local speed=leader_speed(s,leader)
-          if Pass and not entering then
-            Pass.control(v,state,board,frames,old,roof,leader,speed,
-              math.min(leader.max_speed,bridge_limit(s,leader.frame) or math.huge))
-          else
-            state.speed=speed
-          end
-          return false
-        end
-      end
-      local function commit()
-        if bay_commit then Bay.commit(s,v,old,b,bay_commit,frames,state.index+1) end
-        state.waiting,state.oneway_reason,state.oneway_tile=nil,nil,nil
-        if v.status=="Waiting at one-way road" or v.status=="Waiting for roadworks" or v.status=="Waiting for junction clearance" then v.status="En route" end
-        local span_limit=bridge_limit(s,b)
-        local permitted=math.min(limit[v.engine],span_limit or math.huge)
-        if span_limit then state.speed=math.min(state.speed,permitted) end
-        if state.heading~=b[3] then state.heading=b[3];Speed.turn(state) end
-        if old[1]~=b[1] or old[2]~=b[2] then
-          actual_z=actual_z or W.height(s,b)
-          Speed.grade(state,record.z,actual_z,permitted)
-        end
-        state.index=state.index+1
-        if entering and v.road_via_pending then
-          local wp=s.tiles[b[4]].road_waypoint_id
-          local pending=v.road_via_pending
-          if wp and pending[1]==wp then
-            v.last_road_waypoint=wp
-            repeat table.remove(pending,1) until pending[1]~=wp
-            if #pending==0 then v.road_via_pending=nil end
-          end
-        end
-        old=b
-        if Pass then Pass.accept(state,b,nominal) end
-        if b[16] then
-          W.erase(record)
-          state.speed=0
-          return false -- stop this movement budget until the stock depot-exit tick
-        end
-        W.put(record,b,state.lane_pose~=nil,actual_z)
-        if state.index==#frames then state.speed=0 end
-        return true
-      end
-      if crossing_step and old[4]~=b[4] then
-        local ok=crossing_step(s,W,old[4],b[4],b[6],commit)
-        if not ok then state.waiting="crossing";state.speed=0 end
-        return ok
-      end
-      return commit()
-    end)
+    a.old,a.roof,a.board=old,roof,board
+    Speed.tick(c,roof,Pass and Pass.active(c),move_frame,a)
     c.ticks=c.ticks+1
   end
 
@@ -368,7 +381,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         local path={frames=actual and {} or frames,cursors={}}
         append(path,1,c,frames)
         timelines[id]=path
-        active[#active+1]={v=v,c=c,frames=frames,record=record,trail=path}
+        active[#active+1]={v=v,c=c,frames=frames,record=record,trail=path,s=s,W=W}
       end
     end
     for _,v in pairs(s.fleet) do
@@ -414,8 +427,8 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     local k=1
     -- step consumes this argument synchronously; only the poses and
     -- cursors are published. Do not allocate a wrapper per vehicle/tick.
-    local moving={}
     local W,records=world(s,true),{}
+    local moving={s=s,W=W}
     clock(function(tick)
       local ready=hooks.economy(tick)
       W.begin_tick()

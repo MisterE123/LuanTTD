@@ -811,3 +811,40 @@ timestamps and receipt sequence advanced monotonically. The post-sample
 99th percentile dropped from **683 / 681 ms to 177 / 153 ms**. End-to-end
 95th percentile went from **733 / 682 ms to 688 / 632 ms**, with some
 requests still taking over 900 ms if they arrived during a busy turn.
+
+## Stop allocating a motion closure for every vehicle tick and pixel
+
+Sampling a checkpoint with 128 paid road vehicles and two working freight
+trains identified the road motion callback as a recurring worker cost.
+The main-thread renderer is not involved. The road clock now passes a
+reusable movement context to the stock advance-distance loop and shares
+the ordinary pixel commit. A tile transition still uses the existing
+crossing transaction; a denied transaction cannot advance the pose. Each
+committed pixel becomes the old pose for the next pixel in that same
+movement budget. Loading, depot visibility, lane changes, slopes, station
+arrival, actual tick order, and persistent road state are unchanged.
+
+Two before/after runs inside Luanti 5.15.2's native async VM, with 192
+purchased and ordered buses, measured median worker CPU of **50.45 →
+36.98 ms** and **45.51 → 28.20 ms** per simulated day (27–38% less CPU).
+Both runs compared all 75 timeline samples, the full world graph, and
+the surface-build count, with 48 vehicles recording arrivals. An occasional
+long candidate sample remained in these short runs; the medians are not a
+worst-frame guarantee. A separate ABBA replay from a 256 × 256 checkpoint
+with 128 road vehicles and two paid freight trains measured **75.25 →
+46.53 ms** and **60.46 → 34.79 ms** median daily CPU. The compared runs
+ended on the same day with identical saved graph values and shared
+references. This is a loaded-network improvement, not a measurement of
+large-map landscape work or client FPS.
+
+The stock speed/distance oracle compiles the 16.0-RC1 methods and checks
+24,000 cases. A separate traffic test runs two-pixel movement budgets
+with one denied crossing, then verifies both vehicles' poses and resume.
+Native four-mode paid gameplay, worker forms, checkpoint reload and
+autonomous advancement also passed.
+
+```sh
+tests/road_fleet_perf_native.sh luantiserver a4b4e54 ../fleet-frame-perf
+lua5.1 tests/road_traffic_runtime.lua
+python3 tests/road_speed_upstream.py /path/to/OpenTTD-16.0-RC1/src
+```

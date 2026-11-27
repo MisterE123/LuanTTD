@@ -200,3 +200,38 @@ do
   assert(#W.vehicles_at(105)==0 and #W.stock_vehicles_at(103)==0)
 end
 print("PASS rolling road buckets retain ordinary vehicles and refresh current grade, bay and borrowed identities")
+
+-- A single stock budget can consume two pixels before another vehicle
+-- runs. A held crossing must not commit the second pixel or leak the
+-- previous vehicle's frame context when its neighbor runs.
+do
+  local crossing_calls=0
+  local function crossing(_,_,from,to,_,commit)
+    assert(from==2 and to==3)
+    crossing_calls=crossing_calls+1
+    if crossing_calls==1 then return false end
+    return commit()
+  end
+  local B=dofile(root.."road_speed_runtime.lua")(Speed,Prox,function() return 0 end,
+    function() return false end,function() return false end,nil,crossing)
+  local a,b=bus(1,30,38,41),bus(2,30,38,73)
+  local w={fleet={a,b}}
+  for _,v in ipairs(w.fleet) do
+    v.running=true
+    v.road_speed_state={index=1,speed=20,subspeed=0,progress=400,heading=5,ticks=0}
+  end
+  local noop=function() end
+  local function tick(n)
+    return B.live_day(w,function(step) step(n) end,
+      {economy=function() return {} end,before=noop,arrive=noop,age=noop})
+  end
+  local _,traces=tick(1)
+  assert(crossing_calls==2)
+  assert(frame(a)[1]==31 and a.road_speed_state.waiting=="crossing" and a.road_speed_state.speed==0)
+  assert(frame(b)[1]==32 and not b.road_speed_state.waiting and b.road_speed_state.speed==21)
+  assert(traces[1].frames[2]==frame(a) and traces[2].frames[2]==frame(b))
+  a.road_speed_state.progress=192
+  tick(2)
+  assert(crossing_calls==3 and frame(a)[1]==32 and not a.road_speed_state.waiting)
+end
+print("PASS mixed two-pixel movement budgets and blocked crossing transactions keep exact vehicle context")
