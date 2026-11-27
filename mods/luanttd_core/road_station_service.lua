@@ -283,6 +283,11 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         if timber_cargo(v.cargo) then return timber.deliver(st,v,p) end
         if v.cargo=="mail" then Mail.accepted(st) else Rating.accepted(s,st) end
         if Sim.stock_town_accept then Sim.stock_town_accept(s,st.town or st.site,v.cargo,p.units,p.units) end
+        -- RC1 DeliverGoods counts an accepted packet in the current
+        -- quarter immediately. Cash settles later through CargoPayment.
+        if Sim.stock_economy_delivered then
+          Sim.stock_economy_delivered(Sim.company(s,v.owner),v.cargo,p.units)
+        end
         local site=receiver(s,st,v.cargo)
         if site then
           site.received[v.cargo]=(site.received[v.cargo] or 0)+p.units
@@ -316,7 +321,6 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
           v.delivered=v.delivered+payment.delivered
           company.units=company.units+payment.delivered
           company.paid_units=company.paid_units+payment.delivered
-          if Sim.stock_economy_delivered then Sim.stock_economy_delivered(company,v.cargo,payment.delivered) end
           push(s,v,"fare",st,tick,{amount=payment.route,units=payment.delivered})
           for id,count in pairs(v.load_state.received_by_site or {}) do
             local site=s.sites[id]

@@ -85,6 +85,7 @@ return function(core,mod,Sim,Settings)
     Campaign.landmarks(Sim,Terrain,S,Gen,dofile(src.."scenery_object_rc1.lua")(Clear,Calendar),Calendar.date(Sim.date(S)))
     Campaign.forests(Sim,Terrain,S,Gen,dofile(src.."tree_worldgen.lua"),option("trees","bayline_generated_tree_placer",2),
       function() progress(79,"Adding landmarks and forests",true) end)
+    Sim.stock_world_launch(S,Calendar)
     progress(83,"Settling the landscape")
     Sim.prepare_initial_landscape(S,growth,Farm,function(tick,total)
       progress(83+math.floor(6*tick/total),"Settling the landscape",true)

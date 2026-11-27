@@ -154,7 +154,7 @@ return function(Sim,mod)
     if not s.stock_rail_fleet then
       local seed=math.floor(math.abs(s.seed or 1751))%4294967296
       assert(owned.initialize(s,{starting_year=Sim.date(s,0),climate="temperate",
-        generation_seed=seed,startup_random=(seed*1664525+1013904223)%4294967296}))
+        generation_seed=seed,startup_random=s.stock_engine_startup_seed or (seed*1664525+1013904223)%4294967296}))
     end
     return owned
   end

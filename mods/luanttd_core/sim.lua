@@ -3310,7 +3310,7 @@ function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighe
     assert(type(starting_year)=="number" and starting_year>=1950 and starting_year<=2050 and starting_year%1==0,
       "Set bayline_stock_bus_start_year to an integer from 1950 to 2050.")
     local gen=s.seed%2^32
-    local startup_seed=(gen*1664525+1013904223)%2^32
+    local startup_seed=s.stock_engine_startup_seed or (gen*1664525+1013904223)%2^32
     local settings={starting_year=starting_year,generation_seed=gen,startup_seed=startup_seed,
       climate="temperate"}
     local market={version=1,epoch=assert(Calendar.date(starting_year,1,1)),
@@ -3333,6 +3333,17 @@ function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighe
     local row=road_freight_catalog().row(key)
     market.models[row.stock_id]=market.models[row.stock_id] or assert(Calendar.prepare_original(row,market.settings))
   end
+end
+function M.stock_world_launch(s,Calendar)
+  assert(s.day==0 and not next(s.fleet) and s.stock_generated_profile and s.stock_generated_profile.forest)
+  assert(s.stock_engine_startup_seed==nil,"Stock launch runs once, before pre-game tile visits")
+  local year=s.stock_bus_market.settings.starting_year
+  local rules=dofile(module_root.."openttd/world_startup_rc1.lua")
+  s.stock_engine_startup_seed,s.stock_disaster_delay=rules.finish(function() return M.stock_random_u32(s) end)
+  -- The scaffold before terrain generation only supplies the date. At
+  -- the actual launch phase, replace it before any roster is usable.
+  s.stock_bus_market=nil
+  M.mount_road_bus_market(s,Calendar,year,false,false)
 end
 function M.foster_art_ready(s)
   return foster_art_mount[s]
@@ -5954,11 +5965,17 @@ function M.daily(s,traverse,tick_pulse,openings)
     for _,id in ipairs(regal_ids) do settle_bus(s.fleet[id]) end
   end
   local stock_work,month_tick,industries_rolled
-  if exact_economy and (openings or town_month or new_month) then
+  if exact_economy and (openings or town_month or new_month or s.stock_disaster_delay) then
     -- Advance the 74-tick batch into the new date after animation, before
     -- the same tick's tile, loading, vehicle and town work.
     month_tick=function()
       local first_on_new_date=s.passenger_house_clock.counter+1
+      if s.stock_disaster_delay then
+        if s.stock_disaster_delay==1 then
+          local rules=dofile(module_root.."openttd/world_startup_rc1.lua")
+          s.stock_disaster_delay=rules.disaster_day(1,function() return M.stock_random_u32(s) end)
+        else s.stock_disaster_delay=s.stock_disaster_delay-1 end
+      end
       local opened=openings and openings("day")
       if opened then
         M.clear_live_sea_cache(s)

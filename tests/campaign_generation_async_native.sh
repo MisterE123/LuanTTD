@@ -28,6 +28,7 @@ export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/g
 if ! timeout 25 "$server" --config "$out/server.conf" --world "$out/world" --gameid generationprobe --logfile '' > "$out/server.log" 2>&1; then
   cat "$out/server.log";exit 1
 fi
+grep 'PASS NATIVE ENGINE LAUNCH' "$out/server.log"
 grep -q 'PASS NATIVE TOWN GROWTH OPTION' "$out/server.log"
 grep 'PASS NATIVE TOWN PLACEMENT OPTIONS' "$out/server.log"
 grep 'PASS NATIVE TOWN BUILDING AGES' "$out/server.log"

@@ -509,12 +509,12 @@ uses **one stock RC1 executable run**, not separate paused games. A
 normal 64×64 Temperate town has two drive-through stations served by an
 MPS Regal. Each numeric observation is taken after a complete tick.
 Starting with its actual January state and loan, the normal LuanTTD
-runtime matches seven full checkpoints through July 1: both RNG words,
+runtime matches twelve full checkpoints through December 1: both RNG words,
 every recorded town house and road, the common height grid, growth and
 rebuild countdowns, town ratings and cargo effects, both station
 clocks and ratings, house Passenger and Mail generation/collection,
 the company cash and its fractional part, and quarterly expenses,
-income and paid passengers. Two packed reopens preserve the result.
+income and paid passengers. Three packed reopens preserve the result.
 The older independently paused samples remain a separate test.
 
 Ordinary monthly company fees now use RC1's Company-priority phase
@@ -536,3 +536,19 @@ engine reliability curve rather than using a fresh engine model.
 Service dates, wear and breakdown state agree with the original
 alongside the full town and economic checks. This is a road-only
 Temperate baseline, not full cross-mode or new-game parity.
+
+By December 1 both games show 231 passenger deliveries. In the November
+checkpoint, eight passengers have already unloaded but their fare has not
+yet been paid. RC1 credits the town and company delivery counters during
+unloading, then records cash when loading ends. The LuanTTD runtime now
+does the same, including when the game is reopened before cash settlement.
+The January physical town, roads, terrain, effective house ages and growth
+clocks still match, but late-December road motion changes shared random
+draws and cargo totals; January is not counted as a full match.
+
+New generated worlds now take the active engine-design draw from the
+shared post-forest stream before settling the map. The disabled-disaster
+clock still consumes its reset draw as in RC1. This is not a port of
+active disasters or evidence of whole-world startup parity. See the
+[compiled-source launch values](../tests/world_startup_rc1.lua) and the
+[native generation comparison](../tests/campaign_generation_async_probe.lua).

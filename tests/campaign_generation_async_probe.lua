@@ -35,6 +35,14 @@ core.register_on_mods_loaded(function()
     assert(not unexpected_table and progress_seen>0 and last==90 and heartbeats>1)
     local actual=assert(prepared.read(),"Worker success without durable result")
     compare(expected,actual)
+    local TG=dofile(mod.."/openttd/terragenesis.lua")(dofile(mod.."/openttd/slope.lua"))
+    local forest=actual.stock_generated_profile.forest
+    local stream={forest[1],forest[2]}
+    local initial_model_seed=TG.next_random(stream)
+    assert(actual.stock_engine_startup_seed==initial_model_seed and
+      actual.stock_bus_market.settings.startup_seed==initial_model_seed)
+    assert(actual.stock_disaster_delay==TG.next_random(stream)%512+730)
+    core.log("action","PASS NATIVE ENGINE LAUNCH: actual worker checkpoint keeps both post-forest RC1 draws")
     assert(actual.stock_generated_profile.town_settings.growth_setting==0)
     local G=dofile(mod.."/openttd/town_growth.lua")
     for _,town in pairs(actual.stock_town_growth.towns) do
