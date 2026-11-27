@@ -91,3 +91,21 @@ cross-chunk edits, boundary corners, invalid/atomic batches, canonical
 save bytes and malformed input. The native test sends real binary snapshots
 through Luanti's separate async VM and checks that a stale result is
 rejected and the current result commits exactly once.
+
+## Live campaign durability gate
+
+The normal campaign still uses its single authoritative worker and canonical
+checkpoint file, separately from the sparse primitive above. Its native
+process-crash regression uses a real generated world and the normal paid road
+command endpoint. It kills a disposable server before an in-memory road edit
+is published, reopens the previous terrain and balance, then kills again
+immediately after acknowledged construction and removal. Each reopen checks
+all five affected road tiles and the exact company ledger.
+
+```sh
+bash tests/campaign_paid_process_crash_native.sh
+```
+
+This qualifies recovery after process death, not after an operating-system or
+storage-device failure. A future asynchronous checkpoint writer must also
+prove that an older staged autosave cannot replace a newer acknowledged edit.
