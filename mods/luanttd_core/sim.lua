@@ -5824,6 +5824,7 @@ function M.daily(s,traverse)
   end
   coal_day_bindings[s]=nil
   timber_day_bindings[s]=nil
+  if s.retired_ship_stations then M.road_station_retirement().expire(s) end
 end
 function M.demo(s,owner)
   if s.stock_generated_profile then return false,"Choose two of the generated towns and build a connection." end

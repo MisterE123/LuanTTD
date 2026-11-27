@@ -47,8 +47,27 @@ not every pier in the station. If a ship is loading at a berth that
 ceases to serve the station, it finishes that visit and leaves once.
 A ship at another valid berth keeps loading; the station ID and orders
 do not change. The last pier and other harbor edits still have active
-service protection. Full station retirement and joining across vehicle
-modes are separate.
+service protection.
+
+After the last pier is removed, the station is temporarily unavailable
+for orders or berthing. A new dock less than eight tiles away (Manhattan
+distance) can automatically reuse that company's station ID and name.
+The **Join dock or build separately** picker lets you reopen the station
+explicitly or choose **Build a separate station**. An active adjacent
+station takes priority on a normal build. Retired IDs expire on the
+eighth staggered station check, every 250 game ticks. Restarting a
+paused world preserves the opportunity to reopen a station.
+
+This is the same-mode construction lifecycle from OpenTTD 16.0-RC1
+`CmdBuildDock`, `RemoveDock`, `BuildStationPart`, and
+`StationHandleBigTick`, with sign relocation from `Station::AddFacility`.
+The inactive ID is visible in the construction picker, not as a world
+sign. Joining across vehicle modes and removing a final pier while a
+ship is using the harbor are not covered. Native QA removes the final
+pier via the ordinary Bulldozer transaction, reopens the world, then
+uses the worker operation behind the dock picker to reopen that ID at a
+different shoreline tile and verifies fresh berths. The lifetime and
+nearest-ID tests also match 7,096 compiled OpenTTD cases.
 
 QA: both cargo boats used real worker-authorized purchase, Coal refit,
 route and fare with the same stock mine and power plant after a partial

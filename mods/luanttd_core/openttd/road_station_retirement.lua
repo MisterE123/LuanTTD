@@ -4,19 +4,23 @@
 -- FindDeletedWaypointCloseTo and CmdBuildRoadWaypoint.
 return function(Sim)
   local R={}
-  local buckets={station="retired_road_stations",waypoint="retired_road_waypoints"}
-  local function now(s) return s.stock_load_tick or s.day*74 end
+  local buckets={station="retired_road_stations",waypoint="retired_road_waypoints",
+    dock="retired_ship_stations"}
+  local function now(s,kind)
+    if kind=="dock" and s.passenger_house_clock then return s.passenger_house_clock.counter end
+    return s.stock_load_tick or s.day*74
+  end
   function R.retire(s,kind,row)
     local key=assert(buckets[kind])
     s[key]=s[key] or {}
-    local tick=now(s)
+    local tick=now(s,kind)
     local first=250-(tick+row.id)%250
     s[key][row.id]={row=row,until_tick=tick+first+7*250}
   end
   function R.get(s,kind,id)
     local map=s[buckets[kind]]
     local entry=map and map[id]
-    if entry and now(s)<entry.until_tick then return entry.row end
+    if entry and now(s,kind)<entry.until_tick then return entry.row end
   end
   function R.take(s,kind,id)
     local row=R.get(s,kind,id)
@@ -41,8 +45,8 @@ return function(Sim)
     return closest
   end
   function R.expire(s)
-    local tick=now(s)
-    for _,key in pairs(buckets) do
+    for kind,key in pairs(buckets) do
+      local tick=now(s,kind)
       for id,entry in pairs(s[key] or {}) do
         if tick>=entry.until_tick then s[key][id]=nil end
       end

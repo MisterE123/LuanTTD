@@ -9,10 +9,32 @@ return function(Sim,Terrain,Water,Facilities)
   local Geo={xy=Sim.xy,id=Sim.id}
   local function spread(s) return s.stock_station_spread or 12 end
   local function area(p) return Area.search_area(Geo,p.land,p.dir) end
-  local function joined_board(s)
+  local run_keys={"ship_pilot","stock_coal_ship_run","stock_oil_ship_route"}
+  local function retiring() return Sim.road_station_retirement() end
+  local function joined_board(s,owner)
     local B={xy=Sim.xy,id=Sim.id,matches=function()return true end}
+    local function eligible(st)
+      for _,key in ipairs(run_keys) do
+        local run=s[key]
+        local v=run and run.vehicle
+        if run and run.dock_forced_leave and v and (v.last_station or run.last_dock)==st.id then
+          return false
+        end
+      end
+      return true
+    end
+    if owner and s.retired_ship_stations then
+      B.deleted={}
+      for _,row in ipairs(retiring().list(s,"dock",owner)) do
+        if eligible(row) then B.deleted[#B.deleted+1]=row end
+      end
+    end
     function B.station(id)
       local st=s.stock_ship_stations and s.stock_ship_stations[id]
+      if not st and s.retired_ship_stations then
+        local row=retiring().get(s,"dock",id)
+        return row and eligible(row) and row or nil
+      end
       if not st or st.neutral then return end
       return {id=id,owner=st.owner,tile=st.land,spread=st.spread or area(st),name=st.name}
     end
@@ -173,7 +195,7 @@ return function(Sim,Terrain,Water,Facilities)
     if not t or not (t.is_water_tile or t.rocks and t.kind=="sea") then return "BUOY_NEEDS_OPEN_WATER" end
   end
   local function ship_on(s,id)
-    for _,name in ipairs({"ship_pilot","stock_coal_ship_run","stock_oil_ship_route"}) do
+    for _,name in ipairs(run_keys) do
       local run=s[name]
       local v=run and run.vehicle
       if v and (v.tile==id or v.x and v.y and
@@ -200,8 +222,17 @@ return function(Sim,Terrain,Water,Facilities)
       if ship_on(s,p.land) then return nil,"VEHICLE_IN_THE_WAY",p.land end
       if ship_on(s,p.water) then return nil,"VEHICLE_IN_THE_WAY",p.water end
       local req=dock_request or {}
-      local sel,why=Area.join(joined_board(s),area(p),owner,req,spread(s),s.stock_distant_join_stations~=false)
+      local board=joined_board(s)
+      local extent=area(p)
+      local sel,why=Area.join(board,extent,owner,req,spread(s),s.stock_distant_join_stations~=false)
       if not sel then return nil,why,id end
+      -- RC1 BuildStationPart reuses an unattached sign only if neither
+      -- an adjoining nor explicit station won. The unjoined picker row
+      -- represents NEW_STATION; an ordinary click opts into reuse.
+      if not sel.id and not req.adjacent and s.retired_ship_stations then
+        local row=retiring().closest(s,"dock",owner,extent.tile,function(old) return board.station(old.id)~=nil end)
+        if row then sel.id=row.id end
+      end
       p.join,p.spread=sel.id,sel.spread
       return p
     end
@@ -216,9 +247,13 @@ return function(Sim,Terrain,Water,Facilities)
   function N.join_choices(s,owner,id)
     local p,why=N.quote(s,owner,"dock",id,nil,{adjacent=true})
     if not p then return nil,why end
-    local rows=Picker.find(joined_board(s),area(p),owner,spread(s),s.stock_distant_join_stations~=false)
+    local rows=Picker.find(joined_board(s,owner),area(p),owner,spread(s),s.stock_distant_join_stations~=false)
     local choices={}
-    for i,r in ipairs(rows) do choices[i]={id=r.id,name=r.new and "Build a separate station" or r.name or ("Dock "..r.id)} end
+    for i,r in ipairs(rows) do
+      local name=r.new and "Build a separate station" or r.name or ("Dock "..r.id)
+      if r.tile and s.retired_ship_stations and s.retired_ship_stations[r.id] then name="Reopen "..name end
+      choices[i]={id=r.id,name=name}
+    end
     return {choices=choices,cost=p.cost}
   end
   function N.build(s,owner,kind,id,arg,dock_request)
@@ -229,11 +264,17 @@ return function(Sim,Terrain,Water,Facilities)
       s.stock_ship_stations=s.stock_ship_stations or {}
       local next_=p.join or s.next_stock_ship_station or 1
       local st=s.stock_ship_stations[next_]
+      local retired=p.join and not st and retiring().take(s,"dock",next_)
       local part={land=p.land,water=p.water,dir=p.dir,
         station_area=p.station_area,approach=p.approach,water_class=p.water_class}
       if not st then
-        s.next_stock_ship_station=next_+1
-        st={id=next_,owner=owner,sign_tile=p.land}
+        if not retired then s.next_stock_ship_station=next_+1 end
+        st=retired or {id=next_,owner=owner,sign_tile=p.land}
+        if retired then
+          -- Station::AddFacility relocates an unused sign to the new
+          -- facility, retaining the existing station name and ID.
+          st.sign_tile,st.tile=p.land,nil
+        end
         for k,v in pairs(part) do st[k]=v end
         st.docks={}
         s.stock_ship_stations[next_]=st
@@ -285,7 +326,7 @@ return function(Sim,Terrain,Water,Facilities)
   end
   local function wake_lost_berths(s,station)
     local board=N.board(s)
-    for _,key in ipairs({"ship_pilot","stock_coal_ship_run","stock_oil_ship_route"}) do
+    for _,key in ipairs(run_keys) do
       local run=s[key]
       local v=run and run.vehicle
       if v and v.loading and v.tile and (v.last_station or run.last_dock)==station and
@@ -328,7 +369,7 @@ return function(Sim,Terrain,Water,Facilities)
       entries=s.stock_ship_buoys
       p=entries and entries[t.station]
       if not p or p.tile~=id then return nil,"INVALID_FACILITY" end
-      for _,name in ipairs({"ship_pilot","stock_coal_ship_run","stock_oil_ship_route"}) do
+      for _,name in ipairs(run_keys) do
         local run=s[name]
         if run then
           local v=run.vehicle
@@ -368,9 +409,16 @@ return function(Sim,Terrain,Water,Facilities)
       p.sign_tile=Area.closest_tile(Geo,p.spread,sign)
     else
       entries[p.id]=nil
+      if pair_idx then
+        -- An unused StationID has no footprint, routing, or catchment
+        -- until another dock activates it. Keep the sign and identity.
+        p.tile=p.sign_tile or p.land
+        p.land,p.water,p.dir,p.station_area,p.approach,p.water_class,p.docks,p.spread=nil,nil,nil,nil,nil,nil,nil,nil
+        retiring().retire(s,"dock",p)
+      end
     end
     for _,key in ipairs(tiles) do s.tiles[key].ship=nil end
-    if partial then wake_lost_berths(s,p.id) end
+    if pair_idx then wake_lost_berths(s,p.id) end
     c.cash,c.expense,c.month_exp=c.cash-cost,c.expense+cost,c.month_exp+cost
     s.topology=s.topology+1
     return tiles,cost

@@ -38,6 +38,69 @@ local function begin()
   local partial=core.settings:get_bool("luanttd_qa_joined_active_remove",false)
   local saved=reopened and assert(core.deserialize(storage:get_string("joined_docks_qa"),true))
   local function checkpoint() return assert(OwnerCheckpoint.read()) end
+  if core.settings:get_bool("luanttd_qa_retired_dock",false) then
+    local function proof()
+      local s=checkpoint()
+      local reopen=core.settings:get_bool("luanttd_qa_retired_dock_reopen",false)
+      if reopen then
+        local saved=assert(core.deserialize(storage:get_string("retired_dock_qa"),true))
+        assert(s.speed==0 and not s.stock_ship_stations[saved.id] and
+          s.retired_ship_stations[saved.id].row.tile==saved.a)
+        ask({kind="dock_join_choices",request={tile=saved.b}},function(options)
+          local offered
+          for _,row in ipairs(options.value.choices) do
+            if row.id==saved.id then offered=row.name end
+          end
+          assert(offered and offered:find("Reopen",1,true)==1)
+          dock(saved.b,{join=saved.id,adjacent=true},function(r)
+            local after=checkpoint()
+            local station=assert(after.stock_ship_stations[saved.id])
+            assert(r.value.id==saved.id and station.land==saved.b and #station.docks==1
+              and not after.retired_ship_stations[saved.id])
+            local view=N.board(after)
+            assert(#view.station_dock_tiles(saved.id)>0 and not after.tiles[saved.a].ship)
+            core.log("action",("PASS NATIVE RETIRED DOCK REOPEN: %d retained and moved from %d to %d")
+              :format(saved.id,saved.a,saved.b))
+          end)
+        end)
+        return
+      end
+      local legal,a,b={}
+      for id,t in ipairs(s.tiles) do
+        if t.coastal_water and N.quote(s,owner,"dock",id) then legal[#legal+1]=id end
+      end
+      for i,one in ipairs(legal) do
+        for j=i+1,#legal do
+          local other=legal[j]
+          if Sim.distance(one,other)==2 then a,b=one,other;break end
+        end
+        if a then break end
+      end
+      assert(a and b,"No pair of legal natural shores")
+      dock(a,nil,function(built)
+        local id=assert(built.value.id)
+        ask({kind="demolition",tile=a},function(d)
+          local layer
+          for _,o in ipairs(d.value.options) do if o.key=="harbor" and o.ok then layer=o.key end end
+          assert(layer,"Bulldozer did not permit unoccupied dock")
+          ask({kind="command",command={kind="demolition",token=d.value.token,layer=layer,revision=d.revision}},function()
+            local after=checkpoint()
+            assert(not after.stock_ship_stations[id] and not after.tiles[a].ship and
+              after.retired_ship_stations[id].row.tile==a and #N.board(after).station_dock_tiles(id)==0)
+            storage:set_string("retired_dock_qa",core.serialize({id=id,a=a,b=b}))
+            core.log("action","PASS NATIVE RETIRED DOCK SAVE: removed from route destinations, identity saved")
+          end)
+        end)
+      end)
+    end
+    if reopened or checkpoint().speed==0 then proof()
+    else
+      ask({kind="clock"},function(q)
+        ask({kind="command",command={kind="speed",speed=0,revision=q.revision}},proof)
+      end)
+    end
+    return
+  end
   local function visit(n,station,base,ext,last)
     local s=checkpoint()
     local st=assert(s.stock_ship_stations[station])
