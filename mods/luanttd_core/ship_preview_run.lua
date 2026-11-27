@@ -24,6 +24,19 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
     end
     return cached.board,cached.region
   end
+  -- RC1 InvalidateWaterRegion: a changed tile dirties its own patch
+  -- and any neighboring region whose boundary reads it. For anything
+  -- other than a proven plain tide, keep the conservative full rebuild.
+  function R.after_plain_flood(s,previous,first)
+    local cached=worlds[s]
+    if not cached or previous==nil or cached.topology~=previous or s.topology~=previous+1 then return end
+    if cached.region then
+      for i=first,#s.changed do cached.region.invalidate(s.changed[i]) end
+    end
+    -- The water board reads authoritative terrain and facilities live.
+    -- Preserve its region index, not a previously sampled tile or route.
+    cached.topology=s.topology
+  end
   local function plan(board,v,td,region)
     if not td or not v.order then return end
     local order=route_order(v)

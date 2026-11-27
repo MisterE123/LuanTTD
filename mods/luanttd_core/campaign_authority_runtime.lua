@@ -338,12 +338,25 @@ return function(Sim,mod,s,cap)
   end
   local project=dofile(mod.."/campaign_actor_projection.lua")
   function N.actors(x,z,w,h,fraction,frame) return project(Sim,N,x,z,w,h,fraction,frame) end
+  local river_tide
   if s.stock_generated_profile and s.stock_generated_profile.river_stats then
     local rivers=dofile(mod.."/river_presentation.lua")(Sim)
     local flow=rivers.cached()
     N.river_direction=function(id) return flow.at(s,id) end
-    Sim.mount_river_tide_observer(s,flow.after_plain_flood)
+    river_tide=flow.after_plain_flood
   end
+  if river_tide or N.water then
+    local water=N.water
+    local ships=water and {water.run,water.freight or false,water.tanker_run or false}
+    Sim.mount_plain_tide_observer(s,function(state,previous,first)
+      if river_tide then river_tide(state,previous,first) end
+      if ships then
+        for _,run in ipairs(ships) do
+          if run then run.after_plain_flood(state,previous,first) end
+        end
+      end
+    end)
+  else Sim.mount_plain_tide_observer(s,nil) end
   if N.rail and N.rail.owned then
     N.orders.rail=dofile(mod.."/rail_vehicle_orders.lua")(s,N.rail.owned,dofile(source.."rail_order_cargo.lua"))
   end

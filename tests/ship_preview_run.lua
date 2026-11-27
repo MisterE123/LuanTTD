@@ -9,9 +9,10 @@ local N=dofile(root.."ship_network.lua")(S,Terrain,W,D)
 local Y=dofile(src.."ship_yapf.lua")(T,W,dofile(src.."yapf_road_search.lua"))
 local Move=dofile(src.."ship_motion.lua")(T,W)
 local Regions=dofile(src.."ship_regions.lua")
-local binds=0
+local binds,last_region=0
 local function watched_regions(...)
   local r=Regions(...)
+  last_region=r
   local find=r.find_route
   function r.find_route(...)
     binds=binds+1
@@ -36,6 +37,31 @@ local rocks=arg[1]=="rocks"
 if rocks then
   for x=9,17 do s.tiles[id(x,12)].stock_water_rocks=true end
 end
+
+-- A genuine shore edit on the first column of one 16×16 region
+-- changes the edge read by the region on its other side as well.
+local Flood=dofile(root.."water_flood_world.lua")(S,Terrain,dofile(src.."water_flood.lua"))
+local function flood(z)
+  local prev=s.topology
+  local n,plain,first=Flood.visit(s,16,z)
+  assert(n>0 and plain and s.tiles[id(17,z)].terrain=="water")
+  R.after_plain_flood(s,prev,first)
+end
+s.tiles[id(17,22)].terrain="grass";s.topology=s.topology+1
+assert(R.quote(s,"Alice",d.id,a.id,b.id,buoy and buoy.tile))
+local historic=last_region
+assert(not T.has(historic.info(0,1).edge[2],5))
+flood(22)
+assert(R.quote(s,"Alice",d.id,a.id,b.id,buoy and buoy.tile))
+assert(last_region==historic and T.has(historic.info(0,1).edge[2],5),
+  "Local tide must invalidate the reciprocal water edge")
+-- A separate transaction went by without a plain tide notification.
+-- The following known plain event must not conceal that earlier edit.
+s.tiles[id(17,24)].terrain="grass";s.topology=s.topology+1
+flood(24)
+assert(R.quote(s,"Alice",d.id,a.id,b.id,buoy and buoy.tile))
+assert(last_region~=historic,"An unknown revision requires the full rebuild")
+
 local p,why=R.start(s,"Alice",d.id,a.id,b.id,buoy and buoy.tile)
 assert(p,why)
 assert(not R.pose(p))
