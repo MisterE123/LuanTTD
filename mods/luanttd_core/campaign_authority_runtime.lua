@@ -153,13 +153,13 @@ return function(Sim,mod,s,cap)
         or above(s.aqueduct_above,s.stock_aqueducts,id,y)
     end
     local link=dofile(mod.."/rail_guideway_drawbar.lua")
-    function N.rail.poses(train,fraction)
+    function N.rail.poses(train,fraction,live)
       local parts=train.consist.parts
       local samples={}
       local push_pull=(train.dual_head or train.stock_engine==11) and #parts>1
       for i=1,#parts do
         local id,td,f,reversed,wormhole
-        if train.paid_clock then id,td,f,reversed,wormhole=Sim.rail_paid_pose(s,i,fraction,train.fleet_id,true)
+        if train.paid_clock and not live then id,td,f,reversed,wormhole=Sim.rail_paid_pose(s,i,fraction,train.fleet_id,true)
         else id,td,f,wormhole=rail.presentation_sample(s,train,i);reversed=train.consist.reversed end
         if id then samples[i]={id=id,td=td,progress=f,reversed=reversed,wormhole=wormhole} end
       end
@@ -324,17 +324,19 @@ return function(Sim,mod,s,cap)
   end
   -- Horizontal coordinates are enough to decide which sector owns a
   -- sample. Ground and pitch are exact but only needed for exported poses.
-  function N.road_coordinates(v,fraction)
-    local computed,x,z,yaw,bridge,bore_height=positions.timeline_coordinates(s,v,fraction)
-    if computed then return x,z,yaw,bridge,bore_height end
+  function N.road_coordinates(v,fraction,live)
+    if not live then
+      local computed,x,z,yaw,bridge,bore_height=positions.timeline_coordinates(s,v,fraction)
+      if computed then return x,z,yaw,bridge,bore_height end
+    end
     local f=Sim.road_motion_frame(s,v)
     if f then return positions.coordinates(s,{f},1,1) end
   end
   function N.road_finish(...)
     return positions.finish(s,road_surface,...)
   end
-  function N.road_pose(v,fraction)
-    return N.road_finish(N.road_coordinates(v,fraction))
+  function N.road_pose(v,fraction,live)
+    return N.road_finish(N.road_coordinates(v,fraction,live))
   end
   local project=dofile(mod.."/campaign_actor_projection.lua")
   function N.actors(x,z,w,h,fraction,frame) return project(Sim,N,x,z,w,h,fraction,frame) end
@@ -410,8 +412,8 @@ return function(Sim,mod,s,cap)
         terrain=Terrain,coal=coal,density=generated.industry_density or 4,vehicle_on_ground=vehicle_on_ground,
           advertise=N.news.industry_opened})
   end
-  function N.day()
-    Sim.daily(s)
+  function N.day(tick_pulse)
+    Sim.daily(s,nil,tick_pulse)
     if Clock then Clock() end
     if openings and openings() then Sim.clear_live_sea_cache(s) end
     N.news.day()

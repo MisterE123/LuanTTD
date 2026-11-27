@@ -244,12 +244,12 @@ return function(Sim,Service,Roster,Calendar,Rules,Catchment,debit)
       onboard=v and v.units or 0,delivered=v and v.delivered or 0,revenue=v and v.revenue or 0,
       expense=craft.expense,stopped=p and p.stopped or false,visits=p and p.arrivals or 0, failure=p and p.failure}
   end
-  function M.pose(s,f)
+  function M.pose(s,f,live)
     local run=M.run(s)
     local p=run and run.current(s)
     if not p then return end
     local samples=views[s]
-    if not samples or #samples<2 then return run.pose(p) end
+    if live or not samples or #samples<2 then return run.pose(p) end
     local x=math.max(0,math.min(1,f or 1))*(#samples-1)
     local i=math.floor(x)+1
     local a,z=samples[i],samples[i+1]

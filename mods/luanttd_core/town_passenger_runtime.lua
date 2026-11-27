@@ -155,6 +155,7 @@ return function(Sim,H,Packets,Rating,Mail)
       end
     end
     local traverse=hooks and hooks.traverse
+    local tick_pulse=hooks and hooks.tick_pulse
     if after_tick then
       -- Use the same landscape cursor for housing and industry. The
       -- existing road passenger rating callback retains its placement.
@@ -168,6 +169,7 @@ return function(Sim,H,Packets,Rating,Mail)
           H.advance_houses(clock,1,house,settings,random,emit,rated,landscape_tile,traverse)
           after_tick(clock.counter)
         end
+        if tick_pulse then tick_pulse(clock.counter) end
       end
     else
       H.advance_houses(clock,H.day_ticks,house,settings,random,emit,rated,landscape_tile,traverse)

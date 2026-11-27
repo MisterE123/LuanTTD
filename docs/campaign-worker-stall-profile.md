@@ -48,3 +48,48 @@ between samples and that commands still commit against a coherent tick.
 Speeding up the individual tile rules will still help, but will not
 remove the full-day wait on its own. The times above are from this one
 fixture, not FPS measurements or latency guarantees.
+
+## Paced stock ticks
+
+Ordinary generated campaigns now run on one owner, but the owner can
+sample scenery and vehicle poses between completed source ticks. The
+stock daily routine and original tick order remain the same. Road,
+rail, tram, ship and aircraft presentation reads the current native
+pose rather than replaying the previous day's timeline. Rendering
+still interpolates between bounded worker replies, and does not
+predict movement through a stop.
+
+The owner schedules ticks against elapsed time and gives its mailbox
+a turn between short batches. An individual expensive tick can still
+exceed the batch target. Construction and other requests that can
+change authoritative state settle the current day first, as do saves.
+When the owner finishes a day early to answer a command, it charges
+those future ticks to the playback clock instead of accelerating the
+campaign. Authored scenario playback keeps its existing scheduler.
+
+In a paired native run on the same 1024×1024 fixture, with active
+viewport queries and one deliberate fixed-day state capture:
+
+| Observation | Baseline p90 send to host receipt | Paced p90 |
+| --- | ---: | ---: |
+| Actor frames | 545 ms | 76 ms |
+| Full viewport observations | 507 ms | 178 ms |
+
+All 1,559,990 tables and shared references were equal at day 22,
+including the 1,048,576 tiles. The comparison excludes only the
+presentation clock fraction, not random or vehicle state. Large saves
+still produce occasional delays; these figures aren't a frame-rate
+measurement. The native motion test also builds, buys and runs a bus,
+train, ferry and aircraft, verifies monotonic completed stock
+samples, exercises a durable edit and a worker restart, and checks
+the complete paid-service state against the unsliced clock. A separate
+26-second measured run without the extra fixed-day write had 1,270
+worker batches (median 8.9 ms; p90 17.7 ms); requests during simulation
+had p90 81 ms to the host, compared with 804 and 633 ms before.
+The native Linux client also passed Autorail preview and purchase,
+train order edits, station picking, bus dispatch, and fresh join/reopen.
+
+```sh
+lua5.1 tests/campaign_tick_step.lua
+tests/campaign_tick_motion_native.sh "$(command -v luantiserver)" /tmp/live-stock-motion
+```

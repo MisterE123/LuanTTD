@@ -4,7 +4,7 @@ local M={sample_interval=.2}
 local clamp=function(x,a,b) return math.max(a,math.min(b,x)) end
 function M.new(Sim,s,interval)
   local year,year_start,year_days
-  return function(now)
+  return function(now,fraction)
     local elapsed=s.day
     local stock=s.stock_bus_market
     local day=stock and stock.epoch+elapsed or elapsed
@@ -20,7 +20,7 @@ function M.new(Sim,s,interval)
       end
     end
     return {day=elapsed,year=year,year_day=day-year_start,year_days=year_days,
-      fraction=clamp(s.campaign_day_fraction or 0,0,1),rate=(s.speed or 0)/interval,us=now}
+      fraction=clamp(fraction or s.campaign_day_fraction or 0,0,1),rate=(s.speed or 0)/interval,us=now}
   end
 end
 function M.phase(sample,now)

@@ -1,6 +1,8 @@
+local live_motion_fixture=(...)=="live_motion_fixture"
 local mod=(core and core.get_modpath("luanttd_core") or "mods/luanttd_core")
 local Sim=dofile(mod.."/sim.lua")
 local Terrain=dofile(mod.."/openttd/terrain.lua")
+if live_motion_fixture then Sim.W,Sim.H=64,64 end
 local s=Sim.new(1751)
 s.corner_grid=Terrain.new(Sim.W,Sim.H,function(x) return x<19 and 1 or 0 end)
 s.rail_paid_service,s.rail_owned_service,s.ship_paid_service,s.air_paid_service=true,true,true,true
@@ -10,10 +12,15 @@ for i,t in ipairs(s.tiles) do
   t.site,t.owner,t.wood,t.house,t.build=nil,nil,nil,nil,nil
   t.terrain=x>=19 and "water" or "grass"
 end
-local runtime=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,s,{
+local cap={
   road={start_year=1950,breakdowns=0,service_interval=150},
   rail={ready={},engines={},split={}},air={[215]=true},ferry={[206]=true}
-})
+}
+if live_motion_fixture then
+  s.stock_generated_profile={width=64,depth=64}
+  s.speed=1;cap.oil_tanker=true
+end
+local runtime=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,s,cap)
 local A=dofile(mod.."/campaign_authority_endpoint.lua")(Sim,runtime)
 local revision=0
 local function command(owner,c)
@@ -74,6 +81,22 @@ command("Rail",{kind="transport_start",mode="rail",vehicle=engine,
 local rail_row=A.depot("Rail","rail",depot).value.vehicles[1]
 assert(rail_row.id==engine and rail_row.help.service=="Passenger train")
 assert(A.orders("Rail","rail",engine).ok and A.orders("Water","ship","ferry").ok and A.orders("Air","air",1).ok)
+if live_motion_fixture then
+  -- Build and order the fourth paid mode via the ordinary host calls.
+  local name="Road"
+  command(name,{kind="company_open"})
+  local a,b,d=Sim.id(4,30),Sim.id(15,30),Sim.id(7,31)
+  assert(Sim.build(s,name,"road",Sim.line(a,b)))
+  assert(Sim.build(s,name,"road_station",{a,b}))
+  assert(Sim.build(s,name,"road_depot",{d}))
+  local bus=assert(Sim.purchase(s,name,"bus","passenger",nil,d))
+  assert(Sim.add_order(s,name,bus,s.tiles[a].station))
+  assert(Sim.add_order(s,name,bus,s.tiles[b].station))
+  assert(Sim.toggle(s,name,bus))
+  s.passenger_house_clock=dofile(mod.."/openttd/town_passengers.lua").new_clock(6,6)
+  cap.autoplay,cap.seconds_per_day=true,.15
+  return s,cap
+end
 assert(A.advance(4).tick==296 and runtime.rail.run.current(s).ticks>0)
 assert(runtime.water.run.current(s).vehicle.tick>0 and runtime.air.run.current(s).vehicle.tick>0)
 print("PASS worker builds, buys and dispatches rail, ferry and air using the normal commands")

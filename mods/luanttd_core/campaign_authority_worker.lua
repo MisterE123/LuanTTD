@@ -21,17 +21,20 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   end
   local A=endpoint(Sim,runtime)
   local auto,interval
+  local tick_mode=cap.autoplay and s.stock_generated_profile and s.passenger_house_clock and
+    Sim.road_stock_service_active(s)
   if cap.autoplay then
     interval=cap.seconds_per_day or 1.25
     assert(type(interval)=="number" and interval>=.05 and interval<=15,"invalid worker day interval")
-    auto=dofile(mod.."/campaign_step.lua").new(s,interval,{
+    local clock=dofile(mod..(tick_mode and "/campaign_tick_step.lua" or "/campaign_step.lua"))
+    auto=clock.new(s,interval,{
+      now=core.get_us_time,
       persist_fraction=true,
-      -- Slow maps and checkpoints may leave several full days queued.
-      -- Give the host a chance to observe or edit the world between
-      -- complete days, rather than blocking through the entire backlog.
+      -- The authored-scenario fallback still advances completed days.
+      -- Never block the host through a backlog of several days.
       day_budget=1,
-      advance=function()
-        runtime.day()
+      advance=function(pulse)
+        runtime.day(tick_mode and pulse or nil)
         -- Until the UI subscribes to notifications, do not retain
         -- transient loads, arrivals or effects for an invisible world.
         runtime.passengers.collect()
@@ -61,7 +64,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     local last_us,last_speed
     publish=function(now)
       if s.speed~=last_speed or now-last_us>=solar.sample_interval*1000000 then
-        core.ipc_set(channel..":solar_clock",sample(now))
+        core.ipc_set(channel..":solar_clock",sample(now,tick_mode and auto.sample() or nil))
         last_us,last_speed=now,s.speed
       end
     end
@@ -72,7 +75,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   local fraction,overdue=nil,false
   -- The first periodic checkpoint still saves mount-time normalization.
   local dirty=true
-  local presentation_only={snapshots=true,actor_frames=true,clock=true}
+  local presentation_only={snapshot=true,snapshots=true,actor_frames=true,clock=true}
   local live_view={snapshots=true,actor_frames=true}
   local function ordinary_road_hover(q)
     -- Only these inspected planners read the already-open company's
@@ -88,11 +91,16 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     fraction,days,overdue=auto.step(dt,true,true)
   end
   local function sample_view(q,sample)
-    if q.kind=="actor_frames" then return A.actor_frames(q.windows,sample or q.fraction) end
-    return A.snapshots(q.windows,sample or q.fraction,q.players)
+    if q.kind=="actor_frames" then return A.actor_frames(q.windows,sample or q.fraction,tick_mode) end
+    return A.snapshots(q.windows,sample or q.fraction,q.players,tick_mode)
   end
   local function send(q,r,now)
-    if live_view[q.kind] then r.actor_us=now end
+    if live_view[q.kind] then
+      r.actor_us=now
+      -- Measurements and the render observer can identify exactly
+      -- which completed stock state a live sample represents.
+      if tick_mode then r.actor_tick=auto.completed_tick() end
+    end
     r.seq=q.seq
     core.ipc_set(outbox,r)
   end
@@ -132,7 +140,8 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   -- subscription. Only the explicit shutdown/cancel ends that ownership.
   -- Keep the short fail-safe solely for finite, manual test jobs.
   while (auto or prior-heartbeat<6500000) and not core.ipc_get(cancel) do
-    local available=core.ipc_poll(inbox,auto and (overdue and 1 or 35) or 650)
+    local timeout=tick_mode and auto.poll_ms() or (auto and (overdue and 1 or 35) or 650)
+    local available=core.ipc_poll(inbox,timeout)
     local now=core.get_us_time()
     if core.ipc_get(cancel) then break end
     local q=available and assert(core.ipc_get(inbox))
@@ -155,13 +164,22 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       -- The very same day advances below without moving any edit.
       local boundary_view=q and q.seq==seq+1 and live_view[q.kind] and
         (s.speed or 0)>0 and auto.sample(dt)==1
-      if q and (overdue or late_view or boundary_view) then
+      if tick_mode then
+        if q and not (presentation_only[q.kind] or ordinary_road_hover(q)) then
+          -- Cached daily bindings cannot tolerate a mutable command
+          -- midway through the stock loop. Complete that transaction,
+          -- then service this one request before starting another day.
+          if auto.flush() then dirty=true end
+          deferred=dt
+        else advance(dt) end
+      elseif q and (overdue or late_view or boundary_view) then
         deferred=dt
       else advance(dt) end
     end
     prior=now
     if q then
       heartbeat=now
+      local sampled_at=tick_mode and live_view[q.kind] and core.get_us_time() or now
       core.ipc_set(inbox,nil)
       local r
       if q.seq~=seq+1 then
@@ -171,7 +189,8 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         -- Do not assume an uncommon panel or command cannot lazily
         -- touch saved state. Only skip the proven display-only traffic.
         if not presentation_only[q.kind] and not ordinary_road_hover(q) then dirty=true end
-        if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction)
+        if q.kind=="snapshot" then
+          r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction,tick_mode and {road={},rail={},live_tick=true} or nil)
         elseif live_view[q.kind] then
           -- The preceding save may already have sampled ahead within this
           -- completed trajectory. Do not send an older interpolated pose.
@@ -224,12 +243,13 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
           return "stopped",seq,s.day
         else r={ok=false,why="UNKNOWN_OPERATION"} end
       end
-      send(q,r,now)
+      send(q,r,sampled_at)
     end
     if deferred then advance(deferred) end
     if publish then publish(now) end
-    if auto and dirty and now-last_saved>=8000000 then periodic_checkpoint() end
+    if auto and dirty and now-last_saved>=8000000 and (not tick_mode or not auto.partial()) then periodic_checkpoint() end
   end
+  if tick_mode then auto.flush() end
   storage.write_state(s)
   return not auto and prior-heartbeat>=6500000 and "idle" or "cancelled",seq,s.day
 end

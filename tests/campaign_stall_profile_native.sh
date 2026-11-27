@@ -57,15 +57,28 @@ modify('town_passenger_runtime.lua',[
       s.day,us(),all_tile,all_after,peak_tile,peak_after,big_count)) end
   end
   return M''')])
+runtime_source=(root/'campaign_authority_runtime.lua').read_text()
+daily='Sim.daily(s,nil,tick_pulse)' if 'Sim.daily(s,nil,tick_pulse)' in runtime_source else 'Sim.daily(s)'
 modify('campaign_authority_runtime.lua',[
- ('    Sim.daily(s)\n    if Clock','''    local a,c=core.get_us_time(),os.clock()
-    Sim.daily(s)
+ ('    '+daily+'\n    if Clock','''    local a,c=core.get_us_time(),os.clock()
+    '''+daily+'''
     core.log("action",("DAY_CORE %d began=%d ended=%d cpu_ms=%.2f heap_kb=%.1f"):format(
       s.day,a,core.get_us_time(),(os.clock()-c)*1000,collectgarbage("count")))
     if Clock'''),
  ('    N.news.day()\n  end','''    N.news.day()
     core.log("action",("DAY_COMPLETE %d us=%d"):format(s.day,core.get_us_time()))
   end''')])
+worker_source=(root/'campaign_authority_worker.lua').read_text()
+if 'local tick_mode=' in worker_source:
+ modify('campaign_authority_worker.lua',[
+  ('    fraction,days,overdue=auto.step(dt,true,true)','''    local a=core.get_us_time()
+    fraction,days,overdue=auto.step(dt,true,true)
+    local b=core.get_us_time()
+    if b-a>=500 then core.log("action",("SIM_BATCH begin=%d end=%d"):format(a,b)) end'''),
+  ('          if auto.flush() then dirty=true end','''          local a=core.get_us_time()
+          if auto.flush() then dirty=true end
+          local b=core.get_us_time()
+          if b-a>=500 then core.log("action",("SIM_BATCH begin=%d end=%d"):format(a,b)) end''')])
 modify('campaign_checkpoint.lua',[
  ('''    return write(state_prefix,core.compress(assert(codec).encode(state,pulse),"zstd",3))''','''    local a=core.get_us_time()
     local bytes=assert(codec).encode(state,pulse)

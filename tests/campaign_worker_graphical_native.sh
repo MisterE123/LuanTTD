@@ -89,7 +89,7 @@ mark 'PASS NATIVE PROJECTED TRAIN EDIT'
 mark 'NATIVE_PROJECTED_FINANCE_READY'
 sleep .45
 import -window root -resize 960x600 -quality 88 "$out/worker-finance.jpg"
-xdotool mousemove 612 480 click 1
+xdotool mousemove 612 450 click 1
 mark 'PASS NATIVE PROJECTED FINANCE'
 mark 'NATIVE_PROJECTED_DEMOLITION_READY'
 sleep .55

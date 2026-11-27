@@ -5196,7 +5196,7 @@ local function rail_tick_broker(s)
   return register,advance,function() return flushed end
 end
 
-local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse)
+local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse)
   local clock
   local faults=road_faults_mount[s]
   local freight_ready,ship_ready,industry_ready,tanker_ready
@@ -5207,7 +5207,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
   if s.road_stock_house_supply then
     town_passengers.start(s)
     clock=function(callback)
-      if not commercial and not coal and not timber and not growth and not tide then return town_passengers.day(s,callback,{traverse=traverse}) end
+      if not commercial and not coal and not timber and not growth and not tide then return town_passengers.day(s,callback,{traverse=traverse,tick_pulse=tick_pulse}) end
       local works=growth and growth.world.reconstruction
       local work_state=works and s.stock_town_growth.reconstruction
       local road_ground,road_tick
@@ -5290,7 +5290,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         end
       end,{passenger=commercial and commercial.hooks.passenger,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
-        growth=growth and growth.world,traverse=traverse,
+        growth=growth and growth.world,traverse=traverse,tick_pulse=tick_pulse,
         before_landscape=(machines or timber and timber.animate) and function(tick)
           if machines then machines.animate(tick) end
           if timber and timber.animate then timber.animate(tick) end
@@ -5480,7 +5480,7 @@ function M.position(s,v)
   end
   return v.depot or (s.stations[v.station] and s.stations[v.station].tile)
 end
-function M.daily(s,traverse)
+function M.daily(s,traverse,tick_pulse)
   s.day=s.day+1
   if s.retired_road_stations or s.retired_road_waypoints then M.road_station_retirement().expire(s) end
   local faults=road_faults_mount[s]
@@ -5630,7 +5630,7 @@ function M.daily(s,traverse)
   if stock_service then
     passenger_modules()
     local tanker=oil.ship and timber and oil.ship.day(s,timber,s.passenger_house_clock.counter+1)
-    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse)
+    stock_work=stock_station_day(s,road_supply,commercial,coal,freight,timber,freighter,industry_train,tanker,traverse,tick_pulse)
   elseif commercial then
     town_passengers.day(s,function(tick)
       local ready,events=commercial.before(tick)

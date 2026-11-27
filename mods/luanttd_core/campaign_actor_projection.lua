@@ -7,7 +7,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     local p=frame.road[v]
     if not p then
       local pos,yaw,pitch,bore
-      if R.road_pose then pos,yaw,pitch,bore=R.road_pose(v,fraction) end
+      if R.road_pose then pos,yaw,pitch,bore=R.road_pose(v,fraction,frame.live_tick) end
       p={at=Sim.position(s,v),pos=pos,yaw=yaw,pitch=pitch,bore=bore}
       frame.road[v]=p
     end
@@ -15,7 +15,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
   end
   local function train(r)
     local parts=frame.rail[r]
-    if not parts then parts=R.rail.poses(r,fraction);frame.rail[r]=parts end
+    if not parts then parts=R.rail.poses(r,fraction,frame.live_tick);frame.rail[r]=parts end
     return parts
   end
   local out={}
@@ -63,7 +63,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       buckets={}
       frame.road_buckets=buckets
       for id,v in pairs(s.fleet) do
-        local px,pz,yaw,bridge,bore_height=R.road_coordinates(v,fraction)
+        local px,pz,yaw,bridge,bore_height=R.road_coordinates(v,fraction,frame.live_tick)
         local at,u,b
         if px~=nil then
           u,b=floor((px+.5)/2),floor((pz+.5)/2)
@@ -146,7 +146,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     local ferry=R.water.run.current(s)
     if ferry then
       local p,dir
-      if ferry.paid_clock then p,dir=Sim.ferry_paid_pose(s,fraction)
+      if ferry.paid_clock and not frame.live_tick then p,dir=Sim.ferry_paid_pose(s,fraction)
       else p,dir=R.water.run.pose(ferry) end
       if point(p) then add("ship","ferry",{owner=ferry.owner,engine=ferry.engine_id,pos=xyz(p),dir=dir,
         passenger=true,running=not (ferry.stopped or ferry.crashed or ferry.phase=="blocked"),
@@ -154,7 +154,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
         depot=ferry.depot,label=ferry.engine_id==208 and "Bakewell 300 Hovercraft" or ferry.engine_id==207 and "FFP Passenger Ferry" or "MPS Passenger Ferry"}) end
     end
     if R.water.tanker then
-      local p,dir=R.water.tanker.pose(s,fraction)
+      local p,dir=R.water.tanker.pose(s,fraction,frame.live_tick)
       if point(p) then
         local hull=R.water.tanker.status(s)
         add("ship","oil",{owner=hull.owner,engine=hull.engine,pos=xyz(p),dir=dir,depot=hull.depot,
@@ -164,7 +164,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     if R.water.freight and R.water.coal then
       local ship=R.water.freight.current(s)
       if ship then
-        local p,dir=R.water.coal.pose(s,fraction)
+        local p,dir=R.water.coal.pose(s,fraction,frame.live_tick)
         if point(p) then
           local hull=R.water.coal.status(s)
           add("ship","coal",{owner=ship.owner,engine=hull and hull.engine,pos=xyz(p),dir=dir,depot=ship.depot,
@@ -177,7 +177,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
   if R.air then
     for _,run in ipairs(R.air.run.all(s)) do
       local p,dir,airborne
-      if run.paid_clock then p,dir,airborne=Sim.air_paid_pose(s,fraction,run.paid_clock)
+      if run.paid_clock and not frame.live_tick then p,dir,airborne=Sim.air_paid_pose(s,fraction,run.paid_clock)
       else p,dir=R.air.run.pose(run) end
       if point(p) then
         if airborne==nil then airborne=run.vehicle.airborne end
@@ -197,7 +197,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     local runs=service.all and service.all(s) or {service.current(s)}
     for _,run in ipairs(runs) do
       local f,pos,yaw,pitch
-      if R.tram.pose_at then f,pos,yaw,pitch=R.tram.pose_at(fraction,service.serial and service.serial(run))
+      if R.tram.pose_at and not frame.live_tick then f,pos,yaw,pitch=R.tram.pose_at(fraction,service.serial and service.serial(run))
       else
         f=service.frame(run)
         if f then pos,yaw,pitch=R.tram.pose(f) end

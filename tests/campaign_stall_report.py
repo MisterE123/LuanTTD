@@ -21,6 +21,7 @@ def duration_summary(label, micros):
 
 def report(log):
     days = records(log, r"DAY_CORE (\d+) began=(\d+) ended=(\d+)")
+    batches = records(log, r"SIM_BATCH begin=(\d+) end=(\d+)")
     phases = records(log, r"TILE_PHASE (\d+) us=\d+ landscape=(\d+) tick=(\d+)")
     saves = records(log, r"SAVE_PHASE (\d+) begin=(\d+) encode=(\d+) packed=(\d+) finish=(\d+)")
     views = records(log, r"PROBE_VIEW \d+ kind=\w+ send=(\d+) sample=(\d+) receive=(\d+)")
@@ -28,6 +29,8 @@ def report(log):
         raise SystemExit("No completed live stock campaign profile; check the fixture and configuration.")
 
     duration_summary("Simulation day wall time", [end - start for _, start, end in days])
+    if batches:
+        duration_summary("Worker stock-tick batch time", [end - start for start, end in batches])
     fraction = statistics.median(landscape / (landscape + tick) for _, landscape, tick in phases)
     print(f"Median tile-loop share of landscape + after-tick time: {fraction:.1%}")
     for day, start, encode, packed, end in saves:
@@ -37,7 +40,7 @@ def report(log):
     def during(send, windows):
         return any(start <= send < end for start, end in windows)
 
-    daylight = [(start, end) for _, start, end in days]
+    daylight = batches or [(start, end) for _, start, end in days]
     saving = [(start, end) for _, start, _, _, end in saves]
     for label, include in (
         ("All requests", lambda _: True),

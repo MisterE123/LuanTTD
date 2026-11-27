@@ -326,14 +326,14 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar)
       visits=p and p.arrivals or 0,stopped=p and p.stopped or false,failure=p and p.failure,
       paused=not M.active(s),tick=c and c.post_tick}
   end
-  function M.pose(s,f)
+  function M.pose(s,f,live)
     local b=bindings[s]
     if not b then return end
     local p=b.run.current(s)
     if not p then return end
     local view=frames[s]
     local samples=view and view.samples
-    if not samples or #samples<2 or not M.active(s) then return b.run.pose(p) end
+    if live or not samples or #samples<2 or not M.active(s) then return b.run.pose(p) end
     local x=math.max(0,math.min(1,f or 1))*(#samples-1)
     local i=math.floor(x)+1
     local a,z=samples[i],samples[i+1]
