@@ -38,7 +38,8 @@ export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PA
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!; server= client=
-trap '[[ -z "$client" ]] || kill "$client" 2>/dev/null || true; [[ -z "$server" ]] || kill "$server" 2>/dev/null || true; kill "$xv" 2>/dev/null || true;wait 2>/dev/null || true' EXIT
+source tests/native_processes.sh
+trap 'native_stop_children "$client" "$server" "$xv"' EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 xdpyinfo > /dev/null || { cat "$out/xvfb.log"; exit 1; }
 mark() {
@@ -76,7 +77,7 @@ for phase in new reopen; do
   fi
   grep 'PASS NATIVE AUTORAIL' "$out/$phase-server.log"
   ! grep -E 'ERROR\[' "$out/$phase-server.log" "$out/$phase-client.log"
-  kill -TERM "$client" "$server" 2>/dev/null || true
-  wait "$client" "$server" 2>/dev/null || true
+  native_stop_children "$client" "$server"
+  ! kill -0 "$server" 2>/dev/null || { echo "Cannot reopen while the old server is alive" >&2; exit 1; }
   client= server=
 done

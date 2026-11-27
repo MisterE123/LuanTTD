@@ -23,7 +23,8 @@ export DISPLAY="127.0.0.1:$display" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DI
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1100x740x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!; server=; client=
-trap 'for pid in "$client" "$server" "$xv"; do [[ -z "$pid" ]] || kill "$pid" 2>/dev/null || true; done; wait 2>/dev/null || true' EXIT
+source tests/native_processes.sh
+trap 'native_stop_children "$client" "$server" "$xv"' EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 xdpyinfo >/dev/null
 luantiserver --world "$out/world" --config "$out/server.conf" --gameid wildqa --logfile "" >"$out/server.log" 2>&1 &
