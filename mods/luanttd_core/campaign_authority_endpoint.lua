@@ -440,9 +440,17 @@ return function(Sim,R,max_days)
     for _=1,days do R.day() end
     return reply(true)
   end
+  -- These commands only touch the company, playback clock, or road
+  -- vehicle records. Everything else must be treated as
+  -- a potential surface edit, including future command types. Both
+  -- direct placement RPCs below flow through this same handler.
+  local keeps_sea={company_open=true,company_loan=true,speed=true,
+    road_buy=true,road_order_add=true,road_toggle=true}
   function A.command(name,c)
     if not owner(name) or type(c)~="table" then return reply(false,"INVALID_REQUEST") end
     if c.kind~="company_open" and c.revision~=authority_revision then return reply(false,"STALE_COMMAND") end
+    local road_orders=c.mode=="road" and (c.kind=="vehicle_order" or c.kind=="depot_copy_orders")
+    if R.invalidate_sea and not (keeps_sea[c.kind] or road_orders) then R.invalidate_sea() end
     local ok,note,value
     local previous_topology=s.topology
     if c.kind=="demolition" then

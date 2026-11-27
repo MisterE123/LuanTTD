@@ -167,7 +167,12 @@ a construction command or when a new industry is placed. Town,
 field, and tree growth do not convert plain open sea into a target.
 A short cooldown after edits avoids rebuilding flags while a player
 is actively building. Views and quotes do not clear the flags.
-No cache state is included in a checkpoint.
+Company creation, loans, playback changes, and road vehicle purchases,
+orders, and dispatch also keep already-proven flags. All other company
+commands are conservatively treated as possible edits. The validation
+endpoint covers both direct drag placements and quoted commits, so an
+actual construction command still clears the cache before changing the
+map. No cache state is included in a checkpoint.
 
 In repeated native runs on the same 1024×1024 coastal world, mean CPU
 per game day across days 21–31 fell from **804 to 716 ms** (22 warm
@@ -177,6 +182,15 @@ wall-clock display fraction. The native worker also used the cache
 before a paid Bulldozer removed a sea tile; normal tides flooded the
 cleared ground again. The autonomous oil-rig opening test verifies
 that only a successful placement notifies the worker.
+
+A separate native replay paused, borrowed and repaid, and resumed on six
+consecutive days of the same campaign. Across four alternating runs,
+the complete day-31 state was identical apart from the wall-clock
+display fraction. Cold-cache resets dropped from 24 to zero during
+those transactions, avoiding about 26,000 coastal flood checks per
+simulated day in this fixture. Whole-day CPU measurements overlapped
+between runs, so this is a count of work avoided, not a frame-rate
+guarantee.
 
 ```sh
 tests/live_ocean_edit_native.sh luantiserver /path/to/fixture-world /path/to/fixture.conf ../sea-edit-test

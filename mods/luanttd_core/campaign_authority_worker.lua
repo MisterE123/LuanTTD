@@ -15,7 +15,10 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   if cap.road_town_policy then s.stock_road_town_policy=cap.road_town_policy end
   local Sim=dofile(mod.."/sim.lua")
   local runtime=mounts(Sim,mod,s,cap)
-  if cap.autoplay and s.stock_generated_profile then Sim.mount_live_sea_cache(s) end
+  if cap.autoplay and s.stock_generated_profile then
+    Sim.mount_live_sea_cache(s)
+    runtime.invalidate_sea=function() Sim.clear_live_sea_cache(s) end
+  end
   local A=endpoint(Sim,runtime)
   local auto,interval
   if cap.autoplay then
@@ -152,12 +155,6 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         -- Do not assume an uncommon panel or command cannot lazily
         -- touch saved state. Only skip the proven display-only traffic.
         if not presentation_only[q.kind] then dirty=true end
-        -- Every wire operation that changes physical parcels passes
-        -- through one of these three commit entry points. Read-only
-        -- quotes and viewport traffic cannot invalidate open water.
-        if s.stock_generated_profile and (q.kind=="command" or q.kind=="road_place" or q.kind=="rail_place") then
-          Sim.clear_live_sea_cache(s)
-        end
         if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction)
         elseif live_view[q.kind] then
           -- The preceding save may already have sampled ahead within this

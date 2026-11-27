@@ -11,14 +11,16 @@ end
 local runtime=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,s,{
   road={start_year=1950,breakdowns=0,service_interval=150},
 })
+local sea_invalidations=0
+runtime.invalidate_sea=function() sea_invalidations=sea_invalidations+1 end
 local A=dofile(mod.."/campaign_authority_endpoint.lua")(Sim,runtime)
 local john="Authorised"
 local p,q,d=Sim.id(4,7),Sim.id(14,7),Sim.id(8,8)
 local build={kind="road_build",first=p,last=q,revision=0}
 local built=A.command(john,build)
-assert(built.ok and built.revision==1)
+assert(built.ok and built.revision==1 and sea_invalidations==1)
 local cash=s.companies[john].cash
-assert(not A.command(john,build).ok and cash==s.companies[john].cash)
+assert(not A.command(john,build).ok and cash==s.companies[john].cash and sea_invalidations==1)
 assert(not A.snapshot(1,1,33,1).ok and not A.snapshot(0,1,1,1).ok)
 local patch=A.snapshot(4,7,11,1)
 assert(patch.ok and #patch.value.tiles==11 and patch.value.tiles[1].id==p)
@@ -53,7 +55,7 @@ local close=A.snapshot(3,6,24,12)
 local far=A.snapshot(35,22,4,3)
 assert(close.ok and #close.value.vehicles==1 and close.value.vehicles[1].id==id)
 assert(far.ok and #far.value.vehicles==0)
-assert(s.fleet[id].running)
+assert(s.fleet[id].running and sea_invalidations==1)
 print("PASS single-owner construction/road orders; stale and foreign edits rejected; scoped projection does not own actors")
 do
   local resolve=dofile(mod.."/campaign_order_target.lua")
@@ -92,6 +94,7 @@ local built_bend=A.command(john,{kind="road_commit",revision=4,request=bend,quot
 assert(built_bend.ok and #built_bend.value==#fresh.value.tiles)
 assert(s.companies[john].cash==starting_cash-fresh.value.cost)
 print("PASS worker validates and applies the ordinary paid road bend; obsolete topology quote cannot spend")
+local expected_sea=sea_invalidations
 assert(A.company("Another").why=="COMPANY_NOT_OPEN")
 assert(A.command("Another",{kind="company_open",revision=5}).revision==6)
 local before=A.company("Another")
@@ -102,6 +105,7 @@ local vehicle=assert(Sim.vehicle_offer(s,"bus"))
 assert(not A.command(john,{kind="road_buy",revision=7,engine="bus",cargo="passenger",depot=d,cost=vehicle.cost+1}).ok)
 local purchase=A.command(john,{kind="road_buy",revision=7,engine="bus",cargo="passenger",depot=d,cost=vehicle.cost})
 assert(purchase.ok and purchase.revision==8 and s.fleet[purchase.value].owner==john)
+assert(sea_invalidations==expected_sea)
 print("PASS typed company and depot actions charge only the owning company at the quoted price")
 local paint=A.snapshot(3,6,17,5)
 assert(#paint.value.corners==18*6)
@@ -139,6 +143,7 @@ local land=A.terrain_quote(john,{operation="raise",first=plot})
 assert(land.ok and #land.value.corners==1 and land.value.cost>0)
 local cost=A.company(john).value.cash
 local applied=A.command(john,{kind="terrain_commit",revision=8,token=land.value.token})
+assert(sea_invalidations==expected_sea+1)
 assert(applied.ok and T.corner(s.corner_grid,36,26)==1)
 assert(A.company(john).value.cash==cost-land.value.cost)
 local clear=A.terrain_quote(john,{operation="bulldoze",first=Sim.id(21,10)})
@@ -362,6 +367,7 @@ do
   local ticket=choices.value.sources[1]
   local command={kind="depot_copy_orders",mode="road",vehicle=copied_bus.id,source=ticket.id,depot=depot,
     revision=choices.revision,source_revision=ticket.revision,target_revision=choices.value.revision}
+  local before_copy=sea_invalidations
   original.orders[2].action="unload"
   assert(not A.command(john,command).ok and copied_bus.orders[1].station==first,"stale source must not change receiver")
   original.orders[2].action="full"
@@ -374,7 +380,7 @@ do
   command.source_revision=A.orders(john,"road",incompatible).value.revision
   assert(not A.command(john,command).ok and copied_bus.orders[1].station==first,"incompatible stations must fail atomically")
   command.source,command.source_revision=ticket.id,ticket.revision
-  assert(A.command(john,command).ok)
+  assert(A.command(john,command).ok and sea_invalidations==before_copy)
   assert(copied_bus.orders~=before_src and original.orders==before_src and copied_bus.index==2)
   assert(copied_bus.orders[1].station==last and copied_bus.orders[1].action=="transfer")
   assert(copied_bus.orders[2].station==first and copied_bus.orders[2].action=="full")
@@ -391,6 +397,8 @@ do
     t.build,t.station,t.road_bits,t.wood,t.house,t.site,t.stock_industry=nil,nil,nil,nil,nil,nil,nil
   end
   local rules=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,r,{road={start_year=1950,breakdowns=0,service_interval=0}})
+  local placed_resets=0
+  rules.invalidate_sea=function() placed_resets=placed_resets+1 end
   local R=dofile(mod.."/campaign_authority_endpoint.lua")(Sim,rules)
   local selected={tool="drag",first=Sim.id(3,9),last=Sim.id(10,9),axis=0,start_half=false,end_half=true}
   assert(R.road_place("Unknown",selected).why=="COMPANY_NOT_OPEN")
@@ -401,7 +409,9 @@ do
   assert(R.road_place(john,selected,quote).why=="ROAD_QUOTE_CHANGED" and cash==r.companies[john].cash)
   quote.cost=quote.cost+1
   r.topology=r.topology+1 -- unrelated owner-side work; the shown price and footprint stay valid
+  local before_place=placed_resets
   local accepted=R.road_place(john,selected,quote)
+  assert(placed_resets==before_place+1)
   assert(accepted.ok and #accepted.value==#quote.tiles and r.companies[john].cash==cash-quote.cost)
   local again=R.road_place(john,selected,quote)
   assert(not again.ok and r.companies[john].cash==cash-quote.cost)
@@ -577,4 +587,23 @@ do
   runtime.transport.start=start
   a.rail_station_id,b.rail_station_id,s.stock_rail_stations=prev1,prev2,prev3
   print("PASS initial map routes reject forged or replaced station tiles before hitting the dispatcher")
+end
+
+
+do
+  -- No paid landscape or transport tracker touched: use the same handler
+  -- for the actual UI commands and observe only the invalidation hook.
+  local rev=A.company(john).revision
+  local rolling=sea_invalidations
+  local function command(c)
+    c.revision=rev
+    local r=A.command(john,c)
+    assert(r.ok,r.why)
+    rev=r.revision
+  end
+  command({kind="speed",speed=0})
+  command({kind="speed",speed=2})
+  command({kind="road_order_add",vehicle=purchase.value,station=s.tiles[p].station})
+  assert(sea_invalidations==rolling)
+  print("PASS the ocean cache is not invalidated by playback or road orders; paid terrain and road edits still invalidate")
 end
