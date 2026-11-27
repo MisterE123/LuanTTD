@@ -1,4 +1,15 @@
 -- Appended only to disposable native test game init.lua.
+local town_services=dofile(mod.."/town_station_services.lua")(Sim)
+local function town_freight_clock(id)
+  local row
+  for _,entry in ipairs(town_services.view(S)) do
+    if entry.mode=="ship" and entry.id==id then
+      assert(not row,"Physical freight facility counted twice")
+      row=entry
+    end
+  end
+  assert(row and (row.time_since_load or 255)<=20,"Paid freight load missing from the town's station clock")
+end
 local owner,road_owner,ferry_owner="Yate QA","Tipper QA","Ferry QA"
 local function qa()
   local C=assert(api.ship_coal)
@@ -23,6 +34,7 @@ local function qa()
     local live=assert(S.stock_coal_ship_run)
     local v=assert(S.stock_ship_coal.vehicle)
     local before=C.status()
+    town_freight_clock(saved.source)
     assert(before.onboard==saved.onboard and before.loading and before.last_berth==saved.tile)
     assert(live.vehicle.x==saved.x and live.vehicle.y==saved.y and before.tick==saved.tick)
     assert(v.load_state.reserved_units==saved.reserved)
@@ -155,7 +167,8 @@ local function qa()
       local v=S.stock_ship_coal.vehicle
       assert(st.last_berth~=a.water and st.visits==1 and st.fare==0 and v.load_state.slice==10)
       assert(S.fleet[truck].running)
-      S.yate_native_qa={onboard=st.onboard,tile=st.last_berth,x=ship.vehicle.x,y=ship.vehicle.y,
+      town_freight_clock(a.id)
+      S.yate_native_qa={source=a.id,onboard=st.onboard,tile=st.last_berth,x=ship.vehicle.x,y=ship.vehicle.y,
         tick=st.tick,reserved=v.load_state.reserved_units,truck=truck,sink=z.id,
         cash=company.cash,expense=company.expense,revenue=company.revenue,ferry_visits=S.ship_pilot.arrivals}
       api.save()

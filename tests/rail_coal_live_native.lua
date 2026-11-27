@@ -1,5 +1,16 @@
 -- Appended only to the isolated test copy of init.lua. Two actual
 -- Luanti processes, one native save, actual purchased train and truck.
+local town_services=dofile(mod.."/town_station_services.lua")(Sim)
+local function town_freight_clock(id)
+  local row
+  for _,entry in ipairs(town_services.view(S)) do
+    if entry.mode=="rail" and entry.id==id then
+      assert(not row,"Physical freight facility counted twice")
+      row=entry
+    end
+  end
+  assert(row and (row.time_since_load or 255)<=20,"Paid freight load missing from the town's station clock")
+end
 local owner,truck_owner="Coal Kirby QA","Coal Truck QA"
 local function place_tile(x) return Sim.id(x,15) end
 local mode=core.settings:get("bayline_rail_coal_qa_mode") or "legacy"
@@ -17,6 +28,7 @@ local function stamp()
     end
   end
   if qa then
+    town_freight_clock(qa.mine)
     local v=assert(owned.get(S,owner,qa.unit))
     local r=assert(Run.current_paid(S))
     local before=assert(Sim.rail_coal_status(S))
@@ -170,6 +182,7 @@ local function stamp()
       assert(state.cargo_tile==r.consist.parts[2].tile and state.head_tile==r.consist.parts[1].tile)
       local a,td,t=Sim.rail_paid_pose(S,2,1)
       assert(a==state.cargo_tile and td and t)
+      town_freight_clock(mine)
       S.rail_coal_native_qa={unit=v.id,quote=q,mine=mine,sink=sink,truck=truck,onboard=state.onboard,
         ticks=state.running_ticks,cash=c.cash,revenue=c.revenue,expense=c.expense}
       api.save()

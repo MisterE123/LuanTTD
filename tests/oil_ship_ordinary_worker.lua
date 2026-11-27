@@ -124,6 +124,14 @@ for _=1,900 do
   end
   if not saved and status.onboard>0 and status.onboard<capacity
       and (not partial or s.stock_oil_ship_route.vehicle.loading and s.stock_oil_ship_route.vehicle.last_station==a) then
+    local count=0
+    for _,row in ipairs(m("town_station_services")(Sim).view(s)) do
+      if row.mode=="ship" and row.id==a then
+        count=count+1
+        assert((row.time_since_load or 255)<=20,"The real oil load did not reach town growth")
+      end
+    end
+    assert(count==1,"The physical oil port or rig must count exactly once")
     if partial then
       dofile("tests/worker_joined_dock_removal_case.lua")(Sim,A,s,owner,s.stock_oil_ship_route,a)
       removed_units=status.onboard

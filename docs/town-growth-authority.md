@@ -159,6 +159,13 @@ physical facility is removed.
 
 The native fixture earns real road, rail, ferry, and air receipts,
 isolates each live station at a monthly town check, and verifies that
-each one independently skips the unserviced-town lottery. The port
-does not yet merge all separate freight-only station-age ledgers or
-port every mode's effect on company council rating.
+each one independently skips the unserviced-town lottery.
+
+The same check reads the mounted, live coal/goods/oil and profiled freight
+rail clocks and the coal and oil ship clocks. When multiple controllers
+represent one physical station, the youngest valid load and unload ages
+are combined and that StationID counts once. A neutral oil rig's dock
+and helipad share that same station identity. Released freight designations,
+detached oil berths and demolished or foreign facilities cannot qualify
+from stale transport records. This is the RC1 **growth** check; company
+council-rating integration for all freight modes is still separate.

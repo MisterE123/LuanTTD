@@ -3990,6 +3990,12 @@ function M.mount_coal_ship(s,Run,Passenger,Network,art)
   ship_coal.mount(s,Run,Passenger,Network,art)
   return ship_coal
 end
+function M.ship_oil_active(s,station)
+  if not oil.ship or not oil.ship.active(s) then return false end
+  local Run=oil.ship.run(s)
+  local voyage=Run and Run.current(s)
+  return voyage and (not station or Run.ordered_dock(voyage,station)) or false
+end
 function M.ship_coal_active(s)
   return ship_coal and ship_coal.active(s) or false
 end
