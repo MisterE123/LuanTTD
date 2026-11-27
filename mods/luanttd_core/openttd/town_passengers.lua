@@ -1,7 +1,9 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Vanilla OpenTTD 14.1 house production, copyright OpenTTD contributors.
 -- src/town_cmd.cpp TownGenerateCargo and TileLoop_Town;
--- src/table/town_land.h _original_house_specs; src/landscape.cpp RunTileLoop;
+-- src/table/town_land.h _original_house_specs;
+-- The landscape cursor matches 16.0-RC1 src/landscape.cpp RunTileLoop:
+-- tests/landscape_tile_loop_rc1.py compares every emitted tile in its cases.
 -- src/economy_func.h ScaleByCargoScale; src/core/random_func.hpp Chance16I.
 -- This module models per-house cargo production, not town expansion,
 -- construction stages, animated lifts, industry supply or NewGRF hooks.

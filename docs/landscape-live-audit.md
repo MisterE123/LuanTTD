@@ -139,3 +139,17 @@ used only to audit the existing callback shape. The test-only harness
 uses visual dirty appends within the adopted fixtures; it does not
 claim coverage for arbitrary external tool edits or for a new
 fully stock multiplayer game.
+
+## Landscape cursor reference for optimization
+
+`tests/landscape_tile_loop_rc1.py` extracts `RunTileLoop` unchanged
+from the pinned 16.0-RC1 source. It compares the binary tile-ID stream
+and final cursor/counter with the Lua owner, including initialization
+and live timing at tile-zero boundaries. The 100 reference cases cover
+every supported pair of axis sizes, from 64×64 through 4096×4096,
+and compare 2,076,800 actual tile visits, not aggregate counts.
+This tests the cursor order, not the performance of an entire 4096² game.
+
+```sh
+python3 tests/landscape_tile_loop_rc1.py /path/to/OpenTTD-16.0-RC1 --lua lua5.1
+```
