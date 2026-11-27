@@ -2,7 +2,9 @@
 -- OpenTTD contributors, 14.1 town_cmd.cpp UpdateTownRadius,
 -- ForAllStationsNearTown, CountActiveStations, UpdateTownGrowth*,
 -- TownTickHandler and monthly economy timer; town.h and timer_game_tick.h.
--- Temperate, ordinary vanilla houses and stations, no stock calendar shim.
+-- Rate, service, zones and the per-town deadline also match the compiled
+-- 16.0-RC1 functions (tests/town_growth_scheduler_rc1.py). This comparison
+-- does not cover the calendar adapter, lot placement or other climates.
 local G={TOWN_TICKS=70,STATION_TICKS=185,ACTIVE_AGE=20,NONE=65535,MAX_TOWN_TICKS=930,
   WINTER=4294967294,DESERT=4294967295}
 local floor,min,abs,sqrt=math.floor,math.min,math.abs,math.sqrt

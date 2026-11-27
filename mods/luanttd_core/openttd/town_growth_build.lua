@@ -203,14 +203,14 @@ return function(G,catalog)
     end
     local h=board.tile(u,v)
     if disallowed(h) then return end
-    local permit,rcmd=true,0
+    local permit,rcmd,extra_built=true,0,false
     if d~=nil and roads then
       if t.layout=="grid3" or t.layout=="better" then
         local hx,hz=per(board,u,v,d)
         local plan=extra(t,board,hx,hz,opts,random)
         if plan then
           if opts.extra_house then
-            if opts.extra_house(plan) then opts.extra_succeeded=true end
+            extra_built=not not opts.extra_house(plan)
           else return plan end
         end
       end
@@ -221,9 +221,9 @@ return function(G,catalog)
     if permit then
       if h.kind~="house" then
         if G.chance(1,6,random()) and board.level_land then board.level_land(u,v) end
-        return B.house(t,board,u,v,opts,random)
+        return B.house(t,board,u,v,opts,random),false,extra_built
       end
-      return
+      return nil,false,extra_built
     end
     return plan_road(t,board,x,z,rcmd,d,random),true
   end
@@ -246,10 +246,11 @@ return function(G,catalog)
           if portal then
             if from~=nil or G.chance(1,2,random()) then x,z=q.other_x,q.other_z end
           end
-          local plan,stop
-          if not portal then plan,stop=grow_here(t,board,x,z,rb,from,opts,random) end
-          if plan then return plan end
-          if opts.extra_succeeded then return end
+          local plan,stop,extra_built
+          if not portal then plan,stop,extra_built=grow_here(t,board,x,z,rb,from,opts,random) end
+          -- GrowTownInTile can build both houses, or succeed solely through
+          -- the extra house. Report its committed build without a second write.
+          if plan or extra_built then return plan,extra_built end
           if from and has(rb,bits[rev(from)]) then rb=rb-bits[rev(from)] end
           local next_dir
           if portal and rb~=0 then next_dir=rev(board.tile(x,z).inside) end

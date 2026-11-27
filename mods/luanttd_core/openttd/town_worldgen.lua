@@ -185,7 +185,6 @@ return function(Growth,Build,Names)
     end
     growth_settings.extra_house=commit
     for _=1,stats.attempts do
-      growth_settings.extra_succeeded=false
       local p=Build.grow(town,board,growth_settings,random)
       if p then commit(p) end
     end

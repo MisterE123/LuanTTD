@@ -104,6 +104,24 @@ queries on a simulated 4096 × 4096 map, including edges and the strict
 radius. The quote and final construction both check the current
 rating, so a stale approval cannot spend company funds.
 
+## RC1 growth scheduler baseline
+
+The [compiled 16.0-RC1 scheduler comparison](../tests/town_growth_scheduler_rc1.py)
+checks the actual radius, active-station, growth eligibility, counter, and
+per-town tick functions. It covers 18,628 cases, including 128 consecutive
+twelve-window traces with changing service, funding and recorded growth
+outcomes. It verifies the RNG draw count and which tick calls for growth,
+not which tile OpenTTD will build. The isolated house-selector
+differential is still pinned to 14.1.
+
+On Better Roads and 3×3 Grid, a successful extra house can count as a
+successful growth attempt even if the main roadside lot is already
+occupied or cannot be built on. The worker now uses the normal countdown
+after that real commit, without building or counting the extra house twice.
+Other town-growth gaps remain: ordinary runtime still selects the Normal
+growth speed internally, some construction branches lack stock behavior,
+and we have not yet proven whole-town placement/RNG parity.
+
 ## Municipal streets on ordinary generated maps
 
 A town on the normal generated Temperate map can extend its own streets

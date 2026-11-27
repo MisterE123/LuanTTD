@@ -329,10 +329,10 @@ return function(Sim,Terrain,G,B,H)
       local function write(proposal)
         return commit(s,t,proposal,view,tick,write_house)
       end
-      local proposal=B.grow(t,brd,{year=Sim.date(s),allow_roads=not not expand,
+      local proposal,extra_built=B.grow(t,brd,{year=Sim.date(s),allow_roads=not not expand,
         build_on_slopes=not policy or policy.build_on_slopes~=false,extra_house=expand and write or nil},random)
-      if not proposal then return false end
-      if proposal.kind=="house" then return write(proposal) end
+      if not proposal then return not not extra_built end
+      if proposal.kind=="house" then return write(proposal) or not not extra_built end
       local id=Sim.id(proposal.x,proposal.z)
       if proposal.kind=="road" then
         if not available(s,id,s.tiles[id]) or not Sim.town_road_piece(s,t.id,id,proposal.bits,true) then return false end
