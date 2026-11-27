@@ -101,3 +101,19 @@ These are throughput measurements, not an FPS comparison. A separate
 records, including the vehicle orders and RNG state. The exact RC1
 fixtures also matched 10,528 field maintenance visits and 600 planting
 scenarios, including field fences and grass regrowth.
+
+### Check the live crop record before classifying a fence neighbor
+
+A fence visit only needs to know whether its neighboring ground is
+still farmland. When there is no field record, the worker no longer
+classifies that parcel's surface. Where there is a record, it still
+checks map bounds, current ownership and surface occupancy, and all
+four live corner heights. A changed corner on the opposite side of a
+neighbor can expose a fence without prematurely deleting that field.
+The field itself still updates at its scheduled stock visit.
+
+The 10,528 compiled RC1 maintenance cases and the graphical Linux
+farm/fence culling and return probe passed. One 36-day LuaJIT comparison
+of the same populated 1024×1024 campaign measured 21.55 versus 20.67 s,
+with every saved value and shared record matching. This is a single
+end-to-end replay, not an FPS claim.

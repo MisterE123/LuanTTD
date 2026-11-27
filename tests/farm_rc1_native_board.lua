@@ -49,6 +49,22 @@ for i,layer in ipairs({"bridge_above","rail_bridge_above","aqueduct_above","tunn
   b.visit(x,z,2,false)
   assert(not W.field(restored,at) and not b.landscape_fields[at])
 end
+-- A present crop record is not enough: a later edit to a corner
+-- beyond our plot can invalidate just the neighbor and expose the edge.
+local x,z=28,28
+local here,east=id(x,z),id(x+1,z)
+b.make_field(x,z,3,123,0)
+b.make_field(x+1,z,3,123,0)
+b.visit(x,z,41,false,here)
+assert(not restored.stock_farm_fields[here].fences[2])
+local at=z*(Sim.W+1)+x+3
+restored.corner_grid.levels[at]=2
+assert(not W.field(restored,east) and W.field(restored,here))
+b.visit(x,z,42,false,here)
+assert(restored.stock_farm_fields[here].fences[2]==3)
+assert(restored.stock_farm_fields[east],"Neighbor validation must not collect the neighbor record out of order")
+b.visit(x+1,z,42,false,east)
+assert(not restored.stock_farm_fields[east])
 local p=m("generated_campaign")
 restored.stock_generated_profile.object_rng={10,20}
 restored.stock_farm_fields[rough]={kind="clear",ground="field",variant=2,counter=0,fences={},base=1,slope=0}

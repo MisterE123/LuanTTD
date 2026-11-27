@@ -105,6 +105,14 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     s.stock_farm_fields=s.stock_farm_fields or {}
     local records=s.stock_farm_fields
     local regrowth=s.stock_farm_grass
+    local function in_map(x,z)
+      return x>=0 and z>=0 and x<Sim.W and z<Sim.H and not (freeform and (x==0 or z==0))
+        and not (stock and (x==width-1 or z==height-1))
+    end
+    local function valid_field(id,t,x,z,r)
+      return t and not t.stock_void and not occupied(s,id,t,true,true)
+        and Terrain.matches(s.corner_grid,x+1,z+1,r.slope,r.base)
+    end
     local function base(x,z)
       local id=Sim.id(x+1,z+1)
       if not id or not s.tiles[id] then return nil end
@@ -126,10 +134,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     local b={width=width,height=height,freeform=not not freeform,
       landscape_fields=records,landscape_regrowth=regrowth}
     function b.tile(x,z)
-      if x<0 or z<0 or x>=Sim.W or z>=Sim.H or b.freeform and (x==0 or z==0) or
-          stock and (x==width-1 or z==height-1) then
-        return empty
-      end
+      if not in_map(x,z) then return empty end
       local id,t=base(x,z)
       if not id then return protected end
       local r=records[id]
@@ -153,10 +158,14 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
       local field=assert(records[id]);field.fences[side]=style
       dirty(id)
     end
-    local function edge(r,id,x,z,side)
+    local function edge(r,id,other,x,z,side)
       if r.fences[side] then return end
-      local t=b.tile(x,z)
-      if t.kind~="clear" or t.ground~="field" then r.fences[side]=3;dirty(id) end
+      -- No other native surface can describe itself as a field. Avoid
+      -- reading/classifying a neighbor we already know has no crop.
+      local n=records[other]
+      if n and n.kind=="clear" and n.ground=="field" and in_map(x,z)
+          and valid_field(other,s.tiles[other],x,z,n) then return end
+      r.fences[side]=3;dirty(id)
     end
     function b.visit(x,z,tick,editor,id)
       id=id or Sim.id(x+1,z+1)
@@ -171,11 +180,13 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
         return
       end
       if r.last_tick==tick then return end
-      if b.tile(x,z)~=r then records[id]=nil;dirty(id);return end
+      if not in_map(x,z) or not valid_field(id,s.tiles[id],x,z,r) then records[id]=nil;dirty(id);return end
       r.last_tick=tick
       -- Stock clear_cmd.cpp UpdateFences and the ordinary CLEAR_FIELDS
       -- TileLoop_Clear. Same physical landscape revisit as any tile.
-      edge(r,id,x+1,z,2);edge(r,id,x,z+1,1);edge(r,id,x-1,z,0);edge(r,id,x,z-1,3)
+      local stride=Sim.W
+      edge(r,id,id+1,x+1,z,2);edge(r,id,id+stride,x,z+1,1)
+      edge(r,id,id-1,x-1,z,0);edge(r,id,id-stride,x,z-1,3)
       if editor then return end
       if r.counter<7 then r.counter=r.counter+1;return end
       r.counter=0
