@@ -26,7 +26,7 @@ assert(c.step(.006)==1/74 and c.partial() and c.completed_tick()==917)
 assert(settled()==0 and s.day==11)
 local f,n,late=c.step(.10)
 assert(f==3/74 and n==0 and late and settled()==0,"Slice budget must return to the mailbox")
-assert(c.poll_ms()==1)
+assert(c.poll_ms()==0,"A due stock tick should not sleep before checking its mailbox")
 assert(c.flush() and not c.partial() and c.completed_tick()==990 and settled()==1)
 assert(not c.flush() and s.campaign_day_fraction==0,"Only complete days can checkpoint")
 -- Early flush charged the future ticks. It must not advance another
@@ -39,7 +39,7 @@ assert(c.step(.121)==1/74 and c.completed_tick()==991)
 assert(c.flush() and c.completed_tick()==1064 and settled()==2)
 
 s,c,settled=setup(.5)
-assert(c.poll_ms()==1)
+assert(c.poll_ms()==0,"A due stock tick should not sleep before checking its mailbox")
 local trace={}
 local done=0
 while done==0 do

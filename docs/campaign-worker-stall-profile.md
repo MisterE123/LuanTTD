@@ -199,3 +199,13 @@ A separate same-day replay from the fixed starting checkpoint advanced
 records and aliases, including RNG, orders, and all paid vehicle state.
 It took 17.9 seconds of CPU before and 11.0 after on that fixture; this
 excludes the host and is not a general simulation speed multiplier.
+
+### Backlogged fast-forward no longer sleeps between batches
+
+When pacing already has a complete tick of backlog, the owner checks the
+mailbox without waiting one more millisecond. The CPU budget per batch,
+in-order replies, elapsed credit and paused/idle waits are unchanged.
+On the same populated 1024×1024 fixture at 4× speed, the baseline
+completed 30 days in both 26-second replays. With the change it completed
+32, 32 and 34 days. Actor sample p90 stayed about 114–118 ms; the measured
+gain is simulation throughput, not a change in the view reply cadence.

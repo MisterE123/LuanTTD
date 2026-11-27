@@ -70,6 +70,7 @@ function M.new(s,interval,hooks)
   function C.poll_ms()
     local speed=s.speed or 0
     if speed<=0 then return 35 end
+    if credit>=1-1e-9 then return 0 end
     return max(1,min(35,math.ceil(max(0,1-credit)*interval*1000/(speed*ticks_per_day))))
   end
   return C

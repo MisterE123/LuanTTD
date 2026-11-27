@@ -148,10 +148,16 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   -- Keep the short fail-safe solely for finite, manual test jobs.
   while (auto or prior-heartbeat<6500000) and not core.ipc_get(cancel) do
     local timeout=tick_mode and auto.poll_ms() or (auto and (overdue and 1 or 35) or 650)
-    local available=core.ipc_poll(inbox,timeout)
+    local q
+    if timeout==0 then
+      -- There is already a whole stock tick due. Check the mailbox
+      -- without a sleep, then continue with the same bounded work.
+      q=core.ipc_get(inbox)
+    elseif core.ipc_poll(inbox,timeout) then
+      q=assert(core.ipc_get(inbox))
+    end
     local now=core.get_us_time()
     if core.ipc_get(cancel) then break end
-    local q=available and assert(core.ipc_get(inbox))
     local deferred
     if auto then
       local dt=(now-prior)/1000000
