@@ -353,3 +353,77 @@ do
     table.concat(trace,","))
 end
 print("PASS: periodic encoding serves in-order presentation and ordinary road hovers; paid edit receipt follows its separate atomic write")
+
+-- A due day and an already queued observation can coincide even after a
+-- short poll, with no previous long turn or backlog. Send the end of the
+-- complete trajectory before doing the new day, but don't move a paid
+-- command ahead of that day.
+do
+  local file="mods/luanttd_core/campaign_authority_worker.lua"
+  local owner="luanttd_core:authority:1"
+  local state={day=6,speed=4,authority_revision=0}
+  local now,turn=0,0
+  local inbox,reply=owner..":request",owner..":reply"
+  local ipc,events={},{}
+  local function note(e) events[#events+1]=e end
+  local noop=function() end
+  local sim=setmetatable({},{__index=function() return function() return {} end end})
+  local modules={
+    campaign_authority_runtime=function()
+      return {day=function() state.day=state.day+1;note("day:"..state.day) end,
+        frame=noop,passengers={frame=noop,collect=noop,collect_fares=noop}}
+    end,
+    campaign_authority_endpoint=function()
+      return {
+        actor_frames=function(_,fraction)
+          assert(fraction==1 and state.day==6,"frame must sample the previous complete trajectory")
+          return {ok=true}
+        end,
+        command=function()
+          assert(state.day==7,"paid edit overtook a due day")
+          state.authority_revision=1;note("edit");return {ok=true,revision=1}
+        end,
+      }
+    end,
+    campaign_checkpoint=function()
+      return {read=function() return state end,write_state=function() note("save:"..state.day) end}
+    end,
+    packed_campaign={},
+    campaign_solar_clock={sample_interval=.1,new=function() return function() return {} end end},
+    sim=sim,
+  }
+  local saved_core,read=core,dofile
+  core={
+    get_modpath=function()return "fixture" end,get_current_modname=function()return "luanttd_core" end,
+    get_us_time=function()return now end,ipc_get=function(k)return ipc[k] end,
+    ipc_poll=function(k)
+      assert(k==inbox)
+      turn=turn+1
+      if turn==1 then now=125000;ipc[k]={seq=1,kind="actor_frames"};return true end
+      if turn==2 then ipc[k]={seq=2,kind="command",command={kind="edit"}};return true end
+      assert(turn==3);ipc[owner..":cancel"]=true;return false
+    end,
+    ipc_set=function(k,v)
+      ipc[k]=v
+      if k==reply and v.seq>0 then
+        if v.seq==1 then assert(v.actor_us==125000) end
+        note("reply:"..v.seq)
+      end
+    end,
+  }
+  dofile=function(path)
+    local k=path:match("^fixture/(.*)%.lua$")
+    if k=="campaign_step" then return M end
+    return assert(modules[k],path)
+  end
+  local ok,why=pcall(function()
+    read(file)
+    local reason,sequence,day=core.luanttd_own_campaign("ignored",owner,
+      {autoplay=true,seconds_per_day=.5,durable_actions=true})
+    assert(reason=="cancelled" and sequence==2 and day==7)
+    assert(table.concat(events,",")=="reply:1,day:7,edit,save:7,reply:2,save:7")
+  end)
+  core,dofile=saved_core,read
+  assert(ok,why)
+end
+print("PASS: due first day releases completed pose first, with day and durable edit order unchanged")

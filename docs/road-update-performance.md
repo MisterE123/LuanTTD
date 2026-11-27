@@ -776,3 +776,38 @@ and bend quotes stayed exact and did not charge the company.
 ```sh
 tests/campaign_save_road_hover_native.sh luantiserver 581218c GENERATED_WORLD CONFIG /tmp/road-autosave
 ```
+
+### Vehicle updates at a stock-day boundary
+
+When a live view is already queued and another whole simulation day is
+due, the worker can send the final pose of the last completed trajectory
+first. It then immediately runs the same due day. This doesn't predict
+vehicle motion, change clock speed, advance a queued edit, or expose a
+partially simulated day. The normal host interpolation still applies.
+
+To compare the owner change through the actual Luanti mailbox and host
+interpolator with 192 buses at 4×:
+
+```sh
+BAYLINE_GAP_ABBA=1 tests/campaign_pose_gap_native.sh luantiserver \
+  e257ef7f2610189b0c12cac801b168d3dc39e6b3 /tmp/luanttd-live-boundary
+```
+
+The deterministic worker test also covers a view and the first due day
+arriving together before any long turn: the view must leave first, the
+day must complete, and a following paid edit must still save before its
+receipt.
+
+In the repeat, 99th-percentile delay from that worker turn's sample
+timestamp to receipt at the host fell from **153 / 105 ms to 77 / 83 ms**;
+the biggest delays fell from **176 / 154 ms to 87 / 93 ms**. Typical
+host updates remained about **103 ms** apart and the host gap's 95th
+percentile stayed near **200 ms**. This avoids an unnecessary wait at
+the boundary, not the cost of simulating a day or all visible stutter.
+
+A second test used a generated 1024×1024 world and a real 32×32 viewport
+over four 26-second runs. All four ended on day 37, tick 4018, and frame
+timestamps and receipt sequence advanced monotonically. The post-sample
+99th percentile dropped from **683 / 681 ms to 177 / 153 ms**. End-to-end
+95th percentile went from **733 / 682 ms to 688 / 632 ms**, with some
+requests still taking over 900 ms if they arrived during a busy turn.

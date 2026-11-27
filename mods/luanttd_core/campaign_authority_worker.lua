@@ -149,7 +149,13 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       -- overdue. Deliver the last complete view before catching up.
       -- Never skip or reorder a simulation tick or a paid edit.
       local late_view=q and q.seq==seq+1 and now-prior>=long_turn_us and live_view[q.kind]
-      if q and (overdue or late_view) then
+      -- A view due right at the stock-day boundary can already use the
+      -- final pose of the completed trajectory. Let that receipt leave
+      -- the mailbox before starting the upcoming synchronous stock day.
+      -- The very same day advances below without moving any edit.
+      local boundary_view=q and q.seq==seq+1 and live_view[q.kind] and
+        (s.speed or 0)>0 and auto.sample(dt)==1
+      if q and (overdue or late_view or boundary_view) then
         deferred=dt
       else advance(dt) end
     end
