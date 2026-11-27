@@ -442,3 +442,27 @@ road layer for this test. Initial growth, live growth and house
 replacement share the same check. The oracle compares all 6,561 ordinary
 road/tram/empty arrangements and 1,024 mixed-facility arrangements with
 the RC1 function.
+
+### Active RC1 bus comparison
+
+The 64×64 Temperate, 1950 stock comparison starts the same MPS Regal on
+ordinary town roads with two drive-through stops. The pinned RC1 GameScript
+used the normal build, buy and order commands. Its actual vehicle snapshots
+exposed an important mismatch: the live port had applied OpenTTD's old
+constant acceleration and per-turn speed loss, not RC1's default realistic
+mode. The generated campaign's original buses now take their acceleration
+from the stock engine power, vehicle and passenger weight, traction, drag and
+incline. Realistic curves and turnarounds use their stock speed limits rather
+than the old immediate penalties.
+
+The [compiled force comparison](../tests/road_acceleration_rc1.py) covers
+13,356 cases, including acceleration, braking force and cargo weight. The
+[ordinary motion replay](../tests/stock_road_acceleration_live.lua) matches
+14 snapshots from the official executable on the same board, including actual
+position, direction, movement state/frame, speed/subspeed/progress and a
+downhill approach. The replay aligns to the exact vehicle tick field; the
+stock pause command can land on either side of its most recent controller
+tick. The separately tested Luanti client sees the generated-campaign Regal
+running depot orders with its native mesh. This verifies physical motion before
+the first stop; it does not certify active-station timing, mixed vehicle
+clocks, full cargo/economy parity, or identical growth over a served month.

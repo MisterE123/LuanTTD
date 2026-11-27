@@ -4,6 +4,12 @@ local source=debug and debug.getinfo(1,"S").source
 local base=source and source:match("^@(.*/)road_speed_runtime%.lua$")
 base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
 local Wormhole=dofile(base.."road_bridge_motion.lua")
+local Accel=dofile(base.."openttd/road_acceleration.lua")
+local Buses=dofile(base.."openttd/road_bus_catalog.lua")
+local realistic={}
+for _,engine in ipairs(Buses.order) do
+  realistic[engine]=Accel.vehicle(Buses.quote(nil,nil,Buses.stock_id(engine)))
+end
 return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,crossing_step,oneway_guard,oneway_replan,Bay,Junction,tile_xy)
   local R={bay=Bay,preserve_after_tide=Junction and Junction.preserve_after_tide}
   local Pass
@@ -204,6 +210,23 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
   -- Movement consumes zero or more pixels synchronously. Share the
   -- callbacks instead of allocating them for every moving vehicle and
   -- every pixel; keep the old pose current between pixels in one budget.
+  -- Straight stock road tracks may be inclined; turns, depot interiors
+  -- and flat bay tiles cannot. The height sampler already accounts for
+  -- the road foundation or an elevated bore cutting through other nodes.
+  local function prepare_incline(s,W,state,b,z)
+    local kind=b[6]
+    local tile=s.tiles[b[4]]
+    local mask=tile.road_bits
+    if kind==0 or kind==1 or kind==8 or kind==9 or kind==64 or kind==65 or kind==72 or kind==73 then
+      if mask==5 or mask==10 or b[10] or b[14] then
+        local mid={b[1]-b[1]%16+8,b[2]-b[2]%16+8,b[3],b[4]}
+        mid[10],mid[12],mid[14]=b[10],b[12],b[14]
+        state.incline=Accel.inclination(z or W.height(s,b),W.height(s,mid))
+        return
+      end
+    end
+    state.incline=0
+  end
   local function commit_frame(a,state,b,nominal,actual_z,bay_commit,entering)
     local s,W,v,frames,record,old=a.s,a.W,a.v,a.frames,a.record,a.old
     if bay_commit then Bay.commit(s,v,old,b,bay_commit,frames,state.index+1) end
@@ -211,11 +234,17 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     if v.status=="Waiting at one-way road" or v.status=="Waiting for roadworks" or v.status=="Waiting for junction clearance" then v.status="En route" end
     local span_limit=bridge_limit(s,b)
     local permitted=math.min(limit[v.engine],span_limit or math.huge)
-    if span_limit then state.speed=math.min(state.speed,permitted) end
-    if state.heading~=b[3] then state.heading=b[3];Speed.turn(state) end
+    if span_limit and not a.realistic then state.speed=math.min(state.speed,permitted) end
+    if state.heading~=b[3] then
+      state.heading=b[3]
+      if not a.realistic then Speed.turn(state) end
+    end
     if old[1]~=b[1] or old[2]~=b[2] then
       actual_z=actual_z or W.height(s,b)
-      Speed.grade(state,record.z,actual_z,permitted)
+      if not a.realistic then Speed.grade(state,record.z,actual_z,permitted) end
+    end
+    if a.realistic and (entering or old[6]~=b[6] and b[15]==1) then
+      prepare_incline(s,W,state,b,actual_z)
     end
     state.index=state.index+1
     if entering and v.road_via_pending then
@@ -324,6 +353,8 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     local v,c,frames,record=a.v,a.c,a.frames,a.record
     if c.index>=#frames then return end
     local old=pose(c,frames)
+    local use_realistic=s.stock_generated_profile and s.stock_bus_market and
+      s.stock_road_acceleration_model~=0 and v.stock_bus and realistic[v.engine]
     if old[16] then
       -- RoadVehLeaveDepot (RC1) checks the proposed outward point before
       -- unhiding, services the same physical vehicle, sets its speed to
@@ -346,6 +377,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       c.depot_wait=nil;c.waiting=nil
       W.put(record,old)
       if on_exit then on_exit(v,tick) end
+      if use_realistic then c.ticks=c.ticks+1;return end
     end
     if oneway_replan then
       local fresh=oneway_replan(s,v,c,frames,old,limit[v.engine])
@@ -353,9 +385,23 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         frames,a.frames,old=fresh,fresh,fresh[c.index]
       end
     end
-    local roof=math.min(limit[v.engine],bridge_limit(s,old) or math.huge)
-    a.old,a.roof,a.board=old,roof,board
-    Speed.tick(c,roof,Pass and Pass.active(c),move_frame,a)
+    local span_max=bridge_limit(s,old)
+    local roof=math.min(limit[v.engine],span_max or math.huge)
+    local passing=Pass and Pass.active(c)
+    local acceleration,minimum
+    if use_realistic then
+      if c.incline==nil then
+        local entry=c.index
+        while entry>1 and frames[entry-1][4]==old[4] do entry=entry-1 end
+        prepare_incline(s,W,c,frames[entry])
+      end
+      roof=Accel.limit(limit[v.engine],c.heading,old[6],old[12] and span_max or nil)
+      acceleration=Accel.force(use_realistic,c.speed,v.cargo,v.units or 0,c.incline,s.stock_road_slope_steepness)
+        +(passing and 256 or 0)
+      minimum=4
+    end
+    a.old,a.roof,a.board,a.realistic=old,roof,board,use_realistic
+    Speed.tick(c,roof,passing,move_frame,a,acceleration,minimum)
     c.ticks=c.ticks+1
   end
 
