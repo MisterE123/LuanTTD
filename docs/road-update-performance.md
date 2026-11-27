@@ -687,3 +687,26 @@ ran against the same candidate.
 ```sh
 tests/cargo_queue_perf_native.sh luantiserver 6228420 /tmp/cargo-queue-bench
 ```
+
+### Rolling road vehicle occupancy
+
+RC1's `UpdateVehicleTileHash` changes link membership only when the
+vehicle changes its cell. The worker now retains its live pixel and
+logical-tile buckets within the same stock day. It still refreshes
+each vehicle's pose and grade, rechecks all bay claims, and removes
+borrowed tram records before their controller reseeds them. Depot
+hiding, wreck removal, opposite lanes, and the separate bridge or
+tunnel portal memberships preserve the original checks.
+
+Two native async comparisons with 192 ordered buses measured median
+CPU/day of **62.3 → 58.4 ms** and **60.9 → 54.4 ms** across their
+warm pairs. With 480 additional built but unserved stops, the pairs
+measured **70.5 → 61.0 ms** and **66.1 → 54.9 ms**. Both compared the
+entire saved state, per-tick road poses and station events on each
+of 16 simulated days. This is not a whole-map performance claim.
+The mixed-transport worker test still paid the same fares on road,
+rail, ferry and air after reopening the campaign.
+
+```sh
+tests/road_spatial_index_perf_native.sh luantiserver 2e5af74 /tmp/road-hash-bench
+```

@@ -48,6 +48,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
   -- a power-of-two stride well beyond that range, with exact Lua numbers.
   local stride=131072
   local function world(s,stable_surface)
+    local borrowed={}
     local buckets,bay,by_tile,wormholes,exposed={},{},{},{},0
     local W={}
     local heights=stable_surface and {}
@@ -58,13 +59,14 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     function W.height(_,frame) return road_z(s,frame,heights) end
     function W.put(record,f,opposite,z)
       local x,y,direction,tile=f[1],f[2],f[3],f[4]
+      if record.companion then borrowed[record]=true end
       opposite=not not opposite
       if opposite~=not not record.opposite_lane then
         exposed=exposed+(opposite and 1 or -1)
         record.opposite_lane=opposite
       end
       record.frame=f
-      local cell=floor(x/16)*stride+floor(y/16)
+      local cell=record.x==x and record.y==y and record.cell or floor(x/16)*stride+floor(y/16)
       if record.cell~=cell then
         if record.bucket then record.bucket[record.id]=nil end
         local bucket=buckets[cell]
@@ -112,6 +114,16 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       if record.opposite_lane then exposed=exposed-1 end
       record.bucket,record.cell=nil,nil
       record.tile,record.frame,record.opposite_lane=nil,nil,nil
+    end
+    function W.begin_tick()
+      -- RC1 UpdateVehicleTileHash only changes membership when a
+      -- vehicle changes its index. Positions still update immediately.
+      -- Companion records are rebuilt by their controller. Drop precisely
+      -- those temporary records; ordinary road records keep memberships.
+      for record in pairs(borrowed) do W.erase(record);borrowed[record]=nil end
+      -- The previous tick cannot retain surface or bay eligibility. A
+      -- construction/tide/roadworks update may have run before this call.
+      bay,heights={},stable_surface and {}
     end
     function W.vehicles_at(tile)
       local list={}
@@ -403,11 +415,11 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     -- step consumes this argument synchronously; only the poses and
     -- cursors are published. Do not allocate a wrapper per vehicle/tick.
     local moving={}
+    local W,records=world(s,true),{}
     clock(function(tick)
       local ready=hooks.economy(tick)
-      local W=world(s,true)
+      W.begin_tick()
       local board=board_for(s,W)
-      local records={}
       for _,id in ipairs(ids) do
         local v=s.fleet[id]
         if v and hooks.retire then
@@ -419,9 +431,17 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
             c=init(s,v,v.road_motion_frames)
             f=visible(c,v.road_motion_frames)
           else f=v.road_stop_pose end
-          local rec=record_for(v,c)
-          records[id]=rec
-          if f then W.put(rec,f,c and c.lane_pose~=nil) end
+          local rec=records[id]
+          if not rec then rec=record_for(v,c);records[id]=rec
+          else rec.clock,rec.stopped,rec.max_speed=c,v.running==false,limit[v.engine] end
+          if f then W.put(rec,f,c and c.lane_pose~=nil)
+          else
+            if rec.tile then W.erase(rec) end
+            rec.x,rec.y,rec.z,rec.direction=nil,nil,nil,nil
+          end
+        elseif records[id] then
+          W.erase(records[id])
+          records[id]=nil
         end
       end
       local companion=hooks.companion

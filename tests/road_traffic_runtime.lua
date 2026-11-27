@@ -168,3 +168,35 @@ do
   W.erase(a);assert(not W.exposed() and #W.stock_vehicles_at(108)==0)
 end
 print("PASS ordinary same-tile and span-exit lane updates preserve the occupancy buckets")
+
+-- The rolling board retains hard occupancy only for ordinary records;
+-- a new tick recomputes bay claims and grades and drops borrowed trams
+-- before they are seeded again, even inside a shared bridge or tunnel.
+do
+  local bay=true
+  local function grade(s,f,h)
+    if not h then return s.alt end
+    h[f[4]]=h[f[4]] or s.alt
+    return h[f[4]]
+  end
+  local B=dofile(root.."road_speed_runtime.lua")(Speed,Prox,grade,
+    function() return bay end,function() return false end,nil,nil,nil,nil,nil,nil,xy)
+  local w={alt=8,stock_road_bridges=S.stock_road_bridges,stock_road_tunnels=S.stock_road_tunnels}
+  local W=B.traffic_world(w,true)
+  local coach,tram=moving(1),moving(37)
+  tram.companion=true
+  local same=span(86,105,1,5,8,true)
+  W.put(coach,span(81,105,1,5,8,true))
+  W.put(tram,same,true)
+  assert(W.exposed() and W.bay(105)==1)
+  assert(W.find(coach,{},82,25,5)==tram and #W.stock_vehicles_at(103)==2)
+  w.alt=16;bay=false
+  W.begin_tick()
+  W.put(coach,span(81,105,1,5,8,true)) -- same coordinates and membership, new ground
+  assert(not W.exposed() and not W.bay(105) and coach.z==16)
+  assert(not W.find(coach,{},82,25,5) and #W.stock_vehicles_at(103)==1)
+  assert(#W.vehicles_at(105)==1)
+  W.erase(coach)
+  assert(#W.vehicles_at(105)==0 and #W.stock_vehicles_at(103)==0)
+end
+print("PASS rolling road buckets retain ordinary vehicles and refresh current grade, bay and borrowed identities")
