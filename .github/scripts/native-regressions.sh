@@ -22,6 +22,7 @@ case "${1:-}" in
     bash tests/async_state_owner_native.sh "$(command -v luantiserver)" "$(mktemp -d)/ipc"
     bash tests/campaign_generation_async_native.sh "$(command -v luantiserver)" "$(mktemp -d)/generation"
     bash tests/campaign_tick_worker_native.sh "$(command -v luantiserver)" "$(mktemp -d)/ticks"
+    LUANTTD_QA_MUNICIPAL_KIND=woodhouse bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" "$(mktemp -d)/woodhouse"
     bash tests/campaign_ordinary_worker_native.sh
     bash tests/hotbar_task_native.sh
     bash tests/campaign_worker_recovery_native.sh

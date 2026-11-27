@@ -118,6 +118,11 @@ bits and random draws across all built-in road layouts. It checks
 eligible but sloped lots, protected plots, equal-height foundations,
 year windows, unique buildings, and all stock multi-tile footprints.
 It does not compare the world walk or the host's final placement command.
+Ordinary towns can now build houses on eligible wooded land through
+the stock clear-before-build rule. The committed footprint alone loses
+its trees, no company pays or receives a tree-clear rating penalty, and
+private trees and developed plots stay protected. Native Lua authority
+tests reopen the actual house and verify adjacent trees persist.
 
 On Better Roads and 3×3 Grid, a successful extra house can count as a
 successful growth attempt even if the main roadside lot is already

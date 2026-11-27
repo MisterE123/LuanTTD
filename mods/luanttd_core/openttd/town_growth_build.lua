@@ -49,10 +49,11 @@ return function(G,catalog)
     if disallowed(t) or t.bridge_above or (t.slope or 0)>=16 or noslope and (t.slope or 0)~=0 then return false end
     if board.house_roadtypes and not board.house_roadtypes(x,z) then return false end
     if maxz~=nil and t.max_z~=maxz then return false end
-    -- Host-safety: never let a command quote clear or replace anything
-    -- in the live rollout. Trees, farmland and other classes may later
-    -- get explicit nondestructive policies, not a generic clear call.
-    if t.kind~="clear" and not t.coast or t.occupied or t.owner then return false end
+    -- RC1 CanBuildHouseHere quotes LandscapeClear with Auto and NoWater.
+    -- The host can explicitly admit ordinary trees without allowing
+    -- demolition of buildings or owned property.
+    local wooded=t.kind=="trees" and board.clear_quote~=nil
+    if t.kind~="clear" and not t.coast and not wooded or t.occupied or t.owner then return false end
     return not board.clear_quote or board.clear_quote(x,z,"house")
   end
   local function footprint(board,t,x,z,roads,spec,first)

@@ -182,7 +182,7 @@ for line in io.lines() do
   end
   local board={tile=function(u,v)
     local k=kind(u,v)
-    return {kind="clear",slope=k==3 and 17 or k==4 and 3 or 0,
+    return {kind=k==7 and "trees" or "clear",slope=k==3 and 17 or k==4 and 3 or 0,
       max_z=(k==2 or k==4) and 8 or 0,bridge_above=k==5}
   end,clear_quote=function(u,v) return kind(u,v)~=1 end,
   house_roadtypes=function(u,v) return kind(u,v)~=6 end}
@@ -200,7 +200,7 @@ for _ in range(12000):
     cases.append([rng.randrange(1,180),rng.randrange(-8,9),rng.randrange(-8,9),rng.randrange(4),
         rng.randrange(2),rng.randrange(2),rng.randrange(2),rng.choice([-1]*3+[rng.randrange(41)]),
         rng.randrange(1900,2051),rng.choice([0]*4+[1]),
-        *[rng.choice([0]*12+[1,2,3,4,5,6]) for _ in range(9)],
+        *[rng.choice([0]*12+[1,2,3,4,5,6,7,7]) for _ in range(9)],
         *[rng.getrandbits(32) for _ in range(33)]])
 data="".join(" ".join(map(str,row))+"\n" for row in cases)
 with TemporaryDirectory(prefix="town-house-rc1-") as work:

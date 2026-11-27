@@ -146,3 +146,31 @@ cache.invalidate(S.id(7,7))
 visit(close);visit(far)
 assert(count==3,"A municipal build cannot erase the distant sea cache")
 print("PASS municipal dirty markers only invalidate nearby quiet-sea words")
+
+-- Real worker house writes can clear ordinary woods without enabling
+-- new municipal roads or touching another company's property.
+local function wooded_house(own)
+  local s,t=fixture()
+  s.stock_road_town_policy={allow_town_roads=false}
+  local id=S.id(11,13)
+  local cell=s.tiles[id]
+  cell.wood,cell.stock_clear_ground,cell.stock_clear_density=1,"grass",3
+  local company=S.company(s,"Neighbor")
+  local money=company.cash
+  if own then cell.owner="Neighbor" end
+  local draw={1073741824,0,300000000,41}
+  local i=0
+  W.tick(s,1,function() i=i+1;return draw[i] or (i%4)*1073741824 end)
+  assert(company.cash==money and cell.owner==(own and "Neighbor" or nil))
+  if own then
+    assert(cell.wood and not cell.house and t.num_houses==0)
+  else
+    assert(cell.house and not cell.wood and not cell.stock_clear_ground and t.num_houses==1 and s.changed[1]==id)
+    local C=D("packed_campaign")
+    local reopened=C.decode(C.encode(s))
+    assert(reopened.tiles[id].source_house.id==cell.source_house.id and not reopened.tiles[id].wood)
+  end
+end
+wooded_house(false)
+wooded_house(true)
+print("PASS RC1 town writes on ordinary woods; private wooded lots remain intact")

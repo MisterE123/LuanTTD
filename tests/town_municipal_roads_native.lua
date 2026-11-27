@@ -18,13 +18,14 @@ s.stock_town_growth={version=1,order={1},towns={}}
 local mode=core.settings:get("luanttd_qa_municipal_kind") or "road"
 local span=mode=="bridge" or mode=="tunnel"
 local reseed=mode=="reseed"
+local woodhouse=mode=="woodhouse"
 if span then s.passenger_rating_rng={3,3} end -- exercise the stock two-word RNG
 local cx,cz=span and 13 or 11,span and 17 or 12
-local center,protected=S.id(cx,cz),S.id(cx,cz+1)
+local center,protected=S.id(cx,cz),S.id(cx,cz+(woodhouse and 3 or 1))
 local target=not span and "road" or "stock_road_"..mode
 s.sites={{id=1,kind="town",name="Grid Town",tile=center,population=0,stock={},produced={},received={}}}
 local town=G.new(1,cx,cz,{layout="grid2",grow_counter=0})
-town.growing,town.growth_rate=true,reseed and 15000 or 0
+town.growing,town.growth_rate=true,(reseed or woodhouse) and 15000 or 0
 s.stock_town_growth.towns[1]=town
 for id in ipairs(s.tiles) do s.tiles[id]={h=1,terrain="grass",variant=1} end
 local wooded=S.id(cx-1,cz)
@@ -34,6 +35,7 @@ if reseed then
   s.tiles[wooded].wood=1
 else
   assert(S.town_road_piece(s,1,center,10,true))
+  if woodhouse then for _,dz in ipairs{-1,1} do s.tiles[S.id(cx,cz+dz)].wood=1 end end
 end
 s.tiles[protected].stock_industry={id=77}
 if mode=="bridge" then
@@ -49,6 +51,7 @@ local disk=load_("campaign_checkpoint")(core,load_("packed_campaign"),file)
 disk.write_state(s)
 local client=load_("campaign_authority_client")(core,m)
 local cap={autoplay=true,seconds_per_day=.15,road={start_year=1950,breakdowns=0,service_interval=0},oil_tanker=true}
+if woodhouse then cap.road_town_policy={allow_town_roads=false} end
 local view={{x=1,z=1,w=32,h=32}}
 local newroad,polls,closing=nil,0,false
 local function ask()
@@ -59,7 +62,9 @@ local function ask()
     for _,row in ipairs(r.value[1].tiles) do
       if row.id==center then junction=row.surface end
       if row.id==protected then guard=row.surface end
-      if row.id~=center and row.surface.build==target and row.surface.road_town==1 then newroad=row.id end
+      if woodhouse then
+        if row.surface.source_house and row.surface.source_house.root then newroad=row.id end
+      elseif row.id~=center and row.surface.build==target and row.surface.road_town==1 then newroad=row.id end
     end
     assert(guard and guard.stock_industry.id==77 and not guard.build)
     if reseed then
@@ -83,7 +88,13 @@ core.register_on_mods_loaded(function()
     local next_=assert(disk.read())
     assert(next_.day==day and next_.passenger_house_clock.counter==day*74)
     local created=assert(next_.tiles[newroad])
-    assert(created.build==target and created.road_town==1 and (not created.owner or created.owner=="town"))
+    if woodhouse then
+      assert(newroad==S.id(cx,cz-1) or newroad==S.id(cx,cz+1))
+      assert(not created.wood and created.house and created.source_house.town==1 and not created.owner)
+      assert(next_.tiles[newroad==S.id(cx,cz-1) and S.id(cx,cz+1) or S.id(cx,cz-1)].wood)
+    else
+      assert(created.build==target and created.road_town==1 and (not created.owner or created.owner=="town"))
+    end
     if span then
       local _,book=next(next_["stock_road_"..mode.."s"])
       assert(book.town==1 and #book.middle>=1)
@@ -98,11 +109,11 @@ core.register_on_mods_loaded(function()
         local r=F.follow(road,{owner="Carrier"},id,F.direction_trackdir(a.dir))
         assert(r.ok and r[mode] and r.tile==a.other)
       end
-    else assert(created.road_bits>0) end
+    elseif not woodhouse then assert(created.road_bits>0) end
     assert(not next(next_.companies) and next_.tiles[protected].stock_industry.id==77)
     if reseed then
       assert(not created.wood and not next_.tiles[center].build)
-    elseif not span then assert(next_.tiles[center].road_bits~=10) end
+    elseif not span and not woodhouse then assert(next_.tiles[center].road_bits~=10) end
     cap.autoplay=false
     assert(client.start(cap,function(ready)
       assert(ready.ready and ready.day==day)
@@ -110,7 +121,8 @@ core.register_on_mods_loaded(function()
         local found=false
         for _,row in ipairs(r.value[1].tiles) do
           if row.id==newroad then
-            assert(row.surface.road_bits==created.road_bits and row.surface.road_town==1)
+            if woodhouse then assert(row.surface.source_house.id==created.source_house.id and not row.surface.wood)
+            else assert(row.surface.road_bits==created.road_bits and row.surface.road_town==1) end
             found=true
           end
         end
@@ -119,7 +131,7 @@ core.register_on_mods_loaded(function()
       end))
     end,function(reason)
       assert(reason=="stopped")
-      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and displayed public %s tile %d, preserved private clearance, reopened geometry"):format(mode,newroad))
+      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and displayed public %s tile %d, preserved private clearance, reopened geometry"):format(woodhouse and "house on former woodland at" or mode,newroad))
       core.request_shutdown("Native municipal road proof passed",false,0)
     end,file))
   end,file))
