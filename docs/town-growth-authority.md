@@ -625,7 +625,11 @@ fixed-point speeds, carried passengers, mechanical train health, and the
 waiting, fractions and ratings of all four stops match throughout.
 Twelve monthly observations also check town streets, houses and
 construction ages, growth timers, passenger/mail supply, and paid
-passenger totals. The [reference extractor](../tools/record_rc1_mixed_town.py)
+passenger totals. The same observations match the company cash,
+fractional penny, loan, and current and previous quarterly income and
+expense ledgers. Train running costs use the original VehicleID
+economy phase and the stock Low running-cost multiplier, not a
+separate once-a-day train-side balance update. The [reference extractor](../tools/record_rc1_mixed_town.py)
 records only numbers from the original execution.
 
 Realistic acceleration is the normal RC1 rule for new campaign
@@ -668,5 +672,6 @@ single shared offshore rig. They determine the served-station
 acceptance phase and ties in the common house cargo contest. Depot
 facility-local labels and saved actor keys do not change. The physical
 vehicle pool is live for road and rail; ship/air vehicle allocation,
-simulation-only effects, cross-mode motion order, some facility expiry
-paths, and exact mixed rail accounts remain separate parity work.
+simulation-only effects, general cross-mode motion order, some
+facility expiry paths, and accounts in broader networks remain
+separate parity work.

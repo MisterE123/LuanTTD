@@ -2134,13 +2134,17 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return true
   end
 
-  -- Same stock day charge and company fixed-point credit as the owned
-  -- coal runtime. The host shares an economy-day boundary but does not
-  -- yet expose the original global VehicleID day-tick stagger.
-  function R.settle_passenger_running_day(s,fleet_id)
-    local run=R.current_paid(s,fleet_id)
+  -- Train::OnNewEconomyDay uses the physical VehicleID's phase, after
+  -- breakdown/service/order handling. Market-free tests can still run
+  -- the same finance kernel without the campaign calendar.
+  local running_cost_difficulty={[0]=6,8,9}
+  function R.settle_passenger_running_day(s,fleet_id,date,actual)
+    local run=actual or R.current_paid(s,fleet_id)
     if not (s.rail_paid_service and run and run.fleet_id and not run.freight and Roster and
         R.owned_passenger_engine(run.stock_engine)) then return end
+    if not date and run.stock_pool_id~=nil and s.road_stock_clock and s.stock_bus_market then return end
+    local last_key=date and "last_stock_economy_date" or "last_day"
+    local day=date or s.day
     local total=run.running_ticks_total or 0
     local ledger=run.passenger_finance
     if not ledger then
@@ -2150,11 +2154,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       ledger={charged_ticks=0,expense=0,fixed=0,legacy_ticks=total}
       run.passenger_finance=ledger
     end
-    if ledger.last_day and s.day<=ledger.last_day then return end
+    if ledger[last_key] and day<=ledger[last_key] then return end
     local pending=total-ledger.charged_ticks-ledger.legacy_ticks
     assert(pending>=0,"Owned passenger rail running-tick ledger went backwards")
-    if pending==0 then ledger.last_day=s.day; return end
-    local fixed=Roster.day_running_charge(run.running_year_fp,pending)
+    if pending==0 then ledger[last_key]=day; return end
+    -- RC1 RecomputePrices: Low is 6/8, Medium 8/8, High 9/8.
+    local factor=date and running_cost_difficulty[s.stock_vehicle_costs or 0] or 8
+    local fixed=Roster.day_running_charge(floor(run.running_year_fp*factor/8),pending)
     local c=assert(s.companies[run.owner],"Missing owner for owned passenger rail ledger")
     local whole,remainder=Roster.debit_fraction(c.stock_money_fraction or 0,fixed)
     c.cash,c.expense,c.month_exp,c.stock_money_fraction=
@@ -2163,17 +2169,57 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local v=s.stock_rail_fleet and s.stock_rail_fleet.units[run.fleet_id]
     local market=s.stock_bus_market
     if v then
-      local year=market and Calendar.ymd(market.epoch+s.day) or 1950+math.floor(s.day/360)
+      local year=date and Calendar.ymd(date) or market and Calendar.ymd(market.epoch+s.day) or 1950+math.floor(s.day/360)
       HQStats.operating(v,year,-whole)
     end
-    ledger.charged_ticks,ledger.expense,ledger.fixed,ledger.last_day=
-      ledger.charged_ticks+pending,ledger.expense+whole,ledger.fixed+fixed,s.day
+    ledger.charged_ticks,ledger.expense,ledger.fixed,ledger[last_key]=
+      ledger.charged_ticks+pending,ledger.expense+whole,ledger.fixed+fixed,day
     return whole,fixed,pending
   end
 
   function R.stock_cargo_random(s,run,part,kind)
     if run.stock_random_parts then
       Trigger.chain(run.stock_random_parts,part,kind,function() return R.stock_random(s) end)
+    end
+  end
+
+  local function auto_service(s,state,run,h,date,reliability,random)
+    local cfg=run.stock_train_service_opts
+    if not cfg or not reliability or not run.shuttle or run.block then return end
+    local head,back=run.consist.parts[1],run.consist.parts[#run.consist.parts]
+    local access={stopped=run.stopped,crashed=run.crashed,loading=run.phase=="dwell",
+      depot_target=run.service_depot,depot_service=run.service_depot~=nil,
+      all_in_depot=back.hidden and head.hidden and not head.wormhole and head.tile==back.tile,
+      date_of_last_service=h.date_of_last_service,reliability=h.reliability}
+    if not Auto.due(access,cfg,reliability,date) then return end
+    local base=rail_board(s,run.span)
+    local board=viewed(base,state)
+    local decision=Auto.decision(access,cfg,function(cap,penalty)
+      local v=vehicle(run,head.tile)
+      local found,best=Search.find(board,v,{tile=head.tile,td=head.pose.td},
+        Costs.destination(board,v,{kind="any_depot"}),settings,{
+          max_cost=cap,detect_origin=true,treat_first_red=true,reverse_origin={tile=back.tile,td=Track.reverse_trackdir(back.pose.td)},reverse_penalty=penalty})
+      if found then
+        local route=dense_route(board,v,best,run.span)
+        if route then return {tile=best.last_tile,cost=best.cost,route=route} end
+      end
+    end,random)
+    if not decision then return end
+    if decision.kind=="service_here" then
+      Fault.service(h,reliability,date,date,run.stock_breakdowns)
+    elseif decision.kind=="go_to_depot" then
+      if #decision.route==1 then return end -- front is already entering this depot
+      run.order_before_service=run.order_before_service or run.order
+      run.service_depot=decision.tile
+      run.order,run.route,run.index={kind="depot",tile=decision.tile,nonstop=1},decision.route,1
+      run.live_order_origin=true
+      if run.ordered_tiles then for _,p in ipairs(decision.route) do run.ordered_tiles[p.tile]=true end end
+    elseif decision.kind=="cancel_depot" then
+      run.order,run.service_depot=run.order_before_service,nil
+      run.order_before_service=nil
+      local best,v=search(board,run,head.tile,head.pose.td)
+      local route=best and dense_route(board,v,best,run.span)
+      if route then run.route,run.index=route,1 else run.stuck=true end
     end
   end
 
@@ -2192,43 +2238,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           local random=function() return R.stock_random(s) end
           Fault.economy_day(h,{cur_speed=run.speed,stopped=run.stopped,loading=run.phase=="dwell",
             difficulty=run.stock_breakdowns,engine_reliability=reliability},random)
-          local cfg=run.stock_train_service_opts
-          if not cfg or not reliability or not run.shuttle or run.block then return end
-          local head,back=run.consist.parts[1],run.consist.parts[#run.consist.parts]
-          local access={stopped=run.stopped,crashed=run.crashed,loading=run.phase=="dwell",
-            depot_target=run.service_depot,depot_service=run.service_depot~=nil,
-            all_in_depot=back.hidden and head.hidden and not head.wormhole and head.tile==back.tile,
-            date_of_last_service=h.date_of_last_service,reliability=h.reliability}
-          if not Auto.due(access,cfg,reliability,date) then return end
-          local base=rail_board(s,run.span)
-          local board=viewed(base,state)
-          local decision=Auto.decision(access,cfg,function(cap,penalty)
-            local v=vehicle(run,head.tile)
-            local found,best=Search.find(board,v,{tile=head.tile,td=head.pose.td},
-              Costs.destination(board,v,{kind="any_depot"}),settings,{
-                max_cost=cap,detect_origin=true,treat_first_red=true,reverse_origin={tile=back.tile,td=Track.reverse_trackdir(back.pose.td)},reverse_penalty=penalty})
-            if found then
-              local route=dense_route(board,v,best,run.span)
-              if route then return {tile=best.last_tile,cost=best.cost,route=route} end
-            end
-          end,random)
-          if not decision then return end
-          if decision.kind=="service_here" then
-            Fault.service(h,reliability,date,date,run.stock_breakdowns)
-          elseif decision.kind=="go_to_depot" then
-            if #decision.route==1 then return end -- front is already entering this depot
-            run.order_before_service=run.order_before_service or run.order
-            run.service_depot=decision.tile
-            run.order,run.route,run.index={kind="depot",tile=decision.tile,nonstop=1},decision.route,1
-            run.live_order_origin=true
-            if run.ordered_tiles then for _,p in ipairs(decision.route) do run.ordered_tiles[p.tile]=true end end
-          elseif decision.kind=="cancel_depot" then
-            run.order,run.service_depot=run.order_before_service,nil
-            run.order_before_service=nil
-            local best,v=search(board,run,head.tile,head.pose.td)
-            local route=best and dense_route(board,v,best,run.span)
-            if route then run.route,run.index=route,1 else run.stuck=true end
-          end
+          auto_service(s,state,run,h,date,reliability,random)
+          R.settle_passenger_running_day(s,run.fleet_id,date,run)
         end}
       end
     end

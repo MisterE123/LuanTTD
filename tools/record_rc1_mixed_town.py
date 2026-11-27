@@ -154,6 +154,8 @@ for path in map(Path,sys.argv[4:]):
   "supply":{c:[a[k] for a in ent["history"][:2] for k in ("production","transported")]
             for ent in tz["supplied"] if (c:=ent["cargo"]) in (0,2)},
   "map":th,
+  "finance":[co["money"],co["money_fraction"],co["current_loan"]],
+  "quarters":[[q["income"],q["expenses"],q["delivered_cargo"][0]] for q in history],
   "paid":sum(q["delivered_cargo"][0] for q in history)
  }
 assert sorted(checkpoints)==list(periods)

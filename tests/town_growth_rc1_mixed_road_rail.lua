@@ -154,6 +154,17 @@ local function check_town(tick)
   local expected=sample.checks[tick]
   if not expected then return end
   checkpoints=checkpoints+1
+  local company=s.companies[owner]
+  for i,key in ipairs({"cash","stock_money_fraction","loan"}) do
+    eq(key.." at "..tick,company[key],expected.finance[i])
+  end
+  for i,q in ipairs(expected.quarters) do
+    local history=i==1 and company.stock_quarter or company.stock_quarters and company.stock_quarters[i-1]
+    history=history or {income=0,expenses=0,delivered={}}
+    eq("quarter income at "..tick,history.income,q[1])
+    eq("quarter expenses at "..tick,history.expenses,q[2])
+    eq("quarter passenger total at "..tick,history.delivered.passenger or 0,q[3])
+  end
   local t=s.stock_town_growth.towns[1]
   for i,key in ipairs({"grow_counter","growth_rate","time_until_rebuild"}) do eq(key,t[key],expected.town[i]) end
   for id,name in pairs({[0]="passenger",[2]="mail"}) do
@@ -188,4 +199,4 @@ for day=1,362 do
   check_town(s.passenger_house_clock.counter)
 end
 assert(observations==26788 and checkpoints==12 and services==2)
-print("PASS RC1 operating bus and train town, 26,788 ticks, twelve monthly observations, two returns to depot and four packed reopens")
+print("PASS RC1 operating bus and train town, 26,788 ticks, twelve monthly town and exact fiscal observations, two returns to depot and four packed reopens")
