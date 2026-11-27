@@ -260,6 +260,8 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         if v.cargo=="mail" then Mail.observe_loading(s,st,v,cap)
         else Rating.observe_loading(s,st,v,cap) end
       end,
+      new_cargo=Sim.stock_road_vehicle_random and function(_,v) Sim.stock_road_vehicle_random(s,v,"new_cargo") end,
+      emptied=Sim.stock_road_vehicle_random and function(_,v) Sim.stock_road_vehicle_random(s,v,"empty") end,
       loaded=function(st,v,count)
         if v.cargo=="coal" then return coal.loaded(st,v,count) end
         if timber_cargo(v.cargo) then return timber.loaded(st,v,count) end

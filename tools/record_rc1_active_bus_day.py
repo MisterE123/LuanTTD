@@ -29,6 +29,7 @@ def sample(path):
              town=[town[k] for k in ('grow_counter','growth_rate','time_until_rebuild')],
              service=[[r['time_since_load'],r['time_since_unload'],r['goods'][0]['rating']] for r in st],
              fault=[v[k] for k in FIELDS],cash=c['money'],
+             triggers=[v['random_bits'],v['waiting_triggers']],
              delivered=c['cur_economy'][0]['delivered_cargo'][0],
              supply={row['cargo']:[entry[k] for entry in row['history'][:2]
                                   for k in ('production','transported')] for row in town['supplied']})

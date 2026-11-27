@@ -88,7 +88,8 @@ def read(path, with_board):
         bus=pos,motion=[state,frame],bus_tick=bus_tick,
         day_state=[tables[b'PLYR'][0]['money_fraction'],*[raw[k] for k in
                    ('running_ticks','day_counter','cargo_age_counter','reliability','reliability_spd_dec',
-                    'age','max_age','date_of_last_service','date_of_last_service_newgrf','breakdown_chance')]])
+                    'age','max_age','date_of_last_service','date_of_last_service_newgrf','breakdown_chance',
+                    'random_bits','waiting_triggers')]])
     return opening,runs
 
 def main():

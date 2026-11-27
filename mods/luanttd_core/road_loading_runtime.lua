@@ -239,7 +239,10 @@ return function(Timing,Packets)
         v.units=v.units-p.units
         l.unload_units=l.unload_units-p.units
       end
-      if unloaded>0 and ops.unloaded then ops.unloaded(st,v,unloaded) end
+      if unloaded>0 then
+        if ops.unloaded then ops.unloaded(st,v,unloaded) end
+        if v.units==0 and ops.emptied then ops.emptied(st,v) end
+      end
       l.unloading=l.gradual and l.unload_units>0
     elseif not l.no_load and not l.stop_loading then
       local left=l.capacity-v.units
@@ -249,6 +252,7 @@ return function(Timing,Packets)
         local from_reserved=l.reserved_units>0
         local q=from_reserved and l.reserved or queue(st,v,ops)
         attempted=#q>0
+        if attempted and v.units==0 and ops.new_cargo then ops.new_cargo(st,v) end
         loaded=shift(q,limit,function(p)
           if not from_reserved then pick(p,st,v,ops) end
           append_packet(v.batches,p)

@@ -140,6 +140,11 @@ function F.open(initial,with_faults)
   local id,err=Sim.purchase(s,owner,"bus","passenger",nil,depot)
   assert(id,err)
   local v=s.fleet[id]
+  -- The source observation comes after the real build. Reconstructing
+  -- an owned actor here must not draw the already-recorded build twice.
+  s.passenger_rating_rng={initial.clock[4],initial.clock[5]}
+  v.stock_vehicle_random_bits=initial.day_state[12]
+  v.stock_waiting_random_triggers=initial.day_state[13]
   assert(Sim.add_order(s,owner,id,1,"normal"))
   assert(Sim.add_order(s,owner,id,2,"normal"))
   assert(Sim.toggle(s,owner,id))

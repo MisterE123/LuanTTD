@@ -261,6 +261,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     if b[16] then
       W.erase(record)
       state.speed=0
+      if a.entered_transit then a.entered_transit(v) end
       return false -- stop this movement budget until the stock depot-exit tick
     end
     W.put(record,b,state.lane_pose~=nil,actual_z)
@@ -487,7 +488,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     -- step consumes this argument synchronously; only the poses and
     -- cursors are published. Do not allocate a wrapper per vehicle/tick.
     local W,records=world(s,true),{}
-    local moving={s=s,W=W}
+    local moving={s=s,W=W,entered_transit=hooks.entered_transit}
     clock(function(tick)
       local ready=hooks.economy(tick)
       W.begin_tick()

@@ -19,9 +19,13 @@ local function compare(tick)
   eq(s.day-(expect.fraction==0 and 0 or 1),expect.day,"date")
   eq(town.grow_counter,expect.town[1],"town grow countdown")
   eq(town.growth_rate,expect.town[2],"town growth interval")
-  if tick<=3574 then eq(town.time_until_rebuild,expect.town[3],"town rebuild countdown") end
+  eq(town.time_until_rebuild,expect.town[3],"town rebuild countdown")
+  eq(v.stock_vehicle_random_bits,expect.triggers[1],"stock vanilla sprite bits stay unchanged")
+  eq(v.stock_waiting_random_triggers,expect.triggers[2],"retained stock vehicle trigger bits")
   if tick>through then
     if tick==3574 then
+      eq(s.passenger_rating_rng[1],expect.rng[1],"random word 1 after a served month")
+      eq(s.passenger_rating_rng[2],expect.rng[2],"random word 2 after a served month")
       eq(v.delivered,expect.delivered,"first month's paid passengers")
       for i,ref in ipairs(expect.service) do
         local st=s.stations[i]

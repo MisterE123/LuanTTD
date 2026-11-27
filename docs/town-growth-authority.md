@@ -484,6 +484,19 @@ station ratings, town passenger and mail production, and integer balances
 through tick 2,509. Both February and March match the stock growth
 interval and countdown; at the February boundary the stock seven paid
 passengers, ratings and ages at both stops also match. This does not imply
-full town parity: later RNG, cargo, finance and the March rebuilding
-countdown still differ. It verifies the road pool in this road-only case,
+full town parity: later RNG and exact cargo and finance totals still differ. It verifies the road pool in this road-only case,
 not stock global VehicleID allocation across other modes.
+
+
+The first active-service divergence was traced to the original engine's
+`DoTriggerVehicleRandomisation` in `newgrf_engine.cpp`. Even with a vanilla
+bus and no visual resolver, boarding into an empty body performs both
+`NewCargo` and `AnyNewCargo`, drawing once per trigger from the shared
+simulation stream. The stock bus purchase, full unloading and actual
+depot entry also take their original draws. Base vehicles retain their
+waiting-trigger bits without reseeding their visual bits. These are real
+loading and movement callbacks, not time-based inserts. The
+[compiled oracle](../tests/stock_vehicle_random_rc1.py) verifies 4,200
+event sequences; the ordinary replay now matches both RNG words at the
+February boundary and the town rebuilding countdown at both month
+boundaries. Later cargo and RNG are still under comparison.

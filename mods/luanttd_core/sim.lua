@@ -3459,6 +3459,7 @@ function M.purchase(s,owner,engine,cargo,station,depot)
     local key=s.stock_bus_market and "stock_bus" or "stock_regal"
     local v=s.fleet[id]
     v[key]=road_bus_catalog().new(e)
+    M.stock_road_vehicle_random(s,v,"built")
     local f=road_faults_mount[s]
     if f then f.purchased(v) end
   end
@@ -4040,6 +4041,20 @@ end
 function M.stock_random_u32(s)
   passenger_modules()
   return rating_runtime.random_u32(s)
+end
+-- Base engines do not change appearance here, but their original
+-- triggers still participate in the RNG shared by towns and industry.
+function M.stock_road_vehicle_random(s,v,trigger)
+  if not (s.stock_generated_profile and s.stock_bus_market and v.stock_bus) then return end
+  if not M.stock_vanilla_road_triggers then
+    local info=debug and debug.getinfo(1,"S").source
+    local base=info and info:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    M.stock_vanilla_road_triggers=dofile(base.."openttd/vehicle_random_trigger.lua")
+  end
+  local function random() return M.stock_random_u32(s) end
+  if trigger=="built" then M.stock_vanilla_road_triggers.built(v,random)
+  else M.stock_vanilla_road_triggers.single(v,trigger,random) end
 end
 function M.stock_town_accept(s,town,cargo,total,town_units)
   if not s.stock_town_growth or not town or total==0 then return end
@@ -5591,6 +5606,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       v.road_via_pending=#vias>0 and vias or nil
       v.last_departure=s.day;v.last_departure_tick=tick
     end,
+    entered_transit=function(v) M.stock_road_vehicle_random(s,v,"depot") end,
     exited=faults and function(v,tick) faults.service(v,tick,fault_date(tick)) end or nil,
     arrive=function(v,tick,frame,stop_motion)
       if not stock_managed(s,v) then return false end
@@ -5605,6 +5621,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if auto then v.road_depot_resume=auto.index end
         v.progress,v.running,v.status=0,auto~=nil,auto and "Serviced; resuming route" or "Stopped in depot"
         if faults then faults.service(v,tick,fault_date(tick)) end
+        M.stock_road_vehicle_random(s,v,"depot")
         return true,true
       end
       if s.stock_road_bays then road_clock().bay.arrive(s,v,frame) end
