@@ -1,12 +1,13 @@
 -- Replay numeric snapshots from the official RC1 engine through the
--- live simulation. These controlled maps have no industry or transport
--- participants and deliberately keep stock subsidies disabled.
+-- live simulation. These controlled maps have no industry or operators
+-- running vehicles and deliberately keep stock subsidies disabled.
 local m="mods/luanttd_core/"
 local function load_module(name) return dofile(m..name..".lua") end
 local Sim,T,G,H=load_module("sim"),load_module("openttd/terrain"),load_module("openttd/town_growth"),load_module("openttd/town_passengers")
 local Art=load_module("stock_town_art")
 local calendar=load_module("openttd/stock_engine_calendar")
 local bind=load_module("campaign_simulation_bindings")(Sim,m:sub(1,-2))
+local Codec=load_module("packed_campaign")
 local first_tick=1354
 
 -- GetHouseNorthPart, town_cmd.cpp. Offsets follow the stock 1x2 and
@@ -114,7 +115,7 @@ local function initialize(ref)
   return s,towns
 end
 
-local function replay(file,expected,expected_days)
+local function replay(file,expected,expected_days,reopen_day)
   local ref=dofile("tests/fixtures/"..file..".lua")
   local s,towns=initialize(ref)
   local count=0
@@ -136,6 +137,9 @@ local function replay(file,expected,expected_days)
       eq(town.grow_counter,e[2],"growth countdown: "..id)
       eq(town.growth_rate,e[3],"growth rate: "..id)
       eq(town.time_until_rebuild,e[4],"rebuild countdown: "..id)
+      if sample.funding then
+        eq(town.fund_buildings_months or 0,sample.funding[id],"paid funding countdown: "..id)
+      end
       for cargo,name in pairs({[0]="passenger",[2]="mail"}) do
         local got=town.supplied[name] or {}
         local want=sample.supply[id][cargo] or {0,0,0,0}
@@ -186,6 +190,13 @@ local function replay(file,expected,expected_days)
     local tick=s.passenger_house_clock.counter
     local sample=ref.stock[tick]
     if sample then assert(sample.clock[1]==day);compare(sample,tick,0) end
+    if day==reopen_day then
+      assert(sample,"Reopen only after a verified stock checkpoint")
+      s=Codec.decode(Codec.encode(s))
+      towns=s.stock_town_growth.towns
+      bind.towns(s)
+      bind.flood(s)
+    end
   end
   local samples=0
   for _ in pairs(ref.stock) do samples=samples+1 end
@@ -196,6 +207,8 @@ end
 
 replay("town-growth-rc1-pair-natural",5,59)
 replay("town-growth-rc1-pair-active",3,59)
+local funded,ft=replay("town-growth-rc1-one-funded",4,90,31)
+assert(ft[1].fund_buildings_months==0 and funded.sites[1].population==168)
 local s,towns=replay("town-growth-rc1-1950",37,151)
 -- Stock month rollover uses the last tick in the batch, not its
 -- first. Create a funding expiry at the next boundary and observe the

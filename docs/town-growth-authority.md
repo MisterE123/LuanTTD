@@ -290,6 +290,17 @@ house TownIDs, all road bits and all house stages, construction counters
 and ages. These are controlled maps with no industries, companies,
 initial forests or subsidies; they do not establish full-world parity.
 
+An additional [four funded-town snapshots](../tests/fixtures/town-growth-rc1-one-funded.lua)
+come from a separate stock game. An idle company took a loan and paid
+for **Fund New Buildings** on January 1 using the regular town action.
+The replay starts with three months remaining on January 2, reopens its
+LuanTTD checkpoint on February 1 with two remaining, and matches March 31
+and April 1 on both sides of normal expiry. The funding countdown, growth
+state, town cargo statistics, every road and house, and both RNG words
+match those stock snapshots. The original company never ran vehicles;
+this verifies funded town growth and persistence, not company finance or
+served-station parity.
+
 The monthly town callback now runs after animation and before the tile
 loop of the last tick in the 74-tick batch entering the new month.
 Funding and roadwork expiry, station service ages and authority ratings

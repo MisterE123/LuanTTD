@@ -67,7 +67,7 @@ def supply(town):
     return keyed(result)
 
 
-def write(output, initial, paths):
+def write(output, initial, paths, funded=False):
     first = sample(initial)
     towns, date, settings, rows, _, _ = first
     assert (date['date'], date['date_fract'], date['tick_counter']) == (DATE_1950 + 1, 0, 1354)
@@ -78,10 +78,20 @@ def write(output, initial, paths):
         out.write("""-- Vanilla OpenTTD 16.0-RC1 Linux generic AMD64 release SHA-256:
 -- 7fb8e95000d2ce25c9abfa89fa8b1ced44018ebbc9509492a89b5d036f6e18e8.
 -- Clean 64x64 Temperate, seed 1751, 1950, original town roads.
--- No industry, initial forest, companies, NewGRFs or effective subsidies.
--- Town growth uses the default economy setting. In the custom growth
--- sample, stock GameScript sets the six-day town growth interval.
+-- No industry, initial forest, NewGRFs or effective subsidies.
+""")
+        if funded:
+            assert len(towns) == 1 and towns[0]['fund_buildings_months'] == 3
+            out.write("""-- One idle AI company pays for Fund New Buildings on January 1 by
+-- the stock GSTown.PerformTownAction command. No artificial growth rate,
+-- company infrastructure or transport. This starts the day after payment.
+""")
+        else:
+            out.write("""-- No companies. Town growth uses the default economy setting.
+-- In the custom sample, stock GameScript sets the six-day growth interval.
 -- Samples before February are unaffected by the monthly subsidy toggle.
+""")
+        out.write("""\
 -- Numeric observations only: no engine, artwork or player saves.
 -- Tile indices, TownIDs and HouseIDs are all zero-based, as in OpenTTD.
 return {
@@ -103,6 +113,8 @@ return {
             out.write(f'    [{tick}]={{clock={array(clock)},\n')
             out.write('      towns={' + ','.join(array(t[k] for k in TOWN_FIELDS[1:5])
                                                for t in towns.values()) + '},\n')
+            if funded:
+                out.write('      funding=' + array(t['fund_buildings_months'] for t in towns.values()) + ',\n')
             out.write('      supply={' + ','.join(supply(t) for t in towns.values()) + '},\n')
             out.write(f'      roads={keyed(roads)},\n      houses={keyed(houses)},\n')
             if len(towns) == 1 and tick in (4410, 4411):
@@ -113,7 +125,11 @@ return {
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 4:
-        raise SystemExit('usage: record_rc1_town_reference.py OUTPUT JAN2_SAVE LATER_SAVE [...]')
-    output, initial, *paths = map(Path, sys.argv[1:])
-    write(output, initial, paths)
+    args = sys.argv[1:]
+    funded = bool(args) and args[0] == '--funded'
+    if funded:
+        args = args[1:]
+    if len(args) < 3:
+        raise SystemExit('usage: record_rc1_town_reference.py [--funded] OUTPUT JAN2_SAVE LATER_SAVE [...]')
+    output, initial, *paths = map(Path, args)
+    write(output, initial, paths, funded=funded)
