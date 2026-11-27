@@ -59,7 +59,16 @@ assert(projections==1024,"remote construction cannot invalidate acknowledged til
 s.tiles[visible].source_house.stage=2
 local edited=sample(true)
 assert(edited.tiles[1].surface.source_house.stage==2 and first.tiles[1].surface.source_house.stage==1)
-assert(projections==2048,"visible nested house change was missed")
+assert(projections==1025,"one nested house edit should detach only one tile")
+assert(edited.tiles[2]==first.tiles[2],"neighboring row was rebuilt with no change")
+local other=at(61,62)
+local past=edited.tiles[(62-33)*32+(61-33)+1]
+s.tiles[other].variant=(s.tiles[other].variant or 0)+1
+s.tiles[visible].source_house.stage=3
+local changed_two=sample(true)
+assert(projections==1027,"two distant changes in one sector should detach exactly two tiles")
+assert(changed_two.tiles[(62-33)*32+(61-33)+1]~=past and changed_two.tiles[2]==first.tiles[2])
+assert(changed_two.tiles[1].surface.source_house.stage==3 and edited.tiles[1].surface.source_house.stage==2)
 s.tiles[visible].source_house.stage=nil
 edited=sample(true)
 assert(edited.tiles[1].surface.source_house.stage==nil)

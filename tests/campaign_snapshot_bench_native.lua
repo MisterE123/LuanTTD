@@ -13,7 +13,10 @@ core.after(0,function()
       local base,v=run(m,m.."/baseline_endpoint.lua",40,m.."/baseline_projection.lua",clock)
       local now,w=run(m,nil,40,nil,clock)
       assert(v==w and v>0)
-      results[i]={baseline_ms=base,optimized_ms=now,visible=v}
+      local edited_before,ev=run(m,m.."/baseline_endpoint.lua",40,m.."/baseline_projection.lua",clock,true)
+      local edited_after,ew=run(m,nil,40,nil,clock,true)
+      assert(ev==ew and ev>0)
+      results[i]={baseline_ms=base,optimized_ms=now,visible=v,edited_before=edited_before,edited_after=edited_after}
     end
     return results
   end,function(results)
@@ -21,6 +24,8 @@ core.after(0,function()
     for i,m in ipairs(results) do
       core.log("action",("NATIVE SNAPSHOT BENCH run=%d baseline_ms=%.3f optimized_ms=%.3f visible=%d 3x3x32²"):format(
         i,m.baseline_ms,m.optimized_ms,m.visible))
+      core.log("action",("NATIVE SNAPSHOT BENCH edited run=%d baseline_ms=%.3f optimized_ms=%.3f"):format(
+        i,m.edited_before,m.edited_after))
     end
     core.request_shutdown("Native campaign observation comparison complete",false,0)
   end))

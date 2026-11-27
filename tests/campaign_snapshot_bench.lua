@@ -1,6 +1,6 @@
 -- Production worker endpoint, unchanging camera, full 3x3 interest window.
 -- lua tests/campaign_snapshot_bench.lua [alternate_endpoint.lua] [batches] [alternate_projection.lua]
-local function benchmark(mod,source,count,projection,clock)
+local function benchmark(mod,source,count,projection,clock,edit_visible)
   local Sim=dofile(mod.."/sim.lua")
   Sim.W,Sim.H=128,128
   local T=dofile(mod.."/openttd/terrain.lua")
@@ -33,14 +33,25 @@ local function benchmark(mod,source,count,projection,clock)
   if collectgarbage then collectgarbage("collect") end
   local t=clock()
   for batch=1,count do
+    if edit_visible then
+      for _,w in ipairs(windows) do
+        local t=s.tiles[Sim.id(w.x+(batch*3)%16,w.z+(batch*7)%16)]
+        t.variant=((t.variant or 0)+1)%7
+      end
+    end
     local r=A.snapshots(windows,(batch%10)/10)
     assert(r.ok and #r.value==9)
-    for i,p in ipairs(r.value) do assert(p.scene==windows[i].scene and not p.tiles) end
+    for i,p in ipairs(r.value) do
+      if edit_visible then
+        assert(p.scene~=windows[i].scene and p.tiles and #p.tiles==1024)
+        windows[i].scene=p.scene
+      else assert(p.scene==windows[i].scene and not p.tiles) end
+    end
   end
   local d=clock()-t
   return 1000*d/count,actors
 end
 if core then return benchmark end
 local count=tonumber(arg[2]) or 50
-local ms,visible=benchmark("mods/luanttd_core",arg[1],count,arg[3],os.clock)
-print(("128² camera; 9 × 32² sectors; 192 active roads (%d visible); %d unchanged batches: %.3f ms/batch"):format(visible,count,ms))
+local ms,visible=benchmark("mods/luanttd_core",arg[1],count,arg[3],os.clock,arg[4]=="edit")
+print(("128² camera; 9 × 32² sectors; 192 active roads (%d visible); %d batches: %.3f ms/batch"):format(visible,count,ms))

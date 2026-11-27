@@ -162,3 +162,27 @@ for f in campaign_actor_projection campaign_authority_endpoint; do
 done
 luajit tests/campaign_rail_interest.lua /tmp/old-rail-interest
 ```
+
+## Reuse unaffected tile rows when a sector changes
+
+A visible house, field, or road edit can invalidate a sector without
+changing every tile in it. With identical shared corner heights, the
+worker now detaches only genuinely changed rows and reuses unaffected
+ones, including rows after the first mismatch. Registry data, signal
+aspects, and neighbor-dependent geometry still use the live world.
+The host still receives the same complete sector when its scene
+changes; the network protocol is unchanged.
+
+Native Luanti 5.15.2 async worker timings (9 × 32² sectors,
+192 road actors): a workload changing one tile per sector per
+observation had a median **23.55 → 4.36 ms** across three pairs.
+Stationary no-edit observations overlapped (**4.38 → 4.61 ms** medians).
+A separate Luanti-state replay from an active 1024² campaign compared
+complete edited and acknowledged packets from both implementations;
+all matched, including scene/actors, detached registry fields, and
+terrain. These are worker observation times, not client FPS.
+
+```sh
+lua5.1 tests/campaign_snapshot_scene.lua
+tests/campaign_snapshot_bench_native.sh luantiserver 8610b6e /tmp/luanttd-row-reuse
+```

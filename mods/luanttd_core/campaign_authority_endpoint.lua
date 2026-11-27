@@ -721,9 +721,14 @@ return function(Sim,R,max_days)
     local dikes=R.canal_dikes and R.canal_dikes.mask or function() end
     local wires=R.rail_wire_mask or function() end
     local pylons=R.rail_pylon or function() end
-    local unchanged=old and old.key==known and old.corners==corners and projection and projection.matches_tile
-    if unchanged then
-      for _,row in ipairs(old.tiles) do
+    local reusable=old and old.corners==corners and projection and projection.matches_tile and old.tiles
+    local tiles,signals=nil,{}
+    local first=1
+    if reusable then
+      -- Preserve the cheap unchanged-scene walk. When one tile differs,
+      -- the already-verified prefix stays valid, and the suffix can reuse
+      -- its own matching rows rather than detaching every tile again.
+      for i,row in ipairs(reusable) do
         local t=s.tiles[row.id]
         local rail_diagonal,rail_canopy
         if R.rail_scene_context then rail_diagonal,rail_canopy=R.rail_scene_context(s,row.id,t) end
@@ -732,38 +737,42 @@ return function(Sim,R,max_days)
           or steps_at(row.id,t,row.slope,row.level)~=row.front_steps
           or dikes(row.id)~=row.surface.canal_dikes
           or (t.water_class=="river" and R.river_direction and R.river_direction(row.id) or nil)~=row.river_direction then
-          unchanged=false
           break
         end
+        first=i+1
       end
+      if first>#reusable then tiles=reusable end
     end
-
-    local tiles,signals={},{}
-    local signals_at=R.rail and R.rail.signals_at
-    if unchanged then
-      -- The acknowledged geometry produces no terrain payload unless an
-      -- independently projected registry record changed. Motion, aspects,
-      -- passenger counts and always-current registry observations continue.
-      tiles=old.tiles
-      if signals_at then for _,row in ipairs(tiles) do signals_at(row.id,signals) end end
-    else
-      for dz=0,h-1 do
-        for dx=0,w-1 do
-          local id=Sim.id(x+dx,z+dz)
-          local t=s.tiles[id]
-          if signals_at then signals_at(id,signals) end
+    if not tiles then
+      tiles={}
+      for i=1,first-1 do tiles[i]=reusable[i] end
+      for i=first,w*h do
+        local dx,dz=(i-1)%w,math.floor((i-1)/w)
+        local previous=reusable and reusable[i]
+        local id=previous and previous.id or Sim.id(x+dx,z+dz)
+        local t=s.tiles[id]
+        local rail_diagonal,rail_canopy
+        if R.rail_scene_context then rail_diagonal,rail_canopy=R.rail_scene_context(s,id,t) end
+        local wire,pylon,dam=wires(s,id,t),pylons(s,id,t),dikes(id)
+        local river=t.water_class=="river" and R.river_direction and R.river_direction(id) or nil
+        if previous and i~=first and projection.matches_tile(t,previous.surface)
+            and rail_diagonal==previous.rail_diagonal and rail_canopy==previous.rail_canopy
+            and wire==previous.rail_wire and pylon==previous.rail_pylon and dam==previous.surface.canal_dikes
+            and river==previous.river_direction and steps_at(id,t,previous.slope,previous.level)==previous.front_steps then
+          tiles[i]=previous
+        else
           local slope,level,top=R.terrain.tile(s.corner_grid,x+dx,z+dz)
           local surface=projection and projection.tile(t) or nil
-          if surface then surface.canal_dikes=dikes(id) end
-          local rail_diagonal,rail_canopy
-          if R.rail_scene_context then rail_diagonal,rail_canopy=R.rail_scene_context(s,id,t) end
-          tiles[#tiles+1]={id=id,rail_diagonal=rail_diagonal,rail_canopy=rail_canopy,rail_wire=wires(s,id,t),rail_pylon=pylons(s,id,t),level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
+          if surface then surface.canal_dikes=dam end
+          tiles[i]={id=id,rail_diagonal=rail_diagonal,rail_canopy=rail_canopy,rail_wire=wire,rail_pylon=pylon,
+            level=level,slope=slope,top=top,ground=t.terrain,build=t.build,
             rail=t.rail_tracks,road=t.road_bits,water=t.water_class,house=not not t.house,station=t.station,
-            surface=surface,front_steps=steps_at(id,t,slope,level),
-            river_direction=t.water_class=="river" and R.river_direction and R.river_direction(id) or nil}
+            surface=surface,front_steps=steps_at(id,t,slope,level),river_direction=river}
         end
       end
     end
+    local signals_at=R.rail and R.rail.signals_at
+    if signals_at then for _,row in ipairs(tiles) do signals_at(row.id,signals) end end
     local vehicles
     if include_vehicle_summary then
       vehicles={}
