@@ -2,7 +2,9 @@
 # Actual worker-generated stock steel layouts in the Linux Luanti client.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-case ${LUANTTD_QA_STEEL_LAYOUT:-1} in 0) seed=11;; 1) seed=1751;; *) exit 2;; esac
+# RC1 founding consumes RNG before industries. These ordinary starts
+# generate and level the two different upstream steelmill layouts.
+case ${LUANTTD_QA_STEEL_LAYOUT:-1} in 0) seed=1751;; 1) seed=11;; *) exit 2;; esac
 fixture=tests/stock_steel_mill_layout_native.lua
 marker='PASS NATIVE STOCK STEEL MILL'
 if [[ ${LUANTTD_QA_RAIL_GROUND:-0} =~ ^[12]$ ]]; then
@@ -96,8 +98,8 @@ mv "$out/init" "$game/mods/luanttd_core/init.lua"
 port=${BAYLINE_NATIVE_PORT:-41063}
 display=${BAYLINE_NATIVE_DISPLAY:-199}
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' >"$out/world/world.mt"
-printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\nbayline_seed = %s\nluanttd_qa_steel_layout = %s\n' \
-  "$port" "$seed" "${LUANTTD_QA_STEEL_LAYOUT:-1}" >"$out/server.conf"
+printf 'port = %s\nbind_address = 127.0.0.1\nprometheus_listener_address = 127.0.0.1:%s\nserver_announce = false\nbayline_seed = %s\nluanttd_qa_steel_layout = %s\n' \
+  "$port" "$port" "$seed" "${LUANTTD_QA_STEEL_LAYOUT:-1}" >"$out/server.conf"
 if [[ ${LUANTTD_QA_SHORE_TREES:-0} == 2 ]]; then
   printf 'luanttd_coastal_road_trees_qa = true\n' >>"$out/server.conf"
 fi

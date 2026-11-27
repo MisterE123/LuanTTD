@@ -7,11 +7,10 @@ function begin()
   if not (player and authority and authority.status()=="owned" and #world.hotbar_layout(player)>0) then
     core.after(.25,begin);return
   end
-  -- Both docks and this west-of-Medinghead skerry come from the
-  -- settled seed; the pregame tide leaves a different natural coast
-  -- than the earlier un-settled map fixture did.
-  local land_a,land_b,from,to=53956,61119,53954,61121
-  local original_rocks={59842,60098,60354}
+  -- Ordinary dock slopes with occupied catchments on each side of a
+  -- natural skerry after RC1 founding and the pregame tide have run.
+  local land_a,land_b,from,to=29757,31026,30269,31538
+  local original_rocks={30267,30266,30777,30776}
   local Track=dofile(mod.."/openttd/rail_track.lua")
   local Water=dofile(mod.."/openttd/ship_follow.lua")(Track)
   local Terrain=dofile(mod.."/openttd/terrain.lua")
@@ -27,6 +26,10 @@ function begin()
   end
   local s=assert(OwnerCheckpoint.read())
   local board=inspect(s)
+  if not core.settings:get_bool("luanttd_qa_rocky_ferry_reopen",false) then
+    assert(assert(Net.quote(s,player_name,"dock",land_a)).approach==from)
+    assert(assert(Net.quote(s,player_name,"dock",land_b)).approach==to)
+  end
   local camera=original_rocks[2]
   local x,z=Sim.xy(camera)
   -- Look across the actual offshore lane toward the skerry and towns.
@@ -58,7 +61,7 @@ function begin()
   end
   local dry,short=trace(clear)
   local _,long=trace(board)
-  assert(short==2913 and long==3197,"Unexpected reference path costs")
+  assert(short==1510 and long==1597,"Unexpected reference path costs")
   local inlet={}
   for _,id in ipairs(original_rocks) do inlet[id]=true end
   local hits=0

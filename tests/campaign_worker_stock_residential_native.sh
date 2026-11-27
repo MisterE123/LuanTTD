@@ -5,9 +5,10 @@ out=$(mktemp -d "${TMPDIR:-/tmp}/luanttd-stock-residential-native.XXXXXX")
 echo "Native stock residential evidence: $out"
 game="$out/games/luanttd"
 mkdir -p "$game" "$out/world" "$out/home" "$out/cache"
-cp game.conf "$game/"
-cp -al mods "$game/" 2>/dev/null || cp -a mods/. "$game/mods/"
-cp mods/luanttd_core/init.lua "$out/init.lua"
+src=$(realpath "${BAYLINE_NATIVE_EXACT_GAME:-.}")
+cp "$src/game.conf" "$game/"
+cp -al "$src/mods" "$game/" 2>/dev/null || cp -a "$src/mods" "$game/"
+cp "$src/mods/luanttd_core/init.lua" "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
 lift=${LUANTTD_QA_TOWN_LIFT:-0}

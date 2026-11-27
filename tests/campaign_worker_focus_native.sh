@@ -127,7 +127,8 @@ fi
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1180x760x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!;client=;sink=
-trap '[[ -z "$client" ]] || kill "$client" 2>/dev/null || true; [[ -z "$sink" ]] || kill "$sink" 2>/dev/null || true; kill "$xv" 2>/dev/null || true;wait 2>/dev/null || true' EXIT
+source tests/native_processes.sh
+trap 'native_stop_children "$client" "$sink" "$xv"' EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 xdpyinfo >/dev/null
 await_log() {
@@ -200,7 +201,7 @@ if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
   sleep .8
   import -window root -resize 840x541 "$out/shared-platform.jpg"
   rm -f -- "$out/world/native-focus-step"
-  kill -TERM "$client";wait "$client" || true
+  native_stop_children "$client"
   client=
   open reopen
   await_log TRAM_PAID_NATIVE_REOPEN
@@ -229,7 +230,7 @@ if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
     await_log TRAM_FLEET_NATIVE_RETIRED
     grep TRAM_FLEET_NATIVE_RETIRED "$log"
   fi
-  kill -TERM "$client";wait "$client" || true
+  native_stop_children "$client"
   client=
   ! grep -Ei 'ERROR\[|could not load' "$out/"*.log
   rm -rf -- "$out/games" "$out/cache"
@@ -449,8 +450,7 @@ if [[ ${LUANTTD_NATIVE_REJOIN:-0} == 1 ]]; then
   printf '%s\n' set-rejoin > "$out/world/native-focus-step"
   await_log 'FOCUS_NATIVE_REJOIN_SET'
 fi
-kill -TERM "$client"
-wait "$client" || true
+native_stop_children "$client"
 client=
 open reopened
 printf '%s\n' reopen > "$out/world/native-focus-step"

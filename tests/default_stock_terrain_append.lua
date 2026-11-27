@@ -28,8 +28,9 @@ core.after(0,function()
     assert(core.settings:get("bayline_stock_generated_world")==nil
       and core.settings:get("bayline_seed")==nil and core.settings:get("bayline_stock_coastal_flood")==nil)
     local profile=assert(S.stock_generated_profile)
+    -- Default 64-square seed 1751 admits five towns with the RC1 founding walk.
     assert(api.generated_world and S.seed==1751 and Sim.W==64 and Sim.H==64 and #S.corner_grid.levels==65^2
-      and not S.qa_coastal and profile.terrain=="terragenesis-14.1" and profile.towns==2)
+      and not S.qa_coastal and profile.terrain=="terragenesis-14.1" and profile.towns==5)
     assert(api.terrain and api.coastal_flood_tools and S.stock_coastal_flood and api.structure_tools and api.road_bay_tools
       and api.rail_build_tools and api.rail_owned_tools and api.ship_tools and api.airport_tools and api.freight_tools)
     local kinds={}
