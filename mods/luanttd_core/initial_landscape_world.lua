@@ -29,47 +29,8 @@ return function(Sim,H,Lift)
       opts.start_lift=function(_,tile) Lift.add(s.stock_town_lifts,tile+1) end
     end
     local floor,width=math.floor,Sim.W
-    -- One 32-bit word per 32 cells at most; do not allocate one
-    -- Lua table entry for every tile of a large ocean.
-    local quiet_water,flag={},{}
-    for i=0,31 do flag[i]=2^i end
-    local function open_water(t)
-      return t and t.terrain=="water" and t.water_class=="sea" and
-        not (t.coastal_water or t.wood or t.build or t.ship or t.station or t.rail_tracks or
-          t.tram or t.airfield or t.stock_industry or t.stock_landmark or t.stock_object or
-          t.stock_void or t.stock_canal)
-    end
-    local function tide(x,z,tick,id,record)
-      local cell=id-1
-      local word,mask=floor(cell/32)+1,flag[cell%32]
-      local quiet=quiet_water[word] or 0
-      if floor(quiet/mask)%2==1 then return 0 end
-      local old=s.changed and #s.changed or 0
-      local changed=water(x,z,tick)
-      if changed>0 then
-        -- Invalidate the actual touched sea neighbors as in RC1's
-        -- ClearNeighbourNonFloodingStates. The board is private until
-        -- generation ends; no construction/clearing command can run.
-        for i=old+1,#s.changed do
-          local a,b=Sim.xy(s.changed[i])
-          for dz=-1,1 do for dx=-1,1 do
-            local at=Sim.id(a+dx,b+dz)
-            -- Retest this small word on the next visit. Clearing
-            -- a few extra bits is conservative and keeps writes cheap.
-            if at then quiet_water[floor((at-1)/32)+1]=nil end
-          end end
-        end
-      elseif x>0 and x<width-1 and z>0 and z<Sim.H-1
-          and open_water(record)
-          and open_water(tiles[id-width-1]) and open_water(tiles[id-width]) and open_water(tiles[id-width+1])
-          and open_water(tiles[id-1]) and open_water(tiles[id+1])
-          and open_water(tiles[id+width-1]) and open_water(tiles[id+width]) and open_water(tiles[id+width+1]) then
-        -- A conservative subset of stock non-flooding water: open sea
-        -- enclosed by open sea. This cache is never saved or used live.
-        quiet_water[word]=quiet+mask
-      end
-      return changed
-    end
+    local mod=core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core"
+    local sea=dofile(mod.."/stock_open_sea_cache.lua")(Sim,s)
     local function visit(tile,tick)
       local id=tile+1
       local t=tiles[id]
@@ -104,13 +65,13 @@ return function(Sim,H,Lift)
         if road_before[id]==nil then road_before[id]=t.roadside or false end
         decorate(s,x+1,z+1)
       elseif type(t.wood)=="table" then
-        if t.coastal_water then stats.tide_changes=stats.tide_changes+tide(x,z,tick,id,t) end
+        if t.coastal_water then stats.tide_changes=stats.tide_changes+sea.visit(water,x,z,tick,id,t) end
         local old=t.wood
         local event=trees(x+1,z+1,tick)
         if event or t.wood~=old then stats.tree_changes=stats.tree_changes+1 end
       elseif t.terrain=="water" then
         if t.water_class~="river" or t.coastal_water then
-          stats.tide_changes=stats.tide_changes+tide(x,z,tick,id,t)
+          stats.tide_changes=stats.tide_changes+sea.visit(water,x,z,tick,id,t)
         end
       elseif field then
         fields.visit(x,z,tick,false)

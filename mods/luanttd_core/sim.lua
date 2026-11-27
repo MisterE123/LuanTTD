@@ -519,6 +519,16 @@ end
 local function coastal_active(s)
   return s.stock_coastal_flood and s.corner_grid and s.road_economy and s.road_stock_house_supply
 end
+local live_sea=setmetatable({},{__mode="k"})
+function M.mount_live_sea_cache(s)
+  if s.stock_generated_profile and coastal_active(s) then
+    live_sea[s]=dofile(module_root.."stock_open_sea_cache.lua")(M,s)
+  end
+end
+function M.clear_live_sea_cache(s)
+  local sea=live_sea[s]
+  if sea then sea.reset();sea.resume_day=s.day+2 end
+end
 local function coastal_visit(s)
   if not coastal_active(s) then return end
   load_road_rules()
@@ -547,6 +557,8 @@ local function coastal_visit(s)
   local function water(x,z,tick)
     return coastal_world.visit(s,x+1,z+1,board,tick)
   end
+  local sea=live_sea[s]
+  if sea and sea.resume_day and s.day<sea.resume_day then sea=nil end
   local visit_tree=trees and function(x,z,tick) return trees.visit(s,x,z,tick,random) end
   local new_tree=trees and function(tick) return trees.global_tick(s,tick,random) end
   return function(x,z,tick)
@@ -556,7 +568,7 @@ local function coastal_visit(s)
     if not tile then return end
     local was_wet=tile.rail_ground==13
     if was_wet or tile.terrain=="water" then
-      water(x,z,tick)
+      if sea then sea.visit(water,x,z,tick,id,tile) else water(x,z,tick) end
       tile=s.tiles[id]
     end
     -- RC1 dispatches these tile loops by the surface record. A water

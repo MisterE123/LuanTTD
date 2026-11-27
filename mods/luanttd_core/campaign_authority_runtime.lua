@@ -404,7 +404,7 @@ return function(Sim,mod,s,cap)
   function N.day()
     Sim.daily(s)
     if Clock then Clock() end
-    if openings then openings() end
+    if openings and openings() then Sim.clear_live_sea_cache(s) end
     N.news.day()
   end
   return N

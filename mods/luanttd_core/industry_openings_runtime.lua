@@ -68,7 +68,9 @@ return function(Sim,mod,s,adapters,Industry,ctx)
   local counts,ordered,desc=contents()
   local state=s.stock_industry_builder or Schedule.reset(240,#ordered)
   s.stock_industry_builder=state
+  local opened
   local function add(f,cells)
+    opened=true
     s.changed=s.changed or {}
     for _,cell in ipairs(cells) do
       local id=type(cell)=="table" and cell.id or cell
@@ -141,6 +143,7 @@ return function(Sim,mod,s,adapters,Industry,ctx)
   end
   local last_month
   return function()
+    opened=false
     counts,ordered,desc=contents()
     local year,month,day=Sim.date(s)
     local ordinal=year*12+month
@@ -178,5 +181,6 @@ return function(Sim,mod,s,adapters,Industry,ctx)
       last_month,state.month=ordinal,ordinal
       Schedule.month(state,api)
     end
+    return opened
   end
 end

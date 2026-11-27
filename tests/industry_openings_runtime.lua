@@ -35,7 +35,7 @@ local function state(year,density)
     random=function() draws=draws+1 return seed_fields[draws] or 0 end,
     advertise=function() ads=ads+1 end,
   })
-  advance()
+  assert(advance()==(density~=0),"Sea-cache invalidation needs the actual placement receipt")
   return s,draws,ads
 end
 do

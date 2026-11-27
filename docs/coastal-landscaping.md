@@ -156,3 +156,28 @@ was overlap across runs. The saved day-25 states matched for all
 display fraction. Flooded road and tram stops, shore woods and
 recovery, fresh grass, rocks, and ordered initial landscape checks
 also pass. These measurements are for this world, not an FPS claim.
+
+### Reuse proven open-sea flags on the worker
+
+Generated worker-owned worlds now retain the same packed quiet-water
+flags between simulation days. Only a plain sea tile enclosed by
+eight plain sea neighbors qualifies. Flood or dry-out changes reset
+the affected neighbor flags; the worker drops all flags before
+a construction command or when a new industry is placed. Town,
+field, and tree growth do not convert plain open sea into a target.
+A short cooldown after edits avoids rebuilding flags while a player
+is actively building. Views and quotes do not clear the flags.
+No cache state is included in a checkpoint.
+
+In repeated native runs on the same 1024×1024 coastal world, mean CPU
+per game day across days 21–31 fell from **804 to 716 ms** (22 warm
+observations per version). The complete day-31 state matched,
+including all 1,048,576 tiles and 1,559,372 records/aliases, excluding
+wall-clock display fraction. The native worker also used the cache
+before a paid Bulldozer removed a sea tile; normal tides flooded the
+cleared ground again. The autonomous oil-rig opening test verifies
+that only a successful placement notifies the worker.
+
+```sh
+tests/live_ocean_edit_native.sh luantiserver /path/to/fixture-world /path/to/fixture.conf ../sea-edit-test
+```
