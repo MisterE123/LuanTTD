@@ -13,6 +13,15 @@ return function(Sim,s)
         t.tram or t.airfield or t.stock_industry or t.stock_landmark or t.stock_object or
         t.stock_void or t.stock_canal)
   end
+  function C.invalidate(id)
+    local a,b=Sim.xy(id)
+    for dz=-1,1 do for dx=-1,1 do
+      local at=Sim.id(a+dx,b+dz)
+      -- Retest this small word on the next visit. Clearing a few extra
+      -- bits is conservative and keeps local edits cheap.
+      if at then quiet_water[floor((at-1)/32)+1]=nil end
+    end end
+  end
   function C.visit(water,x,z,tick,id,record)
     local cell=id-1
     local word,mask=floor(cell/32)+1,flag[cell%32]
@@ -24,15 +33,7 @@ return function(Sim,s)
       -- Invalidate the actual touched sea neighbors as in RC1's
       -- ClearNeighbourNonFloodingStates. Other authoritative writes
       -- invalidate the worker cache before the next source tick.
-      for i=old+1,#s.changed do
-        local a,b=Sim.xy(s.changed[i])
-        for dz=-1,1 do for dx=-1,1 do
-          local at=Sim.id(a+dx,b+dz)
-          -- Retest this small word on the next visit. Clearing
-          -- a few extra bits is conservative and keeps writes cheap.
-          if at then quiet_water[floor((at-1)/32)+1]=nil end
-        end end
-      end
+      for i=old+1,#s.changed do C.invalidate(s.changed[i]) end
     elseif x>0 and x<width-1 and z>0 and z<Sim.H-1
         and open_water(record)
         and open_water(tiles[id-width-1]) and open_water(tiles[id-width]) and open_water(tiles[id-width+1])

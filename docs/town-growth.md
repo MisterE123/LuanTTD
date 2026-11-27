@@ -137,12 +137,14 @@ building, asserts actual multipart ordering and population, and uses the
 existing passenger production after completion.
 
 This is not full-world OpenTTD growth parity. The road/lot search has focused
-fixtures, not a whole native growth differential. It deliberately refuses
+fixtures, not a whole native growth differential. The detached/house-only path refuses
 automatic terraforming/clearing, bridge/tunnel creation, crossings, competing
 town road expansion, non-temperate goals, NewGRFs, and existing house
 replacement or decay. It returns one safe plan per attempt, even where the
 stock search can perform an extra-house build before continuing. Any broader live mount (road building, more house types or more station modes)
-needs independent timing, save/load and visual QA.
+needs independent timing, save/load and visual QA. See the separate
+[ordinary municipal road adapter](town-growth-authority.md#municipal-streets-on-ordinary-generated-maps)
+for supported live streets and spans.
 
 ## One growth callback per stock tick
 

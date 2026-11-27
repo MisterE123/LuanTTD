@@ -67,3 +67,4 @@ print("PASS host keeps its simulation lease with no viewers and no terrain traff
 -- Run the deterministic worker clock and mailbox order checks in this suite.
 dofile("tests/campaign_step.lua")
 dofile("tests/campaign_tick_step.lua")
+dofile("tests/town_municipal_roads.lua")

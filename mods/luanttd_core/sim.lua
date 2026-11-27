@@ -525,6 +525,12 @@ function M.mount_live_sea_cache(s)
     live_sea[s]=dofile(module_root.."stock_open_sea_cache.lua")(M,s)
   end
 end
+-- The exact dirty IDs of a municipal commit cannot make distant
+-- non-flooding sea recheck. Full unknown edits still use clear().
+function M.invalidate_live_sea_near(s,id)
+  local sea=live_sea[s]
+  if sea then sea.invalidate(id) end
+end
 function M.clear_live_sea_cache(s)
   local sea=live_sea[s]
   if sea then sea.reset();sea.resume_day=s.day+2 end

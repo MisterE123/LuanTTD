@@ -12,6 +12,8 @@ return function(Sim,Terrain,G,B,H)
   local Lift=dofile(path.."openttd/town_lift.lua")
   local Rebuild=dofile(path.."openttd/town_rebuild.lua")
   local authority=dofile(path.."town_road_authority.lua")(Sim,dofile(path.."openttd/road_town_permission.lua"))
+  local roads=dofile(path.."town_generation_board.lua")
+  local Worldgen=dofile(path.."openttd/town_worldgen.lua")(G,B)
   local function at(layer,id) return layer and layer[id] end
   local function record(t) return t and t.house and t.source_house or nil end
   local function protected(s,id,t)
@@ -154,6 +156,67 @@ return function(Sim,Terrain,G,B,H)
     s.changed=s.changed or {}
     s.changed[#s.changed+1]=id
   end
+
+  local function available(s,id,t)
+    -- The first live mount does not demolish or move developed parcels.
+    -- The road and span command still enforces actual geometry/traffic.
+    return t and not (t.stock_void or t.stock_object or t.owner or t.house or t.source_house or
+      t.parcel or t.site or t.station or protected(s,id,t)) and (not t.build or t.build=="road")
+  end
+  function W.road_board(s)
+    local function read(x,z)
+      local id=Sim.id(x,z)
+      local t=at(s.tiles,id)
+      if not t then return end
+      if t.stock_void then return {kind="void"} end
+      local slope,base,top=Terrain.tile(s.corner_grid,x,z)
+      local kind,road_bits,axis,entrance
+      if t.house then kind="house"
+      elseif t.build=="road_depot" and type(t.depot_dir)=="number" then kind,entrance="depot",4-t.depot_dir
+      elseif t.build=="road_station" then
+        local b=t.stop_axis or Sim.road_bits(s,id)
+        if b==5 or b==10 then kind,axis,road_bits="drive_stop",b==5 and 1 or 0,b
+        else
+          kind="bay_stop"
+          for d=0,3 do if b==2^(3-d) then entrance=d;break end end
+        end
+      elseif t.stock_industry then kind="industry"
+      elseif t.rail_tracks and not t.level_crossing then kind="rail"
+      elseif t.build=="road" or t.level_crossing then kind,road_bits="road",Sim.road_bits(s,id)
+      elseif t.terrain=="water" then kind="water"
+      elseif t.wood then kind="trees"
+      elseif available(s,id,t) then kind="clear"
+      else kind="object" end
+      return {kind=kind,slope=slope,base=base,max_z=top*8,road_bits=road_bits,
+        road_town=t.road_town,road_disallowed=t.road_disallowed or t.disallowed,
+        owner=t.owner,axis=axis,entrance=entrance,coast=kind=="water" and t.coastal_water,
+        sea=kind=="water" and t.water_class=="sea" and not t.coastal_water,
+        water_rocks=t.stock_water_rocks}
+    end
+    local function roadable(x,z)
+      local id=Sim.id(x,z)
+      return available(s,id,at(s.tiles,id))
+    end
+    return roads(Sim,Terrain,s,G,Worldgen,read,{
+      houseable=function(x,z) return clear_levels(s,Sim.id(x,z))~=nil end,
+      roadable=roadable,
+      span_ends=function(x,z,u,v) return roadable(x,z) and roadable(u,v) end,
+      bridge_clears=function(ids)
+        -- A municipality may cross a structure at the stock clearance
+        -- but may never clear a private parcel on the way. "town" in
+        -- the command is a sentinel, not a player's name comparison.
+        for _,id in ipairs(ids or {}) do
+          if not available(s,id,at(s.tiles,id)) then return false end
+        end
+        return true
+      end,
+      dirty=function(id)
+        visual_changed(s,id)
+        Sim.invalidate_live_sea_near(s,id)
+      end,
+      grade_changed=function() s.topology=(s.topology or 0)+1 end,
+    })
+  end
   function W.advance_house(s,id,h,tick)
     if not h or not h.town_growth or h.completed then return false end
     local t=s.stock_town_growth.towns[h.town]
@@ -273,14 +336,43 @@ return function(Sim,Terrain,G,B,H)
     local state=s.stock_town_growth
     if not state then return end
     local view,brd
+    local policy=s.stock_road_town_policy
+    local expand=not write_house and s.stock_generated_profile and (not policy or policy.allow_town_roads~=false)
     -- OnTick_Town visits the same ordered towns even when no build is
     -- due. G.tick supplies the town when its countdown actually expires;
     -- share one callback and the lazy board for this source tick.
     local function attempt(t)
       view=view or services(s)
-      brd=brd or board(s)
-      local proposal=B.grow(t,brd,{year=Sim.date(s),allow_roads=false},random)
-      return commit(s,t,proposal,view,tick,write_house)
+      brd=brd or (expand and W.road_board(s) or board(s))
+      local function write(proposal)
+        return commit(s,t,proposal,view,tick,write_house)
+      end
+      local proposal=B.grow(t,brd,{year=Sim.date(s),allow_roads=not not expand,
+        build_on_slopes=not policy or policy.build_on_slopes~=false,extra_house=expand and write or nil},random)
+      if not proposal then return false end
+      if proposal.kind=="house" then return write(proposal) end
+      local id=Sim.id(proposal.x,proposal.z)
+      if proposal.kind=="road" then
+        if not available(s,id,s.tiles[id]) or not Sim.town_road_piece(s,t.id,id,proposal.bits,true) then return false end
+        visual_changed(s,id)
+        Sim.invalidate_live_sea_near(s,id)
+        return true
+      end
+      local finish=Sim.id(proposal.u,proposal.v)
+      if not available(s,id,s.tiles[id]) or not available(s,finish,s.tiles[finish]) then return false end
+      local ok,_,dirty
+      if proposal.kind=="bridge" then
+        if not brd.bridge_quote(t,proposal.x,proposal.z,proposal.u,proposal.v,proposal.style) then return false end
+        ok,_,dirty=Sim.road_bridge(s,"town",id,finish,proposal.style,false,t.id)
+      elseif proposal.kind=="tunnel" then
+        ok,_,dirty=Sim.road_tunnel(s,"town",id,false,t.id)
+      end
+      if not ok then return false end
+      for _,cell in ipairs(dirty) do
+        visual_changed(s,cell)
+        Sim.invalidate_live_sea_near(s,cell)
+      end
+      return true
     end
     for _,id in ipairs(state.order) do G.tick(state.towns[id],attempt) end
   end
