@@ -388,6 +388,7 @@ return function(Sim,mod,s,cap)
   end
   local openings
   local generated=s.stock_generated_profile
+  if generated or s.stock_economy_subsidies then Sim.mount_stock_subsidies(s,N.news.subsidy) end
   if generated and generated.industry_stats and oil and farm then
     local _,_,farm_rules=Sim.mount_farm_world(s,Terrain,true)
     local stand=dofile(source.."passengers.lua")
@@ -412,7 +413,12 @@ return function(Sim,mod,s,cap)
       coal=dofile(mod.."/coal_industry_world.lua")(Sim,Terrain,coal),oil=oil,farm=farm,heavy=heavy,
       bank=N.bank,timber=dofile(mod.."/timber_world.lua")(Sim,Terrain,timber)},rules,{
         terrain=Terrain,coal=coal,density=generated.industry_density or 4,vehicle_on_ground=vehicle_on_ground,
-          advertise=N.news.industry_opened})
+          advertise=N.news.industry_opened,
+          industry_id=function(chain,id)
+            local book=s.stock_economy_subsidies
+            return book and book.industry_keys[chain..":"..id]
+          end,
+          placed=function(chain,id) Sim.stock_subsidy_authority.placed(s,chain,id) end})
   end
   function N.day(tick_pulse)
     Sim.daily(s,nil,tick_pulse,openings)

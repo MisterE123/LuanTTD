@@ -174,7 +174,14 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     local dist=Packets.distance(p,stop_tile(s,st,v),Sim.xy)
     return Income.regular(p.units,dist,p.age or 0,unpack(Income.temperate[v.cargo]))
   end
-  local function apply_subsidy(s,v,p,site,money)
+  local function apply_subsidy(s,st,v,p,site,money)
+    if s.stock_economy_subsidies then
+      return Sim.stock_subsidy_pay(s,v.cargo,v.owner,p,money,function()
+        local cells={}
+        for id in pairs(Sim.road_stop_catchment(s,st,3)) do cells[id-1]=true end
+        return cells
+      end)
+    end
     if host.subsidy then return host.subsidy(s,v,p,site,money) end
     -- Preserve the authored scenario's contract list until the stock
     -- subsidy system mounts. Money remains attributed to the real route.
@@ -284,7 +291,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
             by_site[site.id]=(by_site[site.id] or 0)+p.units
           end
         end
-        return apply_subsidy(s,v,p,site,base_fare(s,st,v,p))
+        return apply_subsidy(s,st,v,p,site,base_fare(s,st,v,p))
       end,
       transfer_income=function(st,v,p)
         if v.cargo=="coal" then return coal.transfer_income(st,v,p) end

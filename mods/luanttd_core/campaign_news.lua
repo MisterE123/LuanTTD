@@ -205,6 +205,55 @@ return function(Sim,mod,R,cap)
     -- events keep a tile instead, so an old factory closure can be read.
     Kernel.remove(book,function(row) return not live_reference(row) end)
   end
+  local function endpoint(row)
+    if row.type=="town" then return s.sites[row.id+1] end
+    local pool=s.stock_economy_subsidies
+    local key=pool and pool.industry_slots[row.id]
+    if not key then return end
+    local chain,id=key:match("^([^:]+):(%d+)$")
+    local list=s["stock_"..chain.."_industries"]
+    local firm=list and list[tonumber(id)]
+    return firm and s.sites[firm.site]
+  end
+  local labels={[0]="Passengers","Coal","Mail","Oil","Livestock","Goods","Grain","Wood","Iron ore","Steel","Valuables"}
+  local function projected(row)
+    local src,dst=endpoint(row.src),endpoint(row.dst)
+    if not src or not dst then return end
+    return {id=row.id,cargo=assert(labels[row.cargo]),src=src.name,dst=dst.name,
+      source_tile=src.tile,destination_tile=dst.tile,months=row.remaining,owner=row.awarded}
+  end
+  function W.subsidy(_,kind,row)
+    local offer=projected(row)
+    if not offer then return end
+    local route=offer.cargo.." from "..offer.src.." to "..offer.dst
+    local title,body
+    if kind=="offer" then
+      title="Service subsidy offered"
+      body=route..". The first company to complete a qualifying delivery earns the contract."
+    elseif kind=="awarded" then
+      title="Service subsidy awarded"
+      local rates={[0]="1.5×","2×","3×","4×"}
+      body=offer.owner.." receives "..rates[s.stock_economy_subsidies.multiplier]..
+        " the normal fare for "..route.." for "..offer.months.." months."
+    elseif kind=="offer_expired" then
+      title,body="Subsidy offer expired",route..". No company claimed the offer."
+    else
+      title,body="Service subsidy ended",route..". Deliveries now pay the normal fare."
+    end
+    return publish("subsidies","thin",title,body,{tile=offer.source_tile,icon="industry"})
+  end
+  function W.subsidies(page)
+    local rows={}
+    if s.stock_economy_subsidies then
+      for _,item in ipairs(Sim.stock_subsidy_authority.entries(s)) do
+        local row=projected(item)
+        if row then rows[#rows+1]=row end
+      end
+    end
+    local items={}
+    for i=(page-1)*6+1,math.min(#rows,page*6) do items[#items+1]=rows[i] end
+    return {items=items,count=#rows}
+  end
   function W.head() return book.head end
   function W.history(name,page,limit)
     local items,n=Kernel.history(book,name,page,limit)

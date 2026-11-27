@@ -127,6 +127,12 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       end
       return out
     end
+    if s.stock_economy_subsidies then
+      ctx.subsidy=function(st,v,p,amount,tiles)
+        local neutral=st.neutral_rig and ("oil:"..st.neutral_rig)
+        return Sim.stock_subsidy_pay(s,v.cargo or "passenger",v.owner,p,amount,tiles,nil,neutral)
+      end
+    end
     ctx.production=function(service,tick) Mux.consume(s,service,tick,ctx) end
     return ctx
   end

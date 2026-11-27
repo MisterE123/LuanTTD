@@ -326,7 +326,35 @@ the Day placement before Month quotas and any other monthly work.
 A newly opened offshore rig is physically present and runs its first
 industry tick immediately. Refreshing the affected transport bindings
 preserves running charges and existing presentation samples. Global
-industry ordering and live subsidies still need broader comparisons.
+industry production order across all supported chains still needs broader
+comparison.
+
+### Active transport subsidies
+
+The stock subsidy lottery now runs after the industry's monthly
+production history and before towns rotate their own previous-month
+history. It uses the same shared random stream as town growth. The
+[compiled source comparison](../tests/subsidy_rc1_upstream.py) checks
+1,700 cases against OpenTTD 16.0-RC1. The
+[mounted live replay](../tests/stock_subsidy_world_replay.lua) matches
+both RNG words, every road and house, and the actual passenger and mail
+offers through April 1 in two stock three-town worlds. Those references
+have no active transport or industries.
+
+An open contract is awarded by the first qualifying **final** delivery
+and persists across save/reload. Covered houses determine which towns
+qualify, independently of the town in the station name. Industry targets
+use actual station coverage; a feeder transfer earns no subsidy, and
+multiple qualifying offers do not stack their multipliers. The Gazette's
+**Active subsidies** page shows unclaimed and assigned routes, months
+remaining, and jumps to the actual endpoints. Default awards pay triple.
+
+Real road passenger and mail settlements verified $62 → $186 and
+$67 → $201. A native tanker received $7,008 at twice the normal fare and
+$10,512 at triple for the same 220 kL of real offshore oil delivered to the
+refinery after reopening a partially loaded save. The award appeared once
+in the Gazette and reopening again did not duplicate it. This does not
+establish full active-transport or cross-industry town-growth parity.
 
 The [numeric snapshots](../tests/fixtures/town-growth-rc1-1950.lua) can be
 regenerated with [the reference extractor](../tools/record_rc1_town_reference.py)

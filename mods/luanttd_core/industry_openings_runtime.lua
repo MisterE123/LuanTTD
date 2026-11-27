@@ -27,18 +27,25 @@ return function(Sim,mod,s,adapters,Industry,ctx)
   for id,row in pairs(stock) do by_kind[row.kind]=id end
   local chains={"coal","timber","oil","farm","heavy","bank"}
   local function contents()
-    local counts,ordered,desc={},{},{}
+    local counts,ordered,desc,global={},{},{},{}
     for _,chain in ipairs(chains) do
       for _,f in pairs(s["stock_"..chain.."_industries"] or {}) do
         local id=by_kind[f.kind]
         if id and not f.removed then
           counts[id]=(counts[id] or 0)+1
           ordered[#ordered+1]=f
+          global[f]=ctx.industry_id and ctx.industry_id(chain,f.id) or nil
           desc[#desc+1]={type=id,x=f.x,z=f.z,town=f.town}
         end
       end
     end
-    table.sort(ordered,function(a,b) return a.id<b.id end)
+    table.sort(ordered,function(a,b)
+      local x,y=global[a],global[b]
+      if x~=nil and y~=nil then return x<y end
+      if x~=nil then return true end
+      if y~=nil then return false end
+      return a.id<b.id
+    end)
     return counts,ordered,desc
   end
   local function refresh_towns()
@@ -76,6 +83,7 @@ return function(Sim,mod,s,adapters,Industry,ctx)
       local id=type(cell)=="table" and cell.id or cell
       if id then s.changed[#s.changed+1]=id end
     end
+    if ctx.placed then ctx.placed(stock[by_kind[f.kind]].chain,f.id) end
     if ctx.advertise then ctx.advertise(f) end
     return f
   end

@@ -17,6 +17,10 @@ case "${1:-}" in
   startup)
     luantiserver --version
     lua5.1 tests/town_growth_stock_replay.lua
+    lua5.1 tests/stock_subsidy_world_replay.lua
+    lua5.1 tests/stock_subsidy_host.lua
+    lua5.1 tests/stock_subsidy_road_live.lua
+    lua5.1 tests/subsidy_board_ui.lua
     lua5.1 tests/town_industry_month_order.lua
     lua5.1 tests/industry_openings_economy_tick.lua
     lua5.1 tests/road_stock_loading_live.lua
@@ -125,6 +129,7 @@ case "${1:-}" in
     python3 tests/stock_oil_rig_art.py
     python3 tests/stock_tricario_art.py
     bash tests/stock_offshore_tanker_worker_native.sh
+    LUANTTD_QA_SUBSIDY_MULTIPLIER=2 bash tests/stock_offshore_tanker_worker_native.sh
     bash tests/offshore_rotary_worker_native.sh
     LUANTTD_QA_ROTARY_FIELD=city bash tests/offshore_rotary_worker_native.sh
     LUANTTD_QA_ROTARY_MODEL=254 bash tests/offshore_rotary_worker_native.sh

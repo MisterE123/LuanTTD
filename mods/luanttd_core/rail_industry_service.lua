@@ -172,7 +172,7 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
           local l=state.vehicle.load_state
           local seq=(l[sequence] or 0)+1
           local token=table.concat({route_tag,v.id,v.visit,seq},":")
-          local r,why=pipeline.stage(st.id,tick,token,packet,v.cargo_tile)
+          local r,why=pipeline.stage(st.id,tick,token,packet,v.cargo_tile,{owner=v.owner})
           assert(r,why)
           l[sequence]=seq
           l[accepted]=(l[accepted] or 0)+r.units

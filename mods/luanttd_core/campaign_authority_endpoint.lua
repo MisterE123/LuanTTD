@@ -350,6 +350,9 @@ return function(Sim,R,max_days)
   end
   function A.news(name,page,after,req)
     if not owner(name) or not s.companies[name] or not R.news then return reply(false,"Newspaper unavailable.") end
+    if req and req.action=="subsidies" and integer(page,1,43) then
+      return reply(true,nil,R.news.subsidies(page))
+    end
     if req and req.action=="last" then
       local function cursor(v) return integer(v,1,9007199254740991) and v or nil end
       return reply(true,nil,R.news.last(name,cursor(req.forced),cursor(req.current),req.shown==true,

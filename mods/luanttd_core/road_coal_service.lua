@@ -222,6 +222,9 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
             current_payment=option("current_payment",tick),refused=ctx.refused,
           })
           if Sim.stock_town_accept then Sim.stock_town_accept(s,st.town or st.site,"coal",result.accepted,0) end
+          if result.accepted>0 and Sim.stock_subsidy_active and Sim.stock_subsidy_active(s) then
+            result.payment=Sim.stock_subsidy_pay(s,"coal",v.owner,p,result.payment,coverage[st.id].tiles,"coal")
+          end
           local l=assert(v.load_state)
           l.coal_accepted=(l.coal_accepted or 0)+result.accepted
           for _,destination in ipairs(result.plants) do

@@ -7,6 +7,7 @@ local client=m("campaign_authority_client")(core,mod)
 local file="luanttd-wide-campaign.chk"
 local checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),file)
 local initial=checkpoint.read()
+local multiplier=tonumber(core.settings:get("luanttd_qa_subsidy_multiplier"))
 local actor="North Reach Tanker"
 local wage=100000
 local function cell(x,z) return (z-1)*64+x end
@@ -37,6 +38,16 @@ if not initial then
   local stock=assert(W.place(s,assert(W.quote(s,rigs,options)),options))
   assert(not stock.neutral_station and stock.tiles[1].stage==0)
   Sim.company(s,actor).cash=wage
+  if multiplier then
+    m("campaign_simulation_bindings")(Sim,mod).towns(s)
+    local book=assert(Sim.mount_stock_subsidies(s))
+    local g=m("openttd/town_growth")
+    local rules=m("openttd/subsidy")(g.range,g.chance)
+    book.multiplier=multiplier
+    assert(rules.create(book.subsidies,3,
+      {type="industry",id=assert(book.industry_keys["oil:12290"])},
+      {type="industry",id=assert(book.industry_keys["oil:12289"])}))
+  end
   checkpoint.write_state(s)
 end
 local thread,revision,goal
@@ -86,6 +97,11 @@ local function work()
     return {kind="stop"}
   end
   if not initial then
+    if multiplier then
+      local offers=ask("news",{action="subsidies",page=1})
+      assert(offers.count==1 and offers.items[1].cargo=="Oil" and not offers.items[1].owner)
+      assert(offers.items[1].source_tile==rigs)
+    end
     -- Only the real landscape loop may finish construction and activate
     -- the neutral depot-less station. No forced test support on restart.
     local rig
@@ -137,6 +153,19 @@ local function work()
         assert(refinery.received.oil==220 and s.companies[actor].revenue==v.revenue and v.revenue>0,
           ("%s kL, %s revenue/%s ship"):format(refinery.received.oil,s.companies[actor].revenue,v.revenue))
         assert(s.stock_owned_oil_ship.expense>0)
+        if multiplier then
+          local offers=ask("news",{action="subsidies",page=1})
+          local contract
+          for _,offer in ipairs(offers.items) do if offer.source_tile==rigs then contract=offer end end
+          assert(contract and contract.owner==actor and contract.months>=11 and contract.months<=12)
+          assert(v.revenue==3504*(multiplier+1),"Stock multiplier must apply to exactly the real refinery fare")
+          local found=0
+          for _,item in ipairs(s.stock_news_journal.items) do
+            if item.kind=="subsidies" and item.headline=="Service subsidy awarded" then found=found+1 end
+          end
+          assert(found==1,"A live delivery must award the contract exactly once")
+          core.log("action",("OFFSHORE_SUBSIDY_PAYOUT %d %d"):format(multiplier,v.revenue))
+        end
         goal=("OFFSHORE_TANKER_NATIVE_PASS restored real rig cargo and paid $%d for 220 kL at the refinery"):format(v.revenue)
         return {kind="stop"}
       end

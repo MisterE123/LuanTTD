@@ -414,7 +414,11 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
         local g=goods(st,v.cargo)
         g.ever_accepted,g.current_month,g.accepted_bigtick=true,true,true
         local amount,distance=fare(v,p,ctx)
-        if ctx.subsidy then amount=ctx.subsidy(st,v,p,amount) end
+        if ctx.subsidy then
+          amount=ctx.subsidy(st,v,p,amount,function()
+            return coverage(state,st,ctx,v.cargo=="mail").tiles
+          end)
+        end
         emit(events,"deliver",st,v,tick,{units=p.units,source=p.source,
           origin_station=p.origin_station,age=p.age,distance=distance,amount=amount})
         return amount

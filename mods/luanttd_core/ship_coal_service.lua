@@ -114,6 +114,9 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
         local result=Coal.delivery(st,B.report(st.host_id),p,{distance=distance,
           current_payment=option("current_payment",tick),date=option("economy_date",tick) or s.day,refused=ctx.refused})
         if Sim.stock_town_accept then Sim.stock_town_accept(s,st.town,"coal",result.accepted,0) end
+        if result.accepted>0 and Sim.stock_subsidy_active and Sim.stock_subsidy_active(s) then
+          result.payment=Sim.stock_subsidy_pay(s,"coal",v.owner,p,result.payment,coverage[st.id].tiles,"coal")
+        end
         local l=v.load_state
         l.coal_accepted=(l.coal_accepted or 0)+result.accepted
         for _,plant in ipairs(result.plants) do

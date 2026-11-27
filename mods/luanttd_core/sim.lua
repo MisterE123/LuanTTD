@@ -4012,6 +4012,31 @@ function M.tram_passenger_age(s,v,tick)
   passenger_modules()
   station_service.age_vehicle(s,v,tick)
 end
+function M.mount_stock_subsidies(s,event)
+  passenger_modules()
+  if not M.stock_subsidy_authority then
+    local info=debug and debug.getinfo(1,"S").source
+    local base=info and info:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    local G=dofile(base.."openttd/town_growth.lua")
+    local rules=dofile(base.."openttd/subsidy.lua")(G.range,G.chance)
+    local host=dofile(base.."stock_subsidy_host.lua")(M,rules,dofile(base.."openttd/town_passengers.lua"),{
+      passenger=station_service.house_passenger_acceptance,
+      mail=mail_runtime.house_acceptance,
+      goods=dofile(base.."openttd/town_goods.lua").house_acceptance,
+    },dofile(base.."openttd/town_cargo_stats.lua"))
+    M.stock_subsidy_authority=dofile(base.."stock_subsidy_runtime.lua")(rules,host)
+  end
+  return M.stock_subsidy_authority.mount(s,{event=event})
+end
+function M.stock_subsidy_active(s)
+  local book=s.stock_economy_subsidies
+  return book and book.subsidies.count>0
+end
+function M.stock_subsidy_pay(s,cargo,owner,p,amount,coverage,chain,neutral)
+  if not M.stock_subsidy_active(s) then return amount end
+  return M.stock_subsidy_authority.pay(s,cargo,owner,p,amount,coverage,chain,neutral)
+end
 function M.stock_random_u32(s)
   passenger_modules()
   return rating_runtime.random_u32(s)
@@ -5744,7 +5769,9 @@ function M.daily(s,traverse,tick_pulse,openings)
   end
   local function roll_town_month()
     M.stock_station_acceptance_history.rotate_host(s,FreightKinds.all)
-    growth.world.month(s,town_month,function() return rating_runtime.random_u32(s) end)
+    local random=function() return rating_runtime.random_u32(s) end
+    if s.stock_economy_subsidies then M.stock_subsidy_authority.month(s,town_month,random) end
+    growth.world.month(s,town_month,random)
   end
   if town_month and not exact_economy then roll_town_month() end
   if s.corner_grid then

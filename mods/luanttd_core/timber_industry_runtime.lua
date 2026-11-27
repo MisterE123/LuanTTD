@@ -219,7 +219,7 @@ return function(Rules,Catchment)
       return table.concat({p.cargo,tostring(p.units),tostring(p.source_type),tostring(p.source),
         tostring(p.age or 0),tostring(p.origin_station),tostring(p.origin_tile),
         tostring(p.travel_x),tostring(p.travel_z),tostring(cargo_tile),tostring(opts_.transfer),
-        tostring(opts_.no_unload),tostring(opts_.distance)},":")
+        tostring(opts_.no_unload),tostring(opts_.distance),tostring(opts_.owner)},":")
     end
     -- The caller supplies an actual unload pulse identity
     -- (vehicle visit/round/packet ordinal). Replay returns no payable
@@ -249,6 +249,10 @@ return function(Rules,Catchment)
         local industry_units=0
         for _,industry in ipairs(result.industries) do industry_units=industry_units+industry.units end
         ctx.town_accept(world,st.town,packet.cargo,result.units,result.units-industry_units)
+      end
+      if ctx.subsidy and world.stock_economy_subsidies and result.units>0 then
+        local neutral=st.neutral_rig and ("oil:"..st.neutral_rig)
+        result.payment=ctx.subsidy(world,packet.cargo,assert(opts_.owner),packet,result.payment,covers[st.id].tiles,nil,neutral)
       end
       p.order[#p.order+1]=key
       p.receipts[key]={signature=signature,result=result}

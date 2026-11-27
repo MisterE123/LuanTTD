@@ -66,7 +66,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
       assert(not raw,"The timber chain must have one shared station scan")
       raw=Adapter.bind(s,s.timber_transactions,{width=Sim.W,height=Sim.H,xy=xy,coverage=coverage,
         stations=scan_stations,industries=industry_at,house_at=options.house_at or house_at,
-        town_accept=Sim.stock_town_accept,
+        town_accept=Sim.stock_town_accept,subsidy=Sim.stock_subsidy_pay,
         random_u32=random,acceptance=function(st,cargo,tick)
           if by_id[st.id] then return refresh(st.st,tick)[cargo] end
           if cargo==st.freight_cargo then return st.acceptance end
@@ -241,7 +241,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
           local l=assert(v.load_state)
           local seq=(l.timber_packet_sequence or 0)+1
           local token=table.concat({v.id,assert(l.arrived_tick),seq},":")
-          local receipt,why=raw.stage(st.id,tick,token,p,actual_tile(v,st))
+          local receipt,why=raw.stage(st.id,tick,token,p,actual_tile(v,st),{owner=v.owner})
           assert(receipt,why)
           l.timber_packet_sequence=seq
           l.timber_accepted=(l.timber_accepted or 0)+receipt.units

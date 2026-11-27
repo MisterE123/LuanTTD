@@ -156,7 +156,8 @@ return function(core,mod,client,formatted_date,sound)
     button(b,.43,7.87,3.29,"history","History")
     button(b,3.88,7.87,3.29,"last","Last message")
     button(b,7.33,7.87,3.29,"settings","News settings")
-    button(b,.43,8.64,4.04,"dismiss","Dismiss alerts")
+    button(b,.43,8.64,2.75,"dismiss","Dismiss alerts")
+    button(b,3.33,8.64,3.05,"subsidies","Active subsidies")
     button(b,6.58,8.64,4.04,"close","Back to world",true)
   end
   local function history(n,q)
@@ -210,6 +211,44 @@ return function(core,mod,client,formatted_date,sound)
     button(b,6.57,8.64,4.04,"close","Back to world",true)
     show(n,b)
   end
+  local function subsidy_board(n,q)
+    local b=base(11.05,9.53)
+    label(b,.44,.43,"TRANSPORT GAZETTE  /  ACTIVE SUBSIDIES","#F4D79E")
+    label(b,.44,.92,q.note or "Start a qualifying service before the offer expires.","#D2E3E9")
+    for i,row in ipairs(q.rows or {}) do
+      local y=1.30+(i-1)*.87
+      local title=table.concat(headline(row.cargo..": "..row.src.." → "..row.dst,64,1))
+      label(b,.46,y,title,"#F6E9CC")
+      local status=row.owner and ("Awarded to "..row.owner) or "Unclaimed · first delivery wins"
+      label(b,.46,y+.35,status.." · "..row.months.." months left","#B8CDD4")
+      button(b,7.30,y+.02,1.54,"src_"..i,"Origin")
+      button(b,8.98,y+.02,1.62,"dst_"..i,"Destination")
+    end
+    if not q.rows or #q.rows==0 then
+      label(b,.47,1.77,q.pending and "Reading active subsidies…" or "No active subsidies.")
+    end
+    local pages=math.max(1,math.ceil((q.count or 0)/6))
+    if q.page>1 then button(b,.44,6.90,2.02,"prev","Previous") end
+    label(b,4.71,7.18,("Page %d of %d"):format(q.page,pages))
+    if q.page<pages then button(b,8.57,6.90,2.02,"next","Next") end
+    buttons(b)
+    show(n,b)
+  end
+  function U.subsidies(p,page)
+    local v,n=state(p)
+    local q={board=true,page=page or 1,pending=true}
+    v.panel=q
+    subsidy_board(n,q)
+    local sent,why=client.query({kind="news",player=n,action="subsidies",page=q.page},function(r)
+      if local_state[n]~=v or v.panel~=q then return end
+      q.pending=nil
+      if r.ok then q.rows,q.count=r.value.items,r.value.count
+      else q.note=r.why or "Could not read active subsidies." end
+      subsidy_board(n,q)
+    end)
+    if not sent then q.pending=nil;q.note=why or "Could not read active subsidies.";subsidy_board(n,q) end
+    return true
+  end
   function U.open(p,page,note)
     local v,n=state(p)
     local q={page=page or 1,pending=true,note=note}
@@ -230,7 +269,8 @@ return function(core,mod,client,formatted_date,sound)
     local q=v.panel
     if not q then return true end
     if f.quit or f.close then v.panel=nil;return true end
-    if f.history then return U.open(p,q.page) end
+    if f.history then return U.open(p,q.board and 1 or q.page) end
+    if f.subsidies then return U.subsidies(p,1) end
     if f.dismiss then
       for _,lane in ipairs({"paper","ticker"}) do remove(p,v,lane) end
       return U.open(p,q.page,"Alerts dismissed. Earlier items remain in history.")
@@ -250,7 +290,31 @@ return function(core,mod,client,formatted_date,sound)
       return true
     end
     if q.pending then return true end
+    if q.board and not f.last then
+      if f.prev and q.page>1 then return U.subsidies(p,q.page-1) end
+      if f.next and q.page*6<(q.count or 0) then return U.subsidies(p,q.page+1) end
+      local tile
+      for i,row in ipairs(q.rows or {}) do
+        if f["src_"..i] then tile=row.source_tile;break end
+        if f["dst_"..i] then tile=row.destination_tile;break end
+      end
+      if tile then
+        q.pending=true
+        local sent,why=client.query({kind="jump_tile",player=n,tile=tile},function(r)
+          if local_state[n]~=v or v.panel~=q then return end
+          q.pending=nil
+          if r.ok then
+            v.panel=nil;core.close_formspec(n,U.form)
+            p:set_pos({x=r.value.x,y=r.value.y,z=r.value.z})
+          else q.note=r.why;subsidy_board(n,q) end
+        end)
+        if not sent then q.pending=nil;q.note=why;subsidy_board(n,q) end
+      end
+      return true
+    end
     if f.last then
+      q.board=nil
+
       q.pending=true
       local sent,why=client.query({kind="news",player=n,action="last",current=v.current,forced=v.forced,
         shown=v.active.paper~=nil,modes=v.prefs},function(r)

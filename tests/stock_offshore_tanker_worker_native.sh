@@ -20,6 +20,9 @@ export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/g
 port=${BAYLINE_NATIVE_PORT:-40004}
 for phase in start reload audit; do
   printf 'port = %s\nprometheus_listener_address = 127.0.0.1:%s\nserver_announce = false\nbind_address = 127.0.0.1\n' "$port" "$port" > "$out/server.conf"
+  if [[ -n ${LUANTTD_QA_SUBSIDY_MULTIPLIER:-} ]]; then
+    printf 'luanttd_qa_subsidy_multiplier = %s\n' "$LUANTTD_QA_SUBSIDY_MULTIPLIER" >> "$out/server.conf"
+  fi
   timeout 100 luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' > "$out/$phase.log" 2>&1 || {
     tail -80 "$out/$phase.log";exit 1;
   }
@@ -29,4 +32,7 @@ for phase in start reload audit; do
     audit) expected=OFFSHORE_TANKER_NATIVE_CONFIRMED ;;
   esac
   grep "$expected" "$out/$phase.log"
+  if [[ $phase == reload && -n ${LUANTTD_QA_SUBSIDY_MULTIPLIER:-} ]]; then
+    grep OFFSHORE_SUBSIDY_PAYOUT "$out/$phase.log"
+  fi
 done
