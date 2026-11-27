@@ -170,10 +170,14 @@ return function(Track,Water,board,layout)
     local r=fetch(p.x,p.z)
     for d=0,3 do
       local nx,nz=p.x+dx[d],p.z+dz[d]
-      local nr=fetch(nx,nz)
+      -- An empty outward edge cannot intersect anything on its far
+      -- side. Leave that region cold; a real terrain edit still dirties
+      -- both sides through the same boundary invalidation.
+      local outward=r.edge[d]
+      local nr=outward~=0 and fetch(nx,nz)
       if nr then
         local opp=Track.reverse_side(d)
-        local bits=Track.intersect(r.edge[d],nr.edge[opp])
+        local bits=Track.intersect(outward,nr.edge[opp])
         if bits~=0 then
           if r.count==1 and nr.count==1 then visit(desc(nx,nz,1))
           else

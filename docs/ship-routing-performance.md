@@ -116,3 +116,21 @@ overlapped. This covers worker movement, not frame rate.
 ```sh
 tests/ship_berth_perf_native.sh luantiserver 78edeed ../ship-berth-perf
 ```
+
+## Leave unreachable neighboring water regions unopened
+
+When the port's 16×16 region already reports no exit on a side,
+the neighboring side cannot share a navigable edge. Skip building that
+neighbor's descriptor. Boundary edits still invalidate both sides;
+a previously closed connection appears on the next search.
+
+For a cold 1024×128 canal test, batches of 16 route builds returned
+identical routes with 788,144 → 276,144 terrain descriptor reads and
+approximately 176 → 113 ms median LuaJIT CPU across four pairs.
+This is a route-search benchmark, not a whole-game speed claim.
+The test also opens a previously dry boundary and checks the new route.
+
+```sh
+git show 377a704:mods/luanttd_core/openttd/ship_regions.lua >/tmp/old-ship-region.lua
+luajit tests/ship_canal_neighbor_profile.lua /tmp/old-ship-region.lua
+```
