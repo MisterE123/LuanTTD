@@ -8,18 +8,20 @@ local function goods_native_scene(p)
   local wood=cargo=="wood"
   local ore=cargo=="iron_ore"
   local heavy=ore or cargo=="steel"
-  local refitted=farm or wood or heavy
-  local cargo_id=({goods=5,grain=6,livestock=4,wood=7,iron_ore=8,steel=9})[cargo]
-  local cargo_title=({goods="Goods",grain="Grain",livestock="Livestock",wood="Wood",iron_ore="Iron Ore",steel="Steel"})[cargo]
+  local bank=cargo=="valuables"
+  local short_coast=heavy or bank
+  local refitted=farm or wood or short_coast
+  local cargo_id=({goods=5,grain=6,livestock=4,wood=7,iron_ore=8,steel=9,valuables=10})[cargo]
+  local cargo_title=({goods="Goods",grain="Grain",livestock="Livestock",wood="Wood",iron_ore="Iron Ore",steel="Steel",valuables="Valuables"})[cargo]
   local source_label=ore and "Iron Ore Mine dock" or heavy and "Steel Mill dock" or
-    farm and "Farm dock" or wood and "Forest dock" or "Goods producer dock"
+    farm and "Farm dock" or wood and "Forest dock" or bank and "Bank pickup dock" or "Goods producer dock"
   local sink_label=ore and "Steel Mill dock" or (heavy or farm) and "Factory dock" or
-    wood and "Sawmill dock" or "Goods delivery dock"
-  local destination=ore and "steel mill" or (heavy or farm) and "factory" or wood and "sawmill" or "town"
-  local camera_x=ore and 38 or heavy and 72 or refitted and 44 or 84
+    wood and "Sawmill dock" or bank and "Bank delivery dock" or "Goods delivery dock"
+  local destination=ore and "steel mill" or (heavy or farm) and "factory" or wood and "sawmill" or bank and "bank" or "town"
+  local camera_x=ore and 38 or heavy and 72 or bank and 52 or refitted and 44 or 84
   assert(cargo_id and api.capabilities.ferry[211] and (refitted or api.capabilities.ferry[204]))
   local name=p:get_player_name()
-  p:set_pos({x=camera_x,y=14,z=heavy and 28 or 55})
+  p:set_pos({x=camera_x,y=14,z=short_coast and 28 or 55})
   p:set_look_horizontal(0);p:set_look_vertical(.38)
   local function ask(req,done)
     req.player=name
@@ -31,7 +33,7 @@ local function goods_native_scene(p)
       ask({kind="command",command={kind="transport_commit",revision=r.revision,token=r.value.token}},done)
     end)
   end
-  local plans=heavy and {{"dock",ore and 11 or 27,19},{"dock",ore and 27 or 46,19},{"depot",ore and 20 or 35,24}} or refitted and {{"dock",12,32},{"dock",33,32},{"depot",20,36}} or
+  local plans=heavy and {{"dock",ore and 11 or 27,19},{"dock",ore and 27 or 46,19},{"depot",ore and 20 or 35,24}} or bank and {{"dock",10,19},{"dock",42,19},{"depot",26,24}} or refitted and {{"dock",12,32},{"dock",33,32},{"depot",20,36}} or
     {{"dock",12,32},{"dock",31,32},{"depot",17,35},{"dock",34,32},{"dock",51,32},{"depot",43,35}}
   local source,sink,home=refitted and 1 or 4,refitted and 2 or 5,refitted and 3 or 6
   local id,at={},{}
@@ -42,7 +44,7 @@ local function goods_native_scene(p)
   local function observe()
     local disk=assert(OwnerCheckpoint.read())
     local ship_pos
-    for _,ref in ipairs(core.get_objects_inside_radius({x=camera_x,y=2,z=heavy and 42 or 68},28)) do
+    for _,ref in ipairs(core.get_objects_inside_radius({x=camera_x,y=2,z=short_coast and 42 or 68},28)) do
       local actor=ref:get_luaentity()
       if actor and actor.name=="luanttd_core:stock_yate_cargo_ship" then
         assert(ref:get_properties().mesh=="bl_yate_cargo_ship.obj")
@@ -64,6 +66,9 @@ local function goods_native_scene(p)
         if not ore then
           assert(disk.fleet[disk.qa_ore_supplier].delivered>0 and mill.received.iron_ore>0)
         end
+      elseif bank then
+        local a,b=disk.stock_bank_industries[0x5000],disk.stock_bank_industries[0x5001]
+        assert(a.town~=b.town and ((a.received or {}).valuables or 0)==0 and b.received.valuables>=160)
       elseif wood then
         local mill=assert(disk.stock_timber_industries[0x1001])
         assert((mill.wood_received or (mill.received or {}).wood or 0)>=160,"Sawmill received no Wood")

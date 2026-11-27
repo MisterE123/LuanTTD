@@ -22,7 +22,9 @@ working ordinary paid service:
   An **Iron Ore** ship serves an Iron Ore Mine and a Steel Mill. A
   **Steel** ship loads the mill's output and delivers to a Factory.
   For Steel service, first supply the mill with Ore; this can be a
-  truck, train or another company's ordinary service.
+  truck or train, including one operated by another company.
+  For **Valuables**, pick docks serving two different Banks. Returning
+  to the source Bank is not a delivery.
   Both hulls retain their stock capacity when refitted.
 
 The actual stock ship controller, regional pathfinding, depot and approach
@@ -94,11 +96,13 @@ also ran as native Linux client projections and earned real fares. The exact sou
 tests/ship_complete_temperate_roster_rc1.py. It checks the original cargo
 class allowlist, all nine equivalent dry cargo holds, and their refit
 prices against RC1. Goods, Coal, Grain, Livestock, Wood, Iron Ore and
-Steel are implemented for this hull in ordinary play. The remaining
-Mail and Valuables choices are not exposed. The Grain, Livestock and Wood regressions check the exact
+Steel and Valuables are implemented for this hull in ordinary play.
+Mail is the only remaining Temperate dry-hold choice not exposed. The Grain, Livestock and Wood regressions check the exact
 depot debit, the appropriate Factory or Sawmill input, and a partial
 load across restart. Native Linux replays selected both docks in 3D,
 verified a paid 160-unit trip for each heavy cargo, and reopened both
 services. The Steel scenario used a separate paid Ore truck as the
-mill's only supplier. See also the
+mill's only supplier. The Valuables replay carried 160 bags per hold
+between two financed Banks in distinct towns, and checked the real
+receiving Bank and post-restart receipts. See also the
 [stock content inventory](stock-content-inventory.md).

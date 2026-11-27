@@ -11,6 +11,7 @@ return function(Sim,Services,Timber,Farm,Catchment,debit)
     wood={name="Wood",load="Forest",unload="Sawmill",sink="sawmill",family="timber"},
     iron_ore={name="Iron Ore",load="Iron Ore Mine",unload="Steel Mill",sink="steel mill",family="heavy"},
     steel={name="Steel",load="Steel Mill",unload="Factory",sink="factory",family="heavy",accept_family="farm"},
+    valuables={name="Valuables",load="Bank pickup",unload="Bank delivery",sink="bank",family="bank"},
   }
   function M.profile(s,cargo)
     local p=profiles[cargo]

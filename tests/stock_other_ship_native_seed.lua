@@ -7,7 +7,8 @@ return function(core,Sim,checkpoint,mod)
   s.stock_generated_profile={version=1,width=64,depth=64,terrain="native stock ship contract"}
   local cargo=core.settings:get("luanttd_qa_other_ship_cargo")
   local heavy=cargo=="iron_ore" or cargo=="steel"
-  local coast=heavy and 20 or 33
+  local bank=cargo=="valuables"
+  local coast=(heavy or bank) and 20 or 33
   Sim.W,Sim.H=64,64
   s.sites,s.tiles={},{}
   s.corner_grid=T.new(64,64,function(_,z) return z<coast and 1 or 0 end)
@@ -25,6 +26,15 @@ return function(core,Sim,checkpoint,mod)
     local Q=dofile(mod.."/qa_dry_heavy_fixture.lua")
     Q.place(Sim,T,s)
     if cargo=="steel" then s.qa_ore_supplier=Q.supply(Sim,s) end
+    s.speed=4
+  elseif bank then
+    s.ship_coal_service=true
+    local Q=dofile(mod.."/qa_dry_bank_fixture.lua")
+    Q.houses(Sim,s,dofile(mod.."/openttd/town_growth.lua"))
+    local cap={temperate_bank=true,oil_tanker=true,
+      road={start_year=year,foster=true,breakdowns=0,service_interval=0},ferry={[211]=true},air={}}
+    local R=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,s,cap)
+    Q.fund(Sim,s,dofile(mod.."/campaign_authority_endpoint.lua")(Sim,R))
     s.speed=4
   elseif cargo=="grain" or cargo=="livestock" then
     s.ship_coal_service,s.road_farm,s.stock_farm_frozen=true,true,true

@@ -223,7 +223,7 @@ return function(Sim,R)
       model=model or {}
       return Help.describe("ship",cargo,model.name,{capacity=model.capacity,
         capacity_unit=cargo=="oil" and "kL" or cargo=="coal" and "t of coal" or cargo=="goods" and "crates" or cargo=="grain" and "t of grain" or cargo=="livestock" and "animals" or cargo=="wood" and "t of wood" or
-          cargo=="iron_ore" and "t of iron ore" or cargo=="steel" and "t of steel",
+          cargo=="iron_ore" and "t of iron ore" or cargo=="steel" and "t of steel" or cargo=="valuables" and "bags",
         speed=model.max_speed and model.max_speed/2},nil,refit,needs_refit)
     end
     local function air_help(entry)
