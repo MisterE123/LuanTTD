@@ -15,7 +15,13 @@ return function(core,Sim,checkpoint,mod)
   s.road_stock_clock,s.road_stock_house_supply,s.road_stock_loading,s.road_economy=true,true,true,true
   s.ship_paid_service=true
   local stock=tonumber(core.settings:get("luanttd_qa_other_ship")) or 212
-  if core.settings:get("luanttd_qa_other_ship_cargo")=="goods" then
+  local cargo=core.settings:get("luanttd_qa_other_ship_cargo")
+  if cargo=="grain" or cargo=="livestock" then
+    s.ship_coal_service,s.road_farm,s.stock_farm_frozen=true,true,true
+    local W,rng=Sim.mount_farm_world(s,T,true)
+    assert(W.seed(s,Sim.id(10,25),Sim.id(32,27),rng))
+    s.speed=4
+  elseif cargo=="goods" then
     s.ship_coal_service,s.road_oil=true,true
     local W=assert(Sim.mount_oil_world(s,T,true))
     assert(W.place(s,assert(W.plan(s,12,28,31,28))))

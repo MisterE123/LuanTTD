@@ -3900,8 +3900,12 @@ local function passenger_modules()
   local ships=dofile(base.."openttd/ship_roster.lua")
   local coal_ship=dofile(base.."ship_coal_service.lua")(M,coal,catchment,ships,passenger_rules,kernel,
     rating_runtime,income_rules,loading_factory,timing)
-  local dry_service=dofile(base.."ship_goods_service.lua")(M,ships,passenger_rules,kernel,loading_factory,timing)
-  local dry=dofile(base.."ship_goods_runtime.lua")(M,dry_service,timber_rules,catchment,debit)
+  local make_dry=dofile(base.."ship_goods_service.lua")
+  local dry_ports={}
+  for _,cargo in ipairs({"goods","grain","livestock"}) do
+    dry_ports[cargo]=make_dry(M,ships,passenger_rules,kernel,loading_factory,timing,cargo)
+  end
+  local dry=dofile(base.."ship_goods_runtime.lua")(M,dry_ports,timber_rules,function() return farm.rules end,catchment,debit)
   ship_coal=dofile(base.."ship_coal_runtime.lua")(M,coal_ship,ships,kernel,debit,credit,received_coal,
     dofile(base.."openttd/stock_engine_calendar.lua"),dry)
   goods.berths=ship_coal.goods_stations

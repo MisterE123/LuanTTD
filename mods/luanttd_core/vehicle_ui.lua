@@ -378,8 +378,8 @@ return function(api)
     end
     local ready=Initial.possible(route.first,route.last)
     local selected=selection.first and selection.second and selection.first~=selection.second
-    local clue=kind=="ship" and "Choose two docks. The ferry shuttles between them."
-      or "Choose the first station, then the next one on the train’s route."
+    local clue=kind=="ship" and (id=="ferry" and "Choose two docks. The ferry shuttles between them."
+      or "Choose a loading dock and a delivery dock for this ship’s cargo.") or "Choose the first station, then the next one on the train’s route."
     local b=title(v.label).."label[.45,1.16;Set up this vehicle’s first service]"
       .."textarea[.45,1.47;10,.65;;;"..esc(ready and clue or route.notice).."]"
     if ready then

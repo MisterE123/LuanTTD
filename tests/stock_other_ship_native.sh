@@ -12,7 +12,7 @@ cp tests/stock_other_ship_native_seed.lua "$game/mods/luanttd_core/qa_tanker_see
 printf 'return function() return {interval=.05} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"
-if [[ ${LUANTTD_QA_OTHER_SHIP_CARGO:-} == goods ]]; then
+if [[ ${LUANTTD_QA_OTHER_SHIP_CARGO:-stock} != stock ]]; then
   cat tests/stock_goods_ship_native.lua >>"$game/mods/luanttd_core/init.lua"
 else
   cat tests/stock_other_ship_native.lua >>"$game/mods/luanttd_core/init.lua"
@@ -43,6 +43,12 @@ if [[ -n ${BAYLINE_NATIVE_TOOLS:-} ]]; then
 fi
 export DISPLAY="127.0.0.1:$display" HOME="$out/home" LIBGL_ALWAYS_SOFTWARE=1 MESA_SHADER_CACHE_DISABLE=1
 export XDG_CACHE_HOME="${LUANTTD_NATIVE_MEDIA_CACHE:-$out/cache}" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
+# The game contains enough 3D media to saturate a cold client's packet
+# quota before its scripted controls can run on GitHub's runner.
+# Seed only stock, hash-addressed media; the native game and UI still run.
+if [[ -z ${LUANTTD_NATIVE_MEDIA_CACHE:-} ]]; then
+  python3 tests/cache_luanti_game_media.py "$game" "$XDG_CACHE_HOME" --hardlink
+fi
 cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$display" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!; server= client=
@@ -55,14 +61,14 @@ mark(){ for _ in {1..360}; do grep -q "$1" "$out/server.log" && return; kill -0 
 mark 'listening on'
 luanti --go --address 127.0.0.1 --port "$port" --name ShipReview --password '' --config "$out/client.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
-mark 'PASS NATIVE STOCK SHIP'
+mark 'PASS NATIVE STOCK SHIP' || { tail -70 "$out/client.log"; exit 1; }
 sleep .50
 if command -v import >/dev/null; then import -window root -resize 1200x750 -quality 91 "$out/ship.jpg"
 elif command -v magick-im7.q16 >/dev/null; then magick-im7.q16 import -window root -resize 1200x750 -quality 91 "$out/ship.jpg"
 fi
 grep 'PASS NATIVE STOCK SHIP' "$out/server.log"
 ! grep -E 'ERROR\[|LuanTTD viewport placement:' "$out/server.log" "$out/client.log"
-if [[ ${LUANTTD_QA_OTHER_SHIP_CARGO:-} == goods ]]; then
+if [[ ${LUANTTD_QA_OTHER_SHIP_CARGO:-stock} != stock ]]; then
   kill "$client" 2>/dev/null || true; wait "$client" 2>/dev/null || true; client=
   kill "$server"; wait "$server"; server=
   luantiserver --world "$out/world" --gameid luanttd --config "$out/server.conf" --logfile '' >"$out/reopen.log" 2>&1 &
@@ -75,9 +81,9 @@ if [[ ${LUANTTD_QA_OTHER_SHIP_CARGO:-} == goods ]]; then
   luanti --go --address 127.0.0.1 --port "$port" --name ShipReview --password '' --config "$out/client.conf" --logfile '' >"$out/reopen-client.log" 2>&1 &
   client=$!
   for _ in {1..360}; do
-    grep -q 'PASS NATIVE GOODS SHIP REOPEN' "$out/reopen.log" && break
+    grep -q 'PASS NATIVE DRY SHIP REOPEN' "$out/reopen.log" && break
     kill -0 "$server" 2>/dev/null || break;sleep .25
   done
-  grep 'PASS NATIVE GOODS SHIP REOPEN' "$out/reopen.log" || { tail -70 "$out/reopen.log"; exit 1; }
+  grep 'PASS NATIVE DRY SHIP REOPEN' "$out/reopen.log" || { tail -70 "$out/reopen.log"; exit 1; }
   ! grep -E 'ERROR\[|LuanTTD viewport placement:' "$out/reopen.log" "$out/reopen-client.log"
 fi

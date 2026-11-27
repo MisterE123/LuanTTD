@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Optional owned #211 coal service, one distinct stock motion actor.
+-- Stock dry-cargo hull. Coal joins the coal economy; other mounted
+-- cargoes share the industry ledger and the same stock motion actor.
 return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
   local M={}
   local bindings=setmetatable({},{__mode="k"})
@@ -84,24 +85,38 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
   local function coal_active(s)
     return s.stock_coal_industries and next(s.stock_coal_industries)~=nil
   end
-  function M.goods(s)
-    return Goods and Goods.enabled(s) or false
+  local coal_profile={name="Coal",load="Coal mine",unload="Power plant",sink="power station"}
+  function M.cargo_profile(s,cargo)
+    if cargo=="coal" then return coal_active(s) and coal_profile or nil end
+    return Goods and Goods.profile(s,cargo)
   end
-  local function dry_goods(s)
+  function M.goods(s)
+    return M.cargo_profile(s,"goods")~=nil
+  end
+  function M.refit_choices(s)
+    local out={}
+    for _,row in ipairs(Roster.refit_catalog()) do
+      local profile=M.cargo_profile(s,row.cargo)
+      if profile then out[#out+1]={id=row.id,cargo=row.cargo,name=profile.name} end
+    end
+    return out
+  end
+  local function industry_cargo(s)
     local craft=s.stock_coal_ship
-    return Goods and craft and craft.cargo==Roster.default_cargo and M.goods(s)
+    local cargo=craft and Roster.cargo_key(craft.cargo)
+    if cargo and cargo~="coal" and M.cargo_profile(s,cargo) then return cargo end
   end
   function M.active(s)
     return not not (bindings[s] and s.ship_coal_service and s.road_stock_house_supply and
       (s.stock_coal_industries or M.goods(s)) and Sim.road_stock_service_active(s))
   end
   function M.goods_stations(s)
-    if not dry_goods(s) then return end
+    if not industry_cargo(s) then return end
     local spec=bindings[s]
     if spec then return Goods.stations(s,spec.run,spec.network) end
   end
   function M.goods_running(s,station)
-    if not dry_goods(s) then return false end
+    if not industry_cargo(s) then return false end
     local spec=bindings[s]
     local voyage=spec and spec.run.current(s)
     return voyage and (not station or spec.run.ordered_dock(voyage,station)) or false
@@ -200,11 +215,9 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
       return nil,"OWN_SHIP_IN_DEPOT_REQUIRED"
     end
     cargo=cargo or "coal"
-    if cargo~="coal" and cargo~="goods" then return nil,"CARGO_NOT_REFITTABLE" end
-    if cargo=="goods" and not M.goods(s) then return nil,"NO_GOODS_INDUSTRY_AUTHORITY" end
-    if cargo=="coal" and not coal_active(s) then return nil,"DOCK_NEEDS_COAL_MINE" end
     local id=Roster.cargo_id(cargo)
-    if v.cargo==id then return nil,cargo=="coal" and "SHIP_ALREADY_COAL_REFITTED" or "SHIP_ALREADY_CARRIES_GOODS" end
+    if not id or not M.cargo_profile(s,cargo) then return nil,"CARGO_NOT_REFITTABLE" end
+    if v.cargo==id then return nil,cargo=="coal" and "SHIP_ALREADY_COAL_REFITTED" or "SHIP_ALREADY_CARRIES_CARGO" end
     return Roster.quote(id,s.stock_ship_purchase_base,v.cargo,v.engine)
   end
   function M.refit(s,owner,dep,cargo)
@@ -222,20 +235,24 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     local spec=bindings[s]
     local v=s.stock_coal_ship
     if not v or v.owner~=owner then return nil,"OWN_DRY_CARGO_SHIP_REQUIRED" end
-    if v.cargo==Roster.default_cargo and not dry_goods(s) then return nil,"NO_GOODS_INDUSTRY_AUTHORITY" end
-    if v.cargo~=Roster.coal and v.cargo~=Roster.default_cargo then return nil,"UNSUPPORTED_SHIP_CARGO" end
+    local cargo=Roster.cargo_key(v.cargo)
+    local profile=M.cargo_profile(s,cargo)
+    if not profile then return nil,cargo=="goods" and "NO_GOODS_INDUSTRY_AUTHORITY" or "UNSUPPORTED_SHIP_CARGO" end
     if a==z or not a or not z then return nil,"OWN_DEPOT_AND_TWO_DOCKS_REQUIRED" end
     local candidate,why=spec.run.quote(s,owner,v.depot,a,z,nil,v.engine)
     if not candidate then return nil,why end
-    local goods=dry_goods(s)
     local source,dest=M.order_report(s,a),M.order_report(s,z)
-    if not source or #source.sources==0 then return nil,goods and "DOCK_NEEDS_GOODS_SOURCE" or "DOCK_NEEDS_COAL_MINE" end
-    if not dest or not dest.accepts then return nil,goods and "DOCK_NEEDS_GOODS_ACCEPTANCE" or "DOCK_NEEDS_POWER_STATION" end
+    if not source or #source.sources==0 then
+      return nil,cargo=="coal" and "DOCK_NEEDS_COAL_MINE" or ("Choose a loading dock serving a "..profile.load..".")
+    end
+    if not dest or not dest.accepts then
+      return nil,cargo=="coal" and "DOCK_NEEDS_POWER_STATION" or ("Choose a dock where "..profile.name.." is accepted.")
+    end
     local run,why2=spec.run.start(s,owner,v.depot,a,z,nil,v.engine)
     if not run then return nil,why2 end
-    if goods then
-      Goods.install(s,v)
-      return run,"Goods ship dispatched."
+    if cargo~="coal" then
+      Goods.install(s,v,cargo)
+      return run,profile.name.." ship dispatched."
     end
     s.stock_ship_coal=Service.new()
     local live=model(s)
@@ -256,9 +273,10 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     return s.stock_coal_ship_run~=nil
   end
   function M.order_report(s,id,cargo)
-    if cargo=="goods" or cargo==nil and dry_goods(s) then
+    cargo=cargo or M.cargo_key(s) or "coal"
+    if cargo~="coal" then
       local spec=bindings[s]
-      return Goods and spec and Goods.report(s,spec.network,id)
+      return Goods and spec and Goods.report(s,spec.network,id,cargo)
     end
     if not s.stock_coal_industries then return end
     local b=model(s,true)
@@ -266,7 +284,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
   end
   function M.report(s,id)
     if not M.active(s) or type(id)~="number" or id<0 or id>=0x4000 or id%1~=0 then return end
-    if dry_goods(s) then return M.order_report(s,id,"coal") end
+    if industry_cargo(s) then return M.order_report(s,id,"coal") end
     local b=model(s)
     local report=b and b.report(id)
     if report then
@@ -287,7 +305,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     if not M.active(s) then return end
     local spec=bindings[s]
     local run=spec.run.current(s)
-    if not run or dry_goods(s) or spec.ready and not spec.ready(s.stock_coal_ship.engine) then return end
+    if not run or s.stock_coal_ship.cargo~=Roster.coal or spec.ready and not spec.ready(s.stock_coal_ship.engine) then return end
     local b,state,common=model(s)
     if state.loading_tick and state.loading_tick<first_tick-1 then
       state.loading_tick,state.post_tick=first_tick-1,first_tick-1
@@ -346,7 +364,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     return {extend=b.extend,before=before,after=after,rating=rating}
   end
   function M.goods_day(s,pipe,first_tick,live)
-    if not dry_goods(s) then return end
+    if not industry_cargo(s) then return end
     local spec=bindings[s]
     local run=spec and spec.run.current(s)
     if not run or spec.ready and not spec.ready(s.stock_coal_ship.engine) then return end
@@ -364,7 +382,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     if not craft then return end
     local b=bindings[s]
     local p=b and b.run.current(s)
-    local c=craft.cargo==Roster.default_cargo and s.stock_goods_ship_service or s.stock_ship_coal
+    local c=craft.cargo==Roster.coal and s.stock_ship_coal or s.stock_goods_ship_service
     local v=c and c.vehicle
     local mine,power
     if p and p.transport_orders then

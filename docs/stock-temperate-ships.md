@@ -15,7 +15,10 @@ working ordinary paid service:
   choose from the same compatible docks in the list or pick them in 3D.
   Choose **Start service** after reviewing both. For Coal, refit in the
   same depot before dispatch, then pick a mine dock and an accepting
-  power plant. Both hulls retain their stock capacity when refitted.
+  power plant. **Grain** and **Livestock** refits connect a Farm dock to
+  a Factory dock. Each carries its own cargo and the Factory receives
+  and processes the shipment on the same clock as road and rail.
+  Both hulls retain their stock capacity when refitted.
 
 The actual stock ship controller, regional pathfinding, depot and approach
 tests, same-town queue production, preserved loading state and 8-bit
@@ -85,6 +88,8 @@ after a separate SQLite restart. The Bakewell cargo ship and hovercraft
 also ran as native Linux client projections and earned real fares. The exact source table check is
 tests/ship_complete_temperate_roster_rc1.py. It checks the original cargo
 class allowlist, all nine equivalent dry cargo holds, and their refit
-prices against RC1. Only Goods and Coal are implemented for this hull in
-ordinary play; the other seven choices are not exposed. See also the
+prices against RC1. Goods, Coal, Grain and Livestock are implemented
+for this hull in ordinary play. The other five choices are not exposed.
+The Grain and Livestock regressions each check the exact depot debit,
+the appropriate Factory input, and a partial load across restart. See also the
 [stock content inventory](stock-content-inventory.md).

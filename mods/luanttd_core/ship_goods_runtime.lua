@@ -1,30 +1,40 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Binds the dry ship's default Goods cargo to the one live industry
+-- Binds the stock dry ship's selected cargo to the one live industry
 -- ledger. Route, hull motion and berth rules remain in the stock driver.
-return function(Sim,Service,Timber,Catchment,debit)
+return function(Sim,Services,Timber,Farm,Catchment,debit)
   local M={}
   local registries={"timber","farm","oil","heavy","bank"}
-  function M.enabled(s)
+  local profiles={
+    goods={name="Goods",load="Goods producer",unload="Goods delivery",sink="town"},
+    grain={name="Grain",load="Farm",unload="Factory",sink="factory",family="farm"},
+    livestock={name="Livestock",load="Farm",unload="Factory",sink="factory",family="farm"},
+  }
+  function M.profile(s,cargo)
+    local p=profiles[cargo]
+    if not p then return end
+    if p.family then return Sim["road_"..p.family.."_active"](s) and p or nil end
     for _,kind in ipairs(registries) do
-      if Sim["road_"..kind.."_active"](s) then return true end
+      if Sim["road_"..kind.."_active"](s) then return p end
     end
-    return false
   end
   function M.stations(s,run,net)
     local voyage=run and run.current(s)
     local ledger=s.stock_goods_ship_service
-    if not (voyage and ledger and M.enabled(s)) then return end
+    if not (voyage and ledger and M.profile(s,ledger.vehicle.cargo)) then return end
+    local Service=assert(Services[ledger.vehicle.cargo])
     local map=net.board(s)
     local list,by=Service.bind_stations(s,ledger,map,function(id)
       return run.ordered_dock(voyage,id)
     end)
     return list,{by=by,map=map}
   end
-  function M.install(s,craft)
-    s.stock_goods_ship_service=Service.new(craft)
+  function M.install(s,craft,cargo)
+    s.stock_goods_ship_service=assert(Services[cargo]).new(craft)
   end
-  function M.report(s,net,id)
-    if not M.enabled(s) then return end
+  function M.report(s,net,id,cargo)
+    local profile=M.profile(s,cargo)
+    if not profile then return end
+    local Service=assert(Services[cargo])
     local _,st=Service.bind_stations(s,{stations={}},net.board(s),function(i)return i==id end)
     st=st[id]
     if not st then return end
@@ -33,15 +43,17 @@ return function(Sim,Service,Timber,Catchment,debit)
       local tile=s.tiles[Sim.id(x+1,z+1)]
       return tile and tile.house and tile.source_house or nil
     end
-    local accepted=Timber.acceptance(st,cover,"goods",{},house)
+    local chain=profile.family and assert(Farm()) or Timber
+    local inds=profile.family and (s["stock_"..profile.family.."_industries"] or {}) or {}
+    local accepted=chain.acceptance(st,cover,cargo,inds,house)
     local sources={}
-    for _,kind in ipairs(registries) do
+    for _,kind in ipairs(profile.family and {profile.family} or registries) do
       if Sim["road_"..kind.."_active"](s) then
         for key,i in pairs(s["stock_"..kind.."_industries"] or {}) do
           local output=i.produced or {}
-          local provides=output.cargo=="goods"
+          local provides=output.cargo==cargo
           if not output.cargo then
-            for _,p in ipairs(output) do if p.cargo=="goods" then provides=true;break end end
+            for _,p in ipairs(output) do if p.cargo==cargo then provides=true;break end end
           end
           if not i.removed and provides then
             for _,t in ipairs(i.tiles) do
@@ -62,7 +74,8 @@ return function(Sim,Service,Timber,Catchment,debit)
     if not (b and state and p) then return end
     if state.tick and state.tick<first_tick-1 then state.tick,state.post=first_tick-1,first_tick-1 end
     local craft=s.stock_coal_ship
-    local D=Service.bind(state,pipe,state.stations,b.by,b.map,{
+    local cargo=state.vehicle.cargo
+    local D=assert(Services[cargo]).bind(state,pipe,state.stations,b.by,b.map,{
       gradual=s.stock_gradual_loading~=false,
       charge_fixed=function(owner,fixed)
         local c=Sim.company(s,owner)
@@ -82,7 +95,7 @@ return function(Sim,Service,Timber,Catchment,debit)
           v.last_fare=data.amount
           if Sim.stock_vehicle_operating then Sim.stock_vehicle_operating(s,craft,data.amount) end
         end
-        emit({kind=kind,cargo="goods",mode="ship",station=st.id,station_local=st.host_id,
+        emit({kind=kind,cargo=cargo,mode="ship",station=st.id,station_local=st.host_id,
           owner=v.owner,vehicle=v.id,day=s.day,units=data.units,amount=data.amount})
       end,
     })
@@ -91,9 +104,9 @@ return function(Sim,Service,Timber,Catchment,debit)
       for _,o in ipairs(p.transport_orders or {{id=p.first,cargo_order="full"},{id=p.second,cargo_order="no_load"}}) do
         local report=D.report(o.id)
         if o.cargo_order=="full" and (not report or #report.sources==0) then
-          p.failure="GOODS_SOURCE_NO_LONGER_AVAILABLE"
+          p.failure="DRY_SHIP_SOURCE_NO_LONGER_AVAILABLE"
         elseif o.cargo_order=="no_load" and (not report or not report.accepts) then
-          p.failure="GOODS_DESTINATION_NO_LONGER_ACCEPTS"
+          p.failure="DRY_SHIP_DESTINATION_NO_LONGER_ACCEPTS"
         end
       end
       if p.failure then p.phase="blocked" end
