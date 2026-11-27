@@ -694,3 +694,19 @@ before the higher-ID road stop and that both ratings happen after the
 town callback, with the original shared random draw. The full mixed
 year above and native generated-world depot/restart test are also
 unchanged by this ordering fix.
+
+#### Road and rail share the stock vehicle sweep
+
+For the road/passenger-rail campaign lane, the controller sweep now uses
+physical VehicleID order instead of moving every road vehicle before
+every train. Each train executes both RC1 locomotive passes inside its
+own slot. In the [generated crossing test](../tests/town_growth_rc1_vehicle_phase.lua),
+two running stock buses have slots 0 and 2 around a train in slot 1.
+For 4,810 ticks the lower-ID bus moves first, the train executes its
+turn, and the higher-ID bus moves afterward. This is exercised with
+normal buses and train orders on a generated board, a shared working
+level crossing, 300 bus waits at its barrier and actual paid cargo.
+The single- and two-bus replays and the full-year bus/rail comparison
+remain exact. It does not port every level-crossing arbitration rule:
+the existing contiguous crossing-group clearance and the separate
+freight, tram, water and aviation combinations still need source work.

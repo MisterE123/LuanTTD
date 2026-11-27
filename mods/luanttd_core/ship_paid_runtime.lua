@@ -614,8 +614,15 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         frame.ship_serial=run
       end
     end
+    local interleave=ctx.stock_late_rating and road_service and not post and not run and #aircraft==0 and #rails>0
+    if interleave then
+      local authority=Rail.current and Rail.current(s)
+      for _,r in ipairs(authority and authority.runs or rails) do
+        if r.stock_pool_id==nil or r.freight then interleave=false;break end
+      end
+    end
     return {before=before,after=after,hooks=hooks,finish_ratings=landscape_ratings,
-      road_departures=road_departures,offer_rig_passengers=function(ind,amount)
+      road_departures=road_departures,interleave_road=not not interleave,offer_rig_passengers=function(ind,amount)
       return Service.offer_industry_passengers(service,ind,amount,ctx)
     end}
   end

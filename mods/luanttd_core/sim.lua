@@ -5434,7 +5434,7 @@ end
 -- Station controllers prepare cargo independently; physical Run advances
 -- once per source simulation tick in the Train pool's order. Do not run
 -- a second world tick for freight just because its loading service differs.
-local function rail_tick_broker(s)
+local function rail_tick_broker(s,before_train)
   local run=paid_rail_runs[s]
   if not run or not run.advance_services then return end
   local handlers,finishes,flushed={},{},false
@@ -5447,7 +5447,7 @@ local function rail_tick_broker(s)
     flushed=true
     handlers.passenger=passenger
     if not next(handlers) then return {} end
-    local moved=run.advance_services(s,handlers)
+    local moved=run.advance_services(s,handlers,before_train)
     local d=run.current(s)
     local by={passenger={}}
     for _,e in ipairs(moved) do
@@ -5536,12 +5536,19 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         local ready,events
         if commercial then ready,events=commercial.before(tick) end
         if freighter then freighter.rating(tick) end
-        callback(tick)
-        local register,advance,flushed=rail_tick_broker(s)
-        if freight then freight.after(tick,freight_ready,register) end
-        if industry_train then industry_train.after(tick,industry_ready,register) end
-        if commercial then commercial.after(tick,ready,events,advance) end
-        if advance and not flushed() then advance() end
+        local function vehicle_rail(before_train)
+          local register,advance,flushed=rail_tick_broker(s,before_train)
+          if freight then freight.after(tick,freight_ready,register) end
+          if industry_train then industry_train.after(tick,industry_ready,register) end
+          if commercial then commercial.after(tick,ready,events,advance) end
+          if advance and not flushed() then advance() end
+        end
+        if commercial and commercial.interleave_road and not (freight or industry_train or freighter or tanker) then
+          callback(tick,vehicle_rail)
+        else
+          callback(tick)
+          vehicle_rail()
+        end
         if freighter then freighter.after(tick,ship_ready) end
         if tanker then tanker.after(tick,tanker_ready) end
         if growth and growth.new then growth.world.tick(s,tick,growth_random) end
@@ -5615,6 +5622,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
   local coastal_road=s.stock_coastal_flood and road_flood_rules()
   local worked,samples=road_clock().live_day(s,clock,{
     live_projection=tick_pulse~=nil,
+    physical_order=commercial and commercial.interleave_road or s.stock_pool_authority and not shared_tram_clock[s],
     companion=shared_tram_clock[s],
     retire=coastal_road and function(v)
       v.road_vehicle_ticks=(v.road_vehicle_ticks or 0)+1

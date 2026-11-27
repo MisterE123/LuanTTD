@@ -2316,7 +2316,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end
   end
 
-  local function tick(s,ticks,paid,service)
+  local function tick(s,ticks,paid,service,before_train)
     local events,d={},R.current(s)
     if not d or #d.runs==0 or d.failure or
         (R.current_paid(s)~=nil)~=(paid~=nil or service~=nil) or paid and not R.paid_art_ready(s) then return events end
@@ -2344,12 +2344,19 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
       d.topology=s.topology
     end
+    local order=d.runs
+    if before_train and #order>1 then
+      order={}
+      for i,r in ipairs(d.runs) do order[i]=r end
+      table.sort(order,function(a,b) return a.stock_pool_id<b.stock_pool_id end)
+    end
     for _=1,ticks or 1 do
       d.ticks=d.ticks+1
-      -- Each vehicle's Train::Tick runs false then true before the next
-      -- vehicle in stock pool order. Our two IDs are in creation order.
+      -- Train::Tick completes both passes inside its physical
+      -- VehicleID slot, before the next road or rail controller.
       local removed
-      for _,run in ipairs(d.runs) do
+      for _,run in ipairs(order) do
+        if before_train then before_train(assert(run.stock_pool_id,"Missing stock train slot")) end
         run.vehicle_ticks=(run.vehicle_ticks or run.ticks or 0)+1
         local h=run.stock_fault
         if h then h.tick_counter=(h.tick_counter+1)%256 end
@@ -2462,10 +2469,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   -- stock world clock may advance them. One-way pilots remain non-paying.
   function R.tick(s,ticks) return tick(s,ticks,nil) end
   function R.advance_paid(s,callbacks) return tick(s,1,callbacks) end
-  function R.advance_services(s,handlers)
+  function R.advance_services(s,handlers,before_train)
     return tick(s,1,nil,function(r)
       return handlers[r.freight and (r.freight.cargo or "coal") or "passenger"]
-    end)
+    end,before_train)
   end
 
   local function sample(run,index,interior)

@@ -370,9 +370,8 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         -- IndividualRoadVehicleController may begin loading while
         -- queued behind a stopped bus, before reaching frame 11.
         -- Preserve the actual pixel; the next order departs from here.
-        local tile=s.tiles[old[4]]
         if a.stock_stop and state.speed==0 and not entering and old[6]>=64 and old[6]<80
-            and tile.station==v.dest then
+            and s.tiles[old[4]].station==v.dest then
           state.arrival_pose=old
         end
         return false
@@ -496,13 +495,18 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
   -- new leg during the same day. A single timeline samples actual poses
   -- rather than assuming that all 74 samples reference one saved leg.
   function R.live_day(s,clock,hooks)
-    local ids,worked={},{}
+    local ids,worked,slots={},{},{}
     local keep=not hooks.live_projection
     local view,timelines=keep and {} or nil,keep and {} or nil
     for id,v in pairs(s.fleet) do
-      if limit[v.engine] then ids[#ids+1]=id end
+      if limit[v.engine] then
+        ids[#ids+1]=id
+        slots[id]=v.stock_pool_id or id-1
+      end
     end
-    table.sort(ids)
+    if hooks.physical_order then
+      table.sort(ids,function(a,b) return slots[a]==slots[b] and a<b or slots[a]<slots[b] end)
+    else table.sort(ids) end
     local function sample(id,k)
       local v=s.fleet[id]
       local route,c=v and v.road_motion_frames,v and v.road_speed_state
@@ -526,7 +530,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     -- cursors are published. Do not allocate a wrapper per vehicle/tick.
     local W,records=world(s,true),{}
     local moving={s=s,W=W,entered_transit=hooks.entered_transit}
-    clock(function(tick)
+    clock(function(tick,interleave_rail)
       local ready=hooks.economy(tick)
       W.begin_tick()
       local board=board_for(s,W)
@@ -559,55 +563,63 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       if external and external.id then external={external} end
       local next_external=1
       k=k+1
-      for _,id in ipairs(ids) do
-        while external and external[next_external] and external[next_external].id<id do
-          companion.advance(s,W,tick,external[next_external],k,ready)
-          next_external=next_external+1
-        end
-        local v=s.fleet[id]
-        if v then
-          local held=hooks.before(v,tick,ready[id])==true
-          local frames=v.road_motion_frames
-          if v.route and frames then
-            local c=init(s,v,frames)
-            local rec=records[id]
-            rec.clock=c
-            rec.stopped=v.running==false
-            local front=visible(c,frames)
-            if front and not rec.tile then W.put(rec,front,c.lane_pose~=nil) end
-            worked[id]=true
-            -- RoadVehController reaches the stock stop frame on one
-            -- movement step, then enters loading on the next attempted
-            -- step from that frame. Both can fit in the same tick.
-            local realistic_profile=stock_realistic(s,v)
-            local stock_stop=v.dest~=nil and not v.road_return_depot and not not realistic_profile
-            local depot_stop=v.road_return_depot~=nil and not not realistic_profile
-            if v.running and not held then
-              moving.v,moving.c,moving.frames,moving.record=v,c,frames,rec
-              step(s,W,moving,board,hooks.exited,tick,stock_stop,realistic_profile or false,depot_stop)
-              frames=moving.frames
-            end
-            v.progress=1+(#v.route-1)*(c.index-1)/math.max(1,#frames-1)
-            local arrived_pose=c.arrival_pose
-            if not held and (arrived_pose or c.index>=#frames and (not (stock_stop or depot_stop) or c.arrival_ready)) then
-              local stop=arrived_pose or frames[#frames]
-              local arrived,hidden=hooks.arrive(v,tick,stop,(stock_stop or depot_stop) and c or nil)
-              if arrived then
-                rec.clock=nil
-                -- Loading occupies the station. Stock depot entry hides the
-                -- vehicle immediately and removes its visible lane obstacle.
-                if hidden then W.erase(rec) else W.put(rec,stop) end
+      local next_road=1
+      local function advance_road(up_to)
+        while ids[next_road] and slots[ids[next_road]]<up_to do
+          local id=ids[next_road]
+          next_road=next_road+1
+          while external and external[next_external] and external[next_external].id<id do
+            companion.advance(s,W,tick,external[next_external],k,ready)
+            next_external=next_external+1
+          end
+          local v=s.fleet[id]
+          if v then
+            local held=hooks.before(v,tick,ready[id])==true
+            local frames=v.road_motion_frames
+            if v.route and frames then
+              local c=init(s,v,frames)
+              local rec=records[id]
+              rec.clock=c
+              rec.stopped=v.running==false
+              local front=visible(c,frames)
+              if front and not rec.tile then W.put(rec,front,c.lane_pose~=nil) end
+              worked[id]=true
+              -- RoadVehController reaches the stock stop frame on one
+              -- movement step, then enters loading on the next attempted
+              -- step from that frame. Both can fit in the same tick.
+              local realistic_profile=stock_realistic(s,v)
+              local stock_stop=v.dest~=nil and not v.road_return_depot and not not realistic_profile
+              local depot_stop=v.road_return_depot~=nil and not not realistic_profile
+              if v.running and not held then
+                moving.v,moving.c,moving.frames,moving.record=v,c,frames,rec
+                step(s,W,moving,board,hooks.exited,tick,stock_stop,realistic_profile or false,depot_stop)
+                frames=moving.frames
+              end
+              v.progress=1+(#v.route-1)*(c.index-1)/math.max(1,#frames-1)
+              local arrived_pose=c.arrival_pose
+              if not held and (arrived_pose or c.index>=#frames and (not (stock_stop or depot_stop) or c.arrival_ready)) then
+                local stop=arrived_pose or frames[#frames]
+                local arrived,hidden=hooks.arrive(v,tick,stop,(stock_stop or depot_stop) and c or nil)
+                if arrived then
+                  rec.clock=nil
+                  -- Loading occupies the station. Stock depot entry hides the
+                  -- vehicle immediately and removes its visible lane obstacle.
+                  if hidden then W.erase(rec) else W.put(rec,stop) end
+                end
               end
             end
+            hooks.age(v,tick)
           end
-          hooks.age(v,tick)
+          sample(id,k)
         end
-        sample(id,k)
       end
+      if interleave_rail and not external then interleave_rail(advance_road) end
+      advance_road(math.huge)
       while external and external[next_external] do
         companion.advance(s,W,tick,external[next_external],k,ready)
         next_external=next_external+1
       end
+      if interleave_rail and external then interleave_rail() end
     end)
     return worked,timelines
   end
