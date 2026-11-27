@@ -35,3 +35,28 @@ unclassified revision.
 ```sh
 tests/ship_regions_tide_perf_native.sh luantiserver 33635c0 ../ship-tide-perf
 ```
+
+## Build fully open sea regions without a tile-by-tile flood fill
+
+The regular water board can prove that every tile in a complete
+16×16 region is ordinary sea and all its shared corner heights match.
+That gives exactly one connected patch. Interior follower probes
+cannot add a patch or find an aqueduct in such a region; only the
+64 outward edges can affect connectivity. Each edge still uses the
+same stock ship follower. Any slope, coast, rock, facility, partial
+rectangle, or decorated routing board uses the full labeling process.
+
+The native differential test checked every patch label, exact edge bit
+and ordered neighbor in full and rectangular extents. It included
+locks, aqueducts, slopes, and rocks, as well as adding a rock inside
+a previously warmed region. In the 256×256 test with 245 provably
+flat-sea regions, one cold build took median **1,584 → 86 ms** on the
+final four alternating pairs. Follower calls fell from **785,898 to
+48,938**. A second fixture ran 20 cold first-route ferry quotes across
+opposite shores in 128×128 maps. Median CPU was **4.79 s → 0.61 s**
+per batch, with identical quotes. These are scoped cold-cache tests;
+coast-only trips do not see that speedup.
+
+```sh
+tests/ship_solid_region_perf_native.sh luantiserver ../solid-sea-perf
+```

@@ -38,6 +38,21 @@ if rocks then
   for x=9,17 do s.tiles[id(x,12)].stock_water_rocks=true end
 end
 
+-- The fast case has no cached per-cell labels. The live board must
+-- reject even one missing water track or non-flat corner in the square.
+local plain=N.board(s)
+local sea=id(31,28)
+assert(plain:solid_plain_sea(17,17,16) and not plain:solid_plain_sea(1,1,16))
+local overlay=setmetatable({tile=function() return nil end},{__index=plain})
+assert(not overlay:solid_plain_sea(17,17,16))
+s.tiles[sea].stock_water_rocks=true
+assert(not plain:solid_plain_sea(17,17,16))
+s.tiles[sea].stock_water_rocks=nil
+local corner=(28-1)*(S.W+1)+31
+s.corner_grid.levels[corner]=1
+assert(not plain:solid_plain_sea(17,17,16))
+s.corner_grid.levels[corner]=0
+
 -- A genuine shore edit on the first column of one 16×16 region
 -- changes the edge read by the region on its other side as well.
 local Flood=dofile(root.."water_flood_world.lua")(S,Terrain,dofile(src.."water_flood.lua"))

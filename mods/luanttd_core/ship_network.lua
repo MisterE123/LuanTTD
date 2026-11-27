@@ -89,10 +89,40 @@ return function(Sim,Terrain,Water,Facilities)
     end
     return out
   end
+  -- A witness for the water region's fully connected case. Read the
+  -- authoritative integer corner raster, not the cached render height.
+  local function solid_plain_sea(s,x,z,size)
+    local g=s.corner_grid
+    if not g or g.width~=Sim.W or g.depth~=Sim.H or x<1 or z<1
+        or x+size-1>g.width or z+size-1>g.depth then return false end
+    local levels,tiles,w=g.levels,s.tiles,g.width
+    local h=levels[(z-1)*(w+1)+x]
+    if h==nil then return false end
+    for dz=0,size do
+      local i=(z+dz-1)*(w+1)+x
+      for dx=0,size do if levels[i+dx]~=h then return false end end
+    end
+    for dz=0,size-1 do
+      local i=(z+dz-1)*w+x
+      for dx=0,size-1 do
+        local t=tiles[i+dx]
+        if not t or t.terrain~="water" or t.water_class and t.water_class~="sea" or
+            t.stock_void or t.coastal_water or t.stock_water_rocks or t.ship or t.build or
+            t.rail_tracks or t.stock_industry then return false end
+      end
+    end
+    return true
+  end
   function N.board(s,occupancy)
-    local B={xy=Sim.xy,tile_at=Sim.id}
-    function B.tile(id) return read(s,id) end
-    function B.adjacent(id,d) return id and Sim.adjacent(id,4-d) end
+    local function tile(id) return read(s,id) end
+    local function adjacent(id,d) return id and Sim.adjacent(id,4-d) end
+    local B={xy=Sim.xy,tile_at=Sim.id,tile=tile,adjacent=adjacent}
+    function B:solid_plain_sea(x,z,size)
+      -- Do not certify a decorated board with different water status or
+      -- adjacency (for example a hypothetical route-planning overlay).
+      return self==B and B.tile==tile and B.adjacent==adjacent and
+        B.xy==Sim.xy and B.tile_at==Sim.id and solid_plain_sea(s,x,z,size)
+    end
     function B.ship_depot(id)
       local t=B.tile(id)
       if t and t.kind=="ship_depot" then return s.stock_ship_depots[t.depot] end

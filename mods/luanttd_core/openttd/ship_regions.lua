@@ -43,7 +43,33 @@ return function(Track,Water,board,layout)
     return local_tile(rx,rz,i,0)
   end
 
+  local function solid_region(rx,rz)
+    if not board.solid_plain_sea or (rx+1)*16>width or (rz+1)*16>height or
+        not board:solid_plain_sea(x0+rx*16,z0+rz*16,16) then return end
+    -- All 256 flat sea tiles offer every track. No interior cycle or
+    -- separate component can exist. Every outgoing direction uses the
+    -- same stock follower, including one-way aqueduct heads at the edge.
+    local r={edge={[0]=0,0,0,0},cross_aqueduct=false,count=1,x=rx,z=rz}
+    for side=0,3 do
+      local td=Track.diagonal_trackdir(side)
+      local bits=0
+      for i=0,15 do
+        local id=edge_tile(rx,rz,side,i)
+        local f=Water.follow(board,nil,id,td)
+        if f.ok then
+          local nx,nz=region_xy(f.tile)
+          if nx~=nil and (nx~=rx or nz~=rz) then bits=bits+2^i end
+        end
+      end
+      r.edge[side]=bits
+    end
+    cache[region_index(rx,rz)]=r
+    return r
+  end
+
   local function force_update(rx,rz)
+    local full=solid_region(rx,rz)
+    if full then return full end
     local r={labels={},edge={[0]=0,0,0,0},cross_aqueduct=false,count=0,x=rx,z=rz}
     local stack={}
     for y=0,15 do for x=0,15 do
