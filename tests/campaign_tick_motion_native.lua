@@ -12,6 +12,14 @@ local state,cap=assert(loadfile(mod.."/campaign_transport_commands_fixture.lua")
 cap.durable_actions=true
 assert(state.passenger_house_clock.counter==0)
 local fixture=codec.encode(state)
+-- Round trip a real level-1 periodic save through the ordinary reader.
+local periodic=dofile(mod.."/campaign_checkpoint.lua")(core,codec,"live-tick-periodic.chk")
+local yields=0
+periodic.write_state(state,function() yields=yields+1 end)
+local restored=assert(periodic.read())
+assert(yields>=2 and restored.passenger_house_clock.counter==0 and #restored.tiles==#state.tiles
+  and restored.companies.Road.cash==state.companies.Road.cash and next(restored.fleet))
+periodic.clear()
 disk.write_state(state)
 local client=dofile(mod.."/campaign_authority_client.lua")(core,mod)
 local windows={{x=1,z=1,w=32,h=32},{x=1,z=33,w=32,h=32},

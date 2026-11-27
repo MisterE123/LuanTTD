@@ -79,8 +79,19 @@ if 'local tick_mode=' in worker_source:
           if auto.flush() then dirty=true end
           local b=core.get_us_time()
           if b-a>=500 then core.log("action",("SIM_BATCH begin=%d end=%d"):format(a,b)) end''')])
-modify('campaign_checkpoint.lua',[
- ('''    return write(state_prefix,core.compress(assert(codec).encode(state,pulse),"zstd",3))''','''    local a=core.get_us_time()
+checkpoint_source=(root/'campaign_checkpoint.lua').read_text()
+if 'local payload=core.compress(bytes,"zstd",pulse and 1 or 3)' in checkpoint_source:
+ modify('campaign_checkpoint.lua',[
+  ('    local bytes=assert(codec).encode(state,pulse)','''    local a=core.get_us_time()
+    local bytes=assert(codec).encode(state,pulse)
+    local b,chars=core.get_us_time(),#bytes'''),
+  ('    return write(state_prefix,payload)','''    local c=core.get_us_time()
+    write(state_prefix,payload)
+    core.log("action",("SAVE_PHASE %d begin=%d encode=%d packed=%d finish=%d chars=%d bytes=%d"):format(
+      state.day,a,b,c,core.get_us_time(),chars,#payload))''')])
+else:
+ modify('campaign_checkpoint.lua',[
+  ('''    return write(state_prefix,core.compress(assert(codec).encode(state,pulse),"zstd",3))''','''    local a=core.get_us_time()
     local bytes=assert(codec).encode(state,pulse)
     local b=core.get_us_time()
     local payload=core.compress(bytes,"zstd",3)

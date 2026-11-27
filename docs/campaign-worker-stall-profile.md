@@ -115,3 +115,22 @@ Four-mode native motion and exact economic replay passed again. The
 native Linux oil tanker was visible at the correct berth and delivered
 220 kL for $1,970. Actual paid tram, rail-coal, ship-coal, and multi-ore
 order/load/payment tests ran with the history disabled.
+
+## Periodic saves give views another turn
+
+The checkpoint's callback can serve an in-order, read-only request
+after encoding and again after compression, before digesting and
+atomically replacing the file. A pending edit still waits; it cannot
+run from that callback. Periodic checkpoints use faster Zstd level 1.
+Explicit command saves, manual checkpoints and shutdown keep level 3.
+The unpacked graph, signature, SHA-256 verification and reader did not
+change.
+
+In two alternating pairs on the same 1024×1024 fixture, median reply
+time for requests arriving during a save fell from **76 → 26 ms**
+and **126 → 26 ms** (13–17 reads in each run). The respective p90s fell
+from **207 → 187 ms** and **228 → 167 ms**. For one identical 21.1 MB
+encoded graph, level 1 was about 5% larger than level 3 (4.21 vs 4.00
+MB) and restored to identical bytes. Whole-day traffic and worst reply
+times still varied. Native save/reopen and settlement tests cover the
+new path independently from the timing observations.

@@ -155,3 +155,40 @@ do
   assert(round.tiles[3].coastal_water==true and round.tiles[3].water_class=="river")
   assert(round.tiles[4]==round.tiles[5])
 end
+
+-- Periodic save pulses are before compression and before the one atomic
+-- commit; explicit saves still use the original format and compression.
+do
+  local seen,committed={},nil
+  local function tag(name) seen[#seen+1]=name end
+  local open=dofile("mods/luanttd_core/campaign_checkpoint.lua")
+  local checkpoint=open({
+    get_worldpath=function() return "/disposable" end,
+    compress=function(raw,format,level)
+      assert(format=="zstd");tag("compress"..level)
+      return raw:reverse()
+    end,
+    sha256=function(bytes) tag("hash");return "sum"..#bytes end,
+    safe_file_write=function(path,data)
+      tag("commit");assert(path=="/disposable/test.chk")
+      committed=data
+      return true
+    end,
+  },{
+    encode=function(s,pulse)
+      tag("encode")
+      if pulse then pulse() end
+      return P.encode(s)
+    end,
+  },"test.chk")
+  local state={day=7}
+  state.loop=state
+  checkpoint.write_state(state,function() tag("read") end)
+  assert(table.concat(seen,",")=="encode,read,read,compress1,read,hash,commit")
+  local data=P.decode(assert(committed:match("^LUANTTD%-WIDE%-CAMPAIGN%-3%-STATE\nsum%d+\n(.*)$")):reverse())
+  assert(data.day==7 and data.loop==data)
+  seen={}
+  checkpoint.write_state(state)
+  assert(table.concat(seen,",")=="encode,compress3,hash,commit")
+  print("PASS periodic checkpoint yields at safe phase boundaries and commits the full state once")
+end

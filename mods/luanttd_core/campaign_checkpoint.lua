@@ -40,7 +40,15 @@ return function(core,codec,filename)
     return write(prefix,payload)
   end
   function M.write_state(state,pulse)
-    return write(state_prefix,core.compress(assert(codec).encode(state,pulse),"zstd",3))
+    local bytes=assert(codec).encode(state,pulse)
+    -- Periodic saves can serve bounded read-only queries while the
+    -- graph is stable. Service the mailbox at native phase boundaries
+    -- too, not just during the Lua traversal.
+    if pulse then pulse() end
+    local payload=core.compress(bytes,"zstd",pulse and 1 or 3)
+    bytes=nil
+    if pulse then pulse() end
+    return write(state_prefix,payload)
   end
   return M
 end
