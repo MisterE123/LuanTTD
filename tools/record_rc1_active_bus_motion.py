@@ -84,6 +84,7 @@ def read(path, with_board):
         supply={row['cargo']:[entry[k] for entry in row['history'][:2] for k in ('production','transported')]
                 for row in town['supplied']},
         houses=houses,roads=roads,stops=stops,goods=goods,cash=tables[b'PLYR'][0]['money'],
+        loan=tables[b'PLYR'][0]['current_loan'],
         settings=[config[k] for k in ('economy.town_growth_rate','construction.extra_tree_placement')],
         bus=pos,motion=[state,frame],bus_tick=bus_tick,
         day_state=[tables[b'PLYR'][0]['money_fraction'],*[raw[k] for k in

@@ -4541,6 +4541,31 @@ function M.hq_production(s,mark,random)
   local _,K=company_hqs()
   return K.produce(mark.stage,random(),s.stock_recession or s.stock_coal_recession)
 end
+function M.stock_company_quarter(s,owner,c,year,month)
+  local quarter=CompanyQuarter.month(c,year,month)
+  if quarter and s.stock_company_hqs and s.stock_company_hqs[owner] then
+    local H,K=company_hqs()
+    local stats=company_hq_stats(s,owner)
+    local score=K.score(c,stats.vehicles,stats.stations,c.stock_quarters,stats.min_age)
+    quarter.performance_history=score
+    quarter.company_value=K.value(c,stats.vehicles,stats.stations)
+    H.upgrade(s,owner,score)
+  end
+end
+-- OpenTTD 16.0-RC1 Company-priority tick, before industry, station,
+-- subsidy and town monthly callbacks. Default stock fees only; optional
+-- inflation and infrastructure maintenance are not synthesized here.
+function M.stock_company_month(s,year,month)
+  for owner,c in pairs(s.companies) do
+    M.stock_company_quarter(s,owner,c,year,month)
+    local rate,station_value=2,100
+    local interest,overhead=CompanyQuarter.monthly_fees(c.loan,c.cash,month,rate,station_value)
+    debit(c,interest,"loan_interest")
+    -- ExpensesType::Other is deducted from balance, but does not affect
+    -- CompanyEconomyEntry's operating expense column.
+    debit(c,overhead,"other")
+  end
+end
 function M.company_hq_status(s,owner,midday)
   if not (s.stock_generated_profile and s.companies[owner]) then return end
   local _,K=company_hqs()
@@ -5929,7 +5954,7 @@ function M.daily(s,traverse,tick_pulse,openings)
     for _,id in ipairs(regal_ids) do settle_bus(s.fleet[id]) end
   end
   local stock_work,month_tick,industries_rolled
-  if exact_economy and (openings or town_month or new_month and (industry.coal or industry.timber)) then
+  if exact_economy and (openings or town_month or new_month) then
     -- Advance the 74-tick batch into the new date after animation, before
     -- the same tick's tile, loading, vehicle and town work.
     month_tick=function()
@@ -5941,6 +5966,7 @@ function M.daily(s,traverse,tick_pulse,openings)
       end
       local topology=s.topology
       if new_month then
+        M.stock_company_month(s,y,month)
         if openings then openings("month") end
         M.stock_industry_month(s,industry.coal,industry.timber,y,month)
         industries_rolled=true
@@ -6107,26 +6133,21 @@ function M.daily(s,traverse,tick_pulse,openings)
       end
       site.service=0
     end
-    local upkeep={}
-    for _,tile in ipairs(s.tiles) do
-      local legacy=tile.build and M.tools[tile.build]
-      -- Stock overlays are not legacy construction tools. Do not invent
-      -- monthly upkeep for them or dereference an absent legacy price.
-      if tile.owner and legacy and legacy.price then
-        upkeep[tile.owner]=(upkeep[tile.owner] or 0)+math.max(1,math.floor(legacy.price*.003))
+    local upkeep
+    if not exact_economy then
+      upkeep={}
+      for _,tile in ipairs(s.tiles) do
+        local legacy=tile.build and M.tools[tile.build]
+        if tile.owner and legacy and legacy.price then
+          upkeep[tile.owner]=(upkeep[tile.owner] or 0)+math.max(1,math.floor(legacy.price*.003))
+        end
       end
     end
     for owner,c in pairs(s.companies) do
-      debit(c,math.floor(c.loan*0.004),"loan_interest")
-      if upkeep[owner] then debit(c,upkeep[owner],"property") end
-      local quarter=CompanyQuarter.month(c,y,month)
-      if quarter and s.stock_company_hqs and s.stock_company_hqs[owner] then
-        local H,K=company_hqs()
-        local stats=company_hq_stats(s,owner)
-        local score=K.score(c,stats.vehicles,stats.stations,c.stock_quarters,stats.min_age)
-        quarter.performance_history=score
-        quarter.company_value=K.value(c,stats.vehicles,stats.stations)
-        H.upgrade(s,owner,score)
+      if upkeep then
+        debit(c,math.floor(c.loan*0.004),"loan_interest")
+        if upkeep[owner] then debit(c,upkeep[owner],"property") end
+        M.stock_company_quarter(s,owner,c,y,month)
       end
       for sid,r in pairs(c.rating) do c.rating[sid]=math.max(10,r-2) end
       table.insert(c.history,1,{day=s.day,revenue=c.month_rev,expenses=c.month_exp,cash=c.cash})

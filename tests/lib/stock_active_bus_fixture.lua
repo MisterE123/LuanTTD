@@ -164,7 +164,9 @@ function F.open(initial,with_faults)
     st.passenger_rating_state={rating=g[3],last_age=g[4],last_speed=g[5],time_since_pickup=g[6],
       amount_fract=g[7],has_rating=math.floor(g[8]/2)%2==1,max_waiting_cargo=0}
   end
-  c.cash=initial.cash
+  c.cash,c.loan=initial.cash,initial.loan
+  local q=initial.quarter
+  if q then c.stock_quarter={income=q[1],expenses=q[2],delivered={passenger=q[3]}} end
   v.route,v.dest,v.dest_index,v.depot,v.station,v.progress=route,1,1,nil,nil,1
   v.road_leg_td,v.road_route_cost,v.road_motion_frames,v.road_bay_branch=td,cost,frames,bays
   v.road_speed_state={index=hit,heading=raw[4],progress=raw[5],speed=raw[6],subspeed=raw[7],ticks=initial.bus_tick}

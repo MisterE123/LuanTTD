@@ -500,3 +500,37 @@ loading and movement callbacks, not time-based inserts. The
 event sequences; the ordinary replay now matches both RNG words at the
 February boundary and the town rebuilding countdown at both month
 boundaries. Later cargo and RNG are still under comparison.
+
+
+## Continuous served-town baseline
+
+The new [continuous comparison](../tests/town_growth_rc1_coherent.lua)
+uses **one stock RC1 executable run**, not separate paused games. A
+normal 64×64 Temperate town has two drive-through stations served by an
+MPS Regal. Each numeric observation is taken after a complete tick.
+Starting with its actual January state and loan, the normal LuanTTD
+runtime matches six full checkpoints through June 1: both RNG words,
+every recorded town house and road, the common height grid, growth and
+rebuild countdowns, town ratings and cargo effects, both station
+clocks and ratings, house Passenger and Mail generation/collection,
+the company cash and its fractional part, and quarterly expenses,
+income and paid passengers. Two packed reopens preserve the result.
+The older independently paused samples remain a separate test.
+
+Ordinary monthly company fees now use RC1's Company-priority phase
+before Industry, Station and Town. Quarterly history rolls before
+the new month's charges. Loan interest uses cumulative annual
+rounding, including interest on negative cash, and the default
+fixed overhead is 25. The overhead affects the balance but is not
+counted as an operating expense. This replaces the ordinary world's
+invented balance percentage and full-map per-tile upkeep scan.
+[The compiled fee oracle](../tests/company_month_rc1.py) checks
+12,012 cases. Source inflation, bankruptcy and optional
+infrastructure maintenance are separate systems.
+
+July 1 matches the physical town and its clocks: the original
+10-house town gains the same 11th house on the same parcel, with
+identical construction state. The July figures are **not** a full
+economy match yet; stock has delivered 119 paying passengers
+and the host has 121. The game is still being compared across longer
+and multi-mode runs, not declared completely stock.
