@@ -9,6 +9,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
   local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
   local Guide=dofile(mod.."/rail_guideway_profiles.lua")
   local power_rules,advanced_models
+  local railtypes=setmetatable({},{__mode="k"})
   function O.initialize(s,cfg)
     if not s.rail_owned_service then return nil,"OWNED_RAIL_DISABLED" end
     return Fleet.initialize(s,cfg)
@@ -44,7 +45,19 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     advanced_models,power_rules=mounted,Types
     return true
   end
-  function O.railtype_mask(s,owner,Types) return Fleet.railtype_mask(s,owner,Types,advanced_models) end
+  function O.railtype_mask(s,owner,Types)
+    -- There are no company-exclusive engines in this adapter yet. The
+    -- existing public-sale table is the same for all current companies.
+    -- Only cache the scalar answer, never availability on the saved world.
+    if not s.companies[owner] then return 0 end
+    local fleet,day,electric=s.stock_rail_fleet,s.day,s.stock_electrification
+    local old=railtypes[s]
+    if old and old.fleet==fleet and old.day==day and old.electric==electric and
+        old.types==Types and old.advanced==advanced_models then return old.mask end
+    local mask=Fleet.railtype_mask(s,owner,Types,advanced_models)
+    railtypes[s]={fleet=fleet,day=day,electric=electric,types=Types,advanced=advanced_models,mask=mask}
+    return mask
+  end
   function O.catalog(s)
     local rows,why=Fleet.catalog(s,advanced_models)
     if not rows then return nil,why end
@@ -81,7 +94,7 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     out.electric_model_ready=function(id) return Run.owned_passenger_engine(id) end
     out.mounted_advanced=advanced_models
     if power_rules and not out.company_railtypes then
-      out.company_railtypes=function(s,owner) return power_rules.flags(Fleet.railtype_mask(s,owner,power_rules,advanced_models)) end
+      out.company_railtypes=function(s,owner) return power_rules.flags(O.railtype_mask(s,owner,power_rules)) end
     end
     return out
   end

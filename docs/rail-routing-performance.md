@@ -26,3 +26,26 @@ Reproduce using `tests/rail_yapf_perf_native.sh LUANTI_SERVER BASELINE_REV NEW_O
 This measures rail routing, not the entire simulation or rendering FPS.
 The existing compiled OpenTTD 14.1 follower, cost and search tests are
 historical regression coverage, not evidence of full RC1 train parity.
+
+## Reuse stock rail availability across company view polls
+
+OpenTTD 16.0-RC1 keeps its calculated rail types on the company and
+updates them as engine availability changes. The current LuanTTD
+adapter has public-sale availability only. Companies still need to
+exist, but do not need separate copies of the same public result.
+The worker now computes the public mask once per simulation day and
+reuses it in the company HUD and rail construction checks. Changes to
+fleet identity, electrification, or mounted assets invalidate it.
+No new availability is saved or granted; exclusive previews will need
+their own per-company calculation when ported.
+
+In the native async benchmark, 1,024 company observations across 32 days
+and four companies took a median **270.64 ms → 5.72 ms** CPU per batch.
+The old path calculated 2,048 masks for the two gauges; the current path
+calculated 32. All returned gauge flags matched over twelve alternating
+batches in different calendar eras. This measures the queried company
+status only, not whole simulation-day performance.
+
+```sh
+tests/railtype_worker_perf_native.sh luantiserver 372a434 /tmp/railtype-bench
+```
