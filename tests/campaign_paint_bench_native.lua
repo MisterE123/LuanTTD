@@ -24,23 +24,29 @@ core.after(0,function()
   map.road_economy=true
   Sim.company(map,"Tester")
   assert(Sim.road_bridge(map,"Tester",Sim.id(18,27),Sim.id(22,27),0))
-  local heights,receipts={},{}
+  local projection=dofile(mod.."/campaign_authority_projection.lua")()
+  local seq=0
   local function window(x,z,w,h)
     local rows={}
     for zz=z,z+h-1 do for xx=x,x+w-1 do
       local id=Sim.id(xx,zz)
       local slope,level,top=T.tile(map.corner_grid,xx,zz)
       local row={id=id,top=top,level=level,slope=slope,surface=P.tile(map.tiles[id])}
-      rows[#rows+1]=row;heights[id]=row
+      rows[#rows+1]=row
     end end
-    receipts[#receipts+1]={revision=1,value={x=x,z=z,width=w,height=h,tiles=rows,
-      corners=P.corners(T,map.corner_grid,x,z,w,h),registries=P.registries(map,rows)}}
+    seq=seq+1
+    local key=tostring(seq)
+    assert(projection.accept(key,projection.subscribe(key),{ok=true,tick=1,seq=seq,revision=1,
+      value={x=x,z=z,width=w,height=h,tiles=rows,corners=P.corners(T,map.corner_grid,x,z,w,h),
+        registries=P.registries(map,rows)}}))
   end
-  window(1,1,32,32);window(89,1,32,32)
-  render.use_worker_projection({
-    windows=function() return receipts end,
-    terrain=function(x,z)return heights[Sim.id(x,z)] end,
-  })
+  local indexed=core.settings:get_bool("luanttd_qa_indexed_paint",false)
+  if indexed then
+    for z=1,65,32 do for x=1,65,32 do window(x,z,32,32) end end
+  else
+    window(1,1,32,32);window(89,1,32,32)
+  end
+  render.use_worker_projection(projection)
   local low,high={x=2,y=-1,z=2},{x=65,y=render.max_target_level(),z=65}
   assert(high.y>=peak+3)
   local stale_y=math.min(high.y,44)
@@ -62,31 +68,51 @@ core.after(0,function()
     p(vm,a,b,low,high,false)
     return (core.get_us_time()-t)/1000
   end
-  core.emerge_area(low,high,function(_,action,left)
-    assert(action~=core.EMERGE_CANCELLED and action~=core.EMERGE_ERRORED)
-    if left~=0 then return end
-    core.after(0,function()
-      local old,new=render.qa_baseline,render.qa_paint
-      repaint(old,true)
-      local g1,p1,area=snapshot()
-      repaint(new,true)
-      local g2,p2=snapshot()
-      local n=0
-      for i in area:iter(low.x,low.y,low.z,high.x,high.y,high.z) do
-        assert(g1[i]==g2[i] and p1[i]==p2[i],"Different node or param2 at "..i)
-        n=n+1
+  local function bench()
+    local old,new=render.qa_baseline,render.qa_paint
+    if indexed then
+      old=function(...)
+        local restore=render.qa_scan_view(projection)
+        new(...)
+        restore()
       end
-      local function median(t) table.sort(t);return t[math.floor((#t+1)/2)] end
-      for _,mode in ipairs({"unchanged","stale"}) do
-        local a,b={},{}
-        local dirty=mode=="stale"
-        for i=1,7 do
-          if i%2==1 then a[i]=repaint(old,dirty);b[i]=repaint(new,dirty)
-          else b[i]=repaint(new,dirty);a[i]=repaint(old,dirty) end
-        end
-        core.log("action",("NATIVE PAINT BENCH %s %.3f -> %.3f ms %d identical voxels"):format(mode,median(a),median(b),n))
+    end
+    repaint(old,true)
+    local g1,p1,area=snapshot()
+    repaint(new,true)
+    local g2,p2=snapshot()
+    local n=0
+    local ignore=core.get_content_id("ignore")
+    for i in area:iter(low.x,low.y,low.z,high.x,high.y,high.z) do
+      assert(g1[i]~=ignore and g1[i]==g2[i] and p1[i]==p2[i],"Different or missing node or param2 at "..i)
+      n=n+1
+    end
+    local function median(t) table.sort(t);return t[math.floor((#t+1)/2)] end
+    for _,mode in ipairs({"unchanged","stale"}) do
+      local a,b={},{}
+      local dirty=mode=="stale"
+      for i=1,7 do
+        if i%2==1 then a[i]=repaint(old,dirty);b[i]=repaint(new,dirty)
+        else b[i]=repaint(new,dirty);a[i]=repaint(old,dirty) end
       end
-      core.request_shutdown("Native paint parity and benchmark passed",false,0)
+      core.log("action",("NATIVE PAINT BENCH %s %.3f -> %.3f ms %d identical voxels"):format(mode,median(a),median(b),n))
+    end
+    core.request_shutdown("Native paint parity and benchmark passed",false,0)
+  end
+  -- Emergence is asynchronous. A canceled Luanti callback can race with
+  -- generation by another thread; retry the region rather than assuming
+  -- ungenerated blocks are identical. Benchmark only after a clean pass.
+  local function emerge(left)
+    local failed=false
+    core.emerge_area(low,high,function(_,action,remaining)
+      failed=failed or action==core.EMERGE_CANCELLED or action==core.EMERGE_ERRORED
+      if remaining~=0 then return end
+      if not failed then core.after(0,bench)
+      else
+        assert(left>0,"Native benchmark could not emerge fixture")
+        core.after(.1,emerge,left-1)
+      end
     end)
-  end)
+  end
+  emerge(5)
 end)

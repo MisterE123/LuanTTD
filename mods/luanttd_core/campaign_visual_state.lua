@@ -6,6 +6,10 @@ return function(Sim,baseline)
   local metadata={}
   for _,key in ipairs(keep) do metadata[key]=baseline[key] end
   local current=baseline
+  -- Same ordered view as the surfaces below: oldest rows are overwritten
+  -- by newer receipts. The painter needs these many times per column.
+  local terrain_rows={}
+  function F.terrain_row(id) return terrain_rows[id] end
   local proxy=setmetatable({},{
     __index=function(_,k) return current[k] end,
     __newindex=function() error("renderer cannot mutate campaign state") end,
@@ -16,10 +20,12 @@ return function(Sim,baseline)
       bridge_above={},stock_road_bridges={},stock_road_tunnels={},stock_rail_spans={},
       corner_grid={width=Sim.W,depth=Sim.H,levels={},revision=0,max_height=255}}
     for key,value in pairs(metadata) do state[key]=value end
+    local rows={}
     local windows=projection.windows()
     for _,receipt in ipairs(windows) do
       local w=receipt.value
       for _,row in ipairs(w.tiles) do
+        rows[row.id]=row
         state.tiles[row.id]=row.surface
         state.paint_tops[row.id]=math.max(row.top or 0,row.surface.h or 0)+3
         state.front_steps[row.id]=row.front_steps
@@ -58,7 +64,7 @@ return function(Sim,baseline)
       if t.level_crossing then state.paint_tops[id]=math.max(state.paint_tops[id],t.level_crossing.top+3) end
     end
     if state.signals then state.stock_rail_dispatch={signals={records=state.signals}} end
-    current=state
+    current,terrain_rows=state,rows
   end
   return F
 end

@@ -29,3 +29,23 @@ Reproduce with `bash tests/campaign_paint_bench_native.sh e0a13ec` in a
 checkout with Luanti's server and Python available. Set
 `BAYLINE_PAINT_PEAK=2` for the flat case. The test uses a disposable world
 and runs both passes with the original renderer helpers and assets.
+
+## Direct lookup in the installed worker scene
+
+The renderer looks up a logical tile's canonical slope in the same
+installed view as its surface record. It no longer searches every
+subscribed sector for every painted node, or recreates the slope view on
+each terrain receipt. This is presentation-only: the simulation and
+terrain rules are unchanged.
+
+With nine hydrated sectors, Luanti 5.15.2 measured 24.4 → 15.3 ms
+for a repaint that needed no writes, and 55.0 → 46.4 ms when stale
+nodes needed cleaning (median of seven paired samples). The flat
+sector contains roads, rail, trees and a bridge, with a tall ridge in a
+different sector. All 241,664 node IDs and orientations were identical.
+Four separate alternating engine runs gave the same node names and
+orientations and confirmed the unchanged-paint gain; write timing varied
+more. These tests measure server-side terrain painting, not simulation
+throughput or client frame rate.
+
+Reproduce with `BAYLINE_PAINT_INDEX=true bash tests/campaign_paint_bench_native.sh 32d9b84`.

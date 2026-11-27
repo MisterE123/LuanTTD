@@ -1,22 +1,23 @@
 -- 3D view over a canonical OpenTTD corner grid. Rendering and ray
 -- intersection use the same continuous slope field, with model units
 -- supplied by the restore/scene adapter.
-return function(Sim,Terrain,grid,projection)
+return function(Sim,Terrain,grid,projection,terrain_row)
   local V={}
   function V.tile(id)
-    local x,z=Sim.xy(id)
-    if projection then
-      local row=projection.terrain(x,z)
+    if terrain_row or projection then
+      local row
+      if terrain_row then row=terrain_row(id) else row=projection.terrain(Sim.xy(id)) end
       if row then return row.slope,row.level,row.top end
       return nil
     end
-    return Terrain.tile(grid,x,z)
+    return Terrain.tile(grid,Sim.xy(id))
   end
   function V.sample(id,x,z)
     local a,b=Sim.xy(id)
     local u,v=(x-a*2+.5)/2,(z-b*2+.5)/2
-    if projection then
-      local row=projection.terrain(a,b)
+    if terrain_row or projection then
+      local row
+      if terrain_row then row=terrain_row(id) else row=projection.terrain(a,b) end
       if row then return .5+Terrain.normalized_height(row.slope,row.level,u,v) end
       return nil
     end

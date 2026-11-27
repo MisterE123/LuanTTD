@@ -2369,8 +2369,10 @@ return function(api)
     assert(api.terrain,"worker projection requires canonical slopes")
     visual.accept(projection)
     S=visual.state
-    projected=true
-    terrain=dofile(modpath.."/terrain_view.lua")(Sim,dofile(modpath.."/openttd/terrain.lua"),nil,projection)
+    if not projected then
+      terrain=dofile(modpath.."/terrain_view.lua")(Sim,dofile(modpath.."/openttd/terrain.lua"),nil,nil,visual.terrain_row)
+      projected=true
+    end
     if api.farm_view then api.farm_view.use_worker_projection(S) end
     for _,receipt in ipairs(projection.windows()) do
       local w=receipt.value

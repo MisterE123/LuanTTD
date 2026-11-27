@@ -19,3 +19,31 @@ W.value.registries.bridge_above=nil
 V.accept({windows=function() return {W} end})
 assert(V.state.paint_tops[2]==4 and V.state.paint_tops[3]==19 and not V.state.paint_tops[5])
 print("PASS visual column heights are local, include stock layer anchors, and drop after authoritative removal")
+
+-- Simulate two ordered receipts over the same tile, then remove the
+-- newer window and finally the older one. The painter and click ray must
+-- use the same canonical slope as the readonly projection either way.
+local P=dofile("mods/luanttd_core/campaign_authority_projection.lua")()
+local terrain=dofile("mods/luanttd_core/openttd/terrain.lua")
+local sim={W=32,H=32,xy=function(id) return (id-1)%32+1,math.floor((id-1)/32)+1 end}
+local view=dofile("mods/luanttd_core/terrain_view.lua")(sim,terrain,nil,nil,V.terrain_row)
+local function add(key,seq,row)
+  assert(P.accept(key,P.subscribe(key),{ok=true,seq=seq,tick=2,revision=seq,
+    value={x=1,z=1,width=1,height=1,tiles={row},corners=string.rep("\\1",4)}}))
+end
+add("newer",8,{id=1,top=5,level=4,slope=3,surface={h=4}})
+add("older",7,{id=1,top=2,level=1,slope=6,surface={h=1}})
+for _,remove in ipairs({"newer","older","other"}) do
+  V.accept(P)
+  local row=P.terrain(1,1)
+  assert(V.terrain_row(1)==row and not V.terrain_row(2))
+  if row then
+    local slope,level,top=view.tile(1)
+    assert(slope==row.slope and level==row.level and top==row.top and V.state.tiles[1]==row.surface)
+    assert(view.sample(1,2,2)==.5+terrain.normalized_height(slope,level,.25,.25))
+  else
+    assert(not view.tile(1) and not view.sample(1,2,2) and not V.state.tiles[1])
+  end
+  P.unsubscribe(remove)
+end
+print("PASS installed terrain rows agree with the projection across overlap, replacement and eviction")
