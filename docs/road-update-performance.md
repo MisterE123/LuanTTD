@@ -927,3 +927,23 @@ Run the differential with:
 git show da7825b:mods/luanttd_core/road_motion_leg.lua > /tmp/before-road-motion.lua
 luajit tests/road_yapf_board.lua /tmp/before-road-motion.lua
 ```
+
+## Reuse the lane conflict predicate during movement
+
+The scan that prevents a passing vehicle from clipping oncoming traffic
+now passes the current pose and lane explicitly. It no longer creates a
+new Lua function for each eligible pixel step. The buckets, traversal
+order, clearance envelope, elevation checks, and stock movement budgets
+are unchanged.
+
+Across four alternating pairs on 960 bought and routed buses, 24
+simulation days took **6.35 → 5.70 s** median CPU. The comparison matched
+every available vehicle timeline on days 1, 10 and 24, and all 240,998
+saved table values and aliases at the end. A separate Luanti SQLite
+replay checkpointed and restored both stopped-leader and moving-leader
+overtakes. The timing is a dense-road workload, not a client FPS claim.
+
+```sh
+tests/road_overtake_sqlite.sh luantiserver
+lua5.1 tests/road_traffic_runtime.lua
+```

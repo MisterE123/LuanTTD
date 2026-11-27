@@ -7,10 +7,10 @@ port="${2:-39289}"
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 game="$tmp/games/overtakeprobe"
-mod="$game/mods/overtakeprobe"
+mod="$game/mods/luanttd_core"
 mkdir -p "$mod/openttd" "$tmp/world" "$tmp/home"
 printf 'title = Road overtaking SQLite probe\n' > "$game/game.conf"
-printf 'name = overtakeprobe\n' > "$mod/mod.conf"
+printf 'name = luanttd_core\n' > "$mod/mod.conf"
 cp mods/luanttd_core/*.lua "$mod/"
 cp mods/luanttd_core/openttd/*.lua "$mod/openttd/"
 cp tests/road_overtake_fixture.lua "$mod/"

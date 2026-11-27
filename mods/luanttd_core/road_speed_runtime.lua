@@ -130,13 +130,13 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       for _,item in pairs(by_tile[tile] or empty) do list[#list+1]=item end
       return list
     end
-    function W.near(x,y,r,check)
+    function W.near(x,y,r,check,id,z,d,horizontal,exposed,changed)
       local bottom,top=floor((y-r)/16),floor((y+r)/16)
       for ix=floor((x-r)/16),floor((x+r)/16) do
         local key=ix*stride
         for iy=bottom,top do
           local bucket=buckets[key+iy]
-          if bucket then for _,item in pairs(bucket) do if check(item) then return true end end end
+          if bucket then for _,item in pairs(bucket) do if check(item,id,x,y,z,d,horizontal,exposed,changed) then return true end end end
         end
       end
       return false

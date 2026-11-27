@@ -119,6 +119,14 @@ return function(Motion,O,Follow,make_board)
   -- Host-only anti-overlap guard. Stock never predicts a road user
   -- arriving beyond the two initial tiles; don't let one occupy the
   -- wrong-way actor's same lane. Returning also checks the blind side.
+  local function obstruct(u,id,x,y,z,d,horizontal,exposed,changed)
+    if u.id==id or u.type~="road" or abs(u.z-z)>=6 then return false end
+    local along=horizontal and abs(u.x-x) or abs(u.y-y)
+    local across=horizontal and abs(u.y-y) or abs(u.x-x)
+    if along>=8 or across>1 then return false end
+    return ((exposed or u.opposite_lane) and (u.direction-d)%8==4) or
+      (changed and u.direction==d)
+  end
   function P.clear(W,record,from,to,nominal,z)
     local changed=not same(from,to) and
       (to[3]%4==1 and from[2]~=to[2] or to[3]%4==3 and from[1]~=to[1])
@@ -126,16 +134,7 @@ return function(Motion,O,Follow,make_board)
     local d=to[3]
     if d%2~=1 then return true end
     local x,y=to[1],to[2]
-    local horizontal=d%4==1
-    local function obstruct(u)
-      if u.id==record.id or u.type~="road" or abs(u.z-z)>=6 then return false end
-      local along=horizontal and abs(u.x-x) or abs(u.y-y)
-      local across=horizontal and abs(u.y-y) or abs(u.x-x)
-      if along>=8 or across>1 then return false end
-      return ((exposed or u.opposite_lane) and (u.direction-d)%8==4) or
-        (changed and u.direction==d)
-    end
-    return not W.near(x,y,8,obstruct)
+    return not W.near(x,y,8,obstruct,record.id,z,d,d%4==1,exposed,changed)
   end
 
   return P
