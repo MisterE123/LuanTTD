@@ -231,6 +231,16 @@ return function(G,catalog)
     return plan_road(t,board,x,z,rcmd,d,random),true
   end
 
+  -- The command adapters quote on the same snapshot as the road walk.
+  function B.visit(t,b,u,v,q,rb,from,opts,rand)
+    local portal=q.inside~=nil and (q.kind=="bridge" or q.kind=="tunnel")
+    if portal and (from==nil or has(rb,bits[rev(from)])) then
+      if from~=nil or G.chance(1,2,rand()) then return nil,false,false,q.other_x,q.other_z end
+      return
+    end
+    return grow_here(t,b,u,v,rb,from,opts,rand)
+  end
+
   -- RC1 GrowTownAtRoad: construction is distinct from the traversal.
   -- The visit may move the current tile through a road bridge/tunnel.
   function B.walk(t,board,x,z,roads,random,visit)
@@ -279,14 +289,7 @@ return function(G,catalog)
     for _,delta in ipairs(walk_seed) do
       if road(board.tile(x,z))~=0 then
         return B.walk(t,board,x,z,opts.allow_roads,random,function(t,b,u,v,q,rb,from,rand)
-          local portal=q.inside~=nil and (q.kind=="bridge" or q.kind=="tunnel")
-          if portal and (from==nil or has(rb,bits[rev(from)])) then
-            if from~=nil or G.chance(1,2,rand()) then
-              return nil,false,false,q.other_x,q.other_z
-            end
-            return
-          end
-          return grow_here(t,b,u,v,rb,from,opts,rand)
+          return B.visit(t,b,u,v,q,rb,from,opts,rand)
         end)
       end
       x,z=x+delta[1],z+delta[2]

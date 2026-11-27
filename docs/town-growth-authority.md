@@ -209,6 +209,15 @@ result at each visited tile; it is not a full town-growth simulation.
 A native worker test confirms that a new house next to the neighboring
 town's starting road persists while the road remains unchanged.
 
+The [composed growth comparison](../tests/town_growth_visit_rc1.py)
+uses the actual RC1 tile visit and road walk together. It checks 6,000
+individual tile visits, then 800 towns across 12 successive growth
+attempts apiece on changing boards. It compares the order of land,
+house and road calls, success, RNG consumption, house counts and final
+tile state. Terrain and construction outcomes are controlled test
+adapters, so this is not yet a month-by-month whole-game comparison
+with all transport and landscape actors running.
+
 ### Recovering a roadless town
 
 The stock roadless fallback searches from the town center in RC1's
