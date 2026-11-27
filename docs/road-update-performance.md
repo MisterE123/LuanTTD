@@ -534,3 +534,23 @@ version:
 tests/ship_yapf_perf_native.sh "$(command -v luantiserver)" \
   f38b4d8d934b3904555b24f8a9a3570dfac46183 /tmp/ship-routing-bench
 ```
+
+### Share road tile records inside each YAPF segment
+
+The road cost loop now passes the tile description it already read to
+the stock cost, destination and follower checks. Reversal and entrance
+helpers no longer allocate closures for each tile. Nothing is cached
+between searches, and the follower still reads its destination afresh,
+including access, roadworks, tram directions, gradients and structures.
+
+In a native Luanti async worker on the 256×256 mixed-company fixture,
+median elapsed time for batches of 128 complete bus route searches
+fell from **41.4 to 26.4 ms**. Across twelve alternating runs, every
+selected path, direction, cost and vehicle motion sample matched
+exactly. This measures route searches, not all moving-vehicle updates
+or frame rate. To rerun on a copied benchmark checkpoint:
+
+```sh
+tests/road_yapf_perf_native.sh "$(command -v luantiserver)" \
+  cbaa1785abe27a42d71490202ed5cdcf8a347f93 /path/to/128-bus-checkpoint.chk /tmp/road-routing-bench
+```

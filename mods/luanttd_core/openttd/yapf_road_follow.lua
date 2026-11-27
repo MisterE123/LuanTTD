@@ -118,8 +118,57 @@ end
 -- A faithful road follower over the adapter, including in-place reversal
 -- transitions. Failure still returns the attempted fields and error, as
 -- CFollowTrackRoad does. No global state is mutated.
-function R.follow(board,v,old_id,old_td)
-  local old=board.tile(old_id)
+local function force_reverse(res,leave)
+  res.tile=res.old_tile
+  res.trackdirs=masks[reverse_trackdir(res.old_td)]
+  res.exit=leave
+  res.ok=true
+  res.reversed=true
+  return res
+end
+
+local function try_reverse(res,old,v)
+  if not v.tram then
+    res.exit=reverse_direction(res.exit)
+    res.tile=res.old_tile
+    res.trackdirs=R.origin_trackdirs(old,false,res.exit)
+    if res.trackdirs~=0 then
+      res.ok=true;res.reversed=true
+      return res
+    end
+  end
+  res.error=R.EC_NO_WAY
+  return res
+end
+
+local function can_enter(board,v,entry,res)
+  if entry.kind=="bay_stop" and entry.dir~=reverse_direction(res.exit) then
+    res.error=R.EC_NO_WAY;return false
+  end
+  local single=v.tram and single_tram(entry)
+  if single and single~=reverse_direction(res.exit) then
+    res.error=R.EC_NO_WAY;return false
+  end
+  if entry.kind=="depot" then
+    if entry.dir~=reverse_direction(res.exit) then
+      res.error=R.EC_NO_WAY;return false
+    end
+    if entry.owner~=v.owner then
+      res.error=R.EC_OWNER;return false
+    end
+  end
+  if not allowed_type(board,v,entry,res.tile) then
+    res.error=R.EC_RAIL_ROAD_TYPE;return false
+  end
+  if (entry.kind=="tunnel" and not res.tunnel or
+      entry.kind=="bridge" and not res.bridge) and entry.dir~=res.exit then
+    res.error=R.EC_NO_WAY;return false
+  end
+  return true
+end
+
+function R.follow(board,v,old_id,old_td,source_record)
+  local old=source_record or board.tile(old_id)
   local res={old_tile=old_id,old_td=old_td,tile=nil,trackdirs=0,
     exit=exitdir[old_td],skip=0,station=false,bridge=false,tunnel=false,
     error=R.EC_NONE,ok=false}
@@ -129,34 +178,11 @@ function R.follow(board,v,old_id,old_td)
     return res
   end
 
-  local function force_reverse(leave)
-    res.tile=old_id
-    res.trackdirs=masks[reverse_trackdir(old_td)]
-    res.exit=leave
-    res.ok=true
-    res.reversed=true
-    return res
-  end
-
-  local function try_reverse()
-    if not v.tram then
-      res.exit=reverse_direction(res.exit)
-      res.tile=old_id
-      res.trackdirs=R.origin_trackdirs(old,false,res.exit)
-      if res.trackdirs~=0 then
-        res.ok=true;res.reversed=true
-        return res
-      end
-    end
-    res.error=R.EC_NO_WAY
-    return res
-  end
-
-  if old.kind=="depot" and old.dir~=res.exit then return force_reverse(old.dir) end
+  if old.kind=="depot" and old.dir~=res.exit then return force_reverse(res,old.dir) end
   local single=v.tram and single_tram(old)
   if single==reverse_direction(res.exit) or
       (old.kind=="bay_stop" and old.dir==reverse_direction(res.exit)) then
-    return force_reverse(reverse_direction(res.exit))
+    return force_reverse(res,reverse_direction(res.exit))
   end
   if ((old.kind=="bay_stop" or old.kind=="depot") and old.dir~=res.exit) or
       (single and single~=res.exit) then
@@ -180,37 +206,11 @@ function R.follow(board,v,old_id,old_td)
       not board.edge_available(old_id,res.tile,res.exit,v) then
     res.trackdirs=0
   end
-  if res.trackdirs==0 then return try_reverse() end
+  if res.trackdirs==0 then return try_reverse(res,old,v) end
   res.trackdirs=band(res.trackdirs,reachable[res.exit])
 
-  local function can_enter()
-    if entry.kind=="bay_stop" and entry.dir~=reverse_direction(res.exit) then
-      res.error=R.EC_NO_WAY;return false
-    end
-    local single=v.tram and single_tram(entry)
-    if single and single~=reverse_direction(res.exit) then
-      res.error=R.EC_NO_WAY;return false
-    end
-    if entry.kind=="depot" then
-      if entry.dir~=reverse_direction(res.exit) then
-        res.error=R.EC_NO_WAY;return false
-      end
-      if entry.owner~=v.owner then
-        res.error=R.EC_OWNER;return false
-      end
-    end
-    if not allowed_type(board,v,entry,res.tile) then
-      res.error=R.EC_RAIL_ROAD_TYPE;return false
-    end
-    if (entry.kind=="tunnel" and not res.tunnel or
-        entry.kind=="bridge" and not res.bridge) and entry.dir~=res.exit then
-      res.error=R.EC_NO_WAY;return false
-    end
-    return true
-  end
-
-  if res.trackdirs==0 or not can_enter() then
-    if not v.tram then return try_reverse() end
+  if res.trackdirs==0 or not can_enter(board,v,entry,res) then
+    if not v.tram then return try_reverse(res,old,v) end
     if res.trackdirs==0 then res.error=R.EC_NO_WAY end
     return res
   end

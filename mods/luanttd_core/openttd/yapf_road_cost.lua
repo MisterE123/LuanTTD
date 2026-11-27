@@ -22,12 +22,12 @@ return function(F)
   -- stop_continues(id, previous_id) compares stock stop continuation.
   -- stop_entry(id, exit_direction) -> occupied length, total length.
   -- bay_free(id, 0|1) is true when that bay is empty.
-  function C.one_tile(board,tile,td,settings)
+  function C.one_tile(board,tile,td,settings,source_record)
     if td~=0 and td~=1 and td~=8 and td~=9 then
       return C.TILE_CORNER_LENGTH+setting(settings,"road_curve_penalty")
     end
     local cost=C.TILE_LENGTH
-    local t=assert(board.tile(tile))
+    local t=assert(source_record or board.tile(tile))
     if t.kind=="crossing" then
       cost=cost+setting(settings,"road_crossing_penalty")
     elseif t.kind=="drive_stop" and t.stop_type~="road_waypoint" then
@@ -72,9 +72,9 @@ return function(F)
       stop_type=stop_type,non_articulated=not vehicle.articulated}
   end
 
-  function C.detect(board,d,tile,td)
+  function C.detect(board,d,tile,td,source_record)
     if d.kind=="tile" then return tile==d.tile and has(d.trackdirs,td) end
-    local t=board.tile(tile)
+    local t=source_record or board.tile(tile)
     if d.kind=="any_depot" then return t and t.kind=="depot" or false end
     return t and (t.kind=="bay_stop" or t.kind=="drive_stop") and
       t.station==d.station and t.stop_type==d.stop_type and
@@ -104,13 +104,13 @@ return function(F)
     local parent_cost=node.parent and node.parent.cost or 0
     while true do
       if record then record(tile,td) end
-      cost=cost+C.one_tile(board,tile,td,settings)
-      if C.detect(board,d,tile,td) then break end
-      if max_cost and max_cost>0 and parent_cost+cost>max_cost then return false end
       local old=board.tile(tile)
+      cost=cost+C.one_tile(board,tile,td,settings,old)
+      if C.detect(board,d,tile,td,old) then break end
+      if max_cost and max_cost>0 and parent_cost+cost>max_cost then return false end
       if old.kind=="depot" and td==F.direction_trackdir(F.reverse_direction(old.dir)) then break end
 
-      local f=F.follow(board,v,tile,td)
+      local f=F.follow(board,v,tile,td,old)
       if not f.ok then break end
       local choices=F.trackdirs(f.trackdirs)
       if #choices>1 then break end
