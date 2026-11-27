@@ -135,7 +135,7 @@ do
     local script={
       {8,"clock"},            -- first periodic write after mount
       {16,"snapshots"},       -- no repeated paused write
-      {24,"actor_frames"},
+      {24,"road_quote"},      -- read-only AutoRoad hover does not arm a save
       {25,"checkpoint"},      -- reset the quiet window
       {27,"command"},         -- persist now only if durable
       {36,"clock"},           -- otherwise persist here
@@ -154,7 +154,7 @@ do
         local r=assert(script[index])
         now=r[1]*1000000
         if r[2]=="cancel" then ipc[prefix..":cancel"]=true;return false end
-        ipc[k]={seq=index,kind=r[2],player="tester",command={kind="edit"}}
+        ipc[k]={seq=index,kind=r[2],player="tester",command={kind="edit"},peek=true,request={tool="bend"}}
         return true
       end,
     }
@@ -166,7 +166,7 @@ do
           passengers={frame=noop,collect=noop,collect_fares=noop}}
       end,
       ["/campaign_authority_endpoint.lua"]=function()
-        return {snapshots=read,actor_frames=read,command=function()
+        return {snapshots=read,actor_frames=read,road_quote=read,command=function()
           s.authority_revision=s.authority_revision+1
           return {ok=true,revision=s.authority_revision}
         end}
@@ -313,7 +313,10 @@ do
         passengers={frame=noop,collect=noop,collect_fares=noop}}
     end,
     campaign_authority_endpoint=function()
-      return {actor_frames=observe,snapshots=observe,command=function()
+      return {actor_frames=observe,snapshots=observe,road_quote=function(player,request)
+        assert(player=="QA" and request.tool=="drag" and state.authority_revision==0 and state.day==9)
+        return {ok=true,revision=0,value={cost=190}}
+      end,command=function()
         assert(not ipc[inbox])
         state.authority_revision=1
         log("edit")
@@ -329,7 +332,9 @@ do
         assert(ipc[inbox]==nil and ipc[outbox].actor_us==8300000)
         now=8500000;ipc[inbox]={seq=2,kind="snapshots"};pulse()
         assert(ipc[inbox]==nil and ipc[outbox].actor_us==8500000)
-        now=8600000;local edit={seq=3,kind="command",player="QA",command={kind="edit"}}
+        now=8550000;ipc[inbox]={seq=3,kind="road_quote",peek=true,request={tool="drag"},player="QA"};pulse()
+        assert(ipc[inbox]==nil and ipc[outbox].value.cost==190 and ipc[outbox].actor_us==nil)
+        now=8600000;local edit={seq=4,kind="command",player="QA",command={kind="edit"}}
         ipc[inbox]=edit;pulse()
         assert(ipc[inbox]==edit and s.authority_revision==0)
         log("periodic:finish")
@@ -343,8 +348,8 @@ do
   setfenv(assert(loadfile(file)),env)()
   local reason,seq,day=fake.luanttd_own_campaign("fixture",channel,{
     autoplay=true,durable_actions=true,seconds_per_day=15})
-  assert(reason=="cancelled" and seq==3 and day==9 and views==2)
-  assert(table.concat(trace,",")=="periodic:start,reply1:0,reply2:0,periodic:finish,edit,plain:1,reply3:1,plain:1",
+  assert(reason=="cancelled" and seq==4 and day==9 and views==2)
+  assert(table.concat(trace,",")=="periodic:start,reply1:0,reply2:0,reply3:0,periodic:finish,edit,plain:1,reply4:1,plain:1",
     table.concat(trace,","))
 end
-print("PASS: periodic encoding serves in-order presentation only; paid edit receipt follows its separate atomic write")
+print("PASS: periodic encoding serves in-order presentation and ordinary road hovers; paid edit receipt follows its separate atomic write")

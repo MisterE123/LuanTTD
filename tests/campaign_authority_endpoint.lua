@@ -83,7 +83,10 @@ assert(sectors.value[1].vehicles==nil and sectors.value[2].vehicles==nil,
 assert(not A.snapshots({{x=1,z=1,w=1,h=1},{x=2,z=2,w=100,h=100}}).ok)
 print("PASS multiple sectors captured at the same authoritative tick")
 local bend={tool="bend",first=Sim.id(20,10),last=Sim.id(23,13)}
+local Packed=dofile(mod.."/packed_campaign.lua")
+local before_bend=Packed.encode(s)
 local offer=A.road_quote(john,bend)
+assert(Packed.encode(s)==before_bend,"bend hover mutated the saved graph")
 assert(offer.ok and offer.revision==4 and #offer.value.tiles>2 and offer.value.cost>0)
 local starting_cash=s.companies[john].cash
 s.topology=s.topology+1
@@ -311,6 +314,10 @@ do
   local receipt=station_worker.road_place(john,rm,p)
   assert(receipt.ok,receipt.why)
   assert(t.build=="stock_rail" and t.owner==john and t.rail_tracks==1 and t.rail_type==0 and t.road_bits==nil)
+  local saved_crossing=Packed.encode(s2)
+  local shadow={tool="drag",first=crossing_at,axis=1,start_half=false,end_half=true}
+  station_worker.road_quote(john,shadow)
+  assert(Packed.encode(s2)==saved_crossing,"road drag over a reserved crossing mutated the saved graph")
   assert(not t.level_crossing and not s2.level_crossing_tiles[crossing_at] and s2.companies[john].cash==money-80)
   assert(s2.stock_rail_dispatch.life.bits[crossing_at]==1 and s2.stock_rail_dispatch.life.claims==claims)
   s2.stock_rail_dispatch=nil
@@ -403,7 +410,9 @@ do
   local selected={tool="drag",first=Sim.id(3,9),last=Sim.id(10,9),axis=0,start_half=false,end_half=true}
   assert(R.road_place("Unknown",selected).why=="COMPANY_NOT_OPEN")
   assert(R.command(john,{kind="company_open"}).ok)
+  local before_hover=Packed.encode(r)
   local quote=assert(R.road_quote(john,selected).value)
+  assert(Packed.encode(r)==before_hover,"road drag hover mutated the saved graph")
   local cash=r.companies[john].cash
   quote.cost=quote.cost-1
   assert(R.road_place(john,selected,quote).why=="ROAD_QUOTE_CHANGED" and cash==r.companies[john].cash)

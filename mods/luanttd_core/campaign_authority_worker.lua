@@ -74,6 +74,13 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   local dirty=true
   local presentation_only={snapshots=true,actor_frames=true,clock=true}
   local live_view={snapshots=true,actor_frames=true}
+  local function ordinary_road_hover(q)
+    -- Only these inspected planners read the already-open company's
+    -- cash, geometry and occupancy without touching the saved graph.
+    -- Keep facility planners and explicit quotes on their normal turn.
+    return q.kind=="road_quote" and q.peek==true and type(q.request)=="table" and
+      (q.request.tool=="drag" or q.request.tool=="bend")
+  end
   local long_turn_us=150000 -- longer than a normal mailbox poll and host frame
   local function advance(dt)
     if (s.speed or 0)>0 then dirty=true end
@@ -105,15 +112,18 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       if core.ipc_get(cancel) then blocked=true;return end
       local q=core.ipc_get(inbox)
       if not q then return end
-      -- Encoding reads one stable graph. Only the two observed viewport
-      -- paths may read it between encoding chunks. Commands,
-      -- panels, shutdown and every durability receipt stay on the normal
-      -- owner turn; never read past a request that must wait.
-      if q.seq~=seq+1 or not live_view[q.kind] then blocked=true;return end
+      -- Encoding reads one stable graph. Bounded viewport reads and
+      -- ordinary road hovers can use it between encoding chunks.
+      -- Never read past any edit, shutdown, or other waiting request.
+      local road_hover=ordinary_road_hover(q)
+      if q.seq~=seq+1 or not (live_view[q.kind] or road_hover) then blocked=true;return end
       heartbeat=now
       core.ipc_set(inbox,nil)
       seq=q.seq
-      send(q,sample_view(q,auto.sample((now-prior)/1000000)),now)
+      local r
+      if road_hover then r=A.road_quote(q.player,q.request)
+      else r=sample_view(q,auto.sample((now-prior)/1000000)) end
+      send(q,r,now)
     end)
   end
   -- A paused or unfocused native singleplayer host can stop asking for
@@ -154,7 +164,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         seq=q.seq
         -- Do not assume an uncommon panel or command cannot lazily
         -- touch saved state. Only skip the proven display-only traffic.
-        if not presentation_only[q.kind] then dirty=true end
+        if not presentation_only[q.kind] and not ordinary_road_hover(q) then dirty=true end
         if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction)
         elseif live_view[q.kind] then
           -- The preceding save may already have sampled ahead within this

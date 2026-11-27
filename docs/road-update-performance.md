@@ -755,3 +755,24 @@ and painted the saved road into the live scene.
 ```sh
 tests/road_quote_perf_native.sh luantiserver ec98ce6 /tmp/road-quote-bench
 ```
+
+### Road previews during autosave
+
+Read-only AutoRoad and bend hovers from the ordinary tool can use the
+worker's existing checkpoint check-ins. The worker computes them on
+the stable state it is saving. Paid placement and explicit facility
+quotes still wait for the normal owner turn; a queued edit is never
+overtaken. Hovering over those two ordinary tools while paused no
+longer schedules an otherwise unnecessary autosave.
+
+In a 1024×1024 Linux worker comparison (two runs before and two
+after), hovers sent during saves took a median of **2,177 ms → 26 ms**
+(4 and 31 requests respectively). The longest save-overlapping wait
+in the updated runs was 886 ms, so compression and long simulation
+turns can still cause delays. The paused hover-only window triggered
+one save in each baseline run and none after the change. Straight
+and bend quotes stayed exact and did not charge the company.
+
+```sh
+tests/campaign_save_road_hover_native.sh luantiserver 581218c GENERATED_WORLD CONFIG /tmp/road-autosave
+```
