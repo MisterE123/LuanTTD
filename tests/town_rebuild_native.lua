@@ -42,7 +42,20 @@ local function begin()
         :format(saved.id,tostring(h.completed),asset,table.concat(actual,",")))
       core.after(.35,function() verify(left-1) end)
     end
-    core.after(.45,function()verify(145)end)
+    -- A genuine RC1 replacement needs 24 root visits. Use the ordinary
+    -- 4× simulation control on this disposable reopened world instead of
+    -- assuming the old, much shorter construction clock.
+    local function begin_verification()
+      assert(authority.query({kind="company",player=owner},function(row)
+        assert(row.ok,row.why)
+        assert(authority.query({kind="command",player=owner,
+          command={kind="speed",speed=4,revision=row.revision}},function(reply)
+          assert(reply.ok,reply.why)
+          verify(205)
+        end))
+      end))
+    end
+    core.after(.45,begin_verification)
     return
   end
   local town
