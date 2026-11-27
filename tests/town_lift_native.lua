@@ -36,13 +36,13 @@ local function ask()
   local dx,dy,dz=focus.x-sight.x,focus.y-sight.y-1.625,focus.z-sight.z
   p:set_look_horizontal(math.atan2(-dx,dz))
   p:set_look_vertical(math.atan2(-dy,math.sqrt(dx*dx+dz*dz)))
-  local low,high,native_low,native_high=36,0,36,0
+  local low,high,native_low,native_high=math.huge,-math.huge,math.huge,-math.huge
   local count=0
   local function watch(limit)
     local world=assert(OwnerCheckpoint.read())
     local h=world.tiles[target.id].source_house
-    local pos=h.lift_position or 0
-    low,high=math.min(low,pos),math.max(high,pos)
+    local pos=h.lift_position
+    if pos then low,high=math.min(low,pos),math.max(high,pos) end
     local node=core.get_node_or_nil(target)
     local car,current
     if node and node.name=="luanttd_core:town_stock_04" then
@@ -66,7 +66,10 @@ local function ask()
     end
     -- A checkpoint and a projection may coalesce different tick batches.
     -- Require real travel in both, not a fortuitous mid-trip camera sample.
-    if car and high-low>=12 and native_high-native_low>=.54 and count>=4 then
+    -- Durable snapshots are seconds apart and can miss the ends of a
+    -- trip. The in-world cab must still visibly traverse at least 12
+    -- positions; the saved worker state must show a real change too.
+    if car and high>low and native_high-native_low>=12*.0475-.001 and count>=4 then
       if resume then
         core.log("action","PASS NATIVE TOWN LIFT REOPEN: same worker-owned office continued stock cab travel after restart")
       else
@@ -79,8 +82,8 @@ local function ask()
       end
       return
     end
-    assert(limit>0,("No stock lift travel in rendered office %d: worker range %d..%d, native %.2f..%.2f, %d samples")
-      :format(target.id,low,high,native_low,native_high,count))
+    assert(limit>0,("No stock lift travel in rendered office %d: worker range %s..%s, native %.2f..%.2f, %d samples")
+      :format(target.id,tostring(low),tostring(high),native_low,native_high,count))
     core.after(.27,function()watch(limit-1) end)
   end
   core.after(.4,function()watch(160) end)

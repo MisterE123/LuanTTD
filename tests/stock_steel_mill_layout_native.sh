@@ -247,7 +247,16 @@ if [[ ${LUANTTD_QA_TOWN_STATUE:-0} == 1 ]]; then
   wait_statue 'NATIVE STATUE OFFER'
   sleep 1
   if command -v import >/dev/null; then import -window root -quality 91 "$out/statue-offer.jpg"; fi
-  xdotool mousemove 600 519 click 1
+  # The Local Authority panel grows as new rows are added. Use the
+  # actual centered real-coordinate form and the offered button row.
+  read -r row form_height <<<"$(sed -n 's/.*NATIVE STATUE OFFER //p' "$out/server.log" | tail -1)"
+  geometry=$(xdotool getwindowgeometry --shell "$win")
+  width=$(sed -n 's/^WIDTH=//p' <<<"$geometry")
+  height=$(sed -n 's/^HEIGHT=//p' <<<"$geometry")
+  button_y=$(awk -v h="$height" -v row="$row" -v form="$form_height" \
+    'BEGIN { printf "%d", h/2 + (row + .285 - form/2) * h * .072 + .5 }')
+  xdotool mousemove --window "$win" "$((width/2))" "$button_y"
+  xdotool mousedown 1; sleep .20; xdotool mouseup 1
 fi
 if [[ ${LUANTTD_QA_COMPANY_HQ:-0} == 1 ]]; then
   wait_hq() {

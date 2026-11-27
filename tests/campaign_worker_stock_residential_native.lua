@@ -7,7 +7,7 @@ local residential_ids={[0x06]=true,[0x0e]=true,[0x18]=true,[0x19]=true,[0x1a]=tr
 local set_visual_time=core.set_timeofday
 core.set_timeofday=function()return set_visual_time(.315)end
 local function find_house_plots(disk)
-  local groups,looks,founded={},{}
+  local groups,looks,fronts,founded={},{},{}
   for id,t in ipairs(disk.tiles) do
     local h=t.source_house
     if t.house and h and h.root and h.completed and residential_ids[h.id] then
@@ -22,10 +22,11 @@ local function find_house_plots(disk)
         if shape~=0 and base<deck and not founded then record.founded=true;founded=record end
         groups[h.id]=groups[h.id] or record
         looks[name]=looks[name] or record
+        fronts[f]=fronts[f] or record
       end
     end
   end
-  return groups,looks,founded
+  return groups,looks,fronts,founded
 end
 local function residential_native()
   local p=core.get_player_by_name("StockResidentialQA")
@@ -33,7 +34,7 @@ local function residential_native()
     core.after(.2,residential_native);return
   end
   local disk=assert(OwnerCheckpoint.read())
-  local groups,looks,founded=find_house_plots(disk)
+  local groups,looks,fronts,founded=find_house_plots(disk)
   local take,used={},{}
   local function add(r)
     if r and not used[r.name] then
@@ -51,7 +52,11 @@ local function residential_native()
   assert(#take==12,"The seeded worker town must expose all twelve dress variations")
   local directions={}
   for _,candidate in ipairs(take) do directions[candidate.dir]=true end
-  for dir=0,3 do assert(directions[dir],"No houses faced direction "..dir) end
+  -- The first example of a mesh need not cover every road direction.
+  -- Keep one witness per dress variation, then add any missing fronts.
+  for dir=0,3 do
+    if not directions[dir] then take[#take+1]=assert(fronts[dir],"No houses faced direction "..dir) end
+  end
 
   take[#take+1]=assert(founded,"No eligible completed hillside residential plot")
 

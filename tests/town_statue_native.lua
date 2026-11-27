@@ -5,9 +5,10 @@ local raw_show=core.show_formspec
 core.show_formspec=function(name,form,text)
   if name=="SteelReview" and form=="luanttd_core:town_authority" then
     local y=text:match("button%[%.45,([%d.]+);9%.7,%.57;build_statue;")
-    if y and not form_y then
+    local height=text:match("size%[10%.6,([%d.]+)%]")
+    if y and height and not form_y then
       form_y=tonumber(y)
-      core.log("action","NATIVE STATUE OFFER "..form_y)
+      core.log("action","NATIVE STATUE OFFER "..form_y.." "..height)
     end
   end
   return raw_show(name,form,text)
