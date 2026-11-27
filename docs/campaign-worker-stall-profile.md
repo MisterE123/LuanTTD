@@ -162,3 +162,40 @@ Reproduce with:
 LUANTTD_QA_AUTORAIL_HOVER=true tests/campaign_save_road_hover_native.sh \
   luantiserver 35ffba3 GENERATED_WORLD CONFIG NEW_OUTPUT_DIRECTORY
 ```
+
+## Do not rebuild every road junction during town growth
+
+A second native fixture kept the surrounding generated 1024×1024 campaign
+(832 towns) and added eight running buses, a train, a ferry and an aircraft
+through their normal purchase and order paths in a controlled test patch.
+The nine-sector observer used the ordinary host scheduler and rendered pose
+buffer. In 26 seconds, each baseline rebuilt *all* junctions 81 times,
+mostly after the monthly town growth decision. Each rebuild visited the
+whole map and allocated a median 10.8 MiB of temporary Lua tables, even
+though the active buses were nowhere near the changed roads.
+
+The worker now discovers junction components on demand from the same
+three-by-three halo or from a bay apron. It still traverses every connected
+junction tile, checks the same swept envelope and altitude, and invalidates
+on the same unclassified topology changes. It no longer constructs
+distant intersection geometry merely because one active bus moved.
+
+| Measure, two baseline / two candidate runs | Baseline | Local junction lookups |
+| --- | ---: | ---: |
+| Worker actor sample gap, p90 | 156–191 ms | 116–119 ms |
+| Host actor receipt gap, p95 | 252–255 ms | 165 ms |
+| Completed simulation days in the observation window | 17 | 22 |
+| Whole-map road junction rebuilds | 81 | 0 |
+
+The worker still has occasional long gaps around saves and larger scenery
+requests. These are measured pose intervals, not client FPS. Regression
+coverage includes a vehicle occupying a connected junction outside the
+local halo, a geometry edit that disconnects it, a foreign tide revision
+that must not hide a real edit, edge-of-map halos, and the original live
+bus admission and restart case.
+
+A separate same-day replay from the fixed starting checkpoint advanced
+1,332 source ticks. It matched all 1,048,576 tiles and 1,560,108 table
+records and aliases, including RNG, orders, and all paid vehicle state.
+It took 17.9 seconds of CPU before and 11.0 after on that fixture; this
+excludes the host and is not a general simulation speed multiplier.

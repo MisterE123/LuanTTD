@@ -75,6 +75,36 @@ local edge_holder={id=1,frame=model(1*16+8,5*16+8,5,1),z=0}
 local edge_world={vehicles_at=function(tile) return tile==edge and {edge_holder} or {} end}
 assert(not G.check(s,edge_world,{id=2},past_edge,across_edge,0),"missed junction just inside the map edge")
 
+-- A large unrelated part of the board must not be scanned after every
+-- municipal topology bump. The local halo still discovers the complete
+-- connected component and sees an occupant outside the candidate's 3x3.
+local wide=Sim.new(1751)
+wide.corner_grid=Terrain.new(Sim.W,Sim.H,function() return 0 end)
+wide.road_junction_clearance=true
+for tile=1,Sim.W*Sim.H do wide.tiles[tile]={h=0,terrain="grass"} end
+for x=8,14 do
+  wide.tiles[id(x,8)]={h=0,terrain="grass",build="road",road_bits=14}
+end
+for z=18,Sim.H-1 do for x=3,Sim.W-1 do
+  wide.tiles[id(x,z)]={h=0,terrain="grass",build="road",road_bits=15}
+end end
+local tail=id(14,8)
+local far_holder={id=71,z=0,frame=model(14*16+8,8*16+8,5,1)}
+local bounded_world={vehicles_at=function(t) return t==tail and {far_holder} or {} end}
+local outside=model(8*16+5,8*16+27,7,0)
+local entering=model(8*16+5,8*16+8,7,0)
+local checked=0
+Sim.road_bits=function(...) checked=checked+1;return road_bits(...) end
+assert(not G.check(wide,bounded_world,{id=72},outside,entering,0),
+  "Local lookup must include the full adjoining junction cluster")
+assert(checked<100,"A local driver visit read distant junctions")
+wide.tiles[id(11,8)].road_bits=13 -- still a junction, but breaks the east edge
+wide.topology=wide.topology+1
+assert(G.check(wide,bounded_world,{id=72},outside,entering,0),
+  "A changed road edge left two disconnected junctions in one cached component")
+assert(checked<200,"Local lookup fell back to a whole-map scan on topology change")
+Sim.road_bits=road_bits
+
 local function copy(t)
   if type(t)~="table" then return t end
   local o={}
