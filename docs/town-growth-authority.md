@@ -225,9 +225,14 @@ uses the actual RC1 tile visit and road walk together. It checks 6,000
 individual tile visits, then 800 towns across 12 successive growth
 attempts apiece on changing boards. It compares the order of land,
 house and road calls, success, RNG consumption, house counts and final
-tile state. Terrain and construction outcomes are controlled test
-adapters, so this is not yet a month-by-month whole-game comparison
-with all transport and landscape actors running.
+tile state. A separate 160-town test in the same harness links the
+compiled RC1 growth-rate calculation and TownTickHandler to those same
+road and building mutations. It compares eight monthly scheduler
+windows with changing station service and funding, then disabled growth.
+Eligibility, counters, growth actions, house counts and shared RNG match
+in these controlled worlds. Station service and terrain results are
+still supplied as inputs; this is not yet an unrestricted month-by-month
+whole-game comparison with all transport and landscape actors running.
 
 ### Recovering a roadless town
 

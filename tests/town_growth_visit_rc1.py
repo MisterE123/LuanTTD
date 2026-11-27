@@ -20,6 +20,7 @@ src=root/"src"
 lua=sys.argv[2] if len(sys.argv)>2 else "lua5.1"
 
 cpp=r"""
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -27,7 +28,25 @@ cpp=r"""
 #include <iostream>
 using uint=unsigned;
 using TileIndex=int;
-using TownExpandModes=bool;
+enum class TownExpandMode {Buildings,Roads};
+struct TownExpandModes {
+ bool roads;
+ TownExpandModes(bool r):roads(r){}
+ TownExpandModes(TownExpandMode m):roads(m==TownExpandMode::Roads){}
+ operator bool()const{return roads;}
+ void Set(TownExpandMode m){if(m==TownExpandMode::Roads)roads=true;}
+};
+enum class TownFlag {IsGrowing,CustomGrowth};
+enum class TownAcceptanceEffect {None,Passengers,Mail,Goods,Water,Food,End};
+auto EnumRange(TownAcceptanceEffect){
+ return std::array{TownAcceptanceEffect::None,TownAcceptanceEffect::Passengers,TownAcceptanceEffect::Mail,
+     TownAcceptanceEffect::Goods,TownAcceptanceEffect::Water,TownAcceptanceEffect::Food};
+}
+enum class WindowClass{TownView};
+enum class TropicZone{Normal,Desert};
+struct Ticks{static constexpr uint TOWN_GROWTH_TICKS=70;};
+constexpr uint TOWN_GROWTH_WINTER=0xfffffffeu,TOWN_GROWTH_DESERT=0xffffffffu;
+constexpr uint16_t TOWN_GROWTH_RATE_NONE=65535,MAX_TOWN_GROWTH_TICKS=930;
 #define NOT_REACHED() std::abort()
 template<class E> constexpr int to_underlying(E a){return int(a);}
 enum class DiagDirection {NE,SE,SW,NW,End};
@@ -46,7 +65,15 @@ struct Map {static int Size(){return 4096;}};
 struct Town {
  int xy=center;TownLayout layout;
  int index=1;
- struct{uint num_houses=0;}cache;
+ bool larger_town=false;
+ int fund_buildings_months=0;
+ uint16_t growth_rate=12000,grow_counter=0;
+ struct{uint num_houses=0,population=0;}cache;
+ struct{bool growing=false;bool Test(TownFlag f)const{return f==TownFlag::IsGrowing && growing;}
+   void Reset(TownFlag){growing=false;} void Set(TownFlag){growing=true;}}flags;
+ struct Goals {uint operator[](TownAcceptanceEffect)const{return 0;}}goal;
+ struct Received {struct Cargo{uint old_act=0;};Cargo operator[](TownAcceptanceEffect)const{return {};}}received;
+
  static Town *GetByTile(int){return nullptr;}
 };
 struct TileIndexDiffC {int x,y;};
@@ -84,8 +111,17 @@ bool IsTileType(int i,TileType t){return GetTileType(i)==t;}
 bool IsValidTile(int i){return i>=0 && i<Map::Size() && GetTileType(i)!=TileType::Void;}
 bool HasTileWaterGround(int i){return GetTileType(i)==TileType::Water;}
 int GetTileSlope(int i){return cell(i).slope;}
-struct Settings{struct{bool allow_town_level_crossings;} economy;struct{bool build_on_slopes;} construction;} _settings_game;
+struct Settings{struct{bool allow_town_level_crossings,allow_town_roads;int town_growth_rate=2;} economy;struct{bool build_on_slopes;} construction;} _settings_game;
 uint32_t word,draws;
+int active_count;
+bool timed;
+int CountActiveStations(Town*){return active_count;}
+void SetWindowDirty(WindowClass,int){}
+int TileHeight(int){return 0;}
+int GetSnowLine(){return 100;}
+TropicZone GetTropicZone(int){return TropicZone::Normal;}
+static void UpdateTownGrowthRate(Town*t);
+
 uint32_t Random(){draws++;assert(draws<10000);return word=word*1664525u+1013904223u;}
 DiagDirection RandomRange(DiagDirection d){assert(d==DiagDirection::End);return DiagDirection(Random()>>30);}
 bool Chance16(int a,int b){return (((Random()&0xffff)*b+b/2)>>16)<uint(a);}
@@ -109,7 +145,7 @@ RoadBits GetTownRoadBits(int i){return {uint(cell(i).rb)};}
 bool TryBuildTownHouse(Town*t,int i,TownExpandModes){
  std::cout<<" "<<(i-center)<<" ";
  if(cell(i).house){
-   std::cout<<"1";cell(i).house=0;cell(i).k=int(TileType::House);t->cache.num_houses++;
+   std::cout<<"1";cell(i).house=0;cell(i).k=int(TileType::House);t->cache.num_houses++;if(timed)UpdateTownGrowthRate(t);
    return true;
  }
  std::cout<<"0";return false;
@@ -130,6 +166,14 @@ cpp+=source_block(src,"slope_type.h",r"^enum class Corner :")
 cpp+=source_block(src,"slope_type.h",r"^enum Slope :")
 for f,t in [("GetTownRoadGridElement","RoadBits"),("GrowTownWithExtraHouse","bool"),("GrowTownInTile","TownGrowthResult"),("CanFollowRoad","bool"),("GrowTownAtRoad","bool")]:
     cpp+=source_block(src,"town_cmd.cpp",rf"^static {t} {f}\([^;\n]*\)\n")
+cpp+=source_block(src,"town.h",r"^inline uint16_t TownTicksToGameTicks")
+cpp+=source_block(src,"core/math_func.hpp",r"^constexpr int RoundDivSU")
+for f in ("GetNormalGrowthRate","UpdateTownGrowCounter","UpdateTownGrowthRate","UpdateTownGrowth"):
+    cpp+=source_block(src,"town_cmd.cpp",rf"^static (?:uint|void) {f}\([^;]*\)\n")
+cpp+=r"""
+bool GrowTown(Town*t,TownExpandModes m){return GrowTownAtRoad(t,t->xy,m);}
+"""
+cpp+=source_block(src,"town_cmd.cpp",r"^static void TownTickHandler")
 cpp+=r"""
 int main(){
  int dx,dz,layout,roads,incoming,mask,grade,cross,count,x,z;
@@ -144,7 +188,21 @@ int main(){
    Town t{center,TownLayout(layout)};
    TileIndex tile=center+dx+64*dz;
    draws=0;
-   if(incoming==5){
+   timed=incoming==6;
+   if(timed){
+     _settings_game.economy.allow_town_roads=roads;
+     t.larger_town=(word&1)!=0;
+     for(int month=0;month<8;month++){
+       active_count=month%3==0?0:3;
+       t.fund_buildings_months=month==2?2:month==3?1:0;
+       _settings_game.economy.town_growth_rate=month==7?0:3;
+       UpdateTownGrowth(&t);
+       for(int tick=0;tick<2250;tick++)TownTickHandler(&t);
+       std::cout<<" 902 "<<month<<" "<<t.flags.growing<<" "<<t.growth_rate<<" "<<t.grow_counter
+                <<" "<<draws<<" "<<t.cache.num_houses;
+     }
+     std::cout<<"\n";
+   }else if(incoming==5){
      for(int n=0;n<12;n++){
        auto result=GrowTownAtRoad(&t,tile,roads);
        std::cout<<" 900 "<<result<<" "<<draws<<" "<<t.cache.num_houses;
@@ -192,10 +250,13 @@ for line in io.lines() do
    if good then return {kind="house",x=x,z=z} end
  end
  local t=G.new(1,0,0,{layout=({"original","better","grid2","grid3"})[layout+1]})
+ local stations,setting={},nil
  local function apply(plan)
    if not plan then return false end
    local q=tile(plan.x,plan.z)
-   if plan.kind=="house" then q.kind,q.house="house",false; t.num_houses=t.num_houses+1
+   if plan.kind=="house" then
+     q.kind,q.house="house",false
+     if heading==6 then G.house_added(t,stations,setting) else t.num_houses=t.num_houses+1 end
    elseif plan.kind=="road" then
      local old=q.road_bits or 0
      for _,bit in ipairs{1,2,4,8} do
@@ -208,12 +269,28 @@ for line in io.lines() do
  local draws=0
  local function random() word=(word*1664525+1013904223)%4294967296;draws=draws+1;return word end
  local opts={allow_roads=roads==1,build_on_slopes=grade==1,allow_level_crossings=cross==1,extra_house=apply}
- if heading==5 then
+ local function walk()
+   local plan,extra=B.walk(t,board,dx,dz,opts.allow_roads,random,function(t,b,x,z,q,rb,from,rand)
+     return B.visit(t,b,x,z,q,rb,from,opts,rand)
+   end)
+   return apply(plan) or extra
+ end
+ if heading==6 then
+   t.larger_town=word%2==1
+   t.growth_rate,t.grow_counter=12000,0
+   for month=0,7 do
+     stations=month%3==0 and {} or {{x=0,z=0,time_since_load=0},{x=0,z=0,time_since_load=0},{x=0,z=0,time_since_load=0}}
+     t.fund_buildings_months=month==2 and 2 or month==3 and 1 or 0
+     setting=month==7 and 0 or 3
+     G.update(t,stations,setting,random)
+     for i=1,2250 do G.tick(t,walk) end
+     for _,v in ipairs{902,month,t.growing and 1 or 0,t.growth_rate,t.grow_counter,draws,t.num_houses} do
+       trace[#trace+1]=v
+     end
+   end
+ elseif heading==5 then
    for _=1,12 do
-     local plan,extra=B.walk(t,board,dx,dz,opts.allow_roads,random,function(t,b,x,z,q,rb,from,rand)
-       return B.visit(t,b,x,z,q,rb,from,opts,rand)
-     end)
-     local result=apply(plan) or extra
+     local result=walk()
      trace[#trace+1]=900;trace[#trace+1]=result and 1 or 0
      trace[#trace+1]=draws;trace[#trace+1]=t.num_houses
    end
@@ -256,7 +333,11 @@ for i in range(800):
             bits=(10 if z==0 else 0)+(5 if x==0 else 0) if road else 0
             cells.extend([x,z,k,0,int(k==0 and rng.randrange(2)==0),int(k in (0,1)),
                          int(k in (0,1)),1,bits])
-    cases.append([0,0,i%4,int(i%3!=0),5,15,1,1,rng.getrandbits(32),len(cells)//9,*cells])
+    row=[0,0,i%4,int(i%3!=0),5,15,1,1,rng.getrandbits(32),len(cells)//9,*cells]
+    cases.append(row)
+    if i%10<2:
+        row=list(row);row[4]=6
+        cases.append(row)
 data="".join(" ".join(map(str,r))+"\n" for r in cases)
 with TemporaryDirectory(prefix="town-growth-visit-rc1-") as d:
     d=Path(d)
@@ -267,4 +348,4 @@ with TemporaryDirectory(prefix="town-growth-visit-rc1-") as d:
     assert len(a)==len(b)==len(cases)
     errors=[(i,cases[i][:10],x,y) for i,(x,y) in enumerate(zip(a,b)) if x.split()!=y.split()]
     assert not errors,(len(errors),errors[:8])
-print("PASS 6000 RC1 town visits and 800 twelve-attempt consecutive town-growth traces")
+print("PASS 6000 RC1 town visits and 800 twelve-attempt growth traces, and 160 eight-month scheduler-and-growth traces")
