@@ -31,6 +31,18 @@ function M.new(s,interval,hooks)
     if #ids>0 then hooks.refresh(ids) end
     s.offscreen_terrain_dirty=nil
   end
+  -- Present only a trajectory the owner has already completed. Reading
+  -- wall time cannot carry the economy past a simulation-day boundary.
+  function U.sample(dt)
+    local speed=s.speed or 0
+    if speed<=0 then return 1 end
+    local step=interval/speed
+    local offset=elapsed
+    if persistent and speed~=speed_before then
+      offset=(s.campaign_day_fraction or 0)*step
+    end
+    return min(1,(offset+dt)/step)
+  end
   function U.step(dt,online,headless)
     local speed=s.speed or 0
     if online then flush() end

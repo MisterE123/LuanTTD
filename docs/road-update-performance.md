@@ -574,3 +574,31 @@ separate 192-bus simulation test compares complete durable and
 visual-motion state; this timing is for cargo aging alone, not a
 claim about entire fleet stepping or frame rate. Whole-fleet timing
 varied in both directions across repeated runs.
+
+### Keep the viewport responsive during periodic checkpoint encoding
+
+The campaign owner can answer its two bounded presentation requests
+between encoding chunks. It still reads from the latest completed
+simulation day and can only interpolate up to the end of that day's
+recorded trajectory. It doesn't step vehicles or change the checkpoint
+while projecting a view. Commands, explicit saves, and paid-action
+receipts still follow the separate, normal owner turn. A pending
+command is never bypassed. Compression and atomic disk replacement
+remain synchronous.
+
+In two alternating pairs of ordinary native 1024×1024 sessions at 1×,
+the median response time for views requested during an autosave fell
+from **1.11 s to 54 ms** (4 baseline and 30 candidate observations;
+slowest **1.39 s vs 429 ms**). All four sessions ended on the same
+simulation day and tick. Save CPU itself still took roughly 1.1–1.5 s,
+and a large simulation day can still delay a view. This is host/worker
+latency, not an FPS or whole-fleet smoothness measurement.
+
+The deterministic owner-loop test covers sequence, interpolation,
+and command/save ordering. To measure the receipt and encode times on
+a copied stock generated checkpoint:
+
+```sh
+tests/campaign_autosave_view_native.sh luantiserver 5d35bf8 \
+  /path/to/fixture-world /path/to/fixture.conf /path/to/new-bench-dir
+```

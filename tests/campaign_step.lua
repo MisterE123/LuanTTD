@@ -46,6 +46,8 @@ do
   assert(f==.5 and n==1 and not overdue and s.day==3)
   f,n,overdue=run.step(0,true,true)
   assert(f==.5 and n==0 and not overdue and s.day==3)
+  assert(run.sample(.0625)==.75 and run.sample(50)==1)
+  assert(s.day==3 and s.campaign_day_fraction==.5)
   s.speed=0; f,n,overdue=run.step(60,true,true)
   assert(f==1 and n==0 and not overdue and s.campaign_day_fraction==.5)
   s.speed=2; f,n,overdue=run.step(.25,true,true)
@@ -245,7 +247,7 @@ local function scenario(kind,quick)
     packed_campaign={},
     campaign_solar_clock={sample_interval=.1,new=function()return function()return {} end end},
     campaign_step={new=function(_,_,hooks)
-      return {step=function(dt)
+      return {sample=function() return .4 end,step=function(dt)
         record("advance");hooks.advance();now=now+(quick and 20000 or 800000)
         return 0.4,1,false
       end}
@@ -272,3 +274,77 @@ local sequence,fast=scenario("actor_frames",true)
 assert(sequence=="advance,save,advance,reply,save",sequence)
 assert(fast.time==8070000 and fast.value.day==6)
 print("PASS after long save: viewport replies before catch-up, durable commands still advance and save first")
+
+
+-- Periodic encoding may read an exact presentation snapshot, but
+-- a queued paid edit and its receipt both wait for a normal owner turn.
+do
+  local state={day=9,speed=1,authority_revision=0,campaign_day_fraction=.1}
+  local channel="luanttd_core:authority:1"
+  local inbox,outbox,cancel=channel..":request",channel..":reply",channel..":cancel"
+  local now,polls,views=0,0,0
+  local ipc,trace={},{}
+  local function log(s) trace[#trace+1]=s end
+  local fake={get_modpath=function() return "fixture" end,get_current_modname=function() return "luanttd_core" end,
+    get_us_time=function() return now end,ipc_get=function(k) return ipc[k] end}
+  function fake.ipc_set(k,v)
+    ipc[k]=v
+    if k==outbox and not v.ready then log("reply"..v.seq..":"..v.revision) end
+  end
+  function fake.ipc_poll(k)
+    assert(k==inbox)
+    polls=polls+1
+    if polls==1 then now=8000000;return false end
+    if polls==2 then now=8650000;return ipc[inbox]~=nil end
+    ipc[cancel]=true
+    return false
+  end
+  local function observe(_,f)
+    views=views+1
+    assert(state.authority_revision==0 and state.day==9)
+    assert(math.abs(f-(.1+(views==1 and 8.3 or 8.5)/15))<1e-9)
+    assert(math.abs(state.campaign_day_fraction-(.1+8/15))<1e-9)
+    return {ok=true,revision=0}
+  end
+  local function noop() end
+  local modules={
+    campaign_authority_runtime=function()
+      return {day=function() state.day=state.day+1 end,frame=noop,
+        passengers={frame=noop,collect=noop,collect_fares=noop}}
+    end,
+    campaign_authority_endpoint=function()
+      return {actor_frames=observe,snapshots=observe,command=function()
+        assert(not ipc[inbox])
+        state.authority_revision=1
+        log("edit")
+        return {ok=true,revision=1}
+      end}
+    end,
+    campaign_step=M,
+    campaign_checkpoint=function()
+      return {read=function() return state end,write_state=function(s,pulse)
+        if not pulse then log("plain:"..s.authority_revision);return end
+        log("periodic:start")
+        now=8300000;ipc[inbox]={seq=1,kind="actor_frames"};pulse()
+        assert(ipc[inbox]==nil and ipc[outbox].actor_us==8300000)
+        now=8500000;ipc[inbox]={seq=2,kind="snapshots"};pulse()
+        assert(ipc[inbox]==nil and ipc[outbox].actor_us==8500000)
+        now=8600000;local edit={seq=3,kind="command",player="QA",command={kind="edit"}}
+        ipc[inbox]=edit;pulse()
+        assert(ipc[inbox]==edit and s.authority_revision==0)
+        log("periodic:finish")
+      end}
+    end,
+    packed_campaign={},
+    campaign_solar_clock={sample_interval=.1,new=function() return function() return {} end end},
+    sim=setmetatable({},{__index=function() return function() return {} end end}),
+  }
+  local env=setmetatable({core=fake,dofile=function(p) return assert(modules[p:match("([^/]+)%.lua$")]) end},{__index=_G})
+  setfenv(assert(loadfile(file)),env)()
+  local reason,seq,day=fake.luanttd_own_campaign("fixture",channel,{
+    autoplay=true,durable_actions=true,seconds_per_day=15})
+  assert(reason=="cancelled" and seq==3 and day==9 and views==2)
+  assert(table.concat(trace,",")=="periodic:start,reply1:0,reply2:0,periodic:finish,edit,plain:1,reply3:1,plain:1",
+    table.concat(trace,","))
+end
+print("PASS: periodic encoding serves in-order presentation only; paid edit receipt follows its separate atomic write")

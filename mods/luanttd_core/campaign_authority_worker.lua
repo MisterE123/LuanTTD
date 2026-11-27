@@ -47,7 +47,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       refresh=function() end,
     })
   end
-  local inbox,outbox=channel..":request",channel..":reply"
+  local inbox,outbox,cancel=channel..":request",channel..":reply",channel..":cancel"
   local seq=0
   local prior=core.get_us_time()
   local publish
@@ -76,20 +76,51 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     local days
     fraction,days,overdue=auto.step(dt,true,true)
   end
-  local function checkpoint()
-    storage.write_state(s)
+  local function sample_view(q,sample)
+    if q.kind=="actor_frames" then return A.actor_frames(q.windows,sample or q.fraction) end
+    return A.snapshots(q.windows,sample or q.fraction,q.players)
+  end
+  local function send(q,r,now)
+    if live_view[q.kind] then r.actor_us=now end
+    r.seq=q.seq
+    core.ipc_set(outbox,r)
+  end
+  local function checkpoint(pulse)
+    storage.write_state(s,pulse)
     last_saved=core.get_us_time()
     dirty=false
+  end
+  local function periodic_checkpoint()
+    local check_at=0
+    local blocked=false
+    checkpoint(function()
+      if blocked then return end
+      local now=core.get_us_time()
+      if now<check_at then return end
+      check_at=now+25000
+      if core.ipc_get(cancel) then blocked=true;return end
+      local q=core.ipc_get(inbox)
+      if not q then return end
+      -- Encoding reads one stable graph. Only the two observed viewport
+      -- paths may read it between encoding chunks. Commands,
+      -- panels, shutdown and every durability receipt stay on the normal
+      -- owner turn; never read past a request that must wait.
+      if q.seq~=seq+1 or not live_view[q.kind] then blocked=true;return end
+      heartbeat=now
+      core.ipc_set(inbox,nil)
+      seq=q.seq
+      send(q,sample_view(q,auto.sample((now-prior)/1000000)),now)
+    end)
   end
   -- A paused or unfocused native singleplayer host can stop asking for
   -- view updates completely, even while Luanti's async job stays alive.
   -- The ordinary simulation is a session-lifetime owner, not a view
   -- subscription. Only the explicit shutdown/cancel ends that ownership.
   -- Keep the short fail-safe solely for finite, manual test jobs.
-  while (auto or prior-heartbeat<6500000) and not core.ipc_get(channel..":cancel") do
+  while (auto or prior-heartbeat<6500000) and not core.ipc_get(cancel) do
     local available=core.ipc_poll(inbox,auto and (overdue and 1 or 35) or 650)
     local now=core.get_us_time()
-    if core.ipc_get(channel..":cancel") then break end
+    if core.ipc_get(cancel) then break end
     local q=available and assert(core.ipc_get(inbox))
     local deferred
     if auto then
@@ -121,8 +152,10 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         -- touch saved state. Only skip the proven display-only traffic.
         if not presentation_only[q.kind] then dirty=true end
         if q.kind=="snapshot" then r=A.snapshot(q.x,q.z,q.w,q.h,fraction or q.fraction)
-        elseif q.kind=="snapshots" then r=A.snapshots(q.windows,fraction or q.fraction,q.players)
-        elseif q.kind=="actor_frames" then r=A.actor_frames(q.windows,fraction or q.fraction)
+        elseif live_view[q.kind] then
+          -- The preceding save may already have sampled ahead within this
+          -- completed trajectory. Do not send an older interpolated pose.
+          r=sample_view(q,deferred and auto.sample(deferred) or fraction)
         elseif q.kind=="orders" then r=A.orders(q.player,q.mode,q.vehicle,q.page)
         elseif q.kind=="road_quote" then r=A.road_quote(q.player,q.request)
         elseif q.kind=="road_join_choices" then r=A.road_join_choices(q.player,q.request)
@@ -171,13 +204,11 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
           return "stopped",seq,s.day
         else r={ok=false,why="UNKNOWN_OPERATION"} end
       end
-      if q.kind=="snapshots" or q.kind=="actor_frames" then r.actor_us=now end
-      r.seq=q.seq
-      core.ipc_set(outbox,r)
+      send(q,r,now)
     end
     if deferred then advance(deferred) end
     if publish then publish(now) end
-    if auto and dirty and now-last_saved>=8000000 then checkpoint() end
+    if auto and dirty and now-last_saved>=8000000 then periodic_checkpoint() end
   end
   storage.write_state(s)
   return not auto and prior-heartbeat>=6500000 and "idle" or "cancelled",seq,s.day
