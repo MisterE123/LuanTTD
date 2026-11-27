@@ -110,3 +110,6 @@ do
   assert(inherited.h==10 and inherited.road_bits==3 and P.matches_tile(overlay,inherited))
   print("PASS: sparse projection notices deletions, respects the whitelist, and preserves preview overlays")
 end
+
+-- Run the wire-delta and batch-recovery contract in the standard suite.
+dofile("tests/campaign_scene_delta.lua")

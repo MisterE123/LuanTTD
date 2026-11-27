@@ -63,7 +63,7 @@ return function(client,projection,width,depth,changed)
       local r=sectors[i]
       local scene=projection.scene(r.key)
       if motion_only and not scene then return false end
-      windows[#windows+1]={x=r.x,z=r.z,w=r.w,h=r.h,scene=scene,
+      windows[#windows+1]={x=r.x,z=r.z,w=r.w,h=r.h,scene=scene,delta_tiles=not motion_only,
         after_boarding=not motion_only and projection.boarding_cursor(r.key) or nil}
       subscriptions[#subscriptions+1]={key=r.key,token=r.token}
     end

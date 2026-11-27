@@ -186,3 +186,27 @@ terrain. These are worker observation times, not client FPS.
 lua5.1 tests/campaign_snapshot_scene.lua
 tests/campaign_snapshot_bench_native.sh luantiserver 8610b6e /tmp/luanttd-row-reuse
 ```
+
+## Transfer only changed rows for acknowledged sectors
+
+When the host has acknowledged a sector and its corners are unchanged,
+a small visual edit can travel as replacement tile rows rather than
+another full terrain packet. The host checks the scene and tile IDs,
+then builds the same complete read-only sector for the painter. A registry
+change sends its replacement (including an empty registry), not stale
+merged records. New, missed, dense and corner-edited sectors still use
+full snapshots. A stale or malformed edit rejects the whole batch; its
+next request recovers from a full snapshot.
+
+In a native Luanti 5.15.2 test, one edited tile in each of nine 32×32
+sectors reduced the serialized scene reply from roughly **900 kB to
+1.75 kB** (Lua serialized size, a proxy for transfer size). After applying
+either receipt, the host windows were recursively identical. Four
+alternating batches of 30 actual `ipc_set`/`ipc_get` copies took
+**471–651 ms** for the full reply and **0.79–0.97 ms** for the sparse
+reply. This isolates the worker mailbox, not network traffic or FPS.
+
+```sh
+lua5.1 tests/campaign_scene_delta.lua
+tests/campaign_scene_wire_native.sh luantiserver
+```

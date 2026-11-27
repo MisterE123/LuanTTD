@@ -805,12 +805,29 @@ return function(Sim,R,max_days)
     for k in pairs(b) do if a[k]==nil then return false end end
     return true
   end
-  local function scene(packet,known,epoch)
+  local function scene(packet,known,epoch,wants_patch)
     local key=scene_key(packet.x,packet.z,packet.width,packet.height)
     local old=scenes[key]
     scene_clock=scene_clock+1
-    if not old or packet.corners~=old.corners
-      or not equal(packet.tiles,old.tiles) or not equal(packet.registries,old.registries) then
+    local same_corners=old and packet.corners==old.corners
+    local same_tiles=same_corners and equal(packet.tiles,old.tiles)
+    local same_registries=same_corners and (same_tiles or wants_patch) and equal(packet.registries,old.registries)
+    local tile_patch
+    if old and wants_patch and old.key==known and same_corners and (not same_tiles or not same_registries) then
+      tile_patch={}
+      if not same_tiles then
+        -- Reused unchanged rows share identity in the worker. Replace
+        -- a full row atomically, never diff its mutable nested fields.
+        local limit=math.min(64,#packet.tiles/4)
+        for i,row in ipairs(packet.tiles) do
+          if row~=old.tiles[i] then
+            tile_patch[#tile_patch+1]={i,row}
+            if #tile_patch>limit then tile_patch=nil;break end
+          end
+        end
+      end
+    end
+    if not same_corners or not same_tiles or not same_registries then
       if not old then
         if scene_count==32 then
           local evict
@@ -829,6 +846,12 @@ return function(Sim,R,max_days)
     packet.scene=old.key
     if known==old.key then
       packet.tiles,packet.corners,packet.registries=nil,nil,nil
+    elseif tile_patch then
+      packet.scene_base,packet.tile_patch=known,tile_patch
+      packet.tiles,packet.corners=nil,nil
+      -- A registry-only update may remove records; an explicit empty
+      -- registry is still a replacement, not a request to retain them.
+      if same_registries then packet.registries=nil end
     end
   end
   local function actor_interest(windows)
@@ -861,7 +884,7 @@ return function(Sim,R,max_days)
       -- scan and copy of the fleet registry for each window.
       local r=snapshot(w.x,w.z,w.w,w.h,fraction,frame,w.scene,false,epoch)
       if not r.ok then return r end
-      scene(r.value,w.scene,epoch)
+      scene(r.value,w.scene,epoch,w.delta_tiles==true)
       if R.passengers then
         r.value.boardings,r.value.boarding_cursor,r.value.fares=R.passengers.events({w},w.after_boarding)
       end

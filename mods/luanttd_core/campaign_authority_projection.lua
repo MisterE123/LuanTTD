@@ -37,10 +37,23 @@ return function()
       local r=regions[request.key]
       if not r or r.token~=request.token or r.result and r.result.seq>=reply.seq then return false end
       local w=reply.value[i]
+      if type(w)~="table" or w.scene_base and (not w.scene or w.tiles or w.corners) then return false end
       if w.scene and not w.tiles then
         local old=r.result and r.result.value
-        if not old or old.scene~=w.scene or old.x~=w.x or old.z~=w.z
+        if not old or old.scene~=(w.scene_base or w.scene) or old.x~=w.x or old.z~=w.z
           or old.width~=w.width or old.height~=w.height then return false end
+        if w.scene_base then
+          if w.scene==w.scene_base or type(old.tiles)~="table" or type(w.tile_patch)~="table" or #w.tile_patch>64 then return false end
+          local index=0
+          for _,replacement in ipairs(w.tile_patch) do
+            if type(replacement)~="table" then return false end
+            local i,row=replacement[1],replacement[2]
+            if type(i)~="number" or i%1~=0 or i<=index or i>#old.tiles or type(row)~="table" then return false end
+            local previous=old.tiles[i]
+            if type(previous)~="table" or row.id~=previous.id then return false end
+            index=i
+          end
+        end
       end
     end
     if reply.actor_us then actor_us=math.max(actor_us or 0,reply.actor_us) end
@@ -53,7 +66,17 @@ return function()
         local materialized={}
         for k,v in pairs(w) do materialized[k]=v end
         local old=regions[request.key].result.value
-        materialized.tiles,materialized.corners,materialized.registries=old.tiles,old.corners,old.registries
+        materialized.tiles,materialized.corners=old.tiles,old.corners
+        materialized.registries=materialized.registries or old.registries
+        if w.scene_base then
+          if #w.tile_patch>0 then
+            local rows={}
+            for j,row in ipairs(old.tiles) do rows[j]=row end
+            for _,p in ipairs(w.tile_patch) do rows[p[1]]=p[2] end
+            materialized.tiles=rows
+          end
+          materialized.scene_base,materialized.tile_patch=nil,nil
+        end
         w=materialized
       end
       local function receive(events,out)
