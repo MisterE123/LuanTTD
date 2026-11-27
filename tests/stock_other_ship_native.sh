@@ -11,6 +11,7 @@ awk '/^local resumed_owner=/{print "dofile(mod..\"/qa_tanker_seed.lua\")(core,Si
 cp tests/stock_other_ship_native_seed.lua "$game/mods/luanttd_core/qa_tanker_seed.lua"
 cp tests/stock_dry_heavy_fixture.lua "$game/mods/luanttd_core/qa_dry_heavy_fixture.lua"
 cp tests/stock_dry_bank_fixture.lua "$game/mods/luanttd_core/qa_dry_bank_fixture.lua"
+cp tests/stock_dry_mail_fixture.lua "$game/mods/luanttd_core/qa_dry_mail_fixture.lua"
 printf 'return function() return {interval=.05} end\n' >"$game/mods/luanttd_core/qa_layout.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
 printf '\n' >>"$game/mods/luanttd_core/init.lua"

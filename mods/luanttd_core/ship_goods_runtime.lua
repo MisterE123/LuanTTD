@@ -13,6 +13,7 @@ return function(Sim,Services,Timber,Farm,Catchment,debit)
     steel={name="Steel",load="Steel Mill",unload="Factory",sink="factory",family="heavy",accept_family="farm"},
     valuables={name="Valuables",load="Bank pickup",unload="Bank delivery",sink="bank",family="bank"},
   }
+  function M.refit_profile(cargo) return profiles[cargo] end
   function M.profile(s,cargo)
     local p=profiles[cargo]
     if not p then return end

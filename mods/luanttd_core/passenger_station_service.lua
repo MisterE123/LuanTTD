@@ -16,6 +16,12 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
   for _,id in ipairs(ships.order) do
     vessels[id]={engine=id,cap=ships.model(id).capacity,slice=10,aging=185,wait=10}
   end
+  local dry_mail={}
+  local dry=dofile(base.."/openttd/ship_roster.lua")
+  for _,id in ipairs(dry.order) do
+    local model=dry.model(id)
+    dry_mail[id]={engine=id,cap=model.capacity,slice=model.load_amount,aging=model.cargo_age_ticks,wait=10}
+  end
   local S={version=1,stock={
     rail={engine=27,cap=40,slice=5,aging=185,wait=40},
     ship=vessels[206],
@@ -38,7 +44,10 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
   end
   function S.stock_for(mode,engine,coach,cargo)
     if mode=="rail" and cargo=="mail" then return mail end
-    if mode=="ship" and engine then return vessels[engine] end
+    if mode=="ship" and engine then
+      if cargo=="mail" then return dry_mail[engine] end
+      return vessels[engine]
+    end
     if mode=="rail" and dmus[engine] then return dmus[engine][coach and "coach" or "solo"] end
     if mode=="air" and engine then return aircraft[engine] end
     return S.stock[mode]
@@ -158,6 +167,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     assert(type(def.id)=="number" and def.owner~=nil and not state.vehicles[def.id],"Invalid or duplicate vehicle")
     local cargo=def.cargo or "passenger"
     assert(cargo=="passenger" or cargo=="mail" and def.mode=="rail" and def.wagon==28
+      or cargo=="mail" and def.mode=="ship" and dry_mail[def.engine]
       or cargo=="mixed" and def.mode=="rail" and def.town_parts,"Invalid town cargo body")
     local stock=assert(S.stock_for(def.mode,def.engine,def.coach,cargo),"Only mounted stock cargo bodies")
     assert(type(def.speed)=="number" and type(def.built)=="number",
@@ -173,7 +183,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
         "Unsupported mixed town formation")
       v.town_mixed=true
       Compartments.town_wagons(v,parts,Roster,express,def.advanced_gauge)
-    elseif cargo=="mail" then
+    elseif cargo=="mail" and def.mode=="rail" then
       assert(v.total_length==16 and not def.coach and not def.dual_head and not def.passenger_coaches,
         "Only the single stock Mail Van formation is mounted")
       v.wagon=28

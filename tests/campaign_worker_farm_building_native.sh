@@ -25,7 +25,8 @@ display=${BAYLINE_NATIVE_DISPLAY:-402}
 cat >"$out/server.conf" <<CONF
 port = $port
 bind_address = 127.0.0.1
-prometheus_listener_address = 127.0.0.1:$port
+# Test never scrapes metrics; let the kernel pick an unused TCP port.
+prometheus_listener_address = 127.0.0.1:0
 server_announce = false
 bayline_generated_map_width = 128
 bayline_generated_map_depth = 128

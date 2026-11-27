@@ -217,13 +217,16 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     local stations,by_id={},{}
     local nearby=sector(width,depth)
     for _,st in ipairs(physical) do
-      assert(not by_id[st.id],"Duplicate physical mail station")
+      -- Keep the station's own packet IDs; use the host's unified
+      -- StationID band only for this cross-mode search and tie break.
+      local id=options and options.station_id and options.station_id(st) or st.id
+      assert(not by_id[id],"Duplicate physical mail station")
       local tiles=options and options.tiles and options.tiles(st)
       local region=mail_region(Catchment,st,width,depth,tiles,options)
-      by_id[st.id]={st=st,region=region}
-      stations[#stations+1]=by_id[st.id]
+      by_id[id]={id=id,st=st,region=region}
+      stations[#stations+1]=by_id[id]
     end
-    table.sort(stations,function(a,b)return a.st.id<b.st.id end)
+    table.sort(stations,function(a,b)return a.id<b.id end)
     -- Index coarse bounds, not a second set of tables for every
     -- covered tile. Exact coverage remains in the region and in offer().
     -- Index insertion order is the stock numeric StationID order.

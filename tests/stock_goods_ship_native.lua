@@ -9,16 +9,17 @@ local function goods_native_scene(p)
   local ore=cargo=="iron_ore"
   local heavy=ore or cargo=="steel"
   local bank=cargo=="valuables"
-  local short_coast=heavy or bank
+  local mail=cargo=="mail"
+  local short_coast=heavy or bank or mail
   local refitted=farm or wood or short_coast
-  local cargo_id=({goods=5,grain=6,livestock=4,wood=7,iron_ore=8,steel=9,valuables=10})[cargo]
-  local cargo_title=({goods="Goods",grain="Grain",livestock="Livestock",wood="Wood",iron_ore="Iron Ore",steel="Steel",valuables="Valuables"})[cargo]
+  local cargo_id=({goods=5,grain=6,livestock=4,wood=7,iron_ore=8,steel=9,valuables=10,mail=2})[cargo]
+  local cargo_title=({goods="Goods",grain="Grain",livestock="Livestock",wood="Wood",iron_ore="Iron Ore",steel="Steel",valuables="Valuables",mail="Mail"})[cargo]
   local source_label=ore and "Iron Ore Mine dock" or heavy and "Steel Mill dock" or
-    farm and "Farm dock" or wood and "Forest dock" or bank and "Bank pickup dock" or "Goods producer dock"
+    farm and "Farm dock" or wood and "Forest dock" or bank and "Bank pickup dock" or mail and "Mail pickup dock" or "Goods producer dock"
   local sink_label=ore and "Steel Mill dock" or (heavy or farm) and "Factory dock" or
-    wood and "Sawmill dock" or bank and "Bank delivery dock" or "Goods delivery dock"
+    wood and "Sawmill dock" or bank and "Bank delivery dock" or mail and "Mail delivery dock" or "Goods delivery dock"
   local destination=ore and "steel mill" or (heavy or farm) and "factory" or wood and "sawmill" or bank and "bank" or "town"
-  local camera_x=ore and 38 or heavy and 72 or bank and 52 or refitted and 44 or 84
+  local camera_x=ore and 38 or heavy and 72 or (bank or mail) and 52 or refitted and 44 or 84
   assert(cargo_id and api.capabilities.ferry[211] and (refitted or api.capabilities.ferry[204]))
   local name=p:get_player_name()
   p:set_pos({x=camera_x,y=14,z=short_coast and 28 or 55})
@@ -33,13 +34,20 @@ local function goods_native_scene(p)
       ask({kind="command",command={kind="transport_commit",revision=r.revision,token=r.value.token}},done)
     end)
   end
-  local plans=heavy and {{"dock",ore and 11 or 27,19},{"dock",ore and 27 or 46,19},{"depot",ore and 20 or 35,24}} or bank and {{"dock",10,19},{"dock",42,19},{"depot",26,24}} or refitted and {{"dock",12,32},{"dock",33,32},{"depot",20,36}} or
+  local plans=heavy and {{"dock",ore and 11 or 27,19},{"dock",ore and 27 or 46,19},{"depot",ore and 20 or 35,24}} or (bank or mail) and {{"dock",10,19},{"dock",42,19},{"depot",26,24}} or refitted and {{"dock",12,32},{"dock",33,32},{"depot",20,36}} or
     {{"dock",12,32},{"dock",31,32},{"depot",17,35},{"dock",34,32},{"dock",51,32},{"depot",43,35}}
   local source,sink,home=refitted and 1 or 4,refitted and 2 or 5,refitted and 3 or 6
   local id,at={},{}
   local began,viewed,settled=false,false,false
+  local function carrier(disk)
+    if mail then
+      local comm=disk.stock_ship_commercial
+      return comm and comm.mail_ship_serial and comm.service.vehicles[comm.mail_ship_serial]
+    end
+    return disk.stock_goods_ship_service and disk.stock_goods_ship_service.vehicle
+  end
   local prior=assert(OwnerCheckpoint.read())
-  local saved=prior.stock_goods_ship_service and prior.stock_goods_ship_service.vehicle
+  local saved=carrier(prior)
   local restart=saved and saved.delivered or 0
   local function observe()
     local disk=assert(OwnerCheckpoint.read())
@@ -52,8 +60,9 @@ local function goods_native_scene(p)
       end
     end
     local c=disk.companies[name]
-    local v=disk.stock_goods_ship_service and disk.stock_goods_ship_service.vehicle
-    if v and v.delivered>=restart+160 and viewed and settled then
+    local v=carrier(disk)
+    if v and (v.delivered or 0)>=restart+160 and viewed and settled then
+      local fare=v.revenue or v.route_profit
       assert(disk.stock_coal_ship.engine==211 and disk.stock_coal_ship.cargo==cargo_id and disk.stock_coal_ship.refit==(refitted and 507 or 0))
       if farm then
         local factory=assert(disk.stock_farm_industries[0x2001])
@@ -72,8 +81,11 @@ local function goods_native_scene(p)
       elseif wood then
         local mill=assert(disk.stock_timber_industries[0x1001])
         assert((mill.wood_received or (mill.received or {}).wood or 0)>=160,"Sawmill received no Wood")
+      elseif mail then
+        assert((disk.sites[2].received.mail or 0)>=160 and not disk.stock_goods_ship_service)
+        assert(disk.stock_ship_commercial.service.post_tick==disk.passenger_house_clock.counter)
       else assert(disk.sites[1].received.goods>=160) end
-      assert(c.revenue>=v.revenue and v.revenue>0)
+      assert(c.revenue>=fare and fare>0)
       if restart>0 then
         assert(disk.day>prior.day and c.revenue>=prior.companies[name].revenue)
         core.log("action",("PASS NATIVE DRY SHIP REOPEN: %d→%d units after the SQLite restart"):format(restart,v.delivered))
@@ -82,7 +94,7 @@ local function goods_native_scene(p)
           p:set_pos({x=ship_pos.x,y=ship_pos.y+5,z=ship_pos.z-18})
           p:set_look_horizontal(0);p:set_look_vertical(.33)
         end
-        core.log("action",("PASS NATIVE STOCK SHIP #211: depot %s, two world-picked docks, projected original hull, %d units/$%d"):format(cargo,v.delivered,v.revenue))
+        core.log("action",("PASS NATIVE STOCK SHIP #211: depot %s, two world-picked docks, projected original hull, %d units/$%d"):format(cargo,v.delivered,fare))
       end
       return
     end

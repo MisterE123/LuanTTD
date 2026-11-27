@@ -3,7 +3,7 @@
 -- station clock. The original paid-ferry save key remains stable.
 local dock_path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
 local DockMembers=dofile(dock_path.."dock_station_members.lua")
-return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom)
+return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom,Dry)
   local F={}
   local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local Roster=dofile(mod.."/openttd/rail_roster.lua")
@@ -49,6 +49,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local c=s.stock_ship_commercial
     local p=Ship and Ship.current(s)
     return not not (
+      Dry and Dry.mail(s) or
       Ship and enabled(s,"ship") and (
         (p and p.paid_clock~=nil) or (c and c.active_serial~=nil)
         or (s.stock_ship_stations and next(s.stock_ship_stations))) or
@@ -146,7 +147,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
           local asset
           if e.mode=="rail" and v.finance_asset_id then
             asset=s.stock_rail_fleet and s.stock_rail_fleet.units[v.finance_asset_id]
-          elseif e.mode=="ship" then asset=s.stock_owned_ferry
+          elseif e.mode=="ship" then asset=v.cargo=="mail" and s.stock_coal_ship or s.stock_owned_ferry
           elseif e.mode=="air" then asset=s.stock_owned_air_fleet and s.stock_owned_air_fleet[e.paid_clock] or s.stock_owned_aircraft end
           Sim.stock_vehicle_operating(s,asset,e.amount)
         end
@@ -212,7 +213,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     c.air_serial=primary and primary.paid_clock and air_key(primary.paid_clock) or nil
   end
 
-  local function sync_stations(s,c,ctx,active)
+  local function sync_stations(s,c,ctx,active,mail_dock)
     local ships=s.stock_ship_stations or {}
     local rails=s.stock_rail_stations or {}
     local airports=s.stock_small_airports or {}
@@ -224,7 +225,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local neutral=Rig.neutral_ref(s,actual)
       local owner=actual.owner
       if neutral then owner=false end
-      local mail=mode_=="air" or mode_=="rail" and s.rail_mail_service==true and not Freight.role(actual)
+      local mail=not not (mode_=="air" or mode_=="rail" and s.rail_mail_service==true and not Freight.role(actual) or
+        mode_=="ship" and mail_dock and mail_dock(local_id))
       local fresh=not st or not not st.mail_enabled~=mail
       if st then
         assert(st.owner==owner and mode(st)==mode_,"Commercial station ownership changed")
@@ -316,7 +318,10 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
   function F.day(s,Ship,Rail,Air,first_tick,live)
     local c=commercial(s)
     local service=c.service
-    local active={ship=Ship and enabled(s,"ship"),rail=Rail and enabled(s,"rail"),air=Air and enabled(s,"air")}
+    local post,post_run,post_id,post_craft
+    if Dry then post,post_run,post_id,post_craft=Dry.mail(s) end
+    local active={ship=post~=nil or Ship and enabled(s,"ship"),rail=Rail and enabled(s,"rail"),air=Air and enabled(s,"air")}
+    if post then Dry.mail_charge(s,post_craft) end
     if active.rail and Rail.paid_art_ready and not Rail.paid_art_ready(s) then active.rail=false end
     local ctx=context(s,active)
     local p=Ship and Ship.current(s)
@@ -371,15 +376,17 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         engine=p.engine_id,speed=(Ship.engine_for and Ship.engine_for(p) or Ship.engine).max_speed,
         built=p.paid_build_year or Sim.date(s,p.paid_built_day or s.day)})
     end
+    reconcile("mail_ship_serial",post_id,post_id and {id=post_id,mode="ship",owner=post.owner,engine=post_craft.engine,
+      speed=post_run.engine_for(post).max_speed,built=post_craft.built,cargo="mail"})
     if Rail then
       Actors.reconcile(c,rails,ctx,first_tick,function(r)
         return r.paid_build_year or Sim.date(s,r.paid_built_day or s.day)
       end,function(events,owner) flash(s,c,events,owner) end)
     end
     if Air then reconcile_air(s,c,Air,aircraft,ctx,first_tick) end
-    sync_stations(s,c,ctx,active)
+    sync_stations(s,c,ctx,active,post and function(id) return post_run.ordered_dock(post,id) end)
     local hooks=Mux.town_hooks
-    if (s.rail_mail_service and active.rail or active.air and next(s.stock_small_airports or {})) and Mail and Catchment then
+    if (post or s.rail_mail_service and active.rail or active.air and next(s.stock_small_airports or {})) and Mail and Catchment then
       local physical={}
       for _,st in pairs(service.stations) do
         if st.mail_enabled and active[mode(st)] then physical[#physical+1]=st end
@@ -394,6 +401,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local allocator=Mail.shared_allocator(Catchment,ctx.width,ctx.height,physical,{
         select_goods=ctx.select_goods,neutral_owner=ctx.neutral_owner,town_rights=rights,
         station_town=function(st) return st.town or st.site end,
+        station_id=function(st) return st.host_mode=="ship" and ship_index(st.host_id) or st.id end,
         modified=s.stock_modified_catchment,immutable_footprints=true,tiles=function(st)
           if Mail.truck_stop(st) then return Sim.road_stop_tiles(st) end
           return st.tiles
@@ -412,6 +420,15 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         local ship=assert(service.vehicles[run])
         ship.stopped=not ship_ready or p.stopped or p.phase=="blocked" or p.vehicle.stopped or p.dock_forced_leave or nil
         ship.broken=p.vehicle.breakdown or nil
+      end
+      if post then
+        local v=assert(service.vehicles[post_id])
+        v.stopped=post.stopped or post.phase=="blocked" or post.vehicle.stopped or post.dock_forced_leave or nil
+        v.broken=post.vehicle.breakdown or nil
+        if post.transport_cancel_full then
+          Service.update_load_type(v,false,false,false)
+          post.transport_cancel_full=nil
+        end
       end
       Actors.controls(c,rails)
       local held
@@ -450,6 +467,20 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
           leave=function(_,force) return leave(run,force) end,
           arrive=function(q)
             return Service.begin(service,run,q.last_dock,q.arrivals,q.last_berth,{},tick,ctx,events)
+          end,
+        })
+      end
+      if post then
+        if not post.stopped and post.phase~="blocked" then
+          post_craft.mail_running_ticks=(post_craft.mail_running_ticks or 0)+1
+        end
+        post_run.advance_paid(s,{
+          leave=function(_,force) return leave(post_id,force) end,
+          arrive=function(q)
+            local o=q.transport_orders[q.transport_order_cursor.real+1]
+            local policy=o and o.cargo_order
+            local flags={full=policy=="full",no_load=policy=="no_load"}
+            return Service.begin(service,post_id,q.last_dock,q.arrivals,q.last_berth,flags,tick,ctx,events)
           end,
         })
       end

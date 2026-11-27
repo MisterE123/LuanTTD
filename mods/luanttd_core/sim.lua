@@ -3907,7 +3907,8 @@ local function passenger_modules()
   end
   local dry=dofile(base.."ship_goods_runtime.lua")(M,dry_ports,timber_rules,function() return farm.rules end,catchment,debit)
   ship_coal=dofile(base.."ship_coal_runtime.lua")(M,coal_ship,ships,kernel,debit,credit,received_coal,
-    dofile(base.."openttd/stock_engine_calendar.lua"),dry)
+    dofile(base.."openttd/stock_engine_calendar.lua"),dry,
+    dofile(base.."ship_mail_port.lua")(M,make_dry(M,ships,passenger_rules,kernel,loading_factory,timing,"mail"),catchment,house))
   goods.berths=ship_coal.goods_stations
   function goods.join_ports(s)
     local list,oil_ports=oil.berths(s)
@@ -3922,7 +3923,7 @@ local function passenger_modules()
     rating_runtime,loading_factory,timing)
   local mux=dofile(base.."passenger_supply_mux.lua")(M,catchment,passenger_rules,rating_runtime,kernel)
   paid_ferry=dofile(base.."ship_paid_runtime.lua")(M,commercial,mux,credit,push,
-    dofile(base.."rail_paid_actors.lua"),mail_runtime,catchment,rating_runtime.random_u32)
+    dofile(base.."rail_paid_actors.lua"),mail_runtime,catchment,rating_runtime.random_u32,ship_coal)
   return passenger_rules,income_rules
 end
 -- RC1 trams use the RoadVehicle station loader. Keep the custom body in

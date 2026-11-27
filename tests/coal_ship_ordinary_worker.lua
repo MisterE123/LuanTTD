@@ -49,7 +49,7 @@ assert(commit(offer.request).id=="coal" and s.stock_coal_ship.cargo==5)
 q=assert(rt.transport.depot(owner,"ship",d))
 assert(q.vehicles[1].id=="coal" and q.vehicles[1].cargo=="goods")
 local refit
-for _,o in ipairs(q.offers) do if o.request.operation=="refit" then refit=o end end
+for _,o in ipairs(q.offers) do if o.request.operation=="refit" and o.request.cargo=="coal" then refit=o end end
 assert(refit and refit.price==507)
 assert(commit(refit.request).id=="coal" and s.stock_coal_ship.cargo==1)
 q=assert(rt.transport.depot(owner,"ship",d))

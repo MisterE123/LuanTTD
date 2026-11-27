@@ -24,7 +24,10 @@ working ordinary paid service:
   For Steel service, first supply the mill with Ore; this can be a
   truck or train, including one operated by another company.
   For **Valuables**, pick docks serving two different Banks. Returning
-  to the source Bank is not a delivery.
+  to the source Bank is not a delivery. **Mail** uses docks within
+  reach of houses that produce and accept Mail. Mail ships, lorries,
+  trains and aircraft share the same town allocation, not private
+  copies of each town’s cargo.
   Both hulls retain their stock capacity when refitted.
 
 The actual stock ship controller, regional pathfinding, depot and approach
@@ -95,14 +98,19 @@ after a separate SQLite restart. The Bakewell cargo ship and hovercraft
 also ran as native Linux client projections and earned real fares. The exact source table check is
 tests/ship_complete_temperate_roster_rc1.py. It checks the original cargo
 class allowlist, all nine equivalent dry cargo holds, and their refit
-prices against RC1. Goods, Coal, Grain, Livestock, Wood, Iron Ore and
-Steel and Valuables are implemented for this hull in ordinary play.
-Mail is the only remaining Temperate dry-hold choice not exposed. The Grain, Livestock and Wood regressions check the exact
+prices against RC1. Goods, Coal, Mail, Grain, Livestock, Wood, Iron
+Ore, Steel and Valuables are implemented in ordinary play. The Grain, Livestock and Wood regressions check the exact
 depot debit, the appropriate Factory or Sawmill input, and a partial
 load across restart. Native Linux replays selected both docks in 3D,
 verified a paid 160-unit trip for each heavy cargo, and reopened both
 services. The Steel scenario used a separate paid Ore truck as the
 mill's only supplier. The Valuables replay carried 160 bags per hold
 between two financed Banks in distinct towns, and checked the real
-receiving Bank and post-restart receipts. See also the
+receiving Bank and post-restart receipts. The Mail replay delivered 160
+bags from actual houses after a partial-load reopen, then repeated with
+a separately owned, active Mail lorry competing for the same supply.
+The native Mail voyage used the in-world order picker and resumed from
+its SQLite checkpoint. Refits remain limited to the parked hull before
+its first dispatch; the complete fleet and depot-order rules are separate.
+See also the
 [stock content inventory](stock-content-inventory.md).

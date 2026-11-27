@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Stock dry-cargo hull. Coal joins the coal economy; other mounted
 -- cargoes share the industry ledger and the same stock motion actor.
-return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
+return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods,Mail)
   local M={}
   local bindings=setmetatable({},{__mode="k"})
   local frames=setmetatable({},{__mode="k"})
@@ -86,17 +86,23 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     return s.stock_coal_industries and next(s.stock_coal_industries)~=nil
   end
   local coal_profile={name="Coal",load="Coal mine",unload="Power plant",sink="power station"}
+  local function refit_profile(cargo)
+    if cargo=="coal" then return coal_profile end
+    if cargo=="mail" then return Mail and Mail.profile end
+    return Goods and Goods.refit_profile(cargo)
+  end
   function M.cargo_profile(s,cargo)
     if cargo=="coal" then return coal_active(s) and coal_profile or nil end
+    if cargo=="mail" then return Mail and Mail.enabled(s) and Mail.profile or nil end
     return Goods and Goods.profile(s,cargo)
   end
   function M.goods(s)
     return M.cargo_profile(s,"goods")~=nil
   end
-  function M.refit_choices(s)
+  function M.refit_choices()
     local out={}
     for _,row in ipairs(Roster.refit_catalog()) do
-      local profile=M.cargo_profile(s,row.cargo)
+      local profile=refit_profile(row.cargo)
       if profile then out[#out+1]={id=row.id,cargo=row.cargo,name=profile.name} end
     end
     return out
@@ -104,11 +110,11 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
   local function industry_cargo(s)
     local craft=s.stock_coal_ship
     local cargo=craft and Roster.cargo_key(craft.cargo)
-    if cargo and cargo~="coal" and M.cargo_profile(s,cargo) then return cargo end
+    if cargo and cargo~="coal" and cargo~="mail" and M.cargo_profile(s,cargo) then return cargo end
   end
   function M.active(s)
     return not not (bindings[s] and s.ship_coal_service and s.road_stock_house_supply and
-      (s.stock_coal_industries or M.goods(s)) and Sim.road_stock_service_active(s))
+      (s.stock_coal_industries or M.goods(s) or M.cargo_profile(s,"mail")) and Sim.road_stock_service_active(s))
   end
   function M.goods_stations(s)
     if not industry_cargo(s) then return end
@@ -120,6 +126,29 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     local spec=bindings[s]
     local voyage=spec and spec.run.current(s)
     return voyage and (not station or spec.run.ordered_dock(voyage,station)) or false
+  end
+  function M.mail(s)
+    local spec=bindings[s]
+    local craft=s.stock_coal_ship
+    if not (spec and craft and Roster.cargo_key(craft.cargo)=="mail" and M.active(s)) then return end
+    local p=spec.run.current(s)
+    if not (p and p.paid_clock and (not spec.ready or spec.ready(craft.engine))) then return end
+    return p,spec.run,Mail.id(p),craft
+  end
+  function M.mail_charge(s,craft)
+    local fixed=Roster.running_fixed(craft.mail_running_ticks or 0,s.stock_ship_running_base,craft.engine)
+    craft.mail_running_ticks=0
+    if fixed==0 then return end
+    local company=Sim.company(s,craft.owner)
+    local old=company.stock_money_fraction or 0
+    local rem=(old-fixed%256)%256
+    company.stock_money_fraction=rem
+    local whole=math.floor(fixed/256)+(rem>old and 1 or 0)
+    if whole>0 then
+      debit(company,whole,"ship_run")
+      craft.expense=(craft.expense or 0)+whole
+      if Sim.stock_vehicle_operating then Sim.stock_vehicle_operating(s,craft,-whole) end
+    end
   end
   function M.cargo_key(s)
     local craft=s.stock_coal_ship
@@ -216,7 +245,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     end
     cargo=cargo or "coal"
     local id=Roster.cargo_id(cargo)
-    if not id or not M.cargo_profile(s,cargo) then return nil,"CARGO_NOT_REFITTABLE" end
+    if not id or not refit_profile(cargo) then return nil,"CARGO_NOT_REFITTABLE" end
     if v.cargo==id then return nil,cargo=="coal" and "SHIP_ALREADY_COAL_REFITTED" or "SHIP_ALREADY_CARRIES_CARGO" end
     return Roster.quote(id,s.stock_ship_purchase_base,v.cargo,v.engine)
   end
@@ -250,6 +279,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     end
     local run,why2=spec.run.start(s,owner,v.depot,a,z,nil,v.engine)
     if not run then return nil,why2 end
+    if cargo=="mail" then return run,"Mail ship dispatched." end
     if cargo~="coal" then
       Goods.install(s,v,cargo)
       return run,profile.name.." ship dispatched."
@@ -276,6 +306,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     cargo=cargo or M.cargo_key(s) or "coal"
     if cargo~="coal" then
       local spec=bindings[s]
+      if cargo=="mail" then return Mail and spec and Mail.report(s,spec.network,id) end
       return Goods and spec and Goods.report(s,spec.network,id,cargo)
     end
     if not s.stock_coal_industries then return end
@@ -284,7 +315,7 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
   end
   function M.report(s,id)
     if not M.active(s) or type(id)~="number" or id<0 or id>=0x4000 or id%1~=0 then return end
-    if industry_cargo(s) then return M.order_report(s,id,"coal") end
+    if M.cargo_key(s)~="coal" and s.stock_coal_ship then return M.order_report(s,id,"coal") end
     local b=model(s)
     local report=b and b.report(id)
     if report then
@@ -384,6 +415,12 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     local p=b and b.run.current(s)
     local c=craft.cargo==Roster.coal and s.stock_ship_coal or s.stock_goods_ship_service
     local v=c and c.vehicle
+    local post=c and (c.post_tick or c.post)
+    if Roster.cargo_key(craft.cargo)=="mail" then
+      local service=s.stock_ship_commercial and s.stock_ship_commercial.service
+      v=p and p.paid_clock and service and service.vehicles[Mail.id(p)]
+      post=service and service.post_tick
+    end
     local mine,power
     if p and p.transport_orders then
       for _,o in ipairs(p.transport_orders) do
@@ -393,12 +430,12 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods)
     end
     return {id=craft.id,owner=craft.owner,engine=craft.engine,cargo=craft.cargo,name=Roster.model(craft.engine).name,
       phase=p and p.phase or "purchased",capacity=Roster.model(craft.engine).capacity,onboard=v and v.units or 0,
-      delivered=v and v.delivered or 0,boarded=v and v.boarded or 0,fare=v and v.revenue or 0,
-      last_fare=v and v.last_fare,purchase=craft.purchase,refit=craft.refit,running_expense=craft.expense,
+      delivered=v and v.delivered or 0,boarded=v and v.boarded or 0,fare=v and (v.revenue or v.route_profit) or 0,
+      last_fare=v and (type(v.last_fare)=="table" and v.last_fare.amount or v.last_fare),purchase=craft.purchase,refit=craft.refit,running_expense=craft.expense,
       depot=craft.depot,mine=mine or p and p.first,power=power or p and p.second,last_dock=p and p.last_dock,
       last_berth=p and p.last_berth,loading=v and v.load_state~=nil,
       visits=p and p.arrivals or 0,stopped=p and p.stopped or false,failure=p and p.failure,
-      paused=not M.active(s),tick=c and (c.post_tick or c.post)}
+      paused=not M.active(s),tick=post}
   end
   function M.pose(s,f,live)
     local b=bindings[s]

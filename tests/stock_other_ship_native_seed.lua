@@ -8,7 +8,8 @@ return function(core,Sim,checkpoint,mod)
   local cargo=core.settings:get("luanttd_qa_other_ship_cargo")
   local heavy=cargo=="iron_ore" or cargo=="steel"
   local bank=cargo=="valuables"
-  local coast=(heavy or bank) and 20 or 33
+  local mail=cargo=="mail"
+  local coast=(heavy or bank or mail) and 20 or 33
   Sim.W,Sim.H=64,64
   s.sites,s.tiles={},{}
   s.corner_grid=T.new(64,64,function(_,z) return z<coast and 1 or 0 end)
@@ -35,6 +36,10 @@ return function(core,Sim,checkpoint,mod)
       road={start_year=year,foster=true,breakdowns=0,service_interval=0},ferry={[211]=true},air={}}
     local R=dofile(mod.."/campaign_authority_runtime.lua")(Sim,mod,s,cap)
     Q.fund(Sim,s,dofile(mod.."/campaign_authority_endpoint.lua")(Sim,R))
+    s.speed=4
+  elseif mail then
+    s.ship_coal_service=true
+    dofile(mod.."/qa_dry_mail_fixture.lua")(Sim,s)
     s.speed=4
   elseif cargo=="grain" or cargo=="livestock" then
     s.ship_coal_service,s.road_farm,s.stock_farm_frozen=true,true,true
