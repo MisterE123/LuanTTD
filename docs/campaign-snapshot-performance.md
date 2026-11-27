@@ -88,3 +88,28 @@ old global routine. For 60 topology refreshes sampling three actual
 after. This measures river-direction work only, not the full snapshot
 or client FPS. Tests also cover a changed outlet, a river rejoining
 two components, ignored distant tides and recovery from skipped revisions.
+
+## Bound the large reference hash during checkpoint encoding
+
+The wide encoder's reference hash used to grow past a million objects
+as a single allocation and rehash. It now partitions references by
+stable raw terrain shape and woodland type, with a general fallback
+bucket. Buckets still compare the original table objects, including
+when a tile or tree is first encountered through another alias. A
+single first-encounter counter produces the same reference IDs and
+wire bytes. The partition is transient and not part of the saved game.
+
+Periodic checkpoints now also check for read-only viewport work while
+emitting sparse registries, sweeping dense array metadata, and just
+before joining the final string. Commands and simulation edits remain
+blocked until the atomic save completes. The save prefix, Zstd level,
+checksum and crash recovery path are unchanged.
+
+The same generated 1,024×1,024 map was replayed with road, rail, ship
+and air services at 4× on native Luanti. The longest gap between worker
+view samples in two instrumented baseline runs was 389 and 597 ms,
+versus 203 and 214 ms with the changes. The corresponding 90th
+percentiles were roughly 116 ms and 114 ms. This is a small
+replay comparison, not an FPS claim; allocation, compression and
+file writes can still block individual samples. The codec also
+matched the complete packed bytes of the same active fixture.

@@ -156,6 +156,31 @@ do
   assert(round.tiles[4]==round.tiles[5])
 end
 
+-- The wide reference hash chooses by raw shape, not encounter path.
+-- Ordinary tiles, trees and generic tables still alias across a table
+-- key, direct root fields and compact slots. The read-only pulses do
+-- not change a byte of the already identical graph.
+do
+  local wood={class=4,type=11,count=1,ground=0,density=3,growth=2}
+  local cell={h=14,variant=2,terrain="grass",wood=wood}
+  local other={h=14,variant=2,terrain="grass"}
+  local rich=setmetatable({h=15,variant=2,terrain="grass"},
+    {__index={stock_clear_ground=1},__metatable=false})
+  local state={tiles={},cell=cell,wood=wood,rich=rich}
+  state[cell]=wood;state.self=state
+  state.tiles[1],state.tiles[2],state.tiles[3]=cell,other,rich
+  for i=4,262144 do state.tiles[i]=(i%2==0 and cell or other) end
+  state.tiles.aux=wood
+  local pulses=0
+  local bytes=P.encode(state,function() pulses=pulses+1 end)
+  assert(bytes==P.encode(state) and pulses>96)
+  local loaded=P.decode(bytes)
+  assert(loaded.self==loaded and loaded.cell==loaded.tiles[1] and loaded.cell==loaded.tiles[262144])
+  assert(loaded.cell~=loaded.tiles[2] and loaded.wood==loaded.cell.wood and loaded.wood==loaded.tiles.aux)
+  assert(loaded[loaded.cell]==loaded.wood and loaded.rich==loaded.tiles[3] and loaded.rich.stock_clear_ground==1)
+  print("PASS wide checkpoint references across shaped buckets and readonly pulses")
+end
+
 -- Periodic save pulses are before compression and before the one atomic
 -- commit; explicit saves still use the original format and compression.
 do

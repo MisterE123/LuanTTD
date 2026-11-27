@@ -1,4 +1,5 @@
 -- Compare both encoders in native Lua, using a copied synthetic campaign.
+for _,n in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..n,"air") end
 local mod=core.get_modpath("bench")
 core.register_on_mods_loaded(function()
   core.after(0,function()

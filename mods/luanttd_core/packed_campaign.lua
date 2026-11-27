@@ -45,7 +45,7 @@ local base_cells={}
 for h=0,255 do
   for f=0,47 do base_cells[h*48+f]=char(TILE,h,f,0,0,0) end
 end
-local function tile_bytes(t,tables)
+local function tile_bytes(t,table_bucket)
   local h,v,g,w=t.h,t.variant,terrain_codes[t.terrain],t.water_class
   if not (g and tiny_int(h,255) and tiny_int(v,3)) or w~=nil and not water_codes[w] then return end
   -- These raw keys account for all fields in the ordinary record.
@@ -70,14 +70,16 @@ local function tile_bytes(t,tables)
   local presence=(c~=nil and 1 or 0)+(r~=nil and 2 or 0)+(k and 4 or 0)
   local wood=t.wood
   if wood~=nil then
-    if type(wood)~="table" or tables and tables[wood] then return end
+    if type(wood)~="table" then return end
+    local wood_bucket=table_bucket and table_bucket(wood)
+    if wood_bucket and wood_bucket[wood] then return end
     local class,kind,count=wood.class,wood.type,wood.count
     local ground,density,growth,salt=wood.ground,wood.density,wood.growth,wood.water_class
     if not (tiny_int(class,255) and tiny_int(kind,255) and tiny_int(count,255)
       and tiny_int(ground,255) and tiny_int(density,255) and tiny_int(growth,255))
       or salt~=nil and salt~="sea" then return end
     for key in next,wood do if not wood_fields[key] then return end end
-    return char(WOODED_TILE,h,flags,presence,c or 0,r or 0,class,kind,count,ground,density,growth,salt and 1 or 0),wood
+    return char(WOODED_TILE,h,flags,presence,c or 0,r or 0,class,kind,count,ground,density,growth,salt and 1 or 0),wood,wood_bucket
   end
   return char(TILE,h,flags,presence,c or 0,r or 0)
 end
@@ -148,12 +150,34 @@ function M.host_tile_view(tiles)
   })
 end
 
+-- The caller owns a stable snapshot for the entire encode. Periodic
+-- pulses may service read-only queries but must not mutate that graph.
 function M.encode(root,pulse)
   local chunks,fragment={},{}
   local fragment_count=0
   local tables,strings={},{}
   local table_count,string_count=0,0
   local tiles=type(root)=="table" and root.tiles
+  local function table_bucket() return tables end
+  if type(tiles)=="table" and #tiles>=262144 then
+    -- Dense terrain used to resize one million-key reference hash in
+    -- a single uninterruptible operation. Select smaller temporary
+    -- buckets by stable raw shape fields, not by the path to a table.
+    -- All aliases still compare by object, and a single encounter
+    -- counter supplies the exact same IDs and checkpoint bytes.
+    local buckets={}
+    for i=0,47 do buckets[i]={} end
+    table_bucket=function(value)
+      local variant=rawget(value,"variant")
+      if type(variant)=="number" and variant>=0 and variant<=3 and variant%1==0 then
+        local h=rawget(value,"h")
+        if type(h)=="number" and h>=0 and h<=255 and h%1==0 then return buckets[4*(h%8)+variant] end
+      end
+      local tree=rawget(value,"type")
+      if type(tree)=="number" and tree>=0 and tree<=255 and tree%1==0 then return buckets[32+tree%16] end
+      return tables
+    end
+  end
   local function put(value)
     fragment_count=fragment_count+1
     fragment[fragment_count]=value
@@ -162,6 +186,8 @@ function M.encode(root,pulse)
       -- fragment leaves tens of MiB of garbage in a dense campaign save.
       chunks[#chunks+1]=table.concat(fragment)
       fragment_count=0
+      -- A large sparse registry may never hit an array pulse.
+      if pulse and #chunks%8==0 then pulse() end
     end
   end
   local function tag(n) put(symbols[n]) end
@@ -176,9 +202,10 @@ function M.encode(root,pulse)
   write=function(value)
     local kind=type(value)
     if kind=="table" then
-      local id=tables[value]
+      local bucket=table_bucket(value)
+      local id=bucket[value]
       if id then tag(TABREF);uint(id);return end
-      table_count=table_count+1;tables[value]=table_count
+      table_count=table_count+1;bucket[value]=table_count
       local n=#value
       -- Only omit array keys when every member through #value exists.
       -- Most campaign tiles are records, not arrays.
@@ -195,11 +222,12 @@ function M.encode(root,pulse)
           for i=1,n do
             if pulse and i%8192==0 then pulse() end
             local t=rawget(value,i)
-            local fixed,wood
-            if type(t)=="table" and not tables[t] then fixed,wood=tile_bytes(t,tables) end
+            local fixed,wood,tree_bucket
+            local bucket=type(t)=="table" and table_bucket(t)
+            if bucket and not bucket[t] then fixed,wood,tree_bucket=tile_bytes(t,table_bucket) end
             if fixed then
-              table_count=table_count+1;tables[t]=table_count
-              if wood then table_count=table_count+1;tables[wood]=table_count end
+              table_count=table_count+1;bucket[t]=table_count
+              if wood then table_count=table_count+1;tree_bucket[wood]=table_count end
               put(fixed)
             else write(t) end
           end
@@ -212,7 +240,14 @@ function M.encode(root,pulse)
           end
         end
       else tag(TAB) end
+      local keys_seen=0
+      local dense_pulse=pulse and dense and n>=8192
       for k,v in next,value do
+        -- Covered numeric keys do not emit fragments on this pass.
+        if dense_pulse then
+          keys_seen=keys_seen+1
+          if keys_seen%8192==0 then pulse() end
+        end
         if not dense or type(k)~="number" or k<1 or k>n or k%1~=0 then
           local key=strings[k]
           if key then put(key) else write(k) end
@@ -243,6 +278,7 @@ function M.encode(root,pulse)
   if fragment_count~=0 then
     chunks[#chunks+1]=table.concat(fragment,"",1,fragment_count)
   end
+  if pulse then pulse() end
   return table.concat(chunks)
 end
 
