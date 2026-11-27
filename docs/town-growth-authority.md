@@ -162,8 +162,12 @@ The stock setting **Allow towns to build level crossings** defaults to
 on; turning it off stops new municipal crossings. The [compiled RC1
 railway branch comparison](../tests/town_crossing_rc1.py) checks 15,848
 cases, and a native worker test verifies that the two owners survive a
-checkpoint and reopen. Incompatible track and protected facilities are
-not demolished to force a crossing.
+checkpoint and reopen. The ordinary pavement removal tool and layer
+confirmation can remove only the public road; the stock local-authority
+rating and extra-dynamite rules apply. A native transaction verifies
+that the rail remains and only the requesting road company pays.
+Incompatible track and protected facilities are not demolished to
+force a crossing.
 
 The supported spans preserve open river
 water below a bridge and surface roads above a bore. Changed cells

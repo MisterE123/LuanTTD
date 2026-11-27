@@ -20,7 +20,7 @@ return function(Sim,Terrain,rules)
     local tile=s.tiles[id]
     if not tile or tile.stock_void then return nil,"NO_ROAD" end
     if not plain(tile) then
-      if rules.special then return rules.special(s,owner,id,tile,wanted,ctx) end
+      if rules.special then return rules.special(s,owner,id,tile,wanted,ctx,journal) end
       return nil,"NOT_PLAIN_ROAD"
     end
     if (tile.roadtype or 0)~=0 or Sim.road_bits(s,id)==0 then return nil,"NO_ROAD" end
@@ -85,7 +85,7 @@ return function(Sim,Terrain,rules)
   function W.surface_plan(s,owner,id)
     local tile,company=s.tiles[id],s.companies[owner]
     if not tile or not company or not s.corner_grid then return nil,"PARAMETERS" end
-    if not plain(tile) then return nil,"NOT_PLAIN_ROAD" end
+    if not plain(tile) and not tile.level_crossing then return nil,"NOT_PLAIN_ROAD" end
     local journal={ratings={},road={}}
     local edit,why=quote_tile(s,owner,id,Sim.road_bits(s,id),rules.context and rules.context(s),journal)
     if not edit then return nil,why end

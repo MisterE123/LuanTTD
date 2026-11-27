@@ -155,13 +155,14 @@ return function(Sim,Terrain,Crossing,Track)
   -- RC1 RemoveRoad, RoadTileType::Crossing: the road's whole axis
   -- goes away even when the drag selects a single half. The separate
   -- rail claim lives in the dispatcher, not the road tile record.
-  function W.surface_remove_quote(s,owner,id,wanted,ctx,tram,piece_price)
+  function W.surface_remove_quote(s,owner,id,wanted,ctx,tram,piece_price,allow_town)
     local a=W.record(s,id)
     if not a or tram and a.tramtype==nil or not tram and a.roadtype==nil then
       return nil,tram and "NO_TRAM" or "NOT_PLAIN_ROAD"
     end
     local type_owner=tram and a.tram_owner or a.road_owner
-    if type_owner~=owner then return nil,"OWNED_BY" end
+    if type_owner~=owner and not (allow_town and not tram and type_owner=="town" and a.town and
+        s.tiles[id].road_town==a.town) then return nil,"OWNED_BY" end
     if a.road_axis~=0 and a.road_axis~=1 or a.rail_axis~=1-a.road_axis then return nil,"INVALID_PARAMETER" end
     local present=tram and a.tram_bits or a.road_bits
     for _,b in ipairs{1,2,4,8} do
@@ -177,8 +178,8 @@ return function(Sim,Terrain,Crossing,Track)
       road_bits=tram and a.road_bits or 0,tram_bits=tram and 0 or a.tram_bits,
       rail_tracks=2^a.rail_axis,railtype=a.railtype,rail_owner=a.rail_owner,cost=2*piece_price}
   end
-  function W.road_remove_quote(s,owner,id,wanted,ctx)
-    return W.surface_remove_quote(s,owner,id,wanted,ctx,false,40)
+  function W.road_remove_quote(s,owner,id,wanted,ctx,allow_town)
+    return W.surface_remove_quote(s,owner,id,wanted,ctx,false,40,allow_town)
   end
   function W.surface_remove_apply(s,edit)
     local id=edit.id
@@ -187,7 +188,10 @@ return function(Sim,Terrain,Crossing,Track)
     assert(edit.rail_tracks)
     if edit.build=="road" then
       if edit.tool=="tram_remove_crossing" then record.tramtype,record.tram_owner,record.tram_bits=nil,nil,0
-      else record.roadtype,record.road_owner,record.road_bits=nil,nil,0 end
+      else
+        record.roadtype,record.road_owner,record.road_bits=nil,nil,0
+        t.road_town=nil
+      end
       t.owner,t.road_bits=record.road_owner or record.tram_owner,record.road_bits
     else
       t.build,t.owner,t.rail_tracks,t.rail_type=edit.build,edit.rail_owner,edit.rail_tracks,edit.railtype

@@ -428,3 +428,33 @@ World.rail_remove_apply(s,removal)
 assert(Sim.road_connected(s,at(6,20),2) and Sim.road_connected(s,town_rail,2))
 assert(not t.level_crossing and t.road_town==1 and not t.owner and t.road_bits==10 and t.build=="road")
 print("PASS municipality adds a public level crossing across company rail, preserves reservation and does not debit")
+
+-- The ordinary demolition layer must not treat a town crossing like
+-- another company's private road, nor let players take the railway.
+local remove_site=rail(7,22,Track.Y)
+assert(Sim.town_road_piece(s,1,at(6,22),10,true) and Sim.town_road_piece(s,1,at(8,22),10,true))
+assert(Sim.town_road_piece(s,1,remove_site,10,true))
+s.sites={{id=1,kind="town",tile=remove_site}}
+local public="Paver"
+local paver=Sim.company(s,public)
+paver.stock_town_authority_ratings={[1]=500}
+s.stock_road_town_policy.extra_dynamite=false
+local denied,reason=Sim.road_remove_surface_plan(s,public,remove_site)
+assert(not denied and reason=="TOWN_REFUSES")
+s.stock_road_town_policy.extra_dynamite=true
+paver.stock_town_authority_ratings[1]=0
+denied,reason=Sim.road_remove_surface_plan(s,public,remove_site)
+assert(not denied and reason=="TOWN_REFUSES")
+paver.stock_town_authority_ratings[1]=500
+s.stock_rail_dispatch.life.bits[remove_site]=2
+local quote=assert(Sim.road_remove_surface_plan(s,public,remove_site))
+local drag=assert(Sim.road_remove_plan(s,public,remove_site,remove_site,0,false,true))
+assert(quote.cost==80 and drag.cost==80 and quote.ratings[1]==450 and drag.ratings[1]==450)
+assert(paver.stock_town_authority_ratings[1]==500 and s.tiles[remove_site].level_crossing)
+local before_paver,before_rail=paver.cash,money.cash
+assert(Sim.apply_road_removal(s,public,quote))
+local restored=s.tiles[remove_site]
+assert(restored.build=="stock_rail" and restored.rail_tracks==2 and restored.owner==owner)
+assert(not restored.level_crossing and not restored.road_town and s.stock_rail_dispatch.life.bits[remove_site]==2)
+assert(paver.cash==before_paver-80 and money.cash==before_rail and paver.stock_town_authority_ratings[1]==450)
+print("PASS removing public pavement at a municipal crossing applies town approval and leaves rail reserved")

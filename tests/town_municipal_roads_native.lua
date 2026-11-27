@@ -49,7 +49,7 @@ else
   if woodhouse then for _,dz in ipairs{-1,1} do s.tiles[S.id(cx,cz+dz)].wood=1 end end
 end
 s.tiles[protected].stock_industry={id=77}
-local rail_cash,road_cash
+local rail_cash,road_cash,paver_cash
 if companyroad then
   local c=S.company(s,"Road Builder")
   road_cash=c.cash
@@ -58,6 +58,7 @@ end
 if crossing then
   local company=S.company(s,"Rail Builder")
   rail_cash=company.cash
+  paver_cash=S.company(s,"Paver").cash
   local t=s.tiles[rail_cell]
   t.build,t.rail_tracks,t.owner,t.rail_type="stock_rail",2,"Rail Builder",0
   -- Prevent another new street from ending the first growth attempt.
@@ -171,10 +172,30 @@ core.register_on_mods_loaded(function()
           end
         end
         assert(found)
-        assert(client.query({kind="stop"},function() error("Unexpected reopen receipt") end))
+        local function stop()
+          assert(client.query({kind="stop"},function() error("Unexpected reopen receipt") end))
+        end
+        if crossing then
+          assert(client.query({kind="company",player="Paver"},function(c)
+            assert(c.ok and c.revision,c.why)
+            assert(client.query({kind="command",player="Paver",command={kind="road_place",revision=c.revision,
+              request={tool="remove",first=rail_cell,last=rail_cell,axis=0,start_half=false,end_half=true}}},function(result)
+              assert(result.ok,result.why)
+              stop()
+            end))
+          end))
+        else stop() end
       end))
     end,function(reason)
       assert(reason=="stopped")
+      if crossing then
+        local reopened=assert(disk.read())
+        local q=reopened.tiles[rail_cell]
+        local company=reopened.companies.Paver
+        assert(q.build=="stock_rail" and q.rail_tracks==2 and q.owner=="Rail Builder" and not q.level_crossing)
+        assert(company.cash==paver_cash-80 and company.stock_town_authority_ratings[1]==482)
+        assert(reopened.companies["Rail Builder"].cash==rail_cash)
+      end
       core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and projected %s tile %d, preserved private clearance, reopened geometry"):format(woodhouse and "house on former woodland at" or companyroad and "new junction on company road at" or mode,newroad))
       core.request_shutdown("Native municipal road proof passed",false,0)
     end,file))

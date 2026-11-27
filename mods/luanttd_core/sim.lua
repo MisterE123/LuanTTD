@@ -427,7 +427,7 @@ local function mount_road_removal()
       town=town_road_authority.quote,
       context=function(state) return auto_oneway.ground_occupancy(state) end,
       occupied=function(_,id,ground) return ground[id]==true end,
-      special=function(state,company,id,tile,wanted,ground)
+      special=function(state,company,id,tile,wanted,ground,journal)
         local part=tile.tram
         if part and part.tram_shelter and part.shared_station==tile.station then
           if tile.owner~=company then return nil,"OWNED_BY" end
@@ -448,11 +448,18 @@ local function mount_road_removal()
         if not c then return nil,"NOT_PLAIN_ROAD" end
         if state.stock_rail_run or (c.survey_clear and not c.survey_clear()) then return nil,"CLEAR_SURVEYED_TRAIN" end
         local W=c.runtime.world
-        return W.road_remove_quote(state,company,id,wanted,{vehicles_at=function(i)
+        local municipal=journal~=nil and tile.road_town~=nil
+        local edit,why=W.road_remove_quote(state,company,id,wanted,{vehicles_at=function(i)
           local a=W.dispatch_parts(state,i)
           if ground[i] then a[#a+1]={type="road",tile=i} end
           return a
-        end})
+        end},municipal)
+        if not edit then return nil,why end
+        if municipal then
+          local allowed,reason=town_road_authority.quote(state,company,id,wanted,journal)
+          if not allowed then return nil,reason or "TOWN_REFUSES" end
+        end
+        return edit
       end,
     })
   end
