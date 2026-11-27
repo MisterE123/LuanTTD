@@ -675,3 +675,22 @@ vehicle pool is live for road and rail; ship/air vehicle allocation,
 simulation-only effects, general cross-mode motion order, some
 facility expiry paths, and accounts in broader networks remain
 separate parity work.
+
+#### Shared stock station phases
+
+The campaign now uses the original ordering from `StateGameLoop`,
+`CallVehicleTicks`, and `CallLandscapeTick`: house production first;
+one loading pass in the common physical BaseStation ID order; then
+vehicle movement, town growth, and trees; then the small station rating
+and staggered acceptance ticks. Road and commercial rail, ship and air
+station adapters share that loading and rating sequence and the same
+simulation RNG. This does not imply that their independent vehicle
+movement controllers are fully interleaved yet.
+
+The [simultaneous station-phase test](../tests/town_growth_rc1_station_phase.lua)
+forces house production, a five-passenger boarding pulse, and rating
+loss onto one tick. It checks that the lower-ID rail platform loads
+before the higher-ID road stop and that both ratings happen after the
+town callback, with the original shared random draw. The full mixed
+year above and native generated-world depot/restart test are also
+unchanged by this ordering fix.

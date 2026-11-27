@@ -107,8 +107,11 @@ return function(Sim,H,Packets,Rating,Mail)
     end
     local random=function() return Rating.random_u32(s) end
     local clock=s.passenger_house_clock
-    local function update_rating(tick)
-      Rating.advance(s,1,mail and mail.step_rating or nil,tick or clock.counter)
+    local function update_rating(tick,only)
+      if only then return Rating.station_tick(s,only,mail and mail.step_rating or nil,tick or clock.counter) end
+      if not (hooks and hooks.commercial_ratings) then
+        Rating.advance(s,1,mail and mail.step_rating or nil,tick or clock.counter)
+      end
     end
     local physical=Sim.W==2^clock.log_x and Sim.H==2^clock.log_y and s.tiles
     local lift_registry=s.stock_town_lifts

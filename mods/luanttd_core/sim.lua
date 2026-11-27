@@ -4465,11 +4465,11 @@ function M.air_paid_motion_events(s)
   if not paid_air_runs[s] then return {} end
   return paid_ferry.take_air_motion(s)
 end
-local function paid_transport_day(s,live)
+local function paid_transport_day(s,live,merge_road)
   local Ship,Rail,Air=paid_ferry_runs[s],paid_rail_runs[s],paid_air_runs[s]
   if not ((Ship or Rail or Air) and paid_ferry.active(s,Ship,Rail,Air)) then return end
   town_passengers.start(s)
-  return paid_ferry.day(s,Ship,Rail,Air,s.passenger_house_clock.counter+1,live)
+  return paid_ferry.day(s,Ship,Rail,Air,s.passenger_house_clock.counter+1,live,merge_road and station_service or nil)
 end
 function M.mount_stock_town_growth(s,world,want_new)
   assert(s.corner_grid and s.road_stock_clock and s.road_stock_house_supply and s.road_stock_loading and s.road_economy,
@@ -5546,7 +5546,8 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if tanker then tanker.after(tick,tanker_ready) end
         if growth and growth.new then growth.world.tick(s,tick,growth_random) end
         if plant_trees then plant_trees(tick) end
-        if finish_rating then finish_rating() end
+        if commercial and commercial.finish_ratings and finish_rating then commercial.finish_ratings(tick,finish_rating)
+        elseif finish_rating then finish_rating() end
         if coal then
           for _,view in ipairs(coal.road_stations) do
             local st=s.stations[view.id]
@@ -5569,6 +5570,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       end,{passenger=commercial and commercial.hooks.passenger,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
         growth=growth and growth.world,traverse=traverse,tick_pulse=tick_pulse,
+        commercial_ratings=commercial and commercial.finish_ratings,
         before_landscape=(month_tick or daily_road or machines or timber and timber.animate) and function(tick)
           if machines then machines.animate(tick) end
           if timber and timber.animate then timber.animate(tick) end
@@ -5627,7 +5629,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
     end,
     economy=function(tick)
       local ready={}
-      local ids=station_service.tick(s,tick)
+      local ids=commercial and commercial.road_departures and commercial.road_departures(tick) or station_service.tick(s,tick)
       for _,id in ipairs(ids) do ready[id]=true end
       if freight then freight_ready=freight.before(tick) end
       if industry_train then industry_ready=industry_train.before(tick) end
@@ -6083,18 +6085,22 @@ function M.daily(s,traverse,tick_pulse,openings)
       return opened and industry or nil
     end
   end
-  local commercial=paid_transport_day(s,live)
+  local commercial=paid_transport_day(s,live,stock_service)
   if stock_service then
     passenger_modules()
     town_passengers.start(s)
     M.bind_stock_industry_ships(s,industry,first,live,false)
     stock_work=stock_station_day(s,road_supply,commercial,industry.coal,industry.freight,industry.timber,industry.freighter,industry.industry_train,industry.tanker,traverse,tick_pulse,month_tick,daily_road)
   elseif commercial then
-    town_passengers.day(s,function(tick)
+    town_passengers.day(s,function(tick,finish_rating)
       local ready,events=commercial.before(tick)
       commercial.after(tick,ready,events)
+      if commercial.finish_ratings and finish_rating then commercial.finish_ratings(tick,finish_rating)
+      elseif finish_rating then finish_rating() end
     end,{passenger=commercial.hooks.passenger,mail=commercial.hooks.mail,
-      landscape_tile=coastal_visit(s),traverse=traverse})
+      landscape_tile=coastal_visit(s),traverse=traverse,
+      growth=commercial.finish_ratings and town_growth_mount[s] and town_growth_mount[s].world,
+      commercial_ratings=commercial.finish_ratings})
   elseif road_supply then
     passenger_modules()
     if s.road_stock_house_supply then

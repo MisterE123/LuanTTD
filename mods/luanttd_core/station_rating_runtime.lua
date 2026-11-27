@@ -190,16 +190,33 @@ return function(Sim,Kernel,Packets)
     return Kernel.modify_around(rows,owner,x,y,-160,30)
   end
 
+  local function big(st)
+    if st.passenger_rating_state then history.big_tick(st.passenger_rating_state) end
+    if st.mail_rating_state then history.big_tick(st.mail_rating_state) end
+    for _,entry in pairs(st.goods or {}) do
+      if type(entry)=="table" then history.big_tick(entry) end
+    end
+  end
+
+  -- station_cmd.cpp OnTick_Station: a single BaseStation's small tick,
+  -- then its staggered big tick. Its caller merges different modes by ID.
+  function R.station_tick(s,st,other_goods,absolute_tick)
+    if st.mode~="road" then return end
+    local phase,events=Kernel.advance_clock(st.passenger_rating_phase or 0,1)
+    st.passenger_rating_phase=phase
+    if events>0 then
+      tick(s,st)
+      if other_goods then other_goods(s,st) end
+    end
+    if (absolute_tick+(st.stock_station_id or st.id-1))%250==0 then big(st) end
+  end
+
   function R.advance(s,ticks,other_goods,absolute_tick)
     local events={}
     for _,st in pairs(s.stations) do
       if st.mode=="road" then
         if absolute_tick and (absolute_tick+(st.stock_station_id or st.id-1))%250==0 then
-          if st.passenger_rating_state then history.big_tick(st.passenger_rating_state) end
-          if st.mail_rating_state then history.big_tick(st.mail_rating_state) end
-          for _,entry in pairs(st.goods or {}) do
-            if type(entry)=="table" then history.big_tick(entry) end
-          end
+          big(st)
         end
         local phase=st.passenger_rating_phase or 0
         -- Generate and merge each station's events in chronological order.
@@ -211,7 +228,7 @@ return function(Sim,Kernel,Packets)
       end
     end
     table.sort(events,function(a,b)
-      if a.when==b.when then return a.st.id<b.st.id end
+      if a.when==b.when then return (a.st.stock_station_id or a.st.id)<(b.st.stock_station_id or b.st.id) end
       return a.when<b.when
     end)
     for _,event in ipairs(events) do

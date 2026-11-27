@@ -327,7 +327,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     return a
   end
 
-  function F.day(s,Ship,Rail,Air,first_tick,live)
+  function F.day(s,Ship,Rail,Air,first_tick,live,road_service)
     local c=commercial(s)
     local service=c.service
     local post,post_run,post_id,post_craft
@@ -336,6 +336,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     if post then Dry.mail_charge(s,post_craft) end
     if active.rail and Rail.paid_art_ready and not Rail.paid_art_ready(s) then active.rail=false end
     local ctx=context(s,active)
+    ctx.stock_late_rating=s.stock_generated_profile and s.road_stock_clock and s.stock_town_growth and s.road_stock_loading
+    if ctx.stock_late_rating and MailRandom then ctx.random_u32=function() return MailRandom(s) end end
     if s.stock_bus_market then
       local new_date=s.stock_bus_market.epoch+s.day
       ctx.stock_date=function(tick) return new_date-(tick<first_tick+73 and 1 or 0) end
@@ -442,6 +444,53 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       -- All services may have been suspended. Rebase their shared clock
       -- without aging or moving paused vehicles behind the player's back.
       service.tick,service.post_tick=first_tick-1,first_tick-1
+    end
+    local landscape_ratings,road_departures
+    if ctx.stock_late_rating then
+      local topology,sorted
+      local function each_station(road,commercial)
+        if not sorted or topology~=s.topology then
+          topology,sorted=s.topology,{}
+          for _,st in pairs(s.stations) do
+            if st.mode=="road" then sorted[#sorted+1]={id=st.stock_station_id or st.id-1,road=true,st=st} end
+          end
+          for _,st in pairs(service.stations) do
+            if ctx.station_active(st) then sorted[#sorted+1]={id=st.tick_index or st.id,st=st} end
+          end
+          table.sort(sorted,function(a,b)
+            if a.id~=b.id then return a.id<b.id end
+            -- Physical IDs never tie in the live stock pool. Keep old
+            -- synthetic inputs deterministic if they reuse mode-local IDs.
+            if a.road~=b.road then return a.road==true end
+            return a.st.id<b.st.id
+          end)
+        end
+        for _,row in ipairs(sorted) do
+          local st=row.st
+          if row.road then
+            if s.stations[st.id]==st then road(st) end
+          elseif service.stations[st.id]==st then commercial(st) end
+        end
+      end
+      -- RC1 CallVehicleTicks loads each station once before the
+      -- vehicle pool moves. CallLandscapeTick runs ratings only after
+      -- both vehicle movement and the town/trees callbacks.
+      if road_service then
+        local ready_tick,ready
+        ctx.loading_sweep=function(tick,visit)
+          local road,departed=assert(road_service.open_tick(s,tick))
+          each_station(road,visit)
+          ready_tick,ready=tick,departed
+        end
+        road_departures=function(tick)
+          assert(ready_tick==tick,"Cross-mode loading scan did not open this tick")
+          return ready
+        end
+      end
+      landscape_ratings=function(tick,road_step)
+        each_station(function(st) road_step(tick,st) end,
+          function(st) Service.landscape_rating(service,st,tick,ctx) end)
+      end
     end
     local function before(tick)
       if run then
@@ -565,7 +614,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         frame.ship_serial=run
       end
     end
-    return {before=before,after=after,hooks=hooks,offer_rig_passengers=function(ind,amount)
+    return {before=before,after=after,hooks=hooks,finish_ratings=landscape_ratings,
+      road_departures=road_departures,offer_rig_passengers=function(ind,amount)
       return Service.offer_industry_passengers(service,ind,amount,ctx)
     end}
   end

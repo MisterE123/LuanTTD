@@ -353,6 +353,13 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     end
   end
 
+  function S.landscape_rating(state,st,tick,ctx)
+    assert(state.post_tick==tick,"Station rating must follow this tick's vehicle sweep")
+    if st.last_stock_rating==tick then return end
+    st.last_stock_rating=tick
+    rating_tick(state,st,tick,ctx)
+  end
+
   local function emit(events,kind,st,v,tick,values)
     local e={kind=kind,station=st.id,vehicle=v.id,mode=v.mode,visit=v.visit,tick=tick,tile=v.cargo_tile,
       part=v.part,body_id=v.body_id,role=v.role,cargo=v.cargo or "passenger"}
@@ -535,10 +542,10 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     return max(1,n)
   end
 
-  -- Order: station ratings -> host tile/house production -> loading scans.
-  -- Move vehicle controllers in ID order after this, calling leave/begin
-  -- as appropriate, then post_motion_tick. Tick must be the absolute
-  -- stock clock, not render frames, 74-tick days, or pilot elapsed time.
+  -- Stock ordering is tile/house production, a loading scan in
+  -- BaseStation ID order, then controllers; landscape_rating follows
+  -- town work. A legacy stand-alone caller can still supply its own
+  -- station phase. The clock is absolute, never a render frame.
   function S.pre_motion_tick(state,tick,ctx)
     if state.tick==tick then return {},{} end
     if state.tick then
@@ -546,19 +553,23 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     end
     state.tick=tick
     local departures,events={},{}
-    local ids=keys(state.stations)
-    table.sort(ids,function(a,b)
-      local l,r=state.stations[a].tick_index or a,state.stations[b].tick_index or b
-      return l==r and a<b or l<r
-    end)
-    for _,id in ipairs(ids) do
-      local st=state.stations[id]
-      if not ctx.station_active or ctx.station_active(st) then rating_tick(state,st,tick,ctx) end
+    local ids
+    if not ctx.stock_late_rating or not ctx.loading_sweep then
+      ids=keys(state.stations)
+      table.sort(ids,function(a,b)
+        local l,r=state.stations[a].tick_index or a,state.stations[b].tick_index or b
+        return l==r and a<b or l<r
+      end)
+    end
+    if not ctx.stock_late_rating then
+      for _,id in ipairs(ids) do
+        local st=state.stations[id]
+        if not ctx.station_active or ctx.station_active(st) then rating_tick(state,st,tick,ctx) end
+      end
     end
     if ctx.production then ctx.production(state,tick) end
     local ops=options(state,tick,ctx,events)
-    for _,id in ipairs(ids) do
-      local st=state.stations[id]
+    local function visit(st)
       if #st.loading_order>0 and (not ctx.station_active or ctx.station_active(st)) then
         assert(not active_pulses,"Station service cannot reenter an active station tick")
         active_pulses={}
@@ -580,6 +591,8 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
         end
       end
     end
+    if ctx.loading_sweep then ctx.loading_sweep(tick,visit)
+    else for _,id in ipairs(ids) do visit(state.stations[id]) end end
     table.sort(departures)
     return departures,events
   end

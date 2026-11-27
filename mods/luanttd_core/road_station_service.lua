@@ -382,26 +382,22 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     return l
   end
 
-  -- Call after rating and house production, before movement. Return road
-  -- departure candidates in stock vehicle-ID order; actual exit belongs
-  -- to the movement adapter. Skipped whole ticks are programmer errors.
-  function M.tick(s,tick)
+  -- Opens one CallVehicleTicks loading scan. A shared station visitor can
+  -- interleave road and other modes by original BaseStation ID.
+  function M.open_tick(s,tick)
     if s.stock_load_tick then
-      if tick==s.stock_load_tick then return {},{} end
+      if tick==s.stock_load_tick then return end
       assert(tick==s.stock_load_tick+1,"Stock loading clock skipped or reversed a tick")
     end
     s.stock_load_tick=tick
-    local ids,departures,rounds={},{},{}
-    for id,st in pairs(s.stations) do
-      if st.loading_order and #st.loading_order>0 then ids[#ids+1]=id end
-    end
-    table.sort(ids)
+    local departures,rounds={},{}
     local api=opts(s,tick)
     local parked_tram=s.tram_pilot and s.tram_pilot.carrier
     local carriers=(parked_tram or s.stock_tram_fleet and next(s.stock_tram_fleet)) and
       setmetatable({},{__index=function(_,id)return loading_vehicle(s,id)end}) or s.fleet
-    for _,sid in ipairs(ids) do
-      local st=s.stations[sid]
+    local function station(st)
+      if not st.loading_order or #st.loading_order==0 then return end
+      local sid=st.id
       local aliases={}
       for _,id in ipairs(st.loading_order) do
         local v=assert(carriers[id],"Missing vehicle in saved loading order")
@@ -429,6 +425,17 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         else v.status=loading_name(v.cargo) end
       end
     end
+    return station,departures,rounds
+  end
+  function M.tick(s,tick)
+    local visit,departures,rounds=M.open_tick(s,tick)
+    if not visit then return {},{} end
+    local rows={}
+    for _,st in pairs(s.stations) do
+      if st.loading_order and #st.loading_order>0 then rows[#rows+1]=st end
+    end
+    table.sort(rows,function(a,b) return (a.stock_station_id or a.id)<(b.stock_station_id or b.id) end)
+    for _,st in ipairs(rows) do visit(st) end
     table.sort(departures)
     return departures,rounds
   end
