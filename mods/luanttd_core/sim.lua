@@ -5044,7 +5044,7 @@ local function launch(s,v,route,dest,index,arrival_td,route_cost,frames,bays)
   v.road_motion_frames=frames;v.road_stop_pose=nil;v.road_speed_state=nil;v.stock_loading_complete=nil
   if depart and frames then
     v.road_speed_state={index=1,heading=frames[1][3],speed=0,subspeed=depart.subspeed,
-      progress=depart.progress,incline=depart.incline,ticks=depart.ticks}
+      progress=depart.progress,incline=depart.incline,ticks=depart.ticks,depot_wait=depart.depot}
   end
   v.road_leg_td=arrival_td;v.road_route_cost=route_cost
   v.road_bay_branch=bays
@@ -5320,10 +5320,13 @@ local function automatic_road_service(s,faults,v,f,difficulty,date,random)
   local c=v.road_speed_state
   local frame=c and M.road_motion_frame(s,v)
   local tile=v.depot or frame and frame[4]
-  local at_depot=v.depot and depot_endpoint(s,v.owner,v.depot)
+  -- FindClosestRoadDepot can return zero cost before the vehicle
+  -- is hidden: being on the physical depot tile is already enough.
+  local depot_on_tile=tile and depot_endpoint(s,v.owner,tile)
+  local parked_in_depot=v.depot~=nil
   local plain=frame and s.tiles[tile].build=="road" and not c.depot_wait and not c.lane_pose and
     not frame[10] and not frame[12] and not frame[13] and not frame[14] and not s.tiles[tile].level_crossing
-  if not at_depot and not plain then return end
+  if not depot_on_tile and not plain then return end
   local order=v.load_state and {kind="loading"} or v.road_auto_service and v.road_auto_service.order
     or {kind="goto_station"}
   local routing
@@ -5335,8 +5338,8 @@ local function automatic_road_service(s,faults,v,f,difficulty,date,random)
   local plan=cfg.kernel.plan(f,{engine_reliability=engine.reliability,interval=cfg.interval,
     percent=cfg.percent,economy_date=date,company_service_interval=cfg.interval,
     stopped=not v.running,crashed=v.crashed,difficulty=difficulty,current_order=order,
-    cur_speed=c and c.speed or 0,tile_is_road_depot=not not at_depot,depot_state=not not at_depot,
-    tile=tile,depot=at_depot and at_depot.tile,dest_tile=old and old.depot or
+    cur_speed=c and c.speed or 0,tile_is_road_depot=not not depot_on_tile,depot_state=parked_in_depot,
+    tile=tile,depot=depot_on_tile and depot_on_tile.tile,dest_tile=old and old.depot or
       v.dest and s.stations[v.dest] and s.stations[v.dest].tile,orders=v.orders},
     {random32=random,nearest=function()
       local path,nearest,td,cost,frames=query()
@@ -5650,6 +5653,12 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         local depot=assert(depot_endpoint(s,v.owner,v.road_return_depot),"Ordered road depot changed during its protected approach")
         assert(frame[4]==depot.tile and frame[15]==road_routing().motion.DEPOT_STOP)
         v.depot,v.last_depot_entry_tick=depot.tile,tick
+        if stop_motion then
+          -- RoadVehLeaveDepot consumes a tick while unhiding and
+          -- sets only cur_speed: it keeps the sub-speed and progress.
+          v.road_stop_motion={subspeed=stop_motion.subspeed,progress=stop_motion.progress,
+            incline=0,ticks=stop_motion.ticks,depot=true}
+        end
         v.road_return_depot,v.road_stop_pose,v.road_speed_state,v.road_motion_frames=nil,nil,nil,nil
         v.road_bay_branch,v.road_leg_td,v.road_arrival_td,v.route,v.dest,v.dest_index=nil,nil,nil,nil,nil,nil
         local auto=v.road_auto_service

@@ -509,7 +509,7 @@ uses **one stock RC1 executable run**, not separate paused games. A
 normal 64×64 Temperate town has two drive-through stations served by an
 MPS Regal. Each numeric observation is taken after a complete tick.
 Starting with its actual January state and loan, the normal LuanTTD
-runtime matches twelve full checkpoints through December 1: both RNG words,
+runtime matches thirteen full checkpoints through the following January 1: both RNG words,
 every recorded town house and road, the common height grid, growth and
 rebuild countdowns, town ratings and cargo effects, both station
 clocks and ratings, house Passenger and Mail generation/collection,
@@ -542,9 +542,24 @@ checkpoint, eight passengers have already unloaded but their fare has not
 yet been paid. RC1 credits the town and company delivery counters during
 unloading, then records cash when loading ends. The LuanTTD runtime now
 does the same, including when the game is reopened before cash settlement.
-The January physical town, roads, terrain, effective house ages and growth
-clocks still match, but late-December road motion changes shared random
-draws and cargo totals; January is not counted as a full match.
+The second automatic service exposed a smaller ordering bug:
+`FindClosestRoadDepot` returns a zero-cost target as soon as the bus is
+physically on the depot tile, even while approaching frame 11. The stock
+automatic-depot recheck consumes its usual `Chance16(1, 20)` draw here;
+the host had skipped that branch until the bus was parked. Reversal
+inclination now also follows the underlying straight track, not the
+vehicle's turning state. Stock depot entry is the attempted movement
+from frame 11, and departure retains the progress and subspeed that
+were already earned before the depot hid the vehicle.
+
+The resulting one-year stock run matches all 26,936 logical ticks of
+both shared RNG words, bus poses (including both hidden service ticks),
+and the two waiting queues including 8-bit fractional carry. Thirteen
+full town and accounting checkpoints match, including the same 11th
+house, its year-boundary age, and 252 passengers delivered. The test
+checks the source observations in segments so a future divergence can
+be located within its month. This does not yet certify multiple vehicles,
+other modes, other climates or identical new-world generation.
 
 New generated worlds now take the active engine-design draw from the
 shared post-forest stream before settling the map. The disabled-disaster
