@@ -75,7 +75,47 @@ print("PASS: source YAPF on LuanTTD tiles with depot, actual bay, through stop a
 local Motion=dofile(root.."openttd/road_motion.lua")(dofile(root.."openttd/road_motion_data.lua"))
 local Leg=dofile(root.."road_motion_leg.lua")
 local Presentation=dofile(root.."road_motion_presentation.lua")(dofile(root.."road_lanes.lua"))
+-- Compiling every pixel still reads each chosen physical part once.
+-- A changed board must be sampled fresh, never inherit route descriptors.
+local descriptor_reads=0
+local describe=B.tile
+function B.tile(id) descriptor_reads=descriptor_reads+1;return describe(id) end
 local frames=assert(Leg(Motion,F,B).compile(course))
+assert(descriptor_reads==#course)
+B.tile=describe
+-- Optionally pass the previous road_motion_leg.lua to benchmark exactly
+-- the same selected detour and two bay ends in a local LuaJIT.
+local baseline=arg and arg[1]
+if baseline then
+  local file=assert(io.open(baseline,"rb"))
+  local old=assert(loadstring(file:read("*a"),"@"..root.."road_motion_leg.lua"))()
+  file:close()
+  local runs=16384
+  local function bench(compile)
+    local reads=0
+    local probe=setmetatable({tile=function(id) reads=reads+1;return B.tile(id) end},{__index=B})
+    local motion=compile(Motion,F,probe)
+    local results={}
+    collectgarbage("collect")
+    local now=os.clock()
+    for i=1,runs do
+      local bay=i%2
+      results[bay]=assert(motion.compile(course,nil,{arrival_bay=bay}))
+    end
+    return os.clock()-now,reads,results
+  end
+  for batch=1,4 do
+    local at,ar,af,bt,br,bf
+    if batch%2==0 then bt,br,bf=bench(Leg);at,ar,af=bench(old)
+    else at,ar,af=bench(old);bt,br,bf=bench(Leg) end
+    for bay=0,1 do
+      assert(#af[bay]==#bf[bay])
+      for i,a in ipairs(af[bay]) do for j=1,16 do assert(a[j]==bf[bay][i][j]) end end
+    end
+    assert(br<ar and br==runs*#course)
+    print(("MOTION COMPILE %d CPU=%.3f/%.3f s reads=%d/%d"):format(batch,at,bt,ar,br))
+  end
+end
 local target_tile=at(6,0)
 assert(frames[1][4]==at(0,0) and frames[#frames][4]==target_tile)
 local rotates=0

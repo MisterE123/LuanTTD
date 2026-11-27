@@ -904,3 +904,26 @@ tests/road_yapf_keys_perf_native.sh luantiserver db7b715 ../road-yapf-cached-geo
 lua5.1 tests/yapf_road_follow.lua
 lua5.1 tests/road_yapf_board.lua
 ```
+
+
+## Read each selected trace part once during motion compilation
+
+When stock YAPF has selected a route, the motion compiler follows every
+stock table step, including turns, paired-portal travel and bay entry.
+Tile descriptors are stable during one synchronous compile. Retain one
+per chosen trace part, rather than asking the road board twice at each
+pixel or rotation. Discard the descriptors after compiling. The route
+search, saved frame sequence and later traffic decisions are unchanged.
+
+On a nine-part route with a detour and a two-bay end, four alternating
+LuaJIT runs of 16,384 compiles reduced tile descriptor reads from
+4,587,520 to 147,456 and median CPU from about 387 to 314 ms.
+The actual campaign replay compared full saved state over 36 days with
+all four service modes active. This is a route-compilation benchmark,
+not a general frame-rate gain.
+
+Run the differential with:
+```sh
+git show da7825b:mods/luanttd_core/road_motion_leg.lua > /tmp/before-road-motion.lua
+luajit tests/road_yapf_board.lua /tmp/before-road-motion.lua
+```

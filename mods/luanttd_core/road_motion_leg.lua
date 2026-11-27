@@ -79,17 +79,21 @@ return function(Motion,F,board)
       if tmp.frame~=frame then return end
       v.direction=tmp.direction
     end
-    local frames,part={},1
+    -- The chosen leg and read-only board do not change during this
+    -- synchronous compile. One descriptor per trace part is enough;
+    -- movement still follows and emits every OpenTTD position frame.
+    local frames,part,parts={},1,{tile}
     local extra=0
-    for _,piece in ipairs(trace) do
-      local t=board.tile(piece.tile)
+    for i,piece in ipairs(trace) do
+      local t=i==1 and tile or board.tile(piece.tile)
       if not t then return end
+      parts[i]=t
       if t.kind=="bridge" or t.kind=="tunnel" then extra=extra+16*t.skip end
     end
     local physical_tile
     local function append(check_x,check_y,entered)
       local p=trace[part]
-      local tile=board.tile(p.tile)
+      local tile=parts[part]
       local bridge=tile.kind=="bridge" and tile or nil
       local wormhole=v.state==Bridge.WORMHOLE
       frames[#frames+1]={v.x,v.y,v.direction,physical_tile or p.tile,projection(p.td,v.state,v.frame),
@@ -99,12 +103,12 @@ return function(Motion,F,board)
     end
     append()
     for _=1,#trace*96+extra do
-      local part_tile=board.tile(trace[part].tile)
-      local final_station=v.frame==stop_frame(part_tile,v.state)
-      local depot_entry=options.depot and part_tile.kind=="depot" and
-        v.state==F.direction_trackdir(F.reverse_direction(part_tile.dir)) and v.frame==Motion.DEPOT_STOP
-      if part==#trace and (final_station or depot_entry) then
-        return frames
+      local part_tile=parts[part]
+      if part==#trace then
+        local final_station=v.frame==stop_frame(part_tile,v.state)
+        local depot_entry=options.depot and part_tile.kind=="depot" and
+          v.state==F.direction_trackdir(F.reverse_direction(part_tile.dir)) and v.frame==Motion.DEPOT_STOP
+        if final_station or depot_entry then return frames end
       end
       local check_x,check_y,entered
       local outgoing=trace[part+1]
@@ -168,7 +172,7 @@ return function(Motion,F,board)
           else
             target=k=="turned" and here or board.adjacent(here,px)
             if target~=next_piece.tile then return end
-            next_state=station_state(board.tile(target),next_piece.td,
+            next_state=station_state(parts[part+1],next_piece.td,
               part+1==#trace and options.arrival_bay or nil)
             start=k=="turned" and Motion.TURN_AROUND_START or Motion.DEFAULT_START
           end
