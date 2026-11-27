@@ -169,3 +169,30 @@ same amounts after a server restart.
 ```sh
 tests/industry_tick_perf_native.sh luantiserver 8b2f154 /tmp/industry-counter --ordinary
 ```
+
+### Reuse stock industry footprint indexes between day bindings
+
+The combined stock freight worker used to rebuild the physical tile
+index for every firm each day, although original industry layouts
+do not move. Keep that index in the live worker, not in the save.
+Rebind when map size, industry identity, footprint table/size, or
+removed status changes. Production, artwork animation, catchment
+and station state still read their current records. Opening a new
+firm or a retired firm's replacement sees the new footprint immediately
+on the next binding.
+
+Four alternating LuaJIT benchmarks with 768 stock industries and
+128 truck stops measured a median of about 478 → 137 ms for 160 daily
+bindings. Acceptance and every indexed physical parcel were equal,
+including after closure and replacement. An active 1024×1024 replay
+matched all final saved values and shared references; it did not
+establish a whole-day speedup. Native oil and rail-farm deliveries
+also matched across save and restart.
+
+```sh
+mkdir -p /tmp/old-industry-bind
+for f in combined_industry_runtime timber_industry_runtime; do
+  git show 1cb2b7a:mods/luanttd_core/$f.lua > /tmp/old-industry-bind/$f.lua
+done
+luajit tests/industry_physical_binding.lua /tmp/old-industry-bind
+```

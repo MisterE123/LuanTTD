@@ -47,6 +47,7 @@ return function(Timber,Farm,Oil,Fields,Runtime,Catchment)
   end
 
   local M={}
+  local footprints=setmetatable({},{__mode="k"})
   function M.new() return Runtime(K,Catchment).new() end
   function M.bind(s,ledger,ctx)
     -- These three stock kernels share ProduceIndustryGoods's 16-bit
@@ -72,7 +73,11 @@ return function(Timber,Farm,Oil,Fields,Runtime,Catchment)
       if policy then for k,v in pairs(policy) do opts[k]=v end end
       return assert(by_kind[i.kind]).month(i,year,opts)
     end
-    return Runtime(A,Catchment).bind(s,ledger,ctx)
+    -- Built-in footprint coordinates never move within a firm. Reuse
+    -- across day bindings only; stock placement/removal may replace it.
+    local cache=footprints[s]
+    if not cache then cache={};footprints[s]=cache end
+    return Runtime(A,Catchment).bind(s,ledger,ctx,cache)
   end
   return K,M
 end

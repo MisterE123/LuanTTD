@@ -20,23 +20,44 @@ return function(Rules,Catchment)
     return {version=R.VERSION,stations={},production={},months={},visited={}}
   end
 
-  function R.bind(world,ledger,ctx)
+  function R.bind(world,ledger,ctx,footprint)
     assert(ledger.version==R.VERSION,"Unsupported timber industry save")
     assert(uint(ctx.width) and ctx.width>0 and uint(ctx.height) and ctx.height>0)
     assert(ctx.stations and ctx.industries and ctx.xy)
     local width,height=ctx.width,ctx.height
-    local industries,by_id,tiles,stations,covers={},{},{},{},{}
-    for _,i in ipairs(Rules.ordered(ctx.industries)) do
-      assert(not by_id[i.id],"Duplicate timber industry ID")
-      by_id[i.id]=i
-      industries[#industries+1]=i
-      for _,p in ipairs(i.tiles) do
-        if not i.removed then
-          assert(p.x>=0 and p.z>=0 and p.x<width and p.z<height)
-          local key=p.z*width+p.x
-          assert(not tiles[key],"Overlapping stock timber industry footprint")
-          tiles[key]={ind=i,tile=p}
+    local ordered=Rules.ordered(ctx.industries)
+    local industries,by_id,tiles
+    local stations,covers={},{}
+    local same=footprint and footprint.width==width and footprint.height==height
+      and footprint.entries and #ordered==#footprint.entries
+    if same then
+      for j,i in ipairs(ordered) do
+        local q=footprint.entries[j]
+        if i~=q[1] or i.tiles~=q[2] or (not not i.removed)~=q[3] or #i.tiles~=q[4] then same=false;break end
+      end
+    end
+    if same then
+      industries,by_id,tiles=footprint.industries,footprint.by_id,footprint.tiles
+    else
+      industries,by_id,tiles={},{},{}
+      local entries=footprint and {}
+      for j,i in ipairs(ordered) do
+        assert(not by_id[i.id],"Duplicate timber industry ID")
+        by_id[i.id]=i
+        industries[#industries+1]=i
+        if entries then entries[j]={i,i.tiles,not not i.removed,#i.tiles} end
+        for _,p in ipairs(i.tiles) do
+          if not i.removed then
+            assert(p.x>=0 and p.z>=0 and p.x<width and p.z<height)
+            local key=p.z*width+p.x
+            assert(not tiles[key],"Overlapping stock timber industry footprint")
+            tiles[key]={ind=i,tile=p}
+          end
         end
+      end
+      if footprint then
+        footprint.width,footprint.height=width,height
+        footprint.entries,footprint.industries,footprint.by_id,footprint.tiles=entries,industries,by_id,tiles
       end
     end
     for _,st in ipairs(ctx.stations) do
