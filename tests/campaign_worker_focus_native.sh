@@ -149,6 +149,13 @@ open() {
   xdotool windowfocus --sync "$window"
   await_log 'FOCUS_NATIVE_POSITION'
 }
+# The Lua poller must never observe the empty interval between opening a
+# pathname for write and printing its command.
+focus_step() {
+  local path="$out/world/native-focus-step"
+  printf '%s\n' "$1" > "${path}.next"
+  mv -f -- "${path}.next" "$path"
+}
 open first
 if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
   buy_streetcar() {
@@ -159,8 +166,7 @@ if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
     sleep .55
     xdotool mousedown 1; sleep .32; xdotool mouseup 1
     for stage in first second; do
-      printf '%s
-' "$stage-$run" > "$out/world/native-focus-step"
+      focus_step "$stage-$run"
       await_log "TRAM_PAID_NATIVE_STAGE $stage-$run"
       sleep .6
       xdotool mousedown 1; sleep .32; xdotool mouseup 1
@@ -175,25 +181,24 @@ if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
   }
   if [[ ${LUANTTD_NATIVE_TRAM_ROAD_ACCESS:-0} == 1 ]]; then
     stop=first
-    printf 'pave-%s\n' "$stop" > "$out/world/native-focus-step"
+    focus_step "pave-$stop"
     await_log "TRAM_ROAD_NATIVE_SLOT $stop "
     slot=$(sed -n "s/.*TRAM_ROAD_NATIVE_SLOT $stop //p" "$log" | tail -1)
     xdotool mousemove 590 380 key "$slot"; sleep .6
     xdotool mousedown 1; sleep .38; xdotool mouseup 1
-    printf 'check-%s\n' "$stop" > "$out/world/native-focus-step"
+    focus_step "check-$stop"
     await_log "TRAM_ROAD_NATIVE_PAVED $stop"
     import -window root -resize 840x541 "$out/paved-platform-$stop.jpg"
-    printf '%s\n' inspect-direct > "$out/world/native-focus-step"
+    focus_step inspect-direct
     await_log TRAM_ROAD_NATIVE_DIRECT
     sleep .45
     import -window root -resize 840x541 "$out/platform-on-existing-pavement.jpg"
-    printf '%s\n' ready-to-buy > "$out/world/native-focus-step"
+    focus_step ready-to-buy
     await_log TRAM_PAID_NATIVE_SLOT
   fi
   buy_streetcar 1
   if [[ ${LUANTTD_NATIVE_TRAM_FLEET:-0} == 1 ]]; then
-    printf '%s
-' depot-2 > "$out/world/native-focus-step"
+    focus_step depot-2
     await_log 'TRAM_PAID_NATIVE_STAGE depot-2'
     buy_streetcar 2
   fi
@@ -237,7 +242,7 @@ if [[ ${LUANTTD_NATIVE_TRAM_PAID:-0} == 1 ]]; then
   echo "PASS: real native Streetcar Orders, paid modal, stock fare, and reopen: $out"
   exit
 fi
-printf '%s\n' initial > "$out/world/native-focus-step"
+focus_step initial
 await_log 'FOCUS_NATIVE_RECEIPT initial'
 import -window root "$out/before.png"
 xmessage -title FocusSink -geometry 300x125+780+550 "Native test: window outside Luanti." >"$out/xmessage.log" 2>&1 &
@@ -250,7 +255,7 @@ xdotool windowfocus --sync "$window"
 # engine; there is no LuanTTD restart or recovery menu to dismiss.
 xdotool key Escape
 sleep 1.3
-printf '%s\n' focus-return > "$out/world/native-focus-step"
+focus_step focus-return
 await_log 'FOCUS_NATIVE_RECEIPT focus-return'
 xdotool keydown d; sleep 1.1; xdotool keyup d
 sleep 1
@@ -260,7 +265,7 @@ kill "$sink" 2>/dev/null || true
 sink=
 if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
   do_road() {
-    printf '%s\n' "road-$1" > "$out/world/native-focus-step"
+    focus_step "road-$1"
     await_log "NATIVE_ROAD_GESTURE_$2"
   }
   do_road x-start X
@@ -447,13 +452,13 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
   fi
 fi
 if [[ ${LUANTTD_NATIVE_REJOIN:-0} == 1 ]]; then
-  printf '%s\n' set-rejoin > "$out/world/native-focus-step"
+  focus_step set-rejoin
   await_log 'FOCUS_NATIVE_REJOIN_SET'
 fi
 native_stop_children "$client"
 client=
 open reopened
-printf '%s\n' reopen > "$out/world/native-focus-step"
+focus_step reopen
 await_log 'FOCUS_NATIVE_RECEIPT reopen'
 if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
   do_road reopen REOPEN_PASS
@@ -461,7 +466,7 @@ if [[ ${LUANTTD_NATIVE_ROAD_GESTURES:-0} == 1 ]]; then
 fi
 if [[ ${LUANTTD_NATIVE_REJOIN:-0} == 1 ]]; then
   sleep .6
-  printf '%s\n' check-rejoin > "$out/world/native-focus-step"
+  focus_step check-rejoin
   await_log 'FOCUS_NATIVE_REJOIN_PASS'
   grep 'FOCUS_NATIVE_REJOIN_PASS' "$log"
 fi
