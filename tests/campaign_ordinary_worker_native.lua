@@ -401,9 +401,15 @@ local function transfer_ordinary(viewer)
     end
     core.after(.65,function()
       ask({kind="company"},function(first)
-        assert(first.ok and first.day>expected.day and first.tick==tick_offset+first.day*74 and first.value.cash==expected.cash,("Initial settled company: ok=%s day=%s base=%s tick=%s cash=%s basecash=%s")
+        -- Finance observes the live owner, including a partial stock day.
+        -- Unlike a paid edit it must not finish the day just to read it.
+        assert(first.ok,first.why)
+        local day_end=tick_offset+first.day*74
+        assert(first.day>expected.day and first.tick>day_end-74 and
+          first.tick<=day_end and first.value.cash==expected.cash,
+          ("Initial live company: ok=%s day=%s base=%s tick=%s (day ends %s) cash=%s basecash=%s")
           :format(tostring(first.ok),tostring(first.day),tostring(expected.day),tostring(first.tick),
-            tostring(first.value and first.value.cash),tostring(expected.cash)))
+            tostring(day_end),tostring(first.value and first.value.cash),tostring(expected.cash)))
         ui.install_worker_controls(authority_test)
         local builder=viewer or {get_player_name=function() return owner end}
         api.on_worker_build=function(name,tiles,quote)
