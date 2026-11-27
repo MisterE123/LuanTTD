@@ -30,35 +30,47 @@ print("PASS: directional shore outlet, tributary, calm pools, uphill protection 
 S.corner_grid={revision=0}
 S.topology=0
 local scan=M.routes
-local scans=0
-M.routes=function(...) scans=scans+1;return scan(...) end
+local adjacent=Sim.adjacent
+local checks=0
+Sim.adjacent=function(...) checks=checks+1;return adjacent(...) end
 local C=M.cached()
 local out=id(7,4)
-local function check()
+local function check(visits)
   local expected=scan(S)
+  checks=0
   for tile in ipairs(S.tiles) do assert(C.at(S,tile)==expected[tile],tile) end
+  if visits~=nil then assert((checks>0)==visits,"Unexpected river component refresh") end
 end
-check()
-assert(scans==1 and C.at(S,out)=="east")
-local function tide(x,z,place)
+-- Querying only the disconnected outlet must not discover the upstream
+-- component or the inland basin, even on a newly invalidated topology.
+checks=0
+assert(C.at(S,out)=="east" and checks<=16)
+check(true)
+local steady=checks
+assert(steady>0 and C.at(S,out)=="east" and checks==steady)
+local function tide(x,z,place,visits)
   local old=S.topology
   local tile=id(x,z)
   S.tiles[tile]=place
   S.changed[#S.changed+1]=tile
   S.topology=old+1
   C.after_plain_flood(S,old,#S.changed)
-  check()
+  check(visits)
 end
 S.changed={id(8,4)} -- older dirty parcels are not part of this tide
-tide(8,7,{terrain="water",water_class="sea",h=0})
-assert(scans==1 and C.at(S,out)=="east")
-tide(7,3,{terrain="water",water_class="sea",h=0})
-assert(scans==2 and C.at(S,out)=="north")
+tide(8,7,{terrain="water",water_class="sea",h=0},false)
+assert(C.at(S,out)=="east")
+tide(7,3,{terrain="water",water_class="sea",h=0},true)
+assert(C.at(S,out)=="north")
 S.topology=S.topology+1 -- interleaved non-tide edit
 S.tiles[id(7,3)]={terrain="grass",h=0}
-tide(7,7,{terrain="water",water_class="sea",h=0})
-assert(scans==3 and C.at(S,out)=="east")
+tide(7,7,{terrain="water",water_class="sea",h=0},true)
+assert(C.at(S,out)=="east")
 S.corner_grid.revision=S.corner_grid.revision+1
-check()
-assert(scans==4)
+check(true)
 print("PASS: distant tides reuse directions; outlet changes, skipped revisions, and shared corner edits rebuild")
+S.tiles[id(6,4)]={terrain="water",water_class="river",h=0}
+S.topology=S.topology+1
+check(true)
+assert(C.at(S,id(5,4))=="east" and C.at(S,id(6,4))=="east",
+  "A restored river tile must join the two cached components again")

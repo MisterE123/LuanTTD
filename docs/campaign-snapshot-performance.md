@@ -70,3 +70,21 @@ footprints at sparse positions in a 4,096×4,096 address space. The
 measurements exclude initialization, world generation, native drawing,
 network/IPC, and the first build of the persistent machinery index;
 they are not frame-rate or overall tick-rate claims.
+
+## Recompute only a river component the viewport actually reads
+
+A road or construction edit can advance the global topology number even
+when waterways are unchanged. The observer used to scan the whole board
+and trace every river before it could answer the first visible river tile.
+It now starts with that tile's connected river component. Outlet seeds
+still sort by tile ID; inland pools still use height and ID, and upstream
+traversal still uses the same four ordered neighbors. A plain flood
+outside a cached component's dependencies can still preserve it.
+
+A native async test decoded a real generated 1024×1024 world with 20,359
+river tiles. Every tile's direction, including calm tiles, matched the
+old global routine. For 60 topology refreshes sampling three actual
+32×32 sectors, direction lookup took 5.54–5.72 s before and 4.08–4.36 ms
+after. This measures river-direction work only, not the full snapshot
+or client FPS. Tests also cover a changed outlet, a river rejoining
+two components, ignored distant tides and recovery from skipped revisions.
