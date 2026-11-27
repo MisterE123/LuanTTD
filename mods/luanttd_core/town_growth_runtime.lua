@@ -336,13 +336,16 @@ return function(Sim,Terrain,G,B,H)
     if not state then return end
     local view,brd
     local policy=s.stock_road_town_policy
-    local expand=not write_house and s.stock_generated_profile and (not policy or policy.allow_town_roads~=false)
+    local ordinary=not write_house and s.stock_generated_profile
+    local expand=ordinary and (not policy or policy.allow_town_roads~=false)
     -- OnTick_Town visits the same ordered towns even when no build is
     -- due. G.tick supplies the town when its countdown actually expires;
     -- share one callback and the lazy board for this source tick.
     local function attempt(t)
       view=view or services(s)
-      brd=brd or (expand and W.road_board(s) or board(s,s.stock_generated_profile and not write_house))
+      -- Houses-only still follows existing crossings, drive-through
+      -- stops and road portals; only construction of new roads stops.
+      brd=brd or (ordinary and W.road_board(s) or board(s,false))
       local function write(proposal)
         return commit(s,t,proposal,view,tick,write_house)
       end

@@ -179,7 +179,12 @@ force a crossing.
 The supported spans preserve open river
 water below a bridge and surface roads above a bore. Changed cells
 invalidate the nearby sea cache rather than restarting it for the map.
-The original option that forbids town road construction still applies.
+The stock **Allow towns to build roads** option defaults to on. Turning it
+off only blocks new town roads: founding a world still creates initial
+streets, and live towns may still find house lots through existing
+streets, drive-through stops, bridges and tunnels. A controlled live
+test starts at a real bridgehead and builds a house beyond the far
+end without changing either the existing road or the bridge.
 
 ```sh
 lua5.1 tests/town_municipal_roads.lua

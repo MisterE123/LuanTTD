@@ -77,6 +77,7 @@ if S.stock_generated_profile then
 end
 S.stock_road_town_policy={
   tolerance=math.max(0,math.min(3,math.floor(tonumber(settings:get("luanttd_town_council_tolerance")) or 0))),
+  allow_town_roads=settings:get_bool("luanttd_allow_town_roads",true),
   allow_town_level_crossings=settings:get_bool("luanttd_allow_town_level_crossings",true),
   extra_dynamite=settings:get_bool("luanttd_extra_dynamite",true),
   station_noise_level=settings:get_bool("luanttd_station_noise_level",false),

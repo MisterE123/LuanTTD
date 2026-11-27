@@ -197,3 +197,30 @@ do
   assert(company.cash==cash and s.changed[1]==center)
 end
 print("PASS live growth extends eligible company road without taking ownership or billing, rejects active traffic and works")
+
+-- Turning town road construction off does not remove the existing
+-- bridge from the stock house search. The town can build on its far side.
+do
+  local s,t=bridgeworld,bridgecity
+  local x,z=S.xy(bridge.start)
+  local far,fz=S.xy(bridge["end"])
+  assert(z==fz)
+  local far_street=S.id(far+1,z)
+  if S.road_bits(s,far_street)==0 then assert(S.town_road_piece(s,t.id,far_street,10,true)) end
+  local old_road=S.road_bits(s,far_street)
+  local destination=S.id(far+1,z+1)
+  s.tiles[destination].wood=1
+  local count=t.num_houses
+  t.x,t.z,t.grow_counter,t.growing,t.layout=x,z,0,true,"original"
+  s.stock_road_town_policy={allow_town_roads=false}
+  local words={0,1073741824,0,300000000,41}
+  local i=0
+  W.tick(s,3,function()
+    i=i+1
+    assert(i<40,"excess road-walk randomness")
+    return words[i] or (i%4)*1073741824
+  end)
+  assert(t.num_houses==count+1 and s.tiles[destination].house and not s.tiles[destination].wood)
+  assert(S.road_bits(s,far_street)==old_road and s.stock_road_bridges[s.tiles[bridge.start].road_bridge_id]==bridge)
+end
+print("PASS houses-only stock policy follows an existing bridge and builds beyond it without changing roads")
