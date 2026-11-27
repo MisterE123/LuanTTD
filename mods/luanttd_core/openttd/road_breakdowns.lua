@@ -89,8 +89,9 @@ end
 -- The host must apply returned cur_speed and skip ordinary motion when
 -- hold_motion is set. It must not treat this as changing the player stop
 -- switch, speed subfraction, movement progress, or orders.
-function B.tick(s,ctx)
-  s.tick_counter=(s.tick_counter+1)%256
+-- Shared Vehicle::HandleBreakdown. A train increments its byte once
+-- before the two locomotive passes, and uses bit mask 3 for recovery.
+function B.handle(s,ctx)
   local out={cur_speed=ctx.cur_speed,hold_motion=false}
   if ctx.front==false or ctx.crashed then return out end
   local n=s.breakdown_ctr
@@ -107,7 +108,7 @@ function B.tick(s,ctx)
     if not ctx.loading then s.breakdown_ctr=n-1 end
     return out
   end
-  if s.tick_counter%2==0 then
+  if s.tick_counter%(ctx.train and 4 or 2)==0 then
     s.breakdown_delay=(s.breakdown_delay-1)%256
     if s.breakdown_delay==0 then
       s.breakdown_ctr=0
@@ -116,6 +117,11 @@ function B.tick(s,ctx)
   end
   out.hold_motion=true
   return out
+end
+
+function B.tick(s,ctx)
+  s.tick_counter=(s.tick_counter+1)%256
+  return B.handle(s,ctx)
 end
 
 -- Actual depot service: both timer dates, reliability from the latest

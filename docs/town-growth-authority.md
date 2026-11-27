@@ -597,3 +597,39 @@ sequence, not as route-specific time adjustments. The verified recheck
 is for an existing detour to the same depot; a different depot chosen
 during a U-turn is not covered. This is still one active Temperate town,
 not proof of multi-town or mixed-mode parity.
+
+### One town with simultaneous bus and train service
+
+A vanilla 16.0-RC1 Temperate town (64 × 64, seed 1751) has a running MPS
+Regal bus, two actual road stops, a Kirby Paul Tank with one separately
+purchased passenger carriage, and two one-tile railway platforms. The
+road and rail services compete for passengers using the same stock
+ratings and random stream. The source's subsidy-duration setting is
+zero. The numerical test reconstructs the opening and builds its rail
+infrastructure and consist through the authority commands. It does not
+read a save or change the stock layout.
+
+The [comparison](../tests/town_growth_rc1_mixed_road_rail.lua) follows
+both services for 11,248 consecutive ticks, from January 4 through
+June 5, including a stock train failure and recovery. It checks both
+random words, the bus motion, the train and carriage positions and
+fixed-point speeds, carried passengers, the mechanical health of the
+train, and the waiting, fractions and ratings of all four stops. Two packed saves are reopened during the replay. Five
+monthly observations also check town streets, houses and construction
+states, growth timers, cargo supply, and paid passenger totals. The
+[reference extractor](../tools/record_rc1_mixed_town.py) records only
+numbers from the original execution.
+
+Realistic acceleration is the normal RC1 rule for new campaign
+services. The [compiled force comparison](../tests/rail_acceleration_rc1.py)
+checks 15,120 cases covering cargo mass, rolling resistance, inclines,
+tunnel drag, magnetic rail and braking against the original method.
+In this town comparison the train's source VehicleID, rail StationIDs,
+saved mechanical state, and per-body random-trigger state are
+restored numerically. Those mounted hooks do not yet establish a
+general shared pool (including effects, other modes, and buy, sell
+and depot operations) for a fresh stock game. This window intentionally
+ends before the first automatic service diversion: original RC1
+selects its depot at tick 12,751; the LuanTTD train does not do that
+yet. A fully autonomous year, broader layouts and climates, and
+tram, water and aviation competition are not claimed here.

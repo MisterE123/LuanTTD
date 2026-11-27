@@ -273,7 +273,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
           end
         end
         if #valid>0 then
-          sync(rail_key(id),id,p,tiles,"rail",table.concat(valid,":"),valid[1],rail_key(id))
+          sync(rail_key(id),id,p,tiles,"rail",table.concat(valid,":"),valid[1],p.stock_station_pool_id or rail_key(id))
         end
       end
     end
@@ -335,6 +335,18 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local ctx=context(s,active)
     local p=Ship and Ship.current(s)
     local rails=Actors.gather(Rail,s) -- owned coal keeps its own cargo lifecycle
+    if Rail and Rail.stock_cargo_random then
+      local original={}
+      for _,r in ipairs(rails) do
+        if r.stock_random_parts then original[rail_key(r.paid_clock)]=r end
+      end
+      if next(original) then
+        ctx.train_random=function(v,part,kind)
+          local run=original[v.id]
+          if run then Rail.stock_cargo_random(s,run,part,kind) end
+        end
+      end
+    end
     if active.rail and Rail.settle_passenger_running_day then
       for _,r in ipairs(rails) do
         if r.fleet_id then Rail.settle_passenger_running_day(s,r.fleet_id) end

@@ -4199,6 +4199,7 @@ end
 function M.mount_paid_rail(s,Run)
   paid_rail_runs[s]=Run
   passenger_modules()
+  Run.stock_random=M.stock_random_u32
 end
 function M.rail_coal_active(s)
   return rail_coal and rail_coal.active(s,paid_rail_runs[s]) or false
@@ -5949,11 +5950,19 @@ function M.daily(s,traverse,tick_pulse,openings)
   local daily_road
   if stock_dates then
     local slot={}
-    for _,id in ipairs(regal_ids) do
-      local phase=(id-1)%74
+    local function add(ev)
+      local phase=ev.id%74
       local group=slot[phase] or {};slot[phase]=group
-      group[#group+1]=id
+      group[#group+1]=ev
     end
+    for _,id in ipairs(regal_ids) do
+      add({id=s.fleet[id].stock_pool_id or id-1,road=id})
+    end
+    local rail=paid_rail_runs[s]
+    if rail and rail.stock_fault_days then
+      for _,ev in ipairs(rail.stock_fault_days(s)) do add(ev) end
+    end
+    for _,group in pairs(slot) do table.sort(group,function(a,b) return a.id<b.id end) end
     if next(slot) then
       -- RunCalendar/EconomyVehicleDayProc in vehicle.cpp. A campaign day
       -- represents phase 1..73 of yesterday, then phase 0 of its new date.
@@ -5962,16 +5971,18 @@ function M.daily(s,traverse,tick_pulse,openings)
       daily_road=function(phase,calendar)
         local group=slot[phase]
         if not group then return end
-        for _,id in ipairs(group) do
-          local v=s.fleet[id]
+        local date=new_date-(phase==0 and 0 or 1)
+        for _,entry in ipairs(group) do
+          local v=entry.road and s.fleet[entry.road]
           if v then
             if calendar then
               if faults then faults.calendar(v) end
             else
-              if faults then faults.economy(v,new_date-(phase==0 and 0 or 1),automatic) end
+              if faults then faults.economy(v,date,automatic) end
               settle_bus(v)
             end
-          end
+          elseif calendar and entry.calendar then entry.calendar()
+          elseif not calendar and entry.economy then entry.economy(date) end
         end
       end
     end

@@ -131,6 +131,7 @@ function M.create(Loading,Timing)
       full_slice=false,reservations=0,cargo_not_full=false,consist=true,elapsed=l.elapsed,wait=l.wait,lateness=l.lateness}
     v.units,l.reserved_units=0,0
     local slices,open,full={},{},{}
+    local still_unloading=false
     for _,body in ipairs(v.carrying_parts) do
       local bs=body.load_state
       bs.stop_loading=l.stop_loading
@@ -143,6 +144,7 @@ function M.create(Loading,Timing)
         meta.reservations=meta.reservations+m.reservations
       end
       meta.retry_unload=meta.retry_unload or m.retry_unload
+      still_unloading=still_unloading or bs.unloading
       if not m.unloading and not bs.no_load and not bs.stop_loading then
         if m.cargo_not_full then open[body.cargo]=true else full[body.cargo]=true end
       end
@@ -170,6 +172,10 @@ function M.create(Loading,Timing)
     end
     -- The ordered station sweep applies the actual mode delay (including rail overhang).
     l.ticks=1
+    if v.mode=="rail" and not still_unloading and meta.loaded==0 and
+       (meta.unloaded>0 or meta.retry_unload) and ops.emptied then
+      ops.emptied(st,v)
+    end
     return meta
   end
   function C.leave(st,v,ops,destroyed)

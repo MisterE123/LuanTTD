@@ -383,6 +383,12 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
         local speed=ctx.speed and ctx.speed(v) or v.cached_max_speed
         Catchment.observe_loading(goods(st,v.cargo),v.mode,speed,ctx.year(tick),v.built,capacity_left)
       end,
+      new_cargo=ctx.train_random and function(st,v)
+        if v.mode=="rail" then ctx.train_random(v,v.part or 2,"new_cargo") end
+      end,
+      emptied=ctx.train_random and function(st,v)
+        if v.mode=="rail" then ctx.train_random(v,1,"empty") end
+      end,
       loaded=function(st,v,n)
         Catchment.loaded(st,v.mode,n)
         local carrier=v.part and assert(state.vehicles[v.id]) or v

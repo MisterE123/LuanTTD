@@ -90,13 +90,13 @@ end
 -- One TrainLocoHandler pass (not a whole Train::Tick, which calls twice).
 -- Fixed point matches uint spd = subspeed + accel, then cast signed
 -- and arithmetic >>8 when used for the whole-speed difference.
-function R.update_speed(v,limit)
+function R.update_speed(v,limit,force,minimum)
   limit=limit or R.original_speed_limit(v)
-  local spd=(v.subspeed or 0)+v.acceleration*(R.is_braking(v) and -4 or 2)
+  local spd=(v.subspeed or 0)+(force or v.acceleration*(R.is_braking(v) and -4 or 2))
   v.subspeed=spd%256
   local cap=limit
   if v.speed>limit then cap=max(v.speed-floor(v.speed/10)-1,limit) end
-  v.speed=max(min(v.speed+floor(spd/256),cap),0)
+  v.speed=max(min(v.speed+floor(spd/256),cap),minimum or 0)
   local budget=floor(v.speed*3/4)+(v.progress or 0)
   v.progress=0
   return budget
@@ -125,8 +125,8 @@ end
 -- advance(v) may commit a pixel, call begin_loading, or set a signal's
 -- explicit progress field. Its "crashed" result interrupts the loop.
 -- Advancing always spends the distance measured BEFORE that advance.
-function R.move_pass(v,advance)
-  local j=R.update_speed(v)
+function R.move_pass(v,advance,limit,force,minimum)
+  local j=R.update_speed(v,limit,force,minimum)
   local distance=R.advance_distance(v.direction)
   local calls=0
   while j>=distance do

@@ -20,6 +20,19 @@ function V.single(part,trigger,random)
   if trigger=="new_cargo" then body(part,"any_new_cargo",random) end
 end
 
+-- Train chain follows Vehicle::First()/Next(), not the direction in
+-- which the consist happens to be moving. This includes no-capacity engines.
+function V.chain(parts,at,trigger,random)
+  if trigger=="new_cargo" then
+    body(assert(parts[at]),trigger,random)
+    for _,part in ipairs(parts) do body(part,"any_new_cargo",random) end
+  elseif trigger=="depot" or trigger=="empty" then
+    for _,part in ipairs(parts) do body(part,trigger,random) end
+  else
+    body(assert(parts[at]),trigger,random)
+  end
+end
+
 function V.built(part,random)
   part.stock_vehicle_random_bits=random()%65536
 end

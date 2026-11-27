@@ -15,9 +15,22 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local Guide=dofile(upstream.."../rail_guideway_profiles.lua")
   local Collision=dofile(upstream.."rail_collision.lua")
   local OrderList=dofile(upstream.."rail_order_list.lua")
-  local acceleration_models={}
-  do local types=dofile(upstream.."rail_types.lua")
-    for gauge=0,3 do acceleration_models[gauge]=types.entry(gauge).acceleration end
+  local Types=dofile(upstream.."rail_types.lua")
+  local Realistic=dofile(upstream.."rail_acceleration_rc1.lua")
+  local Fault=dofile(upstream.."road_breakdowns.lua")
+  local acceleration_models,curve_advantage={},{}
+  for gauge=0,3 do
+    local spec=Types.entry(gauge)
+    acceleration_models[gauge],curve_advantage[gauge]=spec.acceleration,spec.curves
+  end
+  local function update_power(run,stats)
+    run.consist_mass,run.acceleration=stats.weight,stats.acceleration
+    if not run.stock_realistic then return end
+    local grades={}
+    for i,p in ipairs(stats.parts) do grades[i]=p.weight end
+    run.stock_power={weight=stats.weight,power=stats.power,tractive_effort=stats.tractive_effort,
+      axle_resistance=stats.axle_resistance,air_drag=stats.air_drag,max_track_speed=stats.max_track_speed,
+      body_weights=grades}
   end
   local CargoOrder=dofile(upstream.."rail_order_cargo.lua")
   local path_backoff=20 -- pathfinding_settings.ini, path_backoff_interval.
@@ -647,7 +660,14 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         consist.engine_railtype,consist.traction_railtypes=engine_type,stats.compatible
       end
       run.max_track_speed,run.front_length,run.total_length=stats.max_track_speed,stats.front_length,stats.total_length
-      run.acceleration,run.consist_mass,run.power=stats.acceleration,stats.weight,stats.power
+      -- Realistic is RC1's normal campaign setting. Its stock Original
+      -- option is still represented by 0; non-campaign fixtures can
+      -- exercise that kernel without enabling a gameplay feature gate.
+      local acceleration_model=s.stock_train_acceleration_model
+      run.stock_realistic=(acceleration_model==1 or acceleration_model==nil and s.stock_generated_profile~=nil) or nil
+      run.slope_steepness=s.stock_train_slope_steepness or 3
+      update_power(run,stats)
+      run.power=stats.power
       run.paid_build_year=owned.parts[1].build_year
       if freight then
         run.freight_engine_body_id=assert(owned.parts[1].body_id)
@@ -1313,7 +1333,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     run.live_order_origin=nil
     run.reserved_through_station=nil
     if run.ordered_tiles then for _,step in ipairs(route) do run.ordered_tiles[step.tile]=true end end
-    run.speed=0;run.subspeed=0;run.progress=0;run.wait_counter=0;run.stuck=false
+    run.speed=0;run.subspeed=0;run.wait_counter=0;run.stuck=false
+    -- TrainLocoHandler's ProcessOrders/CheckReverseTrain clears speed
+    -- and subspeed, not the current fractional progress.
+    if not run.stock_realistic then run.progress=0 end
     run.slowing=false;run.phase="turnaround";orders.dwell_until=nil
     local height=run.span and base.stock_height or stock_height
     if height then run.z=height(first.tile,head.x%16,head.y%16) end
@@ -1481,7 +1504,19 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return hit
   end
 
+  local function handle_fault(run)
+    local h=run.stock_fault
+    if not h or h.breakdown_ctr==0 then return false end
+    local head=run.consist.parts[1]
+    local result=Fault.handle(h,{train=true,cur_speed=run.speed,loading=run.phase=="dwell",
+      hidden=head.hidden,crashed=run.crashed})
+    run.speed=result.cur_speed
+    run.breakdown=h.breakdown_ctr==1 or nil
+    return result.hold_motion
+  end
+
   local function pass(s,base,d,run,events,mode,paid,service)
+    if handle_fault(run) then return end
     local head=run.consist.parts[1]
     if run.phase=="depot" then
       run.wait_counter=run.wait_counter+1
@@ -1541,6 +1576,40 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end
     local checked_approach=false
     if run.span then run.visible_bridge_speed=ConsistMotion.max_bridge_speed(base,run.consist) end
+    local realistic=run.stock_power
+    local limit,force,minimum
+    if realistic then
+      local board=base
+      local tile=board.tile(head.tile)
+      local gauge=tile and tile.railtype or 0
+      local distance
+      if tile and tile.kind=="station" and Speed.should_stop(run,tile.station) then
+        local stop,ahead,length=Speed.stop_location(board,head.tile,run,head.pose.direction)
+        distance=floor(ahead/16)-floor((length-stop)/16)
+      end
+      local resistance,in_depot=0,false
+      local heights=run.span and base.stock_height or stock_height
+      for i,p in ipairs(run.consist.parts) do
+        local loc=board.tile(p.tile)
+        if p.hidden and not p.wormhole then in_depot=true end
+        if heights and not p.hidden and not p.wormhole and p.pose.direction%2==1 and loc and loc.kind~="depot" and
+            (loc.slope~=0 or portal(loc)) then
+          local dir=floor(p.pose.direction/2)
+          local centre=heights(p.tile,8,8)
+          local edge=heights(p.tile,dir==0 and 15 or dir==2 and 0 or 8,
+            dir==3 and 15 or dir==1 and 0 or 8)
+          if centre and edge and centre~=edge then
+            local n=run.consist.driving_backwards and #realistic.body_weights-i+1 or i
+            resistance=resistance+(centre>edge and 1 or -1)*realistic.body_weights[n]*run.slope_steepness*100
+          end
+        end
+      end
+      local brake=Speed.is_braking(run)
+      force=Realistic.force(realistic,run.speed,brake,acceleration_models[gauge]==2,head.wormhole and head.hidden,resistance)
+      limit=Realistic.limit(realistic,run.speed,Realistic.curves(run.consist.parts,curve_advantage[gauge]),
+        distance,in_depot,run.visible_bridge_speed,run.order_max_speed,not run.consist.driving_backwards or run.consist.last_can_lead)
+      minimum=brake and 0 or 2
+    end
     Speed.move_pass(run,function()
       local old_parts=run.consist.parts
       local old,next_=old_parts[1],run.route[run.index+1]
@@ -1548,6 +1617,12 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       local id,dir,entry=next_tracks(board,old.tile,old.pose.td)
       if not checked_approach then
         checked_approach=true
+        local h=run.stock_fault
+        if h then
+          local approaching=Realistic.breakdown_speed(h.breakdown_ctr)
+          if approaching then run.speed=min(run.speed,approaching);run.slowing=true
+          else run.slowing=nil end
+        end
         if next_ and has(entry.red_tracks,Track.track(next_.td)) then
           -- TrainCheckIfLineEnds reads red before the movement step.
           local front={x=old.pose.x,y=old.pose.y,direction=run.direction,
@@ -1672,10 +1747,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       -- TrainController picks the current tile's acceleration model,
       -- not the vehicle's nominal class (RC1 Train::GetAccelerationType).
       local section=board.tile(new.tile)
-      Speed.after_turn(run,old.pose.direction,new.pose.direction,section and acceleration_models[section.railtype] or 0)
+      if not realistic then Speed.after_turn(run,old.pose.direction,new.pose.direction,section and acceleration_models[section.railtype] or 0) end
       if run.span then
         local z=new.z
-        if not new.span_prepared then Speed.after_grade(run,run.z,z) end
+        if not realistic and not new.span_prepared then Speed.after_grade(run,run.z,z) end
         run.z=z
         for i,part in ipairs(run.consist.parts) do
           if i>1 and part.span_speed then run.speed=min(run.speed,part.span_speed) end
@@ -1687,7 +1762,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         end
       elseif stock_height then
         local z=stock_height(new.tile,new.pose.x%16,new.pose.y%16)
-        Speed.after_grade(run,run.z,z);run.z=z
+        if not realistic then Speed.after_grade(run,run.z,z) end;run.z=z
       end
       if check_collision(base,d,run,events,paid,service) then return "crashed" end
       if stop=="arrived" then
@@ -1732,7 +1807,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           end
         end
       elseif entered and not run.block then look_ahead(base,d,run) end
-    end)
+    end,limit,force,minimum)
   end
 
   function R.current_paid(s,fleet_id)
@@ -2030,6 +2105,33 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return whole,fixed,pending
   end
 
+  local Trigger=dofile(upstream.."vehicle_random_trigger.lua")
+  function R.stock_cargo_random(s,run,part,kind)
+    if run.stock_random_parts then
+      Trigger.chain(run.stock_random_parts,part,kind,function() return R.stock_random(s) end)
+    end
+  end
+
+  -- The real stock daily scheduler visits vehicles by absolute VehicleID.
+  function R.stock_fault_days(s)
+    local state=R.current(s)
+    local out={}
+    for _,run in ipairs(state and state.runs or {}) do
+      local h=run.stock_fault
+      if h and run.stock_pool_id~=nil then
+        out[#out+1]={id=run.stock_pool_id,calendar=function()
+          Fault.calendar_day(h,{front=true})
+        end,economy=function(date)
+          local engine=run.stock_fault_engine
+          Fault.economy_day(h,{cur_speed=run.speed,stopped=run.stopped,loading=run.phase=="dwell",
+            difficulty=run.stock_breakdowns,engine_reliability=engine and Calendar.snapshot(engine,date).reliability},
+            function() return R.stock_random(s) end)
+        end}
+      end
+    end
+    return out
+  end
+
   local function stock_owned_tick(run,paid)
     if not (run.fleet_id and Roster) then return end
     run.running_ticks_total=Roster.running_tick(run.running_ticks_total or 0,run.stopped,run.speed)
@@ -2048,7 +2150,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         end
         local stats=assert(Roster.stats(parts,{freight_trains=run.freight_multiplier}))
         run.cargo_onboard,run.freight_counts=n,counts
-        run.consist_mass,run.acceleration=stats.weight,stats.acceleration
+        update_power(run,stats)
       end
     elseif run.town_parts and counts then
       local different=not run.town_counts
@@ -2069,7 +2171,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         end
         local stats=assert(Roster.stats(parts))
         run.town_counts,run.mail_onboard,run.passengers_onboard=counts,mail,riders
-        run.consist_mass,run.acceleration=stats.weight,stats.acceleration
+        update_power(run,stats)
       end
     elseif Roster.passenger_dmu(run.stock_engine) then
       if a==nil or b==nil then return end
@@ -2078,7 +2180,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         if coach~=nil then p[2]={stock_id=27,cargo_count=coach} end
         local stats=assert(Roster.stats(p))
         run[field],run.front_passengers,run.rear_passengers,run.coach_passengers=n,a,b,coach
-        run.consist_mass,run.acceleration=stats.weight,stats.acceleration
+        update_power(run,stats)
       end
     elseif run.passenger_coaches and counts then
       local different=n~=run[field] or not run.coach_loads
@@ -2090,13 +2192,13 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         for _,count in ipairs(counts) do parts[#parts+1]={stock_id=27,cargo_count=count} end
         local stats=assert(Roster.stats(parts))
         run[field],run.coach_loads=n,counts
-        run.consist_mass,run.acceleration=stats.weight,stats.acceleration
+        update_power(run,stats)
       end
     elseif n~=nil and n~=run[field] then
       local stats=assert(Roster.stats({run.stock_engine,{stock_id=run.stock_wagon,cargo_count=n}},
         {freight_trains=run.freight_multiplier}))
       run[field]=n
-      run.consist_mass,run.acceleration=stats.weight,stats.acceleration
+      update_power(run,stats)
     end
   end
 
@@ -2135,6 +2237,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       local removed
       for _,run in ipairs(d.runs) do
         run.vehicle_ticks=(run.vehicle_ticks or run.ticks or 0)+1
+        local h=run.stock_fault
+        if h then h.tick_counter=(h.tick_counter+1)%256 end
         local callback=service and service(run) or paid
         if not run.crashed and (not service or callback) then stock_owned_tick(run,callback) end
         if run.crashed then
@@ -2173,10 +2277,15 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           switch_shuttle_order(base,d,run,events)
           if d.failure then return events end
         elseif run.fleet_id and run.stopped and run.speed==0 then
+          handle_fault(run);handle_fault(run)
           -- The real stock handler returns here. Do not leave a depot
           -- or station, move a stopped wagon, or discard path holdings.
         elseif run.phase=="dwell" then
-          if run.paired then
+          local held=handle_fault(run)
+          handle_fault(run)
+          if held then
+            -- The second TrainLocoHandler pass cannot leave a loading order.
+          elseif run.paired then
             if callback and callback.leave(run) then
               if run.station==run.paired.first then
                 switch_station_order(base,d,run,events,run.paired.second,run.paired)
@@ -2215,7 +2324,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           run.ticks=run.ticks+1
           pass(s,base,d,run,events,false,callback,service)
           if d.failure then return events end
-          if run.phase~="arrived" and run.phase~="dwell" then pass(s,base,d,run,events,true,callback,service) end
+          if run.phase~="arrived" and run.phase~="dwell" then pass(s,base,d,run,events,true,callback,service)
+          else handle_fault(run) end
           if d.failure then return events end
         end
       end
