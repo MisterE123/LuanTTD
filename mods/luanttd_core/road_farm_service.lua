@@ -63,7 +63,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       if not r then return end
       local station=p or assert(raw.station(id),"Accepted freight report has no station")
       r.sources={}
-      for _,ind in ipairs(raw.industries) do
+      for _,ind in ipairs(raw.local_industries(id)) do
         if not ind.removed and Rules.output(ind,cargo) and (not Rules.allowed_source or Rules.allowed_source(station,ind)) then
           for _,t in ipairs(ind.tiles) do
             if raw.covered(id,t.x,t.z) then r.sources[#r.sources+1]=ind.id;break end

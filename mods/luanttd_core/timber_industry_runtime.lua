@@ -52,9 +52,31 @@ return function(Rules,Catchment)
     function B.covered(id,x,z)
       return covers[id] and Catchment.contains(covers[id],x,z) or false
     end
+    local catchment_firms={}
+    function B.local_industries(id)
+      local c=covers[id]
+      if not c or c.width~=width or c.height~=height then return industries end
+      -- Footprint and catchment are read-only for this binding; a later
+      -- construction or closure is seen by the next bind. Cargo and
+      -- ownership rules still read the original live industry records.
+      local nearby=catchment_firms[id]
+      if nearby then return nearby end
+      nearby={}
+      local seen={}
+      for key,covered in pairs(c.tiles) do
+        local hit=covered==true and tiles[key]
+        if hit and not seen[hit.ind.id] then
+          seen[hit.ind.id]=true
+          nearby[#nearby+1]=hit.ind
+        end
+      end
+      table.sort(nearby,function(a,b) return a.id<b.id end)
+      catchment_firms[id]=nearby
+      return nearby
+    end
     function B.report(id,cargo)
       local st=stations[id]
-      if st then return Rules.acceptance(st,covers[id],cargo,industries,ctx.house_at) end
+      if st then return Rules.acceptance(st,covers[id],cargo,B.local_industries(id),ctx.house_at) end
     end
     -- Call from the existing landscape loop. Replay protection is per
     -- physical tile and tick, not per-industry: multiple legit tiles of

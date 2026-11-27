@@ -117,3 +117,29 @@ farm/fence culling and return probe passed. One 36-day LuaJIT comparison
 of the same populated 1024×1024 campaign measured 21.55 versus 20.67 s,
 with every saved value and shared record matching. This is a single
 end-to-end replay, not an FPS claim.
+
+### Look up freight acceptance from the covered footprint
+
+Each freight binding already has the exact union of physical station
+catchment tiles and a map of industry footprint tiles. RC1's
+`GetAcceptanceAroundStation` reads that physical catchment. Use their
+intersection to build the industry's candidate list in IndustryID
+order. The original acceptance, source filtering, competing cargo
+queues and neutral oil facility rules still read live industry
+records. There is no saved cache or change to station refresh timing.
+
+The native comparison used 768 mixed industries, 128 truck stops and
+five neutral oil berths. It included joined stops, house Goods demand,
+and an industry removed after warming the index. All reports, eligible
+sources and saved station state matched the previous full scan. Across
+four alternating batches of three forced acceptance refreshes, median
+CPU went from about 666 to 3.7 ms. This deliberately freight-dense
+benchmark measures that acceptance stage, not total tick time or
+frame rate. The default generated campaign's paid oil-to-Goods route
+also settled 42 thousand liters for $672 and 13 Goods for $259 across
+a native restart. A native rail-farm restart likewise settled exactly
+25 livestock for $433 and 30 tons of grain for $573.
+
+```sh
+tests/freight_catchment_perf_native.sh luantiserver 0f12322 /tmp/freight-catchment
+```

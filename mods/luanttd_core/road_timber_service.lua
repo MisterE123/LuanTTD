@@ -66,7 +66,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
         local r=raw.report(id,cargo)
         if not r then return end
         r.sources={}
-        for _,ind in ipairs(raw.industries) do
+        for _,ind in ipairs(raw.local_industries(id)) do
           if not ind.removed and ind.produced.cargo==cargo then
             for _,tile in ipairs(ind.tiles) do
               if raw.covered(id,tile.x,tile.z) then r.sources[#r.sources+1]=ind.id;break end
