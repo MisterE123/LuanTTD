@@ -822,7 +822,7 @@ return function(Sim,R,max_days)
       packet.tiles,packet.corners,packet.registries=nil,nil,nil
     end
   end
-  local function road_interest(windows)
+  local function actor_interest(windows)
     local mask={}
     for _,w in ipairs(windows) do
       if type(w)~="table" or not integer(w.x,1,Sim.W) or not integer(w.z,1,Sim.H)
@@ -843,8 +843,8 @@ return function(Sim,R,max_days)
     if type(windows)~="table" or #windows<1 or #windows>9 then
       return reply(false,"INVALID_INTEREST_BATCH")
     end
-    local interest=R.road_coordinates and R.road_finish and road_interest(windows)
-    local packets,frame={},{road={},rail={},whole_trains=true,live_tick=live_tick,road_interest=interest}
+    local interest=(R.road_coordinates and R.road_finish or R.rail and #windows>1) and actor_interest(windows)
+    local packets,frame={},{road={},rail={},whole_trains=true,live_tick=live_tick,actor_interest=interest,multi_view=#windows>1}
     local epoch=observed_corners()
     for _,w in ipairs(windows) do
       if type(w)~="table" then return reply(false,"INVALID_INTEREST_WINDOW") end
@@ -880,8 +880,8 @@ return function(Sim,R,max_days)
       return reply(false,"INVALID_INTEREST_BATCH")
     end
     fraction=type(fraction)=="number" and fraction>=0 and fraction<=1 and fraction or 1
-    local interest=R.road_coordinates and R.road_finish and road_interest(windows)
-    local packets,frame={},{road={},rail={},whole_trains=true,live_tick=live_tick,road_interest=interest}
+    local interest=(R.road_coordinates and R.road_finish or R.rail and #windows>1) and actor_interest(windows)
+    local packets,frame={},{road={},rail={},whole_trains=true,live_tick=live_tick,actor_interest=interest,multi_view=#windows>1}
     for i,w in ipairs(windows) do
       if type(w)~="table" or not integer(w.x,1,Sim.W) or not integer(w.z,1,Sim.H)
         or not integer(w.w,1,32) or not integer(w.h,1,32) or w.x+w.w-1>Sim.W or w.z+w.h-1>Sim.H then

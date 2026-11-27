@@ -1,5 +1,51 @@
 -- Produce compact, engine-free actor pose samples for one visible region.
 -- No route, vehicle controller, ObjectRef or mutable state leaves the owner.
+local floor=math.floor
+local empty_runs={}
+local function rail_candidates(runs,frame,poses,x,z,w,h)
+  local mask=frame.actor_interest
+  if not frame.whole_trains or not frame.multi_view or not mask or #runs<16 then return runs end
+  local indexed=frame.rail_buckets
+  if not indexed then
+    -- Sample the full consist once. A tail in the visible union is
+    -- enough even when the locomotive's bucket is outside it.
+    indexed={};frame.rail_buckets=indexed
+    for _,r in ipairs(runs) do
+      for _,body in ipairs(poses(r)) do
+        local p=body.pos
+        if p then
+          local zz,xx=floor((floor((p.z+.5)/2)-1)/32),floor((floor((p.x+.5)/2)-1)/32)
+          if mask[zz] and mask[zz][xx] then
+            local row=indexed[zz]
+            if not row then row={};indexed[zz]=row end
+            local group=row[xx]
+            if not group then group={};row[xx]=group end
+            if group[#group]~=r then group[#group+1]=r end
+          end
+        end
+      end
+    end
+  end
+  local x0,x1=floor((x-1)/32),floor((x+w-2)/32)
+  local z0,z1=floor((z-1)/32),floor((z+h-2)/32)
+  if x0==x1 and z0==z1 then return indexed[z0] and indexed[z0][x0] or empty_runs end
+  local nearby,seen
+  for zz=z0,z1 do
+    local row=indexed[zz]
+    if row then
+      for xx=x0,x1 do
+        local group=row[xx]
+        if group then
+          if not nearby then nearby,seen={},{} end
+          for _,r in ipairs(group) do
+            if not seen[r] then seen[r]=true;nearby[#nearby+1]=r end
+          end
+        end
+      end
+    end
+  end
+  return nearby or empty_runs
+end
 return function(Sim,R,x,z,w,h,fraction,frame)
   local s=R.world
   frame=frame or {road={},rail={}}
@@ -58,7 +104,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
     -- The sampling fraction and world state are shared by the entire
     -- viewport reply, including overlapping and nonaligned sectors.
     local size,floor=32,math.floor
-    local want=frame.road_interest
+    local want=frame.actor_interest
     local buckets=frame.road_buckets
     if not buckets then
       buckets={}
@@ -123,17 +169,20 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       if point(p) then add("rail_pilot",1,{owner=platform.owner,pos=p,yaw=yaw,model=platform.visual,tile=id}) end
     end
     local dispatch=R.rail.run.current(s)
-    for _,r in ipairs(dispatch and dispatch.runs or {}) do
-      local parts={}
+    local runs=dispatch and dispatch.runs or empty_runs
+    for _,r in ipairs(rail_candidates(runs,frame,train,x,z,w,h)) do
+      local parts
       local consist=train(r)
       for _,body in ipairs(consist) do
-        if point(body.pos) then parts[#parts+1]=body end
+        if point(body.pos) then
+          -- A fast sighting carries every exposed body from one sample,
+          -- even when the first body seen is the last car in the train.
+          if frame.whole_trains then parts=consist;break end
+          parts=parts or {}
+          parts[#parts+1]=body
+        end
       end
-      if #parts>0 then
-        -- A fast sighting carries every exposed body from one sample.
-        -- Two sectors at different fractions of one simulation day must
-        -- not splice their locomotive and wagons into a stretched train.
-        if frame.whole_trains then parts=consist end
+      if parts then
         local unit=R.rail.owned and r.fleet_id and R.rail.owned.get(s,r.owner,r.fleet_id)
         local lead=consist[1] and consist[1].pos
         local index=lead and Sim.id(math.floor((lead.x+.5)/2),math.floor((lead.z+.5)/2))

@@ -136,3 +136,29 @@ worker allocation results, not client FPS numbers.
 ```sh
 tests/campaign_actor_interest_native.sh luantiserver 1bbd702 /tmp/actor-interest
 ```
+
+## Index long rail consists once per multi-sector observation
+
+When a busy rail fleet is projected into several windows, the worker
+now indexes the actual sampled bodies once for the packet rather than
+scanning every train from every sector. A visible tail is enough to
+return the whole sampled consist, even if the locomotive is entirely
+offscreen. The final rectangle tests still decide visibility; ordinary
+clipped snapshots return just the body positions within their bounds.
+No movement, collision rule, save, or interpolation timing changes.
+
+A projection-only LuaJIT fixture with 384 trains of 24 bodies each
+compared single, overlapping, split, and empty requests. Every actor
+reply matched. Across four nine-window batches, median CPU was about
+183 → 15 ms per 96 observations. This deliberate long-fleet fixture
+measures the projection, not simulation throughput or FPS. Native
+rail-farm service also verified ordinary consists and payments across
+a restart.
+
+```sh
+mkdir -p /tmp/old-rail-interest
+for f in campaign_actor_projection campaign_authority_endpoint; do
+  git show 9e20f4d:mods/luanttd_core/$f.lua > /tmp/old-rail-interest/$f.lua
+done
+luajit tests/campaign_rail_interest.lua /tmp/old-rail-interest
+```
