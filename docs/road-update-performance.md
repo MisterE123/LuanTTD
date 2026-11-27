@@ -710,3 +710,26 @@ rail, ferry and air after reopening the campaign.
 ```sh
 tests/road_spatial_index_perf_native.sh luantiserver 2e5af74 /tmp/road-hash-bench
 ```
+
+### Stock road and ship route keys
+
+The worker now uses the pinned RC1 `CYapfNodeKeyExitDir` and
+`CYapfNodeKeyTrackDir` numeric composition for the shared road/ship
+search tables instead of allocating a Lua table per visited tile.
+The binary heap and its equal-score order are unchanged. The road
+follower also uses the engine's native bit operations when available,
+with the same 14-bit arithmetic path retained for plain Lua.
+
+On a real constructed 128×128 road network, an async benchmark of 32
+ordered route searches closed 94,825 nodes per batch. Median CPU
+went from **2.67 to 2.26 s** in the initial comparison and **2.46 to
+2.19 s** in the controlled repeat. Both exit-direction and full
+trackdir searches matched costs, closed-node counts, tie choices and
+the reconstructed course. The exact same shared search also matched
+all 22 native ship courses, including their scores and search limits.
+These are routing workloads, not simulation frame-rate claims.
+
+```sh
+tests/road_yapf_keys_perf_native.sh luantiserver c162bc0 /tmp/road-yapf-keys
+tests/ship_yapf_perf_native.sh luantiserver c162bc0 /tmp/ship-yapf-keys
+```

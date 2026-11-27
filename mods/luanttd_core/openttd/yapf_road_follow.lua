@@ -36,6 +36,15 @@ local function band(a,b)
   end
   return r
 end
+-- The native VM has the stock TrackdirBits intersection available.
+-- Keep the fourteen-bit portable path for plain Lua and the unused
+-- upper bits out of the result exactly as in the original loop.
+local bits=bit or bit32
+if bits and bits.band then
+  local and_=bits.band
+  has=function(mask,d) return and_(mask,masks[d])~=0 end
+  band=function(a,b) return and_(a,b,0x3FFF) end
+end
 local function reverse_direction(d) return (d+2)%4 end
 local function reverse_trackdir(td) return (td+8)%16 end
 local function axis_bit(dir) return masks[dir%2] end

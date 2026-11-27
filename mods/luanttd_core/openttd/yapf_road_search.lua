@@ -11,13 +11,8 @@ return function(F,C)
       cost=0,estimate=0,is_choice=is_choice}
   end
 
-  local function new_open()
-    local heap,by_tile={},{}
-    local function at(tile)
-      local t=by_tile[tile]
-      if not t then t={};by_tile[tile]=t end
-      return t
-    end
+  local function new_open(stride)
+    local heap,by_key={},{}
     local function move(i,node) heap[i]=node;node.heap_index=i end
     local function up(gap,node)
       while gap>1 do
@@ -37,12 +32,12 @@ return function(F,C)
       return gap
     end
     local function include(node)
-      at(node.tile)[node.key]=node
+      by_key[node.tile*stride+node.key]=node
       move(up(#heap+1,node),node)
     end
     local function remove(node)
       local index,n=assert(node.heap_index),#heap
-      at(node.tile)[node.key]=nil
+      by_key[node.tile*stride+node.key]=nil
       if index<n then
         local last=heap[n]
         heap[n]=nil
@@ -50,7 +45,7 @@ return function(F,C)
       else heap[n]=nil end
       node.heap_index=nil
     end
-    return heap,by_tile,include,remove
+    return heap,by_key,include,remove
   end
 
   -- The startup nodes are deliberately not charged or tested as
@@ -59,17 +54,22 @@ return function(F,C)
     settings=settings or {}
     options=options or {}
     local cap=settings.max_search_nodes or 10000
-    local heap,open,include,remove=new_open()
+    -- RC1 CYapfNodeKey{ExitDir,TrackDir} encodes the tile plus
+    -- 2 or 4 discriminator bits. Lua numbers represent all 4096²
+    -- TileIndex keys exactly. The heap and its tie order are unchanged.
+    local exact=settings.disable_node_optimization
+    local stride=exact and 16 or 4
+    local heap,open,include,remove=new_open(stride)
     local closed,closed_count={},0
     local best_dest,best_intermediate
     local function key(td)
-      return settings.disable_node_optimization and td or F.exit_direction(td)
+      return exact and td or F.exit_direction(td)
     end
     local starts=F.trackdirs(trackdirs)
     for _,td in ipairs(starts) do
       local n=new_node(nil,origin,td,#starts>1)
       n.key=key(td)
-      if not (open[origin] and open[origin][n.key]) then include(n) end
+      if not open[origin*stride+n.key] then include(n) end
     end
     local function add(n,follower)
       -- RC1 CYapfBaseT::AddNewNode passes the existing track follower
@@ -82,7 +82,8 @@ return function(F,C)
       end
       local improve=cap>0 and (not best_intermediate or
         best_intermediate.estimate-best_intermediate.cost>n.estimate-n.cost)
-      local on=open[n.tile] and open[n.tile][n.key]
+      local index=n.tile*stride+n.key
+      local on=open[index]
       if on then
         if n.estimate<on.estimate then
           remove(on)
@@ -92,7 +93,7 @@ return function(F,C)
         end
         return
       end
-      local cn=closed[n.tile] and closed[n.tile][n.key]
+      local cn=closed[index]
       if cn then
         assert(n.estimate>=cn.estimate,"YAPF: a closed node received a lower estimate")
         return
@@ -116,8 +117,7 @@ return function(F,C)
       end
       if cap==0 or closed_count<cap then
         remove(n)
-        closed[n.tile]=closed[n.tile] or {}
-        closed[n.tile][n.key]=n
+        closed[n.tile*stride+n.key]=n
         closed_count=closed_count+1
       else
         capped=true
