@@ -6,7 +6,7 @@ local heavy_layouts=dofile(mod.."/openttd/iron_steel_data.lua").layout
 local prepare=dofile(mod.."/campaign_generation_async.lua")(core,mod)
 local prepared=Checkpoints(core,Codec,"luanttd-prepared-campaign.chk")
 for _,group in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..group,"air") end
-local cfg=Setup.defaults(core.settings)
+local cfg=assert(Setup.parse(Setup.defaults(core.settings),{setup_growth_rate="1"}))
 assert(cfg.width==128 and cfg.depth==64 and cfg.rivers==1)
 local expected=dofile(mod.."/campaign_generation.lua")(core,mod,dofile(mod.."/sim.lua"),Setup).run(cfg)
 local function compare(a,b)
@@ -35,6 +35,13 @@ core.register_on_mods_loaded(function()
     assert(not unexpected_table and progress_seen>0 and last==90 and heartbeats>1)
     local actual=assert(prepared.read(),"Worker success without durable result")
     compare(expected,actual)
+    assert(actual.stock_generated_profile.town_settings.growth_setting==0)
+    local G=dofile(mod.."/openttd/town_growth.lua")
+    for _,town in pairs(actual.stock_town_growth.towns) do
+      -- None affects live growth, not the existence of founding houses.
+      assert(town.num_houses>0 and town.growth_rate==G.normal_rate(town,0,0))
+    end
+    core.log("action","PASS NATIVE TOWN GROWTH OPTION: None reached the generator and survived the prepared checkpoint")
     local found,mill_layouts={},{}
     for _,site in ipairs(actual.stock_generated_profile.industries) do
       if site.chain=="heavy" then

@@ -53,6 +53,7 @@ return function(core,mod,Sim,Settings)
     local towns,why=Campaign.towns(Sim,Terrain,S,Gen,dofile(src.."town_worldgen.lua")(G,B),
       dofile(src.."stock_town_name.lua"),G,B,{
       layout=cfg and cfg.layout or settings:get("bayline_generated_town_layout") or "original",
+      growth_setting=option("growth_rate","luanttd_town_growth_rate",2),
       difficulty=option("towns","bayline_generated_towns",2),larger_towns=4,initial_city_size=2,year=Sim.date(S),
       progress=function(i,n) progress(62+math.floor(9*i/math.max(1,n)),"Building towns and roads",true) end,
     })

@@ -96,3 +96,20 @@ do
   end
   print("PASS normal town funding uses exact stock base cost, three live growth months, saved payments and expiry")
 end
+
+-- The saved world option reaches the ordinary worker's month and funding
+-- entry points, not only worldgen and the isolated RC1 rate calculation.
+for setting=0,4 do
+  local s=world()
+  s.stock_generated_profile={town_settings={growth_setting=setting}}
+  local id=s.stock_town_growth.order[1]
+  local t=s.stock_town_growth.towns[id]
+  local rolls=0
+  W.prepare_day(s,function() rolls=rolls+1;return 0 end,true)
+  assert(t.growing==(setting~=0),"monthly setting "..setting)
+  assert(t.growth_rate==G.normal_rate(t,0,setting))
+  if setting==0 then assert(rolls==0) end
+  assert(W.fund_buildings(s,id)==t and t.growing and t.fund_buildings_months==3)
+  assert(t.growth_rate==G.normal_rate(t,0,setting))
+end
+print("PASS five saved growth modes reach the worker; funding overrides None as in RC1")

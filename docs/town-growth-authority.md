@@ -118,9 +118,14 @@ On Better Roads and 3×3 Grid, a successful extra house can count as a
 successful growth attempt even if the main roadside lot is already
 occupied or cannot be built on. The worker now uses the normal countdown
 after that real commit, without building or counting the extra house twice.
-Other town-growth gaps remain: ordinary runtime still selects the Normal
-growth speed internally, some construction branches lack stock behavior,
-and we have not yet proven whole-town placement/RNG parity.
+A new world can set RC1 growth speed under **Advanced options**:
+None, Slow, Normal (the default), Fast or Very fast. This setting is
+saved per world and reaches the worker on monthly eligibility, funding,
+and house commits. None does not prevent initial towns from being
+founded, and Fund New Buildings can temporarily bypass it. The setup
+does not yet provide OpenTTD’s in-game change callback for existing
+worlds. Some construction branches still lack stock behavior, and we
+have not yet proven whole-town placement/RNG parity.
 
 ## Municipal streets on ordinary generated maps
 

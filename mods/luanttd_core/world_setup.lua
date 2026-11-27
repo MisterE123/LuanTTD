@@ -32,6 +32,8 @@ local items={
   {key="coast",setting="bayline_generated_coasts",default=15,values={15,0,1,2,4,8,5,10,16},
     labels={"All edges","No forced coast","West only","South only","East only","North only",
       "West and east","North and south","Random edges"},advanced="Forced coastlines"},
+  {key="growth_rate",setting="luanttd_town_growth_rate",default=2,values={0,1,2,3,4},
+    labels={"None","Slow","Normal","Fast","Very fast"},advanced="Town growth speed"},
   {key="variety",setting="bayline_generated_variety",default=0,values={0,1,2,3,4,5},
     labels={"None","Very low","Low","Medium","High","Very high"},advanced="Regional variety"},
 }
@@ -149,7 +151,7 @@ local function formspec(core,cfg,advanced,note)
     "button[5.04,2.15;2.40,.54;setup_random;Randomize]",
   }
   out[#out+1]="button[8.43,2.15;3.47,.54;setup_advanced;"..
-    (advanced and "Basic options" or "Landscape options").."]"
+    (advanced and "Basic options" or "Advanced options").."]"
   local labels={"Map width (tiles)","Map depth (tiles)","Terrain relief","Sea level","Rivers","Town density","Town roads","Industry density","Tree placement"}
   local n=0
   out[#out+1]="dropdown[.49,2.82;7.16,.52;setup_scenario;"..scenario_labels..";"..

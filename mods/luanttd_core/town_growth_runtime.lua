@@ -95,6 +95,11 @@ return function(Sim,Terrain,G,B,H)
 
   -- Existing saves may have a non-stock default age before migration.
   -- Age unproven road stations from 255; keep preview clocks on reload.
+  local function growth_setting(s)
+    local options=s.stock_generated_profile and s.stock_generated_profile.town_settings
+    return options and options.growth_setting or 2
+  end
+
   function W.prepare_day(s,random,want_new)
     local state=W.start(s)
     for _,st in pairs(s.stations) do
@@ -115,7 +120,7 @@ return function(Sim,Terrain,G,B,H)
       for _,id in ipairs(state.order) do
         local t=state.towns[id]
         local was_funded=t.road_build_months==1
-        local _,reason=G.month(t,views,2,random)
+        local _,reason=G.month(t,views,growth_setting(s),random)
         if was_funded then W.reconstruction.expired(s,t) end
         t.reason=reason
         t.last_active=G.active_stations(t,views)
@@ -129,7 +134,7 @@ return function(Sim,Terrain,G,B,H)
     local town=s.stock_town_growth and s.stock_town_growth.towns[id]
     if not town then return nil end
     local mounted=services(s)
-    local _,reason=G.fund(town,mounted,2)
+    local _,reason=G.fund(town,mounted,growth_setting(s))
     town.reason,town.last_active=reason,G.active_stations(town,mounted)
     return town
   end
@@ -266,7 +271,7 @@ return function(Sim,Terrain,G,B,H)
         if s.stock_town_lifts and Lift.supports(part.record) then Lift.install(s.stock_town_lifts,part.id,Sim) end
         visual_changed(s,part.id)
       end
-      B.house_committed(t,proposal,views,2)
+      B.house_committed(t,proposal,views,growth_setting(s))
       t.last_build={tile=id,house=h.id,tick=tick,name=style.name}
       return true
     end

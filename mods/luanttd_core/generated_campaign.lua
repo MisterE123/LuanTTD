@@ -81,6 +81,8 @@ end
 function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   local profile=s.stock_generated_profile
   assert(profile and not profile.towns,"Stock towns should be generated once")
+  local growth_setting=tonumber(settings.growth_setting) or 2
+  growth_setting=math.max(0,math.min(4,math.floor(growth_setting)))
   local state=copy(profile.terrain_rng)
   local function random() return Generator.next_random(state) end
   local save={version=1,order={},towns={}}
@@ -138,7 +140,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
       return true
     end
     Worldgen.initialize(town,growth,{year=settings.year,allow_roads=true,
-      initial_city_size=settings.initial_city_size,growth_setting=2,commit=commit},rnd)
+      initial_city_size=settings.initial_city_size,growth_setting=growth_setting,commit=commit},rnd)
     if town.population==0 then
       -- CmdDeleteTown removes failed town buildings and roads, not
       -- previously executed corner shaping or shore clearing.
@@ -163,6 +165,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   profile.towns=#s.sites
   profile.town_settings=copy(settings)
   profile.town_settings.progress=nil
+  profile.town_settings.growth_setting=growth_setting
   profile.town_rng=copy(state)
   s.passenger_rating_rng=copy(state)
   return result

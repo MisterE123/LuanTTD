@@ -14,12 +14,12 @@ mod="$game/mods/luanttd_core"
 mkdir -p "$mod" "$out/world" "$out/home"
 printf 'title = Native Campaign Generation Probe\n' > "$game/game.conf"
 printf 'name = luanttd_core\n' > "$mod/mod.conf"
-cp mods/luanttd_core/*.lua "$mod/"
-cp -a mods/luanttd_core/openttd "$mod/"
+if ! cp -l mods/luanttd_core/*.lua "$mod/" 2>/dev/null; then cp mods/luanttd_core/*.lua "$mod/"; fi
+if ! cp -al mods/luanttd_core/openttd "$mod/" 2>/dev/null; then cp -a mods/luanttd_core/openttd "$mod/"; fi
 mkdir -p "$mod/models" "$mod/textures"
 # The strict heavy-industry visual manifest requires every mounted layout.
-cp mods/luanttd_core/models/bl_industry_{iron_mine,steel_mill,steel_mill_l1}_[0-9]_[0-9].obj "$mod/models/"
-cp mods/luanttd_core/textures/bl_industry_{iron_mine,steel_mill,steel_mill_l1}_atlas.png "$mod/textures/"
+if ! cp -l mods/luanttd_core/models/bl_industry_{iron_mine,steel_mill,steel_mill_l1}_[0-9]_[0-9].obj "$mod/models/" 2>/dev/null; then cp mods/luanttd_core/models/bl_industry_{iron_mine,steel_mill,steel_mill_l1}_[0-9]_[0-9].obj "$mod/models/"; fi
+if ! cp -l mods/luanttd_core/textures/bl_industry_{iron_mine,steel_mill,steel_mill_l1}_atlas.png "$mod/textures/" 2>/dev/null; then cp mods/luanttd_core/textures/bl_industry_{iron_mine,steel_mill,steel_mill_l1}_atlas.png "$mod/textures/"; fi
 rm "$mod/init.lua"
 cp tests/campaign_generation_async_probe.lua "$mod/init.lua"
 printf 'gameid = generationprobe\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
@@ -28,6 +28,7 @@ export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/g
 if ! timeout 25 "$server" --config "$out/server.conf" --world "$out/world" --gameid generationprobe --logfile '' > "$out/server.log" 2>&1; then
   cat "$out/server.log";exit 1
 fi
+grep -q 'PASS NATIVE TOWN GROWTH OPTION' "$out/server.log"
 grep 'PASS NATIVE GENERATION' "$out/server.log" || { cat "$out/server.log";exit 1; }
 # The intentionally blocked atomic rename should be the only engine error.
 grep -Eq 'ERROR\[AsyncWorker-[0-9]+\]: Failed to overwrite .*luanttd-prepared-campaign\.chk.*Is a directory' "$out/server.log"
