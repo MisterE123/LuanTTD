@@ -60,3 +60,24 @@ coast-only trips do not see that speedup.
 ```sh
 tests/ship_solid_region_perf_native.sh luantiserver ../solid-sea-perf
 ```
+
+## Keep the checked sailing leg through unrelated floods
+
+The worker previously verified every remaining edge of an active route
+after any map topology revision. It now remembers the exact validated
+suffix in the ship controller's temporary cache. A proven plain tide
+keeps that check only if its changed parcels do not touch any tile of
+the suffix. A touched route, a replacement route, a cursor moving back
+before that suffix, or an unknown edit still runs the full check. Movement,
+orders, and route selection are unchanged; the proof is not serialized.
+
+An alternating native replay advanced a ferry 40 times after 40 real
+remote floods while it sailed an open-water route. Every saved ferry
+value matched at every step. Follower calls dropped from **2,080 to
+52** per batch and median CPU was about **4.4 → 0.5 ms** across the
+two runs. Inserting a rock on the verified route still blocked the
+ferry with the original network-change error.
+
+```sh
+tests/ship_checked_leg_perf_native.sh luantiserver d0ece7c ../live-ship-leg-perf
+```

@@ -22,7 +22,7 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
       cached.region=Regions and Regions(Track,Water,board,extents)
       worlds[s]=cached
     end
-    return cached.board,cached.region
+    return cached.board,cached.region,cached
   end
   -- RC1 InvalidateWaterRegion: a changed tile dirties its own patch
   -- and any neighboring region whose boundary reads it. For anything
@@ -30,9 +30,15 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
   function R.after_plain_flood(s,previous,first)
     local cached=worlds[s]
     if not cached or previous==nil or cached.topology~=previous or s.topology~=previous+1 then return end
-    if cached.region then
-      for i=first,#s.changed do cached.region.invalidate(s.changed[i]) end
+    local checked=cached.checked_leg
+    if cached.region or checked then
+      for i=first,#s.changed do
+        local id=s.changed[i]
+        if cached.region then cached.region.invalidate(id) end
+        if checked and checked.tiles[id] then checked=nil end
+      end
     end
+    cached.checked_leg=checked
     -- The water board reads authoritative terrain and facilities live.
     -- Preserve its region index, not a previously sampled tile or route.
     cached.topology=s.topology
@@ -207,12 +213,14 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
     if not p or p.owner~=owner then return nil,"NO_OWN_PILOT" end
     if p.owned then return nil,"OWNED_FERRY_CANNOT_BE_CLEARED" end
     s[key]=nil
+    local cached=worlds[s]
+    if cached then cached.checked_leg=nil end
     return true
   end
   local function tick(s,num,paid)
     local p=R.current(s)
     if not p or p.phase=="blocked" or (p.paid_clock~=nil)~=(paid~=nil) then return end
-    local board,region=lookup(s)
+    local board,region,cache=lookup(s)
     local v=p.vehicle
     if p.topology~=s.topology then
       if p.via and not p.transport_orders then
@@ -223,15 +231,26 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
         end
       end
       local route=v.path
-      if route then
-        for i=math.max(1,(v.path_index or 2)-1),#route-1 do
+      local first=math.max(1,(v.path_index or 2)-1)
+      local checked=cache.checked_leg
+      -- Motion replaces the trace when it reroutes. The cursor can move
+      -- forward within a verified suffix, but cannot inherit a proof
+      -- for earlier tiles. A changed path tile drops it in the tide
+      -- callback; any unknown edit replaces the whole cache.
+      if not route then cache.checked_leg=nil
+      elseif not checked or checked.run~=p or checked.route~=route or checked.first>first then
+        cache.checked_leg=nil
+        local tiles=#route-first>=8 and {}
+        for i=first,#route-1 do
           local a,b=route[i],route[i+1]
           local f=Water.follow(board,v,a.tile,a.td)
           if not f.ok or f.tile~=b.tile or not Track.has(f.trackdirs,b.td) then
             p.phase,p.failure="blocked","NETWORK_CHANGED"
             return p
           end
+          if tiles then tiles[a.tile],tiles[b.tile]=true,true end
         end
+        if tiles then cache.checked_leg={run=p,route=route,first=first,tiles=tiles} end
       end
       p.topology=s.topology
     end
