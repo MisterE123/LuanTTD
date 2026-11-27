@@ -452,3 +452,29 @@ jobs:
           python3 tests/yate_haugan_art.py --engines "$src/src/table/engines.h"
           python3 tests/airport_city_airframes_rc1.py "$src/src/table/engines.h"
           python3 tools/build_stock_temperate_inventory.py "$src/src/table/engines.h"
+
+  mixed-town-parity:
+    name: OpenTTD RC1 mixed town parity
+    runs-on: ubuntu-24.04
+    container: debian:13
+    timeout-minutes: 6
+    steps:
+      - name: Install Lua and Luanti server
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git lua5.1 luanti-server python3
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compete, load, rate, and move in the original order
+        run: |
+          set -eu
+          lua5.1 tests/object_pool_rc1.lua
+          lua5.1 tests/rail_auto_service_rc1.lua
+          lua5.1 tests/town_growth_rc1_station_phase.lua
+          lua5.1 tests/town_growth_rc1_vehicle_phase.lua
+          lua5.1 tests/town_growth_rc1_two_buses.lua
+          lua5.1 tests/town_growth_rc1_mixed_road_rail.lua
+          lua5.1 tests/town_growth_rc1_ordinary_train.lua
+      - name: Restart ordinary train mid-service in native Luanti
+        run: bash tests/town_growth_rc1_ordinary_train_native.sh
