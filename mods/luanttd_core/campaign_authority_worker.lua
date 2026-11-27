@@ -64,7 +64,11 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     local last_us,last_speed
     publish=function(now)
       if s.speed~=last_speed or now-last_us>=solar.sample_interval*1000000 then
-        core.ipc_set(channel..":solar_clock",sample(now,tick_mode and auto.sample() or nil))
+        -- Completed actor frames use fraction 1 so they never jump
+        -- backwards to the start of that trajectory. A paused sun must
+        -- instead use the calendar fraction that will actually reopen.
+        local visual_fraction=tick_mode and (s.speed or 0)>0 and auto.sample() or nil
+        core.ipc_set(channel..":solar_clock",sample(now,visual_fraction))
         last_us,last_speed=now,s.speed
       end
     end
