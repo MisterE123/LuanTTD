@@ -32,7 +32,7 @@ core.register_on_mods_loaded(function()
     progress_seen=progress_seen+1
   end,function(ok,why,unexpected_table)
     assert(ok,why)
-    assert(not unexpected_table and progress_seen>0 and last==87 and heartbeats>1)
+    assert(not unexpected_table and progress_seen>0 and last==90 and heartbeats>1)
     local actual=assert(prepared.read(),"Worker success without durable result")
     compare(expected,actual)
     local found,mill_layouts={},{}

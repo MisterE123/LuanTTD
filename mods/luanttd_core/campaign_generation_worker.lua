@@ -5,6 +5,7 @@ local Setup=dofile(mod.."/world_setup.lua")
 local Checkpoints=dofile(mod.."/campaign_checkpoint.lua")
 local Codec=dofile(mod.."/packed_campaign.lua")
 local cancelled={}
+local save_progress=90 -- settling ends at 89; completion still needs a durable write
 function core.luanttd_generate_campaign(cfg,path,topic)
   local last_check,pct_sent,stage_sent
   local function pulse(pct,stage)
@@ -22,10 +23,10 @@ function core.luanttd_generate_campaign(cfg,path,topic)
     local sim=dofile(mod.."/sim.lua")
     local generate=dofile(mod.."/campaign_generation.lua")(core,mod,sim,Setup)
     local state=generate.run(cfg,pulse)
-    pulse(87,"Saving your new world")
+    pulse(save_progress,"Saving your new world")
     local host=setmetatable({get_worldpath=function() return path end},{__index=core})
     Checkpoints(host,Codec,"luanttd-prepared-campaign.chk").write_state(state,function()
-      pulse(87,"Saving your new world")
+      pulse(save_progress,"Saving your new world")
     end)
     return true
   end)

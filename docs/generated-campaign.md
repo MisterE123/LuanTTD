@@ -226,3 +226,26 @@ Verification:
   the loaded mapblocks reflect the checkpoint.
 - The graphical test `BAYLINE_NATIVE_GENERATED_WORLD=1` builds a paid
   roadside stop on an actual generated municipal street and reopens it.
+
+### Faster settling on ocean maps
+
+The ordered pregame pass records open-sea tiles whose eight neighbors
+are also open sea. Stock flooding cannot affect any of those
+neighbors. Actual flooded or dried parcels clear the surrounding
+flags. It uses at most one 32-bit word per 32 cells, is discarded
+before the game starts, and makes no changes to live flooding.
+
+In two alternating native generation pairs on the same 1024×1024
+coastal seed, the settling phase averaged **8.81 s before, 7.30 s
+after** (about 17% less CPU). All 1,048,576 tiles, the RNG state,
+and the 1,371,934 decoded records and aliases matched. The timing
+excludes terrain generation, checkpoint encoding and disk I/O.
+
+```sh
+tests/pregame_open_water_perf_native.sh luantiserver 98b6731 ../pregame-bench
+```
+
+The invalidation regression also ensures a formerly quiet sea tile
+is visited again after a neighboring parcel changes. The setup display moves
+forward from settling (up to 89%) to saving (90%); the game still waits
+for the atomic checkpoint write to succeed before declaring completion.
