@@ -554,3 +554,23 @@ or frame rate. To rerun on a copied benchmark checkpoint:
 tests/road_yapf_perf_native.sh "$(command -v luantiserver)" \
   cbaa1785abe27a42d71490202ed5cdcf8a347f93 /path/to/128-bus-checkpoint.chk /tmp/road-routing-bench
 ```
+
+## Stock vehicle cargo age countdown
+
+Most vehicle ticks only decrement the cargo-aging counter. The Lua
+loading adapter follows that fast path without allocating a packet
+closure or dividing/modulo on every tick. When the counter wraps it
+still ages all onboard, unloading, and reserved cargo, caps each age
+at 65,535, and handles more than one expiration in the input interval.
+
+```sh
+LUANTTD_CARGO_AGE_ONLY=1 tests/road_fleet_perf_native.sh luantiserver   2a3d80ba4f6f1c851034a10bad29430905e63e55 /tmp/luanttd-age-bench
+```
+
+Twelve alternating native async batches of 568,320 cargo age calls on
+192 loaded vehicles decreased median CPU time from 76.96 to 20.01 ms.
+Every counter and onboard, unloading, and reserved age matched. The
+separate 192-bus simulation test compares complete durable and
+visual-motion state; this timing is for cargo aging alone, not a
+claim about entire fleet stepping or frame rate. Whole-fleet timing
+varied in both directions across repeated runs.

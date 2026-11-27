@@ -15,11 +15,18 @@ printf 'title = Native road fleet benchmark\n' > "$game/game.conf"
 printf 'name = luanttd_core\n' > "$mod/mod.conf"
 cp mods/luanttd_core/*.lua "$mod/"
 cp -a mods/luanttd_core/openttd "$mod/"
-cp tests/road_fleet_perf_native.lua "$mod/init.lua"
+fixture=road_fleet_perf_native
+marker="NATIVE ROAD FLEET BENCH"
+if [[ ${LUANTTD_CARGO_AGE_ONLY:-0} == 1 ]]; then
+  fixture=road_cargo_age_perf_native
+  marker="CARGO AGE NATIVE"
+fi
+cp "tests/$fixture.lua" "$mod/init.lua"
 cp tests/road_fleet_perf.lua "$mod/"
 # Native async Lua does not have debug.getinfo: point baseline Sim at
 # its two original modules without changing the normal nested loaders.
-git show "$baseline:mods/luanttd_core/sim.lua" | sed -e 's/"road_speed_runtime.lua"/"baseline_speed.lua"/' -e 's/"road_junction_guard.lua"/"baseline_junction.lua"/' > "$mod/baseline_sim.lua"
+git show "$baseline:mods/luanttd_core/sim.lua" | sed -e 's/"road_loading_runtime.lua"/"baseline_loading.lua"/' -e 's/"road_speed_runtime.lua"/"baseline_speed.lua"/' -e 's/"road_junction_guard.lua"/"baseline_junction.lua"/' > "$mod/baseline_sim.lua"
+git show "$baseline:mods/luanttd_core/road_loading_runtime.lua" > "$mod/baseline_loading.lua"
 git show "$baseline:mods/luanttd_core/road_speed_runtime.lua" > "$mod/baseline_speed.lua"
 git show "$baseline:mods/luanttd_core/road_junction_guard.lua" > "$mod/baseline_junction.lua"
 for variant in baseline current; do
@@ -34,5 +41,5 @@ export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/g
 if ! timeout 90 "$server" --config "$out/server.conf" --world "$out/world" --gameid fleetbench --logfile '' >"$out/server.log" 2>&1; then
   cat "$out/server.log";exit 1
 fi
-grep "NATIVE ROAD FLEET BENCH" "$out/server.log"
+grep "$marker" "$out/server.log"
 ! grep -E 'ERROR\[' "$out/server.log"

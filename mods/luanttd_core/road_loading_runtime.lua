@@ -330,6 +330,10 @@ return function(Timing,Packets)
     return rounds,departures
   end
 
+  local function age_packet(p,times)
+    p.age=min(65535,(p.age or 0)+times)
+  end
+
   -- Call after the vehicle controller, stock now also ages reservations.
   -- A host still on daily aging must not also call the old aggregate rule.
   function L.age_vehicle(v,ticks,period)
@@ -338,15 +342,19 @@ return function(Timing,Packets)
     local counter=v.cargo_age_counter or (v.passenger_age_ticks and period-v.passenger_age_ticks) or 1
     counter=min(counter,period)
     local elapsed=period-counter+ticks
+    -- Almost every vehicle tick only decrements the stock countdown.
+    if elapsed>=0 and elapsed<period then
+      v.cargo_age_counter=period-elapsed
+      return
+    end
     local times=floor(elapsed/period)
     v.cargo_age_counter=period-elapsed%period
-    local function age(p) p.age=min(65535,(p.age or 0)+times) end
     if times>0 then
-      for _,p in ipairs(v.batches or {}) do age(p) end
+      for _,p in ipairs(v.batches or {}) do age_packet(p,times) end
       local l=v.load_state
       if l then
-        for _,item in ipairs(l.unload) do age(item.packet) end
-        for _,p in ipairs(l.reserved) do age(p) end
+        for _,item in ipairs(l.unload) do age_packet(item.packet,times) end
+        for _,p in ipairs(l.reserved) do age_packet(p,times) end
       end
     end
   end

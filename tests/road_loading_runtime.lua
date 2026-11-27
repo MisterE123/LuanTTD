@@ -84,6 +84,17 @@ same(#no_leave,0);same(#st.stock.mail,1);same(st.stock.mail[1].units,18)
 same(v.load_state.reserved_units,14);same(v.units,8)
 L.age_vehicle(v,1)
 same(v.batches[1].age,1);same(v.load_state.reserved[1].age,1)
+do
+  local a={cargo_age_counter=2,batches={{age=65534},{age=1}},
+    load_state={unload={{packet={age=3}}},reserved={{age=4}}}}
+  L.age_vehicle(a,1,10)
+  same(a.cargo_age_counter,1);same(a.batches[1].age,65534);same(a.load_state.unload[1].packet.age,3)
+  L.age_vehicle(a,22,10)
+  same(a.cargo_age_counter,9);same(a.batches[1].age,65535);same(a.batches[2].age,4)
+  same(a.load_state.unload[1].packet.age,6);same(a.load_state.reserved[1].age,7)
+  L.age_vehicle(a,1,0);same(a.cargo_age_counter,9);same(a.batches[2].age,4)
+end
+
 events,time=run(st,fleet,ops,70)
 same(time,60);same(v.units,22);same(v.load_state.reserved_units,0)
 L.leave(st,v,ops)
