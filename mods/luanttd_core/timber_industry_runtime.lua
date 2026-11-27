@@ -95,20 +95,47 @@ return function(Rules,Catchment)
 
     -- Single world industry iteration, by source IndustryID, so common
     -- RNG draw order with preexisting coal remains under caller control.
+    local function phase_available(tick)
+      if ledger.open_station then return nil,"PREVIOUS_STATION_SCAN_PENDING" end
+      if ledger.industry_phase_tick and tick<ledger.industry_phase_tick or
+          ledger.landscape_tick and tick<ledger.landscape_tick or ledger.station_phase_tick and tick<ledger.station_phase_tick then
+        return nil,"STALE_INDUSTRY_PHASE"
+      end
+      return true
+    end
+    local function produce(ind,id,tick,options)
+      ledger.production[id],ledger.industry_phase_tick=tick,tick
+      options.editor=opts.editor and opts.editor(world,tick)
+      options.scale=opts.scale and opts.scale(world,tick)
+      return Rules.production_tick(ind,options)
+    end
+    local function production_options()
+      return {random_u32=ctx.random_u32,ambient=ctx.ambient}
+    end
     function B.produce(id,tick)
       assert(uint(tick))
       local ind=by_id[id]
       if not ind then return 0 end
-      if ledger.open_station then return 0,"PREVIOUS_STATION_SCAN_PENDING" end
-      if ledger.industry_phase_tick and tick<ledger.industry_phase_tick or
-          ledger.landscape_tick and tick<ledger.landscape_tick or ledger.station_phase_tick and tick<ledger.station_phase_tick then
-        return 0,"STALE_INDUSTRY_PHASE"
-      end
+      local available,reason=phase_available(tick)
+      if not available then return 0,reason end
       local last=ledger.production[id]
       if last and tick<=last then return 0,"DUPLICATE_OR_STALE_PRODUCTION" end
-      ledger.production[id],ledger.industry_phase_tick=tick,tick
-      return Rules.production_tick(ind,{editor=opts.editor and opts.editor(world,tick),
-        scale=opts.scale and opts.scale(world,tick),random_u32=ctx.random_u32,ambient=ctx.ambient})
+      return produce(ind,id,tick,production_options())
+    end
+    function B.produce_all(tick)
+      assert(uint(tick))
+      local options=production_options()
+      for _,ind in ipairs(industries) do
+        -- Recheck the phase in case a client callback opens a station
+        -- scan. The saved per-industry replay guard remains authoritative.
+        if not phase_available(tick) then return end
+        local id=ind.id
+        local last=ledger.production[id]
+        if not last or tick>last then
+          options.field_attempt=nil
+          produce(ind,id,tick,options)
+        end
+      end
     end
     function B.month(id,ordinal,year,options)
       assert(uint(ordinal))

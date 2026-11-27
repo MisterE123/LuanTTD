@@ -18,6 +18,7 @@ cp mods/luanttd_core/{combined_industry_runtime,timber_industry_runtime}.lua "$m
 git show "$2:mods/luanttd_core/openttd/farm_factory_industry.lua" > "$mod/baseline-farm.lua"
 git show "$2:mods/luanttd_core/openttd/oil_industry.lua" > "$mod/baseline-oil.lua"
 git show "$2:mods/luanttd_core/combined_industry_runtime.lua" > "$mod/baseline-combined.lua"
+git show "$2:mods/luanttd_core/timber_industry_runtime.lua" > "$mod/baseline-runtime.lua"
 cp tests/industry_tick_perf_native.lua "$mod/init.lua"
 printf 'port = %s\nbind_address = 127.0.0.1\nserver_announce = false\n' "${BAYLINE_NATIVE_PORT:-44346}" > "$out/conf"
 export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"

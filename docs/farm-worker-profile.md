@@ -65,3 +65,18 @@ Seven real farm, timber, and oil freight services also delivered
 ```sh
 tests/industry_tick_perf_native.sh luantiserver a1d8907 /tmp/industry-tick-bench
 ```
+
+### Ordered industry production dispatch
+
+The native owner now dispatches the already ordered industries as one batch
+per source tick. It reuses transient production options and avoids looking up
+each industry twice. Every live industry still executes its stock production
+rules at its original position in the RNG stream; the phase guards and
+per-industry replay ledger are unchanged.
+
+On Luanti 5.15.2's async VM, 768 mixed industries over 12 alternating
+256-tick batches took a median of 12.08–12.11 ms before and 8.94–10.10 ms
+after (17–26% less CPU in this isolated phase). Each batch compared the full
+production state, ledger, ambient events and field-attempt RNG. This is not a
+26% gain for the whole simulation. A focused farm/factory and timber cargo
+regression tests production, delivery, payment and restart as separate steps.

@@ -137,7 +137,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
     B.animate=options.each_tick
     function B.after_vehicle_tick(tick)
       for _,p in ipairs(stations) do refresh(p.st,tick,true) end
-      for _,i in ipairs(raw.industries) do raw.produce(i.id,tick) end
+      raw.produce_all(tick)
     end
     function B.month(ordinal,year,opts)
       local out={}

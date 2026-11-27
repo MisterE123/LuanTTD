@@ -8,8 +8,9 @@ core.after(0,function()
   local C=D("openttd/station_catchment")(P,Ra)
   local Coal=D("openttd/coal_industry")(P,Ra,C,I)
   local Timber=D("openttd/timber_industry")(P,C,Ra,I,Coal,D("openttd/town_goods"))
-  local Runtime,Fields=D("timber_industry_runtime"),D("openttd/farm_factory_fields")(Coal)
+  local Fields=D("openttd/farm_factory_fields")(Coal)
   local function prepare(base)
+    local Runtime=D(base and "baseline-runtime" or "timber_industry_runtime")
     local FarmCtor=D(base and "baseline-farm" or "openttd/farm_factory_industry")
     local Oil=D(base and "baseline-oil" or "openttd/oil_industry")(FarmCtor,P,C,Ra,I,Coal,Timber)
     local Farm=FarmCtor(P,C,Ra,I,Coal,Timber)
@@ -48,7 +49,8 @@ core.after(0,function()
     collectgarbage("collect")
     local t=os.clock()
     for u=start+1,start+256 do
-      for _,i in ipairs(B.industries) do B.produce(i.id,u) end
+      if B.produce_all then B.produce_all(u)
+      else for _,i in ipairs(B.industries) do B.produce(i.id,u) end end
     end
     return (os.clock()-t)*1000
   end
@@ -60,6 +62,15 @@ core.after(0,function()
     assert(same(before,after) and after.draws>0 and after.ambient>0 and after.attempts>0)
     output[i]={a,b,after.draws,after.ambient,after.attempts}
   end
+  -- Mixed standalone/replayed pulses must never produce twice or leave
+  -- the batch replay ledger different from the baseline per-ID dispatch.
+  local id=before.industry[1].id
+  for _,B in ipairs({base,candidate}) do
+    B.produce(id,tick+1)
+    if B.produce_all then B.produce_all(tick+1);B.produce_all(tick+1)
+    else for _,i in ipairs(B.industries) do B.produce(i.id,tick+1) end end
+  end
+  assert(same(before,after),"Ordered industry batch changed replay state")
   return output
  end,function(rows)
   assert(rows and #rows==12)
