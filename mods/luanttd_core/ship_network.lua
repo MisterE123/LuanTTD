@@ -311,7 +311,8 @@ return function(Sim,Terrain,Water,Facilities)
         station_area=p.station_area,approach=p.approach,water_class=p.water_class}
       if not st then
         if not retired then s.next_stock_ship_station=next_+1 end
-        st=retired or {id=next_,owner=owner,sign_tile=p.land}
+        st=retired or {id=next_,owner=owner,sign_tile=p.land,
+          stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)}
         if retired then
           -- Station::AddFacility relocates an unused sign to the new
           -- facility, retaining the existing station name and ID.
@@ -338,7 +339,8 @@ return function(Sim,Terrain,Water,Facilities)
       s.stock_ship_buoys=s.stock_ship_buoys or {}
       local next_=s.next_stock_ship_station or 1
       s.next_stock_ship_station=next_+1
-      s.stock_ship_buoys[next_]={id=next_,tile=id}
+      s.stock_ship_buoys[next_]={id=next_,tile=id,
+        stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)}
       s.tiles[id].stock_water_rocks=nil
       s.tiles[id].ship={kind="buoy",station=next_,owner=p.water_owner,
         water_class=p.water_class,water_ground=true}

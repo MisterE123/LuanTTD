@@ -676,7 +676,21 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       run.slope_steepness=s.stock_train_slope_steepness or 3
       update_power(run,stats)
       run.power=stats.power
-      run.paid_build_year=owned.parts[1].build_year
+      local lead=owned.parts[1]
+      run.paid_build_year=lead.build_year
+      if lead.stock_fault and R.stock_engine_reliability then
+        run.stock_pool_id,run.stock_fault=lead.stock_pool_id,lead.stock_fault
+        run.stock_live_procurement=true
+        run.stock_breakdowns=R.stock_breakdown_difficulty or Fault.REDUCED
+        run.stock_train_service_opts={interval=150,breakdowns=run.stock_breakdowns,no_servicing_if_no_breakdowns=true}
+        run.stock_fault.tick_counter=((s.passenger_house_clock and s.passenger_house_clock.counter or s.day*74)-
+          lead.stock_purchase_tick)%256
+        run.stock_random_parts={}
+        for i,part in ipairs(owned.parts) do
+          run.stock_random_parts[i]={stock_vehicle_random_bits=part.stock_vehicle_random_bits,
+            stock_waiting_random_triggers=part.stock_waiting_random_triggers}
+        end
+      end
       if freight then
         run.freight_engine_body_id=assert(owned.parts[1].body_id)
         if #owned.stock_ids==2 then run.freight_wagon_body_id=assert(owned.parts[2].body_id) end
@@ -1515,18 +1529,19 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return hit
   end
 
-  local function engine_reliability(run,date)
+  local function engine_reliability(s,run,date)
     local engine=run.stock_fault_engine
     if type(engine)=="number" then return engine end
-    return engine and Calendar.snapshot(engine,date).reliability
+    if engine then return Calendar.snapshot(engine,date).reliability end
+    return R.stock_engine_reliability and R.stock_engine_reliability(s,run.stock_engine,date)
   end
 
-  local function complete_service(s,base,d,run,events)
+  local function complete_service(s,base,d,run,events,paid)
     local depot=run.service_depot
     assert(Dispatch.stow_return(base,d.life,run.id,run.consist,depot))
     local h=run.stock_fault
-    local day=run.stock_last_economy_date
-    local reliability=assert(engine_reliability(run,day))
+    local day=paid and paid.stock_date or run.stock_last_economy_date
+    local reliability=assert(engine_reliability(s,run,day))
     Fault.service(h,reliability,day,day,run.stock_breakdowns)
     if run.stock_random_parts then
       Trigger.chain(run.stock_random_parts,1,"depot",function() return R.stock_random(s) end)
@@ -1582,6 +1597,11 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         if registered and registered.parts[1].in_depot then
           assert(Life.release_depot_front(base,d.life,run.id))
         end
+      end
+      if run.stock_live_procurement and paid and paid.stock_date then
+        local day=paid.stock_date
+        local reliability=assert(engine_reliability(s,run,day))
+        Fault.service(run.stock_fault,reliability,day,day,run.stock_breakdowns)
       end
       assert(ConsistMotion.release_front(run.consist))
       if run.block or run.local_signals then
@@ -1740,7 +1760,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
       local new=run.consist.parts[1]
       if run.service_depot and r.depot_hides and #r.depot_hides>0 and run.consist.parts[#run.consist.parts].hidden then
-        complete_service(s,base,d,run,events)
+        complete_service(s,base,d,run,events,paid)
         return
       end
       local entered=old.tile~=new.tile
@@ -2160,14 +2180,14 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   -- The real stock daily scheduler visits vehicles by absolute VehicleID.
   function R.stock_fault_days(s)
     local state=R.current(s)
-    local out={}
+    local out=R.stored_train_fault_days and R.stored_train_fault_days(s,R.stock_breakdown_difficulty or Fault.REDUCED) or {}
     for _,run in ipairs(state and state.runs or {}) do
       local h=run.stock_fault
       if h and run.stock_pool_id~=nil then
         out[#out+1]={id=run.stock_pool_id,calendar=function()
           Fault.calendar_day(h,{front=true})
         end,economy=function(date)
-          local reliability=engine_reliability(run,date)
+          local reliability=engine_reliability(s,run,date)
           run.stock_last_economy_date=date
           local random=function() return R.stock_random(s) end
           Fault.economy_day(h,{cur_speed=run.speed,stopped=run.stopped,loading=run.phase=="dwell",

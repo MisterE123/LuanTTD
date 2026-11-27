@@ -146,7 +146,8 @@ return function(Sim,Terrain,Stock,Underlay,rules)
         if mark then mark.tile=q.picker_area.tile
         else
           s.next_stock_road_waypoint=q.id+1
-          mark={id=q.id,owner=owner,tile=q.changes[1].id,tiles={},name="Road waypoint #"..q.id}
+          mark={id=q.id,owner=owner,tile=q.changes[1].id,tiles={},name="Road waypoint #"..q.id,
+            stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)}
         end
         all[q.id]=mark
       end

@@ -148,6 +148,7 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
     airport.id=s.next_small_airport or 1
     s.next_small_airport=airport.id+1
     s.stock_small_airports=s.stock_small_airports or {}
+    airport.stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)
     s.stock_small_airports[airport.id]=airport
     local dirty={}
     for _,pos in ipairs(airport.tiles) do

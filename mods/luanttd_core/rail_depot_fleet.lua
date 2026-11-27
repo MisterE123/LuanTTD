@@ -5,6 +5,8 @@
 -- CmdBuildRailWagon, NormalizeTrainVehInDepot and CmdMoveRailVehicle.
 local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local Freight=dofile(mod.."/rail_freight_kinds.lua")
+local Fault=dofile(mod.."/openttd/road_breakdowns.lua")
+local Trigger=dofile(mod.."/openttd/vehicle_random_trigger.lua")
 return function(Sim,Lab,Roster)
   local F={VERSION=1,MAX_POOL=0xFF000}
   local floor,min,max=math.floor,math.min,math.max
@@ -166,10 +168,10 @@ return function(Sim,Lab,Roster)
     s.stock_rail_fleet=d
     return true
   end
-  function F.availability(s,id)
+  function F.availability(s,id,date)
     local d=state(s)
     if not d then return nil,"RAIL_FLEET_UNAVAILABLE" end
-    return availability(d,id,today(s,d))
+    return availability(d,id,date or today(s,d))
   end
   function F.catalog(s,advanced_ready)
     local d=state(s)
@@ -427,6 +429,11 @@ return function(Sim,Lab,Roster)
     local c=s.companies[owner]
     if type(c.cash)~="number" or type(c.expense)~="number" or type(c.month_exp)~="number" then
       return nil,"INVALID_RAIL_COMPANY_LEDGER" end
+    local slots
+    if s.stock_engine_startup_seed~=nil and Sim.stock_vehicle_slots then
+      slots,why=Sim.stock_vehicle_slots(s,#fresh.stats.parts)
+      if not slots then return nil,why end
+    end
     local r={id=d.next_id,unit_number=fresh.unit_number,owner=owner,depot=fresh.depot,
       depot_dir=fresh.depot_dir,stock_ids=clone(fresh.stock_ids),status="depot",purchase_day=s.day,
       price=fresh.price,expense="new_vehicles",roster_preview=fresh.preview,parts={}}
@@ -439,8 +446,21 @@ return function(Sim,Lab,Roster)
         part.reliability=a.reliability
         part.reliability_decay=a.reliability_decay
         part.max_age_days=Roster.vehicle_life_days(row.stock_id,d.config.extend_vehicle_life)
+        if slots and n==1 then
+          part.stock_fault=Fault.new(a.reliability,a.reliability_decay,part.max_age_days,
+            fresh.calendar_day,fresh.calendar_day)
+        end
+      end
+      if slots then
+        part.stock_pool_id=slots[n]
+        part.stock_purchase_tick=s.passenger_house_clock and s.passenger_house_clock.counter or s.day*74
       end
       r.parts[n]=part
+    end
+    if slots then
+      -- Train::BuildRailEngine/BuildRailWagon/BuildMultiheaded: one
+      -- shared draw per physical body, only after a validated purchase.
+      for _,part in ipairs(r.parts) do Trigger.built(part,function() return Sim.stock_random_u32(s) end) end
     end
     -- No callbacks or fallible work beyond this point. The same world
     -- snapshot persists the cash ledger, purchase receipt and identity.
@@ -601,6 +621,25 @@ return function(Sim,Lab,Roster)
     end
     for _,r in pairs(d and d.loose or {}) do if r.depot==depot_id then return true end end
     return false
+  end
+  -- Train::OnNewEconomyDay still decays an unstarted depot engine;
+  -- its stopped guard suppresses the Random() draw, not reliability loss.
+  function F.parked_fault_days(s,difficulty)
+    local d=state(s)
+    local events={}
+    for _,unit in pairs(d and d.units or {}) do
+      local head=unit.parts[1]
+      if unit.status=="depot" and head and head.stock_fault then
+        events[#events+1]={id=head.stock_pool_id,calendar=function()
+          Fault.calendar_day(head.stock_fault,{front=true})
+        end,economy=function(date)
+          local model=availability(d,head.stock_id,date)
+          Fault.economy_day(head.stock_fault,{cur_speed=0,stopped=true,difficulty=difficulty,
+            engine_reliability=model.reliability},function() error("A parked train cannot draw a breakdown") end)
+        end}
+      end
+    end
+    return events
   end
   function F.prepare_dispatch(s,owner,id,hooks)
     local d=state(s)

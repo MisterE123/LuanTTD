@@ -135,11 +135,12 @@ return function(Sim,Terrain,Rig,Oil)
     if ship[id] or air[id] or s.stock_ship_buoys and s.stock_ship_buoys[id] then return end
     local cell=added.id
     local rec=s.stock_oil_placements[ind.id]
-    local key={id=id,type="oilrig",tile=cell,industry=ind.id,name=s.sites[ind.site].name,town=ind.town,
+    local pool=Sim.stock_station_slot and Sim.stock_station_slot(s)
+    local key={id=id,stock_station_id=pool,type="oilrig",tile=cell,industry=ind.id,name=s.sites[ind.site].name,town=ind.town,
       water_class=station.water_class}
-    ship[id]={id=id,neutral=true,oil_rig=ind.id,land=cell,water=cell,water_class=station.water_class,
+    ship[id]={id=id,stock_station_id=pool,neutral=true,oil_rig=ind.id,land=cell,water=cell,water_class=station.water_class,
       town=ind.town,name=key.name,station_area={{x=rec.x,z=rec.z}}}
-    air[id]={id=id,neutral=true,oil_rig=ind.id,origin=cell,x=(tile.x+1)*16,z=(tile.z+1)*16,
+    air[id]={id=id,stock_station_id=pool,neutral=true,oil_rig=ind.id,origin=cell,x=(tile.x+1)*16,z=(tile.z+1)*16,
       layout="oilrig",rotation=0,width=1,height=1,ground=0,delta_z=Rig.airport.delta_z,flags=0,
       town=ind.town,name=key.name,tiles={{id=cell,x=0,z=0}}}
     s.stock_neutral_stations=s.stock_neutral_stations or {}

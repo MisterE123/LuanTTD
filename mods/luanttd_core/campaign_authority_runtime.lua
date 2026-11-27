@@ -226,6 +226,7 @@ return function(Sim,mod,s,cap)
       end},save=function() end},network,rail,signals)
     if roster then
       local owned=B.owned_rail(s,network.lab,roster,rail,function() return Sim.rail_oil_active(s) end)
+      rail.stock_breakdown_difficulty=cap.road and cap.road.breakdowns or 1
       if s.stock_electrification then
         local Types=dofile(source.."rail_types.lua")
         owned.mount_electric(Types)

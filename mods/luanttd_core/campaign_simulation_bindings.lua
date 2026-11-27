@@ -146,6 +146,12 @@ return function(Sim,mod)
   end
   function B.owned_rail(s,lab,roster,pilot,oil_active)
     local depot=dofile(mod.."/rail_depot_fleet.lua")(Sim,lab,roster)
+    pilot.stored_train_fault_days=depot.parked_fault_days
+    pilot.stock_engine_reliability=function(s,id,date)
+      local model=depot.availability(s,id,date)
+      return model and model.reliability
+    end
+
     local owned=dofile(mod.."/rail_owned_service.lua")(depot,roster,pilot,Sim.rail_coal_validate,Sim.rail_oil_validate,
       oil_active,Sim.rail_goods_validate,Sim.rail_goods_active,{active=Sim.rail_profile_active,validate=Sim.rail_profile_validate},
       Sim.rail_mail_active)

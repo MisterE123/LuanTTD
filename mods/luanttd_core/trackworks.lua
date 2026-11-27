@@ -120,7 +120,8 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       st.tiles,st.area=merged,area
     else
       s.next_stock_rail_station=id+1
-      st={id=id,owner=owner,axis=axis,tiles=group,area=area}
+      st={id=id,owner=owner,axis=axis,tiles=group,area=area,
+        stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)}
       s.stock_rail_stations[id]=st
     end
     for _,tile in ipairs(group) do
@@ -158,7 +159,8 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       local id=s.next_stock_rail_station or 1
       s.next_stock_rail_station=id+1
       s.stock_rail_waypoints=s.stock_rail_waypoints or {}
-      s.stock_rail_waypoints[id]={id=id,owner=owner,axis=axis,tile=tile,tiles={tile}}
+      s.stock_rail_waypoints[id]={id=id,owner=owner,axis=axis,tile=tile,tiles={tile},
+        stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)}
       t.rail_waypoint_id,t.rail_waypoint_axis=id,axis
     end
     s.topology=s.topology+1

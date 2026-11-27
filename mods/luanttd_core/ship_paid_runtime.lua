@@ -109,6 +109,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       -- each a noncolliding stable global order for fixed-point tie breaks
       -- and acceptance scheduling while retaining the raw ferry save ID.
       station_id=function(kind,st)
+        if st.stock_station_id~=nil then return st.stock_station_id end
         if kind=="road" or mode(st)~="ship" then return st.id end
         return ship_index(st.id)
       end}
@@ -230,6 +231,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     -- Physical facilities supply catchment: both tiles of every joined
     -- dock pair, and each actual railway platform tile.
     local function sync(id,local_id,actual,tiles,mode_,ref,base,id_for_tick)
+      id_for_tick=actual.stock_station_id or id_for_tick
       local st=service.stations[id]
       local neutral=Rig.neutral_ref(s,actual)
       local owner=actual.owner
@@ -247,6 +249,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
           tick_index=id_for_tick,tiles=tiles},ctx)
       end
       st.host_mode,st.host_id,st.footprint_rev=mode_,local_id,ref
+      st.stock_station_id=actual.stock_station_id
       st.mail_enabled=mail or nil
       if mail and fresh then Service.refresh_mail_acceptance(service,id,ctx) end
       if not st.sign then local x,y=Sim.xy(base);st.sign={x=x,y=y} end
@@ -333,6 +336,10 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     if post then Dry.mail_charge(s,post_craft) end
     if active.rail and Rail.paid_art_ready and not Rail.paid_art_ready(s) then active.rail=false end
     local ctx=context(s,active)
+    if s.stock_bus_market then
+      local new_date=s.stock_bus_market.epoch+s.day
+      ctx.stock_date=function(tick) return new_date-(tick<first_tick+73 and 1 or 0) end
+    end
     local p=Ship and Ship.current(s)
     local rails=Actors.gather(Rail,s) -- owned coal keeps its own cargo lifecycle
     if Rail and Rail.stock_cargo_random then
@@ -422,7 +429,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local allocator=Mail.shared_allocator(Catchment,ctx.width,ctx.height,physical,{
         select_goods=ctx.select_goods,neutral_owner=ctx.neutral_owner,town_rights=rights,
         station_town=function(st) return st.town or st.site end,
-        station_id=function(st) return st.host_mode=="ship" and ship_index(st.host_id) or st.id end,
+        station_id=function(st) return st.stock_station_id or (st.host_mode=="ship" and ship_index(st.host_id) or st.id) end,
         modified=s.stock_modified_catchment,immutable_footprints=true,tiles=function(st)
           if Mail.truck_stop(st) then return Sim.road_stop_tiles(st) end
           return st.tiles

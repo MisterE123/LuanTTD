@@ -2030,7 +2030,8 @@ function M.register_tram_station(s,owner,id)
   local town=s.sites[best]
   s.stations[sid]={id=sid,tile=id,mode="road",owner=owner,tram_only=true,stop_type="bus",
     name=(town and town.name.." " or "").."Tram platform #"..sid,
-    town=town and town.kind=="town" and best or nil,site=best,served=served,stock={},last_service={}}
+    town=town and town.kind=="town" and best or nil,site=best,served=served,stock={},last_service={},
+    stock_station_id=M.stock_station_slot(s)}
   return sid
 end
 function M.tram_stop_id(t)
@@ -2903,7 +2904,8 @@ local function apply_build(s,owner,changes,cost)
             s.next_station=s.next_station+1
             s.stations[sid]={id=sid,tile=id,mode=M.tools[k].mode,owner=owner,
               name=(site and site.name.." " or "")..label.." #"..sid,
-              town=site and site.kind=="town" and best or nil,site=best,served=served,stock={},last_service={}}
+              town=site and site.kind=="town" and best or nil,site=best,served=served,stock={},last_service={},
+              stock_station_id=M.stock_station_slot(s)}
           end
         end
         tile.station=sid
@@ -3441,6 +3443,57 @@ function M.vehicle_available(s,engine)
     (oil_engine(engine) and M.road_oil_active(s)) or
     (heavy_engine(engine) and M.road_heavy_active(s)))
 end
+-- A road vehicle and each physical rail body occupy the same stock
+-- VehicleID pool. Row IDs stay local to the UI; timers use the stock slot.
+function M.stock_identity_pool()
+  if not M.stock_id_pool then
+    local source=debug and debug.getinfo(1,"S").source
+    local base=source and source:match("^@(.*/)sim%.lua$")
+    base=base or (core and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
+    M.stock_id_pool=dofile(base.."openttd/object_pool_rc1.lua")
+  end
+  return M.stock_id_pool
+end
+function M.stock_vehicle_slots(s,count)
+  local Pool=M.stock_identity_pool()
+  local used,limit={},0xFF000
+  for id,v in pairs(s.fleet or {}) do
+    Pool.occupy(used,v.stock_pool_id or id-1,limit)
+  end
+  local rail=s.stock_rail_fleet
+  if rail then
+    local function collect(group)
+      for _,unit in pairs(group or {}) do
+        for _,p in ipairs(unit.parts) do
+          if p.stock_pool_id~=nil then Pool.occupy(used,p.stock_pool_id,limit) end
+        end
+      end
+    end
+    collect(rail.units);collect(rail.loose)
+  end
+  return Pool.reserve(used,count,limit)
+end
+-- BaseStation (stations and waypoints) shares one allocator. A neutral
+-- rig contributes a single BaseStation, not one per presentation alias.
+-- Retired facilities still occupy a slot until their final stock tick.
+function M.stock_station_slot(s)
+  if not s.stock_pool_authority and s.stock_engine_startup_seed==nil then return end
+  local Pool,used,limit=M.stock_identity_pool(),{},0xFFFE
+  local function visit(row)
+    if row.stock_station_id~=nil then Pool.occupy(used,row.stock_station_id,limit) end
+  end
+  for _,key in ipairs({"stations","stock_road_waypoints","stock_rail_stations","stock_rail_waypoints",
+      "stock_ship_stations","stock_ship_buoys","stock_small_airports","stock_neutral_stations"}) do
+    for _,row in pairs(s[key] or {}) do if not row.neutral then visit(row) end end
+  end
+  for _,key in ipairs({"retired_road_stations","retired_road_waypoints","retired_ship_stations"}) do
+    for _,entry in pairs(s[key] or {}) do
+      local now=s.passenger_house_clock and s.passenger_house_clock.counter or s.stock_load_tick or s.day*74
+      if now<entry.until_tick then visit(entry.row) end
+    end
+  end
+  return assert(Pool.reserve(used,1,limit),"Stock station pool exhausted")[1]
+end
 function M.purchase(s,owner,engine,cargo,station,depot)
   local c=M.company(s,owner)
   local e=M.vehicle_offer(s,engine)
@@ -3461,11 +3514,17 @@ function M.purchase(s,owner,engine,cargo,station,depot)
   if c.cash<e.cost then return nil,"Not enough cash." end
   local n=0;for _,v in pairs(s.fleet) do if v.owner==owner then n=n+1 end end
   if n>=60 then return nil,"Company fleet limit reached (60)." end
+  local stock_id
+  if s.stock_engine_startup_seed~=nil and e.mode=="road" then
+    local slots,why=M.stock_vehicle_slots(s,1)
+    if not slots then return nil,why end
+    stock_id=slots[1]
+  end
   debit(c,e.cost)
   local id=s.next_vehicle;s.next_vehicle=id+1
   s.fleet[id]={id=id,name=e.name.." #"..id,owner=owner,engine=engine,cargo=cargo,station=station,
     depot=depot,home_depot=depot,orders=depot and {} or {{station=station,action="normal"}},index=1,units=0,revenue=0,expense=0,delivered=0, bought=s.day,
-    status="Stopped",running=false,progress=0,wait=0,condition=100,stock_purchase_value=e.cost}
+    status="Stopped",running=false,progress=0,wait=0,condition=100,stock_purchase_value=e.cost,stock_pool_id=stock_id}
   if e.stock_id then
     local key=s.stock_bus_market and "stock_bus" or "stock_regal"
     local v=s.fleet[id]

@@ -7,14 +7,16 @@ return function(Sim)
   local buckets={station="retired_road_stations",waypoint="retired_road_waypoints",
     dock="retired_ship_stations"}
   local function now(s,kind)
-    if kind=="dock" and s.passenger_house_clock then return s.passenger_house_clock.counter end
+    if (kind=="dock" or s.stock_pool_authority) and s.passenger_house_clock then
+      return s.passenger_house_clock.counter
+    end
     return s.stock_load_tick or s.day*74
   end
   function R.retire(s,kind,row)
     local key=assert(buckets[kind])
     s[key]=s[key] or {}
     local tick=now(s,kind)
-    local first=250-(tick+row.id)%250
+    local first=250-(tick+(row.stock_station_id or row.id))%250
     s[key][row.id]={row=row,until_tick=tick+first+7*250}
   end
   function R.get(s,kind,id)

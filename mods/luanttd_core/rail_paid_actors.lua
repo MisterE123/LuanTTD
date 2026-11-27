@@ -109,6 +109,7 @@ return function(Service,key)
       return n
     end
     return {
+      stock_date=ctx.stock_date and ctx.stock_date(tick),
       crash=function(r)
         local n=id(r)
         -- Remove pending platform loading, do not pay passenger fares

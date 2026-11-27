@@ -636,6 +636,37 @@ In this town comparison the train's source VehicleID, rail StationIDs,
 saved mechanical state, initial engine calendar, and per-body random
 state are restored numerically. The same-runtime proof does not yet
 establish a general shared vehicle/station pool (including effects,
-other modes, buying, selling, and depot operations) and activation
-from ordinary new worlds. Broader layouts, climates, and tram, water
-and aviation competition are not claimed here.
+other modes, buying, selling, and depot operations). The following generated-world check covers
+ordinary owned purchases separately. Broader layouts, climates, and
+tram, water and aviation competition are not claimed here.
+
+#### Ordinary purchase starts the same train lifecycle
+
+The [generated-world test](../tests/town_growth_rc1_ordinary_train.lua)
+builds the route on an untouched generated Temperate board and purchases
+a locomotive, a bus, and a passenger carriage separately through the
+normal authority commands. Their physical stock VehicleIDs are 0, 1,
+and 2 regardless of depot/fleet panel identifiers. Selling the parked bus
+and buying another reuses slot 1. No source pose, date, reliability,
+random seed, or cargo is inserted into the purchased train. Its condition
+decays even while stopped at the depot; the normal passenger service
+earns fares, independently selects its automatic service depot, enters it
+with both physical bodies, and resumes its existing station order.
+
+The [native Luanti test](../tests/town_growth_rc1_ordinary_train_native.sh)
+repeats the purchase, construction and fare loop in the real worker,
+checks that both shipped actor models are projected, and restarts the
+server while the train is actually headed to the depot. The resumed
+train services itself and returns to the original order, with 128
+passengers already delivered in the fixture. The first-year stock replay
+above remains a separate, stricter differential, not a claim that the
+generated map or every active carrier now matches the original.
+
+Fresh BaseStation IDs also cover road stops, tram platforms, rail
+platforms, road and railway waypoints, docks, buoys, airports and the
+single shared offshore rig. They determine the served-station
+acceptance phase and ties in the common house cargo contest. Depot
+facility-local labels and saved actor keys do not change. The physical
+vehicle pool is live for road and rail; ship/air vehicle allocation,
+simulation-only effects, cross-mode motion order, some facility expiry
+paths, and exact mixed rail accounts remain separate parity work.
