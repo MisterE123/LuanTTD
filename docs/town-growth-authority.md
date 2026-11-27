@@ -129,6 +129,13 @@ RC1's NoWater clear quote permits it. The municipal clear command
 applies only to the committed house footprint. Adjacent river or actual
 sea tiles and owned property are not cleared by this path.
 
+Farm fields are ordinary clear land under RC1, not protected industry
+buildings. Houses may replace an unowned crop tile. Municipal grading
+also includes the stock field clearance price in its spending limit.
+The field and its fence disappear only from cleared tiles; the farm
+and neighboring fields remain. A native worker builds on a crop field
+and reopens the checkpoint with the house and adjacent field intact.
+
 Completed houses age on the stock year boundary and cap at 255; unfinished
 buildings do not age. The rebuild check uses the saved completion year to
 calculate the same age without a map-wide scan. The native generator test

@@ -184,3 +184,29 @@ do
     and tile.terrain~="water" and s.tiles[river].water_class=="river" and town.num_houses==previous+1)
   print("PASS ordinary live town house clears only the selected unowned shore tile, preserving adjacent river")
 end
+
+
+-- Farmland is an ordinary clear tile, including when the stock land
+-- levelling probe changes a field before attempting a house. A wide
+-- four-corner job costs more with crops; failed quotes mutate nothing.
+do
+  local s=world()
+  local x,z=32,32
+  local id,other=Sim.id(x,z),Sim.id(x+3,z)
+  s.corner_grid=Terrain.new(Sim.W,Sim.H,function()return 1 end)
+  s.stock_generated_profile={map_height_limit=30}
+  for dx=-2,2 do for dz=-2,2 do s.tiles[Sim.id(x+dx,z+dz)]={h=1,terrain="grass"} end end
+  local planted=function() return {kind="clear",ground="field",variant=4,counter=0,
+    slope=0,base=1,fences={south=2},industry=12301} end
+  s.stock_farm_fields={[other]=planted()}
+  for dx=-1,1 do for dz=-1,1 do s.stock_farm_fields[Sim.id(x+dx,z+dz)]=planted() end end
+  local b=W.road_board(s)
+  assert(b.clear_quote(x,z,"house"))
+  local rev=s.corner_grid.revision
+  assert(not b.terraform_land(x,z,15,true,true) and s.corner_grid.revision==rev)
+  assert(s.stock_farm_fields[id] and s.stock_farm_fields[other])
+  assert(b.terraform_land(x,z,15,true,false))
+  assert(not s.stock_farm_fields[id] and s.stock_farm_fields[other].industry==12301
+    and s.tiles[id].stock_clear_density==0 and s.corner_grid.revision==rev+1)
+  print("PASS municipal crop-field grading charges stock clear prices against its cap and clears only modified fields")
+end

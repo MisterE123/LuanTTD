@@ -159,7 +159,8 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
           -- non-tree structures and protected company land alone.
           if not t or (t.kind~="clear" and t.kind~="trees") or t.owner or t.bridge_above or
               live and not live.houseable(u,v) then return nil,"TOWN_PROTECTED_TERRAIN" end
-          return Sim.road_site_clear_cost(s.tiles[Sim.id(u,v)])
+          local id=Sim.id(u,v)
+          return Sim.road_site_clear_cost(s.tiles[id],s.stock_farm_fields and s.stock_farm_fields[id])
         end,
       })
     if not p or cost_limited and p.cost>=(price+2)*8 then return false end
@@ -171,6 +172,10 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
         local _,base=Terrain.tile(s.corner_grid,d.x,d.z)
         t.terrain,t.h=base>0 and "hill" or "grass",base
         t.wood,t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,nil,nil,nil
+        if s.stock_farm_fields and s.stock_farm_fields[id] then
+          Sim.mark_clear_land(s,id)
+          if s.stock_farm_grass then s.stock_farm_grass[id]=nil end
+        end
       end
       if live then live.dirty(id) end
     end

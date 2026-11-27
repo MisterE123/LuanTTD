@@ -21,15 +21,17 @@ local reseed=mode=="reseed"
 local crossing=mode=="crossing"
 local companyroad=mode=="companyroad"
 local foreignhouse=mode=="foreignhouse"
+local farmhouse=mode=="farmhouse"
 local woodhouse=mode=="woodhouse" or foreignhouse
+local natural_house=woodhouse or farmhouse
 if span then s.passenger_rating_rng={3,3} end -- exercise the stock two-word RNG
 local cx,cz=span and 13 or 11,span and 17 or 12
-local center,protected=S.id(cx,cz),S.id(cx,cz+(woodhouse and 3 or 1))
+local center,protected=S.id(cx,cz),S.id(cx,cz+(natural_house and 3 or 1))
 local target=not span and "road" or "stock_road_"..mode
 s.sites={{id=1,kind="town",name="Grid Town",tile=center,population=0,stock={},produced={},received={}}}
 local rail_cell=S.id(cx+1,cz)
 local town=G.new(1,cx,cz,{layout="grid2",grow_counter=0})
-town.growing,town.growth_rate=true,(reseed or woodhouse) and 15000 or 0
+town.growing,town.growth_rate=true,(reseed or natural_house) and 15000 or 0
 s.stock_town_growth.towns[1]=town
 for id in ipairs(s.tiles) do s.tiles[id]={h=1,terrain="grass",variant=1} end
 local wooded=S.id(cx-1,cz)
@@ -47,6 +49,13 @@ else
   end
   assert(S.town_road_piece(s,foreignhouse and 2 or 1,center,10,true))
   if woodhouse then for _,dz in ipairs{-1,1} do s.tiles[S.id(cx,cz+dz)].wood=1 end end
+  if farmhouse then
+    s.stock_farm_fields={}
+    for _,dz in ipairs{-1,1} do
+      s.stock_farm_fields[S.id(cx,cz+dz)]={kind="clear",ground="field",
+        variant=5,industry=12301,counter=0,fences={[1]=2},slope=0,base=1}
+    end
+  end
 end
 s.tiles[protected].stock_industry={id=77}
 local rail_cash,road_cash,paver_cash
@@ -78,7 +87,7 @@ local disk=load_("campaign_checkpoint")(core,load_("packed_campaign"),file)
 disk.write_state(s)
 local client=load_("campaign_authority_client")(core,m)
 local cap={autoplay=true,seconds_per_day=.15,road={start_year=1950,breakdowns=0,service_interval=0},oil_tanker=true}
-if woodhouse then cap.road_town_policy={allow_town_roads=false} end
+if natural_house then cap.road_town_policy={allow_town_roads=false} end
 local view={{x=1,z=1,w=32,h=32}}
 local newroad,polls,closing=nil,0,false
 local function ask()
@@ -93,7 +102,7 @@ local function ask()
         if row.id==center and row.surface.road_bits~=10 then newroad=row.id end
       elseif crossing then
         if row.id==rail_cell and row.surface.level_crossing then newroad=row.id end
-      elseif woodhouse then
+      elseif natural_house then
         if row.surface.source_house and row.surface.source_house.root then newroad=row.id end
       elseif row.id~=center and row.surface.build==target and row.surface.road_town==1 then newroad=row.id end
     end
@@ -124,11 +133,14 @@ core.register_on_mods_loaded(function()
     if companyroad then
       assert(newroad==center and created.build=="road" and created.road_bits~=10)
       assert(created.owner=="Road Builder" and not created.road_town and next_.companies["Road Builder"].cash==road_cash)
-    elseif woodhouse then
+    elseif natural_house then
       assert(newroad==S.id(cx,cz-1) or newroad==S.id(cx,cz+1))
       assert(not created.wood and created.house and created.source_house.town==1 and not created.owner)
       assert(next_.tiles[center].road_town==(foreignhouse and 2 or 1) and next_.tiles[center].road_bits==10)
-      assert(next_.tiles[newroad==S.id(cx,cz-1) and S.id(cx,cz+1) or S.id(cx,cz-1)].wood)
+      local untouched=newroad==S.id(cx,cz-1) and S.id(cx,cz+1) or S.id(cx,cz-1)
+      if farmhouse then
+        assert(not next_.stock_farm_fields[newroad] and next_.stock_farm_fields[untouched].industry==12301)
+      else assert(next_.tiles[untouched].wood) end
     else
       assert(created.build==target and created.road_town==1 and (not created.owner or created.owner=="town"))
     end
@@ -152,21 +164,26 @@ core.register_on_mods_loaded(function()
         local r=F.follow(road,{owner="Carrier"},id,F.direction_trackdir(a.dir))
         assert(r.ok and r[mode] and r.tile==a.other)
       end
-    elseif not woodhouse then assert(created.road_bits>0) end
+    elseif not natural_house then assert(created.road_bits>0) end
     assert((crossing or companyroad or not next(next_.companies)) and next_.tiles[protected].stock_industry.id==77)
     if reseed then
       assert(not created.wood and not next_.tiles[center].build)
-    elseif not span and not woodhouse and not crossing then assert(next_.tiles[center].road_bits~=10) end
+    elseif not span and not natural_house and not crossing then assert(next_.tiles[center].road_bits~=10) end
     cap.autoplay=false
     assert(client.start(cap,function(ready)
       assert(ready.ready and ready.day==day)
       assert(client.query({kind="snapshots",windows=view},function(r)
         local found=false
+        if farmhouse then
+          local fields=assert(r.value[1].registries.stock_farm_fields)
+          local untouched=newroad==S.id(cx,cz-1) and S.id(cx,cz+1) or S.id(cx,cz-1)
+          assert(fields[newroad]==nil and fields[untouched].fences[1]==2)
+        end
         for _,row in ipairs(r.value[1].tiles) do
           if row.id==newroad then
             if companyroad then assert(row.surface.owner=="Road Builder" and row.surface.road_bits==created.road_bits)
             elseif crossing then assert(row.surface.level_crossing.rail_owner=="Rail Builder" and row.surface.road_town==1)
-            elseif woodhouse then assert(row.surface.source_house.id==created.source_house.id and not row.surface.wood)
+            elseif natural_house then assert(row.surface.source_house.id==created.source_house.id and not row.surface.wood)
             else assert(row.surface.road_bits==created.road_bits and row.surface.road_town==1) end
             found=true
           end
@@ -196,7 +213,7 @@ core.register_on_mods_loaded(function()
         assert(company.cash==paver_cash-80 and company.stock_town_authority_ratings[1]==482)
         assert(reopened.companies["Rail Builder"].cash==rail_cash)
       end
-      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and projected %s tile %d, preserved private clearance, reopened geometry"):format(woodhouse and "house on former woodland at" or companyroad and "new junction on company road at" or mode,newroad))
+      core.log("action",("PASS NATIVE MUNICIPAL ROADS: real stock owner grew and projected %s tile %d, preserved private clearance, reopened geometry"):format(farmhouse and "house on former farmland at" or woodhouse and "house on former woodland at" or companyroad and "new junction on company road at" or mode,newroad))
       core.request_shutdown("Native municipal road proof passed",false,0)
     end,file))
   end,file))

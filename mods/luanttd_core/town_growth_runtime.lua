@@ -24,18 +24,18 @@ return function(Sim,Terrain,G,B,H)
       at(s.level_crossing_tiles,id) or at(s.bridge_above,id) or at(s.tunnel_below,id) or
       at(s.rail_bridge_above,id) or at(s.rail_tunnel_below,id) or at(s.aqueduct_above,id)
   end
-  local function clear_levels(s,id,allow_tree,allow_coast)
+  local function clear_levels(s,id,allow_cover,allow_coast)
     local tile=at(s.tiles,id)
     local coast=tile and allow_coast and tile.terrain=="water" and tile.coastal_water
     if not tile or tile.terrain~="grass" and tile.terrain~="hill" and not coast or tile.owner or tile.site or
-      tile.stock_void or tile.stock_object or at(s.stock_farm_fields,id) or
-      tile.wood and not allow_tree or tile.house or tile.source_house or tile.build or tile.station or tile.parcel or
+      tile.stock_void or tile.stock_object or (not allow_cover and at(s.stock_farm_fields,id)) or
+      tile.wood and not allow_cover or tile.house or tile.source_house or tile.build or tile.station or tile.parcel or
       tile.road_bits or tile.road_town or protected(s,id,tile) then return end
     local x,z=Sim.xy(id)
     local slope,base,top=Terrain.tile(s.corner_grid,x,z)
     if slope and slope<16 and (not coast or Sim.town_clear_coast(s,id,false)) then return top,slope,base end
   end
-  local function board(s,allow_tree)
+  local function board(s,allow_cover)
     return {
       tile=function(x,z)
         local id=Sim.id(x,z)
@@ -48,7 +48,7 @@ return function(Sim,Terrain,G,B,H)
               road_bits=t.road_bits or 0}
           end
         end
-        local top,slope=clear_levels(s,id,allow_tree,allow_tree)
+        local top,slope=clear_levels(s,id,allow_cover,allow_cover)
         if top then
           local coast=t.terrain=="water" and t.coastal_water
           return {kind=coast and "water" or t.wood and "trees" or "clear",coast=coast,
@@ -56,7 +56,7 @@ return function(Sim,Terrain,G,B,H)
         end
         return {kind=t.terrain=="water" and "water" or t.house and "house" or "object",protected=true}
       end,
-      clear_quote=function(x,z,kind) return kind=="house" and clear_levels(s,Sim.id(x,z),allow_tree,allow_tree)~=nil end,
+      clear_quote=function(x,z,kind) return kind=="house" and clear_levels(s,Sim.id(x,z),allow_cover,allow_cover)~=nil end,
       house_supported=function(id) return names[id]~=nil end,
       house_roadtypes=HouseRoadTypes.on_board(Sim,s),
     }
@@ -270,8 +270,8 @@ return function(Sim,Terrain,G,B,H)
     -- recheck succeed. Do not issue a generic clear or terraform command.
     if not proposal or proposal.kind~="house" or proposal.town~=t.id then return false end
     local style=names[proposal.id]
-    local allow_tree=s.stock_generated_profile and not write_house
-    local get_level=function(id) return clear_levels(s,id,allow_tree,allow_tree) end
+    local allow_cover=s.stock_generated_profile and not write_house
+    local get_level=function(id) return clear_levels(s,id,allow_cover,allow_cover) end
     local parts,level=names.inspect(Sim,proposal,get_level)
     if not parts then return false end
     local root=parts[1]
@@ -283,16 +283,19 @@ return function(Sim,Terrain,G,B,H)
       wrote=true
       for _,part in ipairs(parts) do
         local tile=s.tiles[part.id]
-        local _,_,base=clear_levels(s,part.id,allow_tree,allow_tree)
+        local _,_,base=clear_levels(s,part.id,allow_cover,allow_cover)
         local coast=tile.terrain=="water" and tile.coastal_water
         if coast then
           -- RC1's NoWater flag prohibits clearing actual water, not a
           -- coast or rocky coast. Reuse the exact municipal clear quote.
           assert(Sim.town_clear_coast(s,part.id,true))
-        elseif tile.wood then
-          -- RC1 ClearTile_Trees: OWNER_TOWN does not debit or change
-          -- the rating of a company; clear this exact footprint only.
-          tile.wood,tile.stock_clear_ground,tile.stock_clear_density,tile.stock_clear_visits=nil,nil,nil,nil
+        elseif allow_cover then
+          -- Stock ClearTile_Clear treats fields as clear landscape. Only
+          -- clear this footprint; the field's source farm is unaffected.
+          -- OWNER_TOWN has no company to debit or penalize for trees.
+          Sim.mark_clear_land(s,part.id)
+          tile.wood=nil
+          if s.stock_farm_grass then s.stock_farm_grass[part.id]=nil end
         end
         names.stamp(part.record,proposal,style,part.index,tick)
         tile.house,tile.source_house,tile.h=true,part.record,base
