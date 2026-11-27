@@ -121,7 +121,7 @@ return function(G,catalog)
     if t.kind=="road" then return rb~=0 end
     if t.kind=="drive_stop" then return true end
     if t.kind=="house" or t.kind=="industry" or t.kind=="object" or
-        t.kind=="bay_stop" or t.kind=="station" or t.kind=="depot" then return false end
+        t.kind=="bay_stop" or t.kind=="station" or t.kind=="depot" or t.kind=="rail_portal" then return false end
     if t.kind=="bridge" or t.kind=="tunnel" then return true end
     return true
   end
@@ -229,6 +229,46 @@ return function(G,catalog)
     return plan_road(t,board,x,z,rcmd,d,random),true
   end
 
+  -- RC1 GrowTownAtRoad: construction is distinct from the traversal.
+  -- The visit may move the current tile through a road bridge/tunnel.
+  function B.walk(t,board,x,z,roads,random,visit)
+    local from
+    local m=t.layout=="better" and 2 or grid[t.layout] and 1 or 4
+    local budget=10+floor(t.num_houses*m/9)
+    for _=0,budget do
+      local q=board.tile(x,z)
+      if disallowed(q) then return end
+      local rb=road(q)
+      local plan,stop,extra_built,u,v=visit(t,board,x,z,q,rb,from,random)
+      if plan or extra_built then return plan,extra_built end
+      if u~=nil then x,z=u,v end
+      if from and has(rb,bits[rev(from)]) then rb=rb-bits[rev(from)] end
+      if rb==0 then return end
+      local next_dir
+      q=board.tile(x,z)
+      local portal=q and q.inside~=nil and (q.kind=="bridge" or q.kind=="tunnel")
+      if portal then
+        next_dir=rev(q.inside)
+      else
+        while rb~=0 do
+          local b
+          repeat next_dir=random_dir(random);b=bits[next_dir] until has(rb,b)
+          rb=rb-b
+          if B.can_follow(board,x,z,next_dir,roads) then break end
+          next_dir=nil
+        end
+      end
+      if next_dir==nil then return end
+      x,z=per(board,x,z,next_dir)
+      q=board.tile(x,z)
+      -- Stock checks foreign municipal ownership on landing, not on the
+      -- seed tile. A neighboring town's initial road can host house search.
+      if q and q.kind=="road" and road(q)~=0 and q.road_town and q.road_town~=t.id then return end
+      if stop then return end
+      from=next_dir
+    end
+  end
+
   function B.grow(t,board,opts,random)
     opts=opts or {}
     assert(opts.year,"Calendar year required for house availability")
@@ -236,37 +276,16 @@ return function(G,catalog)
     local x,z=startx,startz
     for _,delta in ipairs(walk_seed) do
       if road(board.tile(x,z))~=0 then
-        local from
-        local m=t.layout=="better" and 2 or grid[t.layout] and 1 or 4
-        local budget=10+floor(t.num_houses*m/9)
-        for _=0,budget do
-          local q=board.tile(x,z)
-          if disallowed(q) or q.road_town and q.road_town~=t.id then return end
-          local rb=road(q)
-          local portal=q.inside~=nil and (q.kind=="bridge" or q.kind=="tunnel") and q
-          if portal then
-            if from~=nil or G.chance(1,2,random()) then x,z=q.other_x,q.other_z end
+        return B.walk(t,board,x,z,opts.allow_roads,random,function(t,b,u,v,q,rb,from,rand)
+          local portal=q.inside~=nil and (q.kind=="bridge" or q.kind=="tunnel")
+          if portal and (from==nil or has(rb,bits[rev(from)])) then
+            if from~=nil or G.chance(1,2,rand()) then
+              return nil,false,false,q.other_x,q.other_z
+            end
+            return
           end
-          local plan,stop,extra_built
-          if not portal then plan,stop,extra_built=grow_here(t,board,x,z,rb,from,opts,random) end
-          -- GrowTownInTile can build both houses, or succeed solely through
-          -- the extra house. Report its committed build without a second write.
-          if plan or extra_built then return plan,extra_built end
-          if from and has(rb,bits[rev(from)]) then rb=rb-bits[rev(from)] end
-          local next_dir
-          if portal and rb~=0 then next_dir=rev(board.tile(x,z).inside) end
-          while not portal and rb~=0 do
-            local b
-            repeat next_dir=random_dir(random);b=bits[next_dir] until has(rb,b)
-            rb=rb-b
-            if B.can_follow(board,x,z,next_dir,opts.allow_roads) then break end
-            next_dir=nil
-          end
-          if next_dir==nil or stop then return end
-          x,z=per(board,x,z,next_dir)
-          from=next_dir
-        end
-        return
+          return grow_here(t,b,u,v,rb,from,opts,rand)
+        end)
       end
       x,z=x+delta[1],z+delta[2]
     end

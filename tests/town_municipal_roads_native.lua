@@ -18,7 +18,8 @@ s.stock_town_growth={version=1,order={1},towns={}}
 local mode=core.settings:get("luanttd_qa_municipal_kind") or "road"
 local span=mode=="bridge" or mode=="tunnel"
 local reseed=mode=="reseed"
-local woodhouse=mode=="woodhouse"
+local foreignhouse=mode=="foreignhouse"
+local woodhouse=mode=="woodhouse" or foreignhouse
 if span then s.passenger_rating_rng={3,3} end -- exercise the stock two-word RNG
 local cx,cz=span and 13 or 11,span and 17 or 12
 local center,protected=S.id(cx,cz),S.id(cx,cz+(woodhouse and 3 or 1))
@@ -34,7 +35,14 @@ if reseed then
   assert(T.tile(s.corner_grid,cx,cz)~=0 and T.tile(s.corner_grid,cx-1,cz)==0)
   s.tiles[wooded].wood=1
 else
-  assert(S.town_road_piece(s,1,center,10,true))
+  if foreignhouse then
+    local nx,nz=cx+8,cz+8
+    local other=G.new(2,nx,nz,{layout="original"})
+    other.growing=false
+    s.stock_town_growth.order[2],s.stock_town_growth.towns[2]=2,other
+    s.sites[2]={id=2,kind="town",name="Neighbor",tile=S.id(nx,nz),population=0,stock={},produced={},received={}}
+  end
+  assert(S.town_road_piece(s,foreignhouse and 2 or 1,center,10,true))
   if woodhouse then for _,dz in ipairs{-1,1} do s.tiles[S.id(cx,cz+dz)].wood=1 end end
 end
 s.tiles[protected].stock_industry={id=77}
@@ -71,7 +79,7 @@ local function ask()
       assert(not junction or not junction.build)
       if newroad then assert(newroad==wooded) end
     else
-      assert(junction and junction.build=="road" and junction.road_town==1)
+      assert(junction and junction.build=="road" and junction.road_town==(foreignhouse and 2 or 1))
     end
     if newroad then
       assert(r.actor_tick>=s.passenger_house_clock.counter)
@@ -91,6 +99,7 @@ core.register_on_mods_loaded(function()
     if woodhouse then
       assert(newroad==S.id(cx,cz-1) or newroad==S.id(cx,cz+1))
       assert(not created.wood and created.house and created.source_house.town==1 and not created.owner)
+      assert(next_.tiles[center].road_town==(foreignhouse and 2 or 1) and next_.tiles[center].road_bits==10)
       assert(next_.tiles[newroad==S.id(cx,cz-1) and S.id(cx,cz+1) or S.id(cx,cz-1)].wood)
     else
       assert(created.build==target and created.road_town==1 and (not created.owner or created.owner=="town"))

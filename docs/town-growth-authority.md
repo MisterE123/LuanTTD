@@ -179,6 +179,23 @@ observation with 24,052 municipal street tiles. Over the next 22
 simulation days it reached 24,094 without player construction.
 The existing 58 public bridges and one tunnel were preserved.
 
+### Following the town road network
+
+The stock road walk visits the road selected at the town's starting
+point before considering the ownership of the next road. A house can
+therefore grow next to a neighboring town's road if it is the starting
+road, without changing the road's owner or pavement. Crossing onto
+such a road from a different tile still ends the search.
+
+The [compiled road-walk differential](../tests/town_road_walk_rc1.py)
+matches 3,200 RC1 traces, including visited tiles, headings, stop and
+success results, and RNG draw counts. It exercises all four layout
+budgets, existing networks with and without town road construction,
+and bridge/tunnel exits. The traversal comparison controls the build
+result at each visited tile; it is not a full town-growth simulation.
+A native worker test confirms that a new house next to the neighboring
+town's starting road persists while the road remains unchanged.
+
 ### Recovering a roadless town
 
 The stock roadless fallback searches from the town center in RC1's
