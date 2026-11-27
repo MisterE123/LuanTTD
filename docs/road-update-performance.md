@@ -733,3 +733,25 @@ These are routing workloads, not simulation frame-rate claims.
 tests/road_yapf_keys_perf_native.sh luantiserver c162bc0 /tmp/road-yapf-keys
 tests/ship_yapf_perf_native.sh luantiserver c162bc0 /tmp/ship-yapf-keys
 ```
+
+### Ordinary road previews
+
+Normal road pieces now emit the exact same construction ticket without
+allocating a temporary field array for every tile. Slopes with
+foundations, crossings, stations, and other non-ordinary rows retain
+the general encoder. An unquoted direct placement still replans, but
+doesn't stringify a price and footprint it has nothing to compare
+against. A quoted placement continues to check the entire ticket
+before applying the edit or charging the company.
+
+Two Linux native worker comparisons of 256 fixed-axis or bend previews
+on a 512×512 board found exact receipts and all 16,540 tile IDs in each
+batch. Median CPU time went from **34.2 to 27.5 ms** and from **32.9 to
+26.0 ms**. This is quote handling, excluding rendering and mailbox
+waits. A normal native AutoRoad mouse drag also previewed seven tiles
+for $1,340, did not charge on hover, charged exactly once on release,
+and painted the saved road into the live scene.
+
+```sh
+tests/road_quote_perf_native.sh luantiserver ec98ce6 /tmp/road-quote-bench
+```

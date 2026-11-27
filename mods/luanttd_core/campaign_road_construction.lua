@@ -133,13 +133,26 @@ return function(Sim,s,oneway,Bank,host)
     end
     return nil,"INVALID_ROAD_GESTURE"
   end
+  -- Keep the canonical receipt byte-for-byte. Most ordinary road
+  -- changes carry only the plain piece, height and normal clear charge.
+  -- Special geometry, ownership, work and stops use the general row.
+  local function ordinary_ticket(id,c)
+    if c.build~="road" or c.tool~="road" or c.disallowed~=nil or c.foundation~=nil or
+        c.rail_tracks~=nil or c.railtype~=nil or c.rail_owner or c.depot_dir~=nil or c.stop_axis~=nil or
+        c.road_terminal_level~=nil or c.tram_bits~=nil or c.stop_type~=nil or c.rotate_depot~=nil or
+        c.waypoint~=nil or c.join_stop~=nil or c.joined_tram_station~=nil or
+        c.clear_road_coast~=nil or c.road_tree_town~=nil then return end
+    return tostring(id)..":road:"..tostring(c.road_bits)..":"..tostring(c.h)..
+      ":road:nil:nil:nil:nil:-:nil:nil:nil:nil:nil:nil:nil:nil:nil:"..
+      tostring(c.clear_road_site)..":nil:"..tostring(c.road_site_cost)..":nil"
+  end
   local function summary(q)
     local ids,parts={},{}
     local depot_direction
     for i,c in ipairs(q.changes) do
       ids[i]=c.id or c.tile
       if c.build=="road_depot" and c.depot_dir then depot_direction=4-c.depot_dir end
-      parts[i]=table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
+      parts[i]=ordinary_ticket(ids[i],c) or table.concat({tostring(ids[i]),tostring(c.build),tostring(c.road_bits),
         tostring(c.h),tostring(c.tool),tostring(c.disallowed),tostring(c.foundation),tostring(c.rail_tracks),tostring(c.railtype),
         c.rail_owner and ("%q"):format(c.rail_owner) or "-",tostring(c.depot_dir),tostring(c.stop_axis),
         tostring(c.road_terminal_level),tostring(c.tram_bits),tostring(c.stop_type),tostring(c.rotate_depot),tostring(c.waypoint),tostring(c.join_stop),tostring(c.joined_tram_station),tostring(c.clear_road_site),tostring(c.clear_road_coast),tostring(c.road_site_cost),tostring(c.road_tree_town)},":")
@@ -207,7 +220,6 @@ return function(Sim,s,oneway,Bank,host)
   function M.commit(player,request,published,direct)
     local q,why=plan(player,request)
     if not q then return false,why end
-    local current=summary(q)
     if request.join_picker_cost~=nil and request.join_picker_cost~=q.cost then
       return false,"ROAD_QUOTE_CHANGED"
     end
@@ -216,9 +228,10 @@ return function(Sim,s,oneway,Bank,host)
     -- never silently replace it. Unrelated changes do not spoil an
     -- otherwise identical direct action.
     if not (direct and published==nil) then
-      if type(published)~="table" or published.cost~=current.cost or published.ticket~=current.ticket
-        or published.stopped_at~=current.stopped_at or published.stop_reason~=current.stop_reason or (not direct and
-          (published.topology~=current.topology or published.terrain~=current.terrain)) then
+      if type(published)~="table" or published.cost~=q.cost
+        or published.stopped_at~=q.stopped_at or published.stop_reason~=q.stop_reason or (not direct and
+          (published.topology~=s.topology or published.terrain~=(s.corner_grid and s.corner_grid.revision)))
+        or published.ticket~=summary(q).ticket then
         return false,"ROAD_QUOTE_CHANGED"
       end
     end
