@@ -182,10 +182,14 @@ jobs:
         run: bash .github/scripts/native-regressions.sh "$NATIVE_SUITE"
 
   native-interaction:
-    name: Focus recovery and private native rides
+    name: Native interaction (${{ matrix.suite }})
     runs-on: ubuntu-24.04
     container: debian:13
     timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [construction-and-focus, rides-and-scenery]
     defaults:
       run:
         shell: bash
@@ -197,32 +201,37 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Replay focus loss, paid bus arrival and process reopen
+      - name: Run graphical interaction shard
+        env:
+          NATIVE_INTERACTION_SUITE: ${{ matrix.suite }}
         run: |
           export PATH="/usr/games:$PATH"
           export TMPDIR="$(mktemp -d "$GITHUB_WORKSPACE/.native-ui.XXXXXX")"
           trap 'rm -rf -- "$TMPDIR"' EXIT
           export LUANTTD_NATIVE_MEDIA_CACHE="$TMPDIR/cache"
           python3 tests/cache_luanti_game_media.py . "$LUANTTD_NATIVE_MEDIA_CACHE"
-          bash tests/road_placement_latency_native.sh
-          LUANTTD_NATIVE_BENCH_REMOVE=1 bash tests/road_placement_latency_native.sh
-          LUANTTD_NATIVE_COAST_ROAD=1 bash tests/road_placement_latency_native.sh
-          bash tests/place_labels_worker_native.sh
-          BAYLINE_NATIVE_DISPLAY=313 bash tests/place_labels_graphical.sh
-          BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=312 BAYLINE_NATIVE_PORT=46712 BAYLINE_NATIVE_BRIDGE_ROAD_CLEAR=1 LUANTTD_NATIVE_BRIDGE_GROUND_STOP=1 timeout 190 bash tests/bridge_pier_render_native.sh
-          BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=314 BAYLINE_NATIVE_PORT=46714 LUANTTD_NATIVE_TRAM_GRADE=1 timeout 190 bash tests/bridge_pier_render_native.sh
-          BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=315 BAYLINE_NATIVE_PORT=46715 LUANTTD_NATIVE_TRAM_SPAN=1 timeout 190 bash tests/bridge_pier_render_native.sh
-          LUANTTD_NATIVE_ROAD_GESTURES=1 LUANTTD_NATIVE_ROAD_MUNICIPAL=1 LUANTTD_NATIVE_EXPLICIT_FACILITIES=1 LUANTTD_NATIVE_EXPLICIT_FACILITY_UI=1 LUANTTD_NATIVE_WAYPOINT=1 LUANTTD_NATIVE_WAYPOINT_REUSE=1 LUANTTD_NATIVE_STOP_AREA=1 LUANTTD_NATIVE_STOP_JOIN=1 LUANTTD_NATIVE_STOP_MIX=1 LUANTTD_NATIVE_STOP_AUTO=1 LUANTTD_NATIVE_TRAM_REMOVE=1 LUANTTD_NATIVE_TRAM_DRAG=1 BAYLINE_NATIVE_DISPLAY=307 timeout 220 bash tests/campaign_worker_focus_native.sh
-          BAYLINE_NATIVE_DISPLAY=309 BAYLINE_FOCUS_DEAD_END=1 timeout 220 bash tests/campaign_worker_focus_native.sh
-          BAYLINE_NATIVE_DISPLAY=316 LUANTTD_NATIVE_TRAM_PAID=1 LUANTTD_NATIVE_TRAM_FLEET=1 timeout 235 bash tests/campaign_worker_focus_native.sh
-          BAYLINE_NATIVE_DISPLAY=306 BAYLINE_FOCUS_DEAD_END=depot timeout 220 bash tests/campaign_worker_focus_native.sh
-          BAYLINE_NATIVE_DISPLAY=308 BAYLINE_NATIVE_PORT=46708 timeout 220 bash tests/campaign_worker_ride_native.sh
-          BAYLINE_NATIVE_DISPLAY=311 BAYLINE_NATIVE_PORT=46711 timeout 140 bash tests/wildlife_native.sh
-          BAYLINE_NATIVE_DISPLAY=318 BAYLINE_NATIVE_PORT=46718 timeout 130 bash tests/campaign_worker_farm_building_native.sh
-          BAYLINE_NATIVE_DISPLAY=359 BAYLINE_NATIVE_PORT=46759 timeout 155 bash tests/campaign_worker_rail_drag_native.sh
-          BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=319 BAYLINE_NATIVE_PORT=46719 LUANTTD_NATIVE_BANK_HEADS=1 timeout 130 bash tests/bridge_pier_render_native.sh
-          BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=351 BAYLINE_NATIVE_PORT=46751 LUANTTD_NATIVE_RAIL_UNDERPASS=1 timeout 130 bash tests/bridge_pier_render_native.sh
-          BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=320 BAYLINE_NATIVE_PORT=46720 BAYLINE_NATIVE_ROCKY_WATER=1 timeout 130 bash tests/coastal_sheet_native.sh
+          if [[ "$NATIVE_INTERACTION_SUITE" == construction-and-focus ]]; then
+            bash tests/road_placement_latency_native.sh
+            LUANTTD_NATIVE_BENCH_REMOVE=1 bash tests/road_placement_latency_native.sh
+            LUANTTD_NATIVE_COAST_ROAD=1 bash tests/road_placement_latency_native.sh
+            bash tests/place_labels_worker_native.sh
+            BAYLINE_NATIVE_DISPLAY=313 bash tests/place_labels_graphical.sh
+            BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=312 BAYLINE_NATIVE_PORT=46712 BAYLINE_NATIVE_BRIDGE_ROAD_CLEAR=1 LUANTTD_NATIVE_BRIDGE_GROUND_STOP=1 timeout 190 bash tests/bridge_pier_render_native.sh
+            BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=314 BAYLINE_NATIVE_PORT=46714 LUANTTD_NATIVE_TRAM_GRADE=1 timeout 190 bash tests/bridge_pier_render_native.sh
+            BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=315 BAYLINE_NATIVE_PORT=46715 LUANTTD_NATIVE_TRAM_SPAN=1 timeout 190 bash tests/bridge_pier_render_native.sh
+            LUANTTD_NATIVE_ROAD_GESTURES=1 LUANTTD_NATIVE_ROAD_MUNICIPAL=1 LUANTTD_NATIVE_EXPLICIT_FACILITIES=1 LUANTTD_NATIVE_EXPLICIT_FACILITY_UI=1 LUANTTD_NATIVE_WAYPOINT=1 LUANTTD_NATIVE_WAYPOINT_REUSE=1 LUANTTD_NATIVE_STOP_AREA=1 LUANTTD_NATIVE_STOP_JOIN=1 LUANTTD_NATIVE_STOP_MIX=1 LUANTTD_NATIVE_STOP_AUTO=1 LUANTTD_NATIVE_TRAM_REMOVE=1 LUANTTD_NATIVE_TRAM_DRAG=1 BAYLINE_NATIVE_DISPLAY=307 timeout 220 bash tests/campaign_worker_focus_native.sh
+            BAYLINE_NATIVE_DISPLAY=309 BAYLINE_FOCUS_DEAD_END=1 timeout 220 bash tests/campaign_worker_focus_native.sh
+            BAYLINE_NATIVE_DISPLAY=316 LUANTTD_NATIVE_TRAM_PAID=1 LUANTTD_NATIVE_TRAM_FLEET=1 timeout 235 bash tests/campaign_worker_focus_native.sh
+            BAYLINE_NATIVE_DISPLAY=306 BAYLINE_FOCUS_DEAD_END=depot timeout 220 bash tests/campaign_worker_focus_native.sh
+          else
+            BAYLINE_NATIVE_DISPLAY=308 BAYLINE_NATIVE_PORT=46708 timeout 220 bash tests/campaign_worker_ride_native.sh
+            BAYLINE_NATIVE_DISPLAY=311 BAYLINE_NATIVE_PORT=46711 timeout 140 bash tests/wildlife_native.sh
+            BAYLINE_NATIVE_DISPLAY=318 BAYLINE_NATIVE_PORT=46718 timeout 130 bash tests/campaign_worker_farm_building_native.sh
+            BAYLINE_NATIVE_DISPLAY=359 BAYLINE_NATIVE_PORT=46759 timeout 155 bash tests/campaign_worker_rail_drag_native.sh
+            BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=319 BAYLINE_NATIVE_PORT=46719 LUANTTD_NATIVE_BANK_HEADS=1 timeout 130 bash tests/bridge_pier_render_native.sh
+            BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=351 BAYLINE_NATIVE_PORT=46751 LUANTTD_NATIVE_RAIL_UNDERPASS=1 timeout 130 bash tests/bridge_pier_render_native.sh
+            BAYLINE_NATIVE_TCP=1 BAYLINE_NATIVE_DISPLAY=320 BAYLINE_NATIVE_PORT=46720 BAYLINE_NATIVE_ROCKY_WATER=1 timeout 130 bash tests/coastal_sheet_native.sh
+          fi
 
   native-opening-bridges:
     name: Opening bridge family and paid service

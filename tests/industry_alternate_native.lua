@@ -52,7 +52,12 @@ local function start()
         local u,v=Sim.xy(id)
         local base=disk.tiles[id].h
         local node=core.get_node_or_nil({x=2*u,y=base+1,z=2*v})
-        local expect="luanttd_core:"..art.asset(row.gfx)
+        local ref=assert(disk.tiles[id].stock_industry)
+        -- Machinery frames are independent actors. The source can
+        -- report animated coal GFX 1 while its static footprint stays 0.
+        local gfx=scene.kind=="coal_mine" and row.gfx==1 and 0 or row.gfx
+        if scene.kind=="coal_mine" then assert(ref.gfx==gfx) end
+        local expect="luanttd_core:"..art.asset(gfx)
         if scene.kind=="forest" then
           expect=("luanttd_core:forest_%d_%d_%d"):format(scene.layout,row.x-scene.x,row.z-scene.z)
         end

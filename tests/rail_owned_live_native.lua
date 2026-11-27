@@ -49,7 +49,7 @@ local depot=turnout and id(16,9) or id(2)
 local function stamp()
   local Owned,Run=assert(api.rail_owned),assert(api.rail_dispatch_controller)
   local qa=S.rail_owned_native_qa
-  local function current() return assert(Run.current_paid(S)) end
+  local function current() return assert(Run.current_paid(S),"Expected an active paid rail consist in the test corridor") end
   local function forward_claims()
     local run,d=current(),Run.current(S)
     assert(run.platform_lookahead and run.phase=="dwell" and run.arrival.tile==id(24) and run.order.station==run.station)
@@ -170,14 +170,14 @@ local function stamp()
       assert(Sim.date(S,0)==(asiastar and 1995 or tim and 1988 or sh40 and 1978 or 1970) and current().engine_railtype==1 and current().traction_railtypes[1] and
         not current().traction_railtypes[0])
       assert(S.tiles[id(20)].rail_type==1 and S.tiles[id(2)].rail_type==1)
-      assert(core.get_node({x=40,y=bridge and 3 or 2,z=20}).name==
+      assert(core.get_node({x=40,y=3,z=20}).name==
         (bridge and "luanttd_core:rail_catenary_1_1" or "luanttd_core:rail_catenary_1_0"))
       if not bridge then
-        assert(core.get_node({x=39,y=2,z=20}).name=="luanttd_core:rail_edge_pylon_0")
-        assert(core.get_node({x=36,y=2,z=21}).name~="luanttd_core:rail_edge_pylon_2")
-        assert(core.get_node({x=41,y=2,z=20}).name~="luanttd_core:rail_edge_pylon_0")
+        assert(core.get_node({x=39,y=3,z=20}).name=="luanttd_core:rail_edge_pylon_0")
+        assert(core.get_node({x=36,y=3,z=21}).name~="luanttd_core:rail_edge_pylon_2")
+        assert(core.get_node({x=41,y=3,z=20}).name~="luanttd_core:rail_edge_pylon_0")
       end
-      assert(core.get_node({x=44,y=bridge and 3 or 2,z=20}).name=="luanttd_core:rail_catenary_1_0")
+      assert(core.get_node({x=44,y=3,z=20}).name=="luanttd_core:rail_catenary_1_0")
       if bridge then
         assert(current().bridge_collectors and api.rail_spans.by_portal(S,id(15)).railtype==1)
         assert(core.get_node({x=34,y=3,z=20}).name:find("rail_bridge_catenary",1,true))
@@ -300,8 +300,8 @@ local function stamp()
     end
     if wire_turnout then
       api.render.update({id(14),id(14,11),id(14,15)})
-      assert(core.get_node({x=28,y=2,z=20}).name=="luanttd_core:rail_turnout_catenary_33")
-      assert(core.get_node({x=28,y=3,z=30}).name=="luanttd_core:rail_turnout_catenary_33")
+      assert(core.get_node({x=28,y=3,z=20}).name=="luanttd_core:rail_turnout_catenary_33")
+      assert(core.get_node({x=28,y=4,z=30}).name=="luanttd_core:rail_turnout_catenary_33")
       core.log("action","ELECTRIC_TURNOUT_NATIVE_PASS branch contact, paid SH30 route, exact native mesh and restart")
     end
     core.log("action",("OWNED_RAIL_LIVE_NATIVE_PASS engine=%d fare=$%d operating_cost=$%d peak=%d bodies=%d"):
@@ -310,11 +310,15 @@ local function stamp()
     return
   end
   local g=S.corner_grid
+  -- These inland services are not a flood test. Do not lower the whole
+  -- seeded corridor to sea level while leaving its surrounding water:
+  -- the stock flood loop can clear standard rail as soon as we start.
+  local ground=1
   for z=1,g.depth+1 do
-    for x=1,g.width+1 do g.levels[(z-1)*(g.width+1)+x]=bridge and ((x==17 or x==18) and 0 or 1) or 0 end
+    for x=1,g.width+1 do g.levels[(z-1)*(g.width+1)+x]=bridge and ((x==17 or x==18) and 0 or 1) or ground end
   end
   for x=1,27 do
-    S.tiles[id(x)]={h=0,terrain="grass",variant=1}
+    S.tiles[id(x)]={h=ground,terrain="grass",variant=1}
   end
   for x=2,signal_free and 26 or 24 do
     if not bridge or x<15 or x>19 then
@@ -324,15 +328,15 @@ local function stamp()
   local c=Sim.company(S,owner)
   if wire_turnout then
     assert(electric and not bridge)
-    S.tiles[id(14,11)]={h=0,terrain="grass",variant=1,owner=owner,rail_tracks=2,build="stock_rail"}
+    S.tiles[id(14,11)]={h=ground,terrain="grass",variant=1,owner=owner,rail_tracks=2,build="stock_rail"}
     S.tiles[id(14)].rail_tracks=33
-    S.tiles[id(14,9)]={h=0,terrain="grass",variant=1}
+    S.tiles[id(14,9)]={h=ground,terrain="grass",variant=1}
     local apron=id(14,15)
     local i=(15-1)*(g.width+1)+14
-    g.levels[i+1],g.levels[i+g.width+1]=1,1
+    g.levels[i+1],g.levels[i+g.width+1]=ground+1,ground+1
     local T=dofile(mod_path.."/openttd/terrain.lua")
     assert(T.tile(g,14,15)==5)
-    S.tiles[apron]={h=0,terrain="hill",variant=1,owner=owner,rail_tracks=33,build="stock_rail"}
+    S.tiles[apron]={h=ground,terrain="hill",variant=1,owner=owner,rail_tracks=33,build="stock_rail"}
     local second=assert(api.electric_quote(owner,{apron},1))
     assert(second.price==136 and api.electric_commit(owner,second))
   end
@@ -352,7 +356,7 @@ local function stamp()
     end
   end
   if turnout then
-    S.tiles[depot]={h=0,terrain="grass",variant=1}
+    S.tiles[depot]={h=ground,terrain="grass",variant=1}
     local builder=assert(api.rail_build)
     assert(builder.build(owner,assert(builder.quote_depot(owner,depot,1))))
     assert(S.tiles[id(16)].rail_tracks==21)
@@ -362,7 +366,7 @@ local function stamp()
   assert(api.trackworks.station(S,owner,id(11),id(12)))
   assert(api.trackworks.station(S,owner,id(22),id(24)))
   if isolated then
-    for x=7,11 do S.tiles[id(x,6)]={owner=owner,build="stock_rail",rail_tracks=1,h=0,terrain="grass",variant=1} end
+    for x=7,11 do S.tiles[id(x,6)]={owner=owner,build="stock_rail",rail_tracks=1,h=ground,terrain="grass",variant=1} end
     assert(Run.place_signal(S,owner,id(9,6),8,4))
   elseif not signal_free then assert(Run.place_signal(S,owner,id(10),0,4)) end
   local west,east=S.tiles[id(11)].rail_station_id,S.tiles[id(22)].rail_station_id
@@ -370,7 +374,7 @@ local function stamp()
   for _,z in ipairs({7,8,12,13}) do
     for _,x in ipairs({8,9,10,11,12,21,22,23,24,25}) do
       local t=S.tiles[id(x,z)]
-      t.terrain,t.h,t.build,t.owner,t.site,t.wood="grass",0,nil,nil,nil,nil
+      t.terrain,t.h,t.build,t.owner,t.site,t.wood="grass",ground,nil,nil,nil,nil
       t.house,t.parcel,t.variant=true,"shop",2
     end
   end
@@ -406,7 +410,7 @@ local function stamp()
     assert(S.tiles[id(20)].rail_type==nil and S.tiles[id(2)].rail_type==1)
     if not bridge then
       api.render.update({id(19)})
-      assert(core.get_node({x=38,y=2,z=21}).name=="luanttd_core:rail_edge_pylon_2",
+      assert(core.get_node({x=38,y=3,z=21}).name=="luanttd_core:rail_edge_pylon_2",
         "The gap must gain its temporary end pylon before it is powered")
     end
   end
@@ -438,13 +442,13 @@ local function stamp()
   end
   assert(r.price==cost and c.cash==initial_cash-r.price)
   if branch then
-    S.tiles[id(25)]={owner=owner,rail_tracks=1,build="stock_rail",h=0,terrain="grass",variant=1}
+    S.tiles[id(25)]={owner=owner,rail_tracks=1,build="stock_rail",h=ground,terrain="grass",variant=1}
     -- Depot release now classifies the real signal block. A through
     -- station is a valid order even if not itself a PBS waiting point.
     local rail=api.trackworks
     local function loop(x,z,piece)
       local tile=id(x,z)
-      if tile~=id(6) then S.tiles[tile]={h=0,terrain="grass",variant=1} end
+      if tile~=id(6) then S.tiles[tile]={h=ground,terrain="grass",variant=1} end
       assert(rail.change(S,owner,tile,piece,false,0))
     end
     loop(6,10,3);loop(6,10,5)
@@ -464,7 +468,7 @@ local function stamp()
     assert(S.tiles[id(20)].rail_type==1)
     if not bridge then
       api.render.update({id(20)})
-      assert(core.get_node({x=38,y=2,z=21}).name~="luanttd_core:rail_edge_pylon_2",
+      assert(core.get_node({x=38,y=3,z=21}).name~="luanttd_core:rail_edge_pylon_2",
         "Connecting the gap must remove the extra end pylon")
     end
     if bridge then

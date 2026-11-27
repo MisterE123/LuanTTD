@@ -2,7 +2,7 @@
 # Actual worker-generated stock steel layouts in the Linux Luanti client.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-case ${LUANTTD_QA_STEEL_LAYOUT:-1} in 0) seed=1751;; 1) seed=11;; *) exit 2;; esac
+case ${LUANTTD_QA_STEEL_LAYOUT:-1} in 0) seed=11;; 1) seed=1751;; *) exit 2;; esac
 fixture=tests/stock_steel_mill_layout_native.lua
 marker='PASS NATIVE STOCK STEEL MILL'
 if [[ ${LUANTTD_QA_RAIL_GROUND:-0} =~ ^[12]$ ]]; then
@@ -71,6 +71,7 @@ if [[ ${LUANTTD_QA_SPLIT_FENCE:-0} == 1 ]]; then
   marker='PASS NATIVE SPLIT FENCE'
 fi
 if [[ ${LUANTTD_QA_VOXEL_STORM:-0} == 1 ]]; then
+  seed=11
   fixture=tests/voxel_storm_native.lua
   marker='PASS NATIVE VOXEL STORM'
 fi

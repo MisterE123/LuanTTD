@@ -30,7 +30,10 @@ local clock=assert(s.passenger_house_clock)
 assert(2^clock.log_x==w and 2^clock.log_y==h and clock.head>=1 and clock.head<w*h)
 assert(p.industry_stats and p.industries and #p.industries>0 and #s.sites>=2,
   "ordinary generated economy missing industries or towns")
-assert(s.day>0 and clock.counter==s.day*74)
+local pregame=assert(p.initial_landscape,"missing original pregame landscape phase")
+assert(pregame.ticks==0x500 and pregame.next_head>=1 and pregame.next_head<w*h)
+assert(s.day>0 and clock.counter==pregame.ticks+s.day*74,
+  "saved landscape clock must include the one-time pregame pass")
 assert(s.tiles[w*h].stock_void)
 print(s.day, clock.counter, clock.head, #p.industries, #s.sites)
 """

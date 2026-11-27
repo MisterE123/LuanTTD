@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+seed=11
 case ${LUANTTD_NATIVE_GROUND_FIXTURE:-industry} in
   industry)
+    seed=42
     fixture=tests/industry_alternate_native.lua
     start_marker='NATIVE ALTERNATE GENERATED:'
     frame_prefix='NATIVE INDUSTRY FRAME'
@@ -60,7 +62,7 @@ bayline_generated_towns = 3
 bayline_generated_industries = 6
 bayline_generated_industry_count = ${LUANTTD_INDUSTRY_LAYOUT_COUNT:-110}
 bayline_generated_town_layout = grid2
-bayline_seed = ${LUANTTD_INDUSTRY_LAYOUT_SEED:-11}
+bayline_seed = ${LUANTTD_INDUSTRY_LAYOUT_SEED:-$seed}
 bayline_stock_bus_start_year = ${LUANTTD_NATIVE_START_YEAR:-1950}
 luanttd_qa_road_autoslope_waypoint = ${LUANTTD_NATIVE_AUTOSLOPE_WAYPOINT:-false}
 luanttd_qa_rail_station_autoslope = ${LUANTTD_NATIVE_RAIL_STATION_AUTOSLOPE:-false}
@@ -146,7 +148,7 @@ for k in {1..460}; do
 done
 grep -E "$start_marker|$frame_prefix|$pass_marker" "$out/server.log"
 if ! grep -Fq "$pass_marker" "$out/server.log"; then
-  tail -75 "$out/server.log" "$out/client.log"
+  tail -n 75 "$out/server.log" "$out/client.log"
   exit 1
 fi
 ! grep -E 'ERROR\[' "$out/server.log" "$out/client.log"

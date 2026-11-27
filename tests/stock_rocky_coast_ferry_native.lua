@@ -7,8 +7,11 @@ function begin()
   if not (player and authority and authority.status()=="owned" and #world.hotbar_layout(player)>0) then
     core.after(.25,begin);return
   end
-  local land_a,land_b,from,to=29503,33357,30015,33355
-  local original_rocks={32070,32071,32327,32328,32585,32841}
+  -- Both docks and this west-of-Medinghead skerry come from the
+  -- settled seed; the pregame tide leaves a different natural coast
+  -- than the earlier un-settled map fixture did.
+  local land_a,land_b,from,to=53956,61119,53954,61121
+  local original_rocks={59842,60098,60354}
   local Track=dofile(mod.."/openttd/rail_track.lua")
   local Water=dofile(mod.."/openttd/ship_follow.lua")(Track)
   local Terrain=dofile(mod.."/openttd/terrain.lua")
@@ -55,12 +58,12 @@ function begin()
   end
   local dry,short=trace(clear)
   local _,long=trace(board)
-  assert(short==1875 and long==2265,"Unexpected reference path costs")
+  assert(short==2913 and long==3197,"Unexpected reference path costs")
   local inlet={}
   for _,id in ipairs(original_rocks) do inlet[id]=true end
   local hits=0
   for _,step in ipairs(dry) do if inlet[step.tile] then hits=hits+1 end end
-  assert(hits==6,"No meaningful alternative route blocked by rocks")
+  assert(hits==#original_rocks,"No meaningful alternative route blocked by rocks")
   local reopened=core.settings:get_bool("luanttd_qa_rocky_ferry_reopen",false)
   local saved=reopened and assert(core.deserialize(storage:get_string("rocky_coast_ferry_qa"),true))
   local function watch(left,visual)

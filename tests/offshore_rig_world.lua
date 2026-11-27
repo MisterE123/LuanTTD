@@ -4,6 +4,9 @@ local S={W=128,H=64}
 function S.id(x,z) if x>=1 and z>=1 and x<=S.W and z<=S.H then return (z-1)*S.W+x end end
 function S.xy(i) return (i-1)%S.W+1,math.floor((i-1)/S.W)+1 end
 function S.nearest_town() return {id=1} end
+-- This detached map has no bridges or aqueducts. Supply the same
+-- overhead-board contract used by the normal ship pathfinder.
+function S.bridge_deck_at() return nil,false end
 local Terrain={tile=function(g,x,z)
   local patch=g[S.id(x,z)]
   if patch then return patch[1],patch[2] end
