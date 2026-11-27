@@ -209,3 +209,20 @@ On the same populated 1024×1024 fixture at 4× speed, the baseline
 completed 30 days in both 26-second replays. With the change it completed
 32, 32 and 34 days. Actor sample p90 stayed about 114–118 ms; the measured
 gain is simulation throughput, not a change in the view reply cadence.
+
+### Place names no longer force the worker to finish a day
+
+Camera-driven place names are a read-only view. The worker formerly
+treated these polls like editable commands, so the next view could
+wait behind the rest of a game day. The poll now reads the latest
+completed stock tick and can also be answered during checkpoint
+encoding. It does not pass a pending write or change when a write can
+commit.
+
+Native replay on the same active 1024×1024 map at 4×, with road,
+rail, ship and air services and the normal 1.35 s label polling
+interval: the 19 place label replies had a median of **394 → 50 ms**.
+The p95 gap between host actor receipts fell from **463 to 162 ms**
+in that paired run. These are callback timings, not a client FPS
+benchmark. The separate native place label test verifies names,
+height, bounding radius and labels outside loaded terrain.

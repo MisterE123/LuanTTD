@@ -75,7 +75,9 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   local fraction,overdue=nil,false
   -- The first periodic checkpoint still saves mount-time normalization.
   local dirty=true
-  local presentation_only={snapshot=true,snapshots=true,actor_frames=true,clock=true}
+  -- Place names are refreshed as the camera moves, not a gameplay
+  -- command. They read the last complete stock tick, like a viewport.
+  local presentation_only={snapshot=true,snapshots=true,actor_frames=true,clock=true,place_labels=true}
   local live_view={snapshots=true,actor_frames=true}
   local function read_only_hover(q)
     -- These two inspected planners read live geometry, occupancy and
@@ -87,6 +89,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
     if q.kind=="rail_quote" then return tool=="autotrack" end
     return false
   end
+  local function sample_place_labels(q) return A.place_labels(q.player,q.x,q.z,q.range) end
   local function sample_hover(q)
     if q.kind=="rail_quote" then return A.rail_quote(q.player,q.request,true) end
     return A.road_quote(q.player,q.request)
@@ -127,16 +130,18 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
       if core.ipc_get(cancel) then blocked=true;return end
       local q=core.ipc_get(inbox)
       if not q then return end
-      -- Encoding reads one stable graph. Bounded viewport reads and
-      -- road and AutoRail hovers can use it between encoding chunks.
+      -- Encoding reads one stable graph. Bounded view and label
+      -- reads and inspected hovers can use it between encoding chunks.
       -- Never read past any edit, shutdown, or other waiting request.
       local hover=read_only_hover(q)
-      if q.seq~=seq+1 or not (live_view[q.kind] or hover) then blocked=true;return end
+      local labels=q.kind=="place_labels"
+      if q.seq~=seq+1 or not (live_view[q.kind] or hover or labels) then blocked=true;return end
       heartbeat=now
       core.ipc_set(inbox,nil)
       seq=q.seq
       local r
       if hover then r=sample_hover(q)
+      elseif labels then r=sample_place_labels(q)
       else r=sample_view(q,auto.sample((now-prior)/1000000)) end
       send(q,r,now)
     end)
@@ -227,7 +232,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         elseif q.kind=="company" then r=A.company(q.player)
         elseif q.kind=="news" then r=A.news(q.player,q.page,q.after,q)
         elseif q.kind=="lesson_progress" then r=A.lesson_progress(q.player,q.lesson)
-        elseif q.kind=="place_labels" then r=A.place_labels(q.player,q.x,q.z,q.range)
+        elseif q.kind=="place_labels" then r=sample_place_labels(q)
         elseif q.kind=="jump_map" then r=A.jump_map(q.player,q.zoom,q.here,q.focus)
         elseif q.kind=="jump_tile" then r=A.jump_tile(q.player,q.tile,q.x,q.z)
         elseif q.kind=="rail_assembly" then r=A.rail_assembly(q.player,q.depot)
