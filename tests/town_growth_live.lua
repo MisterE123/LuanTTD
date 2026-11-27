@@ -58,6 +58,14 @@ s=copy(s)
 Sim.mount_stock_town_growth(s,W,false)
 local last=s.stock_town_growth.towns[qa.town].last_build.tick
 local h=F.second(Sim,s,qa,H.specs)
+local age_model=dofile(p.."openttd/town_rebuild.lua")
+local completed_year=Sim.date(s)
+assert(h.age_epoch==completed_year and age_model.age(h,completed_year)==0)
+local packed=dofile(p.."packed_campaign.lua")
+local aged=packed.decode(packed.encode(s)).tiles[qa.tile].source_house
+assert(age_model.age(aged,completed_year+1)==1)
+assert(age_model.age(aged,completed_year+260)==255)
+print("PASS completed campaign houses retain exact year ages through a packed reopen")
 assert(s.stock_town_growth.towns[qa.town].last_build.tick==last)
 local before=s.sites[qa.town].population
 assert(Sim.build(s,"GrowthQA","clear",{qa.tile}))

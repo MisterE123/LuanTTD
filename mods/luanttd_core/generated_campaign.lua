@@ -132,6 +132,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         if t.coastal_water then assert(Sim.town_clear_coast(s,tile,true)) end
         placed[tile]=true
         art.stamp(h,p,art[p.id],part.index)
+        if h.completed then h.age,h.age_epoch=0,settings.year end
         local x,z=Sim.xy(tile)
         local _,base=Terrain.tile(s.corner_grid,x,z)
         t.house,t.source_house,t.wood,t.stock_clear_ground,t.h=true,h,nil,nil,base

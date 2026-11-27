@@ -223,6 +223,8 @@ return function(Sim,Terrain,G,B,H)
       t.population=t.population+population
       s.sites[h.town].population=t.population
       p.completed_tick=tick or s.passenger_house_clock.counter+1
+      local year=Sim.date(s)
+      for _,part in ipairs(records) do part.age_epoch=year end
     end)
     if stage~=h.stage then
       if members then for _,part in ipairs(members) do visual_changed(s,part.id) end
@@ -308,7 +310,7 @@ return function(Sim,Terrain,G,B,H)
       if not cell or not cell.house or cell.source_house~=p.record
         or p.record.player_protected or cell.owner or protected(s,p.id,cell) then return end
     end
-    local receipt=Rebuild.visit(t,h,style,true,word)
+    local receipt=Rebuild.visit(t,h,style,true,word,Sim.date(s))
     if not receipt then return end
     -- OWNER_TOWN clears the complete building. No company can be
     -- billed or get a demolishing-company reputation adjustment.

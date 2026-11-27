@@ -124,6 +124,13 @@ its trees, no company pays or receives a tree-clear rating penalty, and
 private trees and developed plots stay protected. Native Lua authority
 tests reopen the actual house and verify adjacent trees persist.
 
+Completed houses age on the stock year boundary and cap at 255; unfinished
+buildings do not age. The rebuild check uses the saved completion year to
+calculate the same age without a map-wide scan. The native generator test
+checks that completed founding buildings retain the starting year through
+the prepared checkpoint, and the compiled RC1 rebuild tests compare all
+256 possible stored ages with several years of elapsed time.
+
 On Better Roads and 3×3 Grid, a successful extra house can count as a
 successful growth attempt even if the main roadside lot is already
 occupied or cannot be built on. The worker now uses the normal countdown

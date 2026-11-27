@@ -29,6 +29,7 @@ if ! timeout 25 "$server" --config "$out/server.conf" --world "$out/world" --gam
   cat "$out/server.log";exit 1
 fi
 grep -q 'PASS NATIVE TOWN GROWTH OPTION' "$out/server.log"
+grep 'PASS NATIVE TOWN BUILDING AGES' "$out/server.log"
 grep 'PASS NATIVE GENERATION' "$out/server.log" || { cat "$out/server.log";exit 1; }
 # The intentionally blocked atomic rename should be the only engine error.
 grep -Eq 'ERROR\[AsyncWorker-[0-9]+\]: Failed to overwrite .*luanttd-prepared-campaign\.chk.*Is a directory' "$out/server.log"

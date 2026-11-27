@@ -14,10 +14,13 @@ raw = (src / "town_cmd.cpp").read_text()
 assert "t->time_until_rebuild = 10;" in raw
 command = source_block(src, "town_cmd.cpp", r"^static void TileLoop_Town")
 branch = command[command.index("if (hs->building_flags.Any(BUILDING_HAS_1_TILE)"):].rsplit("}", 1)[0]
+age_source = "".join(source_block(src, "town_map.h", r"^inline .* " + name + r"\(")
+                     for name in ("IncrementHouseAge", "GetHouseAge"))
 cpp = r"""
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cassert>
 #include <iostream>
 struct TileIndex{int x,y;};
 struct TileIndexDiffC{int x,y;};
@@ -59,7 +62,18 @@ uint GB(uint v,int s,int n){return (v>>s)&((1u<<n)-1);}
 void run(Town* t,const HouseSpec* hs,TileIndex tile,uint r){
 """ + branch + r"""
 }
+struct Tile{int *value;bool completed;int &m5()const{return *value;}};
+enum class TileType{House};
+bool IsTileType(Tile,TileType){return true;}
+bool IsHouseCompleted(Tile t){return t.completed;}
+struct TimerGameCalendar{using Year=int;};
+""" + age_source + r"""
 int main(){
+ for(bool completed:{false,true}) for(int prior=0;prior<=255;prior++) for(int years:{0,1,2,7,255,300}){
+   int stored=prior;Tile house{&stored,completed};
+   for(int i=0;i<years;i++)IncrementHouseAge(house);
+   std::cout<<0<<' '<<completed<<' '<<prior<<' '<<years<<' '<<GetHouseAge(house)<<'\n';
+ }
  for(width=1;width<=2;width++)for(depth=1;depth<=2;depth++)
  for(is_root=0;is_root<2;++is_root)for(int g=0;g<2;g++)
  for(allow_remove=0;allow_remove<2;allow_remove++)for(age=2;age<=4;age++)
@@ -75,19 +89,25 @@ int main(){
 """
 lua = r"""
 local R=dofile("mods/luanttd_core/openttd/town_rebuild.lua")
-local n=0
+local n,ages=0,0
 for row in io.lines() do
  local a={};for v in row:gmatch("%-?%d+") do a[#a+1]=tonumber(v) end
- local w,d,root,g,ok,age,x,z,before,hi,lo,after,clear,u,v=unpack(a)
- local town={x=x,z=z,growing=g==1,time_until_rebuild=before}
- local h={x=5,z=5,root=root==1,age=age,completed=true}
- local q=R.visit(town,h,{width=w,depth=d,minimum_life=3},ok==1,hi*2^24+lo*2^16+0xACED)
- assert(town.time_until_rebuild==after and (not not q)==(clear==1),row)
- local p=q and q.replace
- assert((p and p.x or -1)==u and (p and p.z or -1)==v,row)
- n=n+1
+ if a[1]==0 then
+   assert(R.age({completed=a[2]==1,age=a[3],age_epoch=1950},1950+a[4])==a[5],row)
+   ages=ages+1
+ else
+  local w,d,root,g,ok,age,x,z,before,hi,lo,after,clear,u,v=unpack(a)
+  local town={x=x,z=z,growing=g==1,time_until_rebuild=before}
+  local h={x=5,z=5,root=root==1,age=age,completed=true}
+  local q=R.visit(town,h,{width=w,depth=d,minimum_life=3},ok==1,hi*2^24+lo*2^16+0xACED)
+  assert(town.time_until_rebuild==after and (not not q)==(clear==1),row)
+  local p=q and q.replace
+  assert((p and p.x or -1)==u and (p and p.z or -1)==v,row)
+  n=n+1
+ end
 end
-assert(n==51840)
+assert(n==51840 and ages==3072)
+print(("PASS %d exact RC1 house ages, including incomplete houses and 255 cap"):format(ages))
 print(("PASS %d exact compiled RC1 town rebuild decisions from TileLoop_Town"):format(n))
 """
 with TemporaryDirectory() as tmp:

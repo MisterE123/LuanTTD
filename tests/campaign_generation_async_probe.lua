@@ -42,6 +42,17 @@ core.register_on_mods_loaded(function()
       assert(town.num_houses>0 and town.growth_rate==G.normal_rate(town,0,0))
     end
     core.log("action","PASS NATIVE TOWN GROWTH OPTION: None reached the generator and survived the prepared checkpoint")
+    local age=dofile(mod.."/openttd/town_rebuild.lua").age
+    local complete=0
+    for _,tile in ipairs(actual.tiles) do
+      local house=tile.house and tile.source_house
+      if house and house.completed then
+        assert(house.age_epoch==cfg.year and age(house,cfg.year)==0 and age(house,cfg.year+1)==1)
+        complete=complete+1
+      end
+    end
+    assert(complete>0,"Opening towns should contain completed buildings")
+    core.log("action",("PASS NATIVE TOWN BUILDING AGES: %d completed tiles retained their original year through checkpoint"):format(complete))
     local found,mill_layouts={},{}
     for _,site in ipairs(actual.stock_generated_profile.industries) do
       if site.chain=="heavy" then
