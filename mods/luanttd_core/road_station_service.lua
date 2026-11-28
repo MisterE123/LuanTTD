@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Live save and presentation bridge for stock road station service.
--- Acceptance uses OpenTTD 14.1 src/table/town_land.h house eighths,
+-- Acceptance uses OpenTTD 16.0-RC1 src/table/town_land.h house eighths,
 -- src/town_cmd.cpp AddAcceptedCargo_Town and src/station_cmd.cpp
 -- UpdateStationAcceptance. Simulation mechanics stay in road_loading_runtime.
 return function(Sim,Loading,Packets,Income,Rating,Mail,host)
@@ -16,16 +16,8 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
   end
   -- A house can accept while under construction. The town supply module
   -- separately gates production on completion, as the stock engine does.
-  local passenger_accept={
-    [0]=8,8,8,2,10,10,4,6,6,2,2,2,2,8,6,6,
-    6,10,6,6,4,4,4,4,3,3,3,7,8,6,8,8,
-    4,4,4,4,8,3,3,8,8,8,8,8,5,5,3,3,
-    3,3,8,8,9,9,10,10,2,2,3,3,2,2,3,3,
-    6,6,6,6,6,6,7,7,9,9,7,7,7,7,3,3,
-    3,3,6,2,3,6,6,8,8,6,8,2,6,3,3,3,
-    3,3,8,4,4,8,3,3,8,8,8,4,3,3,
-  }
-  function M.house_passenger_acceptance(id) return passenger_accept[id] end
+  local mod=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  M.house_passenger_acceptance=dofile(mod.."/openttd/town_house_acceptance_rc1.lua").passenger
 
   function M.handles(s,v)
     if not s.road_stock_loading or not s.road_economy or not v then return false end

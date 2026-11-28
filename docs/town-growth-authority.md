@@ -1383,3 +1383,15 @@ and the live town-center projection follow the updated zone. River
 random bytes, shared RNG and the post-river LFSR cursor also match.
 The stock Temperate river tests still pass. Other climates are not
 playable campaigns, and the Tropic wetland tree rules are not mounted.
+
+### House cargo acceptance by climate
+
+Ordinary Temperate passenger, mail and Goods catchments now use a
+single table pinned to RC1. All 110 physical HouseID rows are included,
+even unfinished houses and the child tiles of compound houses.
+Arctic/Tropic Food and Toyland Candy/Fizzy Drinks follow the original
+third cargo slot and only count if the label is in the climate's stock
+cargo roster. The regression checks 3,080 source-derived comparisons
+and the regular road runtime. Houses never accept Water; OpenTTD's
+Tropic Water Tower is the industry acceptance path for that growth
+requirement. The new supply chains are not yet playable.

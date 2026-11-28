@@ -21,16 +21,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   -- even if a house is unfinished (only production is gated on completion).
   -- Original house IDs 0..109 from the second cargo acceptance column in
   -- src/table/town_land.h. Each original entry puts CT_MAIL in that slot.
-  local house_accept={
-    [0]=3,3,3,0,4,4,1,1,1,0,0,0,0,2,2,2,
-    2,3,3,2,0,0,0,0,1,1,1,2,3,2,3,2,
-    0,0,0,0,3,1,1,2,2,2,2,2,2,2,1,1,
-    1,1,3,3,3,3,3,3,1,1,1,1,0,0,1,1,
-    2,2,1,1,1,1,2,2,3,3,2,2,2,2,1,1,
-    1,1,2,0,1,2,2,3,3,2,3,0,2,1,1,1,
-    1,1,4,1,1,4,1,1,4,4,4,1,1,2,
-  }
-  function M.house_acceptance(id) return house_accept[id] end
+  M.house_acceptance=dofile(mod.."/openttd/town_house_acceptance_rc1.lua").mail
 
   function M.truck_stop(st)
     return Sim.road_stop_has(st,"truck")
@@ -49,7 +40,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     for id in pairs(Sim.road_stop_catchment(s,st,radius)) do
       local tile=id and s.tiles[id]
       local house=tile and tile.house and tile.source_house
-      if house then total=total+assert(house_accept[house.id],"Unknown mail acceptance for house")
+      if house then total=total+assert(M.house_acceptance(house.id),"Unknown mail acceptance for house")
       else
         local hq=id and Sim.hq_cargo_at and Sim.hq_cargo_at(s,id)
         if hq then total=total+Sim.hq_acceptance(hq,"mail") end
