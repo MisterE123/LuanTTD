@@ -1502,3 +1502,23 @@ were at (27,92) and (27,105), with depot at (27,90). The truck
 delivered a full 21 units to Town 33; lack of Food still blocked
 growth. This is a native OpenTTD comparison target, not a claim
 that the route is playable in LuanTTD.
+
+### Live Tropic Water on the road worker
+
+In a controlled LuanTTD worker campaign generated from Tropic seed
+49832, the reference road corridor now runs through normal construction
+and stock road vehicle orders. The test installs just the two Water
+industry records, buys the 21-unit Uhl Water Tanker in the physical
+depot, and drives its complete pickup and delivery. Native Luanti
+saves the fully loaded truck in transit in SQLite, starts a second
+process, and resumes the original vehicle through YAPF, the road
+controller, and the station loader. The delivery pays $151 in the
+fixture, credits 21 units to the tower and town without counting
+household consumption, and leaves growth blocked without Food.
+
+This is an integration test, not a like-for-like full-economy replay.
+The rest of the source world's industries are not installed, initial
+town population differs, and the road and depot quote are not exact
+matches to the native reference above. No ordinary Tropic campaign,
+new meshes or menu entries are exposed. The next proof is both live
+Food and Water reaching the same town in the same economy month.

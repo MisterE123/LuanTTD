@@ -106,6 +106,7 @@ case "${1:-}" in
     BAYLINE_WOOD_MIXED=true bash tests/stock_rail_wood_live_native.sh
     ;;
   industry-air-and-water)
+    bash tests/town_water_stock_route_native.sh
     lua5.1 tests/iron_steel_kernels.lua
     lua5.1 tests/campaign_worker_truck_stop_ui.lua
     for profile in early mid late; do lua5.1 tests/iron_steel_ordinary_worker.lua "$profile"; done

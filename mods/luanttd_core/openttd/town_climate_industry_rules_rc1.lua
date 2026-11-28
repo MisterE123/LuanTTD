@@ -30,6 +30,7 @@ return function(F,Water,Food,Houses,climate)
     appearance={0,2,2,0},generation={0,3,4,0},map_colour=processors.map_colour}
   if climate=="tropic" then
     F.cargo.water=commodity(Water.cargo,9,"liquid")
+    F.trucks.water={load_amount=5,age_ticks=185,speed=Water.road_tankers[1].speed}
     F.layout.water_supply={[0]=Water.supply.layout}
     F.layout.water_tower={[0]=Water.tower.layout}
     F.spec.water_supply={id=Water.supply.id,life="extractive",minimum=5,

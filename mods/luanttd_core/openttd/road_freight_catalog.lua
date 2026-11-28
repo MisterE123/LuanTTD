@@ -11,6 +11,10 @@ local rows={
     intro_after_1920=19724,decay_speed=20,life=15,base_life=55,climates=7,cargo="goods",
     purchase_factor=130,running_factor=168,speed=176,capacity=16,weight_quarters=48,power_tens_hp=22},
 }
+F.water_order={"water_uhl","water_balogh","water_mps"}
+local water=dofile(base.."/openttd/town_water_industry_rc1.lua")
+for i,k in ipairs(F.water_order) do rows[k]=water.road_tankers[i] end
+function F.water(engine) return rows[engine] and rows[engine].cargo=="water" or false end
 local originals=dofile(base.."/openttd/road_farm_fleet_data.lua")
 F.farm_order={"livestock_van","livestock_uhl","livestock_foster","grain_truck","grain_thomas","grain_goss","wood_truck","wood_foster","wood_moreland"}
 F.other_order={"coal_uhl","coal_dw","mail_mps","mail_reynard","mail_perry","oil_foster","oil_perry","goods_goss","iron_mps","iron_uhl","iron_chippy","steel_balogh","steel_uhl","steel_kelling","valuables_balogh","valuables_uhl","valuables_foster"}

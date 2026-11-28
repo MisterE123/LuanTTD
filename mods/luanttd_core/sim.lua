@@ -26,6 +26,7 @@ M.cargo = {
 M.cargo.livestock={name="Livestock",rate=10}
 M.cargo.iron_ore={name="Iron Ore",rate=0}
 M.cargo.valuables={name="Valuables",rate=0}
+M.cargo.water={name="Water",rate=0} -- Exact industry and town receipt, never legacy pricing.
 M.cargo.oil={name="Oil",rate=0} -- Actual stock pressure uses a dedicated loader.
 M.cargo_order={"passenger","mail","coal","grain","steel","goods","wood","livestock","oil","iron_ore","valuables"}
 M.vehicles = {
@@ -3436,6 +3437,10 @@ for _,key in ipairs(road_freight_catalog().road_order) do
   M.vehicles[key]=road_freight_catalog().offer(key)
   if not old then M.vehicle_order[#M.vehicle_order+1]=key end
 end
+-- Known worker data; not advertised to a renderer/campaign without assets.
+for _,key in ipairs(road_freight_catalog().water_order) do
+  M.vehicles[key]=road_freight_catalog().offer(key)
+end
 function M.road_extra_freight()
   local out={}
   for _,engine in ipairs(road_freight_catalog().road_order) do
@@ -3469,15 +3474,16 @@ local function heavy_engine(engine)
   local cargo=M.road_freight_cargo(engine)
   return cargo=="steel" or cargo=="iron_ore" or cargo=="valuables" or goods_engine(engine)
 end
-local industry_road_cargo={wood=true,grain=true,livestock=true,oil=true,steel=true,iron_ore=true,valuables=true}
+local industry_road_cargo={water=true,wood=true,grain=true,livestock=true,oil=true,steel=true,iron_ore=true,valuables=true}
 local function industry_truck(engine)
   return industry_road_cargo[M.road_freight_cargo(engine)]==true or goods_engine(engine)
 end
 local function allowed(engine,cargo)
+  if cargo=="water" then return road_freight_catalog().water(engine) end
   if engine=="leopard_bus" or engine=="foster_bus" or engine=="foster_mk2_bus" then return cargo=="passenger" end
   if mail_engine(engine) then return cargo=="mail" end
   if coal_engine(engine) then return cargo=="coal" end
-  if road_freight_catalog().farm(engine) or road_freight_catalog().additional(engine) then return M.road_freight_cargo(engine)==cargo end
+  if road_freight_catalog().farm(engine) or road_freight_catalog().additional(engine) or road_freight_catalog().water(engine) then return M.road_freight_cargo(engine)==cargo end
   if goods_engine(engine) then return cargo=="goods" end
   if engine=="oil_tanker" or cargo=="oil" then return engine=="oil_tanker" and cargo=="oil" end
   if engine=="bus" or engine=="coach" or engine=="ferry" or engine=="prop" or engine=="jet" then return cargo=="passenger" or cargo=="mail" end
@@ -3507,7 +3513,7 @@ function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighe
     local gen=s.seed%2^32
     local startup_seed=s.stock_engine_startup_seed or (gen*1664525+1013904223)%2^32
     local settings={starting_year=starting_year,generation_seed=gen,startup_seed=startup_seed,
-      climate="temperate"}
+      climate=s.stock_climate and s.stock_climate.landscape or "temperate"}
     local market={version=1,epoch=assert(Calendar.date(starting_year,1,1)),
       settings=settings,models={}}
     for _,stock_id in ipairs({116,117,118,119}) do
@@ -3526,6 +3532,12 @@ function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighe
     market.models[r.stock_id]=market.models[r.stock_id] or assert(Calendar.prepare_original(r,market.settings))
   end
   market.models[119]=market.models[119] or assert(Calendar.prepare(119,market.settings))
+  if market.settings.climate=="tropic" then
+    for _,key in ipairs(road_freight_catalog().water_order) do
+      local row=road_freight_catalog().row(key)
+      market.models[row.stock_id]=market.models[row.stock_id] or assert(Calendar.prepare_original(row,market.settings))
+    end
+  end
   for _,key in ipairs(road_freight_catalog().road_order) do
     local row=road_freight_catalog().row(key)
     market.models[row.stock_id]=market.models[row.stock_id] or assert(Calendar.prepare_original(row,market.settings))
@@ -3592,6 +3604,11 @@ function M.vehicle_stock_load_amount(v)
   return r and road_bus_catalog().quote(nil,nil,r.stock_id).load_amount
 end
 function M.vehicle_available(s,engine)
+  if road_freight_catalog().water(engine) then
+    if not M.road_climate_industry_active(s) then return false end
+    local model=M.stock_road_offer(s,engine)
+    return not not (model and model.public)
+  end
   if road_freight_catalog().additional(engine) then
     local market=s.stock_bus_market
     if not (market and extra_road_art[s] and extra_road_art[s][engine] and M.road_stock_service_active(s)) then return false end
@@ -4017,6 +4034,10 @@ local timber_day_bindings=setmetatable({},{__mode="k"})
 local coal_day_bindings=setmetatable({},{__mode="k"})
 local function timber_binding(s,force)
   if timber_day_bindings[s] then return timber_day_bindings[s] end
+  if M.road_climate_industry_active(s) then
+    return farm.climate_water.bind(s,{credit=credit,modified_catchment=s.stock_modified_catchment~=false,
+      town_rights=function(id) return s.stock_town_growth and s.stock_town_growth.towns[id] end})
+  end
   if goods.mixed_enabled and goods.mixed_enabled(s) then return goods.mixed_binding(s) end
   if oil.service and s.stock_oil_industries and (force or M.road_oil_active(s)) then
     return oil.binding(s)
@@ -4076,7 +4097,8 @@ local function passenger_modules()
     {credit=credit,news=push,coal=coal_binding,
       coal_handles=function(s,v) return M.road_coal_active(s) and coal_service.supported_vehicle(v) end,
       timber=timber_binding,timber_handles=function(s,v)
-        return ((M.road_heavy_active(s) or M.road_bank_active(s)) and goods.mixed and goods.mixed.supported_vehicle(v)) or (M.road_timber_active(s) and timber_service.supported_vehicle(v)) or
+        return (M.road_climate_industry_active(s) and farm.climate_water.supported_vehicle(v)) or
+          ((M.road_heavy_active(s) or M.road_bank_active(s)) and goods.mixed and goods.mixed.supported_vehicle(v)) or (M.road_timber_active(s) and timber_service.supported_vehicle(v)) or
           (M.road_farm_active(s) and farm_service and farm_service.supported_vehicle(v)) or
           (M.road_oil_active(s) and oil.service.supported_vehicle(v))
       end})
@@ -4394,6 +4416,31 @@ function M.oil_rules()
 end
 function M.oil_asset_shapes()
   return oil.world and oil.world.visual_sources()
+end
+-- Binds native Tropic source industries supplied by the campaign
+-- authority, independent of UI or asset readiness. Never mix overlapping
+-- commodity owners or initialise a second industry clock.
+function M.mount_climate_water(s)
+  if not (s.stock_climate and s.stock_climate.landscape=="tropic" and s.stock_climate_industries) then return end
+  passenger_modules()
+  if not farm.climate_water then
+    local function openttd(name) return dofile(module_root.."openttd/"..name..".lua") end
+    local kernel=openttd("station_rating")
+    local catchment=openttd("station_catchment")(passenger_rules,kernel,
+      station_service.house_passenger_acceptance,mail_runtime.house_acceptance)
+    local coal=openttd("coal_industry")(passenger_rules,kernel,catchment,income_rules)
+    local rules=openttd("town_climate_industry_rules_rc1")(
+      openttd("farm_factory_industry")(passenger_rules,catchment,kernel,income_rules,coal,timber_rules),
+      openttd("town_water_industry_rc1"),openttd("town_food_supply_rc1"),openttd("town_house_acceptance_rc1"),"tropic")
+    local adapter=dofile(module_root.."farm_factory_runtime.lua")(rules,nil,
+      dofile(module_root.."timber_industry_runtime.lua"),catchment)
+    farm.climate_water=dofile(module_root.."road_farm_service.lua")(M,rules,adapter,passenger_rules,income_rules,kernel,rating_runtime,
+      {tag="climate_water",label="Water",storage="stock_climate_industries",vehicles={water="water_uhl"},cargo={"water"},
+        conflicts={"stock_farm_industries","stock_timber_industries","stock_oil_industries","stock_heavy_industries","stock_bank_industries"}})
+    farm.climate_rules=rules
+  end
+  town_passengers.start(s)
+  return farm.climate_rules
 end
 function M.mount_farm_world(s,Terrain,asset_ready)
   if not asset_ready then return nil,"The native farm, factory or freight assets are missing." end
@@ -5016,6 +5063,10 @@ end
 function M.road_timber_active(s)
   return not not (s.road_timber and s.road_stock_house_supply and s.stock_timber_industries and M.road_stock_service_active(s))
 end
+function M.road_climate_industry_active(s)
+  return not not (s.stock_climate and s.stock_climate.landscape=="tropic" and s.stock_climate_industries
+    and farm.climate_water and M.road_stock_service_active(s))
+end
 function M.road_farm_active(s)
   return not not (s.road_farm and s.road_stock_house_supply and s.stock_farm_industries and farm_service and
     M.road_stock_service_active(s))
@@ -5092,7 +5143,7 @@ function M.truck_stop_cargo(s,st)
   end
   local b=timber_day_bindings[s] or timber_binding(s)
   if b then
-    for _,cargo in ipairs({"oil","livestock","goods","grain","wood","iron_ore","steel","valuables"}) do
+    for _,cargo in ipairs({"oil","livestock","goods","grain","wood","iron_ore","steel","valuables","water"}) do
       local r=b.report(st,cargo,tick)
       if r then
         local rating=st.goods and st.goods[cargo] and st.goods[cargo].rating
@@ -5119,7 +5170,7 @@ abort_stock_stop=function(s,v)
   v.loaded_at=nil
 end
 function M.build_truck_stop(s,owner,id)
-  if not (s.road_mail and s.road_stock_house_supply) and not M.road_coal_active(s) and not M.road_timber_active(s) and not M.road_farm_active(s) and not M.road_oil_active(s) and not M.road_heavy_active(s) and not M.road_bank_active(s) then
+  if not M.road_climate_industry_active(s) and not (s.road_mail and s.road_stock_house_supply) and not M.road_coal_active(s) and not M.road_timber_active(s) and not M.road_farm_active(s) and not M.road_oil_active(s) and not M.road_heavy_active(s) and not M.road_bank_active(s) then
     return false,"No stock mail or freight service in this campaign."
   end
   local t=s.tiles[id]
@@ -6355,7 +6406,7 @@ function M.bind_stock_industry_day(s,first,live,refresh)
     coal=coal_binding(s,true,freight,freighter)
     coal_day_bindings[s]=coal
   end
-  if M.road_timber_active(s) or M.road_farm_active(s) or M.road_oil_active(s) or M.road_heavy_active(s) or M.road_bank_active(s) then
+  if M.road_climate_industry_active(s) or M.road_timber_active(s) or M.road_farm_active(s) or M.road_oil_active(s) or M.road_heavy_active(s) or M.road_bank_active(s) then
     passenger_modules()
     timber=timber_binding(s)
     timber_day_bindings[s]=timber
@@ -6464,7 +6515,8 @@ function M.daily(s,traverse,tick_pulse,openings)
       local is_timber=industry_truck(v.engine)
       local is_mail=priced_mail(v.engine)
       local enabled=(is_mail and road_mail(s,v)) or (not is_timber and not is_mail and industry.coal) or is_timber and industry.timber and
-        (M.road_farm_active(s) and farm_engine(v.engine) or M.road_timber_active(s) and timber_engine(v.engine)
+        (M.road_climate_industry_active(s) and farm.climate_water.supported_vehicle(v)
+          or M.road_farm_active(s) and farm_engine(v.engine) or M.road_timber_active(s) and timber_engine(v.engine)
           or M.road_oil_active(s) and oil_engine(v.engine) or
             (M.road_heavy_active(s) or M.road_bank_active(s)) and heavy_engine(v.engine))
       local key=is_mail and "stock_mail_running_ticks" or is_timber and "stock_timber_running_ticks" or "stock_coal_running_ticks"
