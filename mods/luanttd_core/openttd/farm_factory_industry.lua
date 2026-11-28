@@ -6,22 +6,13 @@ local here=debug and debug.getinfo(1,"S").source:match("^@(.*/)")
 local path=here or (core and core.get_modpath("luanttd_core").."/openttd/") or "mods/luanttd_core/openttd/"
 local Arrival=dofile(path.."industry_production_arrival_rc1.lua")
 local Delivery=dofile(path.."industry_delivery_rc1.lua")
+local Layout=dofile(path.."stock_industry_layouts_rc1.lua")
 return function(Packets,Catchment,Rating,Income,Commons,Timber)
   local F={TICKS=256,SLOTS=16,MAX_WAITING=65535,ABANDON_YEARS=5}
   local floor,ceil,min,max,abs=math.floor,math.ceil,math.min,math.max,math.abs
   local function range(limit,u32) return floor(limit*u32/4294967296) end
   local history=function() return {production=0,transported=0} end
-  F.layout={
-    farm={
-      [0]={{1,0,33},{1,1,34},{1,2,36},{0,0,37},{0,1,37},{0,2,36},{2,0,35},{2,1,38},{2,2,38}},
-      {{1,1,33},{1,2,34},{0,0,35},{0,1,36},{0,2,36},{0,3,35},{1,0,37},{1,3,38},{2,0,37},{2,1,37},{2,2,38},{2,3,38}},
-      {{2,0,33},{2,1,34},{0,0,36},{0,1,36},{0,2,37},{0,3,37},{1,0,35},{1,1,38},{1,2,38},{1,3,37},{2,2,37},{2,3,35}},
-    },
-    factory={
-      [0]={{0,0,39},{0,1,40},{1,0,41},{1,1,42},{0,2,39},{0,3,40},{1,2,41},{1,3,42},{2,1,39},{2,2,40},{3,1,41},{3,2,42}},
-      {{0,0,39},{0,1,40},{1,0,41},{1,1,42},{2,0,39},{2,1,40},{3,0,41},{3,1,42},{1,2,39},{1,3,40},{2,2,41},{2,3,42}},
-    },
-  }
+  F.layout={farm=Layout[9],factory=Layout[6]}
   F.spec={
     farm={id=9,life="organic",minimum=5,cost_factor=250,procurement_probability=0xD9999999,
       climates=3,sounds=3,out={"grain","livestock"},rates={10,10},input={},multiplier={},

@@ -112,7 +112,8 @@ local function layout(plan)
 end
 for _,plan in ipairs(F.process.layout) do layout(plan) end
 layout(F.fruit.layout[0])
-for _=1,2 do for i=0,2 do layout(kernel.layout.farm[i]) end end
+for i=0,2 do layout(F.maize.layout[i]) end
+for i=0,2 do layout(kernel.layout.farm[i]) end
 local D=dofile(p.."climate_road_freight_rc1.lua")
 local by={}
 for _,id in ipairs(D.all) do

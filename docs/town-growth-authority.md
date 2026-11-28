@@ -1564,8 +1564,8 @@ remain attached to their real Maize industry record across reopens.
 The compiled field placement regression matches
 600 RC1 field scenarios, including RNG, ordered writes, fence
 styles and the final board. In the native Tropic freight test the
-initial 373 crop tiles are worked by the live landscape clock;
-409 visited crop tiles survive through the mid-haul SQLite
+initial 376 crop tiles are worked by the live landscape clock;
+399 visited crop tiles survive through the mid-haul SQLite
 restart and subsequent Food and Water delivery. This is a
 controlled field lifecycle test, not a port of the full Tropic
 industry generator.
@@ -1588,3 +1588,23 @@ forced/weighted selection order and final RNG with interleaved
 placement draws. The ordinary generator uses this allocator for
 its supported Temperate industry types; it does not yet generate
 the full industry maps or other climate campaigns.
+
+### Stock industry footprints and ground admission
+
+The complete stock catalog preserves all 60 layout variants across
+37 industry types, including the signed Oil Rig offsets that check
+water without placing anything. The same source table supplies the
+175 construction slope masks, ordinary Farm and Factory, and the
+five Tropic supply-chain footprints. The extractor includes no artwork.
+
+Two compiled RC1 routines match 8,448 slope and footprint trials.
+They cover steep and directional refusals, checked water, vehicles,
+bridges and the distinction between clearing as a town and clearing
+as a company. The Tropic Food/Water native corridor now quotes its
+physical firms through these rules and verifies that a processor
+inside the stock 14-tile exclusion is rejected. The revised route
+still opens monthly growth after a native async SQLite restart.
+The rules port is not yet full climate map generation: worldgen
+candidate retries, complete territory and industry pool admission,
+and TerraGenesis platform grading on these kinds remain to be
+verified against generated RC1 worlds.

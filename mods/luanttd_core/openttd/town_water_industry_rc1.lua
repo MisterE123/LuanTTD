@@ -2,12 +2,14 @@
 -- OpenTTD contributors, 16.0-RC1 table/build_industry.h,
 -- table/cargo_const.h and industry_cmd.cpp CheckNewIndustry_Water,
 -- CheckIfIndustryTilesAreFree and CheckIfFarEnoughFromConflictingIndustry.
+local directory=(core and core.get_modpath and core.get_modpath("luanttd_core").."/openttd/") or "mods/luanttd_core/openttd/"
+local Layout=dofile(directory.."stock_industry_layouts_rc1.lua")
 local M={}
 M.cargo={key="water",label="WATR",effect=4,weight_sixteenths=16,
   capacity_multiplier=256,base_payment=4664,transit_period_1=20,transit_period_2=80}
-M.supply={id=21,layout={{0,0,118},{0,1,119},{1,0,118},{1,1,119}},
+M.supply={id=21,layout=Layout[21][0],
   construction_factor=199,map_colour=37,rate=12,cargo="water",conflict=22}
-M.tower={id=22,layout={{0,0,120}},construction_factor=115,map_colour=208,accepts="water",
+M.tower={id=22,layout=Layout[22][0],construction_factor=115,map_colour=208,accepts="water",
   acceptance_eighths=8,conflict=21,only_in_town=true}
 M.specs={[21]=M.supply,[22]=M.tower}
 -- Source MR #165..167 and ROV #49..51. Do not expose in a depot
