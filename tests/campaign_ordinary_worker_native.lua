@@ -320,6 +320,8 @@ local function transfer_ordinary(viewer)
                 if core.settings:get_bool("luanttd_worker_town_rules_qa",false) and body:find("Town growth (all towns)",1,true) then
                   if body:find("World town growth set to None.",1,true) then
                     core.log("action","PASS NATIVE PROJECTED WORLD RULES: graphical growth change reached the stock authority")
+                  elseif body:find("Town cargo generation set to Quadratic (original).",1,true) then
+                    core.log("action","PASS NATIVE PROJECTED TOWN CARGO: graphical cargo choice reached the stock authority")
                   else
                     core.log("action","NATIVE_PROJECTED_WORLD_RULES_READY")
                   end

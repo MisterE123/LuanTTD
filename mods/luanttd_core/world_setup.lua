@@ -34,6 +34,8 @@ local items={
       "West and east","North and south","Random edges"},advanced="Forced coastlines"},
   {key="growth_rate",setting="luanttd_town_growth_rate",default=2,values={0,1,2,3,4},
     labels={"None","Slow","Normal","Fast","Very fast"},advanced="Town growth speed"},
+  {key="town_cargo",setting="luanttd_town_cargo_mode",default=1,values={0,1},
+    labels={"Quadratic (original)","Linear"},advanced="Town cargo generation"},
   {key="variety",setting="bayline_generated_variety",default=0,values={0,1,2,3,4,5},
     labels={"None","Very low","Low","Medium","High","Very high"},advanced="Regional variety"},
 }
@@ -205,8 +207,8 @@ local function formspec(core,cfg,advanced,note)
           :format(x,y,label,x,y+.20,item.key,cfg[item.key],item.key)
         n=n+1
       end
-      out[#out+1]="label[.49,6.97;Custom town count applies only when Town density is set to Custom.]"
-      out[#out+1]="label[.49,7.32;No forced coast still allows inland water and sea-level terrain.]"
+      out[#out+1]="label[6.43,6.95;Custom count needs Custom density.]"
+      out[#out+1]="label[6.43,7.30;No forced coast still allows inland water.]"
     end
   elseif cfg.scenario=="original" then
     out[#out+1]="label[.49,3.86;Survey map side length]"

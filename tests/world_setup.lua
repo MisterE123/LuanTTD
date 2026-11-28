@@ -4,7 +4,7 @@ local params={bayline_seed="4294967295",bayline_generated_map_size="128",
 local settings={get=function(_,name)return params[name] end}
 local defaults=M.defaults(settings)
 assert(defaults.seed==4294967295 and defaults.size==128 and defaults.relief==1 and defaults.layout=="grid3" and defaults.rivers==2)
-assert(defaults.growth_rate==4)
+assert(defaults.growth_rate==4 and defaults.town_cargo==1)
 assert(defaults.larger_towns==4 and defaults.initial_city_size==2 and defaults.town_min_distance==20 and defaults.custom_towns==1)
 local custom=assert(M.parse(defaults,{setup_towns="5",setup_custom_towns="123",setup_larger_towns="0",
   setup_initial_city_size="10",setup_town_min_distance="500"}))
@@ -14,6 +14,8 @@ for k,v in pairs{custom_towns="5001",larger_towns="256",initial_city_size="0",to
 end
 assert(M.parse(defaults,{setup_growth_rate="1"}).growth_rate==0)
 assert(not M.parse(defaults,{setup_growth_rate="6"}))
+assert(M.parse(defaults,{setup_town_cargo="1"}).town_cargo==0)
+assert(not M.parse(defaults,{setup_town_cargo="3"}))
 local submitted={setup_seed="12345678",setup_size="1",setup_relief="3",setup_rivers="2",setup_year="1968",setup_industries="1",setup_coast="2",setup_smooth="3",setup_variety="4"}
 local cfg=assert(M.parse(defaults,submitted))
 assert(cfg.seed==12345678 and cfg.size==64 and cfg.relief==2 and cfg.rivers==1 and cfg.industries==0)
@@ -52,6 +54,7 @@ fields(p,M.form,{setup_defaults="true"})
 assert(shown:find("Generate world",1,true) and shown:find("Cancel setup",1,true))
 fields(p,M.form,{setup_advanced="true"})
 assert(shown:find("Custom town count",1,true) and shown:find("Every Nth town is a city",1,true))
+assert(shown:find("Town cargo generation",1,true) and shown:find("Quadratic (original),Linear",1,true))
 assert(shown:find("Town growth speed",1,true) and shown:find("None,Slow,Normal,Fast,Very fast",1,true))
 fields(p,M.form,{setup_cancel="true",setup_seed="bad"})
 assert(shutdown and shutdown[2]==false and not saved)

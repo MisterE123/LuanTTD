@@ -340,6 +340,7 @@ return function(Sim,R,max_days)
     return s.stock_generated_profile and s.stock_generated_profile.town_settings
   end
   local growth_names={[0]="None","Slow","Normal","Fast","Very fast"}
+  local cargo_names={[0]="Quadratic (original)","Linear"}
   function A.company(name,midday)
     if not owner(name) then return reply(false,"INVALID_REQUEST") end
     local c=s.companies[name]
@@ -352,7 +353,8 @@ return function(Sim,R,max_days)
       rail_mono=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,2) or false,
       news_head=R.news and R.news.head(),
       year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name,
-      world_town_growth=growth and (growth.growth_setting or 2) or nil})
+      world_town_growth=growth and (growth.growth_setting or 2) or nil,
+      world_town_cargo=growth and (growth.cargo_mode or 1) or nil})
   end
   function A.news(name,page,after,req)
     if not owner(name) or not s.companies[name] or not R.news then return reply(false,"Newspaper unavailable.") end
@@ -462,7 +464,7 @@ return function(Sim,R,max_days)
   -- vehicle records. Everything else must be treated as
   -- a potential surface edit, including future command types. Both
   -- direct placement RPCs below flow through this same handler.
-  local keeps_sea={company_open=true,company_loan=true,speed=true,town_growth_setting=true,
+  local keeps_sea={company_open=true,company_loan=true,speed=true,town_growth_setting=true,town_cargo_setting=true,
     road_buy=true,road_order_add=true,road_toggle=true}
   local function valid_speed(speed)
     return speed==0 or speed==1 or speed==2 or speed==4
@@ -641,6 +643,16 @@ return function(Sim,R,max_days)
       -- paths, not by the setting command and not by an extra tick.
       growth.growth_setting=c.rate
       ok,note=true,"World town growth set to "..growth_names[c.rate].."."
+    elseif c.kind=="town_cargo_setting" then
+      if not integer(c.mode,0,1) then return reply(false,"INVALID_TOWN_CARGO_SETTING") end
+      if s.chair~=name and c.admin~=true then return reply(false,"Only the host or server admin can change world rules.") end
+      local growth=town_settings()
+      if not growth then return reply(false,"Stock town growth is unavailable in this world.") end
+      if (growth.cargo_mode or 1)==c.mode then return reply(true,"Town cargo generation is already "..cargo_names[c.mode]..".") end
+      -- Stock changes future TileLoop_Town production, not history,
+      -- queues, or the random state at the time the setting is changed.
+      growth.cargo_mode=c.mode
+      ok,note=true,"Town cargo generation set to "..cargo_names[c.mode].."."
     elseif c.kind=="town_fund_buildings" and index(c.town) then
       ok,note,value=Sim.fund_town_buildings(s,name,c.town,c.cost)
     elseif c.kind=="town_fund_roads" and index(c.town) then

@@ -60,6 +60,7 @@ return function(core,mod,Sim,Settings)
       dofile(src.."stock_town_name.lua"),G,B,{
       layout=cfg and cfg.layout or settings:get("bayline_generated_town_layout") or "original",
       growth_setting=option("growth_rate","luanttd_town_growth_rate",2),
+      cargo_mode=option("town_cargo","luanttd_town_cargo_mode",1),
       difficulty=option("towns","bayline_generated_towns",2),
       custom_count=option("custom_towns","bayline_generated_custom_towns",1),
       larger_towns=option("larger_towns","bayline_generated_larger_towns",4),

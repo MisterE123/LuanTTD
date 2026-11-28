@@ -524,3 +524,25 @@ jobs:
           lua5.1 tests/campaign_worker_finance_ui.lua
           lua5.1 tests/town_growth_rc1_fast_grid.lua midyear
           bash tests/town_growth_rc1_goods_native.sh midyear
+
+  rc1-town-cargo-and-cities:
+    runs-on: ubuntu-24.04
+    container: debian:13
+    timeout-minutes: 10
+    steps:
+      - name: Install Lua and Luanti server
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git lua5.1 luanti-server
+          echo /usr/games >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compare stock Quadratic production and live settings
+        run: |
+          lua5.1 tests/world_setup.lua
+          lua5.1 tests/campaign_worker_finance_ui.lua
+          lua5.1 tests/town_growth_rc1_fast_grid.lua quadratic
+          bash tests/town_growth_rc1_goods_native.sh quadratic
+      - name: Compare three years of dense 1993 grid cities
+        run: lua5.1 tests/town_growth_rc1_fast_grid.lua crowded

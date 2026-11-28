@@ -95,16 +95,24 @@ if [[ ${LUANTTD_NATIVE_TOWN_RULES:-false} == true ]]; then
   mark 'NATIVE_PROJECTED_WORLD_RULES_READY'
   sleep .45
   import -window root -resize 960x600 -quality 88 "$out/worker-world-rules.jpg"
-  xdotool mousemove 760 449 click 1
+  xdotool mousemove 760 397 click 1
   sleep .23
   import -window root -resize 960x600 -quality 88 "$out/worker-growth-dropdown.jpg"
   xdotool key Home Return
   sleep .25
-  xdotool mousemove 869 448 click 1
+  xdotool mousemove 869 397 click 1
   mark 'PASS NATIVE PROJECTED WORLD RULES'
   sleep .4
   import -window root -resize 960x600 -quality 88 "$out/worker-world-rules-changed.jpg"
-  xdotool mousemove 612 534 click 1
+  xdotool mousemove 760 457 click 1
+  sleep .2
+  xdotool key Home Return
+  sleep .25
+  xdotool mousemove 869 457 click 1
+  mark 'PASS NATIVE PROJECTED TOWN CARGO'
+  sleep .4
+  import -window root -resize 960x600 -quality 88 "$out/worker-town-cargo-changed.jpg"
+  xdotool mousemove 612 552 click 1
   sleep .35
 fi
 xdotool mousemove 612 450 click 1

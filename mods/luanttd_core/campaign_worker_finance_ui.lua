@@ -3,6 +3,7 @@ return function(core,client,fmt,money,view_hq)
   local M={form="luanttd_core:worker_finance"}
   local open={}
   local growth_names="None,Slow,Normal,Fast,Very fast"
+  local cargo_modes="Quadratic (original),Linear"
   local serial=0
   local function draw(player,v,note)
     local t=v.data or {}
@@ -11,12 +12,19 @@ return function(core,client,fmt,money,view_hq)
     local growth=t.world_town_growth
     local world_controls=growth~=nil and (t.can_speed or admin)
     if world_controls and v.in_rules then
-      local b={"formspec_version[7]size[8.9,4.36]bgcolor[#152334;false]",label(.4,"World rules"),
-        label(.99,"Town growth (all towns)"),label(1.47,note or "Changes apply at the normal growth updates."),
-        ("dropdown[.45,1.85;5.55,.63;f%d_growth;%s;%d;true]"):format(v.id,growth_names,(v.selected_growth or growth)+1),
-        ("button[6.2,1.85;2.2,.58;f%d_apply_growth;Apply]"):format(v.id),
-        ("button[.45,3.41;4,.58;f%d_back_finance;Back to finance]"):format(v.id),
-        "button_exit[4.55,3.41;3.86,.58;close;Back to world]"}
+      local b={"formspec_version[7]size[8.9,5.03]bgcolor[#152334;false]",label(.4,"World rules"),
+        label(.99,"Town growth (all towns)"),
+        ("dropdown[.45,1.25;5.55,.63;f%d_growth;%s;%d;true]"):format(v.id,growth_names,(v.selected_growth or growth)+1),
+        ("button[6.2,1.25;2.2,.58;f%d_apply_growth;Apply]"):format(v.id)}
+      if t.world_town_cargo~=nil then
+        b[#b+1]=label(2.08,"Town cargo generation")
+        b[#b+1]=("dropdown[.45,2.34;5.55,.63;f%d_cargo;%s;%d;true]")
+          :format(v.id,cargo_modes,(v.selected_cargo or t.world_town_cargo)+1)
+        b[#b+1]=("button[6.2,2.34;2.2,.58;f%d_apply_cargo;Apply]"):format(v.id)
+      end
+      b[#b+1]=label(3.49,note or "Changes affect future updates, not existing cargo.")
+      b[#b+1]=("button[.45,4.08;4,.58;f%d_back_finance;Back to finance]"):format(v.id)
+      b[#b+1]="button_exit[4.55,4.08;3.86,.58;close;Back to world]"
       core.show_formspec(player,M.form,table.concat(b))
       return
     end
@@ -86,13 +94,17 @@ return function(core,client,fmt,money,view_hq)
       end
       if v.in_rules then
         if f[stem.."back_finance"] then
-          v.in_rules,v.selected_growth=nil,nil
+          v.in_rules,v.selected_growth,v.selected_cargo=nil,nil,nil
           draw(name,v)
           return true
         end
         local selection=tonumber(f[stem.."growth"])
         if selection and selection%1==0 and selection>=1 and selection<=5 then v.selected_growth=selection-1 end
-        if f[stem.."apply_growth"] and v.selected_growth~=nil then
+        local cargo=tonumber(f[stem.."cargo"])
+        if cargo==1 or cargo==2 then v.selected_cargo=cargo-1 end
+        if f[stem.."apply_cargo"] and v.selected_cargo~=nil and v.data.world_town_cargo~=nil then
+          command={kind="town_cargo_setting",mode=v.selected_cargo,admin=admin}
+        elseif f[stem.."apply_growth"] and v.selected_growth~=nil then
           command={kind="town_growth_setting",rate=v.selected_growth,admin=admin}
         else return true end
       end
@@ -110,7 +122,7 @@ return function(core,client,fmt,money,view_hq)
     command.revision=v.revision
     v.pending=true
     local queued,why=client.query({kind="command",player=name,command=command},function(r)
-      if open[name]==v then M.show(p,r.why,command.kind=="town_growth_setting") end
+      if open[name]==v then M.show(p,r.why,command.kind=="town_growth_setting" or command.kind=="town_cargo_setting") end
     end)
     if not queued then v.pending=nil;draw(name,v,why) end
     return true

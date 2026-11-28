@@ -24,7 +24,9 @@ return function(Sim,H,Lift)
     end
     local stats={start_head=clock.head,ticks=TICKS,tree_changes=0,tide_changes=0,houses=0,completed=0,
       passenger=0,mail=0,industry_machinery=0}
-    local opts={percentage=s.stock_cargo_scale_percent or 100}
+    local town=profile.town_settings
+    local opts={percentage=s.stock_cargo_scale_percent or 100,
+      mode=town and town.cargo_mode==0 and "original" or "bitcount"}
     if s.stock_town_lifts then
       opts.start_lift=function(_,tile) Lift.add(s.stock_town_lifts,tile+1) end
     end

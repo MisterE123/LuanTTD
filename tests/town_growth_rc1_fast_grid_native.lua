@@ -19,6 +19,7 @@ if not initial then
   local cfg=ref.hills and {seed=1,relief=3,coast=0,rivers=3,towns=3,larger_towns=4,layout="original",growth_rate=2}
     or {seed=98217,relief=1,coast=16,rivers=2,towns=4,custom_towns=6,larger_towns=3,layout="grid3",growth_rate=3}
   if ref.midyear then cfg={seed=1751,relief=1,coast=16,rivers=2,towns=4,custom_towns=4,larger_towns=3,layout="original",growth_rate=2} end
+  if ref.quadratic then cfg.town_cargo=0 end
   cfg.width,cfg.depth,cfg.year,cfg.sea,cfg.trees,cfg.industries,cfg.variety,cfg.smooth=width,depth,1950,0,2,4,0,1
   local s=gen.run(cfg)
   assert(#s.stock_generated_profile.industries==industry_count and #s.stock_town_growth.towns==town_count)
@@ -54,6 +55,7 @@ local function run()
     local s=assert(Checkpoint.read())
     assert(s.day==restart_day and #s.stock_generated_profile.industries==industry_count)
     if ref.midyear then assert(s.stock_generated_profile.town_settings.growth_setting==0) end
+    if ref.quadratic then assert(s.stock_generated_profile.town_settings.cargo_mode==0) end
     proof=("ORDINARY_GOODS_SAVED: %dx%d region at day %d, %d industries"):format(width,depth,restart_day,industry_count)
   else
     assert(initial.day==restart_day)
@@ -74,6 +76,15 @@ local function run()
     end
     assert(#s.stock_town_growth.towns==town_count)
     if ref.midyear then assert(s.stock_generated_profile.town_settings.growth_setting==4) end
+    if ref.quadratic then
+      assert(s.stock_generated_profile.town_settings.cargo_mode==0)
+      ask("command",nil,{kind="town_cargo_setting",mode=1,revision=revision,admin=true})
+      ask("checkpoint")
+      local changed=assert(Checkpoint.read())
+      assert(changed.stock_generated_profile.town_settings.cargo_mode==1 and changed.day==s.day
+        and changed.passenger_rating_rng[1]==s.passenger_rating_rng[1]
+        and changed.passenger_rating_rng[2]==s.passenger_rating_rng[2])
+    end
     local last=ref.year_end_house
     if last then
       local house=assert(s.tiles[last.tile+1].source_house)

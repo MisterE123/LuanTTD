@@ -1,7 +1,11 @@
 -- Compare a second ordinary, independently generated RC1 world.
 local profiles={
+  crowded={fixture="rc1-crowded-grid2-years",width=256,depth=256,year=1993,seed=9354,
+    towns=4,custom_towns=14,layout="grid2",growth_rate=4,larger_towns=1,initial_city_size=8,coast=0},
   grid={fixture="rc1-fast-grid-town-year",width=256,depth=128,year=1950,seed=98217,
     towns=4,custom_towns=6,layout="grid3",growth_rate=3},
+  quadratic={fixture="rc1-quadratic-town-year",width=256,depth=128,year=1950,seed=98217,
+    towns=4,custom_towns=6,layout="grid3",growth_rate=3,town_cargo=0},
   better={fixture="rc1-better-slow-town-year",width=128,depth=256,year=1950,seed=11681,
     towns=2,layout="better",growth_rate=1},
   midyear={fixture="rc1-midyear-town-setting",width=128,depth=128,year=1950,seed=1751,
@@ -136,6 +140,28 @@ for day=1,ref.days or 365 do
   end
   runtime.day(observe)
 end
-assert(ticks==(ref.days or 365)*74 and maps==(ref.midyear and 20 or ref.days and 18 or 14) and digest==ref.rng)
+assert(ticks==(ref.days or 365)*74 and maps==(ref.snapshot_count or ref.midyear and 20 or ref.days and 18 or 14) and digest==ref.rng)
 print(("PASS RC1 %s region: %d industry placements, %d towns, original span portals, %d map snapshots, %d RNG ticks, %d packed reopens")
   :format(profile_id,#ref.industries,#s.stock_town_growth.towns,maps,ticks,reopens))
+
+
+if ref.quadratic then
+  local copy=assert(Codec.decode(Codec.encode(s)))
+  local authority=endpoint(Sim,runtime)
+  local revision=s.authority_revision or 0
+  local before=s.passenger_rating_rng
+  local state={before[1],before[2],s.day,s.passenger_house_clock.counter}
+  local cargo={kind="town_cargo_setting",mode=1,revision=revision}
+  assert(not authority.command("Visitor",cargo).ok)
+  cargo.admin=true
+  assert(authority.command("Server Admin",cargo).ok)
+  assert(not authority.command("Server Admin",cargo).ok)
+  equal(state[4],"setting without simulation",{before[1],before[2],s.day,s.passenger_house_clock.counter},state)
+  s=assert(Codec.decode(Codec.encode(s)))
+  assert(s.stock_generated_profile.town_settings.cargo_mode==1)
+  mount(Sim,mod,s,cap).day()
+  mount(Sim,mod,copy,cap).day()
+  local a,b=s.passenger_rating_rng,copy.passenger_rating_rng
+  assert(a[1]~=b[1] or a[2]~=b[2],"Production stayed on the old algorithm after reopening")
+  print("PASS switching town cargo mode is authorized, persisted and applied only to future visits")
+end

@@ -32,6 +32,7 @@ bayline_stock_bus_start_year (Starting year) int 1950 1950 2050
 [OpenTTD town authority]
 # The original RC1 construction and difficulty options, not feature unlocks.
 luanttd_town_growth_rate (Town growth: 0 None, 1 Slow, 2 Normal, 3 Fast, 4 Very fast) int 2 0 4
+luanttd_town_cargo_mode (Town cargo generation: 0 Quadratic original, 1 Linear) int 1 0 1
 luanttd_town_council_tolerance (Council tolerance: 0 Lenient, 1 Neutral, 2 Hostile, 3 Permissive) int 0 0 3
 
 # Stock OpenTTD setting. When off, the standard two-airport town limit applies.

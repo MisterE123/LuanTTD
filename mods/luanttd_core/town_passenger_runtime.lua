@@ -118,7 +118,10 @@ return function(Sim,H,Packets,Rating,Mail)
     local physical=Sim.W==2^clock.log_x and Sim.H==2^clock.log_y and s.tiles
     local hub=s.stock_world_animations
     local lift_registry=s.stock_town_lifts
-    local settings={}
+    local town=s.stock_generated_profile and s.stock_generated_profile.town_settings
+    -- TownCargogenMode::Bitcount is the RC1 default. Use the same
+    -- selection for the live loop and 1,280 pregame landscape visits.
+    local settings={mode=town and town.cargo_mode==0 and "original" or "bitcount"}
     if s.stock_generated_profile and growth and growth.rebuild then
       settings.rebuild=function(house,id,word,tick,rng)
         growth.rebuild(s,house,id,word,tick,rng,growth_calendar and growth_calendar(tick))
