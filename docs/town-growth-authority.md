@@ -1608,3 +1608,29 @@ The rules port is not yet full climate map generation: worldgen
 candidate retries, complete territory and industry pool admission,
 and TerraGenesis platform grading on these kinds remain to be
 verified against generated RC1 worlds.
+
+### Native climate industry-generation boundaries
+
+Six fresh stock OpenTTD 16.0-RC1 worlds provide the observed
+initial industry choices, random states, accepted coordinates,
+layout numbers, and placed cells. The same allocator and
+candidate-draw routine used by the ordinary worker reproduce
+206 ordered industry selections, the exact successful tile,
+variant and 16-bit input seed for each, and all 1,826 built
+industry tiles from the layout catalog. The native recordings
+include 4,824 candidate draws across Temperate, Arctic, Tropic
+and Toyland. After each successful candidate, the test consumes
+the source-recorded number of initialization and land-clearing
+draws. It does not yet reproduce all of those operations or
+independently reach each accepted coordinate by validating the
+climate map's geometry.
+
+The same pinned data now supplies all 37 industry specs and
+all 35 default cargo definitions, including the distinct Tropic
+Oil and Wood rates. Mixed labels resolve to the first active
+cargo in the original order: livestock/fruit, grain/wheat/maize,
+and valuables/gold/diamonds. The native boundary test verifies
+the exact ordered input and output CargoIDs for all 206 firms.
+The active worldgen selector and the five Tropic freight
+industries now read this catalog directly instead of using
+parallel handwritten weights and rates.

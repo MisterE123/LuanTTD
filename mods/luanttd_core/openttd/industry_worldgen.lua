@@ -334,10 +334,15 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
       local l=W.specs[id].layout
       for _=1,hard and W.HARD_ATTEMPTS or W.SOFT_ATTEMPTS do
         result.attempted=result.attempted+1
-        local r=random()%(board.width*board.height)
-        local x,z=r%board.width,floor(r/board.width)
-        local a,b=random(),random()%65536
-        local variant=range(#l+1,random())
+        local x,z,a,b,variant
+        if opts.rc1 then
+          x,z,a,b,variant=Schedule.candidate(board.width,board.height,#l+1,random)
+        else
+          local r=random()%(board.width*board.height)
+          x,z=r%board.width,floor(r/board.width)
+          a,b=random(),random()%65536
+          variant=range(#l+1,random())
+        end
         local plan,why=W.quote(board,id,x,z,variant,opts,used)
         if plan then
           if opts.prepare then opts.prepare(plan,random) end

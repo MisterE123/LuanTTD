@@ -5,48 +5,11 @@
 -- selection order; PlaceInitialIndustry is supplied by the world host.
 local I={}
 local floor,ceil,min=math.floor,math.ceil,math.min
-local landscape={temperate=2,arctic=3,tropic=4,toyland=5}
+local landscape={temperate=1,arctic=2,tropic=3,toyland=4}
 local densities={[0]=0,0,10,25,55,80,0}
--- Name, four mapgen weights, coastline scaling, built on water.
-I.registry={
-  [0]={"coal_mine",8,8,0,0,false,false},
-  {"power_station",5,5,0,0,false,false},
-  {"sawmill",5,0,0,0,false,false},
-  {"forest",5,5,0,0,false,false},
-  {"oil_refinery",4,4,4,0,true,false},
-  {"oil_rig",0,0,0,0,true,true},
-  {"factory",5,0,0,0,false,false},
-  {"printing_works",0,5,0,0,false,false},
-  {"steel_mill",5,0,0,0,false,false},
-  {"farm",9,9,0,0,false,false},
-  {"copper_mine",0,0,4,0,false,false},
-  {"oil_well",4,5,5,0,false,false},
-  {"bank",0,0,0,0,false,false},
-  {"food_process",0,3,4,0,false,false},
-  {"paper_mill",0,5,0,0,false,false},
-  {"gold_mine",0,4,0,0,false,false},
-  {"bank2",0,6,5,0,false,false},
-  {"diamond_mine",0,0,4,0,false,false},
-  {"iron_mine",5,0,0,0,false,false},
-  {"fruit_plantation",0,0,4,0,false,false},
-  {"rubber_plantation",0,0,4,0,false,false},
-  {"water_supply",0,0,4,0,false,false},
-  {"water_tower",0,0,8,0,false,false},
-  {"factory2",0,0,4,0,false,false},
-  {"farm2",0,0,2,0,false,false},
-  {"lumber_mill",0,0,0,0,false,false},
-  {"cotton_candy",0,0,0,5,false,false},
-  {"candy_factory",0,0,0,5,false,false},
-  {"battery_farm",0,0,0,4,false,false},
-  {"cola_wells",0,0,0,5,false,false},
-  {"toy_shop",0,0,0,4,false,false},
-  {"toy_factory",0,0,0,5,false,false},
-  {"plastic_fountain",0,0,0,5,false,false},
-  {"fizzy_drink",0,0,0,4,false,false},
-  {"bubble_generator",0,0,0,5,false,false},
-  {"toffee_quarry",0,0,0,5,false,false},
-  {"sugar_mine",0,0,0,4,false,false},
-}
+local dir=(core and core.get_modpath and core.get_modpath("luanttd_core").."/openttd/") or "mods/luanttd_core/openttd/"
+local Stock=dofile(dir.."stock_industry_specs_rc1.lua")
+I.registry=Stock.industry
 I.LAST_ID=36
 local function density(opts) return opts.editor and 2 or opts.density or 4 end
 function I.count(board,opts)
@@ -56,12 +19,18 @@ function I.count(board,opts)
 end
 function I.probability(board,id,opts,water)
   local rule=I.registry[id]
-  if not rule or opts.enabled and opts.enabled[id]==false or density(opts)==0
-      or water~=nil and rule[7]~=water then return 0,false end
-  local weight=rule[assert(landscape[opts.landscape or "temperate"])]*16
-  local chance=rule[6] and ceil(weight*(board.width+board.height)/512)
+  if not rule or opts.enabled and opts.enabled[id]==false or density(opts)==0 then return 0,false end
+  local built_on_water,skip_force=false,false
+  for _,b in ipairs(rule[14]) do
+    if b=="BuiltOnWater" then built_on_water=true end
+    if b=="NoBuildMapCreation" then skip_force=true end
+  end
+  if water~=nil and built_on_water~=water then return 0,false end
+  local weight=rule[5][assert(landscape[opts.landscape or "temperate"])]*16
+  local coastal=rule[8]=="Refinery" or rule[8]=="OilRig"
+  local chance=coastal and ceil(weight*(board.width+board.height)/512)
     or ceil(weight*board.width*board.height/65536)
-  return chance,chance>0 and not opts.editor
+  return chance,chance>0 and not opts.editor and not skip_force
 end
 function I.probabilities(board,opts,water)
   local probs,forced={},{}
@@ -73,6 +42,14 @@ function I.probabilities(board,opts,water)
     if f then forced[#forced+1]=id end
   end
   return {weights=probs,total=total,forced=forced,water=water}
+end
+-- Stock RandomTile, then CreateNewIndustry's three input draws.
+-- The attempt consumes these even when its quote is rejected.
+function I.candidate(width,height,variants,random)
+  local tile=random()%(width*height)
+  local seed,bits=random(),random()%65536
+  local layout=floor(variants*random()/4294967296)
+  return tile%width,floor(tile/width),seed,bits,layout
 end
 function I.generate(board,opts,random,place,progress,reset)
   if density(opts)==0 then return end
