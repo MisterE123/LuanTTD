@@ -1814,3 +1814,21 @@ world then keeps matching through 8,880 live ticks and two
 save/reopens. This validates real site search and construction,
 not its selection frequency in play. Physical closures and
 player transport still need their own end-to-end proofs.
+
+### Dry industry closure and farm abandonment
+
+Closure keeps a firm on the source industry clock until the next
+economy month. Only then does the destructor clear the physical
+tile records, remove them from the animation registry, release
+the industry pool slot and leave the former farm fields unowned
+so their normal aging can run.
+
+In another controlled Smooth Tropic test, both of the newly built
+dry industries are marked for closure. The source removes them
+at the monthly boundary, not on the marking tick. Luanti matches
+the cleared footprints, all 452 field ownership records (including
+208 abandoned plots), the full 8,880-tick RNG trace and two native
+packed reopens. The test injects the closing flag, so it validates
+the timing and physical removal rather than the incidence of
+naturally selected closures. Wet industry removal and company
+cargo-packet cleanup are outside this proof.

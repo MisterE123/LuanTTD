@@ -195,15 +195,50 @@ return function(Sim,Terrain,s,live_economy,town_runtime)
       end
     end
   end
+  -- Industry::~Industry and MakeWaterKeepingClass for dry buildings.
+  -- The test authority has no stations, so no catchment/packet graph
+  -- owns these rows. Their pool slot becomes available only on removal.
+  local function finish_closure(firm)
+    for _,c in ipairs(firm.cells) do
+      local id=assert(Sim.id(c.x+1,c.z+1))
+      local t=s.tiles[id]
+      if t.stock_industry and t.stock_industry.id==firm.id then
+        assert(t.terrain~="water","Native water-class restoration needs a wet closure case")
+        t.stock_industry=nil
+        records[id]=nil
+        Anim.delete(hub,id,false)
+        Sim.mark_clear_land(s,id)
+      end
+    end
+    if by_spec[firm.id].behavior.PlantFields then
+      for id,plot in pairs(s.stock_farm_fields or {}) do
+        if plot.industry==firm.id then
+          local x,z=Sim.xy(id)
+          x,z=x-1,z-1
+          if x>=firm.x-21 and x<firm.x+21 and z>=firm.z-21 and z<firm.z+21 then plot.industry=nil end
+        end
+      end
+    end
+    by_id[firm.id],by_spec[firm.id]=nil,nil
+    s.topology=s.topology+1
+  end
   function M.month(year)
     if market then Scheduler.month(market,market_api) end
     local firms=s.stock_worldgen_climate_firms
     local count={}
     for _,firm in ipairs(firms) do count[firm.type]=(count[firm.type] or 0)+1 end
-    for _,firm in ipairs(firms) do
+    local i=1
+    while i<=#firms do
+      local firm=firms[i]
       Change.roll(firm,year)
-      assert(firm.prod_level~=0,"Closing climate industries need physical clearance before another month")
-      Change.change(firm,by_spec[firm.id],s.stock_climate.landscape,live_economy,true,year,random,count[firm.type])
+      if firm.prod_level==0 then
+        finish_closure(firm)
+        table.remove(firms,i)
+        count[firm.type]=count[firm.type]-1
+      else
+        Change.change(firm,by_spec[firm.id],s.stock_climate.landscape,live_economy,true,year,random,count[firm.type])
+        i=i+1
+      end
     end
   end
   local function reset_stage(t)

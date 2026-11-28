@@ -34,6 +34,7 @@ local toyland_live=dofile(fp.."rc1-native-climate-industry-live-toyland.lua").to
 local wooded=dofile(fp.."rc1-native-climate-industry-live-wooded.lua")
 local smooth=dofile(fp.."rc1-native-climate-industry-smooth-year.lua")
 local smooth_open=dofile(fp.."rc1-native-climate-industry-smooth-opening.lua")
+local smooth_close=dofile(fp.."rc1-native-climate-industry-smooth-closure.lua")
 local function fold(h,...)
   for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
   return h
@@ -49,7 +50,8 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
     industry_clock=S.mount_climate_industry_clock(s,T,economy)
   end
   mount()
-  local digest,ticks,maps,reopen,opens=1,0,0,0,0
+  local digest,ticks,maps,reopen,opens,closes=1,0,0,0,0,0
+  local new_cells={}
   local function check(tick)
     assert(tick==1281+ticks)
     ticks=ticks+1
@@ -71,7 +73,42 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
         table.sort(footprint,function(x,y)return x[2]<y[2] end)
         assert(#footprint==#event.cells)
         for n,row in ipairs(footprint) do eq("industry opening tile "..n,row,event.cells[n]) end
+        new_cells[firm.id]=footprint
         opens=opens+1
+      end
+    end
+    local mark=fixture.close_mark
+    if mark and mark[1]==tick then
+      local found=0
+      for _,f in ipairs(s.stock_worldgen_climate_firms) do
+        if f.id==mark[2] or f.id==mark[3] then f.prod_level=0;found=found+1 end
+      end
+      assert(found==2)
+    end
+    if fixture.closures then
+      for _,event in ipairs(fixture.closures) do
+        local id=event[2]
+        if tick==event[1] then
+          local in_pool=false
+          for _,f in ipairs(s.stock_worldgen_climate_firms) do if id==f.id then in_pool=true;break end end
+          assert(in_pool,"Industry removed before the stock monthly boundary")
+        elseif tick==event[1]+1 then
+          for _,f in ipairs(s.stock_worldgen_climate_firms) do assert(f.id~=id,"Industry still active after monthly close") end
+          for _,row in ipairs(assert(new_cells[id])) do assert(not s.tiles[row[2]+1].stock_industry) end
+          closes=closes+1
+        end
+      end
+      if tick==fixture.closures[1][1]+1 then
+        local n,h,unowned=0,1,0
+        for id=1,w*w do
+          local f=s.stock_farm_fields[id]
+          if f then
+            n=n+1
+            h=fold(h,id-1,f.industry or 65535)
+            if f.industry==nil then unowned=unowned+1 end
+          end
+        end
+        eq("native field ownership after farm closure",{n,h,unowned},fixture.farmland)
       end
     end
     local expected=fixture.snapshots[tick]
@@ -149,8 +186,9 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
   assert(ticks==days*74 and maps==(days==120 and 5 or 8) and reopen==(days==120 and 2 or 3))
   eq(climate.." full live RNG and landscape cursor",{digest},{fixture.trace})
   if fixture.openings then assert(opens==#fixture.openings) end
-  print(("PASS live %s RC1 %s (tree setting %d): %d exact ticks, %d snapshots, %d reopens, %d test openings")
-    :format(economy,climate,settings,ticks,maps,reopen,opens))
+  if fixture.closures then assert(closes==#fixture.closures) end
+  print(("PASS live %s RC1 %s (tree setting %d): %d exact ticks, %d snapshots, %d reopens, %d test openings, %d test closures")
+    :format(economy,climate,settings,ticks,maps,reopen,opens,closes))
 end
 local proper=selection or arg and tonumber(arg[1]) or 0
 for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
@@ -299,6 +337,7 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
       if smooth_start then
         live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth,"smooth")
         live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_open,"smooth")
+        live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_close,"smooth")
       end
     end
 
