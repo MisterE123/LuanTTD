@@ -4041,7 +4041,8 @@ local coal_day_bindings=setmetatable({},{__mode="k"})
 local function timber_binding(s,force)
   if timber_day_bindings[s] then return timber_day_bindings[s] end
   if M.road_climate_industry_active(s) then
-    return farm.tropic_freight.bind(s,{credit=credit,modified_catchment=s.stock_modified_catchment~=false,
+    return farm.tropic_freight.bind(s,{credit=credit,field_board=farm.tropic_field_board(s),
+      modified_catchment=s.stock_modified_catchment~=false,
       town_rights=function(id) return s.stock_town_growth and s.stock_town_growth.towns[id] end})
   end
   if goods.mixed_enabled and goods.mixed_enabled(s) then return goods.mixed_binding(s) end
@@ -4439,6 +4440,11 @@ function M.mount_tropic_freight(s)
       openttd("farm_factory_industry")(passenger_rules,catchment,kernel,income_rules,coal,timber_rules),
       openttd("town_water_industry_rc1"),openttd("town_food_supply_rc1"),openttd("town_house_acceptance_rc1"),"tropic")
     local fields=openttd("farm_factory_fields")(coal)
+    local field_world=dofile(module_root.."farm_factory_world.lua")(M,openttd("terrain"),rules,fields,catchment)
+    function farm.tropic_field_board(state)
+      return field_world.field_board(state,{industries=state.stock_climate_industries,exact_grid=true})
+    end
+    farm.tropic_field_rules=fields
     local adapter=dofile(module_root.."farm_factory_runtime.lua")(rules,fields,
       dofile(module_root.."timber_industry_runtime.lua"),catchment)
     farm.tropic_freight=dofile(module_root.."road_farm_service.lua")(M,rules,adapter,passenger_rules,income_rules,kernel,rating_runtime,
@@ -4451,6 +4457,12 @@ function M.mount_tropic_freight(s)
   end
   town_passengers.start(s)
   return farm.climate_rules
+end
+function M.plant_tropic_fields(s,ind)
+  assert(M.road_climate_industry_active(s) and ind and ind.kind=="maize_farm" and s.stock_climate_industries[ind.id]==ind,
+    "Field planting requires a source Maize Farm in the mounted Tropic state")
+  return farm.tropic_field_rules.on_built(ind,farm.tropic_field_board(s),
+    function() return M.stock_random_u32(s) end)
 end
 function M.mount_farm_world(s,Terrain,asset_ready)
   if not asset_ready then return nil,"The native farm, factory or freight assets are missing." end

@@ -32,7 +32,7 @@ return function(Commons)
   end
   function F.plant(b,x,z,industry,rnd)
     local w,h=b.width,b.height
-    -- Stock host currently mounts Temperate; snowline is only required for Arctic.
+    -- Only the Arctic stock climate compares height with the snowline.
     local arctic=b.climate=="arctic"
     if arctic and b.height_at(x,z)+2>=b.snowline then return 0 end
     local n=rnd()
@@ -87,7 +87,7 @@ return function(Commons)
     return planted,{x=x,z=z,w=size_x,h=size_z,field_type=field_type,counter=counter,fence=fence}
   end
   function F.on_built(ind,board,rnd)
-    assert(ind.kind=="farm")
+    assert(ind.kind=="farm" or ind.kind=="maize_farm")
     local planted=0
     for _=1,50 do planted=planted+F.random(ind,board,rnd) end
     return planted

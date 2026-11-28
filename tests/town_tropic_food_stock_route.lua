@@ -31,7 +31,7 @@ end
 local function prepare()
   s.corner_grid=T.new(64,64,function()return 1 end)
   for z=0,63 do for x=0,63 do
-    s.tiles[id(x,z)]={h=1,variant=0,terrain="hill",stock_tropic_zone=x<=22 and 1 or nil}
+    s.tiles[id(x,z)]={h=1,variant=0,terrain="hill",stock_tropic_zone=x<=22 and 1 or nil,stock_clear_ground=x<=22 and 5 or nil}
   end end
   s.sites[1]={id=1,name="Test town",kind="town",tile=id(20,41),stock={},produced={},received={},population=467,service=0}
   s.tiles[s.sites[1].tile].site=1
@@ -69,6 +69,16 @@ local function prepare()
   plant("fruit_plantation",13,24,13)
   plant("maize_farm",14,24,21)
   plant("food_process",15,24,29)
+  assert(S.plant_tropic_fields(s,firm[14])>0)
+  local field_count=0
+  for i,r in pairs(s.stock_farm_fields) do
+    assert(r.industry==14 and r.variant>=0 and r.variant<=8)
+    for _,style in pairs(r.fences) do assert(style==3) end
+    assert(not s.tiles[i].stock_industry and s.tiles[i].stock_tropic_zone~=1)
+    field_count=field_count+1
+  end
+  assert(field_count>=50)
+  s.qa_initial_fields=field_count
   local c=S.company(s,owner);c.cash=80000000
   local function apply(q,why)
     assert(q,why);assert(S.apply_road_construction(s,owner,q))
@@ -136,6 +146,15 @@ for day=s.day+1,250 do
     assert(town.accepted.food.old_act>0 and not town.accepted.water)
     assert(town.received[4].old_act>0 and town.received[5].old_act>0 and town.reason=="serviced")
     assert(s.companies[owner].paid_units==total)
+    local visited=0
+    for i,r in pairs(s.stock_farm_fields) do
+      if r.last_tick then
+        visited=visited+1
+        assert(r.industry==14 and not s.tiles[i].stock_industry and s.tiles[i].stock_tropic_zone~=1)
+      end
+    end
+    assert(visited>=s.qa_initial_fields/2)
+    print(("PASS Tropic Maize Farm lifecycle: %d initial crop tiles, %d visited tiles survive packed reopen"):format(s.qa_initial_fields,visited))
     print(("PASS live Fruit %d, Maize %d, Food %d and Water %d; town unlocked on day %d after packed reopen"):
       format(received.fruit,received.maize,received.food,received.water,day))
     return

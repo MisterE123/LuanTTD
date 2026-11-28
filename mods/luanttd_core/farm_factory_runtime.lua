@@ -8,7 +8,7 @@ return function(Rules,Fields,IndustryRuntime,Catchment)
   function M.bind(world,ledger,ctx)
     if ctx.random_u32 then
       for _,ind in pairs(ctx.industries) do
-        if ind.kind=="farm" and not ind.removed then
+        if assert(Rules.spec[ind.kind],"Missing stock industry spec").plant_fields and not ind.removed then
           assert(ctx.field_board or ctx.field_attempt,"Farm shares an RNG; supply the real field attempt callbacks")
           break
         end

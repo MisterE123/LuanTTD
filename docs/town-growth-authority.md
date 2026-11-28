@@ -1545,7 +1545,27 @@ Food and 42 Water, with no household Water and no cargo handoff
 in the fixture code.
 
 This verifies the live transport-to-growth chain on the controlled
-board. Ordinary Tropic industry siting, crop field landscape visits,
-dynamic industrial opening/closure, native parity of the complete
+board. Ordinary Tropic industry siting, dynamic industrial
+opening/closure, native parity of the complete
 economic timeline, and the playable climate art and menu still need
 work; this is not a claim of overall town-growth parity.
+
+
+### Maize Farm planting and fields on the worker
+
+The Tropic farm now uses the same RC1 field placement, boundary
+fences and periodic landscape visitor as the ordinary Temperate
+farm. This includes the original 50 planting attempts and the
+Tropic choice of fence 3 without an extra random draw. The host
+reads the actual desert surface class rather than confusing a
+Tropic climate zone with clear-ground classification. Farm fields
+remain attached to their real Maize industry record across reopens.
+
+The compiled field placement regression matches
+600 RC1 field scenarios, including RNG, ordered writes, fence
+styles and the final board. In the native Tropic freight test the
+initial 373 crop tiles are worked by the live landscape clock;
+409 visited crop tiles survive through the mid-haul SQLite
+restart and subsequent Food and Water delivery. This is a
+controlled field lifecycle test, not a port of the full Tropic
+industry generator.

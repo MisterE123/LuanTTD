@@ -88,11 +88,13 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
   local trees,shore,rough_trees={kind="trees",ground="grass"},{kind="trees",ground="shore"},{kind="trees",ground="rough"}
   local grass,snow,dry={kind="clear",ground="grass"},{kind="clear",ground="snow",snow=true},{kind="clear",ground="desert"}
   local rough,rocks={kind="clear",ground="rough"},{kind="clear",ground="rocks"}
-  function W.field_board(s)
+  function W.field_board(s,opts)
+    opts=opts or {}
+    local climate=s.stock_climate
     -- Stock maps use a power-of-two board with void at the edge. Expose
     -- only existing LuanTTD tiles; unused columns/rows remain void.
     local width,height=64,64
-    local stock=s.stock_generated_profile
+    local stock=s.stock_generated_profile or opts.exact_grid
     local freeform
     if stock then
       -- Generated stock axes already include the boundary void tiles.
@@ -126,13 +128,15 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
         return id,(cover==3 or t.terrain=="shore") and shore or cover==1 and rough_trees or trees
       end
       local g=t.stock_clear_ground
-      return id,t.terrain=="snow" and snow or t.terrain=="desert" and dry or g==1 and rough or g==2 and rocks or grass
+      return id,t.terrain=="snow" and snow or (g==5 or t.terrain=="desert") and dry or g==1 and rough or g==2 and rocks or grass
     end
     local function dirty(id)
       s.changed=s.changed or {};s.changed[#s.changed+1]=id
     end
     local b={width=width,height=height,freeform=not not freeform,
-      landscape_fields=records,landscape_regrowth=regrowth}
+      landscape_fields=records,landscape_regrowth=regrowth,
+      climate=climate and climate.landscape,snowline=climate and climate.snowline}
+    function b.height_at(x,z) return Terrain.corner(s.corner_grid,x+1,z+1) end
     function b.tile(x,z)
       if not in_map(x,z) then return empty end
       local id,t=base(x,z)
@@ -190,7 +194,8 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
       if editor then return end
       if r.counter<7 then r.counter=r.counter+1;return end
       r.counter=0
-      local producer=s.stock_farm_industries and s.stock_farm_industries[r.industry]
+      local producers=opts.industries or s.stock_farm_industries
+      local producer=producers and producers[r.industry]
       if not producer or producer.removed then r.industry=nil end
       if r.industry==nil and r.variant>=7 then
         records[id]=nil

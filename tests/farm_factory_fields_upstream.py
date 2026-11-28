@@ -191,7 +191,7 @@ for line in io.lines() do
     else t={kind="protected"} end
     seen[i]=t
   end
-  local ind={kind="farm",x=x,z=z,width=w,height=h,id=72}
+  local ind={kind=climate==2 and "maize_farm" or "farm",x=x,z=z,width=w,height=h,id=72}
   local function key(u,v) return v*wid+u end
   local board={width=wid,height=hei,freeform=freeform==1,tile=function(u,v) return seen[key(u,v)] end,
     climate=({"temperate","arctic","tropic","toyland"})[climate+1],snowline=snowline,
