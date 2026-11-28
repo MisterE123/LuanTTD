@@ -1780,3 +1780,19 @@ reopen packed state before live play and twice mid-run in Luanti's
 async VM. They cover the Frozen economy without a company or a
 fleet; Original and Smooth climate economies and normal menu
 integration remain open.
+
+### One year of the Smooth economy in a wooded Tropic map
+
+The no-company wooded Tropic comparison now runs its unmodified
+Smooth economy for 365 days. Every one of the 27,010 live ticks
+matches the native RNG and landscape cursor. Eight samples compare
+physical terrain and roads, house and town growth, industry
+animation, waiting cargo and rates, and the fractional daily
+industry clock. The test reopens the packed world three times
+in Luanti's async VM, including immediately after the second
+market selection day. Three industries change production rates.
+
+This source year contains two daily market selections but no new
+industry site or physical industry closure. The test exercises
+the shared calendar, rate adjustments and market RNG, not live
+construction/removal, companies or station coverage.

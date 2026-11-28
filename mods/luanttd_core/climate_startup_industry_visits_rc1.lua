@@ -1,8 +1,9 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Vanilla RC1 industry_cmd.cpp: MakeIndustryTileBigger, TileLoop_Industry,
 -- ProduceIndustryGoods and the monthly production roll. Pregame runs only
--- the tile visits; the isolated Frozen lane also runs the live phases.
-return function(Sim,Terrain,s,live_frozen)
+-- the tile visits; the isolated climate lane also runs the live phases.
+return function(Sim,Terrain,s,live_economy)
+  local live=live_economy~=nil
   local dir=(core and core.get_modpath and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
   local function o(n)return dofile(dir.."openttd/"..n..".lua")end
   local Rules,Layout=o("industry_machinery_rc1"),o("stock_industry_layouts_rc1")
@@ -10,6 +11,7 @@ return function(Sim,Terrain,s,live_frozen)
   local Fields=o("farm_factory_fields")(Commons)
   local Specs=o("industry_spec_rc1")
   local Anim=o("world_animation_rc1")
+  local Change=live and o("industry_production_change_rc1")
   local hub=s.stock_world_animations
   local by_spec={}
   local FieldWorld=dofile(dir.."farm_factory_world.lua")(Sim,Terrain,nil,Fields)
@@ -29,9 +31,14 @@ return function(Sim,Terrain,s,live_frozen)
     if t.animated then Anim.add(hub,id,"industry")
     elseif was then Anim.delete(hub,id,false) end
   end
-  if live_frozen then
+  if live then
     assert(not next(s.companies) and not next(s.stations) and not next(s.fleet),
       "The no-company climate comparison does not settle player freight")
+    assert(live_economy=="frozen" or live_economy=="smooth","Choose a supported climate economy")
+    if live_economy~="frozen" then
+      local start=Sim.date(s)
+      for _,firm in ipairs(s.stock_worldgen_climate_firms) do firm.created_year=firm.created_year or start end
+    end
   end
   local Bubble=s.stock_climate.landscape=="toyland" and o("bubble_effect_rc1")
   local spawn_bubble
@@ -115,7 +122,46 @@ return function(Sim,Terrain,s,live_frozen)
       if action then t.stock_arctic_snow=density end
     end
   end
-  local fields=live_frozen and Field.field_board(s)
+  local fields=live and Field.field_board(s)
+  local market,market_api,Scheduler
+  if live then
+    Scheduler=o("industry_build_scheduler")
+    local firms=s.stock_worldgen_climate_firms
+    market=s.stock_climate_market or Scheduler.reset(37,#firms)
+    s.stock_climate_market=market
+    market_api={width=Sim.W,height=Sim.H,random=random,total=function() return #firms end}
+    local climate=s.stock_climate.landscape
+    local slot=assert(({temperate=1,arctic=2,tropic=3,toyland=4})[climate])
+    function market_api.count(kind)
+      local n=0
+      for _,firm in ipairs(firms) do if firm.type==kind then n=n+1 end end
+      return n
+    end
+    function market_api.available(kind)
+      local spec=Specs.get(kind,climate)
+      if not spec or not Layout[kind] then return 0,0 end
+      local year=market_api.year
+      local flags=spec.behavior
+      if flags.Before1950 and year>1950 or flags.After1960 and year<1960 then return 0,0 end
+      local probability=spec.appearance[slot]
+      return probability,probability>0 and flags.CanCloseLastInstance and 1 or 0
+    end
+    -- This clock comparison includes the stock monthly production and
+    -- daily market selection. A newly constructed industry requires the
+    -- separate physical site/placement host, not a fake success.
+    function market_api.place()
+      error("Live climate industry construction is not mounted")
+    end
+    function market_api.change_random_industry()
+      if #firms==0 then return end
+      local firm=firms[1+math.floor(random()*#firms/4294967296)]
+      Change.change(firm,by_spec[firm.id],climate,live_economy,false,market_api.year,random,market_api.count(firm.type))
+    end
+    function M.day(year)
+      market_api.year=year
+      Scheduler.day(market,market_api)
+    end
+  end
   function M.landscape(x,z,tick)
     local id=Sim.id(x+1,z+1)
     if records[id] then return M.visit(id,tick) end
@@ -144,11 +190,15 @@ return function(Sim,Terrain,s,live_frozen)
       end
     end
   end
-  function M.month()
-    for _,firm in ipairs(s.stock_worldgen_climate_firms) do
-      for _,p in ipairs(firm.produced) do
-        p.last_production,p.current_production=p.current_production or 0,0
-      end
+  function M.month(year)
+    if market then Scheduler.month(market,market_api) end
+    local firms=s.stock_worldgen_climate_firms
+    local count={}
+    for _,firm in ipairs(firms) do count[firm.type]=(count[firm.type] or 0)+1 end
+    for _,firm in ipairs(firms) do
+      Change.roll(firm,year)
+      assert(firm.prod_level~=0,"Closing climate industries need physical clearance before another month")
+      Change.change(firm,by_spec[firm.id],s.stock_climate.landscape,live_economy,true,year,random,count[firm.type])
     end
   end
   local function reset_stage(t)
@@ -178,7 +228,7 @@ return function(Sim,Terrain,s,live_frozen)
       end
       return true
     end
-    if live_frozen then
+    if live then
       -- TransportIndustryGoods consumes the completed tile's lot even
       -- if there are no collecting stations; only transported stays 0.
       local min=by_spec[firm.id].minimum
@@ -197,7 +247,7 @@ return function(Sim,Terrain,s,live_frozen)
     local changed,_,fx=Rules.visit(t,tick,random,firm)
     update_registration(id,t,a)
     if fx and fx.effect=="bubble" and spawn_bubble then spawn_bubble(t.x,t.z,fx.direction) end
-    if fx and not live_frozen then
+    if fx and not live then
       M.events=M.events or {}
       M.events[#M.events+1]={id=id,tick=tick,effect=fx.effect,direction=fx.direction}
     end

@@ -32,17 +32,19 @@ local frozen=dofile(fp.."rc1-native-climate-industry-live-frozen.lua")
 local spread=dofile(fp.."rc1-native-climate-industry-live-trees.lua")
 local toyland_live=dofile(fp.."rc1-native-climate-industry-live-toyland.lua").toyland
 local wooded=dofile(fp.."rc1-native-climate-industry-live-wooded.lua")
+local smooth=dofile(fp.."rc1-native-climate-industry-smooth-year.lua")
 local function fold(h,...)
   for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
   return h
 end
-local function live_frozen(s,Calendar,climate,w,settings,fixture)
+local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
+  economy=economy or "frozen"
   s.stock_extra_tree_placement=settings
   local function mount()
     S.mount_road_bus_market(s,Calendar,1985,false,false)
     S.mount_stock_town_growth(s,Live,true)
     S.mount_coastal_flood(s)
-    S.mount_frozen_climate_clock(s,T)
+    S.mount_climate_industry_clock(s,T,economy)
   end
   mount()
   local digest,ticks,maps,reopen=1,0,0,0
@@ -108,20 +110,25 @@ local function live_frozen(s,Calendar,climate,w,settings,fixture)
       end
       eq(label.."bubble vehicle pool and motion",{#order,bh},expected[6])
     end
+    if expected.market then
+      local market=assert(s.stock_climate_market)
+      eq(label.."daily market clock",{math.floor(w*w/31),market.daily_counter,#firms},expected.market)
+    end
     maps=maps+1
   end
-  for day=1,120 do
-    if day==32 or day==95 then
+  local days=fixture.days or 120
+  for day=1,days do
+    if day==32 or day==95 or day==250 then
       s=assert(Codec.decode(Codec.encode(s)))
       mount()
       reopen=reopen+1
     end
     S.daily(s,nil,check)
   end
-  assert(ticks==8880 and maps==5 and reopen==2)
+  assert(ticks==days*74 and maps==(days==120 and 5 or 8) and reopen==(days==120 and 2 or 3))
   eq(climate.." full live RNG and landscape cursor",{digest},{fixture.trace})
-  print(("PASS live frozen RC1 %s (tree setting %d): %d exact ticks, %d snapshots, %d reopens")
-    :format(climate,settings,ticks,maps,reopen))
+  print(("PASS live %s RC1 %s (tree setting %d): %d exact ticks, %d snapshots, %d reopens")
+    :format(economy,climate,settings,ticks,maps,reopen))
 end
 local proper=selection or arg and tonumber(arg[1]) or 0
 for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
@@ -227,10 +234,10 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
     print(("PASS active RC1 %s pregame: %d exact landscape ticks and %d reopened industry tiles"):format(climate,ticks,n))
     if frozen[climate] and seed==1751 then
       local fresh=Codec.encode(s)
-      live_frozen(s,Calendar,climate,w,3,assert(frozen[climate]))
-      live_frozen(assert(Codec.decode(fresh)),Calendar,climate,w,2,assert(spread[climate]))
+      live_industries(s,Calendar,climate,w,3,assert(frozen[climate]))
+      live_industries(assert(Codec.decode(fresh)),Calendar,climate,w,2,assert(spread[climate]))
     elseif climate=="toyland" and seed==49832 then
-      live_frozen(s,Calendar,climate,w,2,toyland_live)
+      live_industries(s,Calendar,climate,w,2,toyland_live)
     end
     if woods then
       s=assert(Codec.decode(industry_snapshot))
@@ -265,7 +272,9 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
       eq("wooded pregame RNG and cursor",{ticks,digest},{1280,woods.pregame})
       s=assert(Codec.decode(Codec.encode(s)))
       print(("PASS wooded RC1 %s: %d initial trees and %d native pregame ticks"):format(climate,size,ticks))
-      live_frozen(s,Calendar,climate,w,2,woods)
+      local smooth_start=climate=="tropic" and Codec.encode(s)
+      live_industries(s,Calendar,climate,w,2,woods)
+      if smooth_start then live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth,"smooth") end
     end
 
   end

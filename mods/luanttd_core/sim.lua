@@ -648,10 +648,10 @@ function M.visible_machinery(s,x,z,w,h) return machine_rules().visible(s,x,z,w,h
 -- Isolated no-company climate authority; never mounted by the ordinary
 -- menu campaign. Its sparse indices are remounted from persistent records.
 M.stock_climate_clock=setmetatable({},{__mode="k"})
-function M.mount_frozen_climate_clock(s,Terrain)
+function M.mount_climate_industry_clock(s,Terrain,economy)
   assert(s.stock_climate and s.stock_world_animations and s.stock_generated_profile.initial_landscape,
     "Settle native climate before measuring live industries")
-  M.stock_climate_clock[s]=dofile(module_root.."climate_startup_industry_visits_rc1.lua")(M,Terrain,s,true)
+  M.stock_climate_clock[s]=dofile(module_root.."climate_startup_industry_visits_rc1.lua")(M,Terrain,s,economy or "frozen")
 end
 function M.prepare_initial_landscape(s,growth,Farm,progress,machines,after_tick)
   assert(coastal_active(s) and s.passenger_house_clock and s.stock_town_growth)
@@ -6369,7 +6369,7 @@ end
 -- RC1 Industry monthly timer rolls production and closure before the
 -- Station and Town timers on the same economy tick.
 function M.stock_industry_month(s,coal,timber,y,month)
-  local climate=M.stock_climate_clock[s];if climate then climate.month() end
+  local climate=M.stock_climate_clock[s];if climate then climate.month(y) end
   local ordered=M.stock_industry_order(s,coal,timber)
   if ordered then
     local stock_options={original=s.stock_industry_original_economy==true,smooth=true}
@@ -6659,7 +6659,9 @@ function M.daily(s,traverse,tick_pulse,openings)
     for _,id in ipairs(regal_ids) do settle_bus(s.fleet[id]) end
   end
   local stock_work,month_tick,industries_rolled
-  if exact_economy and (openings or town_month or new_month or s.stock_disaster_delay) then
+  local climate_clock=M.stock_climate_clock[s]
+  if exact_economy and (openings or town_month or new_month or s.stock_disaster_delay
+      or climate_clock and climate_clock.day) then
     -- Advance the 74-tick batch into the new date after animation, before
     -- the same tick's tile, loading, vehicle and town work.
     month_tick=function()
@@ -6670,6 +6672,7 @@ function M.daily(s,traverse,tick_pulse,openings)
           s.stock_disaster_delay=rules.disaster_day(1,function() return M.stock_random_u32(s) end)
         else s.stock_disaster_delay=s.stock_disaster_delay-1 end
       end
+      if climate_clock and climate_clock.day then climate_clock.day(y) end
       local opened=openings and openings("day")
       if opened then
         M.clear_live_sea_cache(s)
