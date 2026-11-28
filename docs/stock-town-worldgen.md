@@ -204,3 +204,25 @@ still protects converging paths, but does not reserve both physically
 separated lanes for one straight-moving vehicle. Unordered intermediate
 station arrivals and their implicit orders are still unported; this
 circuit does not use them.
+
+
+### Shared depot and an unlisted road stop
+
+The Goods and wood trucks can now start from the same depot. The Goods
+truck makes an unlisted stop at the forest freight platform, departs
+without advancing its manual destination, then picks up Goods at the
+sawmill. LuanTTD uses RC1's station-stop flags and the RoadVehController
+stop frame or stopped-leader trigger. The normal transfer is allowed
+only at an owned platform for the same vehicle class. Ordered waypoints
+remain non-stopping. The distinct-lane and same-path checks prevent a
+3D junction's broad occupancy area from holding an otherwise clear
+stock convoy; genuinely crossing paths still use the junction guard.
+
+The permanent corridor replay compares 27,010 RNG ticks, 14 world
+snapshots, and physical samples at the unlisted arrival, departure and
+adjacent junctions. Three packed reopens preserve 265 passengers, 80
+units of wood and 47 units of Goods delivered in the first year. The
+dedicated native version also matches those totals and the RC1 town
+clock across a real SQLite restart. This ports normal unlisted stopping
+on road routes; the complete visible implicit list and shared order
+cursor lifecycle are not yet ported.

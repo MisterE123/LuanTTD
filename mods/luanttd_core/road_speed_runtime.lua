@@ -280,6 +280,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
   local function move_frame(state,a)
     local s,W,v,frames,record,old,roof,board=a.s,a.W,a.v,a.frames,a.record,a.old,a.roof,a.board
     local nominal=frames[state.index+1]
+    local intermediate=a.stock_stop and a.intermediate and old[6]>=64 and old[6]<80 and a.intermediate(v,old)
     if a.realistic and old[16] then
       if not state.transit_hidden then
         -- VehicleEnterTile_Road checks the current frame 11 on the
@@ -393,9 +394,18 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         -- queued behind a stopped bus, before reaching frame 11.
         -- Preserve the actual pixel; the next order departs from here.
         if a.stock_stop and state.speed==0 and not entering and old[6]>=64 and old[6]<80
-            and s.tiles[old[4]].station==v.dest then
+            and (s.tiles[old[4]].station==v.dest or intermediate) then
           state.arrival_pose=old
         end
+        return false
+      end
+    end
+    if intermediate and old[15]==Motion.DRIVE_THROUGH_STOP and state.heading==b[3] then
+      local real=board and board.real
+      local next_tile=real and real.adjacent(old[4],math.floor(state.heading/2))
+      if not (real and real.stop_continues(old[4],next_tile) and
+          real.edge_available(old[4],next_tile,math.floor(state.heading/2))) then
+        state.arrival_pose,state.speed=old,0
         return false
       end
     end
@@ -551,7 +561,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     -- step consumes this argument synchronously; only the poses and
     -- cursors are published. Do not allocate a wrapper per vehicle/tick.
     local W,records=world(s,true),{}
-    local moving={s=s,W=W,entered_transit=hooks.entered_transit,choose_junction=hooks.choose_junction}
+    local moving={s=s,W=W,entered_transit=hooks.entered_transit,choose_junction=hooks.choose_junction,intermediate=hooks.intermediate}
     clock(function(tick,interleave_rail)
       local ready=hooks.economy(tick)
       W.begin_tick()

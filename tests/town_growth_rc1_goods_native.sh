@@ -15,7 +15,9 @@ cp game.conf "$game/"
 cp -al mods "$game/" 2>/dev/null || cp -R mods "$game/"
 cp tests/town_growth_rc1_goods_native.lua "$out/init.lua"
 mv "$out/init.lua" "$game/mods/luanttd_core/init.lua"
-cp tests/fixtures/rc1-active-town-goods-year.lua "$game/mods/luanttd_core/qa_native_goods.lua"
+fixture=tests/fixtures/rc1-active-town-goods-year.lua
+if [[ ${1:-} == shared ]]; then fixture=tests/fixtures/rc1-active-shared-road-goods-year.lua; fi
+cp "$fixture" "$game/mods/luanttd_core/qa_native_goods.lua"
 printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"
 export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 port=${BAYLINE_NATIVE_PORT:-40067}

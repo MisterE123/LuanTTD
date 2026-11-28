@@ -3817,6 +3817,7 @@ function M.service(s,owner,id)
   return true,"Vehicle serviced for $"..amount.."."
 end
 local passenger_rules,income_rules
+M.road_station_order_should_stop=dofile(module_root.."openttd/station_stop_order.lua").should_stop
 local rating_runtime,town_passengers,mail_runtime,station_service,paid_ferry,coal_service,rail_coal
 local timber_service,timber_rules,ship_coal
 local farm_service,farm_world
@@ -5148,7 +5149,7 @@ local function vehicle_order(v,station)
   return nil
 end
 local function launch(s,v,route,dest,index,arrival_td,route_cost,frames,bays)
-  v.road_via_pending=nil
+  v.road_via_pending,v.road_implicit_leg=nil,nil
   v.home_depot=v.home_depot or v.depot
   local depart=v.road_stop_motion
   v.road_stop_motion=nil
@@ -5685,7 +5686,8 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
     end
   end
   local function begin(v,st,tick)
-    local _,order=current_station_order(v,st)
+    local _,order
+    if not v.road_implicit_leg then _,order=current_station_order(v,st) end
     if v.stop_requested then
       -- Stop at the next destination after unloading, don't strand a
       -- scheduled stop indefinitely waiting for additional full cargo.
@@ -5784,6 +5786,20 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if not v.running then return end
       end
       if v.load_state then return end
+      local resume=v.road_implicit_leg
+      if resume then
+        -- BeginLoading(false) leaves the manual destination intact.
+        -- Reuse the actual raster cursor, heading and progress; routing
+        -- from the platform center would move the vehicle backwards.
+        v.road_implicit_leg=nil
+        v.road_speed_state,v.road_via_pending=resume.motion,resume.vias
+        v.road_motion_frames,v.road_bay_branch=resume.frames,resume.bays
+        v.road_leg_td,v.road_route_cost=resume.td,resume.cost
+        v.route,v.dest,v.dest_index=resume.route,resume.dest,resume.index
+        v.road_stop_pose,v.road_stop_motion,v.stock_loading_complete=nil,nil,nil
+        v.station,v.loaded_at,v.status=nil,nil,"En route"
+        return
+      end
       if v.stock_loading_complete~=st.id then
         stock_seed_parked_pose(s,v,st)
         begin(v,st,tick)
@@ -5799,6 +5815,17 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       launch(s,v,route,dest,index,td,cost,frames,bays);v.road_order_override=nil
       v.road_via_pending=#vias>0 and vias or nil
       v.last_departure=s.day;v.last_departure_tick=tick
+    end,
+    intermediate=function(v,f)
+      if v.road_via_pending then return end -- current stock order is a non-stopping waypoint
+      local tile=s.tiles[f[4]]
+      local id=tile.station
+      if not id or id==v.dest or tile.owner~=v.owner then return end
+      local st=s.stations[id]
+      if M.road_stop_tile_kind(st,f[4],tile)~=(v.cargo=="passenger" and "bus" or "truck") then return end
+      local order=v.orders[v.dest_index]
+      local flags=order and order.non_stop or 0
+      if M.road_station_order_should_stop("goto_station",v.dest,flags,false,v.road_last_station,id) then return id end
     end,
     choose_junction=function(v,c,old,nominal)
       local id=nominal[4]
@@ -5852,7 +5879,16 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         return true,true
       end
       if s.stock_road_bays then road_clock().bay.arrive(s,v,frame) end
-      v.station,v.index=v.dest,v.dest_index
+      local actual=s.tiles[frame[4]].station
+      if actual~=nil and actual~=v.dest and stop_motion then
+        stop_motion.arrival_pose=nil
+        v.road_implicit_leg={frames=v.road_motion_frames,motion=stop_motion,route=v.route,dest=v.dest,
+          index=v.dest_index,td=v.road_leg_td,cost=v.road_route_cost,bays=v.road_bay_branch,vias=v.road_via_pending}
+        v.station=actual
+      else
+        v.station,v.index=v.dest,v.dest_index
+      end
+      v.road_last_station=v.station
       v.road_via_pending=nil
       v.last_road_arrival_tick=tick
       local td=frame[6]

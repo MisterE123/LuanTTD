@@ -10,7 +10,7 @@ local function run(ref)
   local function m(n) return dofile(mod.."/"..n..".lua") end
   local owner="Stock comparison"
   s.road_coal,s.road_timber,s.road_farm,s.road_oil,s.road_heavy=true,true,true,true,true
-  s.road_mail,s.road_junction_clearance=true,true
+  s.road_mail,s.road_junction_clearance=true,arg[1]~="stock-only" or not ref.shared
   local cap={road={start_year=1950,breakdowns=1,service_interval=150,foster=true},ferry={},air={},oil_tanker=true}
   local Mount,Endpoint=m("campaign_authority_runtime"),m("campaign_authority_endpoint")
   local Codec,Rebuild=m("packed_campaign"),m("openttd/town_rebuild")
@@ -58,12 +58,12 @@ local function run(ref)
   local goods
   if goods_circuit then
     local gd=terminal("truck",49,89,0,true)
-    local gg=terminal("depot",21,87,2)
+    local gg=ref.shared and wd or terminal("depot",21,87,2)
     goods=service("goods_truck","goods",gg,wt,gd)
     ids[#ids+1]=goods
     assert(s.fleet[goods].stock_pool_id==4)
     assert(s.passenger_rating_rng[1]==2870742148 and s.passenger_rating_rng[2]==505883883)
-    assert(s.companies[owner].cash==65609)
+    assert(s.companies[owner].cash==(ref.shared and 66224 or 65609))
   else
     assert(s.passenger_rating_rng[1]==456539431 and s.passenger_rating_rng[2]==329337364)
     assert(s.companies[owner].cash==72275)
@@ -120,8 +120,22 @@ local function run(ref)
       local v=s.fleet[id]
       local r=v.road_speed_state or v.road_stop_motion or {}
       local p=S.road_motion_frame(s,v) or v.road_stop_pose
-      assert(p,"Expected the stock road vehicle to be visible at "..tick)
-      same(tick,v.engine,{p[4]-1,p[1]-16,p[2]-16,p[3],r.speed or 0,r.subspeed or 0,r.progress or 0,v.units or 0},expected[n])
+      if p then
+        same(tick,v.engine,{p[4]-1,p[1]-16,p[2]-16,p[3],r.speed or 0,r.subspeed or 0,r.progress or 0,v.units or 0},expected[n])
+      else
+        local concealed=S.road_hidden_depot(v) and v.road_motion_frames[r.index]
+        local depot=v.depot or concealed and concealed[4]
+        assert(depot and depot-1==expected[n][1] and expected[n][5]==0 and expected[n][8]==0,
+          "Expected the stock road vehicle to be visible at "..tick)
+      end
+    end
+    if ref.shared and tick==1455 then
+      local v=s.fleet[goods]
+      assert(v.load_state and v.road_implicit_leg and v.road_implicit_leg.index==1)
+      assert(v.station~=v.road_implicit_leg.dest and v.orders[1].station==v.road_implicit_leg.dest)
+    elseif ref.shared and tick==1456 then
+      local v=s.fleet[goods]
+      assert(not v.load_state and not v.road_implicit_leg and v.dest==v.orders[1].station)
     end
     poses=poses+1
   end
@@ -132,13 +146,21 @@ local function run(ref)
     end
     N.day(observe)
   end
+  local passenger,wood,finished=unpack(ref.world[28290][1],6)
+  local expected_poses=0
+  for _ in pairs(ref.poses) do expected_poses=expected_poses+1 end
   same(28290,"year",{digest,ticks,maps,poses,s.fleet[bus].delivered,s.fleet[truck].delivered,goods and s.fleet[goods].delivered or 0},
-    {ref.rng,27010,14,goods_circuit and 23 or 19,goods_circuit and 273 or 283,80,goods_circuit and 35 or 0})
-  if goods_circuit then
+    {ref.rng,27010,14,expected_poses,passenger,wood,finished or 0})
+  if ref.shared then
+    print(("PASS RC1 shared depot: 27,010 RNG ticks, 14 world snapshots, %d samples per vehicle, %d passengers, %d wood, %d Goods and three packed reopens"):format(expected_poses,passenger,wood,finished))
+  elseif goods_circuit then
     print("PASS RC1 town goods circuit: 27,010 RNG ticks, 14 world snapshots, 23 samples per vehicle, 273 passengers, 80 wood, 35 Goods into town, three packed reopens")
   else
     print("PASS RC1 normal industry corridor: 27,010 RNG ticks, 14 map/town and 19 vehicle checkpoints, 283 passengers and 80 wood delivered, three packed reopens")
   end
 end
-run(road_base)
-run(dofile("tests/fixtures/rc1-active-town-goods-year.lua"))
+if arg[1]~="shared" and arg[1]~="stock-only" then
+  run(road_base)
+  run(dofile("tests/fixtures/rc1-active-town-goods-year.lua"))
+end
+run(dofile("tests/fixtures/rc1-active-shared-road-goods-year.lua"))

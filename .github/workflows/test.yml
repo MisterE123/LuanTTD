@@ -481,5 +481,9 @@ jobs:
           lua5.1 tests/town_growth_rc1_two_buses.lua
           lua5.1 tests/town_growth_rc1_mixed_road_rail.lua
           lua5.1 tests/town_growth_rc1_ordinary_train.lua
+          lua5.1 tests/station_stop_order_rc1.lua
+          lua5.1 tests/town_growth_rc1_corridor.lua
       - name: Restart ordinary train mid-service in native Luanti
         run: bash tests/town_growth_rc1_ordinary_train_native.sh
+      - name: Restart the shared-depot Goods circuit in native Luanti
+        run: bash tests/town_growth_rc1_goods_native.sh shared

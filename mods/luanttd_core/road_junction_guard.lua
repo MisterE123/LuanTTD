@@ -203,6 +203,35 @@ return function(Sim,Presentation)
     return straight_past(s,v,1,next_pose,d,eastwest and a or b,lat) and
       straight_past(s,other,0,other.frame,(d+4)%8,eastwest and x or y,opposite_lat)
   end
+  local function same_pixel(a,b)
+    return a and b and a[1]==b[1] and a[2]==b[2] and a[3]==b[3]
+      and a[4]==b[4]
+  end
+  -- A road vehicle ahead on the very same curve is a leader, not
+  -- conflicting cross traffic. Prove that both follow the same native
+  -- pixels through the leader's near path and that their bodies are separated
+  -- before leaving longitudinal following to the stock controller.
+  local function aligned_convoy(s,follower,wanted,leader)
+    local fc,lc=follower.clock,leader.clock
+    if not fc or not lc or fc.lane_pose or lc.lane_pose
+        or (fc.overtaking or 0)~=0 or (lc.overtaking or 0)~=0 then return false end
+    local fv,lv=s.fleet[follower.id],s.fleet[leader.id]
+    local later,earlier=fv and fv.road_motion_frames,lv and lv.road_motion_frames
+    local start=fc.index+1
+    if not later or not earlier or later[start]~=wanted or earlier[lc.index]~=leader.frame then return false end
+    local x,z=center(wanted)
+    local a,b=center(leader.frame)
+    if (x-a)^2+(z-b)^2<.95^2 then return false end
+    local at
+    for i=start+1,math.min(#later,start+40) do
+      if same_pixel(later[i],leader.frame) then at=i;break end
+    end
+    if not at then return false end
+    for d=1,4 do
+      if not same_pixel(later[at+d],earlier[lc.index+d]) then return false end
+    end
+    return true
+  end
   function G.check(s,W,v,prev,next_pose,z,road_z)
     if not s.road_junction_clearance or prev[12] or next_pose[12] then return true,z end
     local map=board(s)
@@ -221,7 +250,8 @@ return function(Sim,Presentation)
               z=z or road_z(s,next_pose)
               if abs(other.z-z)<6 then
                 local a,b=center(other.frame)
-                if touches_cluster(a,b,g) and not separate_lanes(s,v,prev,next_pose,other,x,y,a,b) then
+                if touches_cluster(a,b,g) and not separate_lanes(s,v,prev,next_pose,other,x,y,a,b)
+                    and not aligned_convoy(s,v,next_pose,other) then
                   return false,z
                 end
               end

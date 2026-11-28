@@ -8,6 +8,7 @@ local client=m("campaign_authority_client")(core,mod)
 local cap={road={start_year=1950,breakdowns=1,service_interval=150,foster=true},ferry={},air={},oil_tanker=true}
 local owner="Stock Native Goods"
 local ref=m("qa_native_goods")
+local passengers,wood,goods=unpack(ref.world[28290][1],6)
 for _,kind in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..kind,"air") end
 local initial=Checkpoint.read()
 local function tile(x,z) return z*128+x+1 end
@@ -74,10 +75,10 @@ local function run()
     terminal("truck",23,87,0,true)
     assert(serve("wood_truck","wood",wd,3,4,6453)==2)
     terminal("truck",49,89,0,true)
-    local gg=terminal("depot",21,87,2)
+    local gg=ref.shared and wd or terminal("depot",21,87,2)
     assert(serve("goods_truck","goods",gg,4,5,5851)==3)
     local s=state()
-    assert(s.companies[owner].cash==65609 and s.fleet[3].stock_pool_id==4)
+    assert(s.companies[owner].cash==(ref.shared and 66224 or 65609) and s.fleet[3].stock_pool_id==4)
     for _=1,32 do ask("advance",{days=4}) end
     s=state()
     assert(s.day==128 and s.fleet[2].delivered>0 and s.fleet[3].delivered==0)
@@ -87,11 +88,11 @@ local function run()
     for _=1,59 do ask("advance",{days=4}) end
     ask("advance",{days=1})
     local s=state()
-    assert(s.day==365 and s.fleet[1].delivered==273 and s.fleet[2].delivered==80 and s.fleet[3].delivered==35)
+    assert(s.day==365 and s.fleet[1].delivered==passengers and s.fleet[2].delivered==wood and s.fleet[3].delivered==goods)
     local year=ref.world[28290][3]
     local town=s.stock_town_growth.towns[2]
     assert(town.grow_counter==year[4] and town.growth_rate==year[5])
-    proof="ORDINARY_GOODS_PASS: 273 passengers, 80 wood and 35 Goods after SQLite restart; exact RC1 town clock"
+    proof=("ORDINARY_GOODS_PASS: %d passengers, %d wood and %d Goods after SQLite restart; exact RC1 town clock"):format(passengers,wood,goods)
   end
   return {kind="stop"}
 end
