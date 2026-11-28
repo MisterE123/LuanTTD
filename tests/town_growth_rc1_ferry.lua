@@ -1,7 +1,8 @@
 -- A fresh RC1 port, not an imported save: use production world generation
 -- and the ordinary worker's quote, buy, order and company commands.
-local mixed=arg[1]=="mixed"
-local ref=dofile("tests/fixtures/"..(mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
+local hub=arg[1]=="hub"
+local mixed=hub or arg[1]=="mixed"
+local ref=dofile("tests/fixtures/"..(hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local S,T,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -19,6 +20,15 @@ local s=m("campaign_generation")(native_files,mod,S,m("world_setup")).run({
 local cap={road={start_year=1985,breakdowns=1,service_interval=150,foster=true},ferry={[207]=true},air={},oil_tanker=true}
 s.road_coal,s.road_timber,s.road_farm,s.road_oil,s.road_heavy=true,true,true,true,true
 s.ship_paid_service=true
+if hub then
+  local assets,city,heli,ground,expansion=m("airport_manifest")(native_files,mod)
+  cap.city_airport,cap.heliport,cap.ground_rotary,cap.expansion_airports=city,heli,ground,expansion
+  assert(ground.helidepot)
+  for id in pairs(assets) do cap.air[id]=true end
+  cap.rail=m("rail_dispatch_manifest").scan(mod,false,false)
+  s.air_paid_service,s.air_owned_preview,s.air_fleet_preview=true,true,true
+  s.rail_owned_service,s.rail_span_enabled,s.rail_paid_service=true,true,true
+end
 local Mount,Endpoint,Codec=m("campaign_authority_runtime"),m("campaign_authority_endpoint"),m("packed_campaign")
 local N=Mount(S,mod,s,cap)
 local A=Endpoint(S,N)
@@ -75,6 +85,25 @@ local function build()
   local a=transport(request).id
   local b=transport({mode="ship",operation="build",kind="dock",tile=31026,adjacent=true}).id
   assert(s.stock_ship_stations[a].stock_station_id==0 and s.stock_ship_stations[b].stock_station_id==(mixed and 2 or 1))
+  if hub then
+    local function cell(x,y) return S.id(x+1,y+1) end
+    local field={mode="air",operation="build",tile=cell(53,106),layout="helidepot",air_join=0,separate=false}
+    local ap=checked(A.airport_join_choices(owner,field))
+    local offered
+    for _,choice in ipairs(ap.choices) do if choice.id==0 then offered=true end end
+    assert(offered)
+    local airport=transport(field).id
+    assert(s.stock_small_airports[airport].stock_station_id==0)
+    local req={tool="station",first=cell(53,109),last=cell(53,109),axis=0,length=1,tracks=1,separate=true,drag=true}
+    local options=checked(A.rail_quote(owner,req,"road_join_choices"))
+    offered=false
+    for _,choice in ipairs(options.choices) do if choice.id==0 then offered=true end end
+    assert(offered)
+    req.road_station_id=0
+    local rq=checked(A.rail_quote(owner,req))
+    action("rail_commit",{token=rq.token})
+    assert(s.stock_joined_stations[0].facilities==29)
+  end
   local d=transport({mode="ship",operation="build",kind="depot",tile=29760,axis=0}).id
   assert(transport({mode="ship",operation="buy",depot=d,engine=207}).id=="ferry")
   assert(s.stock_owned_ferry.stock_pool_id==(mixed and 13 or 12))
@@ -120,7 +149,15 @@ local function joint(t)
   local group=assert(s.stock_joined_stations[0])
   local st=assert(service.stations[group.service_station_id])
   local road=assert(s.stations[group.members.road])
-  assert(group.facilities==20 and #st.tiles==3 and st.stock==road.stock and st.passenger_rating_state==road.passenger_rating_state)
+  if hub then
+    assert(st.host_mode=="air" and group.members.rail and group.members.dock)
+    local same_id=0
+    for _,candidate in pairs(service.stations) do
+      if candidate.stock_station_id==0 then same_id=same_id+1 end
+    end
+    assert(same_id==1)
+  end
+  assert(group.facilities==(hub and 29 or 20) and #st.tiles==(hub and 8 or 3) and st.stock==road.stock and st.passenger_rating_state==road.passenger_rating_state)
   local bus=s.fleet[id_bus]
   local motion=bus.road_speed_state or bus.road_stop_motion or {}
   local point=S.road_motion_frame(s,bus) or bus.road_stop_pose
@@ -190,8 +227,8 @@ assert((freight.boarded or 0)>0 and freight.units>0 and s.stock_owned_ferry.pric
 if mixed then
   same(ref.last,"bus, station and queues",{bus_hash,bus_count,joint_hash,joint_count,queue_hash,queue_count,both},
     {ref.bus,ref.bus_count,ref.station,ref.station_count,ref.loading,ref.loading_count,ref.both})
-  print(("PASS RC1 bus + ferry: %d world RNG ticks, %d ship poses, %d bus frames, %d shared queue frames and six town snapshots")
-    :format(ticks,poses,bus_count,queue_count))
+  print(("PASS RC1 %s: %d world RNG ticks, %d ship poses, %d bus frames, %d shared queue frames and six town snapshots")
+    :format(hub and "four-facility hub with bus and ferry" or "bus + ferry",ticks,poses,bus_count,queue_count))
   return
 end
 -- This seeded two-dock route generates passengers but neither dock

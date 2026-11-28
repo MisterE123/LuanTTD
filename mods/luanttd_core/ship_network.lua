@@ -25,7 +25,7 @@ return function(Sim,Terrain,Water,Facilities)
     local B={xy=Sim.xy,id=Sim.id,matches=function()return true end}
     local catalog=s.stock_pool_authority and Catalog.board(s) or nil
     local function eligible_bus(st)
-      return st and st.bus_only and not st.airport and not st.rail
+      return st and st.bus_only
     end
     local function eligible(st)
       for _,key in ipairs(run_keys) do
@@ -357,7 +357,7 @@ return function(Sim,Terrain,Water,Facilities)
           local group=Joined.attach(s,road.stock_station_id,owner,"road",road.id)
           Joined.attach(s,road.stock_station_id,owner,"dock",st.id)
           group.tile,group.town,group.random_bits=road.tile,road.town or road.site,road.stock_random_bits
-          group.facilities=Join.BUS
+          group.facilities=group.facilities or Join.BUS
           Join.add_facility(group,Join.DOCK,p.land,owner,s.day,function() return Sim.stock_random_u32(s) end)
           st.town,st.name,st.stock_random_bits=group.town,road.name,group.random_bits
         end

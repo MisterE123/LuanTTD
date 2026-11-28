@@ -1120,9 +1120,9 @@ keeps one station and resumes service for all three after a process
 restart. Removing a stop, airport or rail platform leaves the remaining
 facilities on the original StationID and clamps the station sign to
 their remaining extent. An empty station still follows the stock
-expiration clock. Docks, cross-mode joining without a bus facility,
-and specialized freight-rail platform combinations remain outside
-the supported construction paths.
+expiration clock. Cross-mode joining without a bus facility and
+specialized freight-rail platform combinations remain outside the
+supported construction paths.
 
 
 ## One station for a bus stop and a passenger dock
@@ -1134,7 +1134,7 @@ stopping tiles and share one RC1 arrival-ordered loading sweep. When
 one of several piers is removed, the bus stop and other piers remain.
 Removing the final pier leaves the bus station active rather than
 starting the deleted-station clock. This does not add multi-mode
-cargo-ship refits or dock joining to a rail/airport hub.
+cargo-ship refits.
 
 The ordinary 256×256 coastal reference uses the 1985 Temperate world
 with 51 towns, a Hereford Leopard bus, and the FFP ferry. It matches
@@ -1150,3 +1150,24 @@ stock Empty randomisation trigger when no *unload actions* remain.
 Passengers marked Keep can still be aboard. The common one-body
 loader now follows that rule and keeps the source random sequence
 during future housing and cargo updates.
+
+
+## Four facilities at one coastal station
+
+An owned passenger bus station can now carry a dock, a rail platform
+and an airport together. The RC1 join picker uses the complete
+physical station rectangle, including both tiles of each pier.
+The single station uses the airport as its primary facility for the
+stock tile animation trigger; the bus and ferry still load at their
+own stopping tiles and route their cargo to the same station.
+
+On the 51-town 1985 Temperate comparison, a helidepot and rail
+platform join the working bus and ferry station, retaining StationID
+0, the original sign and all eight facility tiles. The full year
+checks 27,010 random states, 26,714 ferry and station records,
+26,676 visible bus frames, 670 nonempty loading lists and six town
+snapshots. The bus and ferry shared the loading queue on 26 ticks.
+The ordinary Luanti authority-worker test keeps the combined station
+and resumes boarding after a restart. The rail platform and
+helidepot are idle in this comparison; it does not yet prove
+simultaneous operation of all four transport modes.

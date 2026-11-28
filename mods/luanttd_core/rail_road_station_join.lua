@@ -14,7 +14,7 @@ return function(Sim)
       spread=s.stock_station_spread or 12,
     })
     if why then return nil,why end
-    if not target or not target.bus_only or target.rail or target.dock then
+    if not target or not target.bus_only or target.rail then
       return nil,"RAIL_JOIN_UNPORTED_FACILITY"
     end
     return target.road
@@ -23,7 +23,7 @@ return function(Sim)
     local choices={{name="Build a separate rail station"}}
     if s.stock_distant_join_stations==false or not Sim.stock_joined_station then return choices end
     local board=Catalog.board(s)
-    board.matches=function(row) return row.bus_only and not row.rail and not row.dock end
+    board.matches=function(row) return row.bus_only and not row.rail end
     local source=Picker.find(board,{tile=Sim.id(area.x,area.z),w=area.w,h=area.h},owner,s.stock_station_spread or 12,true)
     for _,row in ipairs(source) do
       if not row.new then choices[#choices+1]={id=row.id,name=row.name or ("Bus station "..row.id)} end
@@ -56,6 +56,18 @@ return function(Sim)
       for _,part in ipairs(airport.tiles) do
         local x,y=Sim.xy(part.id)
         combined[#combined+1]={x=x-1,y=y-1}
+      end
+      cells=combined
+    end
+    local dock=Sim.stock_joined_station.member(s,group,"dock")
+    if dock then
+      local combined={}
+      for _,part in ipairs(cells) do combined[#combined+1]=part end
+      for _,pier in ipairs(dock.docks or {dock}) do
+        for _,id in ipairs({pier.land,pier.water}) do
+          local x,y=Sim.xy(id)
+          combined[#combined+1]={x=x-1,y=y-1}
+        end
       end
       cells=combined
     end

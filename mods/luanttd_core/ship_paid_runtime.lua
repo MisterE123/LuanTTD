@@ -87,9 +87,11 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
   local function station_key(s,mode_,id)
     local fallback=mode_=="rail" and rail_key(id) or mode_=="air" and air_key(id) or id
     local pool=mode_=="rail" and s.stock_rail_stations or mode_=="air" and s.stock_small_airports
+      or mode_=="ship" and s.stock_ship_stations
     local record=pool and pool[id]
+    local mode=mode_=="ship" and "dock" or mode_
     local group=record and record.stock_station_id~=nil and
-      Sim.stock_joined_station.resolve(s,record.stock_station_id,mode_,id,record)
+      Sim.stock_joined_station.resolve(s,record.stock_station_id,mode,id,record)
     return group and group.service_station_id or fallback
   end
   local function display_waiting(s,service,st,cargo)
@@ -264,7 +266,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local owner=actual.owner
       if neutral then owner=false end
       local road=joined and Sim.stock_joined_station.member(s,joined,"road")
-      local bitmap=not not (road or joined and joined.members.rail and joined.members.air)
+      local bitmap=not not (road or joined and ((joined.members.rail and joined.members.air) or
+        joined.members.dock and (joined.members.air or joined.members.rail)))
       if road then
         for _,t in ipairs(Sim.road_stop_tiles(road)) do
           tiles[#tiles+1]=t;ref=ref..":R"..t.x..":"..t.y..":"..t.kind
@@ -376,9 +379,12 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       -- AirportTileAnimationTrigger remains attached to the station.
       local primary=rows.air or rows.rail or rows.ship
       local tiles,ref=primary[4],primary[6]
-      if rows.air and rows.rail then
-        for _,tile in ipairs(rows.rail[4]) do tiles[#tiles+1]=tile end
-        ref=ref..":rail:"..rows.rail[6]
+      for _,kind in ipairs({"rail","ship"}) do
+        local extra=rows[kind]
+        if extra and extra~=primary then
+          for _,tile in ipairs(extra[4]) do tiles[#tiles+1]=tile end
+          ref=ref..":"..kind..":"..extra[6]
+        end
       end
       sync(group.service_station_id or primary[1],primary[2],primary[3],tiles,
         primary[5],ref,primary[7],primary[8],group)
@@ -741,7 +747,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         Ship.advance_paid(s,{
           leave=function(_,force) return leave(run,force) end,
           arrive=function(q)
-            return Service.begin(service,run,q.last_dock,q.arrivals,q.last_berth,{},tick,ctx,events)
+            return Service.begin(service,run,station_key(s,"ship",q.last_dock),q.arrivals,q.last_berth,{},tick,ctx,events)
           end,
         })
       end
@@ -755,7 +761,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
             local o=q.transport_orders[q.transport_order_cursor.real+1]
             local policy=o and o.cargo_order
             local flags={full=policy=="full",no_load=policy=="no_load"}
-            return Service.begin(service,post_id,q.last_dock,q.arrivals,q.last_berth,flags,tick,ctx,events)
+            return Service.begin(service,post_id,station_key(s,"ship",q.last_dock),q.arrivals,q.last_berth,flags,tick,ctx,events)
           end,
         })
       end

@@ -623,6 +623,10 @@ jobs:
           lua5.1 tests/road_loading_runtime.lua
           lua5.1 tests/town_growth_rc1_ferry.lua mixed
           bash tests/town_growth_rc1_ferry_native.sh mixed
+      - name: Compare a coastal four-facility station against RC1
+        run: |
+          lua5.1 tests/town_growth_rc1_ferry.lua hub
+          bash tests/town_growth_rc1_ferry_native.sh hub
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua

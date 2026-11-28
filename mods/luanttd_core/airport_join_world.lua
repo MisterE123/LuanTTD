@@ -11,7 +11,7 @@ return function(Sim)
   local function area(airport) return {tile=airport.origin,w=airport.width,h=airport.height} end
   function M.choices(s,airport)
     local board=Catalog.board(s)
-    board.matches=function(st) return st.bus_only and not st.airport and not st.dock end
+    board.matches=function(st) return st.bus_only and not st.airport end
     if s.stock_distant_join_stations==false then return {{name="Build a separate airport"}} end
     local choices=Picker.find(board,area(airport),airport.owner,s.stock_station_spread or 12,true)
     local rows={}
@@ -27,7 +27,7 @@ return function(Sim)
     })
     if why then return nil,why end
     if not target then return false end
-    if not target.bus_only or target.dock then return nil,"AIRPORT_JOIN_UNPORTED_FACILITY" end
+    if not target.bus_only then return nil,"AIRPORT_JOIN_UNPORTED_FACILITY" end
     return target.road
   end
 

@@ -4,7 +4,8 @@ local mod=core.get_modpath(core.get_current_modname())
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local Sim=m("sim")
 local owner="Stock Ferry QA"
-local mixed=core.settings:get_bool("luanttd_qa_join_bus_dock",false)
+local hub=core.settings:get_bool("luanttd_qa_coastal_hub",false)
+local mixed=hub or core.settings:get_bool("luanttd_qa_join_bus_dock",false)
 local Checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
 local previous=Checkpoint.read()
 local client=m("campaign_authority_client")(core,mod)
@@ -16,6 +17,13 @@ local cap={road={start_year=1985,breakdowns=1,service_interval=150,foster=true},
   oil_tanker=true,durable_actions=true}
 cap.ferry[207]=files["bl_ffp_passenger_ferry.obj"] and files["bl_harbor_ferry_palette.png"]
 assert(cap.ferry[207])
+if hub then
+  local assets,city,heli,ground,expansion=m("airport_manifest")(core,mod)
+  assert(ground.helidepot)
+  for id in pairs(assets) do cap.air[id]=true end
+  cap.city_airport,cap.heliport,cap.ground_rotary,cap.expansion_airports=city,heli,ground,expansion
+  cap.rail=m("rail_dispatch_manifest").scan(mod,false,false)
+end
 for _,name in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..name,"air") end
 if not previous then
   local s=m("campaign_generation")(core,mod,Sim,m("world_setup")).run({
@@ -23,6 +31,10 @@ if not previous then
     towns=3,larger_towns=4,industries=4,variety=0,smooth=1,layout="original",growth_rate=2,
   })
   s.ship_paid_service=true
+  if hub then
+    s.air_paid_service,s.air_owned_preview,s.air_fleet_preview=true,true,true
+    s.rail_owned_service,s.rail_span_enabled,s.rail_paid_service=true,true,true
+  end
   s.road_coal,s.road_timber,s.road_farm,s.road_oil,s.road_heavy=true,true,true,true,true
   Checkpoint.write_state(s)
 end
@@ -63,7 +75,7 @@ local function counts()
     local station=assert(service.stations[group.service_station_id])
     local road=assert(s.stations[group.members.road])
     assert(station.stock==road.stock and station.passenger_rating_state==road.passenger_rating_state)
-    assert(#station.tiles==3 and group.facilities==20 and station.stock_station_id==0 and hull.stock_station_physical_vehicle==13)
+    assert(#station.tiles==(hub and 8 or 3) and group.facilities==(hub and 29 or 20) and station.stock_station_id==0 and hull.stock_station_physical_vehicle==13)
     for _,v in pairs(s.fleet) do if v.stock_pool_id==12 then bus=v end end
     assert(bus and bus.engine=="leopard_bus")
   end
@@ -101,6 +113,23 @@ local function work()
     end
     local da=transport(first)
     local db=transport({mode="ship",operation="build",kind="dock",tile=31026,adjacent=true})
+    if hub then
+      local function cell(x,y) return y*256+x+1 end
+      local field={mode="air",operation="build",tile=cell(53,106),layout="helidepot",air_join=0,separate=false}
+      local ap=ask("airport_join_choices",{request=field})
+      local offered
+      for _,choice in ipairs(ap.choices) do if choice.id==0 then offered=true end end
+      assert(offered)
+      transport(field)
+      local r={tool="station",first=cell(53,109),last=cell(53,109),axis=0,length=1,tracks=1,separate=true,drag=true}
+      local choices=ask("rail_join_choices",{request=r})
+      offered=false
+      for _,choice in ipairs(choices.choices) do if choice.id==0 then offered=true end end
+      assert(offered)
+      r.road_station_id=0
+      local q=ask("rail_quote",{request=r})
+      command("rail_commit",{token=q.token})
+    end
     local dp=transport({mode="ship",operation="build",kind="depot",tile=29760,axis=0})
     assert(transport({mode="ship",operation="buy",depot=dp.id,engine=207}).id=="ferry")
     command("transport_start",{mode="ship",vehicle="ferry",depot=dp.id,first=da.id,second=db.id})
