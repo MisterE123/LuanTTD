@@ -2,6 +2,10 @@
 -- OpenTTD 14.1 ordinary temperate Farm (9) and Factory (6), original
 -- build_industry.h, industry_cmd.cpp, economy.cpp, industry.h,
 -- station.cpp, cargo_const.h and engines.h. No NewGRF callbacks.
+local here=debug and debug.getinfo(1,"S").source:match("^@(.*/)")
+local path=here or (core and core.get_modpath("luanttd_core").."/openttd/") or "mods/luanttd_core/openttd/"
+local Arrival=dofile(path.."industry_production_arrival_rc1.lua")
+local Delivery=dofile(path.."industry_delivery_rc1.lua")
 return function(Packets,Catchment,Rating,Income,Commons,Timber)
   local F={TICKS=256,SLOTS=16,MAX_WAITING=65535,ABANDON_YEARS=5}
   local floor,ceil,min,max,abs=math.floor,math.ceil,math.min,math.max,math.abs
@@ -265,19 +269,9 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
     local out={units=0,payment=0,remaining=left,industries={},town=st.town,cargo=cargo}
     if not report.accepts or not Packets.accept_at(packet,st) or opts.transfer or opts.no_unload then return out end
     local src=packet.source_type=="industry" and packet.source
-    for _,candidate in ipairs(report.near) do
-      if left==0 then break end
-      local i=industry_at(candidate.id)
-      local a=i and not i.removed and F.input(i,cargo)
-      if a and i.id~=src and (i.exclusive_supplier==nil or i.exclusive_supplier==st.owner) and
-          (not opts.refuses or not opts.refuses(i,cargo)) then
-        local n=min(left,F.MAX_WAITING-a.waiting)
-        a.waiting=a.waiting+n;a.last_accepted=opts.economy_date
-        left=left-n
-        out.industries[#out.industries+1]={id=i.id,units=n}
-      end
-    end
-    local n=packet.units-left
+    local n,industries=Delivery.to_industries(st,cargo,left,src,report.near,industry_at,F.input,opts)
+    left=left-n
+    out.industries=industries
     if n>0 then
       local g=F.goods(st,cargo)
       g.ever_accepted,g.current_month,g.accepted_bigtick=true,true,true
@@ -290,6 +284,7 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
     return out
   end
 
+  local arrival_matrices=setmetatable({},{__mode="k"})
   -- Trigger once after a whole Station::LoadUnloadStation scan. Input
   -- slot order is source-stable and saturation always consumes accepted
   -- input even if the shared stockpile is already full.
@@ -297,15 +292,14 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
     local scheme=F.spec[ind.kind]
     if ind.removed or not scheme or (scheme.life~="processing" and scheme.life~="black_hole") then return 0,0,{} end
     local output=ind.produced[1]
-    local before,used,details=output.waiting,0,{}
-    ind.was_cargo_delivered=true
-    for slot,a in ipairs(ind.accepted) do
-      if a.cargo and a.waiting>0 then
-        local units=a.waiting
-        output.waiting=min(F.MAX_WAITING,output.waiting+floor(units*scheme.multiplier[slot]/256))
-        a.waiting=0;used=used+units;details[a.cargo]=units
-      end
+    local before=output.waiting
+    local matrix=arrival_matrices[scheme]
+    if not matrix then
+      matrix={}
+      for slot,value in ipairs(scheme.multiplier) do matrix[slot]={value} end
+      arrival_matrices[scheme]=matrix
     end
+    local used,details=Arrival.apply(ind,matrix)
     return output.waiting-before,used,details
   end
 

@@ -1421,3 +1421,26 @@ Delivering both effects opens the next month's growth and allows it
 to close again after an unsupplied month. This is the stock
 water-specific data and rule port; industry creation, a playable
 tanker route, and the 3D assets are not yet mounted.
+
+### Food processing and stock industry delivery
+
+The Food Processing Plant resolves to livestock and wheat in Arctic
+and fruit and maize in Tropic. The two original layouts and their
+tile acceptance come from the pinned industry table. The stock
+arrival kernel consumes each accepted input slot, applies the source
+8.8 multiplier and clips output to uint16. The delivery kernel
+walks the station's ordered industry list, skipping the cargo's
+origin, temporary refusals and supply rights held by another
+company. It retains the stock update for a considered destination
+whose incoming store is already full. These kernels also service
+ordinary Temperate factory deliveries and output now.
+
+The compiled RC1 comparisons cover 5,600 transformation cases
+and 8,200 delivery cases. A climate town receipt test consumes Food
+from a processing batch and opens growth at the Arctic snowline.
+The existing real road factory route and the full-year Temperate
+coastal reference also pass. New-world native RC1 reference runs
+confirmed Water Towers in desert towns below 1,200 population and
+the stock crop/industry input slots in both climates. The new
+Arctic and Tropic supply chains, industry art, and normal campaign
+mount are still separate work.

@@ -376,6 +376,8 @@ jobs:
           python3 tests/town_house_selection_rc1.py "$src" lua5.1
           python3 tests/town_house_acceptance_rc1.py "$src" lua5.1
           python3 tests/town_water_industry_rc1.py "$src" lua5.1
+          python3 tests/town_food_supply_rc1.py "$src" lua5.1
+          python3 tests/industry_delivery_rc1.py "$src" lua5.1
           python3 tests/town_house_construction_rc1.py "$src" lua5.1
           python3 tests/town_house_roadtypes_rc1.py "$src" lua5.1
           python3 tests/town_road_walk_rc1.py "$src" lua5.1
