@@ -24,6 +24,9 @@ vals=[int(s,0) for s in re.search(r"MK\(\s*12, CT_FOOD,\s+\d+,\s*(\d+),\s*(0x\w+
 proc=data.split("MI(_tile_table_food_process,",1)[1].split("STR_INDUSTRY_NAME_FOOD_PROCESSING_PLANT",1)[0]
 assert "MCT_LIVESTOCK_FRUIT,     256, MCT_GRAIN_WHEAT_MAIZE,       256" in proc
 assert "IT_FRUIT_PLANTATION, IT_FARM,           IT_FARM_2" in proc
+for table in ("food_process","fruit_plantation","farm2"):
+    fields=re.search(r"MI\(_tile_table_"+table+r",\s*\{\},(.*?)IndustryCheck::",data,re.S)[1].split(",")
+    vals.extend(int(fields[j].strip()) for j in (0,10))
 for i in range(2):
     layout=re.search(rf"_tile_table_food_process_{i} \{{(.*?)\n\}};",data,re.S)[1]
     coords=[tuple(map(int,m)) for m in re.findall(r"\{\{(\d+), (\d+)\}, (\d+)\}",layout)]
@@ -88,6 +91,10 @@ for i,k in ipairs{"weight_sixteenths","capacity_multiplier","base_payment","tran
   assert(F.cargo[k]==expected[i])
 end
 local offset=6
+for _,spec in ipairs{F.process,F.fruit,F.maize} do
+  assert(spec.cost_factor==expected[offset] and spec.map_colour==expected[offset+1])
+  offset=offset+2
+end
 for _,plan in ipairs(F.process.layout) do
   assert(#plan==expected[offset]);offset=offset+1
   for _,cell in ipairs(plan) do for _,v in ipairs(cell) do assert(v==expected[offset]);offset=offset+1 end end

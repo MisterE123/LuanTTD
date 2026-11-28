@@ -4,7 +4,7 @@
 local F={}
 F.cargo={key="food",label="FOOD",effect=5,weight_sixteenths=16,
   capacity_multiplier=256,base_payment=5688,transit_period_1=0,transit_period_2=30}
-F.process={id=13,cost_factor=55,conflicts={19,9,24},minimum_production=5,
+F.process={id=13,cost_factor=206,map_colour=55,conflicts={19,9,24},minimum_to_distribute=5,
   source_input={livestock_fruit={"livestock","fruit"},grain_wheat_maize={"grain","wheat","maize"}},
   multiplier={{256},{256}},produces="food",layout={
     {{0,0,60},{1,0,60},{2,0,60},{0,1,60},{1,1,60},{2,1,60},
@@ -12,8 +12,8 @@ F.process={id=13,cost_factor=55,conflicts={19,9,24},minimum_production=5,
     {{0,0,61},{1,0,60},{2,0,61},{3,0,61},{0,1,62},{1,1,63},{2,1,63},{3,1,63},
      {0,2,60},{1,2,60},{2,2,60},{3,2,60},{0,3,62},{1,3,62}},
   }}
-F.fruit={id=19,rate=10,cost_factor=86,conflicts={13},cargo="fruit",minimum_production=15}
-F.maize={id=24,rate=11,cost_factor=48,conflicts={13},cargo="maize",minimum_production=5}
+F.fruit={id=19,rate=10,cost_factor=225,map_colour=86,conflicts={13},cargo="fruit",minimum_to_distribute=15}
+F.maize={id=24,rate=11,cost_factor=250,map_colour=48,conflicts={13},cargo="maize",minimum_to_distribute=5}
 local stock={
   arctic={livestock=true,wheat=true},
   tropic={fruit=true,maize=true},

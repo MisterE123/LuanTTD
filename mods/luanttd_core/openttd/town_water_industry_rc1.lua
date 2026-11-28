@@ -6,8 +6,8 @@ local M={}
 M.cargo={key="water",label="WATR",effect=4,weight_sixteenths=16,
   capacity_multiplier=256,base_payment=4664,transit_period_1=20,transit_period_2=80}
 M.supply={id=21,layout={{0,0,118},{0,1,119},{1,0,118},{1,1,119}},
-  construction_factor=37,rate=12,cargo="water",conflict=22}
-M.tower={id=22,layout={{0,0,120}},construction_factor=208,accepts="water",
+  construction_factor=199,map_colour=37,rate=12,cargo="water",conflict=22}
+M.tower={id=22,layout={{0,0,120}},construction_factor=115,map_colour=208,accepts="water",
   acceptance_eighths=8,conflict=21,only_in_town=true}
 M.specs={[21]=M.supply,[22]=M.tower}
 -- Source MR #165..167 and ROV #49..51. Do not expose in a depot

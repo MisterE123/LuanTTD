@@ -29,13 +29,14 @@ inds=[]
 for k,id in [("supply",21),("tower",22)]:
     row=re.search(r"MI\(_tile_table_water_"+k+r",\s+\{\},(.*?)STR_INDUSTRY_NAME_WATER_"+k.upper(),data,re.S)[1]
     q=row.split(",")
-    build=int(q[10].strip())
-    assert (id,build) in [(21,37),(22,208)],q[:14]
+    # MI(..., d, ..., col, ...) maps d to the construction factor;
+    # col is the map legend colour and must never drive the price.
+    build,colour=int(q[0].strip()),int(q[10].strip())
     other=22 if id==21 else 21
     assert q[11].strip()=="IT_WATER_"+("TOWER" if id==21 else "SUPPLY")
     layout=re.search(r"\b_tile_table_water_"+k+r"_0\s*\{(.*?)\n\};",data,re.S)[1]
     layout=[tuple(map(int,r)) for r in re.findall(r"\{\{(\d+), (\d+)\}, (\d+)\}",layout)]
-    inds.append((k,id,build,other,layout))
+    inds.append((k,id,build,colour,other,layout))
 water_defaults=re.search(r"MK\(\s*(15), CT_WATER,\s+\d+,\s*(\d+),\s*(0x\w+),\s*(\d+),\s*(\d+),\s*(\d+),\s*true,\s*TownAcceptanceEffect::Water,",cargo)
 assert water_defaults
 water=[int(x,0) for x in water_defaults.groups()[1:]]
@@ -52,7 +53,7 @@ assert(M.tile_acceptance(120,"water")==io.read("*n") and M.tile_acceptance(119,"
 assert(M.tile_acceptance(120,"food")==0)
 for _,k in ipairs({"supply","tower"}) do
   local spec=M[k]
-  assert(spec.id==io.read("*n") and spec.construction_factor==io.read("*n") and spec.conflict==io.read("*n"))
+  assert(spec.id==io.read("*n") and spec.construction_factor==io.read("*n") and spec.map_colour==io.read("*n") and spec.conflict==io.read("*n"))
   local n=io.read("*n");assert(n==#spec.layout)
   for i=1,n do for j=1,3 do assert(spec.layout[i][j]==io.read("*n")) end end
   local calls=0
@@ -98,8 +99,8 @@ assert(t.received[4].old_act==1 and t.accepted.water==nil)
 assert(not G.month(t,nearby,2,nil,desert))
 """
 values=water+[accept]
-for k,id,build,other,layout in inds:
-    values.extend([id,build,other,len(layout)])
+for k,id,build,colour,other,layout in inds:
+    values.extend([id,build,colour,other,len(layout)])
     for tile in layout:
         values.extend(tile)
 values.extend(tanks)
