@@ -248,9 +248,6 @@ return function(Timing,Packets)
       end
       if unloaded>0 then
         if ops.unloaded then ops.unloaded(st,v,unloaded) end
-        -- Linked aircraft holds use the controller's one Empty trigger
-        -- after the whole chain has finished unloading, not per body.
-        if v.mode~="rail" and not v.part and v.units==0 and ops.emptied then ops.emptied(st,v) end
       end
       l.unloading=l.gradual and l.unload_units>0
     elseif not l.no_load and not l.stop_loading then
@@ -287,8 +284,12 @@ return function(Timing,Packets)
     local refresh
     l.ticks,l.stop_loading,l.finished,refresh=Timing.pulse(m)
     if refresh and ops.refresh_link then ops.refresh_link(st,v) end
-    if v.mode=="rail" and not l.unloading and m.loaded==0 and
-       (m.unloaded>0 or m.retry_unload) and ops.emptied then ops.emptied(st,v) end
+    -- economy.cpp's completely_emptied means this unload round has
+    -- no unload actions left and loaded nothing. Cargo marked Keep
+    -- may still be on a one-body road vehicle or ship.
+    if not l.unloading and m.loaded==0 and (m.unloaded>0 or m.retry_unload) and ops.emptied then
+      ops.emptied(st,v)
+    end
     return {vehicle=v.id,loaded=m.loaded,unloaded=m.unloaded,delivered=m.delivered,transferred=m.transferred}
   end
 

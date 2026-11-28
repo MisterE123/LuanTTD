@@ -321,8 +321,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       end
     end
     local function collect(id,local_id,actual,tiles,mode_,ref,base,id_for_tick)
-      local group=actual.stock_station_id~=nil and (mode_=="air" or mode_=="rail") and
-        Sim.stock_joined_station.resolve(s,actual.stock_station_id,mode_,local_id,actual)
+      local membership=mode_=="ship" and "dock" or mode_
+      local group=actual.stock_station_id~=nil and
+        Sim.stock_joined_station.resolve(s,actual.stock_station_id,membership,local_id,actual)
       if not group then return sync(id,local_id,actual,tiles,mode_,ref,base,id_for_tick) end
       local rows=pending[group.id]
       if not rows then rows={group=group};pending[group.id]=rows end
@@ -332,7 +333,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       for id,p in pairs(ships) do
         if not p.neutral then
           local tiles,rev=DockMembers.footprint(p,Sim.xy)
-          sync(id,id,p,tiles,"ship",rev,p.land,ship_index(id))
+          collect(id,id,p,tiles,"ship",rev,p.land,ship_index(id))
         end
       end
     end
@@ -373,7 +374,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local group=rows.group
       -- Use the airport as the representative when it exists so stock
       -- AirportTileAnimationTrigger remains attached to the station.
-      local primary=rows.air or rows.rail
+      local primary=rows.air or rows.rail or rows.ship
       local tiles,ref=primary[4],primary[6]
       if rows.air and rows.rail then
         for _,tile in ipairs(rows.rail[4]) do tiles[#tiles+1]=tile end
@@ -542,6 +543,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       reconcile("active_serial",run,run and {id=run,mode="ship",owner=p.owner,
         engine=p.engine_id,speed=(Ship.engine_for and Ship.engine_for(p) or Ship.engine).max_speed,
         built=p.paid_build_year or Sim.date(s,p.paid_built_day or s.day)})
+      if run and s.stock_owned_ferry then
+        service.vehicles[run].stock_station_physical_vehicle=s.stock_owned_ferry.stock_pool_id
+      end
     end
     reconcile("mail_ship_serial",post_id,post_id and {id=post_id,mode="ship",owner=post.owner,engine=post_craft.engine,
       speed=post_run.engine_for(post).max_speed,built=post_craft.built,cargo="mail"})

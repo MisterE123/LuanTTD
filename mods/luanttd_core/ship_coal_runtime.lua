@@ -268,6 +268,16 @@ return function(Sim,Service,Roster,Rating,debit,credit,receive,Calendar,Goods,Ma
     local profile=M.cargo_profile(s,cargo)
     if not profile then return nil,cargo=="goods" and "NO_GOODS_INDUSTRY_AUTHORITY" or "UNSUPPORTED_SHIP_CARGO" end
     if a==z or not a or not z then return nil,"OWN_DEPOT_AND_TWO_DOCKS_REQUIRED" end
+    if cargo=="mail" then
+      -- Passenger ferries already carry a physical stock VehicleID.
+      -- This mail refit does not yet take part in the mixed mode pool.
+      for _,id in ipairs({a,z}) do
+        local dock=s.stock_ship_stations and s.stock_ship_stations[id]
+        local group=dock and dock.stock_station_id~=nil and
+          Sim.stock_joined_station.resolve(s,dock.stock_station_id,"dock",id,dock)
+        if group and group.members.road then return nil,"Mail ships currently require a separate dock." end
+      end
+    end
     local candidate,why=spec.run.quote(s,owner,v.depot,a,z,nil,v.engine)
     if not candidate then return nil,why end
     local source,dest=M.order_report(s,a),M.order_report(s,z)

@@ -166,3 +166,43 @@ do
   assert(build(9).id~=old.id)
 end
 print("PASS final dock retirement: owned and inactive, exact timeout, tie priority, separate build, named identity and save/reopen")
+
+-- Cross-mode facility creation keeps the existing physical bus sign
+-- and station seed. The route still uses an ordinary local dock ID.
+do
+  local s=Sim.new(2)
+  s.stock_pool_authority,s.stock_engine_startup_seed=true,2
+  s.passenger_house_clock={counter=1576}
+  s.corner_grid=T.new(Sim.W,Sim.H,function(x)return x<15 and 1 or 0 end)
+  for i in ipairs(s.tiles) do
+    local x=Sim.xy(i)
+    s.tiles[i]={terrain=x>=15 and "water" or "grass",h=x<15 and 1 or 0,
+      coastal_water=x==14 or nil,water_class=x>=15 and "sea" or nil}
+  end
+  local sign=at(10,10)
+  local host={id=23,stock_station_id=0,owner="A",mode="road",tile=sign,town=1,name="Coast Stop",
+    stock_random_bits=987,road_members={[sign]="bus"},stock={passenger={{units=2}}}}
+  s.stations[host.id]=host
+  s.tiles[sign].station=host.id
+  Sim.company(s,"B")
+  s.passenger_rating_rng={2749842008,83962941}
+  local q=assert(N.join_choices(s,"A",at(14,10)))
+  local key=assert(q.choices[2]).id
+  assert(key~=nil and q.choices[2].name=="Coast Stop")
+  local _,why=N.quote(s,"B","dock",at(14,10),nil,{join=key,adjacent=true})
+  assert(why=="OWNED_BY")
+  local built=assert(N.build(s,"A","dock",at(14,10),nil,{join=key,adjacent=true}))
+  local st=s.stock_ship_stations[built.id]
+  local group=s.stock_joined_stations[0]
+  assert(group.members.road==host.id and group.members.dock==st.id and group.facilities==20)
+  assert(st.stock_station_id==0 and st.sign_tile==sign and st.name=="Coast Stop" and st.stock_random_bits==987)
+  assert(s.passenger_rating_rng[1]==2749842008 and s.passenger_rating_rng[2]==83962941)
+  assert(Sim.stock_station_slot(s)==1 and assert(N.build(s,"A","dock",at(14,11))).id==st.id)
+  local picks=assert(N.join_choices(s,"A",at(14,12))).choices
+  assert(#picks==2 and picks[2].id==st.id)
+  assert(N.remove(s,"A",built.water) and #st.docks==1 and st.sign_tile==sign)
+  assert(N.remove(s,"A",st.water) and group.facilities==4 and not group.members.dock)
+  assert(not (s.retired_ship_stations or {})[st.id] and Sim.stock_station_slot(s)==1)
+  assert(s.stations[23].stock.passenger[1].units==2 and s.stations[23].tile==sign)
+  print("PASS mixed dock command preserves bus StationID, sign and RNG; split removal retains live bus station")
+end

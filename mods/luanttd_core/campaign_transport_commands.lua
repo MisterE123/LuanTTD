@@ -115,7 +115,7 @@ return function(Sim,R)
       if cmd.kind~="buoy" and R.water.busy() then return nil,"An active vessel protects these waterways." end
       local dock
       if cmd.kind=="dock" then
-        if cmd.join~=nil and (not integer(cmd.join,1,0x3fff) or cmd.adjacent~=true) then
+        if cmd.join~=nil and (not R.water.network.valid_join_id(cmd.join) or cmd.adjacent~=true) then
           return nil,"INVALID_STATION_TO_JOIN"
         end
         dock={adjacent=cmd.adjacent==true,join=cmd.join}

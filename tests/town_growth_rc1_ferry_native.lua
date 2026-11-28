@@ -4,6 +4,7 @@ local mod=core.get_modpath(core.get_current_modname())
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local Sim=m("sim")
 local owner="Stock Ferry QA"
+local mixed=core.settings:get_bool("luanttd_qa_join_bus_dock",false)
 local Checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
 local previous=Checkpoint.read()
 local client=m("campaign_authority_client")(core,mod)
@@ -52,18 +53,54 @@ local function counts()
   local s=assert(Checkpoint.read())
   local p=assert(s.ship_pilot)
   local unit=assert(s.stock_owned_ferry)
-  assert(p.phase~="blocked" and p.owned and unit.stock_pool_id==12,p.failure)
+  assert(p.phase~="blocked" and p.owned and unit.stock_pool_id==(mixed and 13 or 12),p.failure)
   local c=assert(s.companies[owner])
-  local hull=assert(s.stock_ship_commercial.service.vehicles[p.paid_clock])
-  return s,p,hull.boarded or 0,c.revenue or 0
+  local service=s.stock_ship_commercial.service
+  local hull=assert(service.vehicles[p.paid_clock])
+  local bus
+  if mixed then
+    local group=assert(s.stock_joined_stations[0])
+    local station=assert(service.stations[group.service_station_id])
+    local road=assert(s.stations[group.members.road])
+    assert(station.stock==road.stock and station.passenger_rating_state==road.passenger_rating_state)
+    assert(#station.tiles==3 and group.facilities==20 and station.stock_station_id==0 and hull.stock_station_physical_vehicle==13)
+    for _,v in pairs(s.fleet) do if v.stock_pool_id==12 then bus=v end end
+    assert(bus and bus.engine=="leopard_bus")
+  end
+  return s,p,hull.boarded or 0,c.revenue or 0,bus
 end
 local function work()
   local first=previous and previous.companies[owner]
   if not first then
     ask("advance",{days=4})
     command("company_open")
-    local da=transport({mode="ship",operation="build",kind="dock",tile=29757,separate=true})
-    local db=transport({mode="ship",operation="build",kind="dock",tile=31026,separate=true})
+    local first={mode="ship",operation="build",kind="dock",tile=29757,adjacent=true}
+    if mixed then
+      local function cell(x,y) return y*256+x+1 end
+      local function road(request)
+        local q=ask("road_quote",{request=request})
+        return command("road_commit",{request=request,quote=q})
+      end
+      road({tool="drag",first=cell(52,115),last=cell(58,115),axis=0,start_half=false,end_half=true})
+      local dp=cell(59,115)
+      road({tool="stock_terminal",first=dp,kind="depot",direction=0})
+      road({tool="stock_terminal",first=cell(53,115),kind="bus",direction=0,through=true})
+      road({tool="stock_terminal",first=cell(57,115),kind="bus",direction=0,through=true})
+      local panel=ask("depot",{mode="road",depot=dp})
+      local bus
+      for _,q in ipairs(panel.offers) do if q.request.engine=="leopard_bus" then bus=command("road_buy",q.request);break end end
+      assert(bus)
+      ask("checkpoint")
+      local s=assert(Checkpoint.read())
+      command("road_order_add",{vehicle=bus,station=s.tiles[cell(57,115)].station})
+      command("road_order_add",{vehicle=bus,station=s.tiles[cell(53,115)].station})
+      command("road_toggle",{vehicle=bus})
+      local picks=ask("dock_join_choices",{request=first})
+      for _,choice in ipairs(picks.choices) do if choice.id==0x4000 then first.join=choice.id;break end end
+      assert(first.join)
+    end
+    local da=transport(first)
+    local db=transport({mode="ship",operation="build",kind="dock",tile=31026,adjacent=true})
     local dp=transport({mode="ship",operation="build",kind="depot",tile=29760,axis=0})
     assert(transport({mode="ship",operation="buy",depot=dp.id,engine=207}).id=="ferry")
     command("transport_start",{mode="ship",vehicle="ferry",depot=dp.id,first=da.id,second=db.id})
@@ -76,13 +113,14 @@ local function work()
     assert(s.passenger_house_clock.counter==baseline_tick and boarded==baseline_boarded and money==baseline_money)
     assert(p.arrivals==previous.ship_pilot.arrivals)
   end
-  for _=1,22 do
+  for _=1,(mixed and 43 or 22) do
     ask("advance",{days=4})
-    local state,p,boarded,revenue=counts()
-    if boarded>baseline_boarded then
-      assert(state.stock_owned_ferry.stock_fault.reliability<65535 and p.arrivals>=2 and revenue==0)
+    local state,p,boarded,revenue,bus=counts()
+    if boarded>baseline_boarded and (not mixed or bus.units>0) then
+      assert(state.stock_owned_ferry.stock_fault.reliability<65535 and p.arrivals>=2 and (mixed or revenue==0))
       result=("NATIVE RC1 FERRY %s: %d boarded, VehicleID %d, elapsed tick %d"):format(
         first and "REOPEN" or "SERVICE",boarded,state.stock_owned_ferry.stock_pool_id,state.passenger_house_clock.counter)
+      if mixed then result=result..(", bus carries %d through the same physical station"):format(bus.units) end
       return {kind="stop"}
     end
   end

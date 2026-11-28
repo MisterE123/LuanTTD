@@ -166,3 +166,19 @@ do
   same(v.batches[3].units,1);same(v.batches[3].feeder_share,10)
 end
 print("PASS: stock road loading clocks, unload-first order, reservations, full/no-load, feeder settlement, acceptance changes and late timetable waits")
+
+-- RC1 economy.cpp: completing the unload actions triggers Empty even
+-- with same-origin riders in Keep. The active ferry/bus native corridor
+-- reaches this with four onboard, one delivery and three kept.
+for _,mode in ipairs({"road","rail","ship"}) do
+  local st,v,fleet=fixture({})
+  v.mode,v.batches=mode,{packet(3,2),packet(1,9)}
+  local triggers=0
+  local ops={accepts=function()return true end,emptied=function() triggers=triggers+1 end}
+  L.begin(st,v,31,{},ops)
+  local rounds=L.tick(st,fleet,ops)
+  same(rounds[1].unloaded,1);same(v.units,3);same(triggers,1)
+  run(st,fleet,ops,40)
+  same(triggers,1)
+end
+print("PASS stock Empty random trigger after final unload action even with kept cargo")

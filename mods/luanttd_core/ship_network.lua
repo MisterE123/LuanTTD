@@ -4,9 +4,18 @@ local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "m
 local Area=dofile(path.."openttd/dock_station_area.lua")
 local Picker=dofile(path.."openttd/station_join_picker.lua")
 local Members=dofile(path.."dock_station_members.lua")
+local Join=dofile(path.."openttd/station_join_command.lua")
+-- Dock-local IDs stay below this band; picker rows in the second band
+-- select an owned bus StationID rather than an existing dock route ID.
+local BUS_JOIN=0x4000
 return function(Sim,Terrain,Water,Facilities)
   local N={}
   local Geo={xy=Sim.xy,id=Sim.id}
+  local Joined=Sim.stock_joined_station
+  local Catalog=dofile(path.."stock_station_catalog.lua")(Sim)
+  function N.valid_join_id(id)
+    return type(id)=="number" and id%1==0 and id>=1 and id<=BUS_JOIN+0xFFFE
+  end
   local function spread(s) return s.stock_station_spread or 12 end
   local function area(p) return Area.search_area(Geo,p.land,p.dir) end
   local run_keys={"ship_pilot","stock_coal_ship_run","stock_oil_ship_route"}
@@ -14,6 +23,10 @@ return function(Sim,Terrain,Water,Facilities)
   local function retiring() return Sim.road_station_retirement() end
   local function joined_board(s,owner)
     local B={xy=Sim.xy,id=Sim.id,matches=function()return true end}
+    local catalog=s.stock_pool_authority and Catalog.board(s) or nil
+    local function eligible_bus(st)
+      return st and st.bus_only and not st.airport and not st.rail
+    end
     local function eligible(st)
       for _,key in ipairs(run_keys) do
         local run=s[key]
@@ -31,17 +44,26 @@ return function(Sim,Terrain,Water,Facilities)
       end
     end
     function B.station(id)
+      if id>=BUS_JOIN then
+        local bus=catalog and catalog.station(id-BUS_JOIN)
+        if not eligible_bus(bus) or bus.dock then return end
+        local road=s.stations[bus.road]
+        return {id=id,owner=bus.owner,tile=road.tile,spread=bus.spread,name=road.name or ("Bus stop "..bus.id),road=bus.road}
+      end
       local st=s.stock_ship_stations and s.stock_ship_stations[id]
       if not st and s.retired_ship_stations then
         local row=retiring().get(s,"dock",id)
         return row and eligible(row) and row or nil
       end
       if not st or st.neutral then return end
-      return {id=id,owner=st.owner,tile=st.land,spread=st.spread or area(st),name=st.name}
+      local physical=catalog and st.stock_station_id~=nil and catalog.station(st.stock_station_id)
+      return {id=id,owner=st.owner,tile=st.land,spread=physical and physical.spread or st.spread or area(st),name=st.name}
     end
     function B.station_at(id)
       local f=s.tiles[id] and s.tiles[id].ship
       if f and f.kind=="dock" then return B.station(f.station) end
+      local bus=catalog and catalog.station_at(id)
+      if eligible_bus(bus) then return B.station(bus.dock or BUS_JOIN+bus.id) end
     end
     return B
   end
@@ -277,7 +299,9 @@ return function(Sim,Terrain,Water,Facilities)
         local row=retiring().closest(s,"dock",owner,extent.tile,function(old) return board.station(old.id)~=nil end)
         if row then sel.id=row.id end
       end
+      local selected=sel.id and board.station(sel.id)
       p.join,p.spread=sel.id,sel.spread
+      if selected and selected.road then p.join,p.join_road=nil,selected.road end
       return p
     end
     if kind=="depot" then return Facilities.depot(B,id,arg,opts) end
@@ -313,14 +337,15 @@ return function(Sim,Terrain,Water,Facilities)
         station_area=p.station_area,approach=p.approach,water_class=p.water_class}
       if not st then
         if not retired then s.next_stock_ship_station=next_+1 end
-        st=retired or {id=next_,owner=owner,sign_tile=p.land,
-          stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)}
+        local road=p.join_road and assert(s.stations[p.join_road])
+        st=retired or {id=next_,owner=owner,sign_tile=road and road.tile or p.land,
+          stock_station_id=road and road.stock_station_id or Sim.stock_station_slot and Sim.stock_station_slot(s)}
         if retired then
           -- Station::AddFacility relocates an unused sign to the new
           -- facility, retaining the existing station name and ID.
           st.sign_tile,st.tile=p.land,nil
         end
-        if s.stock_engine_startup_seed~=nil then
+        if s.stock_engine_startup_seed~=nil and not road then
           -- Station::AddFacility only reseeds its sign when adding its
           -- first facility (including one returning from retirement).
           st.stock_random_bits=Sim.stock_random_u32(s)%65536
@@ -328,6 +353,14 @@ return function(Sim,Terrain,Water,Facilities)
         for k,v in pairs(part) do st[k]=v end
         st.docks={}
         s.stock_ship_stations[next_]=st
+        if road then
+          local group=Joined.attach(s,road.stock_station_id,owner,"road",road.id)
+          Joined.attach(s,road.stock_station_id,owner,"dock",st.id)
+          group.tile,group.town,group.random_bits=road.tile,road.town or road.site,road.stock_random_bits
+          group.facilities=Join.BUS
+          Join.add_facility(group,Join.DOCK,p.land,owner,s.day,function() return Sim.stock_random_u32(s) end)
+          st.town,st.name,st.stock_random_bits=group.town,road.name,group.random_bits
+        end
       elseif not st.docks then
         -- All previously authored single-dock fixtures also use this path.
         st.docks={{land=st.land,water=st.water,dir=st.dir,station_area=st.station_area,
@@ -457,7 +490,9 @@ return function(Sim,Terrain,Water,Facilities)
       for _,member in ipairs(p.docks) do p.spread=Area.union(Geo,p.spread,area(member)) end
       -- UpdateStationSignCoord clamps a surviving station's sign to the
       -- new spread, even if the original entrance was just demolished.
-      p.sign_tile=Area.closest_tile(Geo,p.spread,sign)
+      local group=p.stock_station_id~=nil and Joined.resolve(s,p.stock_station_id,"dock",p.id,p)
+      if group then Joined.clamp_sign(s,Sim,group)
+      else p.sign_tile=Area.closest_tile(Geo,p.spread,sign) end
     else
       if pair_idx then
         -- The station persists after its dock/route ledger is cleared.
@@ -471,9 +506,11 @@ return function(Sim,Terrain,Water,Facilities)
         end
         -- An unused StationID has no footprint, routing, or catchment
         -- until another dock activates it. Keep the sign and identity.
-        p.tile=p.sign_tile or p.land
-        p.land,p.water,p.dir,p.station_area,p.approach,p.water_class,p.docks,p.spread=nil,nil,nil,nil,nil,nil,nil,nil
-        retiring().retire(s,"dock",p)
+        if not Joined.detach_commercial(s,Sim,p,"dock",Join.DOCK) then
+          p.tile=p.sign_tile or p.land
+          p.land,p.water,p.dir,p.station_area,p.approach,p.water_class,p.docks,p.spread=nil,nil,nil,nil,nil,nil,nil,nil
+          retiring().retire(s,"dock",p)
+        end
       end
       entries[p.id]=nil
     end

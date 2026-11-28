@@ -1123,3 +1123,30 @@ their remaining extent. An empty station still follows the stock
 expiration clock. Docks, cross-mode joining without a bus facility,
 and specialized freight-rail platform combinations remain outside
 the supported construction paths.
+
+
+## One station for a bus stop and a passenger dock
+
+The dock picker can attach to an owned passenger bus stop, retaining
+the same physical StationID, sign, catchment, rating, and waiting
+passengers. Bus and ferry orders still point to their own actual
+stopping tiles and share one RC1 arrival-ordered loading sweep. When
+one of several piers is removed, the bus stop and other piers remain.
+Removing the final pier leaves the bus station active rather than
+starting the deleted-station clock. This does not add multi-mode
+cargo-ship refits or dock joining to a rail/airport hub.
+
+The ordinary 256×256 coastal reference uses the 1985 Temperate world
+with 51 towns, a Hereford Leopard bus, and the FFP ferry. It matches
+27,010 random states, 26,714 ferry poses, 26,676 visible horizontal
+bus frames, 26,714 shared station records, 698 nonempty loading lists,
+and six town and terrain snapshots through year end. The active
+two-carrier loading case is checked directly, not simulated by two
+isolated legs. The native Luanti worker reproduces the joined
+construction, boarding, and preserved shared queue through restart.
+
+At the first partial ferry delivery, `LoadUnloadVehicle` calls the
+stock Empty randomisation trigger when no *unload actions* remain.
+Passengers marked Keep can still be aboard. The common one-body
+loader now follows that rule and keeps the source random sequence
+during future housing and cargo updates.

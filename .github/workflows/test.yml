@@ -617,6 +617,12 @@ jobs:
           lua5.1 tests/ship_rc1_lane_costs.lua
           lua5.1 tests/town_growth_rc1_ferry.lua
           bash tests/town_growth_rc1_ferry_native.sh
+      - name: Compare a shared passenger dock and bus stop against RC1
+        run: |
+          lua5.1 tests/dock_station_join.lua
+          lua5.1 tests/road_loading_runtime.lua
+          lua5.1 tests/town_growth_rc1_ferry.lua mixed
+          bash tests/town_growth_rc1_ferry_native.sh mixed
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua

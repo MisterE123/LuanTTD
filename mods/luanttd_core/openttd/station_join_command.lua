@@ -2,7 +2,7 @@
 -- Translated from OpenTTD 16.0-RC1 station_cmd.cpp: GetStationAround,
 -- FindJoiningBaseStation, BuildStationPart and CmdBuildAirport.
 -- Command-side selection, not the GUI's spiral list of distant choices.
-local M={TRAIN=1,BUS=4,AIRPORT=8}
+local M={TRAIN=1,BUS=4,AIRPORT=8,DOCK=16}
 local min,max=math.min,math.max
 
 local function valid_area(board,area,spread)
