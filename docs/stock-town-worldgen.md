@@ -187,3 +187,20 @@ frame, `LoadUnloadStation` cargo-received triggers and RC1 queue attrition.
 This is one active road corridor, not full freight, finance or town-growth
 parity. Other cargoes, modes, service densities and municipal interactions
 still need comparisons.
+
+The expanded circuit uses an original Balogh Goods Truck and adds a
+native road delivery from the sawmill into Slarfinghill. It matches
+27,010 consecutive shared RNG ticks, fourteen map and town snapshots
+(including the monthly Goods acceptance record), and 23 physical
+motion/cargo samples per vehicle. At year end the company has delivered
+273 passengers, 80 tonnes of wood and 35 Goods to the town. The replay
+reopens three packed checkpoints, and a separate dedicated Luanti run
+reopens the actual worker checkpoint at day 128.
+
+At a live junction the next tile and reachable entry directions now seed
+the source YAPF choice. The road controller keeps the stock eight-segment
+choice cache and discards unreachable entries. Its 3D clearance guard
+still protects converging paths, but does not reserve both physically
+separated lanes for one straight-moving vehicle. Unordered intermediate
+station arrivals and their implicit orders are still unported; this
+circuit does not use them.

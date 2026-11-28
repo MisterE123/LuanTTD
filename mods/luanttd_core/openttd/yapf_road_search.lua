@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Originally OpenTTD, copyright OpenTTD contributors. No warranty.
--- Road specialization of OpenTTD 14.1 CYapfBaseT, CYapfOriginTileT,
+-- Road specialization of OpenTTD 16.0-RC1 CYapfBaseT, CYapfOriginTileT,
 -- CYapfRoadNodeT, CNodeList_HashTableT and CBinaryHeapT. Lua tables replace
 -- the C++ arena and hash tables; preserve the exact heap comparisons,
 -- removal order and in-place open-node update for equal-cost behavior.
@@ -76,10 +76,6 @@ return function(F,C)
       -- to PfCalcCost; road cost can still follow its longer segment.
       if not C.calc(board,vehicle,destination,n,settings,options.max_cost,nil,follower) then return end
       n.estimate=C.estimate(board,destination,n)
-      if C.detect(board,destination,n.last_tile,n.last_td) then
-        if not best_dest or n.estimate<best_dest.estimate then best_dest=n end
-        return
-      end
       local improve=cap>0 and (not best_intermediate or
         best_intermediate.estimate-best_intermediate.cost>n.estimate-n.cost)
       local index=n.tile*stride+n.key
@@ -105,7 +101,9 @@ return function(F,C)
     local capped=false
     while heap[1] do
       local n=heap[1]
-      if best_dest and best_dest.cost<n.estimate then break end
+      -- RC1 accepts a goal only when it reaches the heap root; equal
+      -- estimated costs retain the heap's insertion and removal ordering.
+      if C.detect(board,destination,n.last_tile,n.last_td) then best_dest=n;break end
       local f=F.follow(board,vehicle,n.last_tile,n.last_td)
       if f.ok then
         local tds=F.trackdirs(f.trackdirs)

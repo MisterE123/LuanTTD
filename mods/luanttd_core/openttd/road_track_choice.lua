@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Originally OpenTTD, copyright OpenTTD contributors. No warranty.
--- Ordinary bus/truck subset of OpenTTD 14.1 RoadFindPathToDest,
+-- Ordinary bus/truck subset of OpenTTD 16.0-RC1 RoadFindPathToDest,
 -- CYapfFollowRoadT::ChooseRoadTrack and YapfRoadVehicleChooseTrack.
 -- Stock RV movement code consumes the reverse state; it is not a normal
 -- trackdir. Caller should handle red crossing signals after this choice.
@@ -91,7 +91,8 @@ return function(F,C,S)
     local mask=F.origin_trackdirs(board.tile(tile),false,entry)
     local found,best=S.find(board,v,tile,mask,d,settings)
     local td=append_choices(board,v,d,best,found,tile,cache)
-    return finish(td or tds[1],found,"search")
+    local selected,result,why=finish(td or tds[1],found,"search")
+    return selected,result,why,best,d
   end
 
   return R

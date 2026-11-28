@@ -114,6 +114,31 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     end
     return trace,best,cost
   end
+  local Choice=dofile(base.."/openttd/road_track_choice.lua")(F,C,Search)
+  -- The moving controller's next tile is the stock YAPF frontier. In
+  -- particular, its reachable exit trackdirs have zero initial cost.
+  function R.at_junction(s,vehicle,current,next_tile,occupancy,cache)
+    if not vehicle.dest or vehicle.road_via_pending or vehicle.road_return_depot then return end
+    local board=Board(Sim,s,F,occupancy)
+    local old=board.tile(current[4])
+    if not old or (old.kind~="road" and old.kind~="drive_stop") then return end
+    local td=current[6]
+    if td>=64 and td<80 then td=td-64 end
+    if not F.has_trackdir(F.status(old,false),td) then return end
+    local entry=F.exit_direction(td)
+    if board.adjacent(current[4],entry)~=next_tile then return end
+    local v={owner=vehicle.owner,bus=vehicle.cargo=="passenger",tile=current[4],display_max_speed=speed[vehicle.engine]}
+    local _,found,_,best,dest=Choice.choose(board,v,next_tile,entry,{kind="station",station=vehicle.dest},cache)
+    if not found or not best then return end
+    local trace=Search.trace(board,v,dest,best)
+    local last=trace[#trace]
+    table.insert(trace,1,{tile=current[4],td=td})
+    local frames,bays=R.frames(board,trace,current)
+    if not frames or #frames<2 then return end
+    local path={}
+    for _,row in ipairs(trace) do if path[#path]~=row.tile then path[#path+1]=row.tile end end
+    return path,frames,bays,last.td,best.cost
+  end
   function R.route(s,a,b,owner,vehicle,occupancy,waypoints)
     local board=Board(Sim,s,F,occupancy)
     local bus=vehicle==nil or vehicle.cargo=="passenger"

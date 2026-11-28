@@ -165,6 +165,44 @@ return function(Sim,Presentation)
     return not status or not (status.entrance or status.first and status.second or
       inbound_in_apron(s,W,place,branch.tile,v.id))
   end
+  -- Opposing traffic can share a 3D approach on two physically
+  -- separated lanes. Prove both swept paths stay straight until they
+  -- pass each other's current body; keep the guard on turns and merges.
+  local function straight(f,dir)
+    local td=f[6]
+    if dir==1 or dir==5 then return f[3]==dir and (td==0 or td==8) end
+    return f[3]==dir and (td==1 or td==9)
+  end
+  local function straight_past(s,r,offset,first,dir,other_major,lateral)
+    local state=r.clock
+    if not state or state.lane_pose or state.transit_hidden or
+        state.overtaking and state.overtaking~=0 then return false end
+    local v=s.fleet and s.fleet[r.id]
+    local frames=v and v.road_motion_frames
+    if not frames or frames[state.index+offset]~=first then return false end
+    local eastwest=dir==1 or dir==5
+    local sign=(dir==3 or dir==5) and 1 or -1
+    for i=state.index+offset,math.min(#frames,state.index+offset+96) do
+      local f=frames[i]
+      if not straight(f,dir) then return false end
+      local x,y=center(f)
+      if abs((eastwest and y or x)-lateral)>1e-6 then return false end
+      if ((eastwest and x or y)-other_major)*sign>.86 then return true end
+    end
+    return false
+  end
+  local function separate_lanes(s,v,prev,next_pose,other,x,y,a,b)
+    local d=next_pose[3]
+    if (d~=1 and d~=3 and d~=5 and d~=7) or other.frame[3]~=(d+4)%8 or
+        not straight(prev,d) or not straight(next_pose,d) or not straight(other.frame,(d+4)%8) then return false end
+    local eastwest=d==1 or d==5
+    local lat,opposite_lat=eastwest and y or x,eastwest and b or a
+    -- Production road models span at most .28 nodes on a straight
+    -- lane. A .01 allowance still fits the .31-node lane-center spacing.
+    if abs(lat-opposite_lat)<.29 then return false end
+    return straight_past(s,v,1,next_pose,d,eastwest and a or b,lat) and
+      straight_past(s,other,0,other.frame,(d+4)%8,eastwest and x or y,opposite_lat)
+  end
   function G.check(s,W,v,prev,next_pose,z,road_z)
     if not s.road_junction_clearance or prev[12] or next_pose[12] then return true,z end
     local map=board(s)
@@ -183,7 +221,9 @@ return function(Sim,Presentation)
               z=z or road_z(s,next_pose)
               if abs(other.z-z)<6 then
                 local a,b=center(other.frame)
-                if touches_cluster(a,b,g) then return false,z end
+                if touches_cluster(a,b,g) and not separate_lanes(s,v,prev,next_pose,other,x,y,a,b) then
+                  return false,z
+                end
               end
             end
           end

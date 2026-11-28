@@ -3355,8 +3355,10 @@ function M.mount_road_bus_market(s,Calendar,starting_year,has_foster,has_craighe
   freight_art_mount[s]=not not has_craighead
   extra_road_art[s]=extra_models or {}
   local market=s.stock_bus_market
-  local r=road_freight_catalog().row(craighead)
-  market.models[r.stock_id]=market.models[r.stock_id] or assert(Calendar.prepare_original(r,market.settings))
+  for _,key in ipairs({"goods_truck",craighead}) do
+    local r=road_freight_catalog().row(key)
+    market.models[r.stock_id]=market.models[r.stock_id] or assert(Calendar.prepare_original(r,market.settings))
+  end
   market.models[119]=market.models[119] or assert(Calendar.prepare(119,market.settings))
   for _,key in ipairs(road_freight_catalog().road_order) do
     local row=road_freight_catalog().row(key)
@@ -5797,6 +5799,30 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       launch(s,v,route,dest,index,td,cost,frames,bays);v.road_order_override=nil
       v.road_via_pending=#vias>0 and vias or nil
       v.last_departure=s.day;v.last_departure_tick=tick
+    end,
+    choose_junction=function(v,c,old,nominal)
+      local id=nominal[4]
+      local to=s.tiles[id]
+      local bits=to and to.road_bits
+      if not to or to.build~="road" or to.level_crossing or
+          (bits~=7 and bits~=11 and bits~=13 and bits~=14 and bits~=15) then
+        -- A planned choice reduced to a single track must be discarded.
+        local expected=c.junction_cache and c.junction_cache[1]
+        if expected and expected.tile==id then c.junction_cache=nil end
+        return
+      end
+      if c.lane_pose or c.overtaking and c.overtaking~=0 then return end
+      if c.junction_tile==id and c.junction_approach==old[4] and c.junction_version==s.topology then return end
+      if c.junction_destination~=v.dest or not c.junction_cache then c.junction_cache={} end
+      -- Town edits elsewhere do not invalidate a still-reachable choice.
+      -- The chooser checks the cached tile and the actual available tracks.
+      c.junction_tile,c.junction_approach,c.junction_version,c.junction_destination=id,old[4],s.topology,v.dest
+      local r=road_routing()
+      local path,frames,bays,td,cost=source_route.at_junction(s,v,old,id,r.occupancy(M,s),c.junction_cache)
+      if not frames then return end
+      v.route,v.road_motion_frames,v.road_bay_branch,v.road_leg_td,v.road_route_cost=path,frames,bays,td,cost
+      c.index=1
+      return frames
     end,
     entered_transit=function(v,tick)
       if faults and tick then faults.service(v,tick,fault_date(tick)) end

@@ -1,9 +1,12 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- OpenTTD 16.0-RC1, src/table/engines.h MR #139 and ROV #23.
+-- OpenTTD 16.0-RC1, src/table/engines.h MR #138–139 and ROV #22–23.
 -- Stock three-quarter sprite art is not imported. These are engine data.
 local F={}
 local base=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
 local rows={
+  goods_truck={stock_id=138,vehicle_type=1,image=5,name="Balogh Goods Truck",
+    intro_after_1920=5479,decay_speed=20,life=15,base_life=55,climates=7,cargo="goods",
+    purchase_factor=107,running_factor=90,speed=96,capacity=14,weight_quarters=38,power_tens_hp=12},
   craighead_goods_truck={stock_id=139,vehicle_type=1,image=22,name="Craighead Goods Truck",
     intro_after_1920=19724,decay_speed=20,life=15,base_life=55,climates=7,cargo="goods",
     purchase_factor=130,running_factor=168,speed=176,capacity=16,weight_quarters=48,power_tens_hp=22},

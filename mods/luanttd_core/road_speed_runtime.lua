@@ -14,7 +14,9 @@ local Freight=dofile(base.."openttd/road_freight_catalog.lua")
 for _,engine in ipairs(Freight.road_order) do
   realistic[engine]=Accel.vehicle(Freight.row(engine))
 end
-realistic.craighead_goods_truck=Accel.vehicle(Freight.row("craighead_goods_truck"))
+for _,engine in ipairs({"goods_truck","craighead_goods_truck"}) do
+  realistic[engine]=Accel.vehicle(Freight.row(engine))
+end
 return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,crossing_step,oneway_guard,oneway_replan,Bay,Junction,tile_xy)
   local R={bay=Bay,preserve_after_tide=Junction and Junction.preserve_after_tide}
   local Pass,Motion
@@ -321,6 +323,10 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       end
       return false
     end
+    if a.realistic and a.choose_junction and nominal[4]~=old[4] then
+      local fresh=a.choose_junction(v,state,old,nominal)
+      if fresh then frames,a.frames,nominal=fresh,fresh,fresh[2] end
+    end
     local b=nominal
     if Pass then
       b=Pass.next(v,state,old,nominal,roof,board)
@@ -545,7 +551,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     -- step consumes this argument synchronously; only the poses and
     -- cursors are published. Do not allocate a wrapper per vehicle/tick.
     local W,records=world(s,true),{}
-    local moving={s=s,W=W,entered_transit=hooks.entered_transit}
+    local moving={s=s,W=W,entered_transit=hooks.entered_transit,choose_junction=hooks.choose_junction}
     clock(function(tick,interleave_rail)
       local ready=hooks.economy(tick)
       W.begin_tick()
