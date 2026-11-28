@@ -108,6 +108,7 @@ case "${1:-}" in
   industry-air-and-water)
     bash tests/town_water_stock_route_native.sh
     bash tests/town_water_stock_route_native.sh food
+    bash tests/industry_climate_worldgen_native.sh
     lua5.1 tests/iron_steel_kernels.lua
     lua5.1 tests/campaign_worker_truck_stop_ui.lua
     for profile in early mid late; do lua5.1 tests/iron_steel_ordinary_worker.lua "$profile"; done

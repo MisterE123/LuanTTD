@@ -136,7 +136,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
     local b={width=width,height=height,freeform=not not freeform,
       landscape_fields=records,landscape_regrowth=regrowth,
       climate=climate and climate.landscape,snowline=climate and climate.snowline}
-    function b.height_at(x,z) return Terrain.corner(s.corner_grid,x+1,z+1) end
+    function b.height_at(x,z) local _,base=Terrain.tile(s.corner_grid,x+1,z+1);return base end
     function b.tile(x,z)
       if not in_map(x,z) then return empty end
       local id,t=base(x,z)

@@ -1671,3 +1671,23 @@ and pool admission. A quote never makes terrain changes. The
 native restart and live Food/Water growth proof still pass.
 The generated-map adapter must still provide the real town
 lookup, terrain edits, and population of the industry pool.
+
+### Automatically generated climate industry maps
+
+The headless worldgen path now generates the terrain, towns,
+and original industry layouts from the same initial seed. It
+does not replay recorded coordinates or measured acceptance
+draws. The worker uses its own physical site quotes, terrain
+platform edits, house clearance and farm planting before
+drawing subsequent placements.
+
+Four actual RC1 reference worlds (Arctic, Toyland, and Tropic
+with and without normal rivers) match all 96 generated firms,
+939 industry cells, and the shared RNG at every type selection,
+before and after each initialization, and at phase exit. The
+checks cover town affiliation, layout, physical elevations,
+tile metadata and starting cargo records, including through a
+packed save/reopen. The source observations are used as assertions
+after generation. This proves the tested starting phase only;
+a full economy year with these active industries, climate 3D
+art, and the normal world-selector path remain separate work.
