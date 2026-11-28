@@ -231,6 +231,7 @@ return function(Growth,Build,Names)
     town.num_houses=mass
     town.radii=Growth.radii(mass)
     local growth_settings={year=opts.year,allow_roads=opts.allow_roads~=false,
+      landscape=opts.landscape,highest_snowline=opts.highest_snowline,
       build_on_slopes=opts.build_on_slopes,allow_level_crossings=opts.allow_level_crossings}
     local stations=opts.stations or {}
     local function commit(p)

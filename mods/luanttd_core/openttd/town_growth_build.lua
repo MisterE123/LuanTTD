@@ -2,7 +2,7 @@
 -- OpenTTD contributors, updated for 16.0-RC1: town_cmd.cpp GrowTown*, CanFollowRoad,
 -- GetTownRoadGridElement and BuildTownHouse; ordinary temperate branch.
 -- Host provides deterministic planning and site authorization.
-return function(G,catalog)
+return function(G,catalog,climate_catalog)
   local B={}
   local floor=math.floor
   local dx,dz={[0]=-1,0,1,0},{[0]=0,1,0,-1}
@@ -57,21 +57,21 @@ return function(G,catalog)
     if t.kind~="clear" and not t.coast and not wooded or t.occupied or t.owner then return false end
     return not board.clear_quote or board.clear_quote(x,z,"house")
   end
-  local function footprint(board,t,x,z,roads,spec,first)
+  local function footprint(board,t,x,z,roads,spec,first,noslope)
     local w,d=spec[6],spec[7]
     if w==1 and d==1 then return x,z end
     local maxz=first.max_z
     if maxz==nil then return end
     if w*d==2 then
       local ox,oz=w==2 and 1 or 0,d==2 and 1 or 0
-      if B.house_on_layout(t,x+ox,z+oz,roads) and may_house(board,x+ox,z+oz,false,maxz) then return x,z end
-      if B.house_on_layout(t,x-ox,z-oz,roads) and may_house(board,x-ox,z-oz,false,maxz) then return x-ox,z-oz end
+      if B.house_on_layout(t,x+ox,z+oz,roads) and may_house(board,x+ox,z+oz,noslope,maxz) then return x,z end
+      if B.house_on_layout(t,x-ox,z-oz,roads) and may_house(board,x-ox,z-oz,noslope,maxz) then return x-ox,z-oz end
       return
     end
     for _,root in ipairs{{x,z},{x,z-1},{x-1,z-1},{x-1,z}} do
       local u,v=root[1],root[2]
-      if B.house_on_layout(t,u,v,roads,true) and may_house(board,u,v,false,maxz) and may_house(board,u,v+1,false,maxz)
-          and may_house(board,u+1,v+1,false,maxz) and may_house(board,u+1,v,false,maxz) then return u,v end
+      if B.house_on_layout(t,u,v,roads,true) and may_house(board,u,v,noslope,maxz) and may_house(board,u,v+1,noslope,maxz)
+          and may_house(board,u+1,v+1,noslope,maxz) and may_house(board,u+1,v,noslope,maxz) then return u,v end
     end
   end
 
@@ -79,8 +79,20 @@ return function(G,catalog)
     if not B.house_on_layout(t,x,z,opts.allow_roads) or not may_house(board,x,z,false) then return end
     local zone,first=G.zone(t,x,z),board.tile(x,z)
     local pool,total={},0
-    for _,spec in ipairs(catalog) do
-      if has(spec[2],2^zone) and (not t.house_counts or (t.house_counts[spec[1]] or 0)<65535) then
+    local climate_bit
+    if opts.landscape then
+      if opts.landscape=="arctic" then
+        -- Board max_z is expressed in internal pixel-height units; the
+        -- stock snowline is in tile height levels. Equality is below.
+        climate_bit=first.max_z>8*assert(opts.highest_snowline) and 1 or 4
+      else
+        local stock={temperate=2,tropic=8,toyland=16}
+        climate_bit=assert(stock[opts.landscape],"Invalid stock house climate")
+      end
+    end
+    local specs=climate_bit and assert(climate_catalog,"RC1 full climate house catalog required") or catalog
+    for _,spec in ipairs(specs) do
+      if (not climate_bit or has(spec[10],climate_bit)) and has(spec[2],2^zone) and (not t.house_counts or (t.house_counts[spec[1]] or 0)<65535) then
         pool[#pool+1]=spec
         total=total+spec[9]
       end
@@ -92,8 +104,10 @@ return function(G,catalog)
       local spec=pool[idx]
       total=total-spec[9]
       pool[idx]=pool[#pool];pool[#pool]=nil -- exact swap-remove order
-      if opts.year>=spec[3] and opts.year<=spec[4] and (not spec[8] or not (t.unique and t.unique[spec[8]])) then
-        local u,v=footprint(board,t,x,z,opts.allow_roads,spec,first)
+      local noslope=spec[11]
+      if opts.year>=spec[3] and opts.year<=spec[4] and (not spec[8] or not (t.unique and t.unique[spec[8]]))
+          and (not noslope or (first.slope or 0)==0) then
+        local u,v=footprint(board,t,x,z,opts.allow_roads,spec,first,noslope)
         if u~=nil and (not board.house_supported or board.house_supported(spec[1],u,v,spec)) then
           local h=spec[1]
           local props={kind="house",x=u,z=v,id=h,town=t.id,root_population=spec[5],

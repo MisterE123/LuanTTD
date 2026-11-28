@@ -202,6 +202,10 @@ for line in io.lines() do
     set_zone=function(x,z,v) zones[id(x,z)]=v end,
   }
   local snow,desert=C.snow_line(board,coverage),C.desert_line(board,coverage)
+  local n_height,n_ground=0,0
+  local height,clear_desert=board.height,board.is_clear_desert
+  board.height=function(x,z) n_height=n_height+1;return height(x,z) end
+  board.is_clear_desert=function(x,z) n_ground=n_ground+1;return clear_desert(x,z) end
   C.classify_tropic(board,desert,function()
     ticks=ticks+1
     if ticks==256 then for i=1,w*d do
@@ -214,6 +218,7 @@ for line in io.lines() do
       end
     end end
   end)
+  assert(n_height==w*d and n_ground==w*d,"classify each raw tile once per pass")
   local dry,alp={},{}
   for i=1,w*d do
     zones[i]=zones[i] or C.NORMAL

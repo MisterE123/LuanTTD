@@ -54,32 +54,57 @@ function C.desert_line(board,desert_coverage)
   return C.coverage_line(board,100-(desert_coverage or C.DEFAULT_DESERT_COVERAGE),4)
 end
 
--- The source neighbourhood is a square with four seven-tile wings.
--- Preserve its stock read and write order, with no dense shadow board.
-local neighbourhood={}
-for z=-5,5 do for x=-5,5 do neighbourhood[#neighbourhood+1]={x,z} end end
-for i=-3,3 do
-  for _,v in ipairs{{6,i},{-6,i},{i,6},{i,-6}} do
-    neighbourhood[#neighbourhood+1]=v
-  end
-end
+-- The exact source neighbourhood is the union of these rectangles:
+-- ±5x±5, ±6x±3 and ±3x±6. A rolling sum makes the all-of test
+-- linear in map size. Intersections may be counted more than once
+-- because only zero vs nonzero is used. Writes still use tile order.
+-- Reject predicate inputs (height, water, clear ground) do not change
+-- when a zone label is written during either pass.
+local radius={5,3,6}
+local halfwidth={5,6,3}
+local byte=string.byte
 local function pass(board,reject,target)
   local w,d,valid=board.width,board.depth,board.valid
-  for z=0,d-1 do for x=0,w-1 do
-    if valid(x,z) then
-      local allows=true
-      for _,v in ipairs(neighbourhood) do
-        local nx,nz=x+v[1],z+v[2]
-        -- In-bounds void tiles are still inspected in this loop, unlike
-        -- lower-neighbour scoring above. Only off-map offsets are skipped.
-        if nx>=0 and nx<w and nz>=0 and nz<d and reject(nx,nz) then
-          allows=false
-          break
-        end
-      end
-      if allows then board.set_zone(x,z,target) end
+  local rows,buffer,columns={},{},{{},{},{}}
+  local function input_row(z)
+    if z<0 or z>=d then return end
+    if not rows[z] then
+      -- Keep in-bounds void coordinates in the rejection test, but
+      -- do not count positions outside the raw map raster.
+      for x=0,w-1 do buffer[x+1]=reject(x,z) and "\1" or "\0" end
+      rows[z]=table.concat(buffer)
     end
-  end end
+    return rows[z]
+  end
+  local function apply(col,data,sign)
+    if data then for x=1,w do col[x]=(col[x] or 0)+sign*byte(data,x) end end
+  end
+  for k,r in ipairs(radius) do
+    for z=0,r do apply(columns[k],input_row(z),1) end
+  end
+  for z=0,d-1 do
+    local totals={}
+    for k,half in ipairs(halfwidth) do
+      local sum,col=0,columns[k]
+      for x=1,half+1 do sum=sum+(col[x] or 0) end
+      totals[k]=sum
+    end
+    for x=1,w do
+      if totals[1]+totals[2]+totals[3]==0 and valid(x-1,z) then
+        board.set_zone(x-1,z,target)
+      end
+      for k,half in ipairs(halfwidth) do
+        local col=columns[k]
+        totals[k]=totals[k]+(col[x+half+1] or 0)-(col[x-half] or 0)
+      end
+    end
+    for k,r in ipairs(radius) do
+      local col=columns[k]
+      apply(col,input_row(z-r),-1)
+      apply(col,input_row(z+r+1),1)
+    end
+    rows[z-6]=nil
+  end
 end
 
 -- Ground and density are the native clear-tile fields, not the zone.

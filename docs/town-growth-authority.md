@@ -1343,3 +1343,24 @@ that an automatic climate and its corresponding explicit profile
 produce identical terrain and RNG; the six existing stock Temperate
 map checkpoints still agree with OpenTTD. This does not turn the new
 climates into selectable campaigns.
+
+### Stock climate-specific housing choices
+
+The selector has the 94 buildable root rows from RC1's original
+house table. The source climate bits, town zones, years, shared
+church/stadium limits and flat-only rules filter those candidates.
+Above-snow Arctic uses `GetTileMaxZ > HighestSnowLine()`, not the
+current ground snow density or the Arctic cargo gate's comparison.
+The original weighted draws, swap-removal retries and preferred
+footprint orientation are retained. The differential exercises 30,000
+placement, rejection and appearance draws across all four climates.
+It also compares every root row with the pinned C++ table. This does
+not add non-Temperate 3D house models or a new campaign selector.
+
+The desert and rainforest passes now test one input per tile per
+pass, retaining the original footprint and write order. On the
+same 512 × 512 Tropic Lua terrain raster, this reduced neighborhood
+predicate reads from 36.2 million to 524,288 and the measured
+classification time from 23.2 seconds to 0.92 seconds. These are local
+CPU times for the isolated two-pass classifier, not whole-world
+generation or in-game frame times.
