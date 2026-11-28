@@ -164,13 +164,13 @@ None, Slow, Normal (the default), Fast or Very fast. This setting is
 saved per world and reaches the worker on monthly eligibility, funding,
 and house commits. None does not prevent initial towns from being
 founded, and Fund New Buildings can temporarily bypass it. The setup
-does not yet provide OpenTTD’s in-game change callback for existing
-worlds. The native monthly worker test exercises the actual funding
+does not yet expose changing the stock setting in an existing world. The native monthly worker test exercises the actual funding
 action with no vehicles, grows houses after a paid command with growth
 set to None, then verifies the three monthly decrements and no further
-building after two worker reopens. Some construction branches still
-lack stock behavior, and we
-have not yet proven whole-town placement/RNG parity.
+building after two worker reopens. [Whole-town replay tests](stock-town-worldgen.md)
+compare placement, RNG and the live map on several stock configurations.
+Uncovered occupied-terrain, transport and climate cases still prevent a
+claim of complete parity.
 
 ## Municipal streets on ordinary generated maps
 

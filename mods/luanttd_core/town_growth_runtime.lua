@@ -27,7 +27,7 @@ return function(Sim,Terrain,G,B,H)
       at(s.level_crossing_tiles,id) or at(s.bridge_above,id) or at(s.rail_bridge_above,id) or
       at(s.aqueduct_above,id) or (not above_tunnel and underground(s,id))
   end
-  local function clear_levels(s,id,allow_cover,allow_coast)
+  local function clear_levels(s,id,allow_cover,allow_coast,allow_steep)
     local tile=at(s.tiles,id)
     local coast=tile and allow_coast and tile.terrain=="water" and tile.coastal_water
     if not tile or tile.terrain~="grass" and tile.terrain~="hill" and not coast or tile.owner or tile.site or
@@ -36,7 +36,7 @@ return function(Sim,Terrain,G,B,H)
       tile.road_bits or tile.road_town or protected(s,id,tile,allow_cover) then return end
     local x,z=Sim.xy(id)
     local slope,base,top=Terrain.tile(s.corner_grid,x,z)
-    if slope and slope<16 and (not coast or Sim.town_clear_coast(s,id,false)) then return top,slope,base end
+    if slope and (slope<16 or allow_steep) and (not coast or Sim.town_clear_coast(s,id,false)) then return top,slope,base end
   end
   local function board(s,allow_cover)
     return {
@@ -213,6 +213,7 @@ return function(Sim,Terrain,G,B,H)
     end
     return roads(Sim,Terrain,s,G,Worldgen,read,{
       houseable=function(x,z) return clear_levels(s,Sim.id(x,z),true,true)~=nil end,
+      terraformable=function(x,z) return clear_levels(s,Sim.id(x,z),true,false,true)~=nil end,
       roadable=roadable,
       span_ends=function(x,z,u,v)
         local a,b=Sim.id(x,z),Sim.id(u,v)

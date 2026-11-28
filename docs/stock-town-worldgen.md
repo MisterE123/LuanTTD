@@ -230,8 +230,8 @@ cursor lifecycle are not yet ported.
 
 ### Rectangular map, Fast growth and 3×3 streets
 
-On a 256×128 Temperate map (seed 98217), OpenTTD counts ordinary and
-rocky coast as land when choosing the number of industries. In RC1's
+On a 256×128 Temperate map (seed 98217), OpenTTD counts ordinary coast and both rocky water
+subtypes as land when choosing the number of industries. In RC1's
 Map::CountLandTiles, IsWaterTile means plain water rather than every
 tile of the water class. LuanTTD had excluded coast, causing a missing
 25th industry (a steel mill) and a different shared random stream.
@@ -267,3 +267,21 @@ river-generated tree. The stock placement quote allowed the tile, but
 the host rejected it when no preparatory leveling was needed. Generated
 industry placement now clears those trees on the actual footprint before
 the host writes it, preserving trees outside the layout.
+
+
+### Rocky shore and steep municipal leveling
+
+A 256-square hilly Temperate region, seed 1, distinguishes the source
+ClearRocks water subtype from plain water. The town road cleanup keeps
+a proposed edge pointed at rocky water, as RC1 does, without making
+the rocky tile itself buildable. It changes the initial road walk on
+the same RNG stream instead of flattening or clearing the water.
+
+Live municipal earthworks can also validate a steep, undeveloped
+neighbor independently of house placement. This reproduces the RC1
+leveling attempt on tick 10,738 without allowing a house to occupy an
+invalid steep footprint. The 47-town, 55-industry annual replay checks
+all 27,010 random-state ticks, original industry placement and layouts,
+14 map/town snapshots, and three packed reopens. The hills mode of the
+dedicated Luanti check also verifies the final stock town clocks and
+RNG after a real SQLite restart.

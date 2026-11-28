@@ -4,14 +4,16 @@ local profiles={
     towns=4,custom_towns=6,layout="grid3",growth_rate=3},
   better={fixture="rc1-better-slow-town-year",width=128,depth=256,year=1950,seed=11681,
     towns=2,layout="better",growth_rate=1},
+  hills={fixture="rc1-hills-town-year",width=256,depth=256,year=1950,seed=1,
+    towns=3,layout="original",growth_rate=2,relief=3,coast=0,rivers=3,larger_towns=4},
   random={fixture="rc1-random-1975-town-year",width=256,depth=256,year=1975,seed=77294,
     towns=2,layout="random",growth_rate=4},
 }
 local profile_id=arg[1] or "grid"
 local cfg=assert(profiles[profile_id])
 local ref=dofile("tests/fixtures/"..cfg.fixture..".lua")
-cfg.relief,cfg.sea,cfg.coast,cfg.rivers=1,0,16,2
-cfg.trees,cfg.larger_towns,cfg.industries,cfg.variety,cfg.smooth=2,3,4,0,1
+cfg.relief,cfg.sea,cfg.coast,cfg.rivers=cfg.relief or 1,0,cfg.coast or 16,cfg.rivers or 2
+cfg.trees,cfg.larger_towns,cfg.industries,cfg.variety,cfg.smooth=2,cfg.larger_towns or 3,4,0,1
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local Sim,Terrain,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -53,6 +55,16 @@ local digest,ticks,maps=1,0,0
 local function observe(tick)
   local rng=s.passenger_rating_rng
   digest=fold(digest,tick,rng[1],rng[2]);ticks=ticks+1
+  if profile_id=="hills" and tick==1281 then
+    local edge,rock=s.tiles[40226+1],s.tiles[40225+1]
+    assert(edge.build=="road" and edge.road_bits==10 and rock.stock_water_rocks and not rock.coastal_water)
+  elseif profile_id=="hills" and tick==10738 then
+    -- The exact live LevelTownLand attempt at the end of a steep avenue.
+    assert(rng[1]==2321292048 and rng[2]==3535918853)
+    local x,z=Sim.xy(47086+1)
+    local slope,base=Terrain.tile(s.corner_grid,x,z)
+    assert(slope==0 and base==7)
+  end
   local expected=ref.snapshots[tick]
   if not expected then return end
   local heights,types,houses,roads,spans=1,1,1,1,1
@@ -83,7 +95,7 @@ local function observe(tick)
     local layouts={original=0,better=1,grid2=2,grid3=3}
     local layout=type(t.layout)=="number" and t.layout or layouts[t.layout]
     equal(tick,"town "..i,{site.tile-1,site.nameparts,t.larger_town and 1 or 0,t.grow_counter,t.growth_rate,
-      t.time_until_rebuild,layout,p.new_max,p.old_max,q.new_max,q.old_max},expected[i+1])
+      t.time_until_rebuild,layout,p.new_max or 0,p.old_max or 0,q.new_max or 0,q.old_max or 0},expected[i+1])
   end
   maps=maps+1
 end

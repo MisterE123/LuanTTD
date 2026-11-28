@@ -496,3 +496,22 @@ jobs:
         run: bash tests/town_growth_rc1_goods_native.sh grid
       - name: Excavate a town road-tunnel exit in native Luanti
         run: bash tests/town_tunnel_excavation_native.sh
+
+
+  rc1-wooded-hill-town-parity:
+    runs-on: ubuntu-24.04
+    container: debian:13
+    timeout-minutes: 6
+    steps:
+      - name: Install Lua and Luanti server
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git lua5.1 luanti-server python3
+          echo /usr/games >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compare a full year of rocky shore and steep town growth
+        run: lua5.1 tests/town_growth_rc1_fast_grid.lua hills
+      - name: Restart the same hills profile in native Luanti
+        run: bash tests/town_growth_rc1_goods_native.sh hills

@@ -17,6 +17,7 @@ test_init=tests/town_growth_rc1_goods_native.lua
 fixture=tests/fixtures/rc1-active-town-goods-year.lua
 case "${1:-}" in
   shared) fixture=tests/fixtures/rc1-active-shared-road-goods-year.lua ;;
+  hills) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-hills-town-year.lua ;;
   grid) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-fast-grid-town-year.lua ;;
 esac
 cp "$test_init" "$out/init.lua"

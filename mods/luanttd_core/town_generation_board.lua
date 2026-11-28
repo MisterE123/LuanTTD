@@ -100,8 +100,11 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
       local b=2^(3-d)
       if has(bits,b) then
         local t=B.tile(x+dx[d],z+dz[d])
+        -- OpenTTD's IsWater excludes ClearRocks and CoastRocks.
+        -- This only preserves a partial road edge; it does not allow
+        -- a road command to build across ordinary or rocky water.
         local useful=t and (t.kind=="clear" or t.kind=="road" or t.kind=="trees" or t.coast
-          or (t.inside and t.inside==d))
+          or t.kind=="water" and t.water_rocks or (t.inside and t.inside==d))
         local mirrored=2^((3-d+2)%4)
         if t and (t.crossing or t.kind=="drive_stop") then
           useful=has(t.road_bits or 0,mirrored)
@@ -163,7 +166,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
           -- Quote the stems before committing any shared corner. Leave
           -- non-tree structures and protected company land alone.
           if not t or (t.kind~="clear" and t.kind~="trees") or t.owner or t.bridge_above or
-              live and not live.houseable(u,v) then return nil,"TOWN_PROTECTED_TERRAIN" end
+              live and not (live.terraformable or live.houseable)(u,v) then return nil,"TOWN_PROTECTED_TERRAIN" end
           local id=Sim.id(u,v)
           -- A house can occupy the independent surface over a bore.
           -- Grading must still preserve its cover and remains excluded.

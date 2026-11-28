@@ -30,9 +30,9 @@ function M.landscape(Sim,Terrain,Generator,settings)
     for x=1,Sim.W do
       local kind,ground,clear_ground,water_rocks=Generator.describe(map.tile(x,z))
       -- RC1 CountLandTiles uses IsWaterTile, not just TileType::Water.
-      -- The plain water sub-type excludes coast and rocky coast. Void
-      -- is also counted by the original Map::Iterate loop.
-      if kind~=6 or ground==2 then dry_count=dry_count+1 end
+      -- Coast and both rock subtypes are not plain water. Void is
+      -- also counted by the original Map::Iterate loop.
+      if kind~=6 or ground==2 or water_rocks then dry_count=dry_count+1 end
       local _,base=Terrain.tile(corner,x,z)
       local t={h=base,variant=(3*x+5*z+math.floor(x*z/16))%4}
       if kind==7 then t.terrain="water";t.stock_void=true
