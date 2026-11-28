@@ -32,8 +32,13 @@ return function(Sim)
   end
   function R.take(s,kind,id)
     local row=R.get(s,kind,id)
-    if row then s[buckets[kind]][id]=nil end
-    return row
+    if not row then return end
+    local entry=s[buckets[kind]][id]
+    s[buckets[kind]][id]=nil
+    -- StationHandleBigTick increments delete_ctr while unused. On
+    -- reopening AddFacility leaves it intact for StationHandleSmallTick.
+    local elapsed=7-math.floor((entry.until_tick-1-now(s,kind))/250)
+    return row,elapsed
   end
   function R.list(s,kind,owner)
     local out={}
@@ -48,7 +53,9 @@ return function(Sim)
     local closest,threshold=nil,8
     for _,row in ipairs(R.list(s,kind,owner)) do
       local dist=Sim.distance(tile,row.tile)
-      if dist<threshold and (not eligible or eligible(row)) then closest,threshold=row,dist end
+      if (dist<threshold or dist==threshold and closest and
+          (row.stock_station_id or row.id)<(closest.stock_station_id or closest.id)) and
+          (not eligible or eligible(row)) then closest,threshold=row,dist end
     end
     return closest
   end

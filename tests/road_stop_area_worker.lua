@@ -109,3 +109,37 @@ distant.join,distant.join_picker_cost=wp,found.cost
 assert(C.commit(own,distant,nil,true))
 assert(s.tiles[id(9,10)].road_waypoint_id==wp)
 print("PASS isolated chooser returns only eligible stations and road waypoints, validates price, and joins by ID")
+
+-- A real multi-platform station whose sign tile is bulldozed.
+local anchor=id(32,19)
+for z=18,21 do
+  for x=30,34 do
+    local t=s.tiles[id(x,z)]
+    t.build,t.owner,t.road_bits="road",own,10
+  end
+end
+local function station_area(first,last,adjacent)
+  return {tool="stock_stop_area",kind="bus",direction=0,first=first,last=last,through=true,adjacent=adjacent}
+end
+assert(C.commit(own,station_area(anchor,anchor,true),nil,true))
+local gap_id=s.tiles[anchor].station
+local gap=s.stations[gap_id]
+local view=dofile(m.."town_station_services.lua")(S).view
+gap.town_growth_service_clock,gap.time_since_load=true,20
+assert(C.commit(own,station_area(id(32,18),id(32,20)),nil,true))
+assert(C.commit(own,{tool="stock_stop_remove",first=anchor},nil,true))
+assert(gap.tile==anchor and not s.tiles[anchor].station)
+local function find()
+  for _,row in ipairs(view(s)) do if row.id==gap_id then return row end end
+end
+local index=assert(find(),"The sign is still active if any platform remains")
+assert(index.x==32 and index.z==19 and index.time_since_load==20)
+assert(C.commit(own,{tool="stock_stop_remove",first=id(32,18),last=id(32,20)},nil,true))
+assert(not s.stations[gap_id] and assert(find()).z==19)
+local first,last=id(33,17),id(33,20)
+for z=17,20 do s.tiles[id(33,z)]={terrain="grass",h=1,variant=1,build="road",owner=own,road_bits=10} end
+assert(C.commit(own,station_area(first,last),nil,true))
+assert(s.tiles[first].station==gap_id and s.stations[gap_id].tile==first)
+index=assert(find())
+assert(index.x==33 and index.z==17 and index.time_since_load==20)
+print("PASS a station with a gap stays in the town index and its reopened sign moves to the actual first platform")

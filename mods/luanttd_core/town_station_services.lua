@@ -43,6 +43,10 @@ return function(Sim)
     return {id=id,mode=mode,x=x,z=z,owner=row.owner,time_since_load=row.time_since_load,time_since_unload=row.time_since_unload}
   end
   local active={coal=Sim.rail_coal_active,goods=Sim.rail_goods_active,oil=Sim.rail_oil_active}
+  local function is_road_part(s,id,station)
+    local t=at(s.tiles,id)
+    return t and (t.station==station or t.tram and t.tram.tram_station==station)
+  end
   function M.view(s,include_idle,at_tick)
     local views={}
     local admitted={rail={},ship={},air={},rig={}}
@@ -75,9 +79,15 @@ return function(Sim)
       views[#views+1]=row
     end
     for _,st in pairs(s.stations or {}) do
-      local t=at(s.tiles,st.tile)
-      if st.mode=="road" and t and (t.station==st.id or t.tram and t.tram.tram_station==st.id) and
-          (include_idle or st.town_growth_service_clock) then
+      local physical=is_road_part(s,st.tile,st.id)
+      if not physical and st.road_members then
+        -- The sign can sit over a demolished tile inside the surviving
+        -- station's spread. Index the sign, not an arbitrary platform.
+        for id in pairs(st.road_members) do
+          if is_road_part(s,id,st.id) then physical=true;break end
+        end
+      end
+      if st.mode=="road" and physical and (include_idle or st.town_growth_service_clock) then
         local x,z=Sim.xy(st.tile)
         local clock=st.town_growth_service_clock and st or {owner=st.owner}
         views[#views+1]=project(st.id,"road",x,z,clock)

@@ -790,12 +790,16 @@ rail platforms and airports, without adding them back to orders,
 catchment or routing. Removing the last facility captures the sign
 and real service ages before clearing its geometry. Pending deletion
 also reserves the physical station ID. The compiled RC1 test compares
-7,000 mixed-facility cases at the town radius, 20/21 service-age, and
-expiry boundaries. The native Luanti worker test removes road, rail
-and air facilities, with the rail and air service clocks seeded, and
-counts all three for February but none in March. Reusing a retired
-station across transport modes remains unported, as does same-mode
-retired sign reuse for rail and airports.
+7,001 mixed-facility cases at the town radius, 20/21 service-age,
+expiry, closest same-mode sign (physical ID breaks ties), and the
+rating-clock phase carried by a reopened road stop. The native
+Luanti worker removes road, rail and air facilities with seeded
+rail and air service clocks, then counts all three in February but
+none in March. A second native run reopens the road stop at a new
+site under its previous ID and verifies the exact tick window when
+it next ages. Bulldozing a central platform no longer drops the
+station from the town index if other platforms remain. Reuse
+across modes and same-mode rail and airport reuse remain unported.
 
 
 ### Wide, varied terrain and neighbouring town roads

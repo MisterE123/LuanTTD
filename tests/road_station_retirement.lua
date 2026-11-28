@@ -25,6 +25,8 @@ end
 place(a,"bus");place(b,"truck")
 local aa,bb=s.tiles[a].station,s.tiles[b].station
 s.stations[aa].name="Old Junction"
+s.stations[aa].stock_station_id,s.stations[bb].stock_station_id=89,8
+s.stations[aa].passenger_rating_phase=143
 s.stations[aa].stock.passenger=6
 s.stations[aa].time_since_load,s.stations[aa].time_since_unload,s.stations[aa].town_growth_service_clock=20,255,true
 local service=dofile(mod.."town_station_services.lua")(S)
@@ -33,7 +35,8 @@ local t=G.new(1,13,14)
 remove(a);remove(b)
 assert(not s.stations[aa] and not s.stations[bb])
 assert(G.active_stations(t,service.view(s))==1,"Clearing the last platform must not erase town service")
-assert(R.closest(s,"station",own,id(16,14)).id==aa)
+assert(R.closest(s,"station",own,id(16,14)).id==bb,"A tie uses the lower physical ID, not construction registry order")
+assert(R.closest(s,"station",own,id(15,14)).id==aa,"A closer sign beats a lower physical ID")
 assert(not R.closest(s,"station","Other rail",id(16,14)))
 assert(not R.closest(s,"station",own,id(27,14)),"distance eight is excluded")
 s=assert(Encode.decode(Encode.encode(s)));C=Command(S,s)
@@ -42,8 +45,11 @@ assert(#options.choices==3 and options.choices[1].name=="New station")
 local names={}
 for _,r in ipairs(options.choices) do names[r.name]=true end
 assert(names["Rebuild Old Junction"])
-place(id(16,14),"bus")
-assert(s.tiles[id(16,14)].station==aa and s.stations[aa].name=="Old Junction")
+-- 500 + 161 + 500: exactly three bigticks elapsed with StationID 89.
+s.stock_load_tick=1161
+place(id(15,14),"bus")
+assert(s.tiles[id(15,14)].station==aa and s.stations[aa].name=="Old Junction")
+assert(s.stations[aa].passenger_rating_phase==3,"Reopening resumes the retired deletion count, not the old active phase")
 assert(s.stations[aa].stock.passenger==6 and s.stations[aa].time_since_load==20)
 local next=s.next_station
 place(id(22,14),"truck",nil,true)

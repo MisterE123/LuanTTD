@@ -2353,6 +2353,11 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
   end
   if join and s.stations[join.id] and not compatible(join) then return nil,"INCOMPATIBLE_STATION_TILE" end
   local result=road_stop_members.preview(join,parts)
+  if join and not s.stations[join.id] then
+    -- A gray sign moves to facil_xy when its first facility reopens,
+    -- not to the closest corner of the new multi-tile bounding box.
+    result.sign=area.tile
+  end
   if not result.spread or #changes==0 then return nil,"ALREADY_BUILT" end
   if result.spread.w>12 or result.spread.h>12 then return nil,"STATION_SPREAD" end
   if cost>company.cash then return nil,"NOT_ENOUGH_CASH" end
@@ -2951,8 +2956,10 @@ local function apply_build(s,owner,changes,cost)
         local site=s.sites[best]
         local label=tile.road_stop_pair and "Bus terminus" or M.tools[k].name
         if not s.stations[sid] then
-          local reused=item.join_stop and M.road_station_retirement().take(s,"station",sid)
+          local reused,phase
+          if item.join_stop then reused,phase=M.road_station_retirement().take(s,"station",sid) end
           if reused then
+            reused.passenger_rating_phase=phase
             s.stations[sid]=reused
           else
             s.next_station=s.next_station+1

@@ -7,6 +7,8 @@ for _,name in ipairs({"stone","water_source","river_water_source"}) do core.regi
 Sim.W,Sim.H=64,64
 local s=Sim.new(4841)
 local tile=Sim.id(18,20)
+local verify_reopen=core.settings:get("luanttd_qa_municipal_kind")=="reopened"
+local target=Sim.id(19,20)
 local owner="Builder"
 s.corner_grid=T.new(64,64,function()return 1 end)
 s.stock_generated_profile={width=64,depth=64,map_height_limit=30,town_settings={growth_setting=2}}
@@ -25,6 +27,7 @@ assert(construction.commit(owner,{tool="stock_terminal_auto",first=tile,kind="bu
 local id=assert(s.tiles[tile].station)
 local st=s.stations[id]
 st.time_since_load,st.time_since_unload,st.town_growth_service_clock=20,255,true
+st.passenger_rating_phase=143
 assert(construction.commit(owner,{tool="stock_stop_remove",first=tile},nil,true))
 assert(not s.stations[id] and not s.tiles[tile].station)
 local track=m("openttd/rail_track")
@@ -67,9 +70,14 @@ local function resume(reply)
   assert(ok,next_query)
   if next_query then assert(client.query(next_query,resume)) end
 end
-local function ask(kind,days)
-  local reply=assert(coroutine.yield({kind=kind,days=days,player=owner}))
+local revision
+local function ask(kind,params)
+  local req=type(params)=="table" and params or {days=params}
+  req.kind,req.player=kind,owner
+  local reply=assert(coroutine.yield(req))
   assert(reply.ok,reply.why)
+  revision=reply.revision or revision
+  return reply.value
 end
 local function run()
   ask("advance",1)
@@ -81,14 +89,40 @@ local function run()
   assert(feb.retired_road_stations[id].row.time_since_load==20,"Inactive service clocks must not age")
   assert(feb.retired_rail_stations[station.id].row.time_since_load==20)
   assert(feb.retired_airports[airport.id].row.time_since_unload==20)
-  for _=1,7 do ask("advance",4) end
+  if verify_reopen then
+    for _=1,4 do ask("advance",4) end
+    ask("checkpoint")
+    local before=assert(Checkpoint.read())
+    local dead=before.retired_road_stations[id]
+    assert(before.day==47 and dead.row.passenger_rating_phase==143)
+    local request={tool="stock_terminal_auto",first=target,kind="bus"}
+    local quote=ask("road_quote",{request=request})
+    ask("command",{command={kind="road_commit",revision=revision,request=request,quote=quote}})
+    ask("checkpoint")
+    local reopened=assert(Checkpoint.read())
+    local live=assert(reopened.stations[id])
+    assert(reopened.tiles[target].station==id and live.tile==target and live.stock_station_id==0)
+    local phase=7-math.floor((dead.until_tick-1-reopened.passenger_house_clock.counter)/250)
+    assert(phase>=4 and phase<=6 and live.passenger_rating_phase==phase and live.time_since_load==20)
+    ask("advance",2)
+    ask("checkpoint")
+    live=assert(Checkpoint.read().stations[id])
+    assert(live.passenger_rating_phase==phase+148 and live.time_since_load==20)
+    ask("advance",1)
+    ask("checkpoint")
+    live=assert(Checkpoint.read().stations[id])
+    assert(live.passenger_rating_phase==phase+222-185 and live.time_since_load==21)
+    ask("advance",4);ask("advance",4);ask("advance",1)
+  else
+    for _=1,7 do ask("advance",4) end
+  end
   ask("checkpoint")
   local mar=assert(Checkpoint.read())
   t=mar.stock_town_growth.towns[1]
   assert(mar.day==59 and mar.passenger_house_clock.counter>cutoff)
   assert(not mar.retired_road_stations[id] and t.last_active==0 and t.reason~="serviced")
   assert(not mar.retired_rail_stations[station.id] and not mar.retired_airports[airport.id])
-  assert(Sim.stock_station_slot(mar)==0,"The physical IDs become available after deletion")
+  assert(Sim.stock_station_slot(mar)==(verify_reopen and 1 or 0),"Only expired physical IDs become available")
   proof=true
   return {kind="stop"}
 end
@@ -99,7 +133,9 @@ core.register_on_mods_loaded(function()
     resume(reply)
   end,function(reason,_,_,detail)
     assert(reason=="stopped" and proof,tostring(detail or reason))
-    core.log("action","PASS NATIVE MUNICIPAL ROADS: removed road, rail and air facilities counted in February and expired before March")
+    core.log("action",verify_reopen and
+      "PASS NATIVE MUNICIPAL ROADS: road stop relocated under its stock physical ID and resumed the exact rating phase" or
+      "PASS NATIVE MUNICIPAL ROADS: removed road, rail and air facilities counted in February and expired before March")
     core.request_shutdown("Retired station parity verified",false,0)
   end,file))
 end)

@@ -554,6 +554,7 @@ jobs:
           lua5.1 tests/road_station_retirement.lua
           lua5.1 tests/dock_station_join.lua
           LUANTTD_QA_MUNICIPAL_KIND=retired bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-retired-station
+          LUANTTD_QA_MUNICIPAL_KIND=reopened bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-reopened-station
       - name: Compare three years of dense 1993 grid cities
         run: lua5.1 tests/town_growth_rc1_fast_grid.lua crowded
 
