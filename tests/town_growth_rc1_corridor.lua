@@ -125,6 +125,7 @@ local function run(ref,founding,air)
     maps=maps+1
   end
   local air_rng,air_ticks,air_poses,air_motion,air_snapshots=1,0,0,1,0
+  local rail_order_hash,rail_order_count=1,0
   local joint_count,joint_hash,queue_count,queue_hash=0,1,0,1
   local original_random=S.stock_random_u32
   local forced,crashed,retired
@@ -190,6 +191,11 @@ local function run(ref,founding,air)
     assert(linked.stock_station_id==1 and linked.sign_tile==bt and linked.town==s.stations[s.tiles[bt].station].town)
     same(12602,"joined rail construction random words",s.passenger_rating_rng,{2585200608,3361959040})
     rail({tool="station",first=second,last=second,axis=0,length=1,tracks=1,separate=true,drag=true})
+    if air.extra_platform then
+      local middle=S.id(47,54)
+      rail({tool="station",first=middle,last=middle,axis=0,length=1,tracks=1,separate=true,drag=true})
+      assert(s.stock_rail_stations[s.tiles[middle].rail_station_id].stock_station_id==6)
+    end
     local function assemble(operation,stock)
       local q=checked(A.rail_assembly(owner,depot))
       action("rail_assembly",{token=q.token,operation=operation,stock=stock})
@@ -203,6 +209,12 @@ local function run(ref,founding,air)
     assert(s.stock_rail_stations[east].stock_station_id==5)
     action("transport_start",{mode="rail",vehicle=assert(train),first=west,second=east})
     assert(s.stock_rail_dispatch.runs[1].stock_pool_id==5)
+    if air.intermediate then
+      for row=1,2 do
+        local o=checked(A.orders(owner,"rail",train,1))
+        action("vehicle_order",{mode="rail",vehicle=train,order_revision=o.revision,operation="nonstop",row=row,destination=0})
+      end
+    end
   end
   local function snapshot_air(tick,expected)
     local height,houses=1,1
@@ -266,6 +278,17 @@ local function run(ref,founding,air)
     joint_hash=fold(joint_hash,tick,st.rating_phase,st.time_since_load,st.time_since_unload,waiting,st.passenger_rating_state.rating)
     joint_count=joint_count+1
     local run=assert(s.stock_rail_dispatch.runs[1])
+    if air.order and (tick<=13300 or tick%113==0) then
+      local function physical(station)
+        return station and s.stock_rail_stations[station].stock_station_id or 65535
+      end
+      rail_order_hash=fold(rail_order_hash,tick,run.order_cursor.real,run.order_cursor.implicit,
+        physical(run.last_station),#run.orders)
+      for _,o in ipairs(run.orders) do
+        rail_order_hash=fold(rail_order_hash,o.kind=="implicit" and 8 or 1,physical(o.station),o.nonstop or 0)
+      end
+      rail_order_count=rail_order_count+1
+    end
     for i,v in ipairs(run.consist.parts) do
       local entry={tick,4+i,v.tile-1,v.pose.x-16,v.pose.y-16,run.z,run.direction}
       if i==1 then entry[#entry+1]=run.speed end -- native coach has no raw front speed
@@ -421,6 +444,9 @@ local function run(ref,founding,air)
     same(air.last,"joined rail year",{air_ticks,air_rng,air_poses,air_motion,joint_count,joint_hash,queue_count,queue_hash},
       {air.rng_count,air.rng,air.pose_count,air.pose,air.station_count,air.station,air.loading_count,air.loading})
     assert(air_snapshots==7)
+    if air.order then
+      same(air.last,"manual and implicit train orders",{rail_order_count,rail_order_hash},{air.order_count,air.order})
+    end
     print(("PASS RC1 joined rail year: %d world RNG ticks, %d locomotive/coach poses, %d shared queues and seven town snapshots"):
       format(air_ticks,air_poses,queue_count))
     return
@@ -463,6 +489,11 @@ local function run(ref,founding,air)
   else
     print("PASS RC1 normal industry corridor: 27,010 RNG ticks, 14 map/town and 19 vehicle checkpoints, 283 passengers and 80 wood delivered, three packed reopens")
   end
+end
+if arg[1]=="rail-intermediate" or arg[1]=="rail-intermediate-learned" then
+  local fixtures=dofile("tests/fixtures/rc1-active-implicit-train-town.lua")
+  run(dofile("tests/fixtures/rc1-active-town-goods-year.lua"),nil,fixtures[arg[1]=="rail-intermediate" and 1 or 2])
+  return
 end
 if arg[1]=="rail-joint" then
   run(dofile("tests/fixtures/rc1-active-town-goods-year.lua"),nil,dofile("tests/fixtures/rc1-active-joint-rail-town.lua"))

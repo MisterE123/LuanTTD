@@ -25,6 +25,12 @@ function M.change(order,kind,value,unbunching)
   end
   return false
 end
+M.stop_choices={{value=0,label="Stop at intermediate stations"},{value=1,label="Non-stop to this station"}}
+function M.change_nonstop(order,value)
+  if order.kind~="station" or value~=0 and value~=1 or (order.nonstop or 0)==value then return false end
+  order.nonstop=value
+  return true
+end
 function M.load_flags(value)
   return value==2 or value==3,value==4,value==3
 end

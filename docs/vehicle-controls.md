@@ -27,6 +27,12 @@ Open the rail depot. **Trains in this depot** lists owned trains; **Buy trains**
 
 This workflow covers supported passenger, Mail, and Coach/Mail trains. Industrial trains with specialized loading and delivery rules still use their dedicated depot route controls.
 
+For a scheduled stop, choose **Stop at intermediate stations** or **Non-stop to
+this station** in the selected order's rules and click **Apply**. With
+intermediate stops allowed, a supported train boards at passing platforms.
+A newly learned stop appears as **Automatic stop** and is maintained by
+the train, not edited as a scheduled cargo order.
+
 ## Copy orders in a depot
 
 Select the receiving vehicle in its depot and choose **Copy orders…**.

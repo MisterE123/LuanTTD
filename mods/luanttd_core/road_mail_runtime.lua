@@ -100,10 +100,10 @@ return function(Sim,H,Packets,Income,Kernel,Station)
     local g=goods(st)
     return g.rating,g.has_rating,Kernel.has_tried_loading(g)
   end
-  function M.observe_loading(s,st,v,capacity_left)
+  function M.observe_loading(s,st,v,capacity_left,calendar_year)
     if not M.truck_stop(st) or not M.supported_vehicle(v) then return end
     local build_year=Sim.date(s,v.bought or s.day)
-    local running_year=Sim.date(s)
+    local running_year=calendar_year or Sim.date(s)
     Kernel.observe_loading(goods(st),floor((Sim.vehicles and Sim.vehicles[v.engine] and Sim.vehicles[v.engine].display_speed or M.engine.max_speed/2)),running_year-build_year,capacity_left)
   end
 

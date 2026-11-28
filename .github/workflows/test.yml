@@ -601,8 +601,12 @@ jobs:
       - name: Compare live joined rail and bus station growth against stock
         run: |
           lua5.1 tests/stock_mixed_rail_world.lua
+          lua5.1 tests/stock_train_implicit_orders.lua
           lua5.1 tests/town_growth_rc1_corridor.lua rail-joint
+          lua5.1 tests/town_growth_rc1_corridor.lua rail-intermediate
+          lua5.1 tests/town_growth_rc1_corridor.lua rail-intermediate-learned
           bash tests/stock_mixed_rail_worker_native.sh
+          bash tests/stock_mixed_rail_worker_native.sh intermediate
       - name: Check ordinary ferry effects on the full RC1 coastal year
         run: |
           lua5.1 tests/ship_rc1_lane_costs.lua

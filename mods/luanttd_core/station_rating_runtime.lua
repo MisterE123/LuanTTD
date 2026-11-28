@@ -131,8 +131,8 @@ return function(Sim,Kernel,Packets)
       g.time_since_pickup=0
     end
   end
-  function R.observe_loading(s,st,v,capacity_left)
-    local year=Sim.date(s)
+  function R.observe_loading(s,st,v,capacity_left,running_year)
+    local year=running_year or Sim.date(s)
     local built=Sim.date(s,v.bought or s.day)
     local speed=v.stock_tram and v.stock_tram.speed or max_speed[v.engine]
     if speed then Kernel.observe_loading(goods(s,st),floor(speed/2),year-built,capacity_left) end

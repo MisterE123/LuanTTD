@@ -351,13 +351,18 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     local d=unit.order_draft or {orders={}}
     local out={orders={},cargo={},stops=Run.order_destinations(s,owner,unit.depot),
       depot=unit.depot,revision=draft_revision(unit),parked=true,
-      capabilities={add=true,move=true,remove=true,replace=true,load=true,unload=true}}
-    local ready=#d.orders>=2
+      capabilities={add=true,move=true,remove=true,replace=true,load=true,unload=true,nonstop=true}}
+    local manual=OrderList.manual_rows(d.orders)
+    local ready=#manual>=2
+    for i,o in ipairs(manual) do
+      local previous=manual[i==1 and #manual or i-1]
+      ready=ready and o.station~=previous.station
+    end
     for i,o in ipairs(d.orders) do
-      local previous=d.orders[i==1 and #d.orders or i-1]
-      ready=ready and o.station~=previous.station and Run.usable_town_order(s,owner,o)
+      ready=ready and Run.usable_town_order(s,owner,o)
       out.orders[i]=o.station
-      out.cargo[i]={load=o.load_type or 0,unload=o.unload_type or 0,summary=CargoOrder.summary(o)}
+      out.cargo[i]={load=o.load_type or 0,unload=o.unload_type or 0,nonstop=o.nonstop or 0,
+        automatic=o.kind=="implicit",summary=CargoOrder.summary(o)}
     end
     out.can_start=not not ready
     out.reason=ready and "Orders saved. The train stays in the depot until you start service."
@@ -374,7 +379,12 @@ return function(Fleet,Roster,Run,validate_coal,validate_oil,oil_wagon_ready,vali
     end
     local slot=type(row)=="number" and row%1==0 and row-1 or nil
     local changed
-    if action=="add" or action=="replace" then
+    if slot and orders[slot+1] and orders[slot+1].kind=="implicit" and action~="remove" then
+      return false,"An automatic stop cannot be edited as a manual order."
+    end
+    if action=="nonstop" and slot and orders[slot+1] then
+      changed=CargoOrder.change_nonstop(orders[slot+1],value)
+    elseif action=="add" or action=="replace" then
       local o=Run.station_order(value)
       if not Run.usable_town_order(s,owner,o) then return false,"Choose a compatible owned rail station." end
       if action=="add" then changed=OrderList.insert(orders,cursor,slot or #orders,o)

@@ -639,7 +639,11 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       max_track_speed=R.engine.speed,front_length=8,total_length=8+R.wagon.length,
       acceleration=Speed.acceleration(R.engine.power,R.engine.weight+R.wagon.weight),
       order=station_order(station)}
-    if orders then run.orders,run.order_cursor,run.order=orders,{real=0,implicit=0},orders[1] end
+    if orders then
+      local cursor={real=0,implicit=0,suppress_implicit=true}
+      OrderList.update_real(orders,cursor)
+      run.orders,run.order_cursor,run.order=orders,cursor,orders[cursor.real+1]
+    end
     if pair then run.paired={first=station,second=second,arrivals=0,reversals=0} end
     if via_tile~=nil then
       local wp=Lab.waypoint_at(s,via_tile)
@@ -786,8 +790,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
     elseif orders then
       local arrivals={route}
-      local cursor={real=0,implicit=0}
-      for j=1,#orders do
+      local cursor={real=run.order_cursor.real,implicit=run.order_cursor.real}
+      for j=1,#OrderList.manual_rows(orders) do
         local order,next_=OrderList.next_manual(orders,cursor)
         local leg,_,_,reason=choose_leg(board,run,departure_probe(run,arrivals[#arrivals]),order.station)
         if not leg then
@@ -975,7 +979,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       or owned and stock_guideway_service(owned.stock_ids)
   end
   function R.usable_town_order(s,owner,order)
-    if type(order)~="table" or order.kind~="station" then return false end
+    if type(order)~="table" or order.kind~="station" and order.kind~="implicit" then return false end
     -- vehicle.cpp CanVehicleUseStation for trains tests the station's
     -- rail facility, not the reachability of this particular vehicle.
     -- The mounted campaign also separates owned town and freight platforms.
@@ -991,12 +995,14 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     end
     local cloned,note=OrderList.copy(orders,{},{real=0,implicit=0},function(o) return R.usable_town_order(s,owner,o) end)
     if not cloned then return false,note end
-    for i,o in ipairs(cloned) do
-      if cloned[i==1 and #cloned or i-1].station==o.station then
+    local manual=OrderList.manual_rows(cloned)
+    if #manual<2 then return false,"Choose at least two manual stations in visit order." end
+    for i,o in ipairs(manual) do
+      if manual[i==1 and #manual or i-1].station==o.station then
         return false,"Use two different consecutive stations, including the return to the first."
       end
     end
-    return start(s,owner,owned.depot,cloned[1].station,cloned[2].station,Spans and s.rail_span_enabled or false,
+    return start(s,owner,owned.depot,manual[1].station,manual[2].station,Spans and s.rail_span_enabled or false,
       owned,nil,nil,nil,nil,nil,cloned)
   end
   function R.start_owned_sequence(s,owner,owned,stations)
@@ -1372,6 +1378,8 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     switch_station_order(base,d,run,events,station,run.shuttle)
     if index and run.station==station and not d.failure then
       run.order_cursor=index;run.selected_after_loading=nil
+      local actual=run.orders[index.real+1]
+      if actual and actual.station==station then run.order=actual end
     end
   end
 
@@ -1832,10 +1840,25 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       end
       if check_collision(base,d,run,events,paid,service) then return "crashed" end
       if stop=="arrived" then
-        Speed.begin_loading(run,run.station)
+        local destination=section.station
+        if destination~=run.station then
+          -- A real intermediate platform is a loading visit, not a
+          -- replacement of our already-routed manual destination.
+          assert(run.orders and run.shuttle and paid and not run.freight,
+            "Only an ordinary paid train supports intermediate platform orders")
+          run.stock_implicit_platform=destination
+          local count=#run.orders
+          OrderList.observe_stop(run.orders,run.order_cursor,destination)
+          if count~=#run.orders then run.order_revision=(run.order_revision or 0)+1 end
+        elseif run.orders then
+          local count=#run.orders
+          OrderList.prune_unreached(run.orders,run.order_cursor)
+          if count~=#run.orders then run.order_revision=(run.order_revision or 0)+1 end
+        end
+        Speed.begin_loading(run,destination)
         run.phase="arrived"
-        run.arrival=emit(d,run,events,"arrived",{tile=new.tile,station=run.station,steps=run.stock_steps})
-        if R.news_arrival then R.news_arrival("rail",run.owner,run.station,new.tile) end
+        run.arrival=emit(d,run,events,"arrived",{tile=new.tile,station=destination,steps=run.stock_steps})
+        if R.news_arrival then R.news_arrival("rail",run.owner,destination,new.tile) end
         if run.shuttle or run.freight or run.paired then
           -- Retain real PBS claims throughout each ordered loading dwell.
           run.phase="dwell"
@@ -1849,7 +1872,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
             local dir=Track.exit_side(new.pose.td)
             local forward=Follow.platform(board,new.tile,dir)
             local backward=Follow.platform(board,new.tile,Track.reverse_side(dir))
-            run.last_paid_platform=run.station
+            run.last_paid_platform=destination
             run.arrival.cargo_tile=wagon and wagon.tile
             run.arrival.platform_tiles=forward+backward-1
             local cargo_tiles,visible
@@ -1891,7 +1914,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local second=q.second or q.power
     if not first or not second then return end
     local i=run.station==first and 0 or 1
-    return {station_order(first),station_order(second)},{real=i,implicit=i}
+    return {station_order(first),station_order(second)},{real=i,implicit=i,suppress_implicit=run.last_station==nil or nil}
   end
 
   function R.copyable_orders(s,owner,id)
@@ -1921,12 +1944,18 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     if not orders then return end
     local editable=not (r.crashed or r.failure or r.paired or r.via or r.freight and r.freight.complete)
     local passenger=editable and not r.freight
-    local out={orders={},cargo={},stops={},active=index.real+1,revision=r.order_revision or 0,
-      capabilities={add=passenger,move=passenger,remove=passenger,skip=passenger,replace=editable,load=passenger,unload=passenger}}
+    local active=index.real+1
+    local automatic=index.implicit+1
+    if r.stock_implicit_platform and orders[automatic] and orders[automatic].kind=="implicit" and
+        orders[automatic].station==r.stock_implicit_platform then active=automatic end
+    local out={orders={},cargo={},stops={},active=active,revision=r.order_revision or 0,
+      capabilities={add=passenger,move=passenger,remove=passenger,skip=passenger,replace=editable,load=passenger,unload=passenger,
+        nonstop=passenger and r.stock_live_procurement}}
     if not editable then out.reason="This specialized or inactive train cannot change its orders." end
     for i,o in ipairs(orders) do
       out.orders[i]=o.station
-      out.cargo[i]={load=o.load_type or 0,unload=o.unload_type or 0,summary=CargoOrder.summary(o)}
+      out.cargo[i]={load=o.load_type or 0,unload=o.unload_type or 0,nonstop=o.nonstop or 0,
+        automatic=o.kind=="implicit",summary=CargoOrder.summary(o)}
     end
     out.stops=R.order_destinations(s,owner,r.depot,r.freight and (r.freight.cargo or "coal"))
     return out
@@ -2015,6 +2044,18 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local slot=type(row)=="number" and row%1==0 and row-1 or nil
     local loading=run.phase=="dwell"
     local selecting=not not run.selected_after_loading
+    if slot and orders[slot+1] and orders[slot+1].kind=="implicit" and action~="remove" then
+      return false,"An automatic stop cannot be edited as a manual order."
+    end
+    if action=="nonstop" then
+      local o=slot and orders[slot+1]
+      if not o or not CargoOrder.change_nonstop(o,value) then return false,"Choose a different stop policy." end
+      run.orders,run.order_cursor,run.order_revision=orders,index,view.revision+1
+      if slot==index.real and run.order.kind=="station" and run.order.station==o.station then
+        run.order.nonstop=value
+      end
+      return true,"Train stopping policy updated."
+    end
     if action=="load" or action=="unload" then
       local o=slot and orders[slot+1]
       if not o or not CargoOrder.change(o,action,value) then return false,"Choose a different supported cargo rule." end
@@ -2063,8 +2104,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       if not slot or not OrderList.skip(orders,index,slot) then return false,"Choose a different existing order." end
       reroute,force=true,loading
     else return false,"Unknown order edit." end
-    for i,o in ipairs(orders) do
-      if o.station==orders[i==1 and #orders or i-1].station then
+    local manual=OrderList.manual_rows(orders)
+    if #manual<2 then return false,"A running train needs at least two different stations." end
+    for i,o in ipairs(manual) do
+      if o.station==manual[i==1 and #manual or i-1].station then
         return false,"Use different consecutive stations, including the loop back to the first."
       end
     end
@@ -2091,7 +2134,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
       if force then run.skip_loading_order=true end
     end
     if reroute and not loading then
-      run.station,run.order,run.route,run.index=station,order,route,1
+      run.station,run.order,run.route,run.index=station,orders[index.real+1] or order,route,1
       run.live_order_origin=true
       run.reserved_through_station=nil
     end
@@ -2395,6 +2438,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           -- Finish the service visit now, but let the stopped/status check
           -- keep the physical consist parked until the player starts it.
           run.skip_loading_order=nil
+          run.stock_implicit_platform=nil
           switch_shuttle_order(base,d,run,events)
           if d.failure then return events end
         elseif run.fleet_id and run.stopped and run.speed==0 then
@@ -2402,8 +2446,10 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
           -- The real stock handler returns here. Do not leave a depot
           -- or station, move a stopped wagon, or discard path holdings.
         elseif run.phase=="dwell" then
+          -- TrainLocoHandler(false) checks the breakdown while OT_LOADING.
+          -- Its HandleLoading can clear that order before the second pass,
+          -- so the second breakdown check must observe the new phase.
           local held=handle_fault(run)
-          handle_fault(run)
           if held then
             -- The second TrainLocoHandler pass cannot leave a loading order.
           elseif run.paired then
@@ -2438,13 +2484,22 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
               if d.failure then return events end
             end
           elseif callback and callback.leave(run) or not callback and d.ticks>=run.shuttle.dwell_until then
-            switch_shuttle_order(base,d,run,events)
+            if run.stock_implicit_platform then
+              OrderList.complete_stop(run.orders,run.order_cursor,run.stock_implicit_platform)
+              run.stock_implicit_platform=nil
+              run.phase="running"
+              run.stock_continue_after_loading=not not run.stock_realistic
+            else
+              switch_shuttle_order(base,d,run,events)
+            end
             if d.failure then return events end
           end
-          if run.stock_continue_after_loading then
+          local continue=run.stock_continue_after_loading
+          run.stock_continue_after_loading=nil
+          local second_held=handle_fault(run)
+          if continue and not second_held then
             -- The first locomotive pass clears OT_LEAVESTATION; if the
             -- next order goes forward, the second immediately accelerates.
-            run.stock_continue_after_loading=nil
             pass(s,base,d,run,events,true,callback,service,true)
             if d.failure then return events end
           end

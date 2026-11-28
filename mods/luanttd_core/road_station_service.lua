@@ -227,7 +227,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
       if not g.has_rating then g.has_rating=true;g.time_since_pickup=0 end
     else Rating.transferred(s,st) end
   end
-  local function opts(s,tick,force_coal,force_timber)
+  local function opts(s,tick,force_coal,force_timber,calendar_year)
     local b=host.coal and host.coal(s,force_coal)
     local coal=b and b.ops(tick,function(kind,st,v,detail)
       if kind=="fare" and host.news and Sim.company(s,v.owner).paid_units==detail.units then
@@ -279,8 +279,8 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
       attempt=function(st,v,cap)
         if v.cargo=="coal" then return coal.attempt(st,v,cap) end
         if timber_cargo(v.cargo) then return timber.attempt(st,v,cap) end
-        if v.cargo=="mail" then Mail.observe_loading(s,st,v,cap)
-        else Rating.observe_loading(s,st,v,cap) end
+        if v.cargo=="mail" then Mail.observe_loading(s,st,v,cap,calendar_year)
+        else Rating.observe_loading(s,st,v,cap,calendar_year) end
       end,
       new_cargo=Sim.stock_road_vehicle_random and function(_,v) Sim.stock_road_vehicle_random(s,v,"new_cargo") end,
       emptied=Sim.stock_road_vehicle_random and function(_,v) Sim.stock_road_vehicle_random(s,v,"empty") end,
@@ -418,14 +418,14 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
 
   -- Opens one CallVehicleTicks loading scan. A shared station visitor can
   -- interleave road and other modes by original BaseStation ID.
-  function M.open_tick(s,tick)
+  function M.open_tick(s,tick,calendar_year)
     if s.stock_load_tick then
       if tick==s.stock_load_tick then return end
       assert(tick==s.stock_load_tick+1,"Stock loading clock skipped or reversed a tick")
     end
     s.stock_load_tick=tick
     local departures,rounds={},{}
-    local api=opts(s,tick)
+    local api=opts(s,tick,nil,nil,calendar_year)
     local parked_tram=s.tram_pilot and s.tram_pilot.carrier
     local carriers=(parked_tram or s.stock_tram_fleet and next(s.stock_tram_fleet)) and
       setmetatable({},{__index=function(_,id)return loading_vehicle(s,id)end}) or s.fleet

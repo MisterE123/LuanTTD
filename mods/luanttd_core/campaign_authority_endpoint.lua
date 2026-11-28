@@ -40,7 +40,7 @@ return function(Sim,R,max_days)
     return {ok=not not ok,why=why,revision=authority_revision,day=s.day,
       tick=s.passenger_house_clock and s.passenger_house_clock.counter or 0,value=extra}
   end
-  local order_verbs={append=true,up=true,down=true,remove=true,skip=true,replace=true,load=true,unload=true}
+  local order_verbs={append=true,up=true,down=true,remove=true,skip=true,replace=true,load=true,unload=true,nonstop=true}
   local function adapter(mode,id)
     if mode=="ship" then
       if id~="ferry" and id~="coal" and id~="oil" then return end
@@ -741,6 +741,8 @@ return function(Sim,R,max_days)
       end
       if c.operation=="append" or c.operation=="replace" then
         if not destination(target) then return reply(false,"INVALID_DESTINATION") end
+      elseif c.operation=="nonstop" then
+        if c.mode~="rail" or not integer(target,0,1) then return reply(false,"INVALID_STOP_POLICY") end
       elseif c.operation=="load" or c.operation=="unload" then
         if not integer(target,0,15) then return reply(false,"INVALID_CARGO_RULE") end
       end

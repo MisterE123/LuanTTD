@@ -1017,6 +1017,18 @@ The Luanti worker builds through the picker query and normal rail
 quote/commit commands. After a real SQLite server restart, the same
 physical joined station continues boarding rail passengers.
 
+Two more RC1 captures allow intermediate stops. In the first, the train
+stops at a platform that is also its previous manual destination without
+inserting a duplicate order. In the second, a third platform is genuinely
+unlisted. The native initial suppress flag delays recording it until the
+first manual stop; later visits record the third platform in both directions.
+The fixture compares real and implicit indices, last visited station, the
+order rows, the same passenger and town records, and train motion. The
+native Luanti worker retains both learned rows and resumes boarding after
+restart. The station departure also exercises the two
+`TrainLocoHandler` passes: the second breakdown check sees the order that
+the first handler just changed, not the old loading order.
+
 One road-side difference was exposed by the changed cargo results and
 vehicle timings. An order to service can be issued in the middle of a
 dead-end turn. RC1's `GetVehicleTrackdir` supplies the logical direction

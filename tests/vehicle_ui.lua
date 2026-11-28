@@ -122,16 +122,21 @@ assert(returned==1)
 V.follow(p,"road",1);s.fleet[1]=nil;V.step(.2)
 assert(not V.following(p) and not p.parent)
 local Cargo=dofile("mods/luanttd_core/openttd/rail_order_cargo.lua")
-local configured
+local configured,stop_policy
 V.orders.rail={
   read=function()
     return {items={{id=1,label="Rail X",cargo={load=0,unload=0}},
-      {id=2,label="Rail Y",cargo={load=configured or 0,unload=0}}},
-      targets={},cargo_rules=Cargo,revision=configured or 0}
+      {id=2,label="Rail Y",cargo={load=configured or 0,unload=0,nonstop=stop_policy or 1}},
+      {id=3,label="Rail Z · Automatic stop",automatic=true}},
+      targets={},cargo_rules={load=Cargo.load,unload=Cargo.unload,nonstop=Cargo.stop_choices},revision=configured or 0}
   end,
   edit=function(n,id,revision,kind,row,value)
-    assert(n=="E" and id==1 and row==2 and kind=="load" and revision==0)
-    assert(value==3);configured=value;return true,"Full load any."
+    assert(n=="E" and id==1 and row==2)
+    if kind=="nonstop" then
+      assert(revision==3 and value==0);stop_policy=value;return true,"Stops at intermediate stations."
+    end
+    assert(kind=="load" and revision==0 and value==3)
+    configured=value;return true,"Full load any."
   end,
 }
 assert(V.open(p,"rail",1) and open.b:find("Cargo rules for selected order",1,true))
@@ -140,6 +145,11 @@ fn(p,before.key,{[field(before,"row")]="2"})
 assert(open~=before)
 fn(p,open.key,{[field(open,"choose_load")]="3",[field(open,"apply_load")]=true})
 assert(configured==3 and open.b:find("Full load any.",1,true))
+assert(open.b:find("V_TOKEN",1,true)==nil and open.b:find("Stop at intermediate stations",1,true))
+fn(p,open.key,{[field(open,"choose_nonstop")]="1",[field(open,"apply_nonstop")]=true})
+assert(stop_policy==0 and open.b:find("Stops at intermediate stations.",1,true))
+fn(p,open.key,{[field(open,"row")]="3"})
+assert(open.b:find("Automatic stop",1,true) and not open.b:find("Cargo rules for selected order",1,true))
 print("PASS vehicle selection and ownership, stale form rejection, six actor types, depot entry, smooth follow anchor, cleanup and exact builder restore")
 -- Use the real worker proxy against the asynchronous transport contract.
 s.fleet[1]={owner="E",id=1,home_depot=depot,name="Regal"}

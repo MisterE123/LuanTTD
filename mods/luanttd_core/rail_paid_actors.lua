@@ -151,13 +151,14 @@ return function(Service,key)
         if not orders then return nil,"MISSING_PASSENGER_ORDERS" end
         local opts={platform_tiles=platform_tiles,cargo_tiles=cargo_tiles}
         if cargo_tiles then wagon_tile=cargo_tiles[1] end
+        local actual=r.stock_implicit_platform or r.station
         local current=r.orders and r.orders[r.order_cursor.real+1]
-        if current and current.station==r.station then CargoOrder.arrival(current,opts) end
+        if current and not r.stock_implicit_platform and current.station==actual then CargoOrder.arrival(current,opts) end
         if r.paired then
           if r.station==orders.second then opts.action="unload"
           elseif r.station~=orders.first then return nil,"UNORDERED_PASSENGER_PLATFORM" end
         end
-        return Service.begin(service,id(r),key(r.station),orders.arrivals,wagon_tile,opts,tick,ctx,events)
+        return Service.begin(service,id(r),key(actual),orders.arrivals,wagon_tile,opts,tick,ctx,events)
       end,
     }
   end

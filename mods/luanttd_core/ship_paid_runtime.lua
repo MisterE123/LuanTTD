@@ -611,7 +611,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       if road_service then
         local ready_tick,ready
         ctx.loading_sweep=function(tick,visit)
-          local road,departed=assert(road_service.open_tick(s,tick))
+          local road,departed=assert(road_service.open_tick(s,tick,ctx.year(tick)))
           each_station(road,visit,nil,function(r,j)
             road(r,function(f,vehicles,ops)
               local function road_reserved(_,cargo)

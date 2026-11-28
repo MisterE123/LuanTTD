@@ -8,12 +8,14 @@ return function(S,Owned,flags)
     for _,x in ipairs(d.stops or {}) do labels[x.id]=x.label end
     for i,x in ipairs(d.orders or {}) do
       local f=d.cargo and d.cargo[i]
-      items[i]={id=x,label=(labels[x] or ("Station #"..x))..(f and f.summary or ""),cargo=f}
+      items[i]={id=x,label=(labels[x] or ("Station #"..x))..
+        (f and f.automatic and " · Automatic stop" or f and f.summary or ""),cargo=f,
+        automatic=f and f.automatic or nil}
     end
     local c=d.capabilities or {}
     return {items=items,targets=d.read_only and {} or d.stops,active=d.active,parked=d.parked,can_start=d.can_start,depot=d.depot,revision=d.revision,read_only=d.read_only,can_insert=c.add==true,
       can_reorder=c.move==true,can_remove=c.remove==true,can_skip=c.skip==true,can_replace=c.replace==true,summary=d.reason,
-      cargo_rules=c.load and {load=flags.load,unload=flags.unload} or nil}
+      cargo_rules=c.load and {load=flags.load,unload=flags.unload,nonstop=c.nonstop and flags.stop_choices or nil} or nil}
   end
   function A.edit(owner,id,rev,op,i,dest)
     local verbs={append="add",up="move",down="move"}

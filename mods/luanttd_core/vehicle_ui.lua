@@ -270,17 +270,19 @@ return function(api)
     local adapter=V.orders[kind]
     local toggle=adapter and adapter.toggle and data and data.can_toggle
     local extended=cargo or toggle or data and data.parked
-    local b=title(v.label,data and data.parked and cargo and 9.67 or extended and 9).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
+    local extra=cargo and cargo.nonstop and .86 or 0
+    local b=title(v.label,(data and data.parked and cargo and 9.67 or extended and 9 or 8)+extra).."button[7.94,.22;2.61,.62;V_TOKEN_follow;Follow vehicle]"
     if note or data and data.summary then
-      b=b..("textarea[.45,%g;10,.63;;;%s]"):format(data and data.parked and cargo and 8.10 or cargo and 7.56 or 6.35,esc(note or data.summary))
+      b=b..("textarea[.45,%g;10,.63;;;%s]"):format((data and data.parked and cargo and 8.10 or cargo and 7.56 or 6.35)+extra,esc(note or data.summary))
     end
     if data then
       local items,targets=data.items or {},data.targets or {}
       local row=math.max(1,math.min(#items,prior and prior.row or 1))
       local target=math.max(1,math.min(#targets,prior and prior.target or 1))
       local labels={}
+      local automatic=items[row] and items[row].automatic
       local pick_append=not not (adapter and adapter.submit_tile and data.can_insert~=false)
-      local pick_replace=not not (adapter and adapter.submit_tile and data.can_replace and items[row])
+      local pick_replace=not not (adapter and adapter.submit_tile and data.can_replace and items[row] and not automatic)
       for i,o in ipairs(items) do labels[i]={label=(data.active==i and "▶ " or "   ")..i..". "..(o.label or tostring(o.id))} end
       b=b.."label[.45,1.05;Orders]"..
         ("textlist[.45,1.30;%g,3.72;V_TOKEN_row;%s;%d;false]"):format(
@@ -305,19 +307,21 @@ return function(api)
         b=b..(pick_append and "button[8.0,4.43;2.55,.57;V_TOKEN_replace_world;Pick replacement]" or
           "button[5.55,4.43;5,.57;V_TOKEN_replace_world;Pick replacement in world]")
       end
-      if data.can_reorder~=false then
+      if data.can_reorder~=false and not automatic then
         if row>1 then b=b.."button[.45,5.16;1.53,.57;V_TOKEN_up;Move up]" end
         if row<#items then b=b.."button[2.07,5.16;1.64,.57;V_TOKEN_down;Move down]" end
       end
       if #items>0 and data.can_remove~=false then b=b.."button[3.80,5.16;1.63,.57;V_TOKEN_remove;Remove]" end
-      if #items>1 and data.can_skip~=false then b=b.."button[.45,5.78;4.98,.53;V_TOKEN_skip;Skip to selected order]" end
+      if #items>1 and data.can_skip~=false and not automatic then b=b.."button[.45,5.78;4.98,.53;V_TOKEN_skip;Skip to selected order]" end
       if data.can_insert~=false and #targets>0 then
         b=b.."button[5.55,5.16;5,.57;V_TOKEN_append;Add selected destination]"
       end
-      if data.can_replace then
+      if data.can_replace and not automatic then
         b=b.."button[5.55,5.78;5,.53;V_TOKEN_replace;Replace selected order]"
       elseif not data.read_only then b=b.."label[5.65,5.99;Select an order or a destination first.]" end
-      if cargo and items[row] and items[row].cargo then
+      if automatic then
+        b=b.."label[.45,6.53;Automatic stop recorded while following a manual order.]"
+      elseif cargo and items[row] and items[row].cargo then
         local f=items[row].cargo
         b=b.."label[.45,6.53;Cargo rules for selected order]"
         for i,k in ipairs({"load","unload"}) do
@@ -329,6 +333,15 @@ return function(api)
           end
           b=b..("dropdown[%g,6.86;3.32,.53;V_TOKEN_choose_%s;%s;%d;true]"):format(x,k,table.concat(rows,","),selected)
             ..("button[%g,6.86;1.53,.53;V_TOKEN_apply_%s;Apply]"):format(x+3.43,k)
+        end
+        if cargo.nonstop then
+          local rows,selected={},1
+          for j,o in ipairs(cargo.nonstop) do
+            rows[j]=esc(o.label)
+            if o.value==f.nonstop then selected=j end
+          end
+          b=b..("dropdown[.45,7.61;8.50,.53;V_TOKEN_choose_nonstop;%s;%d;true]"):format(table.concat(rows,","),selected)
+            .."button[9.02,7.61;1.53,.53;V_TOKEN_apply_nonstop;Apply]"
         end
       end
       local eligible
@@ -351,15 +364,15 @@ return function(api)
     end
     if data and data.parked and adapter and adapter.start_draft then
       if data.can_start then
-        b=b..("button[.45,%g;10.10,.52;V_TOKEN_start_draft;Start service]"):format(cargo and 7.52 or 7)
+        b=b..("button[.45,%g;10.10,.52;V_TOKEN_start_draft;Start service]"):format((cargo and 7.52 or 7)+extra)
       else
-        local y=cargo and 7.52 or 7
+        local y=(cargo and 7.52 or 7)+extra
         b=b..("box[.45,%g;10.10,.52;#263949]label[.68,%g;Start service: check the order list]"):format(y,y+.25)
       end
       prior.start_depot=data.can_start and data.depot
     end
     prior.can_toggle=not not toggle
-    local footer=data and data.parked and cargo and 8.90 or extended and 8.15 or 7.11
+    local footer=(data and data.parked and cargo and 8.90 or extended and 8.15 or 7.11)+extra
     if back then b=b..("button[.45,%g;4.98,.57;V_TOKEN_depot;%s]"):format(footer,
       back.directory and "Company fleet" or back.return_ and "Back to depot" or "Depot vehicles") end
     b=b..("button_exit[5.55,%g;5,.57;V_TOKEN_close;Back to world]"):format(footer)
@@ -707,11 +720,11 @@ return function(api)
       if ok then api.save() end
       return completed(ok,msg)
     end
-    for _,kind in ipairs({"load","unload"}) do
-      if q.cargo and field("apply_"..kind) then
+    for _,kind in ipairs({"load","unload","nonstop"}) do
+      if q.cargo and q.cargo[kind] and field("apply_"..kind) then
         local choice=q.cargo[kind][tonumber(field("choose_"..kind))]
         if not choice then return true end
-        return change(kind,choice.value,true)
+        return change(kind,choice.value,kind~="nonstop")
       end
     end
     for _,op in ipairs({"append","up","down","remove","skip","replace"}) do

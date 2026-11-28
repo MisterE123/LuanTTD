@@ -4,6 +4,7 @@ local mod=core.get_modpath(core.get_current_modname())
 local function m(p) return dofile(mod.."/"..p..".lua") end
 local Sim,Track=m("sim"),m("openttd/rail_track")
 local owner="Rail Connection QA"
+local intermediate=core.settings:get_bool("luanttd_qa_intermediate",false)
 local cp=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
 local before=cp.read()
 local client=m("campaign_authority_client")(core,mod)
@@ -13,6 +14,7 @@ for _,name in ipairs({"stone","water_source","river_water_source"}) do core.regi
 local function cell(x,y) return y*128+x+1 end
 local bus_origin,joined=cell(41,44),cell(43,47)
 local first_rail,second_rail,depot_rail=cell(43,53),cell(49,53),cell(51,53)
+local middle=cell(46,53)
 if not before then
   local s=m("campaign_generation")(core,mod,Sim,m("world_setup")).run({
     width=128,depth=128,year=1950,seed=1751,relief=1,sea=0,coast=16,rivers=2,trees=2,
@@ -98,6 +100,9 @@ local function work()
     req.road_station_id=target
     rail(req)
     rail({tool="station",first=second_rail,last=second_rail,axis=0,length=1,tracks=1,separate=true,drag=true})
+    if intermediate then
+      rail({tool="station",first=middle,last=middle,axis=0,length=1,tracks=1,separate=true,drag=true})
+    end
     local function assemble(operation,stock)
       local q=ask("rail_assembly",{depot=depot_rail})
       command("rail_assembly",{token=q.token,operation=operation,stock=stock})
@@ -110,6 +115,13 @@ local function work()
     s=state()
     command("transport_start",{mode="rail",vehicle=assert(selected),
       first=s.tiles[first_rail].rail_station_id,second=s.tiles[second_rail].rail_station_id})
+    if intermediate then
+      for row=1,2 do
+        local o=ask("orders",{mode="rail",vehicle=selected,page=1})
+        command("vehicle_order",{mode="rail",vehicle=selected,order_revision=o.revision,
+          operation="nonstop",row=row,destination=0})
+      end
+    end
   else
     local s=state()
     assert(s.passenger_house_clock.counter==before.passenger_house_clock.counter)
@@ -117,20 +129,35 @@ local function work()
     local old,oldtrain,oldbus=shared(before)
     assert(run.stock_pool_id==old.stock_pool_id and unit.boarded==oldtrain.boarded and bus.units==oldbus.units)
   end
+  local function learned(s,run)
+    local id=s.tiles[middle].rail_station_id
+    local n=0
+    for _,o in ipairs(run.orders) do if o.kind=="implicit" and o.station==id then n=n+1 end end
+    return n
+  end
+  if before and intermediate then
+    local s=state()
+    local r=shared(s)
+    assert(learned(before,shared(before))==2 and learned(s,r)==2)
+    local o=ask("orders",{mode="rail",vehicle=r.fleet_id,page=1})
+    local n=0
+    for _,row in ipairs(o.items) do if row.automatic then n=n+1 end end
+    assert(n==2)
+  end
   local old=before and select(2,shared(before)).boarded or 0
   for _=1,65 do
     ask("advance",{days=2})
     local s=state()
     local run,unit,bus,st=shared(s)
-    if unit.boarded and unit.boarded>(old or 0) and bus.delivered>0 then
+    if unit.boarded and unit.boarded>(old or 0) and bus.delivered>0 and (not intermediate or learned(s,run)==2) then
       local frames=ask("actor_frames",{windows={{x=40,z=43,w=16,h=16}},fraction=1})
       local shown
       for _,frame in ipairs(frames) do for _,v in ipairs(frame.actors) do
         if v.mode=="rail" and v.owner==owner and v.complete_parts and #v.parts==2 then shown=true end
       end end
       if shown then
-        result=("NATIVE RC1 JOINT RAIL %s: physical station %d, bus delivered %d, train boarded %d"):format(
-          before and "REOPEN" or "SERVICE",st.stock_station_id,bus.delivered,unit.boarded)
+        result=("NATIVE RC1 JOINT RAIL %s: physical station %d, bus delivered %d, train boarded %d, implicit orders %d"):format(
+          before and "REOPEN" or "SERVICE",st.stock_station_id,bus.delivered,unit.boarded,intermediate and learned(s,run) or 0)
         return {kind="stop"}
       end
     end

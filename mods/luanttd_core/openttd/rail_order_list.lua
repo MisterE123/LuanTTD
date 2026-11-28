@@ -34,6 +34,11 @@ function O.update_real(orders,index)
     while implicit(orders[index.real+1]) do index.real=wrapped(index.real,#orders) end
   else index.real=0 end
 end
+function O.manual_rows(orders)
+  local rows={}
+  for _,o in ipairs(orders) do if not implicit(o) then rows[#rows+1]=o end end
+  return rows
+end
 function O.next_manual(orders,index)
   local next_={real=index.real,implicit=index.implicit}
   O.increment_real(orders,next_)
@@ -112,6 +117,66 @@ function O.delete(orders,index,slot)
   end
   return true
 end
+-- Vehicle::DeleteUnreachedImplicitOrders. After a forced cursor jump,
+-- discard only the intervening lookahead, not the route's learned stops.
+function O.prune_unreached(orders,index)
+  if index.suppress_implicit then
+    index.suppress_implicit=nil;index.implicit=index.real
+    return
+  end
+  while index.implicit~=index.real do
+    if implicit(orders[index.implicit+1]) then
+      assert(O.delete(orders,index,index.implicit))
+    else index.implicit=wrapped(index.implicit,#orders) end
+  end
+end
+
+local function stops_at(order,station)
+  return type(order)=="table" and (order.kind=="station" or implicit(order)) and order.station==station
+end
+
+-- Vehicle::BeginLoading's unscheduled stop branch for a route with
+-- at least one manual order. Learn a stop before the true destination,
+-- reuse an existing implicit row when possible, and never promote it
+-- to a real/manual order. A suppressed cursor can reuse, not create.
+function O.observe_stop(orders,index,station)
+  if index.implicit~=nil and implicit(orders[index.implicit+1])
+      and orders[index.implicit+1].station==station then return "current" end
+  local previous=index.implicit>0 and orders[index.implicit] or #orders>1 and orders[#orders]
+  if stops_at(previous,station) then return "consecutive" end
+  local i=index.implicit
+  while i~=index.real do
+    local order=orders[i+1]
+    if implicit(order) and order.station==station then
+      if index.suppress_implicit then index.implicit=i
+      else
+        while not (implicit(orders[index.implicit+1]) and orders[index.implicit+1].station==station) do
+          if implicit(orders[index.implicit+1]) then assert(O.delete(orders,index,index.implicit))
+          else index.implicit=wrapped(index.implicit,#orders) end
+        end
+      end
+      return "reused"
+    end
+    i=wrapped(i,#orders)
+  end
+  if not index.suppress_implicit and O.insert(orders,index,index.implicit,{kind="implicit",station=station}) then
+    if index.implicit>0 then index.implicit=index.implicit-1 end
+    index.suppress_implicit=nil
+    return "inserted"
+  end
+  return "unrecorded"
+end
+
+-- Vehicle::HandleLoading leaves the station even when no order is
+-- currently associated with it, advancing only a matching visit.
+function O.complete_stop(orders,index,station)
+  if stops_at(orders[index.implicit+1],station) then
+    O.increment_implicit(orders,index)
+    return true
+  end
+  return false
+end
+
 -- order_cmd.cpp CmdCloneOrder / CO_COPY (16.0-RC1). The host checks
 -- primary vehicle type, ownership and station-facility access. Then it
 -- constructs a new, independent list and resets indices only if the
