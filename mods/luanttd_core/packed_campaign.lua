@@ -33,7 +33,7 @@ local terrain_codes={grass=1,hill=2,water=3}
 local waters={"sea","river"}
 local water_codes={sea=1,river=2}
 local tile_fields={h=true,variant=true,terrain=true,water_class=true,stock_void=true,coastal_water=true,
-  stock_clear_ground=true,stock_river_bits=true,stock_water_rocks=true,wood=true}
+  stock_clear_ground=true,stock_river_bits=true,stock_water_rocks=true,stock_tropic_zone=true,wood=true}
 local wood_fields={class=true,type=true,count=true,ground=true,density=true,growth=true,water_class=true}
 local function tiny_int(n,high)
   return type(n)=="number" and n>=0 and n<=high and n==floor(n)
@@ -64,10 +64,12 @@ local function tile_bytes(t,table_bucket)
   local c,r=t.stock_clear_ground,t.stock_river_bits
   if c~=nil and not tiny_int(c,255) or r~=nil and not tiny_int(r,255) then return end
   local a,b,k=t.stock_void,t.coastal_water,t.stock_water_rocks
+  local zone=t.stock_tropic_zone
+  if zone~=nil and zone~=1 and zone~=2 then return end
   if a~=nil and a~=true or b~=nil and b~=true or k~=nil and k~=true then return end
   for k in next,t do if not tile_fields[k] then return end end
   local flags=g-1+4*v+16*(water_codes[w] or 0)+64*(a and 1 or 0)+128*(b and 1 or 0)
-  local presence=(c~=nil and 1 or 0)+(r~=nil and 2 or 0)+(k and 4 or 0)
+  local presence=(c~=nil and 1 or 0)+(r~=nil and 2 or 0)+(k and 4 or 0)+8*(zone or 0)
   local wood=t.wood
   if wood~=nil then
     if type(wood)~="table" then return end
@@ -115,7 +117,7 @@ end
 
 local function decode_cell(source,at,tag)
   local h,flags,presence,c,r=byte(source,at,at+4)
-  assert(r and presence<=7,"Invalid packed campaign ground")
+  assert(r and presence<=23,"Invalid packed campaign ground")
   at=at+5
   local t={h=h,variant=floor(flags/4)%4,terrain=assert(terrains[flags%4+1],"Unknown packed terrain")}
   local w=floor(flags/16)%4
@@ -124,7 +126,9 @@ local function decode_cell(source,at,tag)
   if flags>=128 then t.coastal_water=true end
   if presence%2==1 then t.stock_clear_ground=c end
   if floor(presence/2)%2==1 then t.stock_river_bits=r end
-  if presence>=4 then t.stock_water_rocks=true end
+  if floor(presence/4)%2==1 then t.stock_water_rocks=true end
+  local zone=floor(presence/8)
+  if zone~=0 then t.stock_tropic_zone=zone end
   if tag==WOODED_TILE then
     local c,k,n,g,d,v,salt=byte(source,at,at+6)
     assert(salt and salt<=1,"Invalid packed woodland")

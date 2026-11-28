@@ -17,7 +17,7 @@ local dx,dz={[0]=-1,0,1,0},{[0]=0,1,0,-1}
 local function has(bits,bit) return math.floor(bits/bit)%2~=0 end
 local function difference(mask) return 15-mask%16 end
 
-return function(Sim,Terrain,s,G,Worldgen,read,live)
+return function(Sim,Terrain,s,G,Worldgen,read,live,house_roots)
   local policy=s.stock_road_town_policy
   local B={town_level_crossings=not policy or policy.allow_town_level_crossings~=false,
     house_roadtypes=HouseRoadTypes.on_board(Sim,s)}
@@ -42,7 +42,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
   function B.distance_to_edge(x,z) return math.min(x-1,z-1,Sim.W-x,Sim.H-z) end
   function B.house_supported(id,x,z)
     local t=B.tile(x,z)
-    return art[id]~=nil and t and t.slope and t.slope<16
+    return (house_roots or art)[id]~=nil and t and t.slope and t.slope<16
   end
   function B.clear_quote(x,z,kind)
     if live and kind=="house" then return live.houseable(x,z) end

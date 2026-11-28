@@ -1444,3 +1444,22 @@ confirmed Water Towers in desert towns below 1,200 population and
 the stock crop/industry input slots in both climates. The new
 Arctic and Tropic supply chains, industry art, and normal campaign
 mount are still separate work.
+
+### Native initial towns outside Temperate
+
+Four actual OpenTTD 16.0-RC1 starts now match the rule-only LuanTTD
+board through `GenerateTowns`: 92 Arctic, Tropic and Toyland towns
+and 114,688 map cells, including 2,725 exact municipal road masks
+and 2,402 house tiles. The differential includes every town's
+center, name seed, city flag, population, stock growth deadline
+and default cargo goals, every house's original ID, stage and
+appearance byte, and the shared RNG before and after founding.
+It does not include later industry, tree or object placement.
+
+The worker's monthly town routine reads the current physical
+center height and desert zone. The test exercises four Arctic
+towns above the snowline and 40 Tropic desert towns on these
+generated maps. Two packed reopens retain the climate and desert
+zone; the latter now uses reserved bits of the compact tile
+payload rather than falling back to a full table per tile.
+No non-Temperate world selector or placeholder art is exposed.

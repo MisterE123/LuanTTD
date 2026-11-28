@@ -55,8 +55,8 @@ end
 
 -- Source BuildTownHouse part order: N, W, E, S in OpenTTD isometric
 -- terminology, mapped to (x,z), (x,z+1), (x+1,z), (x+1,z+1).
-function Art.inspect(Sim,p,clear_base)
-  local style=Art[p.id]
+function Art.inspect(Sim,p,clear_base,footprint)
+  local style=footprint or Art[p.id]
   if not style or type(p.parts)~="table" then return end
   local w,d=style.width or 1,style.depth or 1
   if #p.parts~=w*d then return end

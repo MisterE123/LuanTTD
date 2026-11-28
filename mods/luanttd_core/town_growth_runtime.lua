@@ -144,10 +144,19 @@ return function(Sim,Terrain,G,B,H)
     local views=services(s,true)
     if #state.order>=8 then views.count_near=G.index_active_stations(views) end
     local ratings=authority.station_view(s,views)
+    local climate=s.stock_climate
+    local climate_at
+    if climate then
+      climate_at=function(x,z)
+        local tile=s.tiles[Sim.id(x,z)]
+        return {tile_height=Terrain.corner(s.corner_grid,x,z),snowline=climate.snowline,
+          is_desert=tile.stock_tropic_zone==1}
+      end
+    end
     for _,id in ipairs(state.order) do
       local t=state.towns[id]
       local was_funded=t.road_build_months==1
-      local _,reason=G.month(t,views,growth_setting(s),random)
+      local _,reason=G.month(t,views,growth_setting(s),random,climate_at)
       if was_funded then W.reconstruction.expired(s,t) end
       t.reason=reason
       t.last_active=G.active_stations(t,views)

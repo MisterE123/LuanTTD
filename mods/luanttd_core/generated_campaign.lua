@@ -24,6 +24,9 @@ function M.landscape(Sim,Terrain,Generator,settings)
   local corner=Terrain.new(Sim.W,Sim.H,map.corner,{freeform_edges=settings.freeform_edges,max_height=255,
     pulse=settings.corner_progress})
   s.corner_grid=corner
+  if map.landscape and map.landscape~="temperate" then
+    s.stock_climate={landscape=map.landscape,snowline=map.snowline}
+  end
   local dry_count=0
   for z=1,Sim.H do
     if settings.host_progress and (z-1)%16==0 then settings.host_progress((z-1)/Sim.H) end
@@ -35,6 +38,10 @@ function M.landscape(Sim,Terrain,Generator,settings)
       if kind~=6 or ground==2 or water_rocks then dry_count=dry_count+1 end
       local _,base=Terrain.tile(corner,x,z)
       local t={h=base,variant=(3*x+5*z+math.floor(x*z/16))%4}
+      if s.stock_climate and map.tropic_zone then
+        local zone=map.tropic_zone(x,z)
+        if zone and zone~=0 then t.stock_tropic_zone=zone end
+      end
       if kind==7 then t.terrain="water";t.stock_void=true
       elseif kind==6 then
         t.terrain="water";t.water_class=ground==3 and "river" or "sea";t.coastal_water=ground==2 or nil
@@ -85,14 +92,18 @@ local function get(Sim,Terrain,s,x,z)
     road_town=t.road_town,owner=t.owner,rough=t.stock_clear_ground==1}
 end
 
-local function founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,save,lifts)
+local function founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,save,lifts,rule_only_roots)
   return function(candidate,rnd)
     local id=#s.sites+1
     local x,z=candidate.x+1,candidate.z+1
     local site={id=id,kind="town",name=assert(candidate.name),nameparts=candidate.nameparts,
       tile=Sim.id(x,z),custom_name=candidate.custom_name,stock={},produced={},received={},population=0,service=0,larger_town=candidate.city}
+    local climate=s.stock_climate and s.stock_climate.landscape
     local town=G.new(id,x,z,{layout=candidate.layout,larger_town=candidate.city,
-      grow_counter=(candidate.stock_id or id-1)%G.TOWN_TICKS})
+      grow_counter=(candidate.stock_id or id-1)%G.TOWN_TICKS,climate=climate,
+      has_effect=function(effect)
+        return effect==5 and (climate=="arctic" or climate=="tropic") or effect==4 and climate=="tropic"
+      end})
     if candidate.stock_id then town.stock_id=candidate.stock_id end
     s.sites[id]=site
     local function dirty(tile)
@@ -123,6 +134,7 @@ local function founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,s
         return ok
       end
       if p.kind~="house" then return false end
+      local footprint=rule_only_roots and assert(rule_only_roots[p.id],"Missing stock house footprint")
       local parts=art.inspect(Sim,p,function(id)
         local x,z=Sim.xy(id)
         local ground=growth.tile(x,z)
@@ -130,7 +142,7 @@ local function founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,s
             growth.clear_quote(x,z,"house") then
           return ground.max_z/8
         end
-      end)
+      end,footprint)
       if not parts then return false end
       for _,part in ipairs(parts) do
         local tile,h=part.id,part.record
@@ -144,7 +156,11 @@ local function founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,s
           if s.stock_farm_grass then s.stock_farm_grass[tile]=nil end
         end
         placed[tile]=true
-        art.stamp(h,p,art[p.id],part.index,candidate.tick)
+        if rule_only_roots then
+          h.town_growth,h.built_tick,h.random_bits=true,candidate.tick,p.random_bits
+        else
+          art.stamp(h,p,art[p.id],part.index,candidate.tick)
+        end
         if h.completed then h.age,h.age_epoch=0,settings.year end
         local x,z=Sim.xy(tile)
         local _,base=Terrain.tile(s.corner_grid,x,z)
@@ -155,6 +171,8 @@ local function founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,s
       return true
     end
     Worldgen.initialize(town,growth,{year=settings.year,allow_roads=true,
+      landscape=rule_only_roots and climate or nil,
+      highest_snowline=s.stock_climate and s.stock_climate.snowline,
       initial_city_size=settings.initial_city_size,growth_setting=growth_setting,
       size=candidate.size,manual=candidate.manual,stations=candidate.stations,
       build_on_slopes=candidate.build_on_slopes,allow_level_crossings=candidate.allow_level_crossings,commit=commit},rnd)
@@ -178,7 +196,10 @@ local function founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,s
   end
 end
 
-function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
+-- Optional rule-only roots are used by headless source comparisons.
+-- They carry stock footprints, not render IDs, and must not be used
+-- for a player's world until the corresponding native assets exist.
+function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings,rule_only_roots)
   local profile=s.stock_generated_profile
   assert(profile and not profile.towns,"Stock towns should be generated once")
   local growth_setting=tonumber(settings.growth_setting) or 2
@@ -187,13 +208,13 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   local function random() return Generator.next_random(state) end
   local save={version=1,order={},towns={}}
   local lifts=Lift.new(s.stock_world_animations)
-  local growth=growth_board(Sim,Terrain,s,G,Worldgen,function(x,z)return get(Sim,Terrain,s,x,z) end)
+  local growth=growth_board(Sim,Terrain,s,G,Worldgen,function(x,z)return get(Sim,Terrain,s,x,z) end,nil,rule_only_roots)
   local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={},
     initial_land_count=profile.initial_land_count}
   function board.tile(x,z) return get(Sim,Terrain,s,x+1,z+1) end
   local opts=copy(settings)
   opts.random,opts.name=random,Names.generate
-  opts.create=founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,save,lifts)
+  opts.create=founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,save,lifts,rule_only_roots)
   local result,why=Worldgen.generate(board,opts)
   if not result or #s.sites==0 then return nil,why or "OpenTTD's placement rules found no viable town on this seed." end
   s.stock_town_growth,s.stock_town_lifts=save,lifts
