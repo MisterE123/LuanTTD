@@ -785,15 +785,17 @@ the station is unused, and `StationHandleBigTick` destroys the station
 on its eighth staggered 250-tick check. On that last tick an earlier
 town growth attempt can still see it; the next tick cannot.
 
-The growth view now follows that rule for deleted road stops and docks,
-without adding them back to orders, catchment or routing. Former docks
-capture the shared station service times before the visible dock and its
-active service records disappear. The compiled RC1 test compares 7,000
-cases at the town radius, 20/21 service-age, and station expiry
-boundaries. A native Luanti test physically removes the only served
-bus stop, sees that station count for February growth, then no longer
-counts it at the March update. Rail and airport station retirement
-and the full cross-mode deletion lifecycle remain separate work.
+The growth view follows that rule for deleted road stops, docks,
+rail platforms and airports, without adding them back to orders,
+catchment or routing. Removing the last facility captures the sign
+and real service ages before clearing its geometry. Pending deletion
+also reserves the physical station ID. The compiled RC1 test compares
+7,000 mixed-facility cases at the town radius, 20/21 service-age, and
+expiry boundaries. The native Luanti worker test removes road, rail
+and air facilities, with the rail and air service clocks seeded, and
+counts all three for February but none in March. Reusing a retired
+station across transport modes remains unported, as does same-mode
+retired sign reuse for rail and airports.
 
 
 ### Wide, varied terrain and neighbouring town roads

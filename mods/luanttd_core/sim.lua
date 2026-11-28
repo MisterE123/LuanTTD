@@ -3548,7 +3548,8 @@ function M.stock_station_slot(s)
       "stock_ship_stations","stock_ship_buoys","stock_small_airports","stock_neutral_stations"}) do
     for _,row in pairs(s[key] or {}) do if not row.neutral then visit(row) end end
   end
-  for _,key in ipairs({"retired_road_stations","retired_road_waypoints","retired_ship_stations"}) do
+  for _,key in ipairs({"retired_road_stations","retired_road_waypoints","retired_ship_stations",
+      "retired_rail_stations","retired_airports"}) do
     for _,entry in pairs(s[key] or {}) do
       local now=s.passenger_house_clock and s.passenger_house_clock.counter or s.stock_load_tick or s.day*74
       if now<entry.until_tick then visit(entry.row) end
@@ -6532,7 +6533,9 @@ function M.daily(s,traverse,tick_pulse,openings)
   if openings and not exact_economy and openings() then M.clear_live_sea_cache(s) end
   coal_day_bindings[s]=nil
   timber_day_bindings[s]=nil
-  if s.retired_ship_stations then M.road_station_retirement().expire(s) end
+  if s.retired_ship_stations or s.retired_rail_stations or s.retired_airports then
+    M.road_station_retirement().expire(s)
+  end
 end
 function M.demo(s,owner)
   if s.stock_generated_profile then return false,"Choose two of the generated towns and build a connection." end

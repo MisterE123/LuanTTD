@@ -3,6 +3,8 @@
 -- local authority rules. Shared stations and site clearing are separate.
 return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
   local N={PRICE_PER_TILE=600,CLEAR_PER_TILE=30}
+  local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+  local TownStations=Sim.road_station_retirement and dofile(path.."town_station_services.lua")(Sim)
   function N.layout(name)
     if name=="city" then return City end
     if name=="oilrig" then return OilRig end
@@ -170,6 +172,7 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
     local cost=#airport.tiles*N.CLEAR_PER_TILE
     local c=s.companies[owner]
     if not c or c.cash<cost then return nil,"NOT_ENOUGH_MONEY" end
+    if not quote and TownStations then TownStations.retire(s,"air",airport) end
     local dirty={}
     for _,pos in ipairs(airport.tiles) do
       dirty[#dirty+1]=pos.id

@@ -137,11 +137,30 @@ return function(Sim)
     end
     inactive("road","retired_road_stations","station")
     inactive("ship","retired_ship_stations","dock")
+    inactive("rail","retired_rail_stations","rail")
+    inactive("air","retired_airports","airport")
     table.sort(views,function(a,b)
       if a.mode~=b.mode then return modes[a.mode]<modes[b.mode] end
       return a.id<b.id
     end)
     return views
+  end
+  -- Capture only the town-facing sign and service clocks. Once the last
+  -- facility is removed this identity must not remain a route endpoint.
+  function M.retire(s,mode,record)
+    local kind=assert(({rail="rail",air="airport"})[mode])
+    local sign=record.sign_tile or record.origin or record.tile or
+      (mode=="rail" and record.tiles and record.tiles[1])
+    if not sign then return end
+    local dead={id=record.id,owner=record.owner,tile=sign,stock_station_id=record.stock_station_id}
+    for _,active in ipairs(M.view(s,true)) do
+      if active.mode==mode and active.id==record.id then
+        dead.tile=Sim.id(active.x,active.z)
+        dead.time_since_load,dead.time_since_unload=active.time_since_load,active.time_since_unload
+        break
+      end
+    end
+    Sim.road_station_retirement().retire(s,kind,dead)
   end
   return M
 end

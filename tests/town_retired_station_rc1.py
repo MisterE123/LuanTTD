@@ -93,7 +93,7 @@ while true do
   for _=1,n do
     local mode,id,xy,removed,load,unload=io.read("*n","*n","*n","*n","*n","*n")
     s.passenger_house_clock.counter=removed
-    retire.retire(s,mode==0 and "station" or "dock",
+    retire.retire(s,({"station","dock","rail","airport"})[mode+1],
       {id=id,stock_station_id=id,tile=xy,time_since_load=load,time_since_unload=unload})
   end
   s.passenger_house_clock.counter=now
@@ -111,7 +111,7 @@ for _ in range(1000):
     row = [x+64*z, rng.choice([4, 25, 49, 81, 121, 149, 200]), now, rng.randrange(2), n]
     for id in rng.sample(range(1024), n):
         xy = x+rng.randrange(-12,12)+64*(z+rng.randrange(-12,12))
-        row.extend([rng.randrange(2),id,xy,now-rng.randrange(2450),
+        row.extend([rng.randrange(4),id,xy,now-rng.randrange(2450),
                     rng.choice([0,20,21,255]),rng.choice([0,20,21,255])])
     cases.append(row)
 for id in range(period):
@@ -121,7 +121,7 @@ for id in range(period):
         for phase in [0,1]:
             for age in [20,21]:
                 for radius in [24,25]:
-                    cases.append([2048,radius,cutoff+when,phase,1,id%2,id,2053,removed,age,255])
+                    cases.append([2048,radius,cutoff+when,phase,1,id%4,id,2053,removed,age,255])
 data = "".join(" ".join(map(str,r))+"\n" for r in cases)
 with tempfile.TemporaryDirectory() as folder:
     path = Path(folder)

@@ -5,9 +5,9 @@
 return function(Sim)
   local R={}
   local buckets={station="retired_road_stations",waypoint="retired_road_waypoints",
-    dock="retired_ship_stations"}
+    dock="retired_ship_stations",rail="retired_rail_stations",airport="retired_airports"}
   local function now(s,kind)
-    if (kind=="dock" or s.stock_pool_authority) and s.passenger_house_clock then
+    if (kind=="dock" or kind=="rail" or kind=="airport" or s.stock_pool_authority) and s.passenger_house_clock then
       return s.passenger_house_clock.counter
     end
     return s.stock_load_tick or s.day*74

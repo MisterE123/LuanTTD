@@ -3,6 +3,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
   local Lab={}
   local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local Freight=dofile(source.."../rail_freight_kinds.lua")
+  local TownStations=Sim.road_station_retirement and dofile(source.."../town_station_services.lua")(Sim)
   local Height=dofile(source.."rail_height.lua")(Track,Slope)
   local Split=dofile(source.."../rail_split_profile.lua")(Track,Height)
   Lab.split_surface=Split.profile
@@ -220,6 +221,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     if not apply then return true end
     local rest={}
     for i,parcel in ipairs(st.tiles) do if i~=index then rest[#rest+1]=parcel end end
+    if #rest==0 and TownStations then TownStations.retire(s,"rail",st) end
     t.rail_station_id,t.rail_station_axis,t.rail_station_gfx=nil,nil,nil
     if #rest==0 then
       s.stock_rail_stations[st.id]=nil
@@ -240,6 +242,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       for _,tile in ipairs(group) do
         if Lab.facility_protected(s,tile) then return false,protected end
       end
+      if TownStations then TownStations.retire(s,"rail",st) end
       s.stock_rail_stations[st.id]=nil
       for _,tile in ipairs(group) do
         s.tiles[tile].rail_station_id=nil
