@@ -44,9 +44,13 @@ return function(Motion,F,board)
     local state=station_state(tile,first.td)
     local v={direction=2*F.exit_direction(first.td)+1}
     local frame
+    local turning=options.reverse_before_trace
     if origin then
-      if (tile.kind~="road" and tile.kind~="drive_stop") or origin[4]~=first.tile or origin[6]~=state or
-          origin[10] or origin[12] or origin[13] or origin[14] then return end
+      if (tile.kind~="road" and tile.kind~="drive_stop") or origin[4]~=first.tile
+          or not turning and origin[6]~=state
+          or turning and (tile.kind~="road" or not F.has_trackdir(F.origin_trackdirs(tile,false,turning.direction),first.td))
+          or origin[10] or origin[12] or origin[13] or origin[14] then return end
+      if turning then state=origin[6] end
       frame,v.direction=origin[15],origin[3]
     elseif tile.kind=="depot" then
       frame=Motion.DEPOT_START
@@ -151,6 +155,14 @@ return function(Motion,F,board)
             v.state=Bridge.WORMHOLE
             physical_tile=trace[part].tile
           end
+        elseif k=="turned" and turning then
+          -- RDE_TURNED invokes RoadFindPathToDest with the marker's entry
+          -- direction. Finish the remaining turn pixels before entering
+          -- that chosen track on the same tile at RVC_TURN_AROUND_START_FRAME.
+          local event
+          event,v.x,v.y,v.direction,v.frame=Motion.enter(v,qx,qy,first.td,SIDE,Motion.TURN_AROUND_START)
+          if not event then return end
+          v.state,turning,entered=first.td,nil,true
         elseif k=="next_tile" or k=="turned" then
           local next_piece=trace[part+1]
           if not next_piece then return end

@@ -6,6 +6,7 @@ local Types=dofile(mod.."/openttd/rail_types.lua")
 return function(api,Lab,Track,Run,prices)
   local R={}
   local Sim,S=api.Sim,api.s
+  local RoadJoin=dofile(mod.."/rail_road_station_join.lua")(Sim)
   local function protected(id) return Lab.span_protected and Lab.span_protected(S,id) end
   local span_msg="That tile is part of a protected rail span."
   local function facility_protected(id)
@@ -264,17 +265,26 @@ return function(api,Lab,Track,Run,prices)
       if tile.subsurface then return nil,"Platforms need unoccupied ground.",group end
       topics[#topics+1]=tile
     end
-    local join,deny=StationPlacement.find_join(area,owner,existing,layout.separate,function(col,row)
+    local separate=layout.separate or layout.road_station_id~=nil
+    local join,deny=StationPlacement.find_join(area,owner,existing,separate,function(col,row)
       local tid=Sim.id(col,row)
       local t=tid and S.tiles[tid]
       return t and t.rail_station_id and S.stock_rail_stations[t.rail_station_id]
     end)
     if deny then return nil,deny,group end
+    local bus_join
+    if layout.road_station_id~=nil then
+      if join or existing then return nil,"ADJOINS_MORE_THAN_ONE_EXISTING",group end
+      bus_join,deny=RoadJoin.quote(S,owner,area,layout.road_station_id)
+      if not bus_join then return nil,deny,group end
+    end
     local combined=area
     if join then
       local box=Lab.station_bounds(S,join)
       combined=StationPlacement.combined(area,box)
-      if math.max(combined.w,combined.h)>StationPlacement.spread then
+      local road_extent=RoadJoin.road_extent(S,join)
+      local spread=road_extent and StationPlacement.combined(combined,road_extent) or combined
+      if math.max(spread.w,spread.h)>(S.stock_station_spread or StationPlacement.spread) then
         return nil,"The joined station would exceed the station spread.",group
       end
       if Freight.role(join) then
@@ -298,10 +308,18 @@ return function(api,Lab,Track,Run,prices)
       if area.axis==1 then track,along=along,track end
       graphics[id]=Bridge.rail_gfx(area.tracks,area.length,track,along,area.axis)
     end
-    local reuse=not join and not layout.separate and Lab.retired_station and Lab.retired_station(S,owner,group[1])
+    local reuse=not join and not bus_join and not separate and Lab.retired_station and Lab.retired_station(S,owner,group[1])
     return budget(owner,{kind="platform",axis=area.axis,area=area,combined=combined,join=join and join.id,
-      reopen=reuse and reuse.id or nil,separate=layout.separate,
+      reopen=reuse and reuse.id or nil,separate=separate,bus_join=bus_join,road_station_id=layout.road_station_id,
       ids=group,price=value,gauge=layout.railtype,graphics=graphics})
+  end
+  function R.join_road_choices(owner,plan)
+    if plan.kind~="platform" then return nil,"INVALID_RAIL_STATION_GESTURE" end
+    for _,tile in ipairs(plan.ids) do
+      if S.tiles[tile].rail_station_id then return {choices={{name="Extend rail platforms"}},cost=plan.price} end
+    end
+    local choices=RoadJoin.choices(S,owner,plan.area)
+    return {choices=choices,cost=plan.price}
   end
   function R.quote_platform(owner,first,last,d)
     local x,z=Sim.xy(first)
@@ -574,11 +592,15 @@ return function(api,Lab,Track,Run,prices)
       ok,note=true,plan.crossing and "Track laid, including level crossing work." or "Track pieces updated."
     elseif plan.kind=="platform" then
       if not gauge_allowed(owner,plan.gauge) then return false,"This rail type is not available to your company." end
-      if not plan.join and not plan.separate and Lab.retired_station then
+      if plan.bus_join then
+        local current,why=RoadJoin.quote(S,owner,plan.area,plan.road_station_id)
+        if current~=plan.bus_join then return false,why or "Station changed; select the footprint again." end
+      end
+      if not plan.join and not plan.bus_join and not plan.separate and Lab.retired_station then
         local reuse=Lab.retired_station(S,owner,plan.ids[1])
         if (reuse and reuse.id or nil)~=plan.reopen then return false,"Station changed; select the footprint again." end
       end
-      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis,plan.combined or plan.area,plan.join,plan.gauge,plan.graphics,plan.reopen)
+      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis,plan.combined or plan.area,plan.join,plan.gauge,plan.graphics,plan.reopen,plan.bus_join)
     elseif plan.kind=="depot" then
       local fresh,why=R.quote_depot(owner,plan.id,plan.direction,plan.requested_railtype)
       if not fresh then return false,why end

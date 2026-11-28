@@ -251,8 +251,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local neutral=Rig.neutral_ref(s,actual)
       local owner=actual.owner
       if neutral then owner=false end
-      local joined=mode_=="air" and s.stock_joined_stations and actual.stock_station_id~=nil and Sim.stock_joined_station.resolve(
-        s,actual.stock_station_id,"air",local_id,actual)
+      local joined=(mode_=="air" or mode_=="rail") and s.stock_joined_stations and actual.stock_station_id~=nil
+        and Sim.stock_joined_station.resolve(s,actual.stock_station_id,mode_,local_id,actual)
       local road=joined and Sim.stock_joined_station.member(s,joined,"road")
       if road then
         for _,t in ipairs(Sim.road_stop_tiles(road)) do
@@ -523,7 +523,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     if next(s.stock_joined_stations or {}) then
       ctx.road_alias=function(road)
         local group=road.stock_station_id~=nil and Sim.stock_joined_station.resolve(s,road.stock_station_id,"road",road.id,road)
-        return group and group.members.air and group.service_station_id or nil
+        return group and Sim.stock_joined_station.commercial_member(group) and group.service_station_id or nil
       end
     end
     local hooks=Mux.town_hooks

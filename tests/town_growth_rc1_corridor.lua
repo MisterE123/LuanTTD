@@ -14,7 +14,10 @@ local function run(ref,founding,air)
   s.road_coal,s.road_timber,s.road_farm,s.road_oil,s.road_heavy=true,true,true,true,true
   s.road_mail,s.road_junction_clearance=true,arg[1]~="stock-only" or not ref.shared
   local cap={road={start_year=1950,breakdowns=1,service_interval=150,foster=true},ferry={},air={},oil_tanker=true}
-  if air then
+  if air and air.rail then
+    cap.rail=m("rail_dispatch_manifest").scan(mod,false,false)
+    s.rail_owned_service,s.rail_span_enabled,s.rail_paid_service=true,true,true
+  elseif air then
     s.air_paid_service,s.air_owned_preview,s.air_fleet_preview,cap.air[216]=true,true,true,true
   end
   local Mount,Endpoint=m("campaign_authority_runtime"),m("campaign_authority_endpoint")
@@ -166,6 +169,41 @@ local function run(ref,founding,air)
       action("vehicle_order",{mode="air",vehicle=unit.id,order_revision=0,operation="load",row=1,destination=2})
     end
   end
+  local function buy_joined_rail_leg()
+    local Track=m("openttd/rail_track")
+    s.companies[owner].cash=80000000
+    local function rail(req)
+      local q=checked(A.rail_quote(owner,req))
+      return action("rail_commit",{token=q.token})
+    end
+    local first,second,depot=S.id(44,54),S.id(50,54),S.id(52,54)
+    rail({tool="track",first=first,last=depot-1,track=Track.X})
+    rail({tool="depot",first=depot,direction=Track.NE})
+    local request={tool="station",first=first,last=first,axis=0,length=1,tracks=1,separate=true,drag=true}
+    local picker=checked(A.rail_quote(owner,request,"road_join_choices"))
+    local offered
+    for _,choice in ipairs(picker.choices) do if choice.id==1 then offered=true end end
+    assert(offered and picker.choices[1].id==nil)
+    request.road_station_id=1
+    rail(request)
+    local linked=assert(s.stock_rail_stations[s.tiles[first].rail_station_id])
+    assert(linked.stock_station_id==1 and linked.sign_tile==bt and linked.town==s.stations[s.tiles[bt].station].town)
+    same(12602,"joined rail construction random words",s.passenger_rating_rng,{2585200608,3361959040})
+    rail({tool="station",first=second,last=second,axis=0,length=1,tracks=1,separate=true,drag=true})
+    local function assemble(operation,stock)
+      local q=checked(A.rail_assembly(owner,depot))
+      action("rail_assembly",{token=q.token,operation=operation,stock=stock})
+    end
+    assemble("engine",0)
+    assemble("wagon",27)
+    local q=checked(A.rail_assembly(owner,depot))
+    local train
+    for id,u in pairs(q.units) do if #u.stocks==2 and u.stocks[1]==0 and u.stocks[2]==27 then train=id end end
+    local west,east=s.tiles[first].rail_station_id,s.tiles[second].rail_station_id
+    assert(s.stock_rail_stations[east].stock_station_id==5)
+    action("transport_start",{mode="rail",vehicle=assert(train),first=west,second=east})
+    assert(s.stock_rail_dispatch.runs[1].stock_pool_id==5)
+  end
   local function snapshot_air(tick,expected)
     local height,houses=1,1
     local year=S.date(s)
@@ -192,6 +230,48 @@ local function run(ref,founding,air)
         m.new_max or 0,m.new_act or 0,m.old_max or 0,m.old_act or 0,g.new_act or 0,g.old_act or 0},expected[i+1])
     end
     air_snapshots=air_snapshots+1
+  end
+  local function observe_rail(tick)
+    if tick<air.first or tick>air.last then return end
+    if tick==air.build then buy_joined_rail_leg() end
+    air_rng=fold(air_rng,tick,unpack(s.passenger_rating_rng))
+    air_ticks=air_ticks+1
+    if tick==air.build then return end
+    local group=assert(s.stock_joined_stations[1])
+    local service=assert(s.stock_ship_commercial).service
+    local st=assert(service.stations[group.service_station_id])
+    local road=assert(s.stations[group.members.road])
+    assert(st.stock==road.stock and st.passenger_rating_state==road.passenger_rating_state)
+    local waiting=0
+    for _,p in ipairs(st.stock.passenger or {}) do waiting=waiting+p.units end
+    local order={}
+    for _,id in ipairs(st.loading_order) do
+      local v=service.vehicles[id]
+      order[#order+1]={v.load_state.arrived_tick,v.stock_station_physical_vehicle,0}
+      for _,body in ipairs(v.carrying_parts or {v}) do
+        if body.cargo=="passenger" then waiting=waiting+body.load_state.reserved_units end
+      end
+    end
+    for _,id in ipairs(road.loading_order or {}) do
+      local v=s.fleet[id]
+      order[#order+1]={v.load_state.arrived_tick,v.stock_pool_id,1}
+      if v.cargo=="passenger" then waiting=waiting+v.load_state.reserved_units end
+    end
+    if #order>0 then
+      table.sort(order,function(a,b) return a[1]==b[1] and a[2]<b[2] or a[1]<b[1] end)
+      queue_hash=fold(queue_hash,tick,#order)
+      for _,v in ipairs(order) do queue_hash=fold(queue_hash,v[2],v[3]) end
+      queue_count=queue_count+1
+    end
+    joint_hash=fold(joint_hash,tick,st.rating_phase,st.time_since_load,st.time_since_unload,waiting,st.passenger_rating_state.rating)
+    joint_count=joint_count+1
+    local run=assert(s.stock_rail_dispatch.runs[1])
+    for i,v in ipairs(run.consist.parts) do
+      local entry={tick,4+i,v.tile-1,v.pose.x-16,v.pose.y-16,run.z,run.direction}
+      if i==1 then entry[#entry+1]=run.speed end -- native coach has no raw front speed
+      air_motion=fold(air_motion,unpack(entry));air_poses=air_poses+1
+    end
+    if air.towns[tick] then snapshot_air(tick,air.towns[tick]) end
   end
   local function observe_air(tick)
     if tick<air.first then return end
@@ -282,7 +362,10 @@ local function run(ref,founding,air)
     if air.new_mail and tick==air.new_mail.tick then same(tick,"new mail into airport",s.passenger_rating_rng,air.new_mail.rng) end
   end
   local function observe(tick)
-    if air then observe_air(tick);return end
+    if air then
+      if air.rail then observe_rail(tick) else observe_air(tick) end
+      return
+    end
     digest=fold(digest,tick,unpack(s.passenger_rating_rng));ticks=ticks+1
     snapshot(tick)
     local expected=not founded and ref.poses[tick]
@@ -334,6 +417,14 @@ local function run(ref,founding,air)
       observe(14674)
     end
   end
+  if air and air.rail then
+    same(air.last,"joined rail year",{air_ticks,air_rng,air_poses,air_motion,joint_count,joint_hash,queue_count,queue_hash},
+      {air.rng_count,air.rng,air.pose_count,air.pose,air.station_count,air.station,air.loading_count,air.loading})
+    assert(air_snapshots==7)
+    print(("PASS RC1 joined rail year: %d world RNG ticks, %d locomotive/coach poses, %d shared queues and seven town snapshots"):
+      format(air_ticks,air_poses,queue_count))
+    return
+  end
   if air then
     same(air_capture.last,"air corridor",{air_ticks,air_rng,air_poses,air_motion},
       {air_capture.last-air.first+1,air_capture.rng,air_capture.last-air.build,air_capture.motion})
@@ -372,6 +463,10 @@ local function run(ref,founding,air)
   else
     print("PASS RC1 normal industry corridor: 27,010 RNG ticks, 14 map/town and 19 vehicle checkpoints, 283 passengers and 80 wood delivered, three packed reopens")
   end
+end
+if arg[1]=="rail-joint" then
+  run(dofile("tests/fixtures/rc1-active-town-goods-year.lua"),nil,dofile("tests/fixtures/rc1-active-joint-rail-town.lua"))
+  return
 end
 if arg[1]=="air-joint" or arg[1]=="air-joint-full" then
   local fixtures=dofile("tests/fixtures/rc1-active-joint-airport-town.lua")

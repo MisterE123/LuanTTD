@@ -56,6 +56,64 @@ function M.member(s,group,mode)
   return record
 end
 
+-- Current shared station pairs use one road facade and one commercial
+-- facade. Keep this distinction explicit until multi-facility groups with
+-- more than two modes share the same backend.
+function M.commercial_member(group)
+  if group.members.air then return "air",group.members.air end
+  if group.members.rail then return "rail",group.members.rail end
+  if group.members.dock then return "dock",group.members.dock end
+end
+
+-- Geometry of the non-road half for spread and sign after road changes.
+-- Return ordinary map bounds (not a catchment or a berth).
+function M.commercial_bounds(s,group,xy)
+  local mode=M.commercial_member(group)
+  if not mode then return end
+  local record=M.member(s,group,mode)
+  if not record then return end
+  local minx,minz,maxx,maxz=math.huge,math.huge,-1,-1
+  local function add(cell)
+    local x,z=xy(cell)
+    minx,minz,maxx,maxz=math.min(minx,x),math.min(minz,z),math.max(maxx,x),math.max(maxz,z)
+  end
+  if mode=="dock" then
+    for _,p in ipairs(record.docks or {record}) do add(p.land);add(p.water) end
+  else
+    for _,cell in ipairs(record.tiles) do add(type(cell)=="table" and cell.id or cell) end
+  end
+  if maxx>=0 then return record,minx,minz,maxx,maxz end
+end
+
+-- Remove only a commercial facility and hand the common clock back to the
+-- road facade. The caller still owns removal of the physical facility tiles.
+function M.detach_commercial(s,Sim,record,mode,flag)
+  local group=record.stock_station_id~=nil and M.resolve(s,record.stock_station_id,mode,record.id,record)
+  if not group then return false end
+  local road=M.member(s,group,"road")
+  local commercial=s.stock_ship_commercial
+  local service=group.service_station_id and commercial and commercial.service.stations[group.service_station_id]
+  if road then
+    local ax,az,bx,bz=math.huge,math.huge,-1,-1
+    for _,t in ipairs(Sim.road_stop_tiles(road)) do
+      ax,az,bx,bz=math.min(ax,t.x+1),math.min(az,t.y+1),math.max(bx,t.x+1),math.max(bz,t.y+1)
+    end
+    local x,z=Sim.xy(group.tile)
+    group.tile=Sim.id(math.max(ax,math.min(bx,x)),math.max(az,math.min(bz,z)))
+    road.tile=group.tile
+    if service then
+      road.passenger_fraction=service.passenger_fraction
+      road.passenger_rating_phase=service.rating_phase
+      road.time_since_load,road.time_since_unload=service.time_since_load,service.time_since_unload
+      road.last_vehicle_type=service.last_vehicle_type
+    end
+  end
+  M.detach(s,group.id,mode,record.id,record)
+  group.service_station_id=nil
+  group.facilities=group.facilities-flag
+  return next(group.members)~=nil
+end
+
 M.mode_by_pool={}
 for mode,pool in pairs(pools) do M.mode_by_pool[pool]=mode end
 return M

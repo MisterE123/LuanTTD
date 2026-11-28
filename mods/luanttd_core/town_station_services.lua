@@ -70,7 +70,7 @@ return function(Sim)
       if not row then return end
       local key=record and record.stock_station_id
       local group=Joined and key~=nil and Joined.resolve(s,key,membership,record.id,record)
-      if not (group and group.members.road and group.members.air and group.tile) then
+      if not (group and group.members.road and Joined.commercial_member(group) and group.tile) then
         views[#views+1]=row
         return row
       end

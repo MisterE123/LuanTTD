@@ -81,6 +81,7 @@ return function(Service,key)
         end
       end
       service.vehicles[id].finance_asset_id=r.fleet_id
+      service.vehicles[id].stock_station_physical_vehicle=r.stock_pool_id
       live[id]=true
     end
     state.rail_serials=live

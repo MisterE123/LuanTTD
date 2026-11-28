@@ -1,6 +1,8 @@
 -- Explicit source rail topology, independent of the legacy rail prototype.
 return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
   local Lab={}
+  local joined_path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+  local RoadJoin=dofile(joined_path.."rail_road_station_join.lua")(Sim)
   local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local Freight=dofile(source.."../rail_freight_kinds.lua")
   local TownStations=Sim.road_station_retirement and dofile(source.."../town_station_services.lua")(Sim)
@@ -104,7 +106,11 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     if not TownStations then return end
     return Sim.road_station_retirement().closest(s,"rail",owner,first)
   end
-  function Lab.commit_station(s,owner,group,axis,area,join,gauge,graphics,reopen)
+  function Lab.commit_station(s,owner,group,axis,area,join,gauge,graphics,reopen,bus_join)
+    local road=bus_join and s.stations[bus_join]
+    if bus_join and (not road or road.owner~=owner or road.stock_station_id==nil or join or reopen) then
+      return false,"Station changed; select the footprint again."
+    end
     for _,tile in ipairs(group) do
       if Lab.facility_protected(s,tile) or not graphics and Lab.span_protected(s,tile) then return false,protected end
       local t=s.tiles[tile]
@@ -135,11 +141,12 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       else
         s.next_stock_rail_station=id+1
         st={id=id,owner=owner,axis=axis,tiles=group,area=area,
-          stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)}
+          stock_station_id=road and road.stock_station_id or Sim.stock_station_slot and Sim.stock_station_slot(s)}
       end
       st.sign_tile=group[1]
-      if s.stock_engine_startup_seed~=nil then st.stock_random_bits=Sim.stock_random_u32(s)%65536 end
+      if not road and s.stock_engine_startup_seed~=nil then st.stock_random_bits=Sim.stock_random_u32(s)%65536 end
       s.stock_rail_stations[id]=st
+      if road then RoadJoin.attach(s,st,road) end
     end
     if s.stock_engine_startup_seed~=nil then
       local order={}
@@ -253,14 +260,18 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     if not apply then return true end
     local rest={}
     for i,parcel in ipairs(st.tiles) do if i~=index then rest[#rest+1]=parcel end end
-    if #rest==0 and TownStations then TownStations.retire(s,"rail",st) end
+    if #rest==0 then
+      local remains=RoadJoin.detach(s,st)
+      if TownStations and not remains then TownStations.retire(s,"rail",st) end
+    end
     t.rail_station_id,t.rail_station_axis,t.rail_station_gfx,t.stock_station_random_bits=nil,nil,nil,nil
     if #rest==0 then
       s.stock_rail_stations[st.id]=nil
     else
       st.tiles,st.area=rest,nil
       st.area=Lab.station_bounds(s,st)
-      if st.sign_tile then
+      local group=RoadJoin.group(s,st)
+      if st.sign_tile and not (group and group.members.road) then
         local x,z=Sim.xy(st.sign_tile)
         local a=st.area
         st.sign_tile=Sim.id(math.max(a.x,math.min(x,a.x+a.w-1)),math.max(a.z,math.min(z,a.z+a.h-1)))
@@ -279,7 +290,8 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       for _,tile in ipairs(group) do
         if Lab.facility_protected(s,tile) then return false,protected end
       end
-      if TownStations then TownStations.retire(s,"rail",st) end
+      local remains=RoadJoin.detach(s,st)
+      if TownStations and not remains then TownStations.retire(s,"rail",st) end
       s.stock_rail_stations[st.id]=nil
       for _,tile in ipairs(group) do
         s.tiles[tile].rail_station_id=nil

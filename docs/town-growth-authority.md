@@ -992,4 +992,40 @@ docks are not offered as attachment targets in this slice.
   losing the station identity. It is a logic and rendering-frame check
   in the worker, not a graphical mouse playthrough.
 
-Using the same mechanism for other station combinations is still pending.
+The same mechanism now supports bus/rail stations below. Other mode
+combinations are still pending.
+
+## One station for a bus stop and a rail platform
+
+Drag or place a rail platform near an owned bus-only station. If the
+combined footprint fits the configured station spread, the normal
+platform tool offers that bus station in the picker. The bus stop keeps
+its sign and both facilities draw from one passenger queue. Orders still
+target the proper facility for their mode. Removing the final member of
+just one mode preserves the other member's physical StationID and rating
+clock, and clamps the shared sign if needed.
+
+The 128×128 stock Temperate reference has active bus, Wood and Goods
+service at tick 12602. The original bus sign and station ID (6059 and 1)
+remain when the rail platform goes down. A purchased Kirby and Passenger
+Wagon run between the joined platform and a separate station with two
+explicit non-stop orders. The port matches all 15,689 successive RNG
+states; 31,376 locomotive/coach poses (including locomotive speed); 1,304
+nonempty, arrival-ordered loading lists; and seven observations of the
+region's heights, houses, four towns and cargo through the end of 1950.
+The Luanti worker builds through the picker query and normal rail
+quote/commit commands. After a real SQLite server restart, the same
+physical joined station continues boarding rail passengers.
+
+One road-side difference was exposed by the changed cargo results and
+vehicle timings. An order to service can be issued in the middle of a
+dead-end turn. RC1's `GetVehicleTrackdir` supplies the logical direction
+for the nearest-depot search, but `RDE_TURNED` later invokes
+`RoadFindPathToDest` from the marker's physical entry direction.
+LuanTTD now preserves the remaining turn pixels and uses both original
+queries rather than attaching the pre-turn trackdir as the outgoing
+lane. The next economy day consumes the genuine service recheck RNG.
+
+This verifies ordinary non-stop passenger rail orders, not trains that
+may stop at unordered intermediate platforms, other station mode
+combinations, or automatic cargo distribution.

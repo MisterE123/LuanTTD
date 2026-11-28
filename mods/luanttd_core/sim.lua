@@ -2355,8 +2355,9 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
   if join and s.stations[join.id] and not compatible(join) then return nil,"INCOMPATIBLE_STATION_TILE" end
   local group=join and join.stock_station_id~=nil and M.stock_joined_station.resolve(
     s,join.stock_station_id,"road",join.id,join)
-  local airport=group and M.stock_joined_station.member(s,group,"air")
-  if airport and req.kind~="bus" then return nil,"AIRPORT_JOIN_UNPORTED_FACILITY" end
+  local facility,u,v,last_u,last_v
+  if group then facility,u,v,last_u,last_v=M.stock_joined_station.commercial_bounds(s,group,M.xy) end
+  if facility and req.kind~="bus" then return nil,"AIRPORT_JOIN_UNPORTED_FACILITY" end
   local result=road_stop_members.preview(join,parts)
   if join and not s.stations[join.id] then
     -- A gray sign moves to facil_xy when its first facility reopens,
@@ -2366,11 +2367,10 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
   if not result.spread or #changes==0 then return nil,"ALREADY_BUILT" end
   local spread=s.stock_station_spread or 12
   if result.spread.w>spread or result.spread.h>spread then return nil,"STATION_SPREAD" end
-  if airport then
+  if facility then
     local x,z=M.xy(result.spread.tile)
-    local u,v=M.xy(airport.origin)
-    if math.max(x+result.spread.w,u+airport.width)-math.min(x,u)>spread or
-        math.max(z+result.spread.h,v+airport.height)-math.min(z,v)>spread then return nil,"STATION_SPREAD" end
+    if math.max(x+result.spread.w,last_u+1)-math.min(x,u)>spread or
+        math.max(z+result.spread.h,last_v+1)-math.min(z,v)>spread then return nil,"STATION_SPREAD" end
   end
   if cost>company.cash then return nil,"NOT_ENOUGH_CASH" end
   local sid=join and join.id or s.next_station
@@ -2502,16 +2502,16 @@ function M.retire_road_station(s,id)
   if st and st.mode=="road" then
     local Joined=M.stock_joined_station
     local group=st.stock_station_id~=nil and Joined.resolve(s,st.stock_station_id,"road",id,st)
-    local airport=group and Joined.member(s,group,"air")
+    local facility,u,v,last_u,last_v
+    if group then facility,u,v,last_u,last_v=Joined.commercial_bounds(s,group,M.xy) end
     if group then Joined.detach(s,group.id,"road",id,st) end
-    if airport then
+    if facility then
       -- UpdateStationSignCoord clamps the original sign into the new
-      -- spread, not to the first airport tile unconditionally.
+      -- spread, not to the first tile unconditionally.
       local x,z=M.xy(group.tile)
-      local u,v=M.xy(airport.origin)
-      group.tile=M.id(math.max(u,math.min(u+airport.width-1,x)),math.max(v,math.min(v+airport.height-1,z)))
-      airport.sign_tile=group.tile
-      group.facilities=8
+      group.tile=M.id(math.max(u,math.min(last_u,x)),math.max(v,math.min(last_v,z)))
+      facility.sign_tile=group.tile
+      group.facilities=group.facilities-4
       local commercial=s.stock_ship_commercial
       local ledger=commercial and group.service_station_id and commercial.service.stations[group.service_station_id]
       if ledger then
@@ -5573,7 +5573,7 @@ local function automatic_road_service(s,faults,v,f,difficulty,date,random)
     {random32=random,nearest=function()
       local path,nearest,td,cost,frames=query()
       if path then return {tile=nearest,depot=nearest,cost=cost,path=path,td=td,frames=frames} end
-      if old and frame then
+      if frame then
         return source_route.reversing_depot_choice(s,v,frame,routing.occupancy(M,s))
       end
     end})

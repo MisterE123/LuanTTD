@@ -251,14 +251,36 @@ return function(Sim,F,C,Search,Board,Motion,MotionLeg)
     local board=Board(Sim,s,F,occupancy)
     local id,td=frame[4],state-6
     local origin=board.tile(id)
-    if not origin or not F.has_trackdir(F.tile_trackdirs(origin,false),td) then return end
+    if not origin or origin.kind~="road" or not F.has_trackdir(F.tile_trackdirs(origin,false),td) then return end
     local v={owner=vehicle.owner,bus=vehicle.cargo=="passenger",tile=id,display_max_speed=speed[vehicle.engine]}
     if not v.display_max_speed then return end
     local trace,_,cost=through(board,v,id,2^td,nil,{kind="any_depot"})
     local last=trace and trace[#trace]
     local dest=last and board.tile(last.tile)
     if dest and dest.kind=="depot" and dest.owner==vehicle.owner then
-      return {tile=last.tile,depot=last.tile,cost=cost}
+      local result={tile=last.tile,depot=last.tile,cost=cost}
+      local direction
+      for f=frame[15]+1,frame[15]+32 do
+        local kind,d=Motion.sample(state,1,f)
+        if kind=="turned" then direction=d;break end
+        if kind~="position" then break end
+      end
+      if direction~=nil then
+        -- The nearest-depot search above uses GetVehicleTrackdir. On
+        -- completion of the U-turn, RoadFindPathToDest instead chooses
+        -- the first real piece from the RDE_TURNED entry direction.
+        local route,chosen=through(board,v,id,F.origin_trackdirs(origin,false,direction),nil,{kind="tile",tile=last.tile})
+        local frames=route and MotionLeg(Motion,F,board).compile(route,frame,{
+          depot=true,reverse_before_trace={direction=direction}})
+        if frames and #frames>=2 then
+          local path={}
+          for _,piece in ipairs(route) do
+            if piece.tile~=path[#path] then path[#path+1]=piece.tile end
+          end
+          result.path,result.td,result.frames=path,chosen.last_td,frames
+        end
+      end
+      return result
     end
   end
 

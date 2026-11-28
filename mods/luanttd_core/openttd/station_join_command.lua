@@ -2,7 +2,7 @@
 -- Translated from OpenTTD 16.0-RC1 station_cmd.cpp: GetStationAround,
 -- FindJoiningBaseStation, BuildStationPart and CmdBuildAirport.
 -- Command-side selection, not the GUI's spiral list of distant choices.
-local M={BUS=4,AIRPORT=8}
+local M={TRAIN=1,BUS=4,AIRPORT=8}
 local min,max=math.min,math.max
 
 local function valid_area(board,area,spread)
@@ -54,9 +54,9 @@ function M.find(board,area,owner,p)
   return chosen
 end
 
--- Country and larger airports share the same join command. Terrain and
--- town-authority checks remain the owning airport command's responsibility.
-function M.airport_target(board,area,owner,p)
+-- Common command-side checks use the existing station spread and the
+-- station facility request, not a bounding box for the cargo catchment.
+function M.target(board,area,owner,p)
   if not p.new_station and p.join_id~=nil and
       (not p.distant or not board.station(p.join_id)) then return nil,"INVALID_STATION" end
   local ok,why=valid_area(board,area,p.spread)
@@ -67,9 +67,17 @@ function M.airport_target(board,area,owner,p)
   if not st and not p.new_station and board.closest_deleted then
     st=board.closest_deleted(area.tile,owner)
   end
-  if not st then return false end -- allocate a fresh station
+  if not st then return false end
   if st.owner~=owner then return nil,"NOT_STATION_OWNER" end
   if not combined_ok(board,area,st.spread,p.spread) then return nil,"STATION_TOO_SPREAD_OUT" end
+  return st
+end
+
+-- Country and larger airports share the same join command. Terrain and
+-- town-authority checks remain the owning airport command's responsibility.
+function M.airport_target(board,area,owner,p)
+  local st,why=M.target(board,area,owner,p)
+  if not st then return st,why end
   if st.airport then return nil,"TOO_CLOSE_TO_ANOTHER_AIRPORT" end
   return st
 end

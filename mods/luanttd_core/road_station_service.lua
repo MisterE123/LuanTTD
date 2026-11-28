@@ -64,7 +64,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     if not (s.stock_joined_stations and st and st.stock_station_id~=nil) then return end
     local group=Sim.stock_joined_station.resolve(s,st.stock_station_id,"road",st.id,st)
     local c=s.stock_ship_commercial
-    local id=group and group.members.air and group.service_station_id
+    local id=group and Sim.stock_joined_station.commercial_member(group) and group.service_station_id
     return id and c and c.service.stations[id] or nil
   end
   function M.acceptance(s,st,cargo)

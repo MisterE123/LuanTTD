@@ -179,7 +179,7 @@ return function(Sim,Kernel,Packets)
       local group=s.stock_joined_stations and st.stock_station_id~=nil and
         Sim.stock_joined_station.resolve(s,st.stock_station_id,"road",st.id,st)
       local c=s.stock_ship_commercial
-      local air=group and group.members.air and group.service_station_id and c and c.service.stations[group.service_station_id]
+      local air=group and Sim.stock_joined_station.commercial_member(group) and group.service_station_id and c and c.service.stations[group.service_station_id]
       if st.mode=="road" and not air then -- shared GoodsEntry was already rated by the commercial caller
         local xx,yy=Sim.xy(st.tile)
         local g=goods(s,st)

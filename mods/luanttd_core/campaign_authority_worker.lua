@@ -285,6 +285,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
           r=A.rail_place(q.player,q.request,q.ticket)
           if r.ok and cap.durable_actions and r.revision~=before then checkpoint() end
         elseif q.kind=="rail_quote" then r=A.rail_quote(q.player,q.request,q.peek==true)
+        elseif q.kind=="rail_join_choices" then r=A.rail_quote(q.player,q.request,"road_join_choices")
         elseif q.kind=="transport_quote" then r=A.transport_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="terrain_quote" then r=A.terrain_quote(q.player,q.request,q.peek==true)
         elseif q.kind=="town_authority" then r=A.town_authority(q.player,q.town)

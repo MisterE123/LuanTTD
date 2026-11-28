@@ -98,6 +98,7 @@ return function(Sim,R,max_days)
     end
     local gauge=request.railtype
     if gauge~=nil and not integer(gauge,0,3) then return reply(false,"INVALID_RAIL_TYPE") end
+    if peek=="road_join_choices" and request.tool~="station" then return reply(false,"INVALID_RAIL_STATION_GESTURE") end
     if request.tool=="autotrack" then
       local q,why=auto_quote(rail,name,request,gauge)
       if peek then return reply(q~=nil,why,q and auto_offer(q,name)) end
@@ -149,8 +150,12 @@ return function(Sim,R,max_days)
     elseif request.tool=="station" and integer(request.axis,0,1) and
       integer(request.length,1,16) and integer(request.tracks,1,16) then
       if (math.abs(x-u)+1)*(math.abs(z-v)+1)>256 then return reply(false,"RAIL_STATION_TOO_LARGE") end
+      if request.road_station_id~=nil and not integer(request.road_station_id,0,0xFFFD) then
+        return reply(false,"INVALID_STATION")
+      end
       q,why=rail.quote_station(name,first,last,{axis=request.axis,length=request.length,
-        tracks=request.tracks,separate=request.separate==true,drag=request.drag==true,railtype=gauge})
+        tracks=request.tracks,separate=request.separate==true,drag=request.drag==true,railtype=gauge,
+        road_station_id=request.road_station_id})
     elseif request.tool=="signal" and integer(request.trackdir,0,13) and
       (request.kind==0 or request.kind==4 or request.kind==5) then
       q,why=rail.quote_signal_track(name,first,request.trackdir,request.kind,request.both==true)
@@ -159,6 +164,11 @@ return function(Sim,R,max_days)
     elseif request.tool=="signal_remove" and integer(request.track,0,5) then
       q,why=rail.quote_remove_signal(name,first,request.track)
     else return reply(false,"UNSUPPORTED_RAIL_GESTURE") end
+    if peek=="road_join_choices" then
+      if not q then return reply(false,why) end
+      local rows,error_=rail.join_road_choices(name,q)
+      return reply(rows~=nil,error_,rows)
+    end
     if peek then return reply(q~=nil,why,q and {tiles=q.ids,cost=q.price,kind=q.kind}) end
     rail_quotes[name]=nil
     if not q then return reply(false,why) end
