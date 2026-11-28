@@ -3,9 +3,9 @@
 -- table/cargo_const.h. Bind the exact climate records to the existing
 -- stock industry accounting, rather than a second water/food economy.
 local directory=(core and core.get_modpath and core.get_modpath("luanttd_core").."/openttd/") or "mods/luanttd_core/openttd/"
-local Geometry=dofile(directory.."industry_footprint_rc1.lua")
 local Layout=dofile(directory.."stock_industry_layouts_rc1.lua")
 local Stock=dofile(directory.."industry_spec_rc1.lua")
+local Admission=dofile(directory.."industry_admission_rc1.lua")
 local life={Organic="organic",Extractive="extractive",Processing="processing",INDUSTRYLIFE_BLACK_HOLE="black_hole"}
 return function(F,Water,Food,Houses,climate)
   if climate~="arctic" and climate~="tropic" then return F end
@@ -52,25 +52,10 @@ return function(F,Water,Food,Houses,climate)
   -- campaign host still owns town/pool admission and platform grading.
   function F.climate_footprint(kind,variant,x,z,board,instances,worldgen)
     local src=assert(physical[kind],"Not a stock climate industry")
-    local s=board.tile(x,z)
-    if not s or not s.valid then return nil,"SITE_UNSUITABLE" end
-    for _,other in ipairs(instances or {}) do
-      for _,t in ipairs(src.conflicts) do
-        if t==other.type and math.max(math.abs(x-other.x),math.abs(z-other.z))<=14 then
-          return nil,"INDUSTRY_TOO_CLOSE"
-        end
-      end
-    end
-    if src.check=="Water" then
-      local ok,why=Water.anchor(s.zone)
-      if not ok then return nil,why end
-    elseif src.check=="Plantation" and not Food.plantation_anchor(s.zone) then return nil,"SITE_UNSUITABLE" end
-    local plan,why=Geometry.tiles_free(assert(F.layout[kind][variant]),Layout.slope_refused,
-      x,z,{only_in_town=src.behavior.OnlyInTown},board)
-    if not plan then return nil,why end
-    local ok,needs_grading=Geometry.slopes(plan,Layout.slope_refused,worldgen,worldgen,false)
-    if not ok then return nil,needs_grading end
-    return plan,needs_grading
+    local q,why=Admission.quote(src,assert(F.layout[kind][variant]),Layout.slope_refused,x,z,board,
+      {landscape=climate,terragenesis=worldgen,generating_world=worldgen,multiple=board.multiple_industries_per_town},instances)
+    if not q then return nil,why end
+    return q.cells,q.needs_grading,q
   end
   function F.tile_acceptance(gfx,cargo)
     local food=Food.acceptance_eighths(gfx,cargo,climate)

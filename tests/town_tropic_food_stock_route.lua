@@ -52,6 +52,7 @@ local function prepare()
   local F=resume()
   local existing={}
   local board={}
+  function board.town() return {id=1,x=20,z=49,population=467} end
   function board.tile(x,z)
     local i=id(x,z);local t=i and s.tiles[i]
     if not t then return end
@@ -76,7 +77,7 @@ local function prepare()
       a.house,a.source_house=nil,nil
       a.stock_industry={id=n,gfx=q.gfx,chain="climate"}
     end
-    existing[#existing+1]={type=F.spec[k].id,x=x,z=z}
+    existing[#existing+1]={type=F.spec[k].id,x=x,z=z,town=1}
   end
   plant("water_supply",11,19,6)
   plant("water_tower",12,19,47)

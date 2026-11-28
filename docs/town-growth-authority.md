@@ -1653,3 +1653,21 @@ and the two RNG words after tile construction. This includes
 42 firms in Original Economy worlds and a Frozen Toyland world.
 Farm planting and changes to the terrain platform are separate
 phases; this test does not claim that they select the same sites.
+
+### Industry location rules and site quote order
+
+The vanilla site checks now cover the Arctic farm and forest
+snowline, desert Water and non-desert plantations, rainforest
+Lumber Mills, lowland Bubble Generators, and the separately scaled
+Refinery and Oil Rig coastline limits. They also cover stock town
+population and center-distance requirements, duplicate firms per
+town, and the original 14-tile exclusion. There are 10,800
+comparisons against the compiled RC1 location and town functions.
+
+The controlled Tropic service now obtains an industry quote in
+the same order as vanilla: conflicting firms, town admission,
+footprint clearance, climate/location, slopes, platform check
+and pool admission. A quote never makes terrain changes. The
+native restart and live Food/Water growth proof still pass.
+The generated-map adapter must still provide the real town
+lookup, terrain edits, and population of the industry pool.
