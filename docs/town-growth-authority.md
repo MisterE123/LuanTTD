@@ -1402,3 +1402,22 @@ cargo roster. The regression checks 3,080 source-derived comparisons
 and the regular road runtime. Houses never accept Water; OpenTTD's
 Tropic Water Tower is the industry acceptance path for that growth
 requirement. The new supply chains are not yet playable.
+
+### Tropic water service rules and stock data
+
+The Water Supply (stock industry 21) and Water Tower (22) have the
+original footprints and cargo records. The tower accepts Water
+through its single industry tile, and Water Supply produces it.
+Both require a desert anchor and reject their conflicting industry
+within 14 tiles. A tower replaces a house using an owner-town clear
+quote, not a general plot within city limits. The three original
+road tankers have their RC1 climate, capacity, weight, purchase and
+running factors, and engine-introduction data.
+
+In the town receipt test, Food alone still blocks a desert town at
+91 population. Water accepted by an industry is credited to the
+station's town for growth, but is not household water consumption.
+Delivering both effects opens the next month's growth and allows it
+to close again after an unsupplied month. This is the stock
+water-specific data and rule port; industry creation, a playable
+tanker route, and the 3D assets are not yet mounted.
