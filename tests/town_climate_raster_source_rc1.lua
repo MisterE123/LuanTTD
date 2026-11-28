@@ -9,9 +9,10 @@ local p="mods/luanttd_core/openttd/"
 local Slope=dofile(p.."slope.lua")
 local TGP=dofile(p.."terragenesis.lua")(Slope)
 local Climate=dofile(p.."town_climate_landscape_rc1.lua")
+local TreeClimate=dofile(p.."tree_climate_rc1.lua")
 local River=dofile(p.."river_worldgen.lua")(Slope,
   dofile(p.."river_landscape_rc1.lua"),dofile(p.."river_yapf_rc1.lua"),
-  dofile(p.."tree_lifecycle_temperate.lua")(dofile(p.."tree_worldgen.lua")))
+  dofile(p.."tree_lifecycle_temperate.lua")(dofile(p.."tree_worldgen.lua"),TreeClimate))
 local Terrain=dofile(p.."terrain.lua")
 local Raster=dofile(p.."stock_climate_raster_rc1.lua")(Climate,River,Slope)
 local cases={
@@ -91,3 +92,58 @@ end
 assert(old_desert==2779 and river_tiles==1977)
 print(("PASS four native RC1 Tropic river maps: %d complete tile comparisons, %d river tiles and %d removed desert zones"):
   format(squares,river_tiles,old_desert))
+
+-- Real Tropic seeds with the stock Improved tree placer. These
+-- deliberately contain wooded terminal wetlands, not zero-tree maps.
+local wooded={
+  {92714,{51822,1503952669,1178545279,2224,62,1130132792,353067503,1420509103,327503182,2096091960,1616726842,514408431,1803457060,723148231,637249236,1383020346,1374757934}},
+  {49832,{51822,2937394600,1693022804,1718,51,980850018,111563986,1420509103,1350869292,1844192794,1301171585,1596626412,1874600199,757206843,1182334445,1129495338,1765783348}},
+  {9152,{51822,1205151467,1282742301,1463,50,470363359,753800510,1420509103,941766583,2141828185,476755711,752508495,2040181177,1017504916,1001053822,341347638,1474211817}},
+}
+local total_trees=0
+local keys={"type","count","growth","ground","density"}
+for _,r in ipairs(wooded) do
+  local seed,expected=unpack(r)
+  local w=256
+  local base=TGP.generate({seed=seed,width=w,depth=w,terrain_type=1,water_borders=0,variety=2,
+    landscape="tropic",rng_state=TGP.startup_rng(seed)})
+  local prep=Raster.prepare(base,{desert_coverage=10})
+  local result=River.generate(prep,TGP.next_random,{terrain=Terrain,rc1=true,original=false,terrain_type=1,
+    tree_placer=2,tree_climate=TreeClimate,climate_rules=Climate,amount_of_rivers=3,min_river_length=4})
+  local a={result.river_tileloop_cursor,result.rng_after[1],result.rng_after[2],0,0}
+  for i=1,12 do a[i+5]=1 end
+  for z=1,w do for x=1,w do
+    local word=result.tile(x,z)
+    local typ=word%16
+    local water=typ==6 and floor(word/16)%16 or 0
+    local row={result.corner(x,z),typ,result.tropic_zone(x,z),typ==0 and floor(word/256)%16 or 255,
+      result.clear_density(x,z) or 255,water,water==3 and result.river_bits(x,z) or 255}
+    local tree=result.river_tree(x,z)
+    assert((tree~=nil)==(typ==4))
+    for k,name in ipairs(keys) do row[k+7]=tree and tree[name] or 255 end
+    if water==3 then a[4]=a[4]+1 end
+    if tree then a[5]=a[5]+1 end
+    for i=1,12 do a[5+i]=(a[5+i]*65599+row[i])%2147483647 end
+  end end
+  for i=1,#a do assert(a[i]==expected[i],("Tropic wooded seed %u field %d: got %.0f expected %.0f"):format(seed,i,a[i],expected[i])) end
+  total_trees=total_trees+a[5]
+end
+assert(total_trees==163)
+print("PASS three native RC1 wooded Tropic river maps, 196,608 tiles and 163 exact trees")
+
+-- Explicit edge cases from TreeType and the climate prefix of TileLoop_Trees.
+assert(TreeClimate.kind("tropic",TreeClimate.DESERT,12)==27)
+assert(not TreeClimate.kind("tropic",TreeClimate.DESERT,13))
+assert(TreeClimate.kind("tropic",TreeClimate.NORMAL,0)==28 and TreeClimate.kind("tropic",TreeClimate.NORMAL,255)==31)
+assert(TreeClimate.kind("tropic",TreeClimate.RAINFOREST,0)==20 and TreeClimate.kind("tropic",TreeClimate.RAINFOREST,255)==26)
+local TL=dofile(p.."tree_lifecycle_temperate.lua")(dofile(p.."tree_worldgen.lua"),TreeClimate)
+local tree={class=4,type=21,count=1,growth=3,ground=1,density=1}
+local dry=TL.visit(tree,3,4,2560,2,function() error("noncactus in desert skips ordinary growth roll") end,
+  nil,nil,TreeClimate.DESERT)
+assert(dry.growth==4 and dry.ground==2 and dry.density==3)
+assert(not TreeClimate.can_spread("tropic",TreeClimate.DESERT,2))
+assert(TreeClimate.can_spread("tropic",TreeClimate.RAINFOREST,1))
+assert(not TreeClimate.can_spread("tropic",TreeClimate.NORMAL,1))
+local calls=0
+local forest=TL.visit(tree,0,0,0,3,function() calls=calls+1;return 65535 end,nil,nil,TreeClimate.RAINFOREST)
+assert(forest==tree and calls==1)

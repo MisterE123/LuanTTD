@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- OpenTTD contributors, 16.0-RC1 src/tree_cmd.cpp, Temperate TileLoop_Trees.
--- Shore water, ambient effects and the shared RNG are owned by the host.
-return function(Worldgen)
+-- OpenTTD contributors, 16.0-RC1 src/tree_cmd.cpp TileLoop_Trees.
+-- Shore water and ambient sound playback are owned by the host.
+return function(Worldgen,Climate)
   local T={NO_SPREAD=0,RAINFOREST_ONLY=1,SPREAD_ALL=2,NO_GROWTH=3}
   local GRASS,ROUGH,SHORE=Worldgen.ground.grass,Worldgen.ground.rough,Worldgen.ground.shore
   local function clone(old)
@@ -9,16 +9,31 @@ return function(Worldgen)
     for k,v in pairs(old) do copy[k]=v end
     return copy
   end
-  function T.visit(tree,x,z,tick,setting,random,neighbor,context)
+  function T.visit(tree,x,z,tick,setting,random,neighbor,context,tropic_zone)
     setting=setting or T.SPREAD_ALL
     local cycle=11*x+9*z+math.floor(tick/256)
     local new=tree
-    if cycle%8==7 and tree.ground==GRASS and tree.density<3 then
-      new=clone(tree);new.density=tree.density+1
+    if tropic_zone~=nil and tree.ground~=SHORE then
+      if tropic_zone==Climate.DESERT and tree.ground~=2 then
+        new=clone(tree);new.ground,new.density=2,3
+      elseif tropic_zone==Climate.RAINFOREST then
+        -- Source consumes this word even when ambient sound is off.
+        random()
+      end
+    end
+    if cycle%8==7 and new.ground==GRASS and new.density<3 then
+      if new==tree then new=clone(tree) end
+      new.density=new.density+1
     end
     if setting==T.NO_GROWTH or cycle%16~=15 then return new end
-    local spread=setting==T.SPREAD_ALL
+    local spread=tropic_zone==nil and setting==T.SPREAD_ALL or
+      tropic_zone~=nil and Climate.can_spread("tropic",tropic_zone,setting)
     if tree.growth==3 then
+      if tropic_zone and tropic_zone==Climate.DESERT and tree.type~=Climate.CACTUS then
+        if new==tree then new=clone(tree) end
+        new.growth=4
+        return new
+      end
       local choice=random()%8
       if choice==0 then
         if new==tree then new=clone(tree) end
@@ -31,9 +46,15 @@ return function(Worldgen)
         local target=neighbor(d,context,x,z)
         if Worldgen.can_plant(target,false) and not (target.class==0 and
            (target.ground or 0)==0 and target.density~=3) then
-          local g=target.class==6 and SHORE or target.ground==1 and ROUGH or GRASS
+          local g,density
+          if tropic_zone~=nil then
+            g,density=Climate.ground(target)
+          else
+            g=target.class==6 and SHORE or target.ground==1 and ROUGH or GRASS
+            density=g==GRASS and target.density or 3
+          end
           return new,{kind="plant",direction=d,tree={class=4,type=tree.type,count=1,growth=0,
-            ground=g,density=g==GRASS and target.density or 3,water_class=g==SHORE and "sea" or nil}}
+            ground=g,density=density,water_class=g==SHORE and "sea" or nil}}
         end
       end
       return new

@@ -1381,8 +1381,15 @@ River springs require rainforest, terminus sites reject desert, and
 river writes remove desert within the stock five-tile footprint. Soil
 and the live town-center projection follow the updated zone. River
 random bytes, shared RNG and the post-river LFSR cursor also match.
-The stock Temperate river tests still pass. Other climates are not
-playable campaigns, and the Tropic wetland tree rules are not mounted.
+Three more actual Tropic worlds use the stock Improved tree placer
+and contain wooded terminal wetlands. Their 196,608 map cells,
+163 trees (type, count, growth, ground and density), river records and
+shared RNG match RC1. Rainforest tree visits consume the source
+ambient RNG word even without sound; desert foliage uses the stock
+cover and spread rules. Ordinary Temperate river tests still pass.
+These checks stop at the end of river generation; they do not cover
+general climate forest generation, the live climate economy or new
+3D foliage assets.
 
 ### House cargo acceptance by climate
 
