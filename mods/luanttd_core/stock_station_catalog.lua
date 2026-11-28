@@ -14,6 +14,15 @@ return function(Sim)
 
   function M.board(s)
     local catalog={}
+    local function include(target,area)
+      if not area then return end
+      local prior=target.spread
+      if not prior then target.spread=area;return end
+      local x,y=Sim.xy(prior.tile)
+      local u,v=Sim.xy(area.tile)
+      local a,b=math.min(x,u),math.min(y,v)
+      target.spread={tile=Sim.id(a,b),w=math.max(x+prior.w,u+area.w)-a,h=math.max(y+prior.h,v+area.h)-b}
+    end
     local function register(mode,host,row)
       local id=row and row.stock_station_id
       if id==nil or row.neutral then return end
@@ -24,11 +33,21 @@ return function(Sim)
       target.group=group
       if mode=="road" then
         target.road,target.name=host,row.name
-        target.spread=enclosing(Sim.road_stop_tiles(row))
+        include(target,enclosing(Sim.road_stop_tiles(row)))
         target.bus_only=Sim.road_stop_has(row,"bus") and not Sim.road_stop_has(row,"truck") and not row.tram_only
-      elseif mode=="air" then target.airport=host
-      elseif mode=="rail" then target.rail=host
-      elseif mode=="dock" then target.dock=host end
+      elseif mode=="air" or mode=="rail" or mode=="dock" then
+        target[mode=="air" and "airport" or mode]=host
+        local cells={}
+        local function add(cell)
+          local x,y=Sim.xy(cell);cells[#cells+1]={x=x-1,y=y-1}
+        end
+        if mode=="dock" then
+          for _,dock in ipairs(row.docks or {row}) do add(dock.land);add(dock.water) end
+        else
+          for _,tile in ipairs(row.tiles or {}) do add(type(tile)=="table" and tile.id or tile) end
+        end
+        include(target,enclosing(cells))
+      end
       return target
     end
     for host,row in pairs(s.stations or {}) do

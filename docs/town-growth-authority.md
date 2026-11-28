@@ -954,8 +954,10 @@ If an owned bus-only station is within the stock join spread, the station
 picker offers that station or a separate airport. The original sign and
 town stay put when the airport is attached; selecting the airport or
 the bus platform still gives a valid destination for that transport mode.
-Buoys, waypoints, truck stops, tram-only platforms, rail platforms, and
-docks are not offered as attachment targets in this slice.
+Buoys, waypoints, truck stops, tram-only platforms, standalone rail
+stations, and docks are not offered as attachment targets in this slice.
+A bus station with a rail platform is eligible; see the three-mode check
+below.
 
 - RC1 `station_cmd.cpp` (`FindJoiningBaseStation`, `CmdBuildAirport`,
   `BuildStationPart`) and `station.cpp` (`AddFacility`,
@@ -1041,3 +1043,35 @@ lane. The next economy day consumes the genuine service recheck RNG.
 This verifies ordinary non-stop passenger rail orders, not trains that
 may stop at unordered intermediate platforms, other station mode
 combinations, or automatic cargo distribution.
+
+
+## One station for a bus stop, airport and railway
+
+A bus station can now take both an airport and a rail platform through
+the normal station picker, in either order. The stock spread check uses
+all existing facility tiles before accepting the build. The original
+StationID, sign, passenger and mail catchment, ratings and passenger
+queue belong to the shared station. Aircraft use the airport's
+hangar and layout, and trains use the actual platform length and
+per-wagon loading tile. Those facility coordinates do not become
+new station identities.
+
+OpenTTD 16.0-RC1's `CmdBuildAirport`, `CmdBuildRailStation`,
+`Station::AddFacility`, `CheckStationSpread`, and
+`UpdateStationSignCoord` supply the construction and sign rules.
+The station tick processes vehicles in arrival order before the
+individual movement passes. On an ordinary 128×128 Temperate map
+with a bus, Wood and Goods service, a Yate with Full Load All and a
+Kirby with a passenger coach joined physical StationID 1. The replay
+matches 15,689 random-state checks, 12,012 nonempty loading lists,
+15,688 passenger/mail station records and aircraft movement samples,
+plus the locomotive pose, coach planar motion and seven housing/town
+snapshots. At tick 13,571 all three modes load at the same station
+with the same queue order as OpenTTD. The regular Luanti worker also
+keeps one station and resumes service for all three after a process
+restart. Removing a stop, airport or rail platform leaves the remaining
+facilities on the original StationID and clamps the station sign to
+their remaining extent. An empty station still follows the stock
+expiration clock. Docks, cross-mode joining without a bus facility,
+and specialized freight-rail platform combinations remain outside
+the supported construction paths.

@@ -11,7 +11,7 @@ return function(Sim)
   local function area(airport) return {tile=airport.origin,w=airport.width,h=airport.height} end
   function M.choices(s,airport)
     local board=Catalog.board(s)
-    board.matches=function(st) return st.bus_only and not st.airport and not st.rail and not st.dock end
+    board.matches=function(st) return st.bus_only and not st.airport and not st.dock end
     if s.stock_distant_join_stations==false then return {{name="Build a separate airport"}} end
     local choices=Picker.find(board,area(airport),airport.owner,s.stock_station_spread or 12,true)
     local rows={}
@@ -27,7 +27,7 @@ return function(Sim)
     })
     if why then return nil,why end
     if not target then return false end
-    if not target.bus_only or target.rail or target.dock then return nil,"AIRPORT_JOIN_UNPORTED_FACILITY" end
+    if not target.bus_only or target.dock then return nil,"AIRPORT_JOIN_UNPORTED_FACILITY" end
     return target.road
   end
 
@@ -36,8 +36,8 @@ return function(Sim)
     local group=Joined.attach(s,id,owner,"road",road.id)
     Joined.attach(s,id,owner,"air",airport.id)
     group.tile,group.town,group.random_bits=road.tile,road.town or road.site,road.stock_random_bits
-    group.facilities=(Sim.road_stop_has(road,"bus") and Command.BUS or 0)+
-      (Sim.road_stop_has(road,"truck") and 2 or 0)
+    group.facilities=group.facilities or ((Sim.road_stop_has(road,"bus") and Command.BUS or 0)+
+      (Sim.road_stop_has(road,"truck") and 2 or 0))
     Command.add_facility(group,Command.AIRPORT,airport.origin,owner,
       s.day,function() return Sim.stock_random_u32(s) end)
     airport.sign_tile,airport.name,airport.town,airport.stock_random_bits=group.tile,road.name,group.town,group.random_bits

@@ -13,6 +13,9 @@ printf 'gameid = luanttd\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_back
 export HOME="$out/home" LUANTI_GAME_PATH="$out/games" MINETEST_GAME_PATH="$out/games"
 port=${BAYLINE_NATIVE_PORT:-43387}
 printf 'port = %s\nprometheus_listener_address = 127.0.0.1:%s\nserver_announce = false\nbind_address = 127.0.0.1\n' "$port" "$port" > "$out/server.conf"
+if [[ ${1:-} == triple ]]; then
+  printf 'luanttd_qa_triple_station = true\n' >> "$out/server.conf"
+fi
 for phase in SERVICE REOPEN; do
   timeout 120 luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' > "$out/$phase.log" 2>&1 || {
     tail -80 "$out/$phase.log";exit 1;

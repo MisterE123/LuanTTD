@@ -70,14 +70,19 @@ return function(Sim)
       if not row then return end
       local key=record and record.stock_station_id
       local group=Joined and key~=nil and Joined.resolve(s,key,membership,record.id,record)
-      if not (group and group.members.road and Joined.commercial_member(group) and group.tile) then
+      local primary,primary_id
+      if group and group.tile then
+        if group.members.road then primary,primary_id="road",group.members.road
+        else primary,primary_id=Joined.commercial_member(group) end
+      end
+      if not primary then
         views[#views+1]=row
         return row
       end
       local shared=mixed[key]
       if not shared then
         local x,z=Sim.xy(group.tile)
-        shared=project(group.members.road,"road",x,z,row)
+        shared=project(primary_id,primary=="dock" and "ship" or primary,x,z,row)
         mixed[key]=shared
         views[#views+1]=shared
       else

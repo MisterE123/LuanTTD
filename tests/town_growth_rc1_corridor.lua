@@ -17,7 +17,8 @@ local function run(ref,founding,air)
   if air and air.rail then
     cap.rail=m("rail_dispatch_manifest").scan(mod,false,false)
     s.rail_owned_service,s.rail_span_enabled,s.rail_paid_service=true,true,true
-  elseif air then
+  end
+  if air and (not air.rail or air.triple) then
     s.air_paid_service,s.air_owned_preview,s.air_fleet_preview,cap.air[216]=true,true,true,true
   end
   local Mount,Endpoint=m("campaign_authority_runtime"),m("campaign_authority_endpoint")
@@ -125,7 +126,7 @@ local function run(ref,founding,air)
     maps=maps+1
   end
   local air_rng,air_ticks,air_poses,air_motion,air_snapshots=1,0,0,1,0
-  local rail_order_hash,rail_order_count=1,0
+  local rail_order_hash,rail_order_count,triple_air_pose,triple_air_count=1,0,1,0
   local joint_count,joint_hash,queue_count,queue_hash=0,1,0,1
   local original_random=S.stock_random_u32
   local forced,crashed,retired
@@ -178,6 +179,7 @@ local function run(ref,founding,air)
       return action("rail_commit",{token=q.token})
     end
     local first,second,depot=S.id(44,54),S.id(50,54),S.id(52,54)
+    if air.triple then first,second,depot=S.id(48,47),S.id(54,47),S.id(56,47) end
     rail({tool="track",first=first,last=depot-1,track=Track.X})
     rail({tool="depot",first=depot,direction=Track.NE})
     local request={tool="station",first=first,last=first,axis=0,length=1,tracks=1,separate=true,drag=true}
@@ -189,7 +191,8 @@ local function run(ref,founding,air)
     rail(request)
     local linked=assert(s.stock_rail_stations[s.tiles[first].rail_station_id])
     assert(linked.stock_station_id==1 and linked.sign_tile==bt and linked.town==s.stations[s.tiles[bt].station].town)
-    same(12602,"joined rail construction random words",s.passenger_rating_rng,{2585200608,3361959040})
+    same(12602,"joined rail construction random words",s.passenger_rating_rng,
+      air.triple and {3453847027,1446032159} or {2585200608,3361959040})
     rail({tool="station",first=second,last=second,axis=0,length=1,tracks=1,separate=true,drag=true})
     if air.extra_platform then
       local middle=S.id(47,54)
@@ -206,9 +209,9 @@ local function run(ref,founding,air)
     local train
     for id,u in pairs(q.units) do if #u.stocks==2 and u.stocks[1]==0 and u.stocks[2]==27 then train=id end end
     local west,east=s.tiles[first].rail_station_id,s.tiles[second].rail_station_id
-    assert(s.stock_rail_stations[east].stock_station_id==5)
+    assert(s.stock_rail_stations[east].stock_station_id==(air.triple and 6 or 5))
     action("transport_start",{mode="rail",vehicle=assert(train),first=west,second=east})
-    assert(s.stock_rail_dispatch.runs[1].stock_pool_id==5)
+    assert(s.stock_rail_dispatch.runs[1].stock_pool_id==(air.triple and 7 or 5))
     if air.intermediate then
       for row=1,2 do
         local o=checked(A.orders(owner,"rail",train,1))
@@ -245,7 +248,10 @@ local function run(ref,founding,air)
   end
   local function observe_rail(tick)
     if tick<air.first or tick>air.last then return end
-    if tick==air.build then buy_joined_rail_leg() end
+    if tick==air.build then
+      if air.triple then buy_airport_leg() end
+      buy_joined_rail_leg()
+    end
     air_rng=fold(air_rng,tick,unpack(s.passenger_rating_rng))
     air_ticks=air_ticks+1
     if tick==air.build then return end
@@ -254,14 +260,32 @@ local function run(ref,founding,air)
     local st=assert(service.stations[group.service_station_id])
     local road=assert(s.stations[group.members.road])
     assert(st.stock==road.stock and st.passenger_rating_state==road.passenger_rating_state)
-    local waiting=0
+    local waiting,mail=0,0
     for _,p in ipairs(st.stock.passenger or {}) do waiting=waiting+p.units end
+    if air.triple then
+      assert(group.facilities==13 and #st.tiles==14 and st.host_mode=="air" and st.host_id==group.members.air)
+      assert(not service.stations[0x4000+group.members.rail])
+      if tick==air.build+1 then
+        local Catchment=m("openttd/station_catchment")(m("openttd/passengers"),m("openttd/station_rating"))
+        local catchment=Catchment.build(st,S.W,S.H,s.stock_modified_catchment)
+        local cells=0
+        for _ in pairs(catchment.tiles) do cells=cells+1 end
+        assert(cells==201 and Catchment.bitmap_iteration_only_tile(catchment))
+      end
+      for _,p in ipairs(st.stock.mail or {}) do mail=mail+p.units end
+      local p=assert(N.air.run.current(s))
+      local v=p.vehicle
+      triple_air_pose=fold(triple_air_pose,tick,v.x-16,v.z-16,v.y,v.speed,v.subspeed,v.progress,v.direction,v.state,v.pos,
+        v.previous_pos,s.stock_small_airports[p.target].stock_station_id,v.loading and 1 or 0)
+      triple_air_count=triple_air_count+1
+    end
     local order={}
     for _,id in ipairs(st.loading_order) do
       local v=service.vehicles[id]
-      order[#order+1]={v.load_state.arrived_tick,v.stock_station_physical_vehicle,0}
+      order[#order+1]={v.load_state.arrived_tick,v.stock_station_physical_vehicle,v.mode=="air" and 3 or 0}
       for _,body in ipairs(v.carrying_parts or {v}) do
-        if body.cargo=="passenger" then waiting=waiting+body.load_state.reserved_units end
+        if body.cargo=="passenger" then waiting=waiting+body.load_state.reserved_units
+        elseif body.cargo=="mail" then mail=mail+body.load_state.reserved_units end
       end
     end
     for _,id in ipairs(road.loading_order or {}) do
@@ -274,8 +298,16 @@ local function run(ref,founding,air)
       queue_hash=fold(queue_hash,tick,#order)
       for _,v in ipairs(order) do queue_hash=fold(queue_hash,v[2],v[3]) end
       queue_count=queue_count+1
+      if tick==air.triple_tick then
+        assert(#order==3 and order[1][2]==5 and order[2][2]==2 and order[3][2]==7)
+      end
     end
-    joint_hash=fold(joint_hash,tick,st.rating_phase,st.time_since_load,st.time_since_unload,waiting,st.passenger_rating_state.rating)
+    if air.triple then
+      joint_hash=fold(joint_hash,tick,st.rating_phase,st.time_since_load,st.time_since_unload,
+        waiting,mail,st.passenger_rating_state.rating,st.mail_rating_state and st.mail_rating_state.rating or 175)
+    else
+      joint_hash=fold(joint_hash,tick,st.rating_phase,st.time_since_load,st.time_since_unload,waiting,st.passenger_rating_state.rating)
+    end
     joint_count=joint_count+1
     local run=assert(s.stock_rail_dispatch.runs[1])
     if air.order and (tick<=13300 or tick%113==0) then
@@ -290,7 +322,12 @@ local function run(ref,founding,air)
       rail_order_count=rail_order_count+1
     end
     for i,v in ipairs(run.consist.parts) do
-      local entry={tick,4+i,v.tile-1,v.pose.x-16,v.pose.y-16,run.z,run.direction}
+      local entry
+      if air.triple then
+        entry={tick,i,v.tile-1,v.pose.x-16,v.pose.y-16}
+        if i==1 then entry[#entry+1]=run.z end
+        entry[#entry+1]=run.direction
+      else entry={tick,4+i,v.tile-1,v.pose.x-16,v.pose.y-16,run.z,run.direction} end
       if i==1 then entry[#entry+1]=run.speed end -- native coach has no raw front speed
       air_motion=fold(air_motion,unpack(entry));air_poses=air_poses+1
     end
@@ -442,7 +479,11 @@ local function run(ref,founding,air)
   end
   if air and air.rail then
     same(air.last,"joined rail year",{air_ticks,air_rng,air_poses,air_motion,joint_count,joint_hash,queue_count,queue_hash},
-      {air.rng_count,air.rng,air.pose_count,air.pose,air.station_count,air.station,air.loading_count,air.loading})
+      {air.rng_count,air.rng,air.pose_count or air.rail_motion_count,air.pose or air.rail_motion,
+        air.station_count,air.station,air.loading_count,air.loading})
+    if air.triple then
+      same(air.last,"triple station aircraft movement",{triple_air_count,triple_air_pose},{air.air_motion_count,air.air_motion})
+    end
     assert(air_snapshots==7)
     if air.order then
       same(air.last,"manual and implicit train orders",{rail_order_count,rail_order_hash},{air.order_count,air.order})
@@ -489,6 +530,10 @@ local function run(ref,founding,air)
   else
     print("PASS RC1 normal industry corridor: 27,010 RNG ticks, 14 map/town and 19 vehicle checkpoints, 283 passengers and 80 wood delivered, three packed reopens")
   end
+end
+if arg[1]=="triple-station" then
+  run(dofile("tests/fixtures/rc1-active-town-goods-year.lua"),nil,dofile("tests/fixtures/rc1-active-triple-station-town.lua"))
+  return
 end
 if arg[1]=="rail-intermediate" or arg[1]=="rail-intermediate-learned" then
   local fixtures=dofile("tests/fixtures/rc1-active-implicit-train-town.lua")

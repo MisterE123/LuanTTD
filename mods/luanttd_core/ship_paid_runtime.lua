@@ -82,6 +82,16 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     return 0xC000+id
   end
   local function mode(st) return st.host_mode or "ship" end
+  -- Vehicle identities are mode-local; StationID owns the physical cargo
+  -- ledger. Never install the same station under a second table key.
+  local function station_key(s,mode_,id)
+    local fallback=mode_=="rail" and rail_key(id) or mode_=="air" and air_key(id) or id
+    local pool=mode_=="rail" and s.stock_rail_stations or mode_=="air" and s.stock_small_airports
+    local record=pool and pool[id]
+    local group=record and record.stock_station_id~=nil and
+      Sim.stock_joined_station.resolve(s,record.stock_station_id,mode_,id,record)
+    return group and group.service_station_id or fallback
+  end
   local function display_waiting(s,service,st,cargo)
     local count,available=Service.waiting(service,st.id,cargo)
     if st.joined_road and (not cargo or cargo=="passenger") then
@@ -245,33 +255,34 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local service=c.service
     -- Physical facilities supply catchment: both tiles of every joined
     -- dock pair, and each actual railway platform tile.
-    local function sync(id,local_id,actual,tiles,mode_,ref,base,id_for_tick)
+    local pending,seen={},{}
+    local function sync(id,local_id,actual,tiles,mode_,ref,base,id_for_tick,joined)
+      seen[id]=true
       id_for_tick=actual.stock_station_id or id_for_tick
       local st=service.stations[id]
       local neutral=Rig.neutral_ref(s,actual)
       local owner=actual.owner
       if neutral then owner=false end
-      local joined=(mode_=="air" or mode_=="rail") and s.stock_joined_stations and actual.stock_station_id~=nil
-        and Sim.stock_joined_station.resolve(s,actual.stock_station_id,mode_,local_id,actual)
       local road=joined and Sim.stock_joined_station.member(s,joined,"road")
+      local bitmap=not not (road or joined and joined.members.rail and joined.members.air)
       if road then
         for _,t in ipairs(Sim.road_stop_tiles(road)) do
           tiles[#tiles+1]=t;ref=ref..":R"..t.x..":"..t.y..":"..t.kind
         end
-        joined.service_station_id=id
       end
+      if joined then joined.service_station_id=id end
       local mail=not not (mode_=="air" or mode_=="rail" and s.rail_mail_service==true and not Freight.role(actual) or
         mode_=="ship" and mail_dock and mail_dock(local_id))
       local fresh=not st or not not st.mail_enabled~=mail
       if st then
-        assert(st.owner==owner and mode(st)==mode_,"Commercial station ownership changed")
+        assert(st.owner==owner and (joined or mode(st)==mode_),"Commercial station ownership changed")
         st.tick_index=id_for_tick
-        st.stock_bitmap_iteration=not not road
+        st.stock_bitmap_iteration=bitmap
         if st.footprint_rev~=ref then Service.footprint(service,id,tiles,ctx) end
       else
         local town=Sim.nearest_town(s,base)
         st=Service.station(service,{id=id,owner=owner,town=road and joined.town or town and town.id,
-          neutral_rig=neutral and neutral.industry,stock_bitmap_iteration=not not road,
+          neutral_rig=neutral and neutral.industry,stock_bitmap_iteration=bitmap,
           tick_index=id_for_tick,tiles=tiles},ctx)
       end
       if road then
@@ -309,6 +320,14 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         if actual.sign_tile then local x,y=Sim.xy(actual.sign_tile);st.sign={x=x,y=y} end
       end
     end
+    local function collect(id,local_id,actual,tiles,mode_,ref,base,id_for_tick)
+      local group=actual.stock_station_id~=nil and (mode_=="air" or mode_=="rail") and
+        Sim.stock_joined_station.resolve(s,actual.stock_station_id,mode_,local_id,actual)
+      if not group then return sync(id,local_id,actual,tiles,mode_,ref,base,id_for_tick) end
+      local rows=pending[group.id]
+      if not rows then rows={group=group};pending[group.id]=rows end
+      rows[mode_]={id,local_id,actual,tiles,mode_,ref,base,id_for_tick}
+    end
     if active.ship then
       for id,p in pairs(ships) do
         if not p.neutral then
@@ -327,7 +346,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
           end
         end
         if #valid>0 then
-          sync(rail_key(id),id,p,tiles,"rail",table.concat(valid,":"),valid[1],p.stock_station_pool_id or rail_key(id))
+          collect(rail_key(id),id,p,tiles,"rail",table.concat(valid,":"),valid[1],p.stock_station_pool_id or rail_key(id))
         end
       end
     end
@@ -346,12 +365,25 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         end
         if #valid>0 and (not p.neutral or Rig.neutral_ref(s,p)) then
           if p.layout=="oilrig" then tiles[2]=at("dock",p.origin) end -- max of stock Airport 4 / Dock 5
-          sync(air_key(id),id,p,tiles,"air",table.concat(valid,":"),p.origin,air_key(id))
+          collect(air_key(id),id,p,tiles,"air",table.concat(valid,":"),p.origin,air_key(id))
         end
       end
     end
+    for _,rows in pairs(pending) do
+      local group=rows.group
+      -- Use the airport as the representative when it exists so stock
+      -- AirportTileAnimationTrigger remains attached to the station.
+      local primary=rows.air or rows.rail
+      local tiles,ref=primary[4],primary[6]
+      if rows.air and rows.rail then
+        for _,tile in ipairs(rows.rail[4]) do tiles[#tiles+1]=tile end
+        ref=ref..":rail:"..rows.rail[6]
+      end
+      sync(group.service_station_id or primary[1],primary[2],primary[3],tiles,
+        primary[5],ref,primary[7],primary[8],group)
+    end
     for id,st in pairs(service.stations) do
-      local exists=mode(st)=="rail" and rails[st.host_id] or mode(st)=="ship" and ships[id]
+      local exists=seen[id] or mode(st)=="rail" and rails[st.host_id] or mode(st)=="ship" and ships[id]
         or mode(st)=="air" and airports[st.host_id]
       if not exists then
         assert(#st.loading_order==0,"Cleared station still has active loading")
@@ -520,6 +552,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     end
     if Air then reconcile_air(s,c,Air,aircraft,ctx,first_tick) end
     sync_stations(s,c,ctx,active,post and function(id) return post_run.ordered_dock(post,id) end)
+    ctx.rail_station_key=function(id) return station_key(s,"rail",id) end
     if next(s.stock_joined_stations or {}) then
       ctx.road_alias=function(road)
         local group=road.stock_station_id~=nil and Sim.stock_joined_station.resolve(s,road.stock_station_id,"road",road.id,road)
@@ -748,12 +781,12 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
             arrive=function(q,tile)
               assert(q.paid_clock==a.paid_clock,"Paid air movement selected another actor")
               local order=q.vehicle.order
-              return Service.begin(service,id,air_key(q.last_airfield),q.arrivals,tile,
+              return Service.begin(service,id,station_key(s,"air",q.last_airfield),q.arrivals,tile,
                 order and order.kind=="station" and order.id==q.last_airfield and CargoOrder.arrival(order,{}) or {},tick,ctx,events)
             end,
             date=ctx.stock_date and function() return ctx.stock_date(tick) end,
             accident=function(q,field)
-              local victims=Service.crash_air(service,id,air_key(field.id))
+              local victims=Service.crash_air(service,id,station_key(s,"air",field.id))
               local v=q.vehicle
               local x=math.max(1,math.min(ctx.width,math.floor(v.x/16)))
               local z=math.max(1,math.min(ctx.height,math.floor(v.z/16)))
@@ -915,7 +948,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       end
     end
     for _,id in ipairs(stops) do
-      local sid=index(id)
+      local sid=station_key(s,mode_,id)
       local st=service and service.stations[sid]
       local visible,available=0,0
       local primary=cargo=="mixed" and "passenger" or cargo
@@ -973,7 +1006,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
   function F.mail_station(s,id)
     local c=s.stock_ship_commercial
     local service=c and c.service
-    local st=service and service.stations[rail_key(id)]
+    local st=service and service.stations[station_key(s,"rail",id)]
     local physical=s.stock_rail_stations and s.stock_rail_stations[id]
     if not physical or Freight.role(physical) then return end
     -- A newly built/extended platform is inspectable while the clock
@@ -1009,9 +1042,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     if not enabled(s,mode_) then return 0 end
     local c=s.stock_ship_commercial
     local service=c and c.service
-    local key=mode_=="rail" and rail_key(id) or mode_=="air" and air_key(id) or id
-    local st=service and service.stations[key]
-    if not st or mode(st)~=mode_ then return 0 end
+    local st=service and service.stations[station_key(s,mode_,id)]
+    if not st then return 0 end
     return (display_waiting(s,service,st))
   end
   return F

@@ -271,7 +271,8 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       st.tiles,st.area=rest,nil
       st.area=Lab.station_bounds(s,st)
       local group=RoadJoin.group(s,st)
-      if st.sign_tile and not (group and group.members.road) then
+      if group then Sim.stock_joined_station.clamp_sign(s,Sim,group)
+      elseif st.sign_tile then
         local x,z=Sim.xy(st.sign_tile)
         local a=st.area
         st.sign_tile=Sim.id(math.max(a.x,math.min(x,a.x+a.w-1)),math.max(a.z,math.min(z,a.z+a.h-1)))

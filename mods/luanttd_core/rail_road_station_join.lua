@@ -14,7 +14,7 @@ return function(Sim)
       spread=s.stock_station_spread or 12,
     })
     if why then return nil,why end
-    if not target or not target.bus_only or target.rail or target.airport or target.dock then
+    if not target or not target.bus_only or target.rail or target.dock then
       return nil,"RAIL_JOIN_UNPORTED_FACILITY"
     end
     return target.road
@@ -23,7 +23,7 @@ return function(Sim)
     local choices={{name="Build a separate rail station"}}
     if s.stock_distant_join_stations==false or not Sim.stock_joined_station then return choices end
     local board=Catalog.board(s)
-    board.matches=function(row) return row.bus_only and not row.rail and not row.airport and not row.dock end
+    board.matches=function(row) return row.bus_only and not row.rail and not row.dock end
     local source=Picker.find(board,{tile=Sim.id(area.x,area.z),w=area.w,h=area.h},owner,s.stock_station_spread or 12,true)
     for _,row in ipairs(source) do
       if not row.new then choices[#choices+1]={id=row.id,name=row.name or ("Bus station "..row.id)} end
@@ -35,7 +35,7 @@ return function(Sim)
     local group=Joined.attach(s,rail.stock_station_id,rail.owner,"road",road.id)
     Joined.attach(s,rail.stock_station_id,rail.owner,"rail",rail.id)
     group.tile,group.town,group.random_bits=road.tile,road.town or road.site,road.stock_random_bits
-    group.facilities=Join.BUS
+    group.facilities=group.facilities or Join.BUS
     Join.add_facility(group,Join.TRAIN,rail.tiles[1],rail.owner,s.day,function() return Sim.stock_random_u32(s) end)
     rail.sign_tile,rail.town,rail.name,rail.stock_random_bits=group.tile,group.town,road.name,group.random_bits
     return group
@@ -48,7 +48,18 @@ return function(Sim)
     local group=M.group(s,rail)
     local road=group and Sim.stock_joined_station.member(s,group,"road")
     if not road then return end
-    local area=Catalog.enclosing(Sim.road_stop_tiles(road))
+    local cells=Sim.road_stop_tiles(road)
+    local airport=Sim.stock_joined_station.member(s,group,"air")
+    if airport then
+      local combined={}
+      for _,part in ipairs(cells) do combined[#combined+1]=part end
+      for _,part in ipairs(airport.tiles) do
+        local x,y=Sim.xy(part.id)
+        combined[#combined+1]={x=x-1,y=y-1}
+      end
+      cells=combined
+    end
+    local area=Catalog.enclosing(cells)
     local x,z=Sim.xy(area.tile)
     return {x=x,z=z,w=area.w,h=area.h}
   end

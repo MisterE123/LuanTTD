@@ -158,7 +158,7 @@ return function(Service,key)
           if r.station==orders.second then opts.action="unload"
           elseif r.station~=orders.first then return nil,"UNORDERED_PASSENGER_PLATFORM" end
         end
-        return Service.begin(service,id(r),key(actual),orders.arrivals,wagon_tile,opts,tick,ctx,events)
+        return Service.begin(service,id(r),(ctx.rail_station_key or key)(actual),orders.arrivals,wagon_tile,opts,tick,ctx,events)
       end,
     }
   end

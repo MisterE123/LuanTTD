@@ -2502,15 +2502,14 @@ function M.retire_road_station(s,id)
   if st and st.mode=="road" then
     local Joined=M.stock_joined_station
     local group=st.stock_station_id~=nil and Joined.resolve(s,st.stock_station_id,"road",id,st)
-    local facility,u,v,last_u,last_v
-    if group then facility,u,v,last_u,last_v=Joined.commercial_bounds(s,group,M.xy) end
-    if group then Joined.detach(s,group.id,"road",id,st) end
+    local facility
+    if group then
+      Joined.detach(s,group.id,"road",id,st)
+      facility=Joined.clamp_sign(s,M,group)
+    end
     if facility then
       -- UpdateStationSignCoord clamps the original sign into the new
       -- spread, not to the first tile unconditionally.
-      local x,z=M.xy(group.tile)
-      group.tile=M.id(math.max(u,math.min(last_u,x)),math.max(v,math.min(last_v,z)))
-      facility.sign_tile=group.tile
       group.facilities=group.facilities-4
       local commercial=s.stock_ship_commercial
       local ledger=commercial and group.service_station_id and commercial.service.stations[group.service_station_id]
@@ -2544,7 +2543,11 @@ function M.apply_road_stop_remove(s,owner,plan)
       M.retire_road_station(s,id)
     else
       local st=s.stations[id]
+      local joined=M.stock_joined_station
+      local group=st.stock_station_id~=nil and joined.resolve(s,st.stock_station_id,"road",id,st)
+      local original_sign=group and group.tile
       road_stop_members.structural_apply(st,result)
+      if original_sign then joined.clamp_sign(s,M,group) end
       refresh_road_station_sites(s,st)
     end
   end
