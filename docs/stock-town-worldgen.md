@@ -120,20 +120,22 @@ Luanti client on the production campaign worker.
 
 Live municipal road expansion is covered separately in [Town growth and authority](town-growth-authority.md). Some foundation changes, bore-exit excavation, and other climates remain outside this slice.
 
-## Ordinary RC1 founding and spring calendar baseline
+## Ordinary RC1 founding and full-year authority baseline
 
 A native OpenTTD 16.0-RC1 128×128 temperate game (seed 1751, Original
 streets, four towns, city frequency 1 in 3, Normal growth, improved forests)
 provides the numeric checkpoint fixture in
 `tests/town_growth_rc1_generated_region.lua`. The test starts LuanTTD's
-ordinary campaign generator, not an imported map. Six snapshots from the
-opening playable tick through May 1 match the reference elevations, tile
-classes, roads, per-house build/age state, town clocks and production, and
-simulation RNG. This includes a nonlinear site search and municipal
+ordinary campaign generator, not an imported map. Fourteen snapshots from the opening playable tick through the next
+January 1 match the reference elevations, tile classes, roads, per-house
+build/age state, town clocks and production, and simulation RNG. The
+ordinary authority runs all 27,010 ticks, with three packed save/rebinds.
+The comparison includes the daily industry clock's stock draw at the
+125-day threshold, even though this map has no industry. This includes a nonlinear site search and municipal
 earthworks. During founding, as in live growth, RC1's executing terraform
 command makes both altitude-dependent random passes; only the second pass
 can mark an excavated tile as rock. Quotes do not consume a draw.
 
 This evidence excludes rivers, industries, companies and subsidy attempts
-to isolate the town system. The river-enabled same-seed case and later
-scenery/town interactions still require separate parity checks.
+to isolate the town system. The river-enabled case and active industry/subsidy interactions on fresh
+worlds require separate parity checks.
