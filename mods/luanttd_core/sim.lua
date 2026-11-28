@@ -1543,6 +1543,16 @@ function M.bridge_deck_at(s,id)
 end
 M.bridge_layers={{"bridge_above","stock_road_bridges"},{"rail_bridge_above","stock_rail_spans"},
   {"aqueduct_above","stock_aqueducts"}}
+-- A marker without its actual paired geometry is protection, not cover.
+function M.tunnel_floor_at(s,id)
+  local road=s.tunnel_below and s.tunnel_below[id]
+  local rail=s.rail_tunnel_below and s.rail_tunnel_below[id]
+  local a=road and s.stock_road_tunnels and s.stock_road_tunnels[road]
+  local b=rail and s.stock_rail_spans and s.stock_rail_spans[rail]
+  if road and not (a and type(a.base)=="number") or
+      rail and not (b and b.kind=="tunnel" and type(b.base)=="number") then return nil,true end
+  if a or b then return math.max(a and a.base or -1,b and b.base or -1),true end
+end
 -- The native station geometry stays separate from the stock layout key:
 -- paired middle buildings and platforms have different overhead masks.
 function M.bridge_rail_facility(t,top)

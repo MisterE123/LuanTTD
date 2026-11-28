@@ -26,7 +26,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
     local t=read(x,z)
     if not t then return end
     local id=Sim.id(x,z)
-    t.bridge_above=Sim.bridge_deck_at(s,id)
+    t.bridge_above,t.bridge_present=Sim.bridge_deck_at(s,id)
     local native=s.tiles[id]
     local span=native.road_bridge_id and s.stock_road_bridges and s.stock_road_bridges[native.road_bridge_id]
       or native.road_tunnel_id and s.stock_road_tunnels and s.stock_road_tunnels[native.road_tunnel_id]
@@ -47,7 +47,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
   function B.clear_quote(x,z,kind)
     if live and kind=="house" then return live.houseable(x,z) end
     local t=B.tile(x,z)
-    if not t or t.owner or t.bridge_above then return false end
+    if not t or t.owner or t.bridge_present and (kind=="house" or not t.bridge_above) then return false end
     if t.coast then return Sim.town_clear_coast(s,Sim.id(x,z),false)~=nil end
     if kind=="house" and t.kind=="road" then
       return Sim.town_clear_road_tip(s,Sim.id(x,z),false)
@@ -56,7 +56,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
   end
   function B.seed_road_clear_quote(x,z)
     local t=B.tile(x,z)
-    if not t or t.slope~=0 or t.owner or t.bridge_above or
+    if not t or t.slope~=0 or t.owner or t.bridge_present and not t.bridge_above or
         live and not live.roadable(x,z) then return false end
     if t.kind=="trees" then return true end
     return B.clear_quote(x,z,"road")
@@ -66,7 +66,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
     -- The stock lookahead does not reject an existing foreign-town
     -- road. The walk checks that owner only when actually stepping on
     -- it; the last new piece can still approach the other town.
-    if not t or B.distance_to_edge(x,z)<=0 then return false end
+    if not t or t.bridge_present and not t.bridge_above or B.distance_to_edge(x,z)<=0 then return false end
     local axis=d%2==0 and 10 or 5
     if t.bridge_above then
       for _,l in ipairs(Sim.bridge_layers) do
@@ -161,16 +161,6 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
     return Spans.bridge(town,B,x,z,d,random) or Spans.tunnel(town,B,x,z,d)
   end
   local terraform_price=250 -- RC1 construction base terraform price for this economy.
-  local function tunnel_floor(id)
-    local road=s.tunnel_below and s.tunnel_below[id]
-    local rail=s.rail_tunnel_below and s.rail_tunnel_below[id]
-    local a=road and s.stock_road_tunnels and s.stock_road_tunnels[road]
-    local b=rail and s.stock_rail_spans and s.stock_rail_spans[rail]
-    if road and not (a and type(a.base)=="number") or rail and not (b and b.kind=="tunnel" and type(b.base)=="number") then
-      return nil,true
-    end
-    if a or b then return math.max(a and a.base or -1,b and b.base or -1),true end
-  end
   local function plan_earthworks(x,z,mask,up,cleared_portal)
     if mask==0 then return end
     return Terrain.plan(s.corner_grid,x,z,mask,up,{
@@ -180,7 +170,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
         -- absolute bridge deck before invoking the surface's callback.
         bridge_height=function(u,v) return Sim.bridge_deck_at(s,Sim.id(u,v)) end,
         tunnel_in_way=function(u,v,base)
-          local floor=tunnel_floor(Sim.id(u,v))
+          local floor=Sim.tunnel_floor_at(s,Sim.id(u,v))
           return floor and base<=floor
         end,
         validate_tile=function(_,u,v)
@@ -196,7 +186,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
               live and not permitted then return nil,"TOWN_PROTECTED_TERRAIN" end
           -- Valid existing bores are independent of the surface.
           -- Unknown geometry must still fail the entire quote.
-          local floor,bore=tunnel_floor(id)
+          local floor,bore=Sim.tunnel_floor_at(s,id)
           if bore and not floor then return nil,"TOWN_PROTECTED_TERRAIN" end
           -- CmdBuildTunnel already paid to clear the far portal.
           if id==cleared_portal then return 0 end

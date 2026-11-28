@@ -311,3 +311,66 @@ do
   end
   print("PASS RC1 municipal roof cover, protected bore, exact execution draws and unchanged route")
 end
+
+-- Native RC1 IsRoadAllowedHere + GrowTownWithRoad beneath a bridge
+-- built along X: the normal lookahead denies X and accepts Y, then the
+-- town installs ROAD_Y=5 without changing RNG or the elevated route.
+do
+  local s=world()
+  local x,z=32,32
+  s.corner_grid=Terrain.new(Sim.W,Sim.H,function() return 2 end)
+  s.stock_generated_profile={map_height_limit=30}
+  for dx=-5,5 do for dz=-3,3 do s.tiles[Sim.id(x+dx,z+dz)]={h=2,terrain="hill"} end end
+  local head,tail,lot=Sim.id(x-4,z),Sim.id(x+4,z),Sim.id(x,z)
+  local okay,why=Sim.road_bridge(s,"Span Builder",head,tail,0)
+  assert(okay,why)
+  local key=assert(s.bridge_above[lot])
+  local bridge=assert(s.stock_road_bridges[key])
+  assert(bridge.deck==3 and bridge.axis==0)
+  local b=W.road_board(s)
+  local town=s.stock_town_growth.towns[s.stock_town_growth.order[1]]
+  local function no_draw() error("Flat lookahead must not draw RNG") end
+  assert(not b.road_allowed(town,x,z,0,no_draw) and not b.road_allowed(town,x,z,2,no_draw))
+  assert(b.road_allowed(town,x,z,1,no_draw) and b.road_allowed(town,x,z,3,no_draw))
+  assert(b.clear_quote(x,z,"road") and not b.clear_quote(x,z,"house"))
+  assert(b.road_quote(town,x,z,5))
+  local balance=Sim.company(s,"Span Builder").cash
+  s.passenger_rating_rng={2886033970,1113251459}
+  assert(Sim.town_road_piece(s,town.id,lot,5,true))
+  assert(s.tiles[lot].road_bits==5 and s.tiles[lot].road_town==town.id and not s.tiles[lot].owner)
+  assert(s.bridge_above[lot]==key and s.stock_road_bridges[key]==bridge and bridge.owner=="Span Builder")
+  assert(Sim.company(s,"Span Builder").cash==balance and s.passenger_rating_rng[1]==2886033970
+    and s.passenger_rating_rng[2]==1113251459)
+  print("PASS RC1 town street crosses below an existing bridge without replacing the deck or allowing parallel lookahead")
+end
+
+-- Native RC1 builds normal municipal road above a road tunnel in
+-- both directions, without running the bridge-only parallel veto.
+do
+  local s=world()
+  local x,z=33,32
+  s.corner_grid=Terrain.new(Sim.W,Sim.H,function(u)
+    return u>=x-3 and u<=x+3 and 2 or 1
+  end)
+  s.stock_generated_profile={map_height_limit=30}
+  for u=x-5,x+5 do for v=z-3,z+3 do s.tiles[Sim.id(u,v)]={h=2,terrain="hill"} end end
+  local start,west,east=Sim.id(x-4,z),Sim.id(x-1,z),Sim.id(x+1,z)
+  local ok,why=Sim.road_tunnel(s,"Span Builder",start,false)
+  assert(ok,why)
+  local key=assert(s.tunnel_below[west])
+  local bore=assert(s.stock_road_tunnels[key])
+  assert(bore.base==1 and s.tunnel_below[east]==key)
+  local b=W.road_board(s)
+  local town=s.stock_town_growth.towns[s.stock_town_growth.order[1]]
+  local function no_draw() error("Flat lookahead must not draw RNG") end
+  assert(b.road_allowed(town,x-1,z,1,no_draw))
+  assert(b.road_allowed(town,x+1,z,2,no_draw))
+  assert(b.road_quote(town,x-1,z,5) and b.road_quote(town,x+1,z,10))
+  s.passenger_rating_rng={2536072277,1090321433}
+  assert(Sim.town_road_piece(s,town.id,west,5,true))
+  assert(Sim.town_road_piece(s,town.id,east,10,true))
+  assert(s.tiles[west].road_bits==5 and s.tiles[east].road_bits==10 and s.tunnel_below[west]==key
+    and s.stock_road_tunnels[key]==bore and s.passenger_rating_rng[1]==2536072277
+    and s.passenger_rating_rng[2]==1090321433)
+  print("PASS RC1 town roads run alongside or across a covered tunnel without altering the bore")
+end

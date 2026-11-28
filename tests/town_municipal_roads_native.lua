@@ -17,6 +17,9 @@ s.passenger_house_clock=load_("openttd/town_passengers").new_clock(6,6,nil,4*74)
 s.stock_town_growth={version=1,order={1},towns={}}
 local mode=core.settings:get("luanttd_qa_municipal_kind") or "road"
 local span=mode=="bridge" or mode=="tunnel"
+local underbridge=mode=="underbridge"
+local abovetunnel=mode=="abovetunnel"
+local layered_street=underbridge or abovetunnel
 local reseed=mode=="reseed"
 local crossing=mode=="crossing"
 local mixedroad=mode=="mixedroad"
@@ -27,13 +30,13 @@ local rail_underhouse=mode=="railunderhouse"
 local underhouse=mode=="underhouse" or rail_underhouse
 local woodhouse=mode=="woodhouse" or foreignhouse
 local natural_house=woodhouse or farmhouse or underhouse
-if span then s.passenger_rating_rng={3,3} end -- exercise the stock two-word RNG
+if span or layered_street then s.passenger_rating_rng={3,3} end -- exercise the stock two-word RNG
 local cx,cz=span and 13 or 11,span and 17 or 12
-local center,protected=S.id(cx,cz),S.id(cx,cz+(natural_house and 3 or 1))
+local center,protected=S.id(cx,cz),S.id(cx,cz+(underbridge and -1 or natural_house and 3 or 1))
 local target=not span and "road" or "stock_road_"..mode
 s.sites={{id=1,kind="town",name="Grid Town",tile=center,population=0,stock={},produced={},received={}}}
 local rail_cell=S.id(cx+1,cz)
-local town=G.new(1,cx,cz,{layout="grid2",grow_counter=0})
+local town=G.new(1,cx,cz,{layout=layered_street and "original" or "grid2",grow_counter=0})
 town.growing,town.growth_rate=true,(reseed or natural_house) and 15000 or 0
 s.stock_town_growth.towns[1]=town
 for id in ipairs(s.tiles) do s.tiles[id]={h=1,terrain="grass",variant=1} end
@@ -50,7 +53,7 @@ else
     s.stock_town_growth.order[2],s.stock_town_growth.towns[2]=2,other
     s.sites[2]={id=2,kind="town",name="Neighbor",tile=S.id(nx,nz),population=0,stock={},produced={},received={}}
   end
-  assert(S.town_road_piece(s,foreignhouse and 2 or 1,center,10,true))
+  assert(S.town_road_piece(s,foreignhouse and 2 or 1,center,layered_street and 5 or 10,true))
   if woodhouse then for _,dz in ipairs{-1,1} do s.tiles[S.id(cx,cz+dz)].wood=1 end end
   if farmhouse then
     s.stock_farm_fields={}
@@ -60,13 +63,26 @@ else
     end
   end
 end
-local under_bore
+local under_bore,over_road
+if layered_street then
+  -- Leave only the street continuation toward the existing span.
+  for _,x in ipairs({cx-1,cx+1}) do s.tiles[S.id(x,cz)].stock_industry={id=78} end
+end
+if underbridge then
+  local z=cz+1
+  local head,tail= S.id(cx-4,z),S.id(cx+4,z)
+  local ok,why=S.road_bridge(s,"Span Builder",head,tail,0)
+  assert(ok,why)
+  local target=S.id(cx,z)
+  over_road={target=target,key=assert(s.bridge_above[target]),head=head,tail=tail,
+    balance=S.company(s,"Span Builder").cash}
+end
 local function mount_rail(s)
   return load_("campaign_simulation_bindings")(S,m).networks(s,load_("openttd/slope"),function(at)
     local x,z=S.xy(at);return T.tile(s.corner_grid,x,z)
   end)
 end
-if underhouse then
+if underhouse or abovetunnel then
   local z=cz-1
   local x1,x2=cx-3,cx+3
   for _,corner_z in ipairs{z,z+1} do
@@ -83,7 +99,9 @@ if underhouse then
     cash=S.company(s,"Rail Builder").cash
     layer,book="rail_tunnel_below","stock_rail_spans"
   else
-    local ok,why=S.road_tunnel(s,"town",start,false,1)
+    local ok,why
+    if abovetunnel then ok,why=S.road_tunnel(s,"Span Builder",start,false)
+    else ok,why=S.road_tunnel(s,"town",start,false,1) end
     assert(ok,why)
     layer,book="tunnel_below","stock_road_tunnels"
   end
@@ -91,6 +109,7 @@ if underhouse then
   local record=s[book][key]
   assert(record.start==start and record["end"]==S.id(x2,z) and record.base==0)
   under_bore={key=key,start=start,finish=record["end"],target=S.id(cx,z),layer=layer,book=book,cash=cash}
+  if abovetunnel then under_bore.cash=S.company(s,"Span Builder").cash end
   s.tiles[S.id(cx,cz+1)].stock_industry={id=79}
 end
 s.tiles[protected].stock_industry={id=77}
@@ -142,6 +161,9 @@ local function ask()
         if row.id==center and row.surface.road_bits~=10 then newroad=row.id end
       elseif crossing then
         if row.id==rail_cell and row.surface.level_crossing then newroad=row.id end
+      elseif layered_street then
+        local at=underbridge and over_road.target or under_bore.target
+        if row.id==at and row.surface.build=="road" and row.surface.road_town==1 then newroad=row.id end
       elseif natural_house then
         if row.surface.source_house and row.surface.source_house.root then newroad=row.id end
       elseif row.id~=center and row.surface.build==target and row.surface.road_town==1 then newroad=row.id end
@@ -210,6 +232,23 @@ core.register_on_mods_loaded(function()
     else
       assert(created.build==target and created.road_town==1 and (not created.owner or created.owner=="town"))
     end
+    if layered_street then
+      local key=underbridge and over_road.key or under_bore.key
+      local span=underbridge and next_.stock_road_bridges[key] or next_.stock_road_tunnels[key]
+      assert(span and (underbridge and next_.bridge_above[newroad] or next_.tunnel_below[newroad])==key)
+      assert(span.start==(underbridge and over_road.head or under_bore.start)
+        and span["end"]==(underbridge and over_road.tail or under_bore.finish))
+      assert(span.owner=="Span Builder" and S.company(next_,"Span Builder").cash==
+        (underbridge and over_road.balance or under_bore.cash))
+      assert(created.road_bits==5 and not created.owner)
+      local F=load_("openttd/yapf_road_follow")
+      local road=load_("road_yapf_board")(S,next_,F)
+      for _,id in ipairs({span.start,span["end"]}) do
+        local a=road.tile(id)
+        local r=F.follow(road,{owner="Carrier"},id,F.direction_trackdir(a.dir))
+        assert(r.ok and (underbridge and r.bridge or r.tunnel) and r.tile==a.other)
+      end
+    end
     if crossing then
       assert(newroad==rail_cell and created.level_crossing)
       local c=created.level_crossing
@@ -231,7 +270,7 @@ core.register_on_mods_loaded(function()
         assert(r.ok and r[mode] and r.tile==a.other)
       end
     elseif not natural_house then assert(created.road_bits>0) end
-    assert((crossing or companyroad or rail_underhouse or not next(next_.companies)) and next_.tiles[protected].stock_industry.id==77)
+    assert((crossing or companyroad or rail_underhouse or layered_street or not next(next_.companies)) and next_.tiles[protected].stock_industry.id==77)
     if reseed then
       assert(not created.wood and not next_.tiles[center].build)
     elseif not span and not natural_house and not crossing then assert(next_.tiles[center].road_bits~=10) end
@@ -240,7 +279,11 @@ core.register_on_mods_loaded(function()
       assert(ready.ready and ready.day==day)
       assert(client.query({kind="snapshots",windows=view},function(r)
         local found=false
-        if underhouse then
+        if underbridge then
+          local data=r.value[1].registries
+          assert(data.bridge_above[newroad]==over_road.key and data.stock_road_bridges[over_road.key].deck==2)
+        end
+        if underhouse or abovetunnel then
           local data=r.value[1].registries
           assert(data[under_bore.layer][newroad]==under_bore.key and data[under_bore.book][under_bore.key].base==0)
         end

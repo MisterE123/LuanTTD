@@ -176,6 +176,13 @@ return function(Sim,Terrain,G,B,H)
     return t and not (t.stock_void or t.stock_object or t.owner or t.house or t.source_house or
       t.parcel or t.site or t.station or protected(s,id,t)) and (not t.build or t.build=="road")
   end
+  local function clear_between_spans(s,id)
+    local deck,bridge=Sim.bridge_deck_at(s,id)
+    local bore,subsurface=Sim.tunnel_floor_at(s,id)
+    if not (bridge or subsurface) or bridge and not deck or subsurface and not bore then return false end
+    local top,_,base=clear_levels(s,id,true,false,true,true)
+    return top~=nil and (not deck or deck>top) and (not bore or base>bore)
+  end
   function W.road_board(s,founding)
     local function read(x,z)
       local id=Sim.id(x,z)
@@ -199,7 +206,8 @@ return function(Sim,Terrain,G,B,H)
         kind,road_bits="road",Sim.road_bits(s,id)
       elseif t.terrain=="water" then kind="water"
       elseif t.wood then kind="trees"
-      elseif available(s,id,t) or underground(s,id) and clear_levels(s,id,true,true) then kind="clear"
+      elseif available(s,id,t) or underground(s,id) and clear_levels(s,id,true,true)
+          or clear_between_spans(s,id) then kind="clear"
       else kind="object" end
       local plain_rail=kind=="rail" and t.build=="stock_rail" and not t.rail_station_id and
         not t.rail_depot_dir and not t.rail_waypoint_id and not t.rail_span_id
@@ -216,7 +224,7 @@ return function(Sim,Terrain,G,B,H)
     end
     local function roadable(x,z)
       local id=Sim.id(x,z)
-      return available(s,id,at(s.tiles,id)) or Sim.town_mixed_road(s,id)
+      return available(s,id,at(s.tiles,id)) or Sim.town_mixed_road(s,id) or clear_between_spans(s,id)
     end
     return roads(Sim,Terrain,s,G,Worldgen,read,{
       founding=founding,
@@ -411,7 +419,7 @@ return function(Sim,Terrain,G,B,H)
       if proposal.kind=="road" then
         local tile=s.tiles[id]
         if not (tile and tile.build=="stock_rail" or available(s,id,tile) or
-            Sim.town_mixed_road(s,id) or Sim.town_company_road(s,id)) or
+            Sim.town_mixed_road(s,id) or Sim.town_company_road(s,id) or clear_between_spans(s,id)) or
             not Sim.town_road_piece(s,t.id,id,proposal.bits,true) then return false end
         visual_changed(s,id)
         Sim.invalidate_live_sea_near(s,id)

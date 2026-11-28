@@ -205,6 +205,19 @@ geometry in the same terrain validator. Towns still cannot autoslope a
 house: OpenTTD's `AutoslopeEnabled` excludes `OWNER_TOWN`, and its
 automatic clear command cannot demolish a house as a fallback.
 
+The same stock town can extend an ordinary street onto clear land below
+an existing bridge. `IsRoadAllowedHere` in the Original and Better Roads
+layouts rejects running parallel directly below a deck. Perpendicular
+lookahead and the normal `GrowTownWithRoad` commit pass the native RC1
+comparison without RNG changes. The Luanti worker grows and reopens
+the lower street, and the routing graph still traverses the separate
+company-owned bridge. A clear surface also admits municipal road above
+a verified tunnel in either direction: the bridge-axis rule does not
+apply to a bore. The native Luanti scenarios keep both road layers in
+place after a worker reopen, with the original span ownership and
+its two routed ends unchanged. House placement beneath a deck
+remains prohibited.
+
 Only an admitted native command writes terrain, road bits, bridge geometry
 or a tunnel. The town cannot clear a private lot, active industry or
 protected/occupied facility. As in RC1 CmdBuildRoad, it can add pieces
