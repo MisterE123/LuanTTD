@@ -5,7 +5,7 @@ return function(path)
   local TG=m("openttd/terragenesis")(Slope)
   local Rivers,Words=m("openttd/river_worldgen")(Slope),m("terrain_word")
   local seed=1751
-  local base=TG.generate({width=128,depth=128,seed=seed,terrain_type=3,quantity_sea_lakes=0,
+  local base=TG.generate({differential_version="14.1",width=128,depth=128,seed=seed,terrain_type=3,quantity_sea_lakes=0,
     rng_state=TG.startup_rng(seed)})
   local rivers,generated=Rivers.generate(base,TG.next_random,{
     original=false,terrain=Terrain,amount_of_rivers=1,min_river_length=16})

@@ -1,5 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- OpenTTD contributors, 14.1 src/tgp.cpp (TerraGenesis Perlin), core/random_func.cpp,
+-- OpenTTD contributors, OpenTTD 16.0-RC1 (07b339c) src/tgp.cpp (TerraGenesis Perlin),
+-- core/random_func.cpp; 14.1 coast path retained only for its differential fixture.
 -- heightmap.cpp FixSlopes and water_cmd.cpp ConvertGroundTilesIntoWaterTiles.
 -- See COPYING.OpenTTD.md. No external height maps or original graphics needed.
 return function(Slope)
@@ -185,14 +186,14 @@ return function(Slope)
     local al,bl=a%U16,b%U16
     return (al*bl+((floor(a/U16)*bl+floor(b/U16)*al)%32768)*U16)%U31
   end
-  local function coast_noise(seed,x,z,primes)
+  local function coast_noise(seed,x,z,primes,normalize)
     local function integer_noise(i,j,prime)
       local n=(i+j*prime+seed)%U31
       n=xor(n,(n*8192)%U31)
       local result=(mul31(n,(mul31(mul31(n,n),15731)+789221)%U31)+1376312589)%U31
       return 1-result/1073741824
     end
-    local total,frequency=0,1
+    local total,frequency,amplitude,weight=0,1,1,0
     for i=0,5 do
       local fx,fz=x*frequency/64,z*frequency/64
       local u,v=trunc(fx),trunc(fz)
@@ -200,10 +201,11 @@ return function(Slope)
       local a,b=integer_noise(u,v,primes[2]),integer_noise(u+1,v,primes[2])
       local c,d=integer_noise(u,v+1,primes[2]),integer_noise(u+1,v+1,primes[2])
       local ab,cd=a+ax*(b-a),c+ax*(d-c)
-      total=total+(ab+az*(cd-ab))*primes[1]^i
-      frequency=frequency*2
+      total=total+(ab+az*(cd-ab))*(normalize and amplitude or primes[1]^i)
+      weight=weight+amplitude
+      frequency,amplitude=frequency*2,amplitude*primes[1]
     end
-    return total
+    return normalize and total/weight or total
   end
   local slopes_coast={
     {{.9,53}, .25,5,{.35,179},1,12},
@@ -213,6 +215,18 @@ return function(Slope)
   }
   local function coast_lines(rows,p,borders)
     if borders==0 then return end
+    local w,h=p.width,p.depth
+    local smallest=min(w,h)
+    local jagged=min(12+floor(smallest*smallest/4096)+min(max(w,h)/smallest,16),64)
+    local smooth=min(floor(smallest/32),32)
+    -- BorderFlag order: NE at x=0, SE at z=h, SW at x=w, NW at z=0.
+    local primes={{67,179,53},{101,193,71},{199,67,101},{179,211,167}}
+    local function depth(i,t)
+      local c=primes[i]
+      return 2+smooth*(1+coast_noise(p.seed,t,t,{.2,c[1]},true))
+        +jagged*abs(coast_noise(p.seed,t,t,{.5,c[2]},true))
+        +8*abs(coast_noise(p.seed,t,t,{.8,c[3]},true))
+    end
     local function cutoff(i,x,z,y,q)
       local c=slopes_coast[i]
       local v=abs((coast_noise(p.seed,x,z,c[1])+c[2])*c[3]+(coast_noise(p.seed,y,q,c[4])+c[5])*c[6])
@@ -221,18 +235,17 @@ return function(Slope)
       v=max(base+v,base+4-v)
       return small<8 and v>5 and v/1.5 or v
     end
-    local w,h=p.width,p.depth
     local z2,z3=floor(h/2),floor(h/3)
     local north,south={},{}
     for x=0,w do
-      north[x]=bit(borders,3) and cutoff(4,x,z2,x,z3) or 0
-      south[x]=bit(borders,1) and h-1-cutoff(2,x,z3,x,z3) or h
+      north[x]=bit(borders,3) and (p.legacy and cutoff(4,x,z2,x,z3) or depth(4,x)) or 0
+      south[x]=bit(borders,1) and h-1-(p.legacy and cutoff(2,x,z3,x,z3) or depth(2,x)) or h
     end
     local a,buf={},{}
     for z=0,h do
         if p.pulse and z%16==0 then p.pulse() end
-      local left=bit(borders,0) and cutoff(1,h-z,z,z,z) or 0
-      local right=bit(borders,2) and w-1-cutoff(3,h-z,z,z,z) or w
+      local left=bit(borders,0) and (p.legacy and cutoff(1,h-z,z,z,z) or depth(1,z)) or 0
+      local right=bit(borders,2) and w-1-(p.legacy and cutoff(3,h-z,z,z,z) or depth(3,z)) or w
       local row=rows[z+1]
       for x=0,w do
         a[x+1]=(x<left or x>right or z<north[x] or z>south[x]) and 0 or get16(row,x+1)
@@ -264,7 +277,7 @@ return function(Slope)
   local function smooth_coasts(rows,p,borders)
     if borders==0 then return end
     local w,h=p.width,p.depth
-    -- Changes are confined to a rim at most 71 corners deep. A sparse
+    -- Changes are confined to the coast search plus smoothing depth. A sparse
     -- overlay keeps exact read-after-write order along perpendicular shores.
     local edits={}
     local function valid(x,z) return x>=0 and x<w and z>=0 and z<h end
@@ -273,7 +286,7 @@ return function(Slope)
       return (row and row[x]) or get16(rows[z+1],x+1)
     end
     local function soften(x,z,dx,dz)
-      for _=1,35 do
+      for _=1,p.legacy and 35 or 100 do
         if not valid(x,z) or read(x,z)>=16
           or valid(x+dz,z+dx) and read(x+dz,z+dx)>0
           or valid(x-dz,z-dx) and read(x-dz,z-dx)>0 then break end
@@ -343,7 +356,10 @@ return function(Slope)
     local sx=clamp(trunc(f32(n*factor)+.5),1,128)
     local sz=clamp(trunc(f32(n/factor)+.5),1,128)
     local c={}
-    for i=0,sx*sz-1 do c[i]=G.next_random(state)%4+1 end
+    for i=0,sx*sz-1 do
+      local r=G.next_random(state)
+      c[i]=(p.legacy and r%4 or floor(r/1073741824))+1
+    end
     local mh=maxh-16
     local lookup={}
     for t=1,4 do
@@ -381,9 +397,14 @@ return function(Slope)
       return 16+trunc(f32(f32(first*X[4])+f32(second*X[3])))
     end)
   end
-  local function integer_rows(rows,p,maxh)
-    local buf={}
+  local function integer_rows(rows,p,maxh,state)
+    local buf,rock_rows={},{}
     local height=floor(maxh/16)
+    -- GenerateWorld resolves the automatic construction ceiling before FixSlopes.
+    local cap=p.map_height_limit==0 and max(30,min(255,height+15)) or p.map_height_limit
+    local function inner(x,z)
+      return x<p.width and z<p.depth and (not p.freeform_edges or x>1 and z>1)
+    end
     -- The extra interpolation fringe is not transferred into OpenTTD's
     -- map. WorldStorage uses the repeated far-edge corner for its fringe.
     rows[p.depth+1]=nil
@@ -395,16 +416,36 @@ return function(Slope)
     end
     -- GenerateLandscape::FixSlopes after the integer height transfer.
     local function sweep(z1,z2,x1,x2,d)
-      local row_new={}
+      local row_new,rock_bits,rock_bytes={},{},{}
+      local nbytes=ceil(p.width/8)
       local neighbor
       for z=z1,z2,d do
         if p.pulse and z%16==0 then p.pulse() end
         local row,prev=rows[z],255
+        local rock_row=rock_rows[z]
+        local changed=false
         for x=x1,x2,d do
           local a=byte(row,x)
           local b=neighbor and byte(neighbor,x) or 255
-          local v=min(a,min(prev,b)+1)
+          local low=min(prev,b)
+          local v=min(a,low+1)
+          -- RC1 heightmap.cpp FixSlopes draws even on a failed rock chance;
+          -- only physical lowered inner tiles consume a draw, in sweep order.
+          if not p.legacy and v~=a and inner(x,z)
+              and floor(G.next_random(state)*cap/U32)<=low then
+            local i,k=floor((x-1)/8)+1,(x-1)%8
+            local bits=rock_bits[i] or (rock_row and byte(rock_row,i)) or 0
+            rock_bits[i]=bit(bits,k) and bits or bits+2^k
+            changed=true
+          end
           row_new[x],prev=row_enc[v],v
+        end
+        if changed then
+          for i=1,nbytes do
+            rock_bytes[i]=row_enc[rock_bits[i] or (rock_row and byte(rock_row,i)) or 0]
+            rock_bits[i]=nil
+          end
+          rock_rows[z]=table.concat(rock_bytes)
         end
         neighbor=table.concat(row_new)
         rows[z]=neighbor
@@ -412,7 +453,7 @@ return function(Slope)
     end
     sweep(1,p.depth,1,p.width,1)
     sweep(p.depth,1,p.width,1,-1)
-    return rows
+    return rows,rock_rows
   end
   local CLEAR,WATER,VOID=0,6,7
   local flood={[0]=170,10,130,2,160,0,128,131,40,8,0,14,32,56,224}
@@ -427,7 +468,8 @@ return function(Slope)
     "custom_terrain_type","custom_sea_level","map_height_limit"}
   local function options(opts)
     assert(type(opts)=="table","TerraGenesis options required")
-    local p={width=opts.width,depth=opts.depth,seed=opts.seed,freeform_edges=opts.freeform_edges~=false}
+    local p={width=opts.width,depth=opts.depth,seed=opts.seed,freeform_edges=opts.freeform_edges~=false,
+      legacy=opts.differential_version=="14.1"}
     p.lx,p.lz=sizes[p.width],sizes[p.depth]
     assert(p.lx and p.lz,"TerraGenesis stock axes are powers of two, 64–4096")
     assert(int(p.seed,0,U32-1),"TerraGenesis requires an explicit uint32 seed")
@@ -470,10 +512,10 @@ return function(Slope)
     mark(.74,"Finishing elevation")
     sine_transform(raw,p,maxh)
     curves(raw,p,maxh,state)
-    smooth_slopes(raw,p,16)
+    if p.legacy then smooth_slopes(raw,p,16) end
     mark(.90,"Finishing shared corners")
-    local rows=integer_rows(raw,p,maxh)
-    local id={"ott14.1-tgp-temperate-v1",w.."x"..h,("%08x"):format(p.seed),p.freeform_edges and 1 or 0,("%08x%08x"):format(start_a,start_b)}
+    local rows,rock_rows=integer_rows(raw,p,maxh,state)
+    local id={p.legacy and "ott14.1-tgp-temperate-v1" or "ott16.0-RC1-tgp-temperate-v1",w.."x"..h,("%08x"):format(p.seed),p.freeform_edges and 1 or 0,("%08x%08x"):format(start_a,start_b)}
     for _,field in ipairs(fields) do id[#id+1]=p[field] end
     id=table.concat(id,"/")
     local function is_void(x,z) return x==w or z==h or p.freeform_edges and (x==1 or z==1) end
@@ -492,7 +534,9 @@ return function(Slope)
       if not int(x,1,w) or not int(z,1,h) then return nil end
       if is_void(x,z) then return VOID end
       local s,b=Slope.classify(corners(x,z))
-      if b~=0 then return CLEAR end
+      local r=rock_rows[z]
+      local ground=r and bit(byte(r,floor((x-1)/8)+1),(x-1)%8) and 512 or CLEAR
+      if b~=0 then return ground end
       if s==0 then return WATER+16 end
       if raised[s] then return WATER+32 end
       local directions=flood[s%16]
@@ -505,7 +549,7 @@ return function(Slope)
         end
         directions=floor(directions/2)
       end
-      return CLEAR
+      return ground
     end
     function V.storage_options()
       return {seed=p.seed,base_id=id,corner=function(_,x,z)return V.corner(x,z) end,
@@ -513,7 +557,7 @@ return function(Slope)
     end
     function V.generation_footprint()
       return {height_bytes=w*h, octave_scratch_rows=3,sweep_scratch_rows=1,
-        packed_fixed_bytes=(w+1)*(h+1)*2,coast_edit_rim=71}
+        packed_fixed_bytes=(w+1)*(h+1)*2,coast_edit_rim=p.legacy and 71 or 136}
     end
     return V
   end

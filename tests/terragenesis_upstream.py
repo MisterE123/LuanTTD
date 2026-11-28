@@ -199,7 +199,7 @@ for line in io.lines() do
   local seed,w,h,t,sea,smooth,freeform,border,variety,limit,ct,cs,newgame=unpack(a)
   assert(newgame==0 or newgame==1)
   local clock=os.clock()
-  local v=G.generate({seed=seed,width=w,depth=h,terrain_type=t,quantity_sea_lakes=sea,
+  local v=G.generate({differential_version="14.1",seed=seed,width=w,depth=h,terrain_type=t,quantity_sea_lakes=sea,
     tgen_smoothness=smooth,freeform_edges=freeform==1,water_borders=border,variety=variety,
     map_height_limit=limit,custom_terrain_type=ct,custom_sea_level=cs,
     rng_state=newgame==1 and G.startup_rng(seed) or nil})

@@ -1,4 +1,4 @@
-# Stock temperate map foundation (OpenTTD 14.1)
+# Stock temperate map foundation (OpenTTD 16.0-RC1)
 
 Unlike the Original generator, TerraGenesis Perlin is self-contained. Its only
 inputs are the stock settings and the RNG world seed/state. It requires no
@@ -6,16 +6,19 @@ OpenGFX masks, imported art, third-party binaries, online service, or file
 uploads. The Lua port keeps the stock fixed-point interpolation, numeric
 tables/rounding, random draw order, water histogram, noisy coastline cuts,
 coast/slope smoothing, temperate sine redistribution, and optional terrain
-variety curves. Heights and tile classes use the pinned OpenTTD 14.1 Linux
-semantics, including the double `abs` overload selected by the complete
-upstream include chain in the coastline routine.
+variety curves. The live generator uses RC1's normalized three-band
+coast noise and 100-tile coast search, high-bit variety selection, and
+`FixSlopes`' paired ordered sweeps. Each lowered inner tile consumes the
+stock rock-chance draw; successful rock marks are stored in a packed bit
+overlay. The historical 14.1 differential fixtures select the old behavior
+explicitly; normal campaigns do not.
 
 ## Generation stages
 
 ```lua
 local Slope = dofile(root .. "/openttd/slope.lua")
 local TGP = dofile(root .. "/openttd/terragenesis.lua")(Slope)
-local Clear = dofile(root .. "/openttd/terragenesis_clear.lua")
+local Clear = dofile(root .. "/openttd/terragenesis_clear_rc1.lua")
 
 local seed = 1751
 local terrain = TGP.generate({
@@ -75,8 +78,13 @@ support that dimension.
 
 ## Verification
 
-Run `lua5.1 tests/terragenesis_storage.lua`, then point the source differential
-at a local OpenTTD 14.1 checkout:
+Run `lua5.1 tests/terragenesis_rc1.lua` for six native 16.0-RC1 reference
+worlds (135,168 corners, classes, and initial ground-cover bytes; both RNG
+words). This checks the boundary after `FixSlopes` and shoreline conversion,
+before the river generator. It does not establish post-river map parity.
+
+The older deterministic storage and 14.1 source comparison remain available
+as historical/reference-only fixtures:
 
 ```sh
 python3 tests/terragenesis_upstream.py /path/to/openttd-14.1 lua5.1
@@ -96,4 +104,6 @@ elevations at adjacent 3D chunk seams.
 Source provenance: OpenTTD authors, GPL-2.0-only (see `COPYING.OpenTTD.md`);
 `tgp.cpp`, `genworld.cpp`, `economy.cpp`, `core/random_func.cpp`,
 `heightmap.cpp`, `tile_map.cpp`, `water_cmd.cpp`, `clear_cmd.cpp`,
-`map.cpp`, and `map_func.h`, all pinned to tag `14.1`.
+`map.cpp`, and `map_func.h`. The live target is `16.0-RC1`
+(`07b339c0aaeb0a87be9490b2f1c3f17c6b00b837`); the historical differential
+harness alone is pinned to `14.1`.

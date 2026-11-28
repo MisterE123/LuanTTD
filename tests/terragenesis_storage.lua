@@ -6,7 +6,7 @@ local Storage=dofile(p.."world_storage.lua")
 local Stream=dofile(p.."terrain_stream.lua")(Slope)
 local function eq(a,b) assert(a==b,tostring(a).." != "..tostring(b)) end
 local seed=1751
-local config={width=64,depth=64,seed=seed,terrain_type=3,rng_state=G.startup_rng(seed)}
+local config={differential_version="14.1",width=64,depth=64,seed=seed,terrain_type=3,rng_state=G.startup_rng(seed)}
 local function generate() return Clear.generate(G.generate(config),G.next_random) end
 local base=generate()
 eq(base.rng_after[1],3351320871);eq(base.rng_after[2],3998776434)
