@@ -2,8 +2,8 @@
 """SHA-pinned OpenTTD 16.0-RC1 growth eligibility, counters and scheduler.
 
 Usage: TMPDIR=/path/to/qa_temp python3 tests/town_growth_scheduler_rc1.py /path/to/OpenTTD [lua5.1]
-Compile actual RC1 rate, radius, station, and tick functions. Stock Temperate
-inputs exercise both isolated calls and consecutive growth windows. GrowTown
+Compile actual RC1 rate, radius, station, climate, and tick functions.
+Inputs exercise both isolated calls and consecutive growth windows. GrowTown
 is a call recorder: this does not compare placement or world-clock delivery.
 """
 from hashlib import sha256
@@ -80,16 +80,22 @@ template<class E> auto EnumRange(E end) {
 template<class E> constexpr auto to_underlying(E e) { return int(e); }
 enum class WindowClass { TownView };
 enum class TropicZone { Normal, Desert };
+enum class LandscapeType { Temperate, Arctic, Tropic, Toyland };
 enum class TownExpandMode { Buildings, Roads };
 struct TownExpandModes { bool buildings=false, roads=false;
     TownExpandModes(TownExpandMode m) { Set(m); }
     void Set(TownExpandMode m) { (m==TownExpandMode::Buildings ? buildings : roads)=true; }
 };
-struct Settings {struct {uint town_growth_rate=2;bool allow_town_roads=true;} economy;} _settings_game;
+struct Settings {
+    struct {uint town_growth_rate=2;bool allow_town_roads=true;} economy;
+    struct { LandscapeType landscape=LandscapeType::Temperate; } game_creation;
+} _settings_game;
 struct Map {static int SizeX(){return 512;}static int SizeY(){return 512;}};
 int TileX(int tile){return tile%512;} int TileY(int tile){return tile/512;}
 uint DistanceSquare(int a,int b){auto x=TileX(a)-TileX(b),y=TileY(a)-TileY(b);return x*x+y*y;}
-int TileHeight(int){return 0;} int GetSnowLine(){return 255;} TropicZone GetTropicZone(int){return TropicZone::Normal;}
+int tile_height=0,snowline=255,desert=0;
+int TileHeight(int){return tile_height;} int GetSnowLine(){return snowline;}
+TropicZone GetTropicZone(int){return desert ? TropicZone::Desert : TropicZone::Normal;}
 void SetWindowDirty(WindowClass,int){}
 template<class T> struct Effects {
     std::array<T,6> values{};
@@ -106,6 +112,11 @@ struct Town{
     struct Cargo {uint old_act=0;};
     Effects<Cargo> received;
 };
+int effect_mask=0;
+const int *FindFirstCargoWithTownAcceptanceEffect(TownAcceptanceEffect e){
+    static const int present=1;
+    return (effect_mask & (1 << int(e))) ? &present : nullptr;
+}
 struct Station {
     TileIndex xy=0;uint time_since_load=255,time_since_unload=255;
     static Station* Get(int id);
@@ -132,6 +143,7 @@ for sig in [r"^void UpdateTownRadius",r"^HouseZone GetTownRadiusGroup",r"^static
             r"^static void UpdateTownGrowth\(Town \*t\)\n",r"^static void TownTickHandler"]:
     cpp+=("template<class Func>\n" if "ForAllStationsNearTown" in sig else "")+block(town,sig)+"\n"
 
+cpp+="void InitializeCargoGoals(Town *t){\n"+block(town,r"Set the default cargo requirement for town growth").split("\n",1)[1]+"\n}\n"
 cpp+=r"""
 int main(){
     int kind;
@@ -150,11 +162,19 @@ int main(){
                 std::cin>>x>>y>>s.time_since_load>>s.time_since_unload;
                 s.xy=t.xy+x+y*512;
             }
+            std::cin>>tile_height>>snowline>>desert;
             UpdateTownRadius(&t);
             samples=0;UpdateTownGrowth(&t);
             std::cout<<CountActiveStations(&t)<<" "<<int(GetTownRadiusGroup(&t,t.xy+dx+dy*512))<<" "<<t.growth_rate
               <<" "<<t.grow_counter<<" "<<t.flags.Test(TownFlag::IsGrowing)<<" "<<samples;
             for(uint r:t.cache.squared_town_zone_radius)std::cout<<" "<<r;
+            std::cout<<"\n";
+        } else if(kind==3){
+            int climate;
+            std::cin>>climate>>effect_mask;
+            _settings_game.game_creation.landscape=LandscapeType(climate);
+            InitializeCargoGoals(&t);
+            for(auto e:EnumRange(TownAcceptanceEffect::End)) std::cout<<t.goal[e]<<" ";
             std::cout<<"\n";
         } else if(kind==2){
             int city,months;
@@ -201,6 +221,37 @@ int main(){
 program=r"""
 local p="mods/luanttd_core/openttd/"
 local G=dofile(p.."town_growth.lua")
+do
+  local function available(effect) assert(effect==4 or effect==5);return true end
+  assert(not next(G.default_goals("temperate",available)))
+  assert(not next(G.default_goals("toyland",available)))
+  assert(not next(G.default_goals("arctic",function(e) return e==4 end)))
+  assert(G.default_goals("arctic",available)[5]==G.WINTER)
+  local tropic=G.default_goals("tropic",available)
+  assert(tropic[4]==G.DESERT and tropic[5]==G.DESERT)
+  assert(G.default_goals("tropic",function(e) return e==4 end)[5]==nil)
+  local calls=0
+  local snowline=8
+  local t=G.new(0,40,30,{population=91,goal={food=G.WINTER},
+    received={food={old_act=0,new_act=1}}})
+  local served={{x=40,z=30,time_since_load=0}}
+  local function center(x,z)
+    assert(x==40 and z==30)
+    calls=calls+1
+    return {tile_height=8,snowline=snowline}
+  end
+  assert(G.month(t,served,2,nil,center),"fresh food counts after rotation")
+  assert(t.received.food.old_act==1 and t.received.food.new_act==0)
+  assert(not G.month(t,served,2,nil,center),"food does not count in later months")
+  snowline=9
+  assert(G.month(t,served,2,nil,center),"the current snowline is read each month")
+  assert(calls==3)
+  local growing,why=G.update(t,served,2)
+  assert(not growing and why=="missing-town-snowline")
+  local function forbidden() error("funding bypasses climate lookup") end
+  t.fund_buildings_months=2
+  assert(G.month(t,served,0,nil,forbidden))
+end
 for line in io.lines() do
   local a={}
   for n in line:gmatch("%S+") do a[#a+1]=tonumber(n) end
@@ -215,12 +266,22 @@ for line in io.lines() do
       st[i+1]={x=x+256,z=y+256,time_since_load=l,time_since_unload=u}
     end
     local samples=0
-    G.update(t,st,setting,function() samples=samples+1;return u32 end)
+    local height,snow,desert=unpack(a,26+count*4,28+count*4)
+    G.update(t,st,setting,function() samples=samples+1;return u32 end,function(x,z)
+      assert(x==t.x and z==t.z,"growth climate at town center")
+      return {tile_height=height,snowline=snow,is_desert=desert==1}
+    end)
     local active=G.active_stations(t,st)
     st.count_near=G.index_active_stations(st)
     assert(G.active_stations(t,st)==active,"indexed station count")
     print(active,G.zone(t,x+256,y+256),t.growth_rate,t.grow_counter,
       t.growing and 1 or 0,samples,unpack(t.radii))
+  elseif a[1]==3 then
+    local climate=({"temperate","arctic","tropic","toyland"})[a[2]+1]
+    local g=G.new(0,0,0,{climate=climate,
+      has_effect=function(effect) return math.floor(a[3]/2^effect)%2==1 end}).goal
+    for i=0,5 do io.write(g[i] or 0," ") end
+    io.write("\n")
   elseif a[1]==2 then
     local _,houses,city,rate,counter,months=unpack(a)
     local t=G.new(0,256,256,{num_houses=houses,larger_town=city==1,
@@ -276,7 +337,31 @@ for _ in range(12000):
     for i in range(c):
         row.extend([rng.randrange(-20,21),rng.randrange(-20,21),
                     rng.choice([0,19,20,21,255]),rng.choice([0,19,20,21,255])])
+    row.extend([0,255,0])
     rows.append(row)
+# Compiled source uses physical center height (inclusive snowline),
+# ORs the bypass conditions, and reads each effect's old receipts.
+# Exercise exact population boundaries across both climates and custom growth.
+for p in [59,60,61,89,90,91,250]:
+    for h,snow,desert in [(8,9,0),(9,9,0),(10,9,0),(8,9,1),(9,9,1),(10,9,1)]:
+        for fund,setting in [(0,0),(0,2),(1,0),(1,2)]:
+            for food,water in [(0,0),(0,1),(1,0),(1,1)]:
+                for winter,arid in [(1,0),(0,1),(1,1)]:
+                    for custom in [0,1]:
+                        word=rng.choice([0,65535])
+                        count=rng.randrange(2)
+                        row=[0,40,p,fund,0,custom,65535 if custom else 69,15,
+                             setting,word,count,0,0]
+                        goal_w=4294967295 if arid else 0
+                        goal_f=4294967294 if winter else 4294967295 if arid else 0
+                        row.extend([0,0]*4 + [goal_w,water,goal_f,food])
+                        if count:
+                            row.extend([0,0,20,255])
+                        row.extend([h,snow,desert])
+                        rows.append(row)
+for climate in range(4):
+    for effects in (0,1<<4,1<<5,(1<<4)|(1<<5),63):
+        rows.append([3,climate,effects])
 for _ in range(6500):
     rows.append([1,rng.randrange(2),rng.choice([0,1,69,70,71,400]),
                  rng.randrange(300),rng.randrange(300),rng.randrange(2),rng.randrange(350)])
@@ -297,4 +382,4 @@ with tempfile.TemporaryDirectory(prefix="town-growth-scheduler-rc1-") as work:
     assert len(ref)==len(lua)==len(rows)
     for i,(a,b) in enumerate(zip(ref,lua)):
         assert list(map(int,a.split()))==list(map(int,b.split())),(i,rows[i],a,b)
-print(f"PASS {len(rows)} RC1 radius, station gate, and growth timer cases (including 128 twelve-window traces)")
+print(f"PASS {len(rows)} RC1 radius, station and climate gates, and growth timer cases (including 128 twelve-window traces)")

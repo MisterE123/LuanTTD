@@ -1294,3 +1294,23 @@ either bribe outcome. The full 51-town comparison matches all
 vehicle and station records. The real Luanti worker persists the
 rights and ban across restart and decrements them at the next
 economy month; the standing and action-mask tests also cover expiry.
+
+## Arctic and Tropic cargo-goal rules
+
+The source-translated growth scheduler now handles the two special RC1
+cargo goals when supplied with authoritative climate data for the town
+center. In Arctic, a town above 90 population at or above the current
+snowline needs at least one unit of the required cargo in the previous
+month. In Tropic, a desert town above 60 population needs at least one
+unit **of each** configured desert cargo in the previous month. The stock defaults look for the Food effect in Arctic and for
+Food and Water independently in Tropic, omitting goals for absent
+cargo effects. Funding bypasses both restrictions. A blocked town does not use the no-service
+growth lottery. The compiled RC1 scheduler comparison includes 4,032
+climate boundary cases and 20 new-town cargo-roster cases; the Lua
+test also checks the monthly cargo
+rotation and a changing snowline.
+
+This is a port of the scheduler branch. Arctic and Tropic world
+generation and the playable Food and Water supply chains remain
+open. The base Arctic game uses a configured snowline height; an
+optional calendar-indexed snowline comes from NewGRF data.

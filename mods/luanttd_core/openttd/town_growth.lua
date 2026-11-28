@@ -4,7 +4,7 @@
 -- TownTickHandler and monthly economy timer; town.h and timer_game_tick.h.
 -- Rate, service, zones and the per-town deadline also match the compiled
 -- 16.0-RC1 functions (tests/town_growth_scheduler_rc1.py). This comparison
--- does not cover the calendar adapter, lot placement or other climates.
+-- does not cover the calendar adapter, lot placement or climate worldgen.
 local G={TOWN_TICKS=70,STATION_TICKS=185,ACTIVE_AGE=20,NONE=65535,MAX_TOWN_TICKS=930,
   WINTER=4294967294,DESERT=4294967295}
 local floor,min,abs,sqrt=math.floor,math.min,math.abs,math.sqrt
@@ -40,6 +40,20 @@ function G.zone(t,x,z)
   for i,r in ipairs(t.radii or G.radii(t.num_houses)) do if d<r then smallest=i-1 end end
   return smallest
 end
+-- DoCreateTown's stock default goals are keyed by acceptance effect,
+-- not by a climate's cargo ID. The roster decides whether the effect
+-- exists at all (equivalent to FindFirstCargoWithTownAcceptanceEffect).
+function G.default_goals(climate,has_effect)
+  local goal={}
+  if climate=="arctic" then
+    if has_effect(5) then goal[5]=G.WINTER end -- Food
+  elseif climate=="tropic" then
+    if has_effect(5) then goal[5]=G.DESERT end -- Food
+    if has_effect(4) then goal[4]=G.DESERT end -- Water
+  end
+  return goal
+end
+
 function G.new(id,x,z,opts)
   opts=opts or {}
   local n=opts.num_houses or 0
@@ -50,7 +64,8 @@ function G.new(id,x,z,opts)
     custom_growth=not not opts.custom_growth,larger_town=not not opts.larger_town,
     fund_buildings_months=opts.fund_buildings_months or 0,
     road_build_months=opts.road_build_months or 0,exclusive_counter=opts.exclusive_counter or 0,
-    exclusivity=opts.exclusivity,layout=opts.layout or "original",goal=opts.goal or {},
+    exclusivity=opts.exclusivity,layout=opts.layout or "original",
+    goal=opts.goal or (opts.climate and G.default_goals(opts.climate,opts.has_effect)) or {},
     supplied=opts.supplied or {},received=opts.received or {},accepted=opts.accepted or {}}
 end
 
@@ -159,7 +174,10 @@ function G.update_rate(t,stations,setting,active)
   t.grow_counter=G.adjust_counter(t.grow_counter,t.growth_rate,last)
   return t.growth_rate
 end
-function G.update(t,stations,setting,random)
+-- A climate world supplies the current source tile height, current snowline
+-- and desert-zone bit lazily, only for a town with a special stock goal.
+-- These are simulation inputs, not height sampled from rendered geometry.
+function G.update(t,stations,setting,random,climate_at)
   setting=setting or 2
   local active=G.active_stations(t,stations)
   G.update_rate(t,stations,setting,active)
@@ -167,12 +185,28 @@ function G.update(t,stations,setting,random)
   local fund=t.fund_buildings_months~=0
   if not fund then
     if setting==0 then return false,"disabled" end
+    local climate
     for effect,goal in pairs(t.goal) do
-      -- Ordinary temperate worlds do not use special climate gates.
-      -- Do not silently treat an imported climate sentinel as cargo tons.
-      if goal==G.WINTER or goal==G.DESERT then return false,"unsupported-climate-goal" end
       local record=t.received[effect]
-      if goal>(record and record.old_act or 0) then return false,"unmet-cargo-goal" end
+      local delivered=record and record.old_act or 0
+      if goal==G.WINTER or goal==G.DESERT then
+        climate=climate or (climate_at and climate_at(t.x,t.z))
+        if goal==G.WINTER then
+          if not climate or climate.tile_height==nil or climate.snowline==nil then
+            return false,"missing-town-snowline"
+          end
+          if climate.tile_height>=climate.snowline and delivered==0 and t.population>90 then
+            return false,"unmet-winter-cargo-goal"
+          end
+        else
+          if not climate or climate.is_desert==nil then return false,"missing-town-desert-zone" end
+          if climate.is_desert and delivered==0 and t.population>60 then
+            return false,"unmet-desert-cargo-goal"
+          end
+        end
+      elseif goal>delivered then
+        return false,"unmet-cargo-goal"
+      end
     end
   end
   if t.custom_growth then t.growing=t.growth_rate~=G.NONE;return t.growing,"custom" end
@@ -188,7 +222,7 @@ local function month_rotate(stats)
     a.new_act,a.new_max=0,0
   end
 end
-function G.month(t,stations,setting,random)
+function G.month(t,stations,setting,random,climate_at)
   if t.road_build_months>0 then t.road_build_months=t.road_build_months-1 end
   if t.fund_buildings_months>0 then t.fund_buildings_months=t.fund_buildings_months-1 end
   if t.exclusive_counter>0 then
@@ -204,7 +238,7 @@ function G.month(t,stations,setting,random)
   month_rotate(t.supplied)
   if t.accepted then month_rotate(t.accepted) end
   month_rotate(t.received)
-  return G.update(t,stations,setting,random)
+  return G.update(t,stations,setting,random,climate_at)
 end
 function G.fund(t,stations,setting,random)
   t.fund_buildings_months=3
