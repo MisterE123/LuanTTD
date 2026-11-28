@@ -33,8 +33,17 @@ return function(Sim,Terrain,s,live_economy,town_runtime)
     elseif was then Anim.delete(hub,id,false) end
   end
   if live then
-    assert(not next(s.companies) and not next(s.stations) and not next(s.fleet),
-      "The no-company climate comparison does not settle player freight")
+    -- Passenger-only road transport shares the town/station clock
+    -- without a duplicate producer. Freight waits for native climate
+    -- cargo to use the same physical industry records.
+    for _,v in pairs(s.fleet) do
+      assert((v.stock_bus or v.stock_regal) and v.cargo=="passenger",
+        "The climate industry comparison does not yet settle other player freight")
+    end
+    for _,st in pairs(s.stations) do
+      assert(st.mode=="road" and Sim.road_stop_has(st,"bus") and not Sim.road_stop_has(st,"truck"),
+        "The climate industry comparison requires passenger-only road stops")
+    end
     assert(live_economy=="frozen" or live_economy=="smooth","Choose a supported climate economy")
     if live_economy~="frozen" then
       local start=Sim.date(s)

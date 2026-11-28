@@ -1832,3 +1832,17 @@ packed reopens. The test injects the closing flag, so it validates
 the timing and physical removal rather than the incidence of
 naturally selected closures. Wet industry removal and company
 cargo-packet cleanup are outside this proof.
+
+### A player bus on the complete generated Tropic world
+
+The wooded Smooth Tropic world now shares its source industry and
+town clocks with an owned Hereford on actual municipal streets.
+Two drive-through passenger stops are built and used in the
+normal command path, with the same depot links as the source UI.
+The test matches all 8,584 vehicle frames, the 8,880-tick shared
+RNG and landscape cursor, and ten samples of both station queues,
+ratings, town state, cash and passenger payments. The bus delivers
+198 passengers. A desert town still cannot bypass its Food/Water
+gate merely by adding busy passenger stops. This run reopens the
+packed world twice in the Luanti worker; it is not a visual
+playtest or a general climate freight or network-parity claim.

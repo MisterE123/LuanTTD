@@ -10,7 +10,7 @@ mkdir -p "$mod/fixtures" "$out/world" "$out/home"
 for p in "$PWD"/mods/luanttd_core/*.lua "$PWD"/mods/luanttd_core/openttd; do
   [[ ${p##*/} == init.lua ]] || cp -al "$p" "$mod/"
 done
-cp tests/fixtures/{rc1-climate-town-start,rc1-native-climate-generated-industries,rc1-native-climate-industry-settle,rc1-native-climate-industry-live-frozen,rc1-native-climate-industry-live-trees,rc1-native-climate-industry-live-toyland,rc1-native-climate-industry-live-wooded,rc1-native-climate-industry-smooth-year,rc1-native-climate-industry-smooth-opening,rc1-native-climate-industry-smooth-closure}.lua "$mod/fixtures/"
+cp tests/fixtures/{rc1-climate-town-start,rc1-native-climate-generated-industries,rc1-native-climate-industry-settle,rc1-native-climate-industry-live-frozen,rc1-native-climate-industry-live-trees,rc1-native-climate-industry-live-toyland,rc1-native-climate-industry-live-wooded,rc1-native-climate-industry-smooth-year,rc1-native-climate-industry-smooth-opening,rc1-native-climate-industry-smooth-closure,rc1-native-climate-industry-smooth-bus}.lua "$mod/fixtures/"
 cp tests/industry_climate_worldgen_rc1.lua "$mod/phase.lua"
 printf 'title = Stock climate industry QA\n' > "$game/game.conf"
 printf 'name = luanttd_core\n' > "$mod/mod.conf"
@@ -37,5 +37,6 @@ timeout 95 "${LUANTI_SERVER:-luantiserver}" --world "$out/world" --gameid climat
 [[ $(grep -c 'PASS active RC1' "$out/log") == 4 ]]
 [[ $(grep -c 'PASS live frozen RC1' "$out/log") == 8 ]]
 [[ $(grep -c 'PASS wooded RC1' "$out/log") == 3 ]]
-[[ $(grep -c 'PASS live smooth RC1' "$out/log") == 3 ]]
-grep -E 'PASS wooded RC1|PASS automatic RC1|PASS active RC1|PASS live (frozen|smooth) RC1|CLIMATE_INDUSTRY_WORLDGEN_NATIVE_PASS' "$out/log"
+[[ $(grep -c 'PASS live smooth RC1' "$out/log") == 4 ]]
+[[ $(grep -c 'PASS generated RC1 Tropic bus' "$out/log") == 1 ]]
+grep -E 'PASS generated RC1 Tropic bus|PASS wooded RC1|PASS automatic RC1|PASS active RC1|PASS live (frozen|smooth) RC1|CLIMATE_INDUSTRY_WORLDGEN_NATIVE_PASS' "$out/log"

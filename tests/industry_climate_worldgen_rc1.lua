@@ -35,6 +35,7 @@ local wooded=dofile(fp.."rc1-native-climate-industry-live-wooded.lua")
 local smooth=dofile(fp.."rc1-native-climate-industry-smooth-year.lua")
 local smooth_open=dofile(fp.."rc1-native-climate-industry-smooth-opening.lua")
 local smooth_close=dofile(fp.."rc1-native-climate-industry-smooth-closure.lua")
+local smooth_bus=dofile(fp.."rc1-native-climate-industry-smooth-bus.lua")
 local function fold(h,...)
   for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
   return h
@@ -43,11 +44,20 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
   economy=economy or "frozen"
   s.stock_extra_tree_placement=settings
   local industry_clock
+  local transport=fixture.bus
+  local owner="Tropic buses"
+  local bus,near,far
+  local motion,frames,visits=1,0,0
   local function mount()
     S.mount_road_bus_market(s,Calendar,1985,false,false)
     S.mount_stock_town_growth(s,Live,true)
     S.mount_coastal_flood(s)
     industry_clock=S.mount_climate_industry_clock(s,T,economy)
+    if transport then
+      S.mount_road_faults(s,o("road_breakdowns"),m("road_faults_runtime"),1,
+        {kernel=o("road_depot_service"),interval=150,percent=false})
+      s.road_regal_enabled,s.road_mail=true,true
+    end
   end
   mount()
   local digest,ticks,maps,reopen,opens,closes=1,0,0,0,0,0
@@ -111,6 +121,49 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
         eq("native field ownership after farm closure",{n,h,unowned},fixture.farmland)
       end
     end
+    if transport and tick==transport.tick then
+      local function cell(x,z) return S.id(x+1,z+1) end
+      local co=assert(S.open_company(s,owner))
+      co.cash=80000000
+      local function apply(quote,why)
+        assert(quote,why)
+        assert(S.apply_road_construction(s,owner,quote))
+      end
+      local depot=cell(49,37)
+      apply(S.stock_road_terminal_plan(s,owner,depot,{kind="depot",dir=0}))
+      local function stop(x)
+        local id=cell(x,37)
+        apply(S.stock_road_stop_area_plan(s,owner,id,id,{kind="bus",dir=0,through=true,adjacent=true}))
+        return assert(s.tiles[id].station)
+      end
+      near,far=stop(47),stop(43)
+      bus=assert(S.purchase(s,owner,"leopard_bus","passenger",nil,depot))
+      assert(S.add_order(s,owner,bus,far) and S.add_order(s,owner,bus,near))
+      assert(S.toggle(s,owner,bus))
+      eq("after depot/stops/Hereford purchase and orders",s.passenger_rating_rng,transport.rng)
+    elseif bus then
+      local v=assert(s.fleet[bus])
+      local frame=assert(S.road_motion_frame(s,v))
+      local c=assert(v.road_speed_state or v.road_stop_motion)
+      motion=fold(motion,tick,frame[4]-1,frame[1]-16,frame[2]-16,S.stock_road_frame_z(s,frame),frame[3],c.progress,
+        v.road_speed_state and c.speed or 0,c.subspeed,v.units)
+      frames=frames+1
+      local receipt=transport.service[tick]
+      if receipt then
+        local function waiting(st)
+          local n=0
+          for _,p in ipairs((st.stock or {}).passenger or {}) do n=n+p.units end
+          return n
+        end
+        local a,b=assert(s.stations[near]),assert(s.stations[far])
+        local town=assert(s.stock_town_growth.towns[1])
+        local co=s.companies[owner]
+        local delivered=co.paid_units+(v.load_state and v.load_state.payment and v.load_state.payment.delivered or 0)
+        eq("passenger service at "..tick,{waiting(a),0,town.population,town.growing and 1 or 0,co.cash,delivered,
+          a.passenger_rating_state.rating,waiting(b),b.passenger_rating_state.rating},receipt)
+        visits=visits+1
+      end
+    end
     local expected=fixture.snapshots[tick]
     if not expected then return end
     local gh,hh,ih,wood,trees=1,1,1,1,0
@@ -123,9 +176,11 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
       local x,z=S.xy(id)
       local h=c.source_house
       local kind=c.stock_void and 7 or h and 3 or c.wood and 4 or c.terrain=="water" and 6
-        or c.stock_industry and 8 or c.build=="road" and 2 or (c.road_bridge_id or c.road_tunnel_id) and 9 or 0
+        or c.stock_industry and 8 or (transport and c.station) and 5
+        or (c.build=="road" or transport and c.build=="road_depot") and 2
+        or (c.road_bridge_id or c.road_tunnel_id) and 9 or 0
       gh=fold(gh,T.corner(s.corner_grid,x,z),kind)
-      if kind==2 then gh=fold(gh,c.road_bits) end
+      if kind==2 and c.build=="road" then gh=fold(gh,c.road_bits) end
       if h then hh=fold(hh,h.id,h.town-1,h.random_bits,h.stage) end
       if kind==4 then
         local t=c.wood
@@ -187,6 +242,11 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
   eq(climate.." full live RNG and landscape cursor",{digest},{fixture.trace})
   if fixture.openings then assert(opens==#fixture.openings) end
   if fixture.closures then assert(closes==#fixture.closures) end
+  if transport then
+    eq("Hereford motion and load on the generated map",{frames,motion,visits},
+      {transport.frames,transport.motion,10})
+    print(("PASS generated RC1 Tropic bus: %d service frames and %d payment/catchment checks"):format(frames,visits))
+  end
   print(("PASS live %s RC1 %s (tree setting %d): %d exact ticks, %d snapshots, %d reopens, %d test openings, %d test closures")
     :format(economy,climate,settings,ticks,maps,reopen,opens,closes))
 end
@@ -338,6 +398,7 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
         live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth,"smooth")
         live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_open,"smooth")
         live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_close,"smooth")
+        live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_bus,"smooth")
       end
     end
 
