@@ -473,6 +473,7 @@ jobs:
           lua5.1 tests/object_pool_rc1.lua
           lua5.1 tests/rail_auto_service_rc1.lua
           lua5.1 tests/town_growth_rc1_station_phase.lua
+          lua5.1 tests/town_growth_rc1_generated_region.lua
           lua5.1 tests/town_growth_rc1_vehicle_phase.lua
           lua5.1 tests/town_growth_rc1_two_buses.lua
           lua5.1 tests/town_growth_rc1_mixed_road_rail.lua

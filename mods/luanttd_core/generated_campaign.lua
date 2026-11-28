@@ -48,7 +48,7 @@ function M.landscape(Sim,Terrain,Generator,settings)
   end
   local persisted=copy(settings)
   persisted.progress,persisted.corner_progress,persisted.host_progress=nil,nil,nil
-  s.stock_generated_profile={version=1,width=Sim.W,depth=Sim.H,terrain="terragenesis-14.1",
+  s.stock_generated_profile={version=1,width=Sim.W,depth=Sim.H,terrain="terragenesis-16.0-RC1",
     settings=persisted,terrain_rng=copy(map.rng_after),clear_attempts=map.clear_attempts,
     initial_land_count=math.min(Sim.W*Sim.H,dry_count+math.floor(dry_count/12)),
     map_height_limit=settings.map_height_limit and settings.map_height_limit>0 and settings.map_height_limit or

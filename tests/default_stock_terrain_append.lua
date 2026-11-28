@@ -30,7 +30,7 @@ core.after(0,function()
     local profile=assert(S.stock_generated_profile)
     -- Default 64-square seed 1751 admits five towns with the RC1 founding walk.
     assert(api.generated_world and S.seed==1751 and Sim.W==64 and Sim.H==64 and #S.corner_grid.levels==65^2
-      and not S.qa_coastal and profile.terrain=="terragenesis-14.1" and profile.towns==5)
+      and not S.qa_coastal and profile.terrain=="terragenesis-16.0-RC1" and profile.towns==5)
     assert(api.terrain and api.coastal_flood_tools and S.stock_coastal_flood and api.structure_tools and api.road_bay_tools
       and api.rail_build_tools and api.rail_owned_tools and api.ship_tools and api.airport_tools and api.freight_tools)
     local kinds={}
@@ -83,7 +83,7 @@ core.after(0,function()
     report("saved stock world and new coast retained despite a different scenario setting")
   elseif key=="obsolete" then
     assert(core.settings:get_bool("luanttd_qa_coastal_layout",false) and core.settings:get_bool("luanttd_qa_plain_layout",false) and core.settings:get_bool("bayline_stock_generated_world",true)==false)
-    assert(api.generated_world and S.stock_generated_profile.terrain=="terragenesis-14.1" and not S.qa_coastal)
+    assert(api.generated_world and S.stock_generated_profile.terrain=="terragenesis-16.0-RC1" and not S.qa_coastal)
     assert(api.world_origin():match("TerraGenesis"))
     report("test layout flags are ignored without QA support")
   elseif key=="all_on" then

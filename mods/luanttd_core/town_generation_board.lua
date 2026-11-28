@@ -176,18 +176,17 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
       })
     if not p or cost_limited and p.cost>=(price+2)*8 then return false end
     -- CmdTerraformLand visits the sorted non-void tile set twice on
-    -- Execute. The validation pass still draws; only pass 1 clears.
+    -- Execute, in both world founding and live growth. The validation pass
+    -- still draws; only pass 1 clears. Pure quotes never consume RNG.
     local rock={}
-    if live then
-      assert(type(random)=="function","Live town earthworks must use the simulation RNG")
-      for pass=0,1 do
-        for _,d in ipairs(p.dirty) do
-          local id=Sim.id(d.x,d.z)
-          if not s.tiles[id].stock_void then
-            local _,_,top=Terrain.tile(s.corner_grid,d.x,d.z,p)
-            local make_rocks=G.range(height_limit,random())<=top
-            if pass==1 and not up and make_rocks then rock[id]=true end
-          end
+    assert(type(random)=="function","Town earthworks must use the simulation RNG")
+    for pass=0,1 do
+      for _,d in ipairs(p.dirty) do
+        local id=Sim.id(d.x,d.z)
+        if not s.tiles[id].stock_void then
+          local _,_,top=Terrain.tile(s.corner_grid,d.x,d.z,p)
+          local make_rocks=G.range(height_limit,random())<=top
+          if pass==1 and not up and make_rocks then rock[id]=true end
         end
       end
     end

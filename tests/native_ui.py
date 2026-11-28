@@ -862,7 +862,7 @@ try:
         gen=await_state("visible modeled houses on the generated map",lambda s:
             (s.get("generated") or {}).get("visible_house",0)>5 and len(s["generated"].get("towns") or [])>=2)
         gen=gen["generated"]
-        assert gen["width"]==gen["depth"]==64 and gen["style"]=="terragenesis-14.1" and gen["void"]==252
+        assert gen["width"]==gen["depth"]==64 and gen["style"]=="terragenesis-16.0-RC1" and gen["void"]==252
         assert gen["road"]>20 and gen["house"]>10
         assert gen["forest_tiles"]>100 and gen["forest_stems"]>gen["forest_tiles"] and gen["forest_shore"]>0
         city=gen["towns"][0]
