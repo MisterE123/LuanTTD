@@ -140,3 +140,11 @@ The regression runs this full year with both rivers off and stock Normal
 rivers. Active industries, companies, disasters and subsidies are off in
 these two same-seed comparisons; active industry and subsidy interactions
 on newly generated maps remain separate parity cases.
+
+### Normal-industry opening
+
+The same 128×128 reference seed starts with eleven industries in RC1 and
+LuanTTD. All placement/layout, starting production and initial counters
+match; the final pre-play map and RNG also match after 1,280 landscape
+ticks. This comparison isolates the startup phase, not live industry
+behavior. The fixture is `tests/town_growth_rc1_industry_start.lua`.

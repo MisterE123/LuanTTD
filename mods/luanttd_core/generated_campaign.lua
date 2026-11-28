@@ -187,7 +187,8 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     custom_count=math.max(1,math.min(64,math.floor(custom_count or 1)))
   end
   local state=copy(profile.town_rng)
-  local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={}}
+  local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={},
+    initial_land_count=profile.initial_land_count}
   for _,site in ipairs(s.sites) do
     if site.kind=="town" then
       local x,z=Sim.xy(site.tile)
@@ -207,24 +208,21 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     tile.bridge=tile.bridge_above~=nil
     return tile
   end
-  local Platform=Heavy and dofile(path.."openttd/industry_platform_level.lua")(Terrain)
+  local Platform=dofile(path.."openttd/industry_platform_level.lua")(Terrain)
   if Platform then
     local function terraform_options()
-      return {validate_tile=function(_,x,z)
+      return {capture_stock_tops=true,void=function(x,z)return s.tiles[Sim.id(x,z)].stock_void end,
+        validate_tile=function(_,x,z)
         local t=board.tile(x-1,z-1)
         local id=Sim.id(x,z)
-        return t and (t.kind=="clear" or t.kind=="trees") and not t.owner and not t.bridge_above
+        return t and (t.kind=="clear" or t.kind=="trees" or t.coast) and not t.owner and not t.bridge_above
           and not (s.tunnel_below and s.tunnel_below[id]) and 0 or nil
       end}
     end
     function board.terraform_quote(x,z,raise)
       return Terrain.plan(s.corner_grid,x+1,z+1,8,raise,terraform_options())~=nil
     end
-    function board.can_level_industry(id) return id==8 end
     function board.level_platform(kind,platform,cells)
-      -- Factory/mining lifecycles may handle cleared neighbors differently.
-      -- Only the stock Steel Mill occupies leveled sites in this tranche.
-      if kind~=8 then return nil,"PLATFORM_TERRAFORM_UNPORTED" end
       local receipt,shadow=Platform.plan(s.corner_grid,platform,terraform_options)
       for _,c in ipairs(cells) do
         local slope,h=Terrain.tile(shadow,c.x+1,c.z+1)
@@ -232,6 +230,20 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
       end
       return receipt
     end
+  end
+  local function platform_draws(plan,random)
+    if not plan.leveling then return end
+    local height_limit=profile.map_height_limit
+    local ground={}
+    for _,cmd in ipairs(plan.leveling.commands) do
+      for pass=0,1 do
+        for _,t in ipairs(cmd.touched or {}) do
+          local rocky=math.floor(random()*height_limit/4294967296)<=t.top
+          if pass==1 then ground[Sim.id(t.x,t.z)]=not cmd.raise and rocky and 2 or false end
+        end
+      end
+    end
+    plan.platform_ground=ground
   end
   local choices={}
   local function commit(plan)
@@ -246,8 +258,12 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
       for _,d in ipairs(plan.leveling.dirty) do
         local tile=Sim.id(d.x,d.z)
         local t=s.tiles[tile]
+        if t.coastal_water then
+          t.coastal_water,t.water_class,t.stock_water_rocks,t.stock_river_bits=nil,nil,nil,nil
+        end
         local _,base=Terrain.tile(s.corner_grid,d.x,d.z)
-        t.h,t.terrain,t.wood,t.stock_clear_ground=base,base>0 and "hill" or "grass",nil,nil
+        t.h,t.terrain,t.wood,t.stock_clear_ground=base,base>0 and "hill" or "grass",nil,
+          plan.platform_ground and plan.platform_ground[tile] or nil
         if s.stock_farm_fields then s.stock_farm_fields[tile]=nil end
       end
     end
@@ -277,9 +293,11 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
     return true
   end
   local result=Industry.generate(board,{random=function() return Generator.next_random(state) end,
-    density=density,custom_count=custom_count,commit=commit,progress=progress})
+    density=density,custom_count=custom_count,commit=commit,progress=progress,
+    prepare=platform_draws,rc1=true})
   profile.industry_rng=copy(state)
   profile.industry_density=density
+  profile.rc1_industry_phase=true
   profile.industries=choices
   profile.timber_generation=Timber and true or nil
   profile.industry_stats={target=result.target,shortfall=result.shortfall,attempted=result.attempted}

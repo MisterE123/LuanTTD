@@ -22,11 +22,20 @@ return function(Terrain)
           local context=options and options(copy,x,z,raise)
           local plan,why=Terrain.plan(copy,x,z,NORTH,raise,context)
           if plan then
+            local touched={}
+            if context and context.capture_stock_tops then
+              for _,d in ipairs(plan.dirty) do
+                if not context.void or not context.void(d.x,d.z) then
+                  local _,_,top=Terrain.tile(copy,d.x,d.z,plan)
+                  touched[#touched+1]={x=d.x,z=d.z,top=top}
+                end
+              end
+            end
             assert(Terrain.apply(copy,plan))
             for _,d in ipairs(plan.dirty) do
               dirty[(d.z-1)*grid.width+d.x]=d
             end
-            out.commands[#out.commands+1]={x=x,z=z,raise=raise}
+            out.commands[#out.commands+1]={x=x,z=z,raise=raise,touched=#touched>0 and touched or nil}
           else
             -- The original command loop advances its local height counter
             -- regardless of the individual execution receipt.

@@ -259,12 +259,16 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
   end
 
   -- Translate DoCreateNewIndustry's accepted-candidate draws to explicit
-  -- fields (no draws during quotes). Smooth production consumes one raw
-  -- draw for each of all sixteen slots, including empty slots.
+  -- fields (no draws during quotes). RC1 smooth production consumes one
+  -- draw through the last valid output slot, not all sixteen (14.1).
   function W.initialize(plan,seed,initial_bits,random,opts)
     opts=opts or {}
     plan.seed,plan.initial_random=seed,initial_bits
-    if opts.original==false then
+    if opts.rc1 then
+      local counts={[0]=1,0,1,1,1,2,1,[8]=1,[9]=2,[11]=1,[12]=1,[18]=1}
+      plan.production_raw={}
+      for j=1,counts[plan.type] or 0 do plan.production_raw[j]=random() end
+    elseif opts.original==false then
       for j=1,16 do
         local r=random()
         if j==1 then plan.production_random=r end
@@ -276,6 +280,11 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
     for _,c in ipairs(plan.cells) do
       c.random_bits=random()%256
       c.stage,c.construction_counter,c.completed=2,3,false
+    end
+    -- RC1's unconditional trigger argument draw happens after every
+    -- tile has been placed (row-major sorted physical footprint).
+    if opts.rc1 then
+      for _=1,#plan.cells do random() end
     end
     return plan
   end
@@ -291,6 +300,14 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
       original=opts.original~=false,production_random=plan.production_random,
       generating_world=true,counter=plan.counter,economy_year=opts.year,
       scale=opts.cargo_scale,random_u32=opts.random})
+    if plan.production_raw and rec.produced then
+      local by_slot=rec.produced.rate and {rec.produced} or rec.produced
+      for i,draw in ipairs(plan.production_raw) do
+        local q=assert(by_slot[i],"Stock produced cargo slot absent from the host record")
+        q.rate=min(255,floor((128+range(256,draw))*q.rate/256))
+        if q.last then q.last.production=floor(q.rate*8*(opts.cargo_scale or 100)/100) end
+      end
+    end
     rec.town,rec.random,rec.random_colour,rec.selected_layout=
       plan.town,plan.initial_random,plan.random_colour,plan.selected_layout
     for j,t in ipairs(rec.tiles) do t.random_bits=plan.cells[j].random_bits end
@@ -314,6 +331,9 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
       if force[id] then forced=forced+1 end
     end
     local target=W.count(board,opts)
+    if opts.rc1 and density(opts)~=6 and board.initial_land_count then
+      target=floor(target*board.initial_land_count/(board.width*board.height))
+    end
     if total_prob==0 or target<forced then target=forced end
     result.target,result.forced=target,forced
     if opts.progress then opts.progress(0,target) end
@@ -330,6 +350,7 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
         local variant=range(#l+1,random())
         local plan,why=W.quote(board,id,x,z,variant,opts,used)
         if plan then
+          if opts.prepare then opts.prepare(plan,random) end
           W.initialize(plan,a,b,random,opts)
           -- The host owns the one authoritative commit; a commit failure
           -- is not a stock failed quote and must not silently burn more RNG

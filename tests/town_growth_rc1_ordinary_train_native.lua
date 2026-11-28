@@ -16,7 +16,7 @@ local west,east,depot,road_depot=cell(44,56),cell(48,56),cell(50,56),cell(12,42)
 if not initial then
   local G=m("campaign_generation")(core,mod,Sim,m("world_setup"))
   local s=G.run({width=64,depth=64,seed=1751,relief=0,sea=0,coast=0,rivers=0,towns=4,custom_towns=2})
-  assert(s.stock_engine_startup_seed==292957355 and s.stock_pool_authority)
+  assert(s.stock_engine_startup_seed==1944356477 and s.stock_pool_authority)
   s.rail_owned_service,s.rail_span_enabled,s.rail_paid_service=true,true,true
   s.road_mail,s.road_junction_clearance=true,true
   Sim.company(s,owner)

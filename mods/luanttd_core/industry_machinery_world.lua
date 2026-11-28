@@ -2,14 +2,14 @@
 -- scene tiles never change when their industry sprite state changes.
 return function(Sim,Rules,OilRegistry)
   local M={}
-  local function index(s,include_wells)
+  local function index(s,include_wells,stock_all)
     local records,animated={},{}
     local function add(all,well)
       for _,industry in pairs(all or {}) do
         if not industry.removed and (not well or industry.kind=="oil_well") then
           for _,part in ipairs(industry.tiles) do
             local g=part.gfx
-            if include_wells or not well and (g==Rules.MINE_REST or g==Rules.MINE_RUN or g==Rules.POWER_SPARKS)
+            if stock_all or include_wells or not well and (g==Rules.MINE_REST or g==Rules.MINE_RUN or g==Rules.POWER_SPARKS)
                 or well and g>=Rules.OIL_REST and g<=Rules.OIL_LAST then
               local id=Sim.id(part.x+1,part.z+1)
               local tile=id and s.tiles[id]
@@ -23,11 +23,18 @@ return function(Sim,Rules,OilRegistry)
       end
     end
     add(s.stock_coal_industries,false)
-    if include_wells then add(s.stock_oil_industries,true) end
+    if stock_all then
+      add(s.stock_oil_industries,false)
+      add(s.stock_timber_industries,false)
+      add(s.stock_farm_industries,false)
+      add(s.stock_heavy_industries,false)
+      add(s.stock_bank_industries,false)
+    elseif include_wells then add(s.stock_oil_industries,true) end
     return records,animated
   end
   function M.bind(s,include_wells)
-    local records,animated=index(s,include_wells)
+    local stock_all=include_wells and s.stock_generated_profile and s.stock_generated_profile.rc1_industry_phase
+    local records,animated=index(s,include_wells,stock_all)
     local W={}
     local random=function() return Sim.stock_random_u32(s) end
     function W.completed(id)
@@ -44,12 +51,21 @@ return function(Sim,Rules,OilRegistry)
           -- can only begin on a later physical visit.
           local counter=(part.construction_counter or 0)+1
           if counter>=4 then
+            if stock_all then random() end -- ConstructionStageChanged dispatch
             part.construction_counter,part.stage=0,(part.stage or 0)+1
-            if part.stage==3 then part.completed=true end
+            if part.stage==3 then
+              part.completed=true
+              if stock_all and part.gfx==8 then
+                -- MakeIndustryTileBigger -> CreateChimneySmoke ->
+                -- ChimneySmokeInit consumes one shared sprite-phase word.
+                part.stock_chimney_start=random()
+              end
+            end
           else part.construction_counter=counter end
         end
         return
       end
+      if stock_all then random() end -- unconditional base TileLoop animation callback word
       local prev_gfx,prev_frame,was=part.gfx,part.animation_frame,part.animated
       Rules.visit(part,tick,random)
       animated[id]=part.animated and part or nil
