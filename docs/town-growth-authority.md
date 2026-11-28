@@ -1746,3 +1746,17 @@ and ordinary planting share the same RNG in their original order;
 Arctic tree visits apply the snow line and the source ambient draw.
 Initial woods are disabled in these reference worlds, so this does
 not certify initial wooded climate generation or full climate parity.
+
+### Toyland's live bubble effect and active industries
+
+The same native Frozen comparison now covers Toyland. Bubble
+vehicles are born during the pregame tile visits, retain their
+source pool indices and tick in that order. Their movement
+programs, brief sprite phases, burst RNG and catcher activation
+are translated from `effectvehicle.cpp` rather than approximated
+as client particles. Client visibility has no influence on
+the simulation. The test checks 8,880 live ticks with default
+tree spread, 17 towns, 14 industries, five map and vehicle
+snapshots, and two packed reopens inside Luanti's async VM.
+This is still a no-player lane, with no startup forest,
+company transport, dynamic industry openings or climate art.

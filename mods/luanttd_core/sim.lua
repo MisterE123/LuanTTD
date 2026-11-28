@@ -6000,6 +6000,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       end
       town_passengers.day(s,function(tick,finish_rating)
         if daily_road then daily_road((tick-before_tick)%74,false) end
+        if climate_clock and climate_clock.effects then climate_clock.effects() end
         if s.stock_effect_vehicles then
           if machines then machines.effects_tick()
           else

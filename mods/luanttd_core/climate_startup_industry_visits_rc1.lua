@@ -32,7 +32,45 @@ return function(Sim,Terrain,s,live_frozen)
   if live_frozen then
     assert(not next(s.companies) and not next(s.stations) and not next(s.fleet),
       "The no-company climate comparison does not settle player freight")
-    assert(s.stock_climate.landscape~="toyland","Live bubble effect vehicles need their source movement port")
+  end
+  local Bubble=s.stock_climate.landscape=="toyland" and o("bubble_effect_rc1")
+  local spawn_bubble
+  if Bubble then
+    local Slope=o("slope")
+    s.stock_climate_bubbles=s.stock_climate_bubbles or {}
+    local pool=s.stock_climate_bubbles
+    local function height(x,z)
+      x=math.max(0,math.min(x,(Sim.W-1)*16))
+      z=math.max(0,math.min(z,(Sim.H-1)*16))
+      local u,v=math.floor(x/16)+1,math.floor(z/16)+1
+      local slope,base,highest=Terrain.tile(s.corner_grid,u,v)
+      local cell=s.tiles[Sim.id(u,v)]
+      if cell and (cell.stock_industry or cell.house) then
+        return highest*8
+      end
+      return base*8+Slope.pixel(x%16,z%16,slope)
+    end
+    spawn_bubble=function(x,z,direction)
+      local id=0
+      while pool[id] do id=id+1 end
+      pool[id]=Bubble.new(x,z,direction,height)
+    end
+    local function catcher(x,z)
+      local id=Sim.id(x+1,z+1)
+      local r=records[id]
+      if r and r[1].gfx==Rules.BUBBLE_CATCHER then
+        r[1].animated=true
+        update_registration(id,r[1],false)
+      end
+    end
+    function M.effects()
+      local order={}
+      for id in pairs(pool) do order[#order+1]=id end
+      table.sort(order)
+      for _,id in ipairs(order) do
+        if not Bubble.tick(pool[id],random,catcher) then pool[id]=nil end
+      end
+    end
   end
   local tropic=s.stock_climate.landscape=="tropic"
   local Climate=tropic and o("town_climate_landscape_rc1")
@@ -145,6 +183,7 @@ return function(Sim,Terrain,s,live_frozen)
     local g,f,a=t.gfx,t.animation_frame,t.animated
     local changed,_,fx=Rules.visit(t,tick,random,firm)
     update_registration(id,t,a)
+    if fx and fx.effect=="bubble" and spawn_bubble then spawn_bubble(t.x,t.z,fx.direction) end
     if fx and not live_frozen then
       M.events=M.events or {}
       M.events[#M.events+1]={id=id,tick=tick,effect=fx.effect,direction=fx.direction}

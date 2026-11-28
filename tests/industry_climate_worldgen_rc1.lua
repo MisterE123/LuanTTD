@@ -30,6 +30,7 @@ local function eq(d,a,b)
 end
 local frozen=dofile(fp.."rc1-native-climate-industry-live-frozen.lua")
 local spread=dofile(fp.."rc1-native-climate-industry-live-trees.lua")
+local toyland_live=dofile(fp.."rc1-native-climate-industry-live-toyland.lua").toyland
 local function live_frozen(s,Calendar,climate,w,settings,fixture)
   s.stock_extra_tree_placement=settings
   local function mount()
@@ -95,6 +96,17 @@ local function live_frozen(s,Calendar,climate,w,settings,fixture)
     eq(label.."industry pool",{#firms,fh},expected[3])
     eq(label.."industry production",{np,ph},expected[4])
     if expected[5] then eq(label.."tree species/age and surface state",{trees,wood},expected[5]) end
+    if expected[6] then
+      local bubbles=assert(s.stock_climate_bubbles)
+      local order,bh={},1
+      for id in pairs(bubbles) do order[#order+1]=id end
+      table.sort(order)
+      for _,id in ipairs(order) do
+        local b=bubbles[id]
+        bh=fold(bh,id,b.x,b.y,b.z,b.progress,b.movement,b.animation_state,b.direction,b.frame)
+      end
+      eq(label.."bubble vehicle pool and motion",{#order,bh},expected[6])
+    end
     maps=maps+1
   end
   for day=1,120 do
@@ -214,6 +226,8 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
       local fresh=Codec.encode(s)
       live_frozen(s,Calendar,climate,w,3,assert(frozen[climate]))
       live_frozen(assert(Codec.decode(fresh)),Calendar,climate,w,2,assert(spread[climate]))
+    elseif climate=="toyland" and seed==49832 then
+      live_frozen(s,Calendar,climate,w,2,toyland_live)
     end
 
   end
