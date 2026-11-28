@@ -10,6 +10,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
   local Freight=dofile(mod.."/rail_freight_kinds.lua")
   local Rig=dofile(mod.."/openttd/oil_rig.lua")
   local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
+  local AirTimetable=dofile(mod.."/openttd/aircraft_timetable.lua")
   local TownStations=dofile(mod.."/town_station_services.lua")(Sim)
   local views=setmetatable({},{__mode="k"})
   local floor=math.floor
@@ -81,6 +82,17 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     return 0xC000+id
   end
   local function mode(st) return st.host_mode or "ship" end
+  local function display_waiting(s,service,st,cargo)
+    local count,available=Service.waiting(service,st.id,cargo)
+    if st.joined_road and (not cargo or cargo=="passenger") then
+      local road=s.stations[st.joined_road]
+      for _,id in ipairs(road and road.loading_order or {}) do
+        local v=assert(s.fleet[id])
+        if v.cargo=="passenger" then count=count+assert(v.load_state).reserved_units end
+      end
+    end
+    return count,available
+  end
   local function at(mode_,tile)
     local x,z=Sim.xy(tile)
     return {x=x-1,y=z-1,kind=mode_}
@@ -217,6 +229,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
           "Saved aircraft and its commercial cargo row disagree")
         if mail then Service.mount_air_mail(v) end
       end
+      local asset=(s.stock_owned_air_fleet or {})[p.paid_clock] or s.stock_owned_aircraft
+      service.vehicles[id].stock_station_physical_vehicle=asset and asset.stock_pool_ids and asset.stock_pool_ids[1]
       serials[id]=true
     end
     c.air_serials=serials
@@ -237,25 +251,57 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local neutral=Rig.neutral_ref(s,actual)
       local owner=actual.owner
       if neutral then owner=false end
+      local joined=mode_=="air" and s.stock_joined_stations and actual.stock_station_id~=nil and Sim.stock_joined_station.resolve(
+        s,actual.stock_station_id,"air",local_id,actual)
+      local road=joined and Sim.stock_joined_station.member(s,joined,"road")
+      if road then
+        for _,t in ipairs(Sim.road_stop_tiles(road)) do
+          tiles[#tiles+1]=t;ref=ref..":R"..t.x..":"..t.y..":"..t.kind
+        end
+        joined.service_station_id=id
+      end
       local mail=not not (mode_=="air" or mode_=="rail" and s.rail_mail_service==true and not Freight.role(actual) or
         mode_=="ship" and mail_dock and mail_dock(local_id))
       local fresh=not st or not not st.mail_enabled~=mail
       if st then
         assert(st.owner==owner and mode(st)==mode_,"Commercial station ownership changed")
         st.tick_index=id_for_tick
+        st.stock_bitmap_iteration=not not road
         if st.footprint_rev~=ref then Service.footprint(service,id,tiles,ctx) end
       else
         local town=Sim.nearest_town(s,base)
-        st=Service.station(service,{id=id,owner=owner,town=town and town.id,neutral_rig=neutral and neutral.industry,
+        st=Service.station(service,{id=id,owner=owner,town=road and joined.town or town and town.id,
+          neutral_rig=neutral and neutral.industry,stock_bitmap_iteration=not not road,
           tick_index=id_for_tick,tiles=tiles},ctx)
+      end
+      if road then
+        if st.joined_road~=road.id then
+          st.joined_road=road.id
+          road.stock=road.stock or {}
+          road.stock.passenger=road.stock.passenger or {}
+          for _,packet in ipairs(road.stock.passenger) do
+            if not packet.origin_tile and packet.origin_station==road.id then
+              packet.stock_origin_station=actual.stock_station_id
+            end
+          end
+          st.stock=road.stock
+          Sim.passenger_rating(s,road)
+          st.passenger_rating_state=assert(road.passenger_rating_state)
+          st.mail_rating_state=road.mail_rating_state or st.mail_rating_state
+          st.rating_phase=road.passenger_rating_phase or 0
+          st.time_since_load,st.time_since_unload=road.time_since_load or 255,road.time_since_unload or 255
+          st.passenger_fraction=road.passenger_fraction
+        end
+        road.stock,road.passenger_rating_state=st.stock,st.passenger_rating_state
+        road.mail_rating_state=st.mail_rating_state
       end
       if mode_=="rail" or mode_=="air" then TownStations.resume_service(s,actual,st) end
       st.host_mode,st.host_id,st.footprint_rev=mode_,local_id,ref
       st.stock_station_id=actual.stock_station_id
       st.mail_enabled=mail or nil
       if mail and fresh then Service.refresh_mail_acceptance(service,id,ctx) end
-      if not st.sign or mode_=="rail" and actual.sign_tile then
-        local x,y=Sim.xy(mode_=="rail" and actual.sign_tile or base)
+      if not st.sign or (mode_=="rail" or mode_=="air") and actual.sign_tile then
+        local x,y=Sim.xy((mode_=="rail" or mode_=="air") and actual.sign_tile or base)
         if not st.sign or st.sign.x~=x or st.sign.y~=y then st.sign={x=x,y=y} end
       end
       if mode_=="ship" then
@@ -359,6 +405,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     if s.stock_bus_market then
       local new_date=s.stock_bus_market.epoch+s.day
       ctx.stock_date=function(tick) return new_date-(tick<first_tick+73 and 1 or 0) end
+      ctx.year=function(tick) return Sim.engine_calendar.ymd(ctx.stock_date(tick)) end
     end
     local p=Ship and Ship.current(s)
     local rails=Actors.gather(Rail,s) -- owned coal keeps its own cargo lifecycle
@@ -390,12 +437,33 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         end
       end
     end
-    local air_ready={}
+    local air_ready,air_actor={},{}
     for _,a in ipairs(aircraft) do
       local id=air_key(a.paid_clock)
+      air_actor[id]=a
       air_ready[id]=active.air and (not Air.paid_art_ready or Air.paid_art_ready(a))
       if air_ready[id] and Air.settle_owned_day and not (Air.phased_economy and Air.phased_economy(s,a)) then
         Air.settle_owned_day(s,a)
+      end
+    end
+    if s.stock_engine_startup_seed~=nil then
+      ctx.refresh_full_link=function(st,v,tick)
+        local actor=air_actor[v.id]
+        if not (actor and actor.stock_air_timetable and st.stock_station_id~=nil) then return end
+        local function resolve(id)
+          local p=s.stock_small_airports[id]
+          if p and p.stock_station_id~=nil then
+            local x,z=Sim.xy(p.sign_tile or p.origin)
+            return {physical=p.stock_station_id,x=x,z=z}
+          end
+        end
+        local engine=Air.engine_for(actor)
+        -- Aircraft::GetDisplayMaxSpeed is its cached km-ish/h speed.
+        local speed=engine and engine.max_speed
+        if speed then
+          AirTimetable.refresh_full(actor,v.carrying_parts or {v},st.stock_station_id,resolve,speed,20,
+            function() return Sim.stock_random_u32(s) end,tick)
+        end
       end
     end
     local base_vehicle_active=ctx.vehicle_active
@@ -452,6 +520,12 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     end
     if Air then reconcile_air(s,c,Air,aircraft,ctx,first_tick) end
     sync_stations(s,c,ctx,active,post and function(id) return post_run.ordered_dock(post,id) end)
+    if next(s.stock_joined_stations or {}) then
+      ctx.road_alias=function(road)
+        local group=road.stock_station_id~=nil and Sim.stock_joined_station.resolve(s,road.stock_station_id,"road",road.id,road)
+        return group and group.members.air and group.service_station_id or nil
+      end
+    end
     local hooks=Mux.town_hooks
     if has_airports then
       hooks={passenger=function(_,amount,x,z,house,tick)
@@ -491,14 +565,20 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local landscape_ratings,road_departures
     if ctx.stock_late_rating then
       local topology,sorted
-      local function each_station(road,commercial,airport_rating)
+      local function each_station(road,commercial,airport_rating,combined)
         if not sorted or topology~=s.topology then
           topology,sorted=s.topology,{}
+          local mounted={}
           for _,st in pairs(s.stations) do
-            if st.mode=="road" then sorted[#sorted+1]={id=st.stock_station_id or st.id-1,road=true,st=st} end
+            if st.mode=="road" then
+              local id=ctx.road_alias and ctx.road_alias(st)
+              local joint=id and service.stations[id]
+              sorted[#sorted+1]={id=st.stock_station_id or st.id-1,road=true,st=st,joint=joint}
+              if joint then mounted[joint.id]=true end
+            end
           end
           for _,st in pairs(service.stations) do
-            if ctx.station_active(st) then sorted[#sorted+1]={id=st.tick_index or st.id,st=st} end
+            if ctx.station_active(st) and not mounted[st.id] then sorted[#sorted+1]={id=st.tick_index or st.id,st=st} end
           end
           local by_physical={}
           for _,row in ipairs(sorted) do by_physical[row.id]=row end
@@ -518,7 +598,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         for _,row in ipairs(sorted) do
           local st=row.st
           if row.road then
-            if s.stations[st.id]==st then road(st) end
+            if s.stations[st.id]==st then
+              if row.joint then combined(st,row.joint) else road(st) end
+            end
           elseif st and service.stations[st.id]==st then commercial(st) end
           if airport_rating and row.airport then airport_rating(row.airport) end
         end
@@ -530,7 +612,27 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         local ready_tick,ready
         ctx.loading_sweep=function(tick,visit)
           local road,departed=assert(road_service.open_tick(s,tick))
-          each_station(road,visit)
+          each_station(road,visit,nil,function(r,j)
+            road(r,function(f,vehicles,ops)
+              local function road_reserved(_,cargo)
+                local amount=0
+                for _,id in ipairs(f.loading_order or {}) do
+                  local v=assert(vehicles[id])
+                  if v.cargo==cargo then amount=amount+assert(v.load_state).reserved_units end
+                end
+                return amount
+              end
+              ctx.joined_road_reserved=road_reserved
+              ops.joined_cargo_taken=ctx.airport_cargo_taken and function(st,cargo)
+                local total=Service.waiting(service,st.id,cargo)+road_reserved(st,cargo)
+                if total==0 then ctx.airport_cargo_taken(st) end
+              end
+              local rounds,leaves=visit(j,f,vehicles,ops)
+              ctx.joined_road_reserved,ops.joined_cargo_taken=nil,nil
+              r.time_since_load,r.time_since_unload,r.last_vehicle_type=j.time_since_load,j.time_since_unload,j.last_vehicle_type
+              return rounds,leaves
+            end)
+          end)
           ready_tick,ready=tick,departed
         end
         road_departures=function(tick)
@@ -541,7 +643,12 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       landscape_ratings=function(tick,road_step,freight)
         each_station(function(st) road_step(tick,st,freight) end,
           function(st) Service.landscape_rating(service,st,tick,ctx) end,
-          function(air) Sim.stock_airport_acceptance_tick(s,air,tick) end)
+          function(air) Sim.stock_airport_acceptance_tick(s,air,tick) end,
+          function(r,j)
+            Service.landscape_rating(service,j,tick,ctx)
+            r.passenger_rating_phase,r.time_since_load,r.time_since_unload=j.rating_phase,j.time_since_load,j.time_since_unload
+            r.mail_rating_state=j.mail_rating_state
+          end)
       end
     end
     local function before(tick)
@@ -812,7 +919,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local st=service and service.stations[sid]
       local visible,available=0,0
       local primary=cargo=="mixed" and "passenger" or cargo
-      if st then visible,available=Service.waiting(service,sid,primary) end
+      if st then visible,available=display_waiting(s,service,st,primary) end
       local accepted=st and (primary=="mail" and (st.mail_acceptance or 0) or st.passenger_acceptance)
       local row={waiting=visible,available=available,accepts=(accepted or 0)>=8}
       if cargo=="mixed" and st then
@@ -905,7 +1012,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local key=mode_=="rail" and rail_key(id) or mode_=="air" and air_key(id) or id
     local st=service and service.stations[key]
     if not st or mode(st)~=mode_ then return 0 end
-    return (Service.waiting(service,key))
+    return (display_waiting(s,service,st))
   end
   return F
 end

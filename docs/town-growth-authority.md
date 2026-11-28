@@ -946,3 +946,50 @@ founding, with three packed reopens across the year.
 This case uses Medium construction costs in OpenTTD and compares
 simulation, not finances. The default-price debit is verified
 separately in the Rivermark case above.
+
+## One station for a bus stop and an airport
+
+In a generated game, select an airport build tool and choose its footprint.
+If an owned bus-only station is within the stock join spread, the station
+picker offers that station or a separate airport. The original sign and
+town stay put when the airport is attached; selecting the airport or
+the bus platform still gives a valid destination for that transport mode.
+Buoys, waypoints, truck stops, tram-only platforms, rail platforms, and
+docks are not offered as attachment targets in this slice.
+
+- RC1 `station_cmd.cpp` (`FindJoiningBaseStation`, `CmdBuildAirport`,
+  `BuildStationPart`) and `station.cpp` (`AddFacility`,
+  `CheckStationSpread`, `RecomputeCatchment`) govern ownership, spread,
+  geometry, the one physical StationID, and the preserved station sign.
+  Building on an active bus station doesn't consume a new sign RNG word.
+  Its rectangle bitmap is iterated for acceptance, while cargo producers
+  use the actual coverage bits and cannot offer cargo through a hole.
+- `economy.cpp` (`LoadUnloadStation`, `LoadUnloadVehicle`) serves bus
+  and aircraft from the same passenger queue in arrival order. The
+  commercial and road station views share rating state and count as one
+  station during town growth. When the bus takes the last passenger,
+  the attached airport consumes the same cargo-animation draw as RC1.
+- A scheduled aircraft stop measures its learned travel and wait times
+  to the source's 37-tick resolution
+  (`timetable_cmd.cpp::UpdateVehicleTimetable`). A full-load retry
+  samples the two ordinary passenger/Mail links using
+  `linkgraph/refresh.cpp::LinkRefresher::RefreshStats`. These are local
+  ordinary-order estimates, not a port of automatic CargoDist,
+  conditional routes, shared timetables, or refits.
+- Two native 16.0-RC1 traces of the 128×128 seed 1751 region include a
+  purchased MPS Regal bus, Coleman Count, Wood and Goods trucks, and
+  four towns. Each replay matches both random words on all 15,693
+  ticks, the aircraft on all 15,688 poses, and seven town, housing
+  and terrain snapshots to year end. Shared station ages, waiting
+  totals including reservations, ratings, and the ordered physical
+  list also match. With **Full Load All**, the native aircraft
+  (VehicleID 5) waits ahead of the later-arriving bus (VehicleID 2),
+  not behind it in numeric order. Lua uses the same worker commands
+  and three earlier checkpoints plus a packed reopen during this route.
+- A separate native Luanti worker test builds through the station
+  picker query and ordinary quote/commit commands, runs both vehicles,
+  restarts the SQLite world, and confirms continued boarding without
+  losing the station identity. It is a logic and rendering-frame check
+  in the worker, not a graphical mouse playthrough.
+
+Using the same mechanism for other station combinations is still pending.

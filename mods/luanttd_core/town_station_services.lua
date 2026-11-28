@@ -64,7 +64,28 @@ return function(Sim)
     end
   end
   function M.view(s,include_idle,at_tick)
-    local views={}
+    local views,mixed={},{}
+    local Joined=Sim.stock_joined_station
+    local function insert(row,record,membership)
+      if not row then return end
+      local key=record and record.stock_station_id
+      local group=Joined and key~=nil and Joined.resolve(s,key,membership,record.id,record)
+      if not (group and group.members.road and group.members.air and group.tile) then
+        views[#views+1]=row
+        return row
+      end
+      local shared=mixed[key]
+      if not shared then
+        local x,z=Sim.xy(group.tile)
+        shared=project(group.members.road,"road",x,z,row)
+        mixed[key]=shared
+        views[#views+1]=shared
+      else
+        shared.time_since_load=math.min(shared.time_since_load or 255,row.time_since_load or 255)
+        shared.time_since_unload=math.min(shared.time_since_unload or 255,row.time_since_unload or 255)
+      end
+      return shared
+    end
     local admitted={rail={},ship={},air={},rig={}}
     local function merge(mode,st,role)
       local id=st.host_id
@@ -92,8 +113,7 @@ return function(Sim)
       elseif neutral or mode=="ship" or not st.sign then x,z=Sim.xy(anchor)
       else x,z=st.sign.x,st.sign.y end
       row=project(id,neutral and "ship" or mode,x,z,st)
-      slot[id]=row
-      views[#views+1]=row
+      slot[id]=insert(row,record,mode=="ship" and "dock" or mode)
     end
     for _,st in pairs(s.stations or {}) do
       local physical=is_road_part(s,st.tile,st.id)
@@ -107,7 +127,7 @@ return function(Sim)
       if st.mode=="road" and physical and (include_idle or st.town_growth_service_clock) then
         local x,z=Sim.xy(st.tile)
         local clock=st.town_growth_service_clock and st or {owner=st.owner}
-        views[#views+1]=project(st.id,"road",x,z,clock)
+        insert(project(st.id,"road",x,z,clock),st,"road")
       end
     end
     local commercial=s.stock_ship_commercial and s.stock_ship_commercial.service

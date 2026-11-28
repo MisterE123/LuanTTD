@@ -590,6 +590,14 @@ jobs:
           lua5.1 tests/aircraft_accident_rc1.lua
           lua5.1 tests/town_growth_rc1_corridor.lua air
           lua5.1 tests/town_growth_rc1_corridor.lua air-crash
+          lua5.1 tests/stock_joined_station_members.lua
+          lua5.1 tests/stock_mixed_airport_join_command.lua
+          lua5.1 tests/stock_mixed_station_catchment.lua
+          lua5.1 tests/stock_mixed_station_loading.lua
+          lua5.1 tests/stock_mixed_airport_world.lua
+          lua5.1 tests/town_growth_rc1_corridor.lua air-joint
+          lua5.1 tests/town_growth_rc1_corridor.lua air-joint-full
+          bash tests/stock_mixed_airport_worker_native.sh
       - name: Check ordinary ferry effects on the full RC1 coastal year
         run: |
           lua5.1 tests/ship_rc1_lane_costs.lua

@@ -22,7 +22,11 @@ return function(Timing,Packets)
     -- details and adds both counts and feeder shares.
     for i=#q,1,-1 do
       local old=q[i]
-      if old.origin_tile==p.origin_tile and old.origin_station==p.origin_station
+      local same_origin
+      if old.stock_origin_station~=nil and p.stock_origin_station~=nil then
+        same_origin=old.stock_origin_station==p.stock_origin_station
+      else same_origin=old.origin_station==p.origin_station end
+      if old.origin_tile==p.origin_tile and same_origin
           and (old.age or 0)==(p.age or 0) and old.source==p.source
           and old.source_type==p.source_type and old.units+p.units<=65535 then
         old.units=old.units+p.units
@@ -88,9 +92,12 @@ return function(Timing,Packets)
     return {full=action=="full",force_unload=action=="unload",
             transfer=action=="transfer",no_load=action=="transfer" or action=="unload"}
   end
-  function L.designation(p,station_id,accept,order)
+  function L.designation(p,station_id,accept,order,physical)
     if order.no_unload then return nil end
-    local deliver=accept and p.origin_station~=station_id
+    local own
+    if physical~=nil and p.stock_origin_station~=nil then own=p.stock_origin_station==physical
+    else own=p.origin_station==station_id end
+    local deliver=accept and not own
     if order.force_unload and deliver then return "deliver" end
     if order.force_unload or order.transfer then return "transfer" end
     if deliver then return "deliver" end
@@ -114,7 +121,7 @@ return function(Timing,Packets)
     local accept=accepted(st,v,ops)
     local units=0
     for _,p in ipairs(v.batches or {}) do
-      local action=L.designation(p,st.id,accept,order)
+      local action=L.designation(p,st.id,accept,order,st.stock_station_id)
       units=units+p.units
       if action=="transfer" then
         local share=0
@@ -332,16 +339,30 @@ return function(Timing,Packets)
       end
     end
     if last then
+      local carrier_ops=ops.for_vehicle
       for i=1,last do
-        local v=vehicles[order[i]]
+        local key=order[i]
+        local v=vehicles[key]
         if not v.stopped and not v.crashed then
+          -- *One* physical Station::loading_vehicles list. Per-carrier
+          -- hosts can encode local payment/UI handles differently, but
+          -- must not receive separate reservation or countdown sweeps.
+          local profile,facility
+          if carrier_ops then profile,facility=carrier_ops(st,v,key);assert(profile)
+          else profile=ops end
+          facility=facility or st
+          local result
           if v.carrying_parts then
-            local c=assert(ops.consist,"Multiple cargo stores need one shared carrier controller")
-            c.reserve(st,v,ops)
-            if v.load_state.ticks==0 then rounds[#rounds+1]=c.round(st,v,ops) end
+            local c=assert(profile.consist,"Multiple cargo stores need one shared carrier controller")
+            c.reserve(facility,v,profile)
+            if v.load_state.ticks==0 then result=c.round(facility,v,profile) end
           else
-            reserve(st,v,ops)
-            if v.load_state.ticks==0 then rounds[#rounds+1]=round(st,v,ops) end
+            reserve(facility,v,profile)
+            if v.load_state.ticks==0 then result=round(facility,v,profile) end
+          end
+          if result then
+            if carrier_ops then result.station_vehicle=key end
+            rounds[#rounds+1]=result
           end
         end
       end

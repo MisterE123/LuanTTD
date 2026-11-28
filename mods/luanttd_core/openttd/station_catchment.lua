@@ -21,7 +21,8 @@ return function(Packets,Rating,passenger_acceptance,mail_acceptance)
   -- tile.station filters foreign tiles when scanning a map rectangle.
   -- The expanded bounding rectangle is storage, not catchment coverage.
   function C.build(st,width,height,modified)
-    local c={id=st.id,width=width,height=height,tiles={},facilities={},radius=0}
+    local c={id=st.id,width=width,height=height,tiles={},facilities={},radius=0,
+      stock_bitmap_iteration=st.stock_bitmap_iteration}
     local rect
     for _,tile in ipairs(st.tiles or {}) do
       if tile.station==nil or tile.station==st.id then
@@ -63,6 +64,19 @@ return function(Packets,Rating,passenger_acceptance,mail_acceptance)
     return in_map(c.width,c.height,x,y) and c.tiles[y*c.width+x]==true
   end
 
+  -- 16.0-RC1 BitmapTileArea::iterator advances only once if the
+  -- rectangle's first tile isn't set. The second tile can thus appear
+  -- in the traversal even when Contains() correctly rejects it.
+  -- Keep this out of StationFinder's actual producer-coverage mask.
+  function C.bitmap_iteration_only_tile(c)
+    local r=c.bounds
+    if not r then return end
+    local first=r.top*c.width+r.left
+    if c.tiles[first] then return end
+    local next_=r.left<r.right and first+1 or r.top<r.bottom and first+c.width
+    if next_ and not c.tiles[next_] then return next_ end
+  end
+
   -- Geometry/ownership check after a host resolves which station to join.
   -- Normal constructors precheck their own footprint size. Spread is the
   -- physical union, not catchment; coordinates in rect are inclusive.
@@ -91,7 +105,7 @@ return function(Packets,Rating,passenger_acceptance,mail_acceptance)
   function C.acceptance(c,cargo,house_at)
     local accepts=assert(houses[cargo],"Unsupported house cargo")
     local raw,towns,always=0,{},false
-    for id in pairs(c.tiles) do
+    local function accumulate(id)
       local house=house_at(id%c.width,math.floor(id/c.width))
       if house then
         local amount=house.hq_acceptance and (house.hq_acceptance[cargo] or 0) or assert(accepts(house.id),"Unknown stock HouseID")
@@ -101,6 +115,11 @@ return function(Packets,Rating,passenger_acceptance,mail_acceptance)
         end
       end
     end
+    if c.stock_bitmap_iteration then
+      local first=C.bitmap_iteration_only_tile(c)
+      if first then accumulate(first) end
+    end
+    for id in pairs(c.tiles) do accumulate(id) end
     local amount=facility_admits(c,cargo) and raw or 0
     return {eighths=amount,raw_eighths=raw,always_accepted=always,
       accepts=amount>=8,demand=math.floor(amount/8),towns=towns}

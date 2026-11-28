@@ -10,6 +10,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
   local Effects=dofile(source.."industry_chimney_effect.lua")
   local Trigger=dofile(source.."vehicle_random_trigger.lua")
   local Depot=dofile(source.."road_depot_service.lua")
+  local Timetable=dofile(source.."aircraft_timetable.lua")
   local Rotor=dofile(source.."airport_rotary_motion.lua")(Motion)
   local R={VERSION=1,DWELL_TICKS=74,engine={id=215,visual="bayshore_trimotor",
     passengers=25,mail=4,acceleration=18,max_speed=473}} -- (37 * 128) / 10
@@ -307,6 +308,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       return list[c.real+1]
     end
     for _=1,ticks or 1 do
+      if fault then Timetable.tick(p) end
       local ready,skipped
       if paid then
         skipped=v.loading and p.transport_skip_loading
@@ -318,6 +320,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
         ready=p.dwell==0
       end
       if ready then
+        if fault and not skipped then Timetable.observe(p,false,v.last_station) end
         v.loading=nil
         if p.transport_orders then v.order=find_order(not skipped)
         else v.order={kind="station",id=v.last_station==p.first and p.second or p.first} end
@@ -375,6 +378,9 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
               p.phase,p.failure="blocked","INVALID_PAID_TERMINAL_TILE";return p
             end
             p.last_terminal_tile=tile
+            if fault and v.order and v.order.kind=="station" and v.order.id==a.id then
+              Timetable.observe(p,true,a.id)
+            end
             local ok,reason=paid.arrive(p,tile)
             if not ok then p.phase,p.failure="blocked",reason or "MISSING_PAID_AIRFIELD";return p end
           end

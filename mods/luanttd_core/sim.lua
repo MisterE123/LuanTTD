@@ -5,6 +5,7 @@ local module_root=module_src and module_src:match("^@(.*/)sim%.lua$") or
   (core and core.get_modpath and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
 local TramIndex=dofile(module_root.."tram_fleet_index.lua")
 local CompanyQuarter=dofile(module_root.."openttd/company_quarters_rc1.lua")
+M.stock_joined_station=dofile(module_root.."stock_joined_station.lua")
 local HQStats=dofile(module_root.."company_hq_stats.lua")(M)
 M.each_tram,M.tram_frame,M.tram_serial=TramIndex.each,TramIndex.frame,TramIndex.serial
 
@@ -2352,6 +2353,10 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
     join=M.road_station_retirement().closest(s,"station",owner,area.tile,function(row) return not row.tram_only end)
   end
   if join and s.stations[join.id] and not compatible(join) then return nil,"INCOMPATIBLE_STATION_TILE" end
+  local group=join and join.stock_station_id~=nil and M.stock_joined_station.resolve(
+    s,join.stock_station_id,"road",join.id,join)
+  local airport=group and M.stock_joined_station.member(s,group,"air")
+  if airport and req.kind~="bus" then return nil,"AIRPORT_JOIN_UNPORTED_FACILITY" end
   local result=road_stop_members.preview(join,parts)
   if join and not s.stations[join.id] then
     -- A gray sign moves to facil_xy when its first facility reopens,
@@ -2359,7 +2364,14 @@ function M.stock_road_stop_area_plan(s,owner,first,last,req)
     result.sign=area.tile
   end
   if not result.spread or #changes==0 then return nil,"ALREADY_BUILT" end
-  if result.spread.w>12 or result.spread.h>12 then return nil,"STATION_SPREAD" end
+  local spread=s.stock_station_spread or 12
+  if result.spread.w>spread or result.spread.h>spread then return nil,"STATION_SPREAD" end
+  if airport then
+    local x,z=M.xy(result.spread.tile)
+    local u,v=M.xy(airport.origin)
+    if math.max(x+result.spread.w,u+airport.width)-math.min(x,u)>spread or
+        math.max(z+result.spread.h,v+airport.height)-math.min(z,v)>spread then return nil,"STATION_SPREAD" end
+  end
   if cost>company.cash then return nil,"NOT_ENOUGH_CASH" end
   local sid=join and join.id or s.next_station
   local excluded,fronts={},{}
@@ -2488,9 +2500,28 @@ end
 function M.retire_road_station(s,id)
   local st=s.stations[id]
   if st and st.mode=="road" then
-    st.road_members,st.road_stop_areas,st.spread={},nil,nil
-    st.bus_tile,st.truck_tile=nil,nil
-    M.road_station_retirement().retire(s,"station",st)
+    local Joined=M.stock_joined_station
+    local group=st.stock_station_id~=nil and Joined.resolve(s,st.stock_station_id,"road",id,st)
+    local airport=group and Joined.member(s,group,"air")
+    if group then Joined.detach(s,group.id,"road",id,st) end
+    if airport then
+      -- UpdateStationSignCoord clamps the original sign into the new
+      -- spread, not to the first airport tile unconditionally.
+      local x,z=M.xy(group.tile)
+      local u,v=M.xy(airport.origin)
+      group.tile=M.id(math.max(u,math.min(u+airport.width-1,x)),math.max(v,math.min(v+airport.height-1,z)))
+      airport.sign_tile=group.tile
+      group.facilities=8
+      local commercial=s.stock_ship_commercial
+      local ledger=commercial and group.service_station_id and commercial.service.stations[group.service_station_id]
+      if ledger then
+        ledger.joined_road=nil
+      end
+    else
+      st.road_members,st.road_stop_areas,st.spread={},nil,nil
+      st.bus_tile,st.truck_tile=nil,nil
+      M.road_station_retirement().retire(s,"station",st)
+    end
   end
   s.stations[id]=nil
 end
@@ -3555,12 +3586,19 @@ end
 function M.stock_station_slot(s)
   if not s.stock_pool_authority and s.stock_engine_startup_seed==nil then return end
   local Pool,used,limit=M.stock_identity_pool(),{},0xFFFE
-  local function visit(row)
-    if row.stock_station_id~=nil then Pool.occupy(used,row.stock_station_id,limit) end
+  local Joined,claimed=M.stock_joined_station,{}
+  local function visit(row,mode,host)
+    local id=row.stock_station_id
+    if id==nil then return end
+    local linked=mode and Joined.resolve(s,id,mode,host,row)
+    if linked and claimed[id]==linked then return end
+    Pool.occupy(used,id,limit)
+    if linked then claimed[id]=linked end
   end
   for _,key in ipairs({"stations","stock_road_waypoints","stock_rail_stations","stock_rail_waypoints",
       "stock_ship_stations","stock_ship_buoys","stock_small_airports","stock_neutral_stations"}) do
-    for _,row in pairs(s[key] or {}) do if not row.neutral then visit(row) end end
+    local mode=Joined.mode_by_pool[key]
+    for host,row in pairs(s[key] or {}) do if not row.neutral then visit(row,mode,host) end end
   end
   for _,key in ipairs({"retired_road_stations","retired_road_waypoints","retired_ship_stations",
       "retired_rail_stations","retired_airports"}) do

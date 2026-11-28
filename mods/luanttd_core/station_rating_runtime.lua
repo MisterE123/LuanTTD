@@ -176,7 +176,11 @@ return function(Sim,Kernel,Packets)
   function R.accident(s,owner,x,y,accepts_mail)
     local rows={}
     for _,st in pairs(s.stations) do
-      if st.mode=="road" then
+      local group=s.stock_joined_stations and st.stock_station_id~=nil and
+        Sim.stock_joined_station.resolve(s,st.stock_station_id,"road",st.id,st)
+      local c=s.stock_ship_commercial
+      local air=group and group.members.air and group.service_station_id and c and c.service.stations[group.service_station_id]
+      if st.mode=="road" and not air then -- shared GoodsEntry was already rated by the commercial caller
         local xx,yy=Sim.xy(st.tile)
         local g=goods(s,st)
         local entries={{state=g,active=g.has_rating or (st.passenger_acceptance or 0)>=8}}

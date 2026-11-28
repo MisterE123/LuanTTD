@@ -1603,14 +1603,14 @@ local function worker_build(n,V,kind,request)
 end
 -- OpenTTD 16.0-RC1 ShowSelectBaseStationIfNeeded. The survey
 -- auxiliary key fills the role of Ctrl without taking over movement.
-function U.open_road_join_picker(p,V,request,is_dock)
+function U.open_road_join_picker(p,V,request,is_dock,is_air)
   local n=p:get_player_name()
   local client=api.worker_bridge_client
   if not client then V.status="The campaign worker is not ready.";return end
-  local pending={request=request,tool=V.tool,selected=1,is_dock=is_dock}
+  local pending={request=request,tool=V.tool,selected=1,is_dock=is_dock,is_air=is_air}
   V.road_join_picker=pending
   V.status="Finding stations that can join…"
-  local sent,why=client.query({kind=is_dock and "dock_join_choices" or "road_join_choices",player=n,request=request},function(r)
+  local sent,why=client.query({kind=is_air and "airport_join_choices" or is_dock and "dock_join_choices" or "road_join_choices",player=n,request=request},function(r)
     if session[n]~=V or V.road_join_picker~=pending then return end
     if V.tool~=pending.tool then V.road_join_picker=nil;return end
     if not r.ok then
@@ -1618,9 +1618,14 @@ function U.open_road_join_picker(p,V,request,is_dock)
       return
     end
     pending.choices,pending.cost=r.value.choices,r.value.cost
+    if is_air and #pending.choices==1 and not request.separate then
+      V.road_join_picker=nil
+      worker_build(n,V,"transport",request)
+      return
+    end
     local labels={}
     for _,choice in ipairs(pending.choices) do labels[#labels+1]=esc(choice.name) end
-    local title=is_dock and "Join a dock station" or request.tool=="road_waypoint" and "Join a road waypoint" or "Join a road station"
+    local title=is_air and "Build an airport: choose station" or is_dock and "Join a dock station" or request.tool=="road_waypoint" and "Join a road waypoint" or "Join a road station"
     V.status="Choose a station or build separately."
     core.show_formspec(n,"luanttd_core:road_join_picker",
       "formspec_version[7]size[9,6.4]bgcolor[#152334;false]"..
@@ -1648,7 +1653,10 @@ function U.road_join_picker_fields(p,f)
   V.road_join_picker=nil
   core.close_formspec(n,"luanttd_core:road_join_picker")
   local r=pending.request
-  if pending.is_dock then
+  if pending.is_air then
+    r.air_join,r.separate=choice.id,choice.id==nil
+    worker_build(n,V,"transport",r)
+  elseif pending.is_dock then
     r.join,r.picker_cost=choice.id,pending.cost
     worker_build(n,V,"transport",r)
   else
@@ -2300,7 +2308,7 @@ local function authority_preview(p,id,hit)
   elseif airfield_tools[tool] and tool~="airfield_remove" then
     label=airfield_tools[tool].name
     local separate=p:get_player_control().aux1==true
-    if separate then label=label.." · New station" end
+    if separate then label=label.." · Choose station" end
     kind,request="transport",{mode="air",operation="build",tile=id,layout=airfield_tools[tool].layout,separate=separate}
   elseif tool=="structure_tunnel" or tool=="rail_span_tunnel" then
     kind,request="transport",{mode=tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id}
@@ -2953,8 +2961,8 @@ function U.build_world(p,id,hit)
       return
     end
     if airfield_tools[V.tool] and V.tool~="airfield_remove" then
-      worker_build(n,V,"transport",{mode="air",operation="build",tile=id,layout=airfield_tools[V.tool].layout,
-        separate=p:get_player_control().aux1==true});return
+      U.open_road_join_picker(p,V,{mode="air",operation="build",tile=id,layout=airfield_tools[V.tool].layout,
+        separate=p:get_player_control().aux1==true},false,true);return
     end
     if V.tool=="structure_tunnel" or V.tool=="rail_span_tunnel" then
       worker_build(n,V,"transport",{mode=V.tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id})

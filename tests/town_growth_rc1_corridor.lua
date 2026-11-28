@@ -122,6 +122,7 @@ local function run(ref,founding,air)
     maps=maps+1
   end
   local air_rng,air_ticks,air_poses,air_motion,air_snapshots=1,0,0,1,0
+  local joint_count,joint_hash,queue_count,queue_hash=0,1,0,1
   local original_random=S.stock_random_u32
   local forced,crashed,retired
   if forced_crash then
@@ -144,20 +145,37 @@ local function run(ref,founding,air)
     local ids={}
     for i,pos in ipairs({{43,52},{47,93}}) do
       local tile=S.id(pos[1]+1,pos[2]+1)
-      ids[i]=transport({mode="air",operation="build",tile=tile,layout="country",separate=true}).id
-      assert(s.stock_small_airports[ids[i]].stock_station_id==i+4)
+      local request={mode="air",operation="build",tile=tile,layout="country",separate=true}
+      if air.joint and i==1 then
+        local picks=checked(A.airport_join_choices(owner,request))
+        local offered
+        for _,choice in ipairs(picks.choices) do if choice.id==1 then offered=true end end
+        assert(offered and picks.choices[1].id==nil)
+        request.air_join,request.separate=1,false
+      end
+      ids[i]=transport(request).id
+      local field=s.stock_small_airports[ids[i]]
+      assert(field.stock_station_id==(air.joint and (i==1 and 1 or 5) or i+4))
+      if air.joint and i==1 then assert(field.sign_tile==bt and field.town==s.stations[s.tiles[bt].station].town) end
     end
     local unit=transport({mode="air",operation="buy",depot=ids[1],engine=216})
     local physical=assert(s.stock_owned_air_fleet[unit.id]).stock_pool_ids
     assert(physical[1]==5 and physical[2]==6 and #physical==2)
     action("transport_start",{mode="air",first=ids[1],second=ids[2],vehicle=unit.id})
+    if air.full then
+      action("vehicle_order",{mode="air",vehicle=unit.id,order_revision=0,operation="load",row=1,destination=2})
+    end
   end
   local function snapshot_air(tick,expected)
     local height,houses=1,1
     local year=S.date(s)
     for id,t in ipairs(s.tiles) do
       local x,z=S.xy(id)
-      height=fold(height,T.corner(s.corner_grid,x,z))
+      if air.joint then
+        -- The older native joined capture records GetTileZ (lowest
+        -- corner); retain the separate north-corner oracle above.
+        local _,low=T.tile(s.corner_grid,x,z);height=fold(height,low)
+      else height=fold(height,T.corner(s.corner_grid,x,z)) end
       local r=t.source_house
       if r then
         houses=fold(houses,id-1,r.id,physical_town(r.town),r.completed and 1 or 0,r.stage,r.counter,
@@ -219,13 +237,49 @@ local function run(ref,founding,air)
       local p,m=unpack(assert(aircraft).carrying_parts)
       same(tick,"cabin and mail hold",{p.units,m.units},air.payload[tick])
     end
-    if tick==air.economy.tick then
+    if air.joint then
+      local group=assert(s.stock_joined_stations[1])
+      local service=assert(s.stock_ship_commercial).service
+      local st=assert(service.stations[group.service_station_id])
+      local road=assert(s.stations[group.members.road])
+      local waiting={passenger=0,mail=0}
+      for cargo,count in pairs(waiting) do
+        for _,p in ipairs(st.stock[cargo] or {}) do count=count+p.units end
+        waiting[cargo]=count
+      end
+      local order={}
+      for _,id in ipairs(st.loading_order) do
+        local actor=service.vehicles[id]
+        local l=assert(actor.load_state)
+        order[#order+1]={l.arrived_tick,actor.stock_station_physical_vehicle,3}
+        for _,body in ipairs(actor.carrying_parts or {actor}) do
+          if waiting[body.cargo] then waiting[body.cargo]=waiting[body.cargo]+body.load_state.reserved_units end
+        end
+      end
+      for _,id in ipairs(road.loading_order or {}) do
+        local actor=s.fleet[id]
+        local l=assert(actor.load_state)
+        order[#order+1]={l.arrived_tick,actor.stock_pool_id,1}
+        if waiting[actor.cargo] then waiting[actor.cargo]=waiting[actor.cargo]+l.reserved_units end
+      end
+      if #order>0 then
+        table.sort(order,function(a,b) return a[1]==b[1] and a[2]<b[2] or a[1]<b[1] end)
+        queue_hash=fold(queue_hash,tick,#order)
+        for _,row in ipairs(order) do queue_hash=fold(queue_hash,row[2],row[3]) end
+        queue_count=queue_count+1
+      end
+      joint_hash=fold(joint_hash,tick,st.rating_phase,st.time_since_load,st.time_since_unload,waiting.passenger,waiting.mail,
+        st.passenger_rating_state.rating,st.mail_rating_state and st.mail_rating_state.rating or 175)
+      joint_count=joint_count+1
+      assert(st.stock==road.stock and st.passenger_rating_state==road.passenger_rating_state)
+    end
+    if air.economy and tick==air.economy.tick then
       local unit=s.stock_owned_air_fleet[p.paid_clock]
       local h=unit.stock_fault
       same(tick,"aircraft economy day",{unit.stock_pool_ids[1],h.reliability,h.breakdown_chance,h.breakdown_ctr},
         {air.economy.id,air.economy.reliability,air.economy.chance,air.economy.counter})
     end
-    if tick==air.new_mail.tick then same(tick,"new mail into airport",s.passenger_rating_rng,air.new_mail.rng) end
+    if air.new_mail and tick==air.new_mail.tick then same(tick,"new mail into airport",s.passenger_rating_rng,air.new_mail.rng) end
   end
   local function observe(tick)
     if air then observe_air(tick);return end
@@ -283,6 +337,10 @@ local function run(ref,founding,air)
   if air then
     same(air_capture.last,"air corridor",{air_ticks,air_rng,air_poses,air_motion},
       {air_capture.last-air.first+1,air_capture.rng,air_capture.last-air.build,air_capture.motion})
+    if air.joint then
+      same(air.last,"shared station state and loading list",{joint_count,joint_hash,queue_count,queue_hash},
+        {air.station_count,air.station,air.queue_count,air.queue})
+    end
     if forced_crash then
       S.stock_random_u32=original_random
       assert(forced and crashed and retired)
@@ -314,6 +372,11 @@ local function run(ref,founding,air)
   else
     print("PASS RC1 normal industry corridor: 27,010 RNG ticks, 14 map/town and 19 vehicle checkpoints, 283 passengers and 80 wood delivered, three packed reopens")
   end
+end
+if arg[1]=="air-joint" or arg[1]=="air-joint-full" then
+  local fixtures=dofile("tests/fixtures/rc1-active-joint-airport-town.lua")
+  run(dofile("tests/fixtures/rc1-active-town-goods-year.lua"),nil,fixtures[arg[1]=="air-joint" and 1 or 2])
+  return
 end
 if arg[1]=="air" or arg[1]=="air-crash" then
   run(dofile("tests/fixtures/rc1-active-town-goods-year.lua"),nil,dofile("tests/fixtures/rc1-active-airport-town-corridor.lua"))

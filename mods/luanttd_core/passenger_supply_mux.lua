@@ -103,10 +103,11 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
         local shared_id=ctx.road_alias and ctx.road_alias(st)
         if shared_id~=nil then
           local shared=assert(native[shared_id],"Missing canonical rail/dock station for bus alias")
-          assert(st.owner==shared.owner and st.id==shared.id and station_key(ctx,"road",st)==station_key(ctx,"service",shared),
+          assert(st.owner==shared.owner and (st.id==shared.id or shared.joined_road==st.id)
+            and station_key(ctx,"road",st)==station_key(ctx,"service",shared),
             "Road alias must use the same station ownership and StationID")
           assert(st.stock==shared.stock and st.passenger_rating_state==shared.passenger_rating_state
-              and st.loading_order==shared.loading_order,
+              and (st.loading_order==shared.loading_order or shared.joined_road==st.id),
             "Road alias must already point at the canonical service queue, rating and loading order")
           local part
           for _,tile in ipairs(shared.tiles) do
@@ -177,13 +178,14 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
     if not q then q={};st.stock.passenger=q end
     for i=#q,1,-1 do
       local p=q[i]
-      if p.origin_station==st.id and p.origin_tile==nil and p.age==0 and
+      local own=p.origin_station==st.id or st.stock_station_id~=nil and p.stock_origin_station==st.stock_station_id
+      if own and p.origin_tile==nil and p.age==0 and
           (p.source_type or "town")==kind and p.source==source and p.units+units<=65535 then
         p.units,p.source_type=p.units+units,kind
         return
       end
     end
-    q[#q+1]={units=units,source=source,source_type=kind,origin_station=st.id,age=0}
+    q[#q+1]={units=units,source=source,source_type=kind,origin_station=st.id,stock_origin_station=st.stock_station_id,age=0}
   end
 
   local function consume_event(s,service,e,ctx,result)

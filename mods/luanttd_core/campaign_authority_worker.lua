@@ -275,6 +275,7 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
         elseif q.kind=="road_quote" then r=A.road_quote(q.player,q.request)
         elseif q.kind=="road_join_choices" then r=A.road_join_choices(q.player,q.request)
         elseif q.kind=="dock_join_choices" then r=A.dock_join_choices(q.player,q.request)
+        elseif q.kind=="airport_join_choices" then r=A.airport_join_choices(q.player,q.request)
         elseif q.kind=="road_place" then
           local before=s.authority_revision or 0
           r=A.road_place(q.player,q.request,q.quote)

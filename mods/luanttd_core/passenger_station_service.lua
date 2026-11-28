@@ -146,7 +146,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     local st={id=def.id,owner=def.owner,town=def.town,neutral_rig=def.neutral_rig,
       stock={passenger={}},loading_order={},passenger_rating_state=Rating.new(),
       rating_phase=def.rating_phase or 0,time_since_load=255,time_since_unload=255,
-      tick_index=def.tick_index}
+      tick_index=def.tick_index,stock_bitmap_iteration=def.stock_bitmap_iteration}
     state.stations[def.id]=st
     S.footprint(state,def.id,def.tiles,ctx)
     return st
@@ -379,9 +379,10 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
   end
 
   local function options(state,tick,ctx,events)
-    local function carrier(st,v) return {id=st.id,tile=v.cargo_tile} end
+    local function carrier(st,v) return {id=st.id,tile=v.cargo_tile,stock_station_id=st.stock_station_id} end
     return {
       gradual=ctx.gradual~=false,feeder_percent=ctx.feeder_percent,consist=Compartments,
+      refresh_link=ctx.refresh_full_link and function(st,v) ctx.refresh_full_link(st,v,tick) end,
       accepts=function(st,v) return entitled(st,v.cargo) end,
       can_load=function(st,v)
         return Catchment.may_load(st,v.owner,town_rights(ctx,st.town),ctx.neutral_owner)
@@ -406,6 +407,9 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
         Catchment.loaded(st,v.mode,n)
         if ctx.airport_cargo_taken and (st.host_mode=="air" or st.neutral_rig) then
           local remaining=S.waiting(state,st.id,v.cargo)
+          if st.joined_road and ctx.joined_road_reserved then
+            remaining=remaining+ctx.joined_road_reserved(st,v.cargo)
+          end
           if remaining==0 then ctx.airport_cargo_taken(st) end
         end
         local carrier=v.part and assert(state.vehicles[v.id]) or v
@@ -579,27 +583,67 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     end
     if ctx.production then ctx.production(state,tick) end
     local ops=options(state,tick,ctx,events)
-    local function visit(st)
-      if #st.loading_order>0 and (not ctx.station_active or ctx.station_active(st)) then
+    local function visit(st,road,road_vehicles,road_ops)
+      if (#st.loading_order>0 or road and road.loading_order and #road.loading_order>0)
+          and (not ctx.station_active or ctx.station_active(st)) then
         assert(not active_pulses,"Station service cannot reenter an active station tick")
         active_pulses={}
-        local ok,rounds,leaves=pcall(Loading.tick,st,state.vehicles,ops)
+        local ok,rounds,leaves
+        local records
+        if road then
+          records={}
+          local sorted,vehicles={},{}
+          local function collect(facility,list,road_carrier)
+            for _,id in ipairs(facility.loading_order or {}) do
+              local v=assert(list[id])
+              local physical=road_carrier and v.stock_pool_id or v.stock_station_physical_vehicle
+              assert(physical and not vehicles[physical],"Each loading carrier needs its unique physical VehicleID")
+              vehicles[physical]=v
+              sorted[#sorted+1]=physical
+              records[physical]={v=v,facility=facility,road=road_carrier}
+            end
+          end
+          collect(road,road_vehicles,true)
+          collect(st,state.vehicles,false)
+          table.sort(sorted,function(a,b)
+            local x,y=vehicles[a].load_state.arrived_tick,vehicles[b].load_state.arrived_tick
+            return x==y and a<b or x<y
+          end)
+          ok,rounds,leaves=pcall(Loading.tick,{loading_order=sorted},vehicles,{for_vehicle=function(_,_,key)
+            local row=records[key]
+            return row.road and road_ops or ops,row.facility
+          end})
+        else
+          ok,rounds,leaves=pcall(Loading.tick,st,state.vehicles,ops)
+        end
         local pulses=active_pulses;active_pulses=nil
         if not ok then error(rounds) end
+        local road_rounds,road_leaves
+        if records then road_rounds,road_leaves={},{} end
         local i=0
         for _,r in ipairs(rounds) do
-          local v=state.vehicles[r.vehicle]
           if not r.consist then i=i+1 end
-          v.load_state.ticks=S.loading_delay(v.mode,r.consist and r or assert(pulses[i]),v.total_length,
-            v.load_state.platform_tiles,ctx.loading_penalty)
+          local row=records and records[r.station_vehicle]
+          if row and row.road then road_rounds[#road_rounds+1]=r
+          else
+            local v=row and row.v or state.vehicles[r.vehicle]
+            v.load_state.ticks=S.loading_delay(v.mode,r.consist and r or assert(pulses[i]),v.total_length,
+              v.load_state.platform_tiles,ctx.loading_penalty)
+          end
         end
         assert(i==#pulses,"Every one-body loading round must emit one timing pulse")
-        for _,vid in ipairs(leaves) do
-          local v=state.vehicles[vid]
-          v.load_state.ready_tick=tick
-          departures[#departures+1]=vid
+        for _,key in ipairs(leaves) do
+          local row=records and records[key]
+          if row and row.road then road_leaves[#road_leaves+1]=row.v.id
+          else
+            local v=row and row.v or state.vehicles[key]
+            v.load_state.ready_tick=tick
+            departures[#departures+1]=v.id
+          end
         end
+        return road_rounds,road_leaves
       end
+      return {},{}
     end
     if ctx.loading_sweep then ctx.loading_sweep(tick,visit)
     else for _,id in ipairs(ids) do visit(state.stations[id]) end end

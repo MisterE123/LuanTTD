@@ -60,8 +60,19 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     end
     return sum,per_town
   end
+  local function joined_passengers(s,st)
+    if not (s.stock_joined_stations and st and st.stock_station_id~=nil) then return end
+    local group=Sim.stock_joined_station.resolve(s,st.stock_station_id,"road",st.id,st)
+    local c=s.stock_ship_commercial
+    local id=group and group.members.air and group.service_station_id
+    return id and c and c.service.stations[id] or nil
+  end
   function M.acceptance(s,st,cargo)
     if not compatible(st,{cargo=cargo,stock_tram=st and st.tram_only}) then return 0 end
+    if cargo=="passenger" then
+      local shared=joined_passengers(s,st)
+      if shared then return shared.passenger_acceptance end
+    end
     if cargo=="coal" then
       local b=host.coal and host.coal(s)
       return b and b.report(st).eighths or 0
@@ -103,7 +114,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
   end
   local function cargo_stop(s,st,v)
     local tile=stop_tile(s,st,v)
-    return tile==st.tile and st or {id=st.id,tile=tile}
+    return tile==st.tile and st or {id=st.id,tile=tile,stock_station_id=st.stock_station_id}
   end
 
   -- Public existing snapshot fields persist on vehicles for save/UI. Keep
@@ -159,6 +170,16 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
       local v=loading_vehicle(s,id)
       if v and v.cargo==cargo and v.load_state and v.load_state.station==st.id then
         count=count+v.load_state.reserved_units
+      end
+    end
+    local shared=joined_passengers(s,st)
+    if shared and cargo=="passenger" then
+      local vehicles=s.stock_ship_commercial.service.vehicles
+      for _,id in ipairs(shared.loading_order) do
+        local v=assert(vehicles[id])
+        for _,body in ipairs(v.carrying_parts or {v}) do
+          if body.cargo==cargo then count=count+assert(body.load_state).reserved_units end
+        end
       end
     end
     return count
@@ -223,7 +244,8 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         host.news(s,v.owner.." made their first paid delivery of "..v.cargo.." for $"..detail.amount..".")
       end
     end)
-    return {
+    local api
+    api={
       xy=Sim.xy,gradual=s.stock_gradual_loading~=false,feeder_percent=s.stock_feeder_percent,
       accepts=function(st,v)
         if v.cargo=="coal" then return coal and coal.accepts(st,v) or false end
@@ -266,6 +288,13 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         if v.cargo=="coal" then return coal.loaded(st,v,count) end
         if timber_cargo(v.cargo) then return timber.loaded(st,v,count) end
         Rating.loaded(st);st.last_service[v.cargo]=s.day
+        if v.cargo=="passenger" then
+          local shared=joined_passengers(s,st)
+          if shared then
+            Rating.loaded(shared)
+            if api.joined_cargo_taken then api.joined_cargo_taken(shared,v.cargo) end
+          end
+        end
         push(s,v,"board",st,tick,{units=count})
       end,
       transferred=function(st,v,p)
@@ -277,6 +306,10 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         if v.cargo=="coal" then return coal.unloaded(st,v,n) end
         if timber_cargo(v.cargo) then return timber.unloaded(st,v,n) end
         Rating.unloaded(st)
+        if v.cargo=="passenger" then
+          local shared=joined_passengers(s,st)
+          if shared then Rating.unloaded(shared) end
+        end
       end,
       deliver=function(st,v,p)
         if v.cargo=="coal" then return coal.deliver(st,v,p) end
@@ -332,6 +365,7 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         v.stock_profit_with_feeders=(v.stock_profit_with_feeders or 0)+payment.visual+payment.transfer
       end,
     }
+    return api
   end
 
   function M.begin(s,st,v,order,tick)
@@ -395,11 +429,11 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
     local parked_tram=s.tram_pilot and s.tram_pilot.carrier
     local carriers=(parked_tram or s.stock_tram_fleet and next(s.stock_tram_fleet)) and
       setmetatable({},{__index=function(_,id)return loading_vehicle(s,id)end}) or s.fleet
-    local function station(st)
-      if not st.loading_order or #st.loading_order==0 then return end
+    local function station(st,combined)
+      if (not st.loading_order or #st.loading_order==0) and not combined then return end
       local sid=st.id
       local aliases={}
-      for _,id in ipairs(st.loading_order) do
+      for _,id in ipairs(st.loading_order or {}) do
         local v=assert(carriers[id],"Missing vehicle in saved loading order")
         aliases[id]={stopped=v.stopped,broken=v.broken}
         -- Stock station transfers are separate; a depot fault blocks the
@@ -408,16 +442,19 @@ return function(Sim,Loading,Packets,Income,Rating,Mail,host)
         local fault=v.road_fault
         if fault and (fault.breakdown_ctr==1 or fault.breakdown_ctr==2) then v.broken=true end
       end
-      local slice,leave=Loading.tick(st,carriers,api)
-      if api.station_done then api.station_done(st) end
+      local success,slice,leave
+      if combined then success,slice,leave=pcall(combined,st,carriers,api)
+      else success=true;slice,leave=Loading.tick(st,carriers,api) end
+      if success and api.station_done then api.station_done(st) end
       for id,saved in pairs(aliases) do
         local v=carriers[id];v.stopped,v.broken=saved.stopped,saved.broken
       end
+      if not success then error(slice) end
       for _,event in ipairs(slice) do
         event.tick=tick;event.station=sid;rounds[#rounds+1]=event
       end
       for _,id in ipairs(leave) do departures[#departures+1]=id end
-      for _,id in ipairs(st.loading_order) do
+      for _,id in ipairs(st.loading_order or {}) do
         local v=carriers[id]
         if not v.running then v.status="Stopped"
         elseif v.load_state.finished then v.status="Waiting for departure"

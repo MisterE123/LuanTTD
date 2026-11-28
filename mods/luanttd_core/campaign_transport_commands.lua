@@ -50,6 +50,14 @@ return function(Sim,R)
     end
     return false,"UNSUPPORTED_SPAN_MODE"
   end
+  local function air_request(cmd)
+    if cmd.air_join==nil then return end
+    return {adjacent=true,station_id=cmd.air_join,new_station=false}
+  end
+  function T.airport_join_choices(owner,cmd)
+    if not (R.air and type(cmd)=="table" and tile(cmd.tile)) then return nil,"INVALID_AIRPORT_SITE" end
+    return R.air.network.join_choices(s,owner,cmd.tile,cmd.layout)
+  end
   function T.quote(owner,cmd)
     if type(cmd)~="table" then return nil,"INVALID_TRANSPORT_COMMAND" end
     local mode,op=cmd.mode,cmd.operation
@@ -59,7 +67,8 @@ return function(Sim,R)
       return {request={mode=mode,operation=op,tile=cmd.tile,last=cmd.last,style=cmd.style,railtype=mode=="rail" and p.railtype or nil},
         price=price,tiles=span_tiles(p),speed=p.spec and p.spec.speed}
     elseif op=="build" and mode=="air" and R.air and tile(cmd.tile) then
-      local q,why,town=R.air.network.quote(s,owner,cmd.tile,cmd.layout,cmd.separate==true)
+      if cmd.air_join~=nil and not integer(cmd.air_join,0,0xFFFD) then return nil,"INVALID_STATION" end
+      local q,why,town=R.air.network.quote(s,owner,cmd.tile,cmd.layout,cmd.separate==true,air_request(cmd))
       if not q then
         if why=="TOWN_REFUSES_AIRPORT_NOISE" then
           return nil,("%s will not allow this much airport noise. Try a quieter airport or build farther from town."):format(s.sites[town].name)
@@ -70,8 +79,8 @@ return function(Sim,R)
         end
         return nil,why
       end
-      return {request={mode=mode,operation=op,tile=cmd.tile,layout=q.layout,separate=cmd.separate==true},
-        price=q.price,tiles=collect_tiles(q),noise=q.noise,join=q.reopen}
+      return {request={mode=mode,operation=op,tile=cmd.tile,layout=q.layout,separate=cmd.separate==true,air_join=cmd.air_join},
+        price=q.price,tiles=collect_tiles(q),noise=q.noise,join=q.join_road or q.reopen}
     elseif op=="build" and mode=="tram" and R.tram and type(cmd.cells)=="table" and
       #cmd.cells>=1 and #cmd.cells<=128 then
       local cells={}
@@ -180,7 +189,7 @@ return function(Sim,R)
     end
     local unit,msg
     if req.operation=="build" and req.mode=="air" then
-      unit,msg=R.air.network.build(s,owner,req.tile,req.layout,req.separate==true)
+      unit,msg=R.air.network.build(s,owner,req.tile,req.layout,req.separate==true,air_request(req))
     elseif req.operation=="build" and req.mode=="ship" then
       unit,msg=R.water.network.build(s,owner,req.kind,req.tile,req.axis,req.kind=="dock" and req or nil)
     elseif req.mode=="rail" then

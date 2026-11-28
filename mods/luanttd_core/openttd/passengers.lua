@@ -23,6 +23,9 @@ end
 function P.pickup(p,st,xy)
   local x,z=xy(st.tile)
   p.origin_station=p.origin_station or st.id
+  if not p.origin_tile and p.stock_origin_station==nil and p.origin_station==st.id then
+    p.stock_origin_station=st.stock_station_id
+  end
   p.origin_tile=p.origin_tile or st.tile
   p.travel_x=(p.travel_x or 0)+x
   p.travel_z=(p.travel_z or 0)+z

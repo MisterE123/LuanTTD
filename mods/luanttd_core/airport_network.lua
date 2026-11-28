@@ -1,9 +1,11 @@
 -- Saved airfield facility adapter: ordinary, level, clean-ground
 -- branch of CmdBuildAirport / CheckFlatLandAirport and the RC1
--- local authority rules. Shared stations and site clearing are separate.
+-- local authority rules. Airport-to-bus attachment uses the station
+-- catalog adapter; unimplemented site clearing remains separate.
 return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
   local N={PRICE_PER_TILE=600,CLEAR_PER_TILE=30}
   local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
+  local JoinedAir=Sim.stock_joined_station and dofile(path.."airport_join_world.lua")(Sim)
   local TownStations=Sim.road_station_retirement and dofile(path.."town_station_services.lua")(Sim)
   function N.layout(name)
     if name=="city" then return City end
@@ -78,7 +80,7 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
     local used,limit=noise_budget(s,id,towns(s),policy.tolerance or 0)
     return {used=used,limit=limit}
   end
-  function N.quote(s,owner,origin,name,separate)
+  function N.quote(s,owner,origin,name,separate,join_request)
     local field=N.layout(name)
     if not field or name=="oilrig" then return nil,"AIRPORT_TYPE_NOT_AVAILABLE" end
     if field.intro_year and Sim.date(s)<field.intro_year then
@@ -135,19 +137,30 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
     airport.price=#airport.tiles*N.PRICE_PER_TILE
     local c=s.companies[owner]
     if (c and c.cash or 100000)<airport.price then return nil,"NOT_ENOUGH_MONEY" end
-    if not separate and TownStations then
+    if join_request then
+      local road,why=assert(JoinedAir).quote(s,airport,join_request)
+      if why then return nil,why end
+      airport.join_road=road or nil
+    end
+    if not airport.join_road and not separate and not (join_request and join_request.new_station) and TownStations then
       local reuse=Sim.road_station_retirement().closest(s,"airport",owner,origin)
       airport.reopen=reuse and reuse.id or nil
     end
     return airport
+  end
+  function N.join_choices(s,owner,origin,name)
+    local airport,why=N.quote(s,owner,origin,name,true)
+    if not airport then return nil,why end
+    local rows=JoinedAir and JoinedAir.choices(s,airport) or {{name="Build a separate airport"}}
+    return {choices=rows,cost=airport.price}
   end
   local function expense(s,owner,cost)
     local c=Sim.company(s,owner)
     c.cash,c.expense,c.month_exp=c.cash-cost,c.expense+cost,c.month_exp+cost
     s.topology=s.topology+1
   end
-  function N.build(s,owner,origin,name,separate)
-    local airport,why,id=N.quote(s,owner,origin,name,separate)
+  function N.build(s,owner,origin,name,separate,join_request)
+    local airport,why,id=N.quote(s,owner,origin,name,separate,join_request)
     if not airport then return nil,why,id end
     -- The price/impact is a quote. Do not persist a stale noise budget.
     airport.noise=nil
@@ -163,11 +176,17 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
     else
       airport.id=s.next_small_airport or 1
       s.next_small_airport=airport.id+1
-      airport.stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)
+      if airport.join_road then airport.stock_station_id=assert(s.stations[airport.join_road].stock_station_id)
+      else airport.stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s) end
     end
     local exact=s.stock_engine_startup_seed~=nil
-    if exact then airport.stock_random_bits=Sim.stock_random_u32(s)%65536 end
+    local joined=airport.join_road
+    if exact and not joined then airport.stock_random_bits=Sim.stock_random_u32(s)%65536 end
     s.stock_small_airports[airport.id]=airport
+    if joined then
+      JoinedAir.attach(s,airport,assert(s.stations[joined]))
+      airport.join_road=nil
+    end
     local dirty={}
     for _,pos in ipairs(airport.tiles) do
       s.tiles[pos.id].airfield={airport=airport.id,x=pos.x,z=pos.z,layout=airport.layout,owner=owner,level=airport.ground/8}
@@ -194,7 +213,10 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
     local cost=#airport.tiles*N.CLEAR_PER_TILE
     local c=s.companies[owner]
     if not c or c.cash<cost then return nil,"NOT_ENOUGH_MONEY" end
-    if not quote and TownStations then TownStations.retire(s,"air",airport) end
+    if not quote then
+      local remains=JoinedAir and JoinedAir.detach(s,airport)
+      if TownStations and not remains then TownStations.retire(s,"air",airport) end
+    end
     local dirty={}
     for _,pos in ipairs(airport.tiles) do
       dirty[#dirty+1]=pos.id
