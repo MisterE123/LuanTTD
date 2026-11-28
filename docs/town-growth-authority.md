@@ -1332,3 +1332,14 @@ thresholds, three-way zone classification, desert surface type and
 density, and snow transitions. Its landscape scheduler visits each
 clear cell once using the compiled stock desert update. This does not
 claim order/RNG parity for complete Arctic or Tropic world generation.
+
+The underlying TerraGenesis relief now uses the RC1 climate dispatch:
+automatic Arctic uses Plateaus, automatic Tropic uses Lowlands, and
+automatic Temperate and Toyland use Normal. Explicit stock average
+height profiles override that default independently of climate.
+The [compiled TGP differential](../tests/terragenesis_climate_rc1.py)
+checks 183,040 fixed-point heights. A full 64 × 64 Lua raster checks
+that an automatic climate and its corresponding explicit profile
+produce identical terrain and RNG; the six existing stock Temperate
+map checkpoints still agree with OpenTTD. This does not turn the new
+climates into selectable campaigns.

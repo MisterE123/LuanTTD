@@ -319,16 +319,43 @@ return function(Slope)
       rows[z+1]=pack16(a,w+1,buf)
     end
   end
-  local function sine_transform(rows,p,maxh)
+  -- 16.0-RC1 HeightMapSineTransform dispatch. These operations
+  -- are double precision in the source, unlike HeightMapCurves below.
+  local function lowlands(height)
+    if height<=.5 then return height/2 end
+    local m=.5/2
+    height=2*((height-.5)/(1-.5))-1
+    height=sin(height*pi2)
+    return .5*((1-m)*height+(1+m))
+  end
+  local function plateaus(height)
+    if height>=.75 then return 1-(1-height)/2 end
+    local m=1-(1-.75)/2
+    height=2*height/.75-1
+    height=sin(height*pi2)
+    return .5*(height+1)*m
+  end
+  local function normal(height) return .5*(sin((2*height-1)*pi2)+1) end
+  local transformations={lowlands=lowlands,normal=normal,plateaus=plateaus}
+  local standard={temperate="normal",arctic="plateaus",tropic="lowlands",toyland="normal"}
+  -- Kept testable directly so compiled RC1 visits every source integer
+  -- height, not only the subset a handful of seeds happen to generate.
+  function G.sine_lut(maxh,landscape,average)
+    local profile=average=="auto" and standard[landscape] or average
+    local transform=assert(transformations[profile],"Invalid stock average height")
     local lut={}
     for h=0,maxh-1 do
       if h<16 then lut[h]=h
       else
         local t=(h-16)/(maxh-16)
-        t=.5*(sin((2*t-1)*pi2)+1)
+        t=transform(t)
         lut[h]=clamp(trunc(t*(maxh-16)+16),0,maxh-1)
       end
     end
+    return lut
+  end
+  local function sine_transform(rows,p,maxh)
+    local lut=G.sine_lut(maxh,p.landscape,p.average_height)
     each_row(rows,p,function(h) return lut[h] end)
   end
   -- C++ HeightMapCurves intentionally uses IEEE single precision in the
@@ -469,12 +496,16 @@ return function(Slope)
   local function options(opts)
     assert(type(opts)=="table","TerraGenesis options required")
     local p={width=opts.width,depth=opts.depth,seed=opts.seed,freeform_edges=opts.freeform_edges~=false,
-      legacy=opts.differential_version=="14.1"}
+      legacy=opts.differential_version=="14.1",landscape=opts.landscape or "temperate",
+      average_height=opts.average_height or "auto"}
     p.lx,p.lz=sizes[p.width],sizes[p.depth]
     assert(p.lx and p.lz,"TerraGenesis stock axes are powers of two, 64–4096")
     assert(int(p.seed,0,U32-1),"TerraGenesis requires an explicit uint32 seed")
     assert(opts.freeform_edges==nil or type(opts.freeform_edges)=="boolean","Invalid freeform edges flag")
-    assert(opts.landscape==nil or opts.landscape=="temperate","Only the temperate GenerateLandscape stage is mounted")
+    assert(standard[p.landscape] and (p.average_height=="auto" or transformations[p.average_height]),
+      "Invalid stock landscape or average-height setting")
+    assert(not p.legacy or p.landscape=="temperate" and p.average_height=="auto",
+      "Nondefault climate transforms are pinned to RC1")
     for _,k in ipairs(fields) do p[k]=opts[k]==nil and defaults[k] or opts[k] end
     assert(int(p.terrain_type,0,5) and int(p.quantity_sea_lakes,0,4)
       and int(p.tgen_smoothness,0,3) and int(p.water_borders,0,16) and int(p.variety,0,5)
@@ -517,6 +548,11 @@ return function(Slope)
     local rows,rock_rows=integer_rows(raw,p,maxh,state)
     local id={p.legacy and "ott14.1-tgp-temperate-v1" or "ott16.0-RC1-tgp-temperate-v1",w.."x"..h,("%08x"):format(p.seed),p.freeform_edges and 1 or 0,("%08x%08x"):format(start_a,start_b)}
     for _,field in ipairs(fields) do id[#id+1]=p[field] end
+    if p.landscape~="temperate" or p.average_height~="auto" then
+      -- No identity change for the existing stock Temperate baseline.
+      id[1]="ott16.0-RC1-tgp-"..p.landscape.."-v1"
+      if p.average_height~="auto" then id[#id+1]=p.average_height end
+    end
     id=table.concat(id,"/")
     local function is_void(x,z) return x==w or z==h or p.freeform_edges and (x==1 or z==1) end
     local function corners(x,z)
@@ -526,7 +562,8 @@ return function(Slope)
       return byte(r,x),byte(r,u),byte(s,x),byte(s,u)
     end
     local V={width=w,depth=h,seed=p.seed,freeform=p.freeform_edges,water_borders=borders,
-      estimated_max_height=floor(maxh/16),rng_after=state,base_id=id}
+      estimated_max_height=floor(maxh/16),rng_after=state,base_id=id,
+      landscape=p.landscape,average_height=p.average_height}
     function V.corner(x,z)
       if int(x,1,w+1) and int(z,1,h+1) then return byte(rows[min(z,h)],min(x,w)) end
     end
