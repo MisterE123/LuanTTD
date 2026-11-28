@@ -51,6 +51,41 @@ R.day(s,{1})
 assert(frame(approach)[4]==4)
 print("PASS: following bus stops and resumes, opposite lanes, depot separation, exclusive bay entrance")
 
+-- OpenTTD 16.0-RC1 checks the proposed position/heading, not whether
+-- a parked bus on a side arm touches the junction's rendered halo.
+-- Pinned native reference: through bus at (960,101), speed 124,
+-- with the side bus stopped at (953,114). The test translates that
+-- geometry by (-864,-16), preserving directions and sub-tile offsets.
+-- Use the real guard and controller on identical traffic, then check
+-- that generated campaigns still yield to a bus in their actual lane.
+do
+  local Sim=dofile(root.."sim.lua")
+  local Presentation=dofile(root.."road_motion_presentation.lua")(dofile(root.."road_lanes.lua"))
+  local Guard=dofile(root.."road_junction_guard.lua")(Sim,Presentation)
+  local Controller=dofile(root.."road_speed_runtime.lua")(Speed,Prox,function()return 0 end,
+    function()return false end,function()return false end,nil,nil,nil,nil,nil,Guard,Sim.xy)
+  local id=Sim.id
+  local function run(generated,main_lane)
+    local w={fleet={},bays={},depots={},tiles={},road_junction_clearance=true}
+    if generated then w.stock_generated_profile={} end
+    for x=2,9 do w.tiles[id(x,5)]={build="road",road_bits=x==5 and 14 or 10} end
+    w.tiles[id(5,6)]={build="road",road_bits=5}
+    local v=bus(1,54,145,85,function(x)return id(math.floor(x/16),5) end)
+    w.fleet[1]=v
+    w.fleet[2]={id=2,engine="bus",running=false,road_stop_pose=
+      main_lane and {91,85,5,id(5,5),1} or {89,98,3,id(5,6),0}}
+    for _=1,3 do Controller.day(w,{1}) end
+    return frame(v)[1],v.road_speed_state.waiting
+  end
+  local old,old_wait=run(false,false)
+  assert(old<80 and old_wait=="junction","test side bus must touch the old junction halo")
+  local passed,wait=run(true,false)
+  assert(passed>95 and not wait,"stock through bus must pass the stopped side bus")
+  local following,wait=run(true,true)
+  assert(following<91 and wait=="road","stock bus must still yield to a stopped same-lane bus")
+end
+print("PASS: source-generated road traffic passes a stopped side-arm bus and still yields to its own lane")
+
 -- Wormhole candidates follow the logical tiles as the visible pixel
 -- crosses terrain not owned by this span. This also admits a future
 -- tram record to the exact same classifier as any other road vehicle.

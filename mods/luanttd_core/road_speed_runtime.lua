@@ -362,26 +362,23 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
       return false
     end
     local actual_z
-    if Junction and s.road_junction_clearance then
+    -- Generated campaigns use RC1's per-movement checks below and
+    -- VehicleEnter_RoadStop's bay rules above. RC1 never reserves a
+    -- whole intersection or stop apron based on another vehicle's
+    -- rendered footprint. Old saves may carry the private replay flag.
+    if Junction and s.road_junction_clearance and not s.stock_generated_profile then
       if Bay and not Junction.bay_clearance(s,W,v,old,b,bay_commit and bay_commit.action,Bay) then
         state.waiting,state.speed="bay",0
         v.road_bay_guard_waits=(v.road_bay_guard_waits or 0)+1
         return false
       end
-      -- RC1 uses RoadVehFindCloseTo at the next pixel; it does not
-      -- reserve an entire street intersection. Keep the extra 3D guard
-      -- out of the source-native climate clock, but retain actual bay
-      -- occupancy and the stock same-heading proximity checks below.
-      local native_climate=s.stock_generated_profile and s.stock_climate and (v.stock_bus or v.stock_road_freight)
-      if not native_climate then
-        local clear
-        clear,actual_z=Junction.check(s,W,record,old,b,nil,W.height)
-        if not clear then
-          state.waiting,state.speed="junction",0
-          v.status="Waiting for junction clearance"
-          v.road_junction_waits=(v.road_junction_waits or 0)+1
-          return false
-        end
+      local clear
+      clear,actual_z=Junction.check(s,W,record,old,b,nil,W.height)
+      if not clear then
+        state.waiting,state.speed="junction",0
+        v.status="Waiting for junction clearance"
+        v.road_junction_waits=(v.road_junction_waits or 0)+1
+        return false
       end
     end
     if Pass and (state.lane_pose or b~=nominal or W.exposed()) then

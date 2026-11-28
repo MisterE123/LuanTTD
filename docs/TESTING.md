@@ -738,7 +738,27 @@ partial ship load alongside a completely independent passenger ferry
 and real competing road truck. The shared power station received the
 truck and ship's total exactly once, with no separate production clock.
 
-### Optional 3D junction clearance
+### Ordinary stock road junctions
+
+OpenTTD 16.0-RC1's `src/roadveh_cmd.cpp` checks the proposed
+pixel and heading in `RoadVehFindCloseTo`, then checks tile
+entry. It does not reserve a whole junction or bay apron.
+In a compiled source run, actual purchased buses used a flat
+T-junction on Arctic seed 1751. The through bus cleared the
+junction at tick 2096 while the other remained stopped on the
+side road. `tests/road_traffic_runtime.lua` checks the translated
+geometry and also verifies that a genuinely stopped vehicle in
+the same lane still holds the following bus.
+
+The ordinary Luanti worker also replayed two private saved road
+networks for 900 simulation days each, with three packed
+save/reopens per run. Every running bus repeatedly reached its
+stops, while a manually stopped bus stayed stopped. Actual road
+stop bay/entrance occupancy, one-way and level-crossing checks are
+separate and remain active. This is a targeted junction check,
+not complete road-network parity.
+
+### Historical 3D junction clearance fixture
 
 `BAYLINE_NATIVE_FRESH=1 BAYLINE_NATIVE_JUNCTION_CLEARANCE=1 tests/native.sh`
 uses a prepared ordinary three-arm road. Both real buses were purchased
