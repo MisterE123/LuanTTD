@@ -599,7 +599,8 @@ return function(Sim,R,max_days)
       end
     elseif c.kind=="company_open" then
       if s.companies[name] then return A.company(name) end
-      Sim.company(s,name)
+      local opened,why=Sim.open_company(s,name)
+      if not opened then return reply(false,why) end
       ok,note=true,"Company opened."
     elseif c.kind=="rail_freight_stage" and tile_id(c.tile) and (c.role=="load" or c.role=="unload") and
       Freight.known(c.cargo) then

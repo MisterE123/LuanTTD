@@ -19,7 +19,7 @@ if not initial then
   assert(s.stock_engine_startup_seed==1944356477 and s.stock_pool_authority)
   s.rail_owned_service,s.rail_span_enabled,s.rail_paid_service=true,true,true
   s.road_mail,s.road_junction_clearance=true,true
-  Sim.company(s,owner)
+  assert(Sim.open_company(s,owner).stock_start.id==0)
   assert(Sim.build(s,owner,"road_depot",{road_depot}))
   Checkpoint.write_state(s)
 end
@@ -47,6 +47,7 @@ end
 local function state()
   ask("checkpoint")
   local s=assert(Checkpoint.read())
+  assert(s.companies[owner].stock_start.id==0)
   return s,s.stock_rail_dispatch and s.stock_rail_dispatch.runs[1]
 end
 local function actor_present()

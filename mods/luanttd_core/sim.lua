@@ -187,6 +187,27 @@ function M.company(s,owner)
   end
   return s.companies[owner]
 end
+-- An explicit player admission, not a UI read or a detached test account.
+-- Stock company creation precedes that player's first action and consumes
+-- the authoritative world RNG exactly once, including after a worker rebind.
+function M.open_company(s,owner)
+  if s.companies[owner] then return s.companies[owner] end
+  if not s.stock_generated_profile then return M.company(s,owner) end
+  local existing={}
+  for _,c in pairs(s.companies) do
+    if c.stock_start then existing[#existing+1]=c.stock_start end
+  end
+  table.sort(existing,function(a,b) return a.id<b.id end)
+  local stock=dofile(module_root.."openttd/company_start_rc1.lua").open(function() return M.stock_random_u32(s) end,existing)
+  if not stock then return nil,"Every company slot is occupied." end
+  local c=M.company(s,owner)
+  c.stock_start=stock
+  stock.year=M.date(s)
+  -- Base game creation loan at uninflated costs and the stock default
+  -- maximum loan. Inflation-aware company joining is a separate gap.
+  c.loan,c.cash=100000,100000
+  return c
+end
 M.stock_economy_money=CompanyQuarter.money
 M.stock_economy_delivered=CompanyQuarter.delivered
 M.stock_vehicle_operating=HQStats.record

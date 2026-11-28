@@ -157,3 +157,13 @@ production and monthly accounting walk the actual IndustryID order. Houses
 and industries animate in one stock tile vector; removal swaps in the last
 tile, which determines the next tick's random draw order. Stock subsidies
 are enabled, but this run has no player company or routes.
+
+Opening a human company consumes the stock company colour shuffle, manager
+face and unique president-name draws on that same simulation RNG. Creating
+the first company begins at the stock 100,000 cash and loan at uninflated
+default settings. In a separate RC1 replay with one new idle human company,
+its initial records and random state match exactly, then towns, roads and
+houses match again through every checkpoint of the first year (including
+actual new streets and houses). Packed reopens and repeat admissions must
+not redraw identity. This does not assert finance parity for the full year,
+late-company inflation, or mixed services.

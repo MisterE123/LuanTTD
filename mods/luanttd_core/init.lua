@@ -647,7 +647,10 @@ dofile(mod.."/ambient_storms.lua").start(core,function(p)
 end,weather_options)
 local function open_campaign_player(p)
   local name=p:get_player_name()
-  if not authority then Sim.company(S,name) end
+  if not authority then
+    local opened,why=Sim.open_company(S,name)
+    if not opened then return core.chat_send_player(name,why) end
+  end
   core.close_formspec(name,"luanttd_core:opening_worker")
   world.spawn(p,ReturnView.read(p))
   atmosphere(p)
