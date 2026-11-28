@@ -161,24 +161,43 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
     return Spans.bridge(town,B,x,z,d,random) or Spans.tunnel(town,B,x,z,d)
   end
   local terraform_price=250 -- RC1 construction base terraform price for this economy.
+  local function tunnel_floor(id)
+    local road=s.tunnel_below and s.tunnel_below[id]
+    local rail=s.rail_tunnel_below and s.rail_tunnel_below[id]
+    local a=road and s.stock_road_tunnels and s.stock_road_tunnels[road]
+    local b=rail and s.stock_rail_spans and s.stock_rail_spans[rail]
+    if road and not (a and type(a.base)=="number") or rail and not (b and b.kind=="tunnel" and type(b.base)=="number") then
+      return nil,true
+    end
+    if a or b then return math.max(a and a.base or -1,b and b.base or -1),true end
+  end
   local function plan_earthworks(x,z,mask,up,cleared_portal)
     if mask==0 then return end
     return Terrain.plan(s.corner_grid,x,z,mask,up,{
         unit_cost=terraform_price,max_height=s.stock_generated_profile.map_height_limit,
         void=function(u,v) return s.tiles[Sim.id(u,v)].stock_void end,
+        -- CmdTerraformLand checks the proposed ground against the
+        -- absolute bridge deck before invoking the surface's callback.
+        bridge_height=function(u,v) return Sim.bridge_deck_at(s,Sim.id(u,v)) end,
+        tunnel_in_way=function(u,v,base)
+          local floor=tunnel_floor(Sim.id(u,v))
+          return floor and base<=floor
+        end,
         validate_tile=function(_,u,v)
+          local id=Sim.id(u,v)
           local t=B.tile(u,v)
+          local deck,overhead=Sim.bridge_deck_at(s,id)
+          if overhead and not deck then return nil,"TOWN_PROTECTED_TERRAIN" end
           -- RC1's tree terraform callback delegates to LandscapeClear.
           -- Quote the stems before committing any shared corner. Leave
           -- non-tree structures and protected company land alone.
-          if not t or (t.kind~="clear" and t.kind~="trees") or t.owner or t.bridge_above or
-              live and not (live.terraformable or live.houseable)(u,v) then return nil,"TOWN_PROTECTED_TERRAIN" end
-          local id=Sim.id(u,v)
-          -- A house can occupy the independent surface over a bore.
-          -- Grading must still preserve its cover and remains excluded.
-          if (s.tunnel_below and s.tunnel_below[id]) or (s.rail_tunnel_below and s.rail_tunnel_below[id]) then
-            return nil,"TOWN_PROTECTED_TERRAIN"
-          end
+          local permitted=live and (live.terraformable or live.houseable)(u,v)
+          if not t or t.owner or (t.kind~="clear" and t.kind~="trees" and not (deck and permitted)) or
+              live and not permitted then return nil,"TOWN_PROTECTED_TERRAIN" end
+          -- Valid existing bores are independent of the surface.
+          -- Unknown geometry must still fail the entire quote.
+          local floor,bore=tunnel_floor(id)
+          if bore and not floor then return nil,"TOWN_PROTECTED_TERRAIN" end
           -- CmdBuildTunnel already paid to clear the far portal.
           if id==cleared_portal then return 0 end
           return Sim.road_site_clear_cost(s.tiles[id],s.stock_farm_fields and s.stock_farm_fields[id])

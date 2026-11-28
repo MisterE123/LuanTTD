@@ -620,6 +620,7 @@ jobs:
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua
+          lua5.1 tests/town_growth_live.lua
           lua5.1 tests/water_flood.lua
           lua5.1 tests/town_growth_rc1_fast_grid.lua wide
           bash tests/town_growth_rc1_goods_native.sh wide

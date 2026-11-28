@@ -191,6 +191,20 @@ of the same corner change; a denied quote leaves the trees and heights
 unchanged. These draws are not added to startup
 map generation.
 
+Municipal levelling can also leave an existing bridge or tunnel
+untouched while changing compatible clear ground on the other layer.
+`CmdTerraformLand` compares the proposed top with the absolute
+bridge deck before raising, and the default 12-level separation when
+lowering. Excavation cannot reach a verified tunnel's height. In two
+native 16.0-RC1 captures, the town flattened a clear parcel below a
+road bridge and lowered a ridge corner above a real tunnel without
+changing either span. Each successful grade cost 250 and consumed
+eight stock RNG words; rejected deck and tunnel edits changed nothing.
+The Lua checks also exercise rail-bridge, aqueduct and rail-bore
+geometry in the same terrain validator. Towns still cannot autoslope a
+house: OpenTTD's `AutoslopeEnabled` excludes `OWNER_TOWN`, and its
+automatic clear command cannot demolish a house as a fallback.
+
 Only an admitted native command writes terrain, road bits, bridge geometry
 or a tunnel. The town cannot clear a private lot, active industry or
 protected/occupied facility. As in RC1 CmdBuildRoad, it can add pieces

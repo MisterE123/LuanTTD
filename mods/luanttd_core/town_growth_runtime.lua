@@ -20,14 +20,15 @@ return function(Sim,Terrain,G,B,H)
   local function underground(s,id)
     return at(s.tunnel_below,id) or at(s.rail_tunnel_below,id)
   end
-  local function protected(s,id,t,above_tunnel)
+  local function protected(s,id,t,above_tunnel,below_bridge)
     return t.stock_canal or t.rail_tracks or t.rail_station_id or t.rail_depot_dir or
       t.level_crossing or t.road_waypoint_id or t.rail_span_id or t.road_tunnel_id or t.road_bridge_id or
       t.stock_industry or t.stock_landmark or t.ship or t.airfield or t.tram or t.signal or
-      at(s.level_crossing_tiles,id) or at(s.bridge_above,id) or at(s.rail_bridge_above,id) or
-      at(s.aqueduct_above,id) or (not above_tunnel and underground(s,id))
+      at(s.level_crossing_tiles,id) or (not below_bridge and
+        (at(s.bridge_above,id) or at(s.rail_bridge_above,id) or at(s.aqueduct_above,id))) or
+      (not above_tunnel and underground(s,id))
   end
-  local function clear_levels(s,id,allow_cover,allow_coast,allow_steep)
+  local function clear_levels(s,id,allow_cover,allow_coast,allow_steep,below_bridge)
     local tile=at(s.tiles,id)
     if allow_cover and not allow_steep and tile and tile.build=="road" and Sim.town_clear_road_tip(s,id,false) then
       local x,z=Sim.xy(id)
@@ -39,7 +40,7 @@ return function(Sim,Terrain,G,B,H)
     if not tile or tile.terrain~="grass" and tile.terrain~="hill" and not coast or tile.owner or tile.site or
       tile.stock_void or tile.stock_object or (not allow_cover and at(s.stock_farm_fields,id)) or
       tile.wood and not allow_cover or tile.house or tile.source_house or tile.build or tile.station or tile.parcel or
-      tile.road_bits or tile.road_town or protected(s,id,tile,allow_cover) then return end
+      tile.road_bits or tile.road_town or protected(s,id,tile,allow_cover,below_bridge) then return end
     local x,z=Sim.xy(id)
     local slope,base,top=Terrain.tile(s.corner_grid,x,z)
     if slope and (slope<16 or allow_steep) and (not coast or Sim.town_clear_coast(s,id,false)) then return top,slope,base end
@@ -220,7 +221,9 @@ return function(Sim,Terrain,G,B,H)
     return roads(Sim,Terrain,s,G,Worldgen,read,{
       founding=founding,
       houseable=function(x,z) return clear_levels(s,Sim.id(x,z),true,true)~=nil end,
-      terraformable=function(x,z) return clear_levels(s,Sim.id(x,z),true,false,true)~=nil end,
+      terraformable=function(x,z)
+        return clear_levels(s,Sim.id(x,z),true,false,true,true)~=nil
+      end,
       roadable=roadable,
       span_ends=function(x,z,u,v)
         local a,b=Sim.id(x,z),Sim.id(u,v)

@@ -232,5 +232,82 @@ do
   assert(not b.terraform_land(x,z,15,false,false) and s.corner_grid.revision==0 and s.rail_tunnel_below[id]==2)
   s.bridge_above={[id]=3}
   assert(not b.clear_quote(x,z,"house"))
-  print("PASS municipal houses can sit above road or rail bores while grading and overhead bridges remain protected")
+  print("PASS municipal houses can sit above road or rail bores; unknown span geometry stays protected")
+end
+
+-- Native RC1 LevelTownLand beneath an actual deck (deck=3, target
+-- north corner 1, other corners 2): the 250 quote succeeds and the
+-- eight Execute draws leave a flat surface without editing the bridge.
+do
+  local function setup(level)
+    local s=world()
+    local x,z=32,32
+    local id=Sim.id(x,z)
+    s.corner_grid=Terrain.new(Sim.W,Sim.H,function(u,v) return u==x and v==z and level or 2 end)
+    s.stock_generated_profile={map_height_limit=30}
+    for dx=-2,2 do for dz=-2,2 do s.tiles[Sim.id(x+dx,z+dz)]={h=2,terrain="hill"} end end
+    return s,W.road_board(s),x,z,id
+  end
+  for _,layer in ipairs(Sim.bridge_layers) do
+    local s,b,x,z,id=setup(1)
+    local span={deck=3,owner="Rail or road owner"}
+    s[layer[1]],s[layer[2]]={[id]=11},{[11]=span}
+    assert(Terrain.tile(s.corner_grid,x,z)==7 and not b.clear_quote(x,z,"house"))
+    s.passenger_rating_rng={760892031,1251784568}
+    assert(b.level_land(x,z,function() return Sim.stock_random_u32(s) end))
+    local a,h=Terrain.tile(s.corner_grid,x,z)
+    assert(a==0 and h==2 and s[layer[1]][id]==11 and s[layer[2]][11]==span and span.deck==3)
+    assert(s.passenger_rating_rng[1]==1077725541 and s.passenger_rating_rng[2]==3220888100)
+  end
+  local s,b,x,z,id=setup(3)
+  s.bridge_above,s.stock_road_bridges={[id]=11},{[11]={deck=3}}
+  assert(Terrain.tile(s.corner_grid,x,z)==8)
+  assert(not b.terraform_land(x,z,7,true,true,function() error("A denied grade cannot draw RNG") end))
+  assert(s.corner_grid.revision==0 and Terrain.corner(s.corner_grid,x,z)==3 and s.bridge_above[id]==11)
+
+  -- RC1's default maximum separation is 12 heights after lowering.
+  s,b,x,z,id=setup(2)
+  s.bridge_above,s.stock_road_bridges={[id]=11},{[11]={deck=14}}
+  assert(not b.terraform_land(x,z,8,false,true,function() error("Overheight bridge blocks!") end))
+  s.stock_road_bridges[11].deck=13
+  assert(b.terraform_land(x,z,8,false,true,function() return 0 end))
+  assert(Terrain.corner(s.corner_grid,x,z)==1 and s.bridge_above[id]==11)
+
+  -- RC1 AutoslopeEnabled expressly excludes the town company. A
+  -- neighbouring house prevents both directions of LevelTownLand even
+  -- though a human player's foundation callback could preserve its top.
+  s,b,x,z,id=setup(1)
+  local home=Sim.id(x-1,z)
+  s.stock_road_town_policy={autoslope=true}
+  s.tiles[home].house,s.tiles[home].source_house=true,{id=0}
+  assert(not b.level_land(x,z,function() error("The house blocks both quotes") end))
+  assert(s.corner_grid.revision==0 and s.tiles[home].source_house.id==0)
+  print("PASS RC1 municipal grading under a verified bridge, deck interference, stock draws and no town autoslope on houses")
+end
+
+-- Native RC1 lowered a ridge corner 3 -> 2 over a real road tunnel at
+-- height 1, but rejected lowering a flat 2 -> 1 at the tunnel floor.
+do
+  local function terrain(level)
+    local s=world()
+    local x,z=32,32
+    s.corner_grid=Terrain.new(Sim.W,Sim.H,function(u,v) return u==x and v==z and level or 2 end)
+    s.stock_generated_profile={map_height_limit=30}
+    for dx=-2,2 do for dz=-2,2 do s.tiles[Sim.id(x+dx,z+dz)]={h=2,terrain="hill"} end end
+    return s,W.road_board(s),x,z,Sim.id(x,z)
+  end
+  for _,layer in ipairs({{"tunnel_below","stock_road_tunnels"},{"rail_tunnel_below","stock_rail_spans"}}) do
+    local s,b,x,z,id=terrain(3)
+    local span={base=1,kind="tunnel",owner="Operator"}
+    s[layer[1]],s[layer[2]]={[id]=11},{[11]=span}
+    s.passenger_rating_rng={3956879858,589167907}
+    assert(b.terraform_land(x,z,8,false,true,function() return Sim.stock_random_u32(s) end))
+    local slope,level=Terrain.tile(s.corner_grid,x,z)
+    assert(slope==0 and level==2 and s[layer[1]][id]==11 and s[layer[2]][11]==span and span.base==1)
+    assert(s.passenger_rating_rng[1]==2752835609 and s.passenger_rating_rng[2]==1918748449)
+    local revision=s.corner_grid.revision
+    assert(not b.terraform_land(x,z,8,false,true,function() error("The bore blocks the quote") end))
+    assert(s.corner_grid.revision==revision and Terrain.corner(s.corner_grid,x,z)==2)
+  end
+  print("PASS RC1 municipal roof cover, protected bore, exact execution draws and unchanged route")
 end
