@@ -1481,3 +1481,24 @@ release or evidence for cargo service across the full climate
 economy. The separate gate tests exercise the accepted Food and
 Water month histories; source-matched 3D assets and normal
 campaigns are still required.
+
+### Climate cargo ledger and native Water route reference
+
+The headless climate ledger uses the same station catchment, cargo
+payment and industry accounting as the Temperate road economy.
+Water is accepted by the Water Tower and credited to the town's
+growth statistics, never to household consumption. Food can be
+produced from the original Tropic fruit and maize inputs, then paid
+as a household delivery if the stock house tiles accept it. The
+regression reopens the packed state mid-chain, verifies that Water
+alone is insufficient, then that both deliveries in one month
+unlock growth and that an unsupplied month blocks it again.
+The test hands off cargo packets directly; it does not drive a truck.
+
+In a separate, running OpenTTD 16.0-RC1 reference world (Tropic seed
+49832), a Uhl Water Tanker ran a two-stop route from Water Supply
+(25,91) to Water Tower (26,106). The two drive-through stops
+were at (27,92) and (27,105), with depot at (27,90). The truck
+delivered a full 21 units to Town 33; lack of Food still blocked
+growth. This is a native OpenTTD comparison target, not a claim
+that the route is playable in LuanTTD.

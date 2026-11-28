@@ -253,8 +253,16 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
       end
     end
     table.sort(near,function(a,b) return a.distance<b.distance or a.distance==b.distance and a.id<b.id end)
+    local household=0
+    if cargo=="food" and F.house_acceptance and house_at then
+      for key in pairs(c.tiles) do
+        local house=house_at(key%c.width,floor(key/c.width))
+        if house then household=household+assert(F.house_acceptance(house.id,cargo),"Unknown house acceptance") end
+      end
+    end
+    raw=raw+household
     local n=(cargo=="passenger" or freight(c)) and raw or 0
-    return {raw_eighths=raw,eighths=n,accepts=n>=8,demand=floor(n/8),near=near,always_accepted=false}
+    return {raw_eighths=raw,eighths=n,accepts=n>=8,demand=floor(n/8),near=near,always_accepted=household>0}
   end
 
   -- Delivery accepts against station big-tick cache, then finds each
@@ -269,9 +277,11 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
     local out={units=0,payment=0,remaining=left,industries={},town=st.town,cargo=cargo}
     if not report.accepts or not Packets.accept_at(packet,st) or opts.transfer or opts.no_unload then return out end
     local src=packet.source_type=="industry" and packet.source
-    local n,industries=Delivery.to_industries(st,cargo,left,src,report.near,industry_at,F.input,opts)
+    local accepted,industries=Delivery.to_industries(st,cargo,left,src,report.near,industry_at,F.input,opts)
+    local n,household=Delivery.acceptance_split(left,accepted,report.always_accepted)
     left=left-n
     out.industries=industries
+    if household>0 then out.town_units=household end
     if n>0 then
       local g=F.goods(st,cargo)
       g.ever_accepted,g.current_month,g.accepted_bigtick=true,true,true

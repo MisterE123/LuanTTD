@@ -4,6 +4,14 @@
 local F={}
 F.cargo={key="food",label="FOOD",effect=5,weight_sixteenths=16,
   capacity_multiplier=256,base_payment=5688,transit_period_1=0,transit_period_2=30}
+F.inputs_cargo={
+  fruit={label="FRUT",weight_sixteenths=16,capacity_multiplier=256,base_payment=4209,
+    transit_period_1=0,transit_period_2=15},
+  maize={label="MAIZ",weight_sixteenths=16,capacity_multiplier=256,base_payment=4322,
+    transit_period_1=4,transit_period_2=40},
+  wheat={label="WHEA",weight_sixteenths=16,capacity_multiplier=256,base_payment=4778,
+    transit_period_1=4,transit_period_2=40},
+}
 F.process={id=13,cost_factor=206,map_colour=55,conflicts={19,9,24},minimum_to_distribute=5,
   source_input={livestock_fruit={"livestock","fruit"},grain_wheat_maize={"grain","wheat","maize"}},
   multiplier={{256},{256}},produces="food",layout={
