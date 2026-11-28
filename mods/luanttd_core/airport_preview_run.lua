@@ -5,6 +5,11 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
   local O=dofile(source.."rail_order_list.lua")
   local Rig=dofile(source.."oil_rig.lua")
   local Fault=dofile(source.."road_breakdowns.lua")
+  local Accident=dofile(source.."aircraft_accident.lua")
+  local Landing=dofile(source.."aircraft_landing_risk.lua")
+  local Effects=dofile(source.."industry_chimney_effect.lua")
+  local Trigger=dofile(source.."vehicle_random_trigger.lua")
+  local Depot=dofile(source.."road_depot_service.lua")
   local Rotor=dofile(source.."airport_rotary_motion.lua")(Motion)
   local R={VERSION=1,DWELL_TICKS=74,engine={id=215,visual="bayshore_trimotor",
     passengers=25,mail=4,acceleration=18,max_speed=473}} -- (37 * 128) / 10
@@ -125,6 +130,42 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
   local function asset(s,p)
     return s.stock_owned_air_fleet and s.stock_owned_air_fleet[p.paid_clock] or s.stock_owned_aircraft
   end
+  function R.stock_cargo_random(s,p,part,kind)
+    local unit=asset(s,p)
+    if not (unit and unit.stock_pool_ids) then return end
+    if not unit.stock_random_parts then
+      local parts={}
+      for i,bits in ipairs(unit.stock_random_bits) do parts[i]={stock_vehicle_random_bits=bits} end
+      unit.stock_random_parts=parts
+    end
+    Trigger.chain(unit.stock_random_parts,part,kind,function() return Sim.stock_random_u32(s) end)
+  end
+  local function service(s,p,h,date)
+    local engine=assert(Roster.engine_snapshot(s,p.engine_id,date))
+    Fault.service(h,engine.reliability,date,date,R.stock_breakdown_difficulty)
+  end
+  -- CheckIfAircraftNeedsService interrupts the current order, not the
+  -- vehicle's saved cyclic list. Keep using the target's own hangar.
+  local function auto_service(s,p,h,date,reliability)
+    local v=p.vehicle
+    local company=s.companies[p.owner]
+    local interval=company and company.stock_air_service_interval or 100
+    if interval==0 or v.loading or not v.order or not Depot.needs_servicing(h,{
+        stopped=v.stopped,crashed=v.crashed,interval=interval,percent=company and company.stock_air_service_percent,
+        economy_date=date,engine_reliability=reliability,difficulty=R.stock_breakdown_difficulty}) then return end
+    local order=v.order
+    if order.kind~="station" and not p.stock_air_service_order then return end
+    if v.hidden and v.state==Small.state.HANGAR then service(s,p,h,date);return end
+    local field=s.stock_small_airports[order.id]
+    if field and layout(field).hangar and R.fits(field,p.engine_id) then
+      if order.kind=="station" then
+        p.stock_air_service_order=order
+        v.order={kind="depot",id=order.id}
+      end
+    elseif p.stock_air_service_order then
+      v.order,p.stock_air_service_order=p.stock_air_service_order,nil
+    end
+  end
   function R.stock_fault_days(s)
     local out={}
     local function add(unit,p)
@@ -132,8 +173,9 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       if not h or p and R.paid_art_ready and not R.paid_art_ready(p) then return end
       local v=p and p.vehicle or nil
       out[#out+1]={id=unit.stock_pool_ids[1],calendar=function()
-        Fault.calendar_day(h)
+        if not (p and p.retired) then Fault.calendar_day(h) end
       end,economy=function(date)
+        if p and p.retired then return end
         local engine=assert(Roster.engine_snapshot(s,unit.stock_id,date))
         unit.stock_economy_age=math.min(Fault.MAX_AGE,(unit.stock_economy_age or 0)+1)
         unit.stock_day_counter=((unit.stock_day_counter or 0)+1)%256
@@ -144,7 +186,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
         Fault.economy_day(h,{cur_speed=v and v.speed or 0,stopped=not v or v.stopped,
           loading=v and v.loading,difficulty=R.stock_breakdown_difficulty,
           engine_reliability=engine.reliability},function() return Sim.stock_random_u32(s) end)
-        if p then R.settle_owned_day(s,p) end
+        if p then auto_service(s,p,h,date,engine.reliability);R.settle_owned_day(s,p) end
       end}
     end
     for id,unit in pairs(s.stock_owned_air_fleet or {}) do add(unit,R.current(s,id)) end
@@ -181,7 +223,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
   end
   local function tick(s,ticks,observe,paid,actor)
     local p=actor or R.current(s)
-    if not p or p.phase=="blocked" or (p.paid_clock~=nil)~=(paid~=nil) then return end
+    if not p or p.retired or p.phase=="blocked" or (p.paid_clock~=nil)~=(paid~=nil) then return end
     local airports=s.stock_small_airports
     local v=p.vehicle
     local a=airports[p.target]
@@ -192,16 +234,53 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     local unit=p.paid_clock and asset(s,p)
     local fault=unit and unit.stock_fault
     if fault then
+      local function random() return Sim.stock_random_u32(s) end
+      local function effect(kind,x,y,z)
+        local slots=Sim.stock_vehicle_slots(s,1)
+        if slots then Effects.add_timed(s,slots[1],kind,x,y,z,unit.stock_pool_ids[1]) end
+      end
+      hooks.brake_hazard=function(_,field)
+        local model=R.engine_for(p)
+        if not Landing.sample(layout(field).short_strip,model.small==false,s.stock_no_jet_crash,
+            s.stock_plane_crashes or 2,random) then return true end
+        effect("explosion_large",v.x+4,v.y+8,v.z+4)
+        Accident.begin(v,false)
+        v.airborne=nil
+        if paid.accident then paid.accident(p,field) end
+        return false
+      end
+      hooks.crash_pass=function(field)
+        return Accident.pass(v,field,function(x,z)
+          local tx=math.max(2,math.min(Sim.W,math.floor(x/16)))
+          local tz=math.max(2,math.min(Sim.H,math.floor(z/16)))
+          local mask,base=Terrain.tile(s.corner_grid,tx,tz)
+          return base*8+Slope.pixel(x%16,z%16,mask)
+        end,random,effect)
+      end
       hooks.breakdown=function(pass)
         if pass==1 then fault.tick_counter=(fault.tick_counter+1)%256 end
         local f=Fault.aircraft_handle(fault,{second_pass=pass==2,cur_speed=v.speed,
           loading=v.loading or pass==1 and hooks.leaving,stopped=v.stopped,crashed=v.crashed})
         v.broken=f.broken or nil
+        if f.smoke then Accident.smoke(v,effect) end
       end
       hooks.touchdown=function()
         -- AircraftLandAirplane -> TriggerAirportTileAnimation;
         -- its Random() precedes even the vanilla empty callback.
         Sim.stock_random_u32(s)
+        if paid.date then
+          local date=paid.date()
+          local engine=assert(Roster.engine_snapshot(s,p.engine_id,date))
+          auto_service(s,p,fault,date,engine.reliability)
+        end
+      end
+      hooks.hangar=function(entering)
+        local date=paid.date and paid.date()
+        if date then service(s,p,fault,date) end
+        if entering then
+          R.stock_cargo_random(s,p,1,"depot")
+          if p.stock_air_service_order then v.order,p.stock_air_service_order=p.stock_air_service_order,nil end
+        end
       end
     end
     if v.helicopter then
@@ -245,7 +324,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
         p.transport_skip_loading,p.transport_cancel_full,p.transport_live_load=nil,nil,nil
         p.phase="taxi"
       end
-      if p.transport_orders and not v.loading and not v.stopped then
+      if p.transport_orders and not p.stock_air_service_order and not v.loading and not v.stopped then
         local order=find_order(false)
         if not v.order or v.order.id~=order.id then
           v.order=order
@@ -278,6 +357,13 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
         elseif ev=="hold" then p.phase="holding";p.hold_ticks=(p.hold_ticks or 0)+1
         elseif ev=="approach" then p.phase="approach"
         elseif ev=="touchdown" then p.phase="rollout"
+        elseif ev=="hangar" then p.phase="hangar"
+        elseif ev=="crashed" then p.phase="crashed"
+        elseif ev=="wreck_cleared" then
+          if paid.retire then paid.retire(p) end
+          if s.airport_pilot==p then s.airport_pilot,s.stock_owned_aircraft=nil,nil
+          else s.airport_owned_runs[p.paid_clock],s.stock_owned_air_fleet[p.paid_clock]=nil,nil end
+          p.retired=true
         elseif ev=="terminal" then
           p.arrivals=p.arrivals+1;p.phase="terminal";p.dwell=paid and 0 or R.DWELL_TICKS
           p.last_airfield=a.id
@@ -317,7 +403,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     f.charged_ticks,f.expense=f.ticks,f.expense+whole
   end
   function R.pose(p)
-    if not p or p.vehicle.hidden then return end
+    if not p or p.retired or p.vehicle.hidden then return end
     local v=p.vehicle
     return {x=v.x/8-.5,y=(v.y-1)/8+.5,z=v.z/8-.5},(v.direction-3)*math.pi/4
   end

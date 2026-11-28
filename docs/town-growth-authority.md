@@ -820,7 +820,7 @@ word on their staggered acceptance tick, together with the normal
 physical station order. Six native RC1 idle pulses are checked.
 Cross-mode joins and full pending cargo restoration remain incomplete.
 
-### First stock flight in the live freight region
+### Live aircraft through the end of the freight region’s first year
 
 A paid Coleman Count in the running bus, Wood and Goods economy
 uses the real airfield construction/buy/order commands. It visits the
@@ -833,15 +833,29 @@ emptied cargo queue, and runway touchdown use the original animation
 triggers' random words at their source call sites. Those draws affect
 the town simulation even without NewGRF artwork.
 
-The pinned native 128×128 capture matches 1,569 consecutive whole-world
-RNG pairs and 1,564 complete controller poses through the first
-touchdown, including an in-flight packed reload and the first Mail
-arrival into an airport's outgoing stock queue. The real Luanti worker
-also completes a separately tested 65-passenger and 8-Mail service
-with one credit across process restarts. This does not prove later
-rollout and air cargo chronology against RC1: Brake crash rolls,
-automatic aircraft servicing and the dedicated stock smoke-effect
-vehicle pool still require integration and comparison.
+In the pinned native 128×128 capture, a funded aircraft joins the
+ordinary freight economy partway through 1950. The rest of the year
+matches 15,693 consecutive world RNG pairs, 15,688 aircraft controller
+poses, and seven snapshots of housing tiles, town growth counters,
+population, passenger and Mail production, and Goods acceptance.
+The test checks cargo on board when the cabin empties before the
+Mail hold, and saves and reopens during the run. An earlier road
+freight rating can discard Wood before a later airport acceptance
+trigger; both now use the same physical StationID order.
+
+The paid controller ports high-speed Brake crash sampling,
+the two-pass wreck timer, cargo loss and the eventual release
+of the runway and aircraft slots. Timed smoke/explosion occupants
+use the stock effect-vehicle pool. The default 100-day service
+interrupt selects the target airport's hangar and resumes the original
+orders after servicing, without loading at a terminal on the way there.
+The exact capture exercises servicing, breakdown and a continuing
+route. A forced-accident worker test takes a separate branch to check
+a wreck and cleanup. The real Luanti worker also completes a
+65-passenger and 8-Mail route and credits it once across process
+restarts. These tests do not cover all airport layouts or shared
+cross-mode stations, other climates, terrain around airport
+foundations, or every service/replacement setting.
 
 
 ### Wide, varied terrain and neighbouring town roads

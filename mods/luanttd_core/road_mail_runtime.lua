@@ -111,13 +111,13 @@ return function(Sim,H,Packets,Income,Kernel,Station)
   -- after advancing its shared station timers exactly once. Do not invent
   -- a second timer/RNG stream for mail. Exclusively typed truck stops
   -- cannot have an active passenger goods entry in this road-first slice.
-  function M.step_rating(s,st)
+  function M.step_rating(s,st,dirty)
     if not M.truck_stop(st) then return end
     local g=goods(st)
     local waiting=M.waiting(st)
     local random=function() return Station.random_u32(s) end
     local r=Kernel.step(g,{waiting=waiting,destinations=waiting>0 and 1 or 0,
-      select_goods=s.stock_select_goods~=false,random_u32=random,
+      select_goods=s.stock_select_goods~=false,random_u32=random,waiting_changed=dirty,
       statue=Sim.station_has_town_statue and Sim.station_has_town_statue(s,st)})
     g.rating,g.has_rating,g.time_since_pickup=r.rating,r.has_rating,r.time_since_pickup
     g.last_speed,g.last_age,g.max_waiting_cargo=r.last_speed,r.last_age,r.max_waiting_cargo
@@ -130,6 +130,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
         end
       end
     end
+    return r.waiting_changed
   end
 
   function M.stops(s)

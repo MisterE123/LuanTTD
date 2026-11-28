@@ -162,7 +162,7 @@ return function(Sim,Kernel,Packets)
       statue=Sim.station_has_town_statue and Sim.station_has_town_statue(s,st)})
     g.rating,g.has_rating,g.time_since_pickup=r.rating,r.has_rating,r.time_since_pickup
     g.last_speed,g.last_age,g.max_waiting_cargo=r.last_speed,r.last_age,r.max_waiting_cargo
-    if r.drop<=0 then return end
+    if r.drop<=0 then return r.waiting_changed end
     for station,remaining in pairs(truncate(st.stock.passenger,waiting,r.drop,random)) do
       local source=s.stations[station]
       if source and source.mode=="road" then
@@ -170,6 +170,7 @@ return function(Sim,Kernel,Packets)
         original.max_waiting_cargo=max(original.max_waiting_cargo,remaining)
       end
     end
+    return r.waiting_changed
   end
 
   function R.accident(s,owner,x,y,accepts_mail)
@@ -226,13 +227,15 @@ return function(Sim,Kernel,Packets)
   end
   -- station_cmd.cpp OnTick_Station: a single BaseStation's small tick,
   -- then its staggered big tick. Its caller merges different modes by ID.
-  function R.station_tick(s,st,other_goods,absolute_tick)
+  function R.station_tick(s,st,other_goods,absolute_tick,freight)
     if st.mode~="road" then return end
     local phase,events=Kernel.advance_clock(st.passenger_rating_phase or 0,1)
     st.passenger_rating_phase=phase
     if events>0 then
-      tick(s,st)
-      if other_goods then other_goods(s,st) end
+      local dirty=tick(s,st)
+      if freight and freight.coal then dirty=freight.coal(st,dirty) or dirty end
+      if other_goods then dirty=other_goods(s,st,dirty) or dirty end
+      if freight and freight.remaining then freight.remaining(st,dirty) end
     end
     if (absolute_tick+(st.stock_station_id or st.id-1))%250==0 then big(st) end
   end

@@ -134,3 +134,22 @@ for cargo,units in pairs({passenger=10,mail=3}) do
   assert(bag.units==units and bag.feeder_share>0 and bag.origin_station==1)
 end
 print("PASS stock aircraft distinct cabin/hold, 20/5 slices, RC1 Full Load Any passenger exception, one 20-tick and payment, and safe legacy rebind")
+
+-- CrashAirplane destroys onboard legs and unreserved station stock,
+-- not the loading reservation on a second vehicle or a town delivery.
+local crash,_,field,plane=setup(216)
+fill_body(plane.carrying_parts[1],7)
+fill_body(plane.carrying_parts[2],3)
+plane.units=10
+field.stock.passenger={packet(2,east_tile,11)}
+field.stock.mail={packet(2,east_tile,4)}
+local other=S.vehicle(crash,{id=78,mode="air",engine=216,speed=473,built=1950,owner="Postal",air_mail=true})
+begin(crash,field,other,1,1,{full=true})
+local people,mailbags=other.carrying_parts[1],other.carrying_parts[2]
+local reserved_people,reserved_mail=people.load_state.reserved_units,mailbags.load_state.reserved_units
+assert(S.crash_air(crash,plane.id,field.id)==9)
+assert(plane.units==0 and plane.crashed and plane.stopped and not next(crash.companies))
+assert(people.load_state.reserved_units==reserved_people and mailbags.load_state.reserved_units==reserved_mail)
+assert(#field.stock.passenger==0 and #field.stock.mail==0)
+assert(field.passenger_rating_state.rating==1 and field.mail_rating_state.rating==1)
+print("PASS aircraft accident loses onboard and stored cargo, not another carrier's reservations")

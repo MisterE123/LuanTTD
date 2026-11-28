@@ -380,6 +380,16 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       end
     end
     local aircraft=air_gather(Air,s)
+    if Air and Air.stock_cargo_random then
+      local original={}
+      for _,a in ipairs(aircraft) do original[air_key(a.paid_clock)]=a end
+      if next(original) then
+        ctx.air_random=function(v,part,kind)
+          local a=original[v.id]
+          if a then Air.stock_cargo_random(s,a,part,kind) end
+        end
+      end
+    end
     local air_ready={}
     for _,a in ipairs(aircraft) do
       local id=air_key(a.paid_clock)
@@ -521,8 +531,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
           return ready
         end
       end
-      landscape_ratings=function(tick,road_step)
-        each_station(function(st) road_step(tick,st) end,
+      landscape_ratings=function(tick,road_step,freight)
+        each_station(function(st) road_step(tick,st,freight) end,
           function(st) Service.landscape_rating(service,st,tick,ctx) end,
           function(air) Sim.stock_airport_acceptance_tick(s,air,tick) end)
       end
@@ -546,18 +556,20 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       local held
       for _,a in ipairs(aircraft) do
         local n=air_key(a.paid_clock)
-        local plane=assert(service.vehicles[n])
-        plane.stopped=not air_ready[n] or a.phase=="blocked" or a.stopped or a.vehicle.stopped or nil
-        plane.broken=a.vehicle.broken or nil
-        plane.crashed=a.vehicle.crashed or nil
-        if air_ready[n] and plane.load_state and (a.transport_cancel_full or a.transport_live_load~=nil) then
-          local full,no_load,full_any=CargoOrder.load_flags(a.transport_cancel_full and 0 or a.transport_live_load)
-          Service.update_load_type(plane,full,no_load,full_any)
-          a.transport_cancel_full,a.transport_live_load=nil,nil
-        end
-        if not air_ready[n] and plane.load_state then
-          held=held or {}
-          held[plane.load_state]=plane.load_state.elapsed
+        if not a.retired then
+          local plane=assert(service.vehicles[n])
+          plane.stopped=not air_ready[n] or a.phase=="blocked" or a.stopped or a.vehicle.stopped or nil
+          plane.broken=a.vehicle.broken or nil
+          plane.crashed=a.vehicle.crashed or nil
+          if air_ready[n] and plane.load_state and (a.transport_cancel_full or a.transport_live_load~=nil) then
+            local full,no_load,full_any=CargoOrder.load_flags(a.transport_cancel_full and 0 or a.transport_live_load)
+            Service.update_load_type(plane,full,no_load,full_any)
+            a.transport_cancel_full,a.transport_live_load=nil,nil
+          end
+          if not air_ready[n] and plane.load_state then
+            held=held or {}
+            held[plane.load_state]=plane.load_state.elapsed
+          end
         end
       end
       local ids,events=Service.pre_motion_tick(service,tick,ctx)
@@ -616,7 +628,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       end
       for _,a in ipairs(aircraft) do
         local id=air_key(a.paid_clock)
-        if air_ready[id] then
+        if air_ready[id] and not a.retired then
           Air.advance_paid(s,{
             leave=function(_,force) return leave(id,force) end,
             arrive=function(q,tile)
@@ -624,6 +636,24 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
               local order=q.vehicle.order
               return Service.begin(service,id,air_key(q.last_airfield),q.arrivals,tile,
                 order and order.kind=="station" and order.id==q.last_airfield and CargoOrder.arrival(order,{}) or {},tick,ctx,events)
+            end,
+            date=ctx.stock_date and function() return ctx.stock_date(tick) end,
+            accident=function(q,field)
+              local victims=Service.crash_air(service,id,air_key(field.id))
+              local v=q.vehicle
+              local x=math.max(1,math.min(ctx.width,math.floor(v.x/16)))
+              local z=math.max(1,math.min(ctx.height,math.floor(v.z/16)))
+              Service.accident_rating(service,q.owner,x,z)
+              Sim.rail_accident_ratings(s,q.owner,x,z)
+              local news=s.stock_air_accidents or {};s.stock_air_accidents=news
+              news[#news+1]={tile=Sim.id(x,z),owner=q.owner,victims=victims,tick=tick,airport=field.id}
+              if #news>16 then table.remove(news,1) end
+              if Air.news_accident then Air.news_accident(q.owner,field.id,Sim.id(x,z),victims) end
+            end,
+            retire=function()
+              Service.withdraw_vehicle(service,id,tick,ctx,events)
+              c.air_serials[id],air_ready[id]=nil,nil
+              if c.air_serial==id then c.air_serial=nil end
             end,
           },function(name,q,airport)
             assert(q.paid_clock==a.paid_clock,"Paid air motion event selected another actor")

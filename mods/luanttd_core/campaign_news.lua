@@ -60,6 +60,11 @@ return function(Sim,mod,R,cap)
     return publish("accident","thin","Train flooded",
       ("A train has been flooded. %d casualties."):format(victims),{tile=tile,icon="train"})
   end
+  function W.air_accident(owner,id,tile,victims)
+    return publish("accident","thin","Aircraft crash at airport #"..id,
+      ("An aircraft crashed while landing. %d casualties."):format(victims),
+      {owner=owner,tile=tile,icon="aircraft",ref_mode="air",ref_station=id})
+  end
   function W.road_flood(tile,victims,tram)
     return publish("accident","thin",tram and "Streetcar flooded" or "Road vehicle flooded",
       ("A %s has been flooded. %d casualties."):format(tram and "streetcar" or "road vehicle",victims),

@@ -173,7 +173,7 @@ return function(A)
       if v.previous_pos~=v.pos then
         if order.kind~="depot" then v.loading=true;v.last_station=a.id end
         if v.helicopter and A.num_helipads and A.num_helipads>0 and h.service_at_helipad then h.service_at_helipad(v,a) end
-        event="terminal"
+        event=order.kind=="depot" and "pass_terminal" or "terminal"
       elseif order.kind==nil or order.kind=="nothing" or order.kind=="conditional" then
         event="wait_terminal"
       elseif A.has_block(a,v,v.pos,1) then

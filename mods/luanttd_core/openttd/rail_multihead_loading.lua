@@ -172,7 +172,7 @@ function M.create(Loading,Timing)
     end
     -- The ordered station sweep applies the actual mode delay (including rail overhang).
     l.ticks=1
-    if v.mode=="rail" and not still_unloading and meta.loaded==0 and
+    if (v.mode=="rail" or v.mode=="air") and not still_unloading and meta.loaded==0 and
        (meta.unloaded>0 or meta.retry_unload) and ops.emptied then
       ops.emptied(st,v)
     end

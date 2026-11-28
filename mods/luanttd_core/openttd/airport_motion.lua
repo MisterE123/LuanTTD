@@ -170,12 +170,17 @@ return function(FTA)
     local events={}
     for pass=1,2 do
       if h.breakdown then h.breakdown(pass) end
-      if v.stopped or v.crashed then break end
-      if not v.loading and not (pass==1 and h.leaving) then
+      if v.crashed then
+        if not h.crash_pass then break end
+        if not h.crash_pass(a) then events[#events+1]="wreck_cleared";break end
+      elseif v.stopped then break
+      elseif not v.loading and not (pass==1 and h.leaving) then
         local done,why=M.move(a,v,h)
         if h.position then h.position(pass,a.id) end
-        if done==nil then return a,events,why end
-        if done then
+        if done==nil and why=="aircraft_crashed" and v.crashed then
+          events[#events+1]="crashed"
+        elseif done==nil then return a,events,why
+        elseif done then
           -- Optional trace of actual AirportClearBlock/AirportMove, not a
           -- second admission or ownership rule. Preserve both intra-tick
           -- transitions when one aircraft clears and another claims later.
@@ -184,6 +189,7 @@ return function(FTA)
             before={loop=pass,airport=a.id,flags=a.flags,pos=v.pos,previous=v.previous_pos,state=v.state,
               x=v.x,z=v.z,y=v.y,speed=v.speed,subspeed=v.subspeed}
           end
+          local was_hidden=v.hidden
           local event,next=(h.layout and h.layout(a) or FTA).arrive(a,v,h)
           if not event then return a,events,next end
           if before then
@@ -194,6 +200,14 @@ return function(FTA)
           end
           if event=="touchdown" and not v.helicopter and h.touchdown then h.touchdown() end
           events[#events+1]=event
+          if h.hangar and event=="hangar" then
+            -- VehicleEnteredDepotThisTick holds the aircraft until the
+            -- post-movement auto-replace phase releases it.
+            h.hangar(true)
+            break
+          elseif h.hangar and was_hidden and not v.hidden then
+            h.hangar(false)
+          end
           if event=="departed" then
             if not next then return a,events,"destination_missing" end
             a=next

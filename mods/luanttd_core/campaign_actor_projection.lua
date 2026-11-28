@@ -240,7 +240,8 @@ return function(Sim,R,x,z,w,h,fraction,frame)
         add("air",run.paid_clock or 1,{owner=run.owner,engine=run.engine_id,pos=xyz(p),dir=dir,
           passenger=not v.helicopter and not (engine and engine.passengers==0),
           running=not (v.stopped or v.crashed or v.hidden or run.phase=="blocked"),
-          airborne=not not airborne,sound_crashed=run.vehicle.crashed or nil,
+          airborne=not not airborne,sound_crashed=v.crashed or nil,
+          breakdown_smoke=(v.broken or v.crashed and (v.crashed_counter or 0)<650) and true or nil,
           sound_helicopter=run.vehicle.helicopter or nil,rotor_period=run.vehicle.helicopter and math.floor((run.vehicle.rotor_speed or 0)/16),
           label=engine and engine.name or "Aircraft #"..(run.paid_clock or 1)})
       end

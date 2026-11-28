@@ -392,11 +392,13 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
         local speed=ctx.speed and ctx.speed(v) or v.cached_max_speed
         Catchment.observe_loading(goods(st,v.cargo),v.mode,speed,ctx.year(tick),v.built,capacity_left)
       end,
-      new_cargo=ctx.train_random and function(st,v)
-        if v.mode=="rail" then ctx.train_random(v,v.part or 2,"new_cargo") end
+      new_cargo=(ctx.train_random or ctx.air_random) and function(st,v)
+        if v.mode=="rail" and ctx.train_random then ctx.train_random(v,v.part or 2,"new_cargo")
+        elseif v.mode=="air" and ctx.air_random then ctx.air_random(v,v.part or 1,"new_cargo") end
       end,
-      emptied=ctx.train_random and function(st,v)
-        if v.mode=="rail" then ctx.train_random(v,1,"empty") end
+      emptied=(ctx.train_random or ctx.air_random) and function(st,v)
+        if v.mode=="rail" and ctx.train_random then ctx.train_random(v,1,"empty")
+        elseif v.mode=="air" and ctx.air_random then ctx.air_random(v,1,"empty") end
       end,
       loaded=function(st,v,n)
         Catchment.loaded(st,v.mode,n)
@@ -672,6 +674,23 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
     v.crashed,v.stopped,v.units,v.batches=true,true,0,{}
     for _,part in ipairs(v.carrying_parts or {}) do part.units,part.batches=0,{} end
     return true
+  end
+
+  -- CrashAirplane's station wipe truncates stored packets, not any
+  -- cargo already reserved to another vehicle in the station.
+  function S.crash_air(state,vid,station)
+    local v=assert(state.vehicles[vid])
+    assert(v.mode=="air" and not v.load_state and not v.crashed)
+    local victims=S.crash_rail_headcount(v)+2
+    v.crashed,v.stopped,v.units,v.batches=true,true,0,{}
+    for _,part in ipairs(v.carrying_parts or {}) do part.units,part.batches=0,{} end
+    local st=state.stations[station]
+    if st then
+      goods(st,"passenger").rating=1
+      st.stock.passenger={}
+      if st.mail_enabled then goods(st,"mail").rating=1;st.stock.mail={} end
+    end
+    return victims
   end
 
   function S.post_motion_tick(state,tick,ctx)

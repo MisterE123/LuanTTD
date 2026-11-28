@@ -5635,6 +5635,17 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         end
       end
       industry_footprints()
+      local ordered_freight_ratings={
+        coal=function(st,dirty)
+          if coal and M.road_stop_has(st,"truck") then
+            local r=coal.step_rating(st,dirty)
+            return r and r.waiting_changed
+          end
+        end,
+        remaining=function(st,dirty)
+          if timber then timber.step_rating(st,dirty) end
+        end,
+      }
       local function landscape(x,z,tick,source)
         local work
         if work_state and (work_state.funded>0 or work_state.active>0) then
@@ -5685,7 +5696,13 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       end
       town_passengers.day(s,function(tick,finish_rating)
         if daily_road then daily_road((tick-before_tick)%74,false) end
-        if s.stock_effect_vehicles and machines then machines.effects_tick() end
+        if s.stock_effect_vehicles then
+          if machines then machines.effects_tick()
+          else
+            if not M.stock_effect_steps then M.stock_effect_steps=dofile(module_root.."openttd/industry_chimney_effect.lua") end
+            M.stock_effect_steps.step(s)
+          end
+        end
         local ready,events
         if commercial then ready,events=commercial.before(tick) end
         if freighter then freighter.rating(tick) end
@@ -5708,12 +5725,18 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
           growth.world.tick(s,tick,growth_random,nil,growth_calendar and growth_calendar(tick))
         end
         if plant_trees then plant_trees(tick) end
-        if commercial and commercial.finish_ratings and finish_rating then commercial.finish_ratings(tick,finish_rating)
+        local merged_ratings=commercial and commercial.finish_ratings and finish_rating
+        if merged_ratings then
+          -- OnTick_Station visits all GoodsEntries before advancing to
+          -- the next physical station, including airport acceptance RNG.
+          commercial.finish_ratings(tick,finish_rating,ordered_freight_ratings)
         elseif finish_rating then finish_rating() end
         if coal then
-          for _,view in ipairs(coal.road_stations) do
-            local st=s.stations[view.id]
-            if st.passenger_rating_phase==0 then coal.step_rating(st) end
+          if not merged_ratings then
+            for _,view in ipairs(coal.road_stations) do
+              local st=s.stations[view.id]
+              if st.passenger_rating_phase==0 then coal.step_rating(st) end
+            end
           end
           if freight then freight.post(tick) end
           if not physical_industries then coal.after_vehicle_tick(tick) end
@@ -5721,7 +5744,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if timber then
           for _,view in ipairs(timber.stations) do
             local st=s.stations[view.id]
-            if st and st.passenger_rating_phase==0 then timber.step_rating(st) end
+            if st and st.passenger_rating_phase==0 and not (merged_ratings and st.mode=="road") then timber.step_rating(st) end
           end
           -- The rail industry station ages and rates before shared
           -- production; that producer has exactly one mixed StationID list.

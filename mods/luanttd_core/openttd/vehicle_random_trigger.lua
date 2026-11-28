@@ -20,8 +20,9 @@ function V.single(part,trigger,random)
   if trigger=="new_cargo" then body(part,"any_new_cargo",random) end
 end
 
--- Train chain follows Vehicle::First()/Next(), not the direction in
--- which the consist happens to be moving. This includes no-capacity engines.
+-- Physical chain follows Vehicle::First()/Next(), not the direction in
+-- which a consist happens to be moving. Includes no-capacity rail engines
+-- and aircraft's shadow/rotor.
 function V.chain(parts,at,trigger,random)
   if trigger=="new_cargo" then
     body(assert(parts[at]),trigger,random)

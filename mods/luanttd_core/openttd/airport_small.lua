@@ -2,7 +2,7 @@
 -- OpenTTD contributors. OpenTTD 14.1 table/airport_movement.h,
 -- airport.h/airport.cpp and aircraft_cmd.cpp fixed-wing handlers.
 -- Country Airfield AT_SMALL; movement and permission callbacks are external.
-local A={W=4,H=3,TILE=16,hangar={x=3,z=0,dir=3,id=0},entries={[0]=16,15,18,17}}
+local A={W=4,H=3,TILE=16,short_strip=true,hangar={x=3,z=0,dir=3,id=0},entries={[0]=16,15,18,17}}
 local S={ALL=0,HANGAR=1,TERM1=2,TERM2=3,TAKEOFF=10,STARTTAKEOFF=11,ENDTAKEOFF=12,
   HELITAKEOFF=13,FLYING=14,LANDING=15,ENDLANDING=16,HELILANDING=17,HELIENDLANDING=18,TERMGROUP=255}
 local B={TERM1=1,TERM2=2,BUSY=256,NOTHING=2^30}

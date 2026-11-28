@@ -241,7 +241,9 @@ return function(Timing,Packets)
       end
       if unloaded>0 then
         if ops.unloaded then ops.unloaded(st,v,unloaded) end
-        if v.mode~="rail" and v.units==0 and ops.emptied then ops.emptied(st,v) end
+        -- Linked aircraft holds use the controller's one Empty trigger
+        -- after the whole chain has finished unloading, not per body.
+        if v.mode~="rail" and not v.part and v.units==0 and ops.emptied then ops.emptied(st,v) end
       end
       l.unloading=l.gradual and l.unload_units>0
     elseif not l.no_load and not l.stop_loading then
