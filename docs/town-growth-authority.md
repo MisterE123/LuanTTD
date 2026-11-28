@@ -1864,3 +1864,26 @@ two packed reopens in the Luanti worker. The 21 units roll into
 the old-month water record; without food, this desert town
 remains growth-blocked. This verifies the single water route,
 not the complete multi-vehicle food-and-water network.
+
+### Complete Food and Water service on the generated Tropic map
+
+Four owned trucks run on the same wooded Smooth Tropic world:
+Fruit and Maize feed the Food Processing Plant, Food goes to the
+desert town, and Water goes from the Water Supply to the town's
+Water Tower. The routes use the stock non-stop order flag and
+normal construction, purchasing, station, and payment code.
+The native OpenTTD 16.0-RC1 comparison sees 100 Fruit, 100 Maize,
+60 Food, and 175 Water delivered by year end. The town first
+starts growing on tick 16,968, after 20 Food and 25 Water roll
+into its old-month receipts. Its population reaches 440 from 426.
+
+The Luanti worker replay compares 27,010 ticks of RNG and landscape
+cursor, 361 daily samples of deliveries, meals and water credits,
+growth and cash, and seven physical world snapshots. It includes
+three packed reopens. At a bend near the destination, the port
+previously reserved a whole synthetic junction that stock road
+vehicles did not reserve. Stock vehicles on the generated climate
+profile now keep source-style proximity and stop-bay clearance
+without that extra junction guard. This verifies this full supply
+chain and the positive growth gate, not every climate, road
+network, or station layout.

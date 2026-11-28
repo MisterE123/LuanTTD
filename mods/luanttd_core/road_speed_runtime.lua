@@ -368,13 +368,20 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         v.road_bay_guard_waits=(v.road_bay_guard_waits or 0)+1
         return false
       end
-      local clear
-      clear,actual_z=Junction.check(s,W,record,old,b,nil,W.height)
-      if not clear then
-        state.waiting,state.speed="junction",0
-        v.status="Waiting for junction clearance"
-        v.road_junction_waits=(v.road_junction_waits or 0)+1
-        return false
+      -- RC1 uses RoadVehFindCloseTo at the next pixel; it does not
+      -- reserve an entire street intersection. Keep the extra 3D guard
+      -- out of the source-native climate clock, but retain actual bay
+      -- occupancy and the stock same-heading proximity checks below.
+      local native_climate=s.stock_generated_profile and s.stock_climate and (v.stock_bus or v.stock_road_freight)
+      if not native_climate then
+        local clear
+        clear,actual_z=Junction.check(s,W,record,old,b,nil,W.height)
+        if not clear then
+          state.waiting,state.speed="junction",0
+          v.status="Waiting for junction clearance"
+          v.road_junction_waits=(v.road_junction_waits or 0)+1
+          return false
+        end
       end
     end
     if Pass and (state.lane_pose or b~=nominal or W.exposed()) then

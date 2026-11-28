@@ -37,6 +37,7 @@ local smooth_open=dofile(fp.."rc1-native-climate-industry-smooth-opening.lua")
 local smooth_close=dofile(fp.."rc1-native-climate-industry-smooth-closure.lua")
 local smooth_bus=dofile(fp.."rc1-native-climate-industry-smooth-bus.lua")
 local smooth_water=dofile(fp.."rc1-native-climate-industry-smooth-water.lua")
+local smooth_chain=dofile(fp.."rc1-native-climate-industry-smooth-food-chain.lua")
 local function fold(h,...)
   for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
   return h
@@ -45,11 +46,13 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
   economy=economy or "frozen"
   s.stock_extra_tree_placement=settings
   local industry_clock
-  local water=fixture.water~=nil
-  local transport=fixture.bus or fixture.water
+  local chain=fixture.chain
+  local water=fixture.water~=nil or chain~=nil
+  local transport=fixture.bus or fixture.water or chain
   local owner="Tropic buses"
   local bus,near,far
   local motion,frames,visits=1,0,0
+  local fleet,gate,last_gate,gate_count,first_growth={},1,nil,0,nil
   local function mount()
     S.mount_road_bus_market(s,Calendar,1985,false,false)
     S.mount_stock_town_growth(s,Live,true)
@@ -132,28 +135,63 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
         assert(quote,why)
         assert(S.apply_road_construction(s,owner,quote))
       end
-      if water then
-        for _,leg in ipairs({{55,30,55,52,1,6380},{55,52,66,52,0,2730},{66,52,66,62,1,1515}}) do
+      local function roads(legs)
+        for _,leg in ipairs(legs) do
           local q,why=S.autoroad_plan(s,owner,cell(leg[1],leg[2]),cell(leg[3],leg[4]),leg[5],false,true)
           assert(q and not q.stopped_at,why or q and q.stop_reason)
           eq("stock road drag cost",{q.cost},{leg[6]})
           apply(q)
         end
       end
+      if water then roads({{55,30,55,52,1,6380},{55,52,66,52,0,2730},{66,52,66,62,1,1515}}) end
       local depot=water and cell(55,29) or cell(49,37)
       local direction=water and 1 or 0
       apply(S.stock_road_terminal_plan(s,owner,depot,{kind="depot",dir=direction}))
-      local function stop(x,z)
+      local function stop(x,z,axis)
         local id=cell(x,z)
         apply(S.stock_road_stop_area_plan(s,owner,id,id,{kind=water and "truck" or "bus",
-          dir=direction,through=true,adjacent=true}))
+          dir=axis or direction,through=true,adjacent=true}))
         return assert(s.tiles[id].station)
       end
       if water then near,far=stop(55,32),stop(66,61) else near,far=stop(47,37),stop(43,37) end
-      bus=assert(S.purchase(s,owner,water and "water_uhl" or "leopard_bus",water and "water" or "passenger",nil,depot))
-      assert(S.add_order(s,owner,bus,water and near or far) and S.add_order(s,owner,bus,water and far or near))
-      assert(S.toggle(s,owner,bus))
-      eq("after depot, stops, purchased vehicle and orders",s.passenger_rating_rng,transport.rng)
+      local function buy(key,cargo,garage,first,last,words)
+        local v=assert(S.purchase(s,owner,key,cargo,nil,garage))
+        assert(S.add_order(s,owner,v,first) and S.add_order(s,owner,v,last))
+        -- This native company explicitly sets OrderNonStopFlag::NonStop.
+        if chain then for _,o_ in ipairs(s.fleet[v].orders) do o_.non_stop=1 end end
+        assert(S.toggle(s,owner,v))
+        eq("after purchasing and ordering "..key,s.passenger_rating_rng,words)
+        return v
+      end
+      local bus_model=chain and "water_balogh" or water and "water_uhl" or "leopard_bus"
+      bus=buy(bus_model,water and "water" or "passenger",depot,water and near or far,water and far or near,
+        chain and chain.rng[1] or transport.rng)
+      if chain then
+        fleet.water=bus
+        roads({{120,32,120,67,1,8830},{71,67,120,67,0,11630},{71,64,71,67,1,325}})
+        local garage=cell(120,31)
+        apply(S.stock_road_terminal_plan(s,owner,garage,{kind="depot",dir=1}))
+        local crop,mill,city=stop(120,33,1),stop(76,67,0),stop(70,64,0)
+        fleet.fruit=buy("fruit_uhl","fruit",garage,crop,mill,chain.rng[2])
+        fleet.maize=buy("maize_thomas","maize",garage,crop,mill,chain.rng[3])
+        fleet.food=buy("food_perry","food",garage,mill,city,chain.rng[4])
+      end
+    elseif bus and chain then
+      if tick%74==22 then
+        local function paid(cargo)
+          local v=assert(s.fleet[fleet[cargo]])
+          return v.delivered+(v.load_state and v.load_state.payment and v.load_state.payment.delivered or 0)
+        end
+        local town=s.stock_town_growth.towns[9]
+        local food,water_=town.received[5] or {},town.received[4] or {}
+        last_gate={paid("fruit"),paid("maize"),paid("food"),paid("water"),
+          food.new_act or 0,food.old_act or 0,water_.new_act or 0,water_.old_act or 0,
+          town.growing and 1 or 0,town.population,s.companies[owner].cash}
+        if town.growing and not first_growth then first_growth=tick end
+        gate=fold(gate,tick,unpack(last_gate))
+        gate_count=gate_count+1
+        if chain.service[tick] then eq("native four-route receipts and growth at "..tick,last_gate,chain.service[tick]) end
+      end
     elseif bus then
       local v=assert(s.fleet[bus])
       local frame=S.road_motion_frame(s,v)
@@ -268,11 +306,17 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
     end
     S.daily(s,nil,check)
   end
-  assert(ticks==days*74 and maps==(days==120 and 5 or 8) and reopen==(days==120 and 2 or 3))
+  assert(ticks==days*74 and maps==(chain and 7 or days==120 and 5 or 8) and reopen==(days==120 and 2 or 3))
   eq(climate.." full live RNG and landscape cursor",{digest},{fixture.trace})
   if fixture.openings then assert(opens==#fixture.openings) end
   if fixture.closures then assert(closes==#fixture.closures) end
-  if transport then
+  if chain then
+    eq("Native town gate throughout the stock four-route year",{gate_count,gate,first_growth},
+      {chain.count,chain.trace,chain.first})
+    eq("Final native four-route delivery and growth state",last_gate,chain.final)
+    print(("PASS generated RC1 Tropic complete food + water chain: %d native days, growth tick %d, population %d")
+      :format(gate_count,first_growth,last_gate[10]))
+  elseif transport then
     eq("Stock motion and loading on the generated map",{frames,motion,visits},
       {transport.frames,transport.motion,10})
     print(("PASS generated RC1 Tropic %s: %d service frames and %d payment/catchment checks")
@@ -431,6 +475,7 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
         live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_close,"smooth")
         live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_bus,"smooth")
         live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_water,"smooth")
+        live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_chain,"smooth")
       end
     end
 
