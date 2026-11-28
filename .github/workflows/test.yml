@@ -369,6 +369,7 @@ jobs:
           python3 tests/town_growth_scheduler_rc1.py "$src" lua5.1
           python3 tests/town_climate_landscape_rc1.py "$src" lua5.1
           python3 tests/terragenesis_climate_rc1.py "$src" lua5.1
+          lua5.1 tests/town_climate_raster_source_rc1.lua
           python3 tests/town_retired_station_rc1.py "$src" lua5.1
           lua5.1 tests/town_growth_extra_house.lua
           python3 tests/town_reseed_rc1.py "$src" lua5.1

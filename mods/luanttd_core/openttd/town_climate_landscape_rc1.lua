@@ -158,14 +158,17 @@ end
 
 -- Called once for a new river tile, in the source command's order.
 -- Do not remove rainforest or roll a random number per affected tile.
-function C.river_tile(board,tile,random,make_river,dirty)
-  make_river(tile,random())
-  dirty(tile)
+function C.clear_river_zone(board,tile)
   local w,d=board.width,board.depth
   for n in Spiral.centered(w,d,tile,5) do
     local x,z=n%w,floor(n/w)
     if board.zone(x,z)==C.DESERT then board.set_zone(x,z,C.NORMAL) end
   end
+end
+function C.river_tile(board,tile,random,make_river,dirty)
+  make_river(tile,random())
+  dirty(tile)
+  C.clear_river_zone(board,tile)
 end
 
 -- This callback is evaluated on demand by the growth scheduler. A

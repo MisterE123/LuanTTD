@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- OpenTTD contributors, 16.0-RC1 landscape.cpp: FindSpring,
 -- IsValidRiverTerminusTile, MakeLake, MakeWetlands, TryMakeRiverTerminus,
--- CountConnectedSeaTiles, FlowRiver and CreateRivers. Temperate only.
+-- CountConnectedSeaTiles, FlowRiver and CreateRivers.
 return function(valid,offset,distance,water,flows_down,circular,range)
   local R={}
   local floor,min,max=math.floor,math.min,math.max
@@ -11,7 +11,7 @@ return function(valid,offset,distance,water,flows_down,circular,range)
   function R.find_spring(B,i,terrain_type)
     if not valid(B,i) then return false end
     local t=B.tile(i)
-    if t.slope~=0 or water(B,i) then return false end
+    if t.slope~=0 or water(B,i) or B.tropic_zone and B.tropic_zone(i)~=2 then return false end
     local low=(terrain_type or 1)<2
     local hills,limit,required=0,low and 3 or 1,low and 1 or 3
     for d=1,4 do
@@ -116,7 +116,7 @@ return function(valid,offset,distance,water,flows_down,circular,range)
   local function terminus_tile(B,i,h)
     if not valid(B,i) then return false end
     local t=B.tile(i)
-    return t.slope==0 and t.corner_height==h
+    return t.slope==0 and t.corner_height==h and (not B.tropic_zone or B.tropic_zone(i)~=1)
   end
 
   function R.lake(B,i,h,random,make)

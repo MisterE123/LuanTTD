@@ -1364,3 +1364,22 @@ predicate reads from 36.2 million to 524,288 and the measured
 classification time from 23.2 seconds to 0.92 seconds. These are local
 CPU times for the isolated two-pass classifier, not whole-world
 generation or in-game frame times.
+
+### Native OpenTTD climate terrain baselines
+
+Six real OpenTTD 16.0-RC1 new worlds now provide pre- and post-climate
+reference maps. The packed climate raster matches both observations:
+122,880 complete tile comparisons plus the snowline, landscape
+cursor and shared RNG. The Tropic startup phase carries the actual
+RC1 LFSR cursor through the 256 calls at calendar counter zero; it
+does not assume every physical tile gets exactly one visit.
+
+Four additional real Tropic maps run through river generation with
+the stock tree placer set to None. Their 114,688 complete tile
+comparisons include 1,977 river tiles and 2,779 desert-zone removals.
+River springs require rainforest, terminus sites reject desert, and
+river writes remove desert within the stock five-tile footprint. Soil
+and the live town-center projection follow the updated zone. River
+random bytes, shared RNG and the post-river LFSR cursor also match.
+The stock Temperate river tests still pass. Other climates are not
+playable campaigns, and the Tropic wetland tree rules are not mounted.

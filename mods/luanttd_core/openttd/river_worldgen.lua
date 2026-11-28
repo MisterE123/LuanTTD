@@ -4,7 +4,7 @@
 -- map.cpp CircularTileSearch; pathfinder/npf/aystar.cpp and queue.cpp;
 -- water_cmd.cpp terrain flood/reflood, void_cmd.cpp, landscape.cpp RunTileLoop.
 -- Ordinary generation injects the 16.0-RC1 spring, terminus and YAPF ports.
--- Detached temperate driver. No hard-coded rivers or substituted paths.
+-- No hard-coded rivers or substituted paths.
 return function(Slope,RC1,Yapf,TreeLife)
   local R={AYSTAR_LIMIT=10000}
   local floor,ceil,min,max,abs=math.floor,math.ceil,math.min,math.max,math.abs
@@ -599,6 +599,29 @@ return function(Slope,RC1,Yapf,TreeLife)
     local water_words,river_extra,corners,trees={},{},{},{}
     local B={width=base.width,height=base.depth,freeform=base.freeform==true,rc1=opts.rc1==true}
     assert(not B.rc1 or rc1 and Yapf and TreeLife,"Missing pinned RC1 river source rules")
+    local tropical=base.landscape=="tropic"
+    local Climate=opts.climate_rules
+    local zones,densities
+    local function source_word(i)
+      local x,z=xy(B,i)
+      return water_words[i] or base.tile(x+1,z+1)
+    end
+    local climate_board
+    if tropical then
+      assert(B.rc1 and Climate and base.tropic_zone,"Pass the prepared RC1 Tropic raster and climate rules")
+      assert(opts.tree_placer==0,"Tropic wetland tree rules are not mounted")
+      zones,densities={},{}
+      function B.tropic_zone(i)
+        local override=zones[i]
+        if override~=nil then return override end
+        local x,z=xy(B,i)
+        return base.tropic_zone(x+1,z+1)
+      end
+      climate_board={width=B.width,depth=B.height,
+        zone=function(x,z) return B.tropic_zone(id(B,x,z)) end,
+        set_zone=function(x,z,v) zones[id(B,x,z)]=v end,
+      }
+    end
     local function corner(x,z)
       local i=id(B,x,z)
       return corners[i] or base.corner(x+1,z+1)
@@ -620,6 +643,7 @@ return function(Slope,RC1,Yapf,TreeLife)
       water_words[uint(i,0,size(B)-1)]=v
       if v~=54 then river_extra[i]=nil end
       if v~=4 then trees[i]=nil end
+      if densities then densities[i]=v%16==0 and 3 or nil end
     end
     local setter={
       word=set_word,
@@ -629,6 +653,10 @@ return function(Slope,RC1,Yapf,TreeLife)
       -- Native TerraGenesis adapter word: kind 6, subtype 3 reserved
       -- for river (sea/coast remain 1/2). Keep gameplay random byte separate.
       water_words[i],river_extra[i],trees[i]=54,bits,nil
+      if climate_board then
+        densities[i]=nil
+        Climate.clear_river_zone(climate_board,i)
+      end
     end
     function B.roughen(i) set_word(i,256) end
     function B.place_tree(i,r)
@@ -644,7 +672,7 @@ return function(Slope,RC1,Yapf,TreeLife)
         B.terraform(j,15-B.tile(j).slope%16,true)
       end
     end
-    local cursor=1
+    local cursor=base.climate_tileloop_cursor or 1
     local function random() return next_random(rng) end
     local function tree_neighbor(d,_,x,z)
       local i=flood_off(B,id(B,x,z),d)
@@ -654,9 +682,29 @@ return function(Slope,RC1,Yapf,TreeLife)
       return {class=word%16,ground=floor(word/256)%16,density=3,coast=floor(word/16)%16==2,
         rocky=floor(word/4096)%2==1,slope=B.tile(i).slope}
     end
+    local function dry_density(i)
+      if densities[i]~=nil then return densities[i] end
+      local x,z=xy(B,i)
+      return base.clear_density(x+1,z+1) or 3
+    end
+    local desert_ground={[0]="grass","rough","rocks","fields",[5]="desert"}
+    local ground_code={grass=0,rough=1,rocks=2,fields=3,desert=5}
     local next_loop=R.loop_scheduler(B,function(i)
       local tree=trees[i]
-      if not tree then R.loop_water(B,set_word,i);return end
+      if not tree then
+        local w=tropical and source_word(i)
+        if w and w%16==0 then
+          local g,den=Climate.clear_desert(desert_ground[floor(w/256)%16],dry_density(i),B.tropic_zone(i),function()
+            return Climate.normal_neighbor(B.width,i,function(j) return j>=0 and j<size(B) and source_word(j)%16~=7 end,
+              function(j) return B.tropic_zone(j)==Climate.DESERT end,
+              function(j) local n=source_word(j);return n%16==6 and floor(n/16)%16~=3 end)
+          end)
+          if g then set_word(i,ground_code[g]*256);densities[i]=den end
+        else
+          R.loop_water(B,set_word,i)
+        end
+        return
+      end
       local x,z=xy(B,i)
       -- CreateRivers calls RunTileLoop directly: source TimerGameTick is 0
       -- for all 256 passes. Only existing wetland trees can grow or spread.
@@ -670,7 +718,7 @@ return function(Slope,RC1,Yapf,TreeLife)
         local j=flood_off(B,i,event.direction)
         set_word(j,4);trees[j]=event.tree
       end
-    end)
+    end,{cursor=cursor})
     function B.reflood()
       if hooks and hooks.reflood then return hooks.reflood(B,setter,rng) end
       R.reflood(B,set_word)
@@ -721,6 +769,20 @@ return function(Slope,RC1,Yapf,TreeLife)
     function output.river_bits(x,z)
       if x<1 or z<1 or x>B.width or z>B.height then return end
       return river_extra[id(B,x-1,z-1)]
+    end
+    if tropical then
+      function output.tropic_zone(x,z)
+        if x<1 or z<1 or x>B.width or z>B.height then return end
+        return B.tropic_zone(id(B,x-1,z-1))
+      end
+      function output.clear_density(x,z)
+        local w=output.tile(x,z)
+        if w and w%16==0 then return dry_density(id(B,x-1,z-1)) end
+      end
+      function output.town_climate(x,z)
+        local zone=output.tropic_zone(x,z)
+        if zone~=nil then return {tile_height=output.corner(x,z),is_desert=zone==Climate.DESERT} end
+      end
     end
     function output.storage_options()
       return {seed=base.seed,base_id=output.base_id,corner=function(_,x,z)return output.corner(x,z) end,
