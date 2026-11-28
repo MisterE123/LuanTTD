@@ -53,11 +53,12 @@ return function(Sim,H,Packets,Rating,Mail)
       end
       nearby=r.nearby
     end
-    local function house(x,z,id,t)
+    local growth_calendar=hooks and hooks.growth_calendar
+    local function house(x,z,id,t,tick)
       if id==nil then id=Sim.id(x+1,z+1);t=id and s.tiles[id] end
       if not t or not t.house then return end
       if not t.source_house then M.stamp(s,t,id) end
-      if growth and growth.advance_house(s,id,t.source_house) then return end
+      if growth and growth.advance_house(s,id,t.source_house,tick,growth_calendar and growth_calendar(tick)) then return end
       return t.source_house
     end
     local function emit(cargo,amount,x,z,record,tick)
@@ -120,7 +121,7 @@ return function(Sim,H,Packets,Rating,Mail)
     local settings={}
     if s.stock_generated_profile and growth and growth.rebuild then
       settings.rebuild=function(house,id,word,tick,rng)
-        growth.rebuild(s,house,id,word,tick,rng)
+        growth.rebuild(s,house,id,word,tick,rng,growth_calendar and growth_calendar(tick))
       end
     end
     local animate

@@ -12,8 +12,8 @@ local profiles={
     towns=2,layout="random",growth_rate=4},
 }
 local profile_id=arg[1] or "grid"
-local cfg=assert(profiles[profile_id])
-local ref=dofile("tests/fixtures/"..cfg.fixture..".lua")
+local cfg=assert(profiles[profile_id=="hills-long" and "hills" or profile_id])
+local ref=dofile("tests/fixtures/"..(profile_id=="hills-long" and "rc1-hills-town-three-years" or cfg.fixture)..".lua")
 cfg.relief,cfg.sea,cfg.coast,cfg.rivers=cfg.relief or 1,0,cfg.coast or 16,cfg.rivers or 2
 cfg.trees,cfg.larger_towns,cfg.industries,cfg.variety,cfg.smooth=2,cfg.larger_towns or 3,4,0,1
 local mod="mods/luanttd_core"
@@ -90,7 +90,13 @@ local function observe(tick)
   local expected=ref.snapshots[tick]
   if not expected then return end
   local heights,types,houses,roads,spans=1,1,1,1,1
-  local year=Sim.date(s)
+  local last=ref.year_end_house
+  local year=ref.snapshot_years and ref.snapshot_years[tick] or Sim.date(s)
+  if last and tick==last.tick then
+    local house=assert(s.tiles[last.tile+1].source_house)
+    assert(house.id==last.id and house.random_bits==last.random_bits and house.built_tick==last.tick,
+      "RC1 HouseID 25 must still be eligible on December 31, 1952")
+  end
   for id,t in ipairs(s.tiles) do
     local x,z=Sim.xy(id)
     local bridge,tunnel=t.road_bridge_id,t.road_tunnel_id
@@ -121,13 +127,15 @@ local function observe(tick)
   end
   maps=maps+1
 end
-for day=1,365 do
-  if day==32 or day==138 or day==267 then
+local reopens=0
+for day=1,ref.days or 365 do
+  if day==32 or day==138 or day==267 or ref.restart_day and day==ref.restart_day+1 then
+    reopens=reopens+1
     s=assert(Codec.decode(Codec.encode(s)))
     runtime=mount(Sim,mod,s,cap)
   end
   runtime.day(observe)
 end
-assert(ticks==27010 and maps==(ref.midyear and 20 or 14) and digest==ref.rng)
-print(("PASS RC1 %s region: %d industry placements, %d towns, original span portals, %d map snapshots, 27,010 RNG ticks, three packed reopens")
-  :format(profile_id,#ref.industries,#s.stock_town_growth.towns,maps))
+assert(ticks==(ref.days or 365)*74 and maps==(ref.midyear and 20 or ref.days and 18 or 14) and digest==ref.rng)
+print(("PASS RC1 %s region: %d industry placements, %d towns, original span portals, %d map snapshots, %d RNG ticks, %d packed reopens")
+  :format(profile_id,#ref.industries,#s.stock_town_growth.towns,maps,ticks,reopens))

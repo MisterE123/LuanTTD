@@ -501,7 +501,7 @@ jobs:
   rc1-wooded-hill-town-parity:
     runs-on: ubuntu-24.04
     container: debian:13
-    timeout-minutes: 6
+    timeout-minutes: 10
     steps:
       - name: Install Lua and Luanti server
         run: |
@@ -515,6 +515,10 @@ jobs:
         run: lua5.1 tests/town_growth_rc1_fast_grid.lua hills
       - name: Restart the same hills profile in native Luanti
         run: bash tests/town_growth_rc1_goods_native.sh hills
+      - name: Compare three years across stock house retirement dates
+        run: |
+          lua5.1 tests/town_growth_rc1_fast_grid.lua hills-long
+          bash tests/town_growth_rc1_goods_native.sh hills-long
       - name: Verify live world-growth setting changes
         run: |
           lua5.1 tests/campaign_worker_finance_ui.lua

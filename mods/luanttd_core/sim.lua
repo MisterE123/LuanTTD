@@ -5607,6 +5607,16 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       end
       local before_tick=clock.counter
       local month_at=month_tick and before_tick+rating_runtime.day_ticks-1
+      local growth_calendar
+      if growth and s.stock_generated_profile and s.stock_bus_market then
+        local year,month,day=M.date(s)
+        if month==1 and day==1 then
+          -- The campaign has already incremented s.day, but the RC1
+          -- calendar advances before RunTileLoop only on phase zero.
+          local midnight=before_tick+rating_runtime.day_ticks
+          growth_calendar=function(tick) return tick<midnight and year-1 or year end
+        end
+      end
       town_passengers.day(s,function(tick,finish_rating)
         if daily_road then daily_road((tick-before_tick)%74,false) end
         if s.stock_effect_vehicles and machines then machines.effects_tick() end
@@ -5628,7 +5638,9 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         end
         if freighter then freighter.after(tick,ship_ready) end
         if tanker then tanker.after(tick,tanker_ready) end
-        if growth and growth.new then growth.world.tick(s,tick,growth_random) end
+        if growth and growth.new then
+          growth.world.tick(s,tick,growth_random,nil,growth_calendar and growth_calendar(tick))
+        end
         if plant_trees then plant_trees(tick) end
         if commercial and commercial.finish_ratings and finish_rating then commercial.finish_ratings(tick,finish_rating)
         elseif finish_rating then finish_rating() end
@@ -5664,7 +5676,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         end
       end,{passenger=commercial and commercial.hooks.passenger,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
-        growth=growth and growth.world,traverse=traverse,tick_pulse=tick_pulse,
+        growth=growth and growth.world,growth_calendar=growth_calendar,traverse=traverse,tick_pulse=tick_pulse,
         commercial_ratings=commercial and commercial.finish_ratings,
         animate_industry=machines and function(id,tick) return machines.frame(id,tick) end,
         before_landscape=(month_tick or daily_road or machines or timber and timber.animate) and function(tick)

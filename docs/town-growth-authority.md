@@ -715,3 +715,24 @@ The single- and two-bus replays and the full-year bus/rail comparison
 remain exact. It does not port every level-crossing arbitration rule:
 the existing contiguous crossing-group clearance and the separate
 freight, tram, water and aviation combinations still need source work.
+
+
+### Three years through stock house retirement
+
+The 256×256 Temperate seed 1 mountainous reference now runs for 1,096
+calendar days, including leap year 1952. All 81,104 observed RNG word
+pairs and 18 map/town checkpoints are compared, with four packed
+reopens. On December 31, 1952, at tick 82,360, TownID 44 selects the
+still-eligible HouseID 25 at tile 31,072 with appearance byte 167. That
+house expires for new construction in 1953, not during the preceding
+day's last 73 ticks. The same source tick drives house placement,
+replacement eligibility and the age epoch of completed construction.
+The new year is visible to tile work only from the source midnight
+tick, as in `StateGameLoop` and `TimerGameCalendar`.
+
+The [native worker check](../tests/town_growth_rc1_goods_native.sh)
+runs this profile through day 1,095, closes a real SQLite world,
+reopens it, and verifies the restored final house, tile cursor, RNG
+and all 47 town clocks against RC1. This is a stock growth baseline
+for one full map; it does not cover all layouts, climate prerequisites
+or active transport permutations.

@@ -10,6 +10,8 @@ local width=ref.midyear and 128 or 256
 local depth=ref.hills and 256 or 128
 local industry_count=#ref.industries
 local town_count=#ref.snapshots[1281]-1
+local restart_day=ref.restart_day or 128
+local final_day,final_tick=ref.days or 365,ref.final_tick or 28290
 for _,kind in ipairs({"stone","water_source","river_water_source"}) do core.register_alias("mapgen_"..kind,"air") end
 local initial=Checkpoint.read()
 if not initial then
@@ -47,24 +49,24 @@ local function run()
       advance(42)
       rate(0)
       advance(86)
-    else advance(128) end
+    else advance(restart_day) end
     ask("checkpoint")
     local s=assert(Checkpoint.read())
-    assert(s.day==128 and #s.stock_generated_profile.industries==industry_count)
+    assert(s.day==restart_day and #s.stock_generated_profile.industries==industry_count)
     if ref.midyear then assert(s.stock_generated_profile.town_settings.growth_setting==0) end
-    proof=("ORDINARY_GOODS_SAVED: %dx%d region at day 128, %d industries"):format(width,depth,industry_count)
+    proof=("ORDINARY_GOODS_SAVED: %dx%d region at day %d, %d industries"):format(width,depth,restart_day,industry_count)
   else
-    assert(initial.day==128)
+    assert(initial.day==restart_day)
     if ref.midyear then
       assert(initial.stock_generated_profile.town_settings.growth_setting==0)
       advance(3)
       rate(4)
       advance(234)
-    else advance(237) end
+    else advance(final_day-restart_day) end
     ask("checkpoint")
     local s=assert(Checkpoint.read())
-    local final=ref.snapshots[28290]
-    assert(s.day==365 and s.passenger_house_clock.counter==28290 and s.passenger_house_clock.head==final[1][1])
+    local final=ref.snapshots[final_tick]
+    assert(s.day==final_day and s.passenger_house_clock.counter==final_tick and s.passenger_house_clock.head==final[1][1])
     assert(s.passenger_rating_rng[1]==final[1][2] and s.passenger_rating_rng[2]==final[1][3])
     for i,t in ipairs(s.stock_town_growth.towns) do
       local row=final[i+1]
@@ -72,6 +74,11 @@ local function run()
     end
     assert(#s.stock_town_growth.towns==town_count)
     if ref.midyear then assert(s.stock_generated_profile.town_settings.growth_setting==4) end
+    local last=ref.year_end_house
+    if last then
+      local house=assert(s.tiles[last.tile+1].source_house)
+      assert(house.id==last.id and house.random_bits==last.random_bits and house.built_tick==last.tick)
+    end
     proof=("ORDINARY_GOODS_PASS: all %d town clocks and exact RC1 final RNG after SQLite restart"):format(town_count)
   end
   return {kind="stop"}

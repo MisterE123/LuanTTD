@@ -235,7 +235,7 @@ return function(Sim,Terrain,G,B,H)
       grade_changed=function() s.topology=(s.topology or 0)+1 end,
     })
   end
-  function W.advance_house(s,id,h,tick)
+  function W.advance_house(s,id,h,tick,year)
     if not h or not h.town_growth or h.completed then return false end
     local t=s.stock_town_growth.towns[h.town]
     local stage=h.stage
@@ -250,8 +250,8 @@ return function(Sim,Terrain,G,B,H)
       t.population=t.population+population
       s.sites[h.town].population=t.population
       p.completed_tick=tick or s.passenger_house_clock.counter+1
-      local year=Sim.date(s)
-      for _,part in ipairs(records) do part.age_epoch=year end
+      local age_epoch=year or Sim.date(s)
+      for _,part in ipairs(records) do part.age_epoch=age_epoch end
     end)
     if stage~=h.stage then
       if members then for _,part in ipairs(members) do visual_changed(s,part.id) end
@@ -333,7 +333,7 @@ return function(Sim,Terrain,G,B,H)
     end
     return native_write()
   end
-  function W.rebuild(s,h,id,word,tick,random)
+  function W.rebuild(s,h,id,word,tick,random,year)
     if not h.root or not h.completed then return end
     local t=s.stock_town_growth and s.stock_town_growth.towns[h.town]
     if not t or not t.growing then return end
@@ -346,7 +346,8 @@ return function(Sim,Terrain,G,B,H)
       if not cell or not cell.house or cell.source_house~=p.record
         or p.record.player_protected or cell.owner or protected(s,p.id,cell) then return end
     end
-    local receipt=Rebuild.visit(t,h,style,true,word,Sim.date(s))
+    year=year or Sim.date(s)
+    local receipt=Rebuild.visit(t,h,style,true,word,year)
     if not receipt then return end
     -- OWNER_TOWN clears the complete building. No company can be
     -- billed or get a demolishing-company reputation adjustment.
@@ -362,12 +363,12 @@ return function(Sim,Terrain,G,B,H)
     if target then
       local policy=s.stock_road_town_policy
       local proposal=B.house(t,board(s,s.stock_generated_profile),target.x,target.z,
-        {year=Sim.date(s),allow_roads=not policy or policy.allow_town_roads~=false},random)
+        {year=year,allow_roads=not policy or policy.allow_town_roads~=false},random)
       commit(s,t,proposal,services(s),tick,nil)
     end
     return receipt
   end
-  function W.tick(s,tick,random,write_house)
+  function W.tick(s,tick,random,write_house,year)
     local state=s.stock_town_growth
     if not state then return end
     local view,brd
@@ -385,7 +386,7 @@ return function(Sim,Terrain,G,B,H)
       local function write(proposal)
         return commit(s,t,proposal,view,tick,write_house)
       end
-      local proposal,extra_built=B.grow(t,brd,{year=Sim.date(s),allow_roads=not not expand,
+      local proposal,extra_built=B.grow(t,brd,{year=year or Sim.date(s),allow_roads=not not expand,
         build_on_slopes=not policy or policy.build_on_slopes~=false,
         allow_level_crossings=not policy or policy.allow_town_level_crossings~=false,
         extra_house=expand and write or nil},random)

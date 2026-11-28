@@ -341,8 +341,8 @@ function H.advance_houses(clock,ticks,map_house,settings,random,emit,before_tick
       -- The exact generated raster shares RunTileLoop's row stride.
       -- Look up the current cell *after* other landscape callbacks.
       local t=physical[tile+1]
-      if t and t.house then house=map_house(x,z,tile+1,t) end
-    else house=map_house(x,z) end
+      if t and t.house then house=map_house(x,z,tile+1,t,tick) end
+    else house=map_house(x,z,nil,nil,tick) end
     if house then
       local word=H.produce_tile(tile,tick,house,settings,random,emit,x,z)
       if word and settings.rebuild then settings.rebuild(house,tile+1,word,tick,random) end
