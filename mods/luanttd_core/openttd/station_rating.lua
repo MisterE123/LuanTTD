@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 -- Originally OpenTTD, copyright OpenTTD contributors. No warranty.
--- Port from pinned OpenTTD 14.1, src/station_cmd.cpp UpdateStationRating and
+-- Port from pinned OpenTTD 16.0-RC1, src/station_cmd.cpp UpdateStationRating and
 -- StationHandleSmallTick; constants from src/station_base.h and
 -- src/timer/timer_game_tick.h. Loading telemetry from src/economy.cpp.
 -- A game adapter applies the queue removal and any cross-station feedback.
@@ -149,7 +149,7 @@ function R.step(g,opts)
   if r.rating<=127 and waiting~=0 then
     local rng=random()
     if r.rating<=field(rng,0,7) then
-      waiting=max(as_signed32(waiting)-as_signed32((field(rng,8,2)-1)*num_dests),0)
+      waiting=max(as_signed32(waiting)-as_signed32((field(rng,8,2)+1)*num_dests),0)
       r.waiting_changed=true
     end
   end

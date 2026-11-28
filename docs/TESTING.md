@@ -192,14 +192,14 @@ intermediate bus pose (x 36.486, z 24.732, yaw 0.242 radians) inside the
 paved bend rather than only an instantaneous heading snap. It also
 verified fares and resumed service after restarting.
 
-### Station-rating kernel (not wired into gameplay yet)
+### Station rating and live road cargo
 
-`python3 tests/station_rating_upstream.py /path/to/OpenTTD-14.1 lua5.1`
-compiles pinned stock `UpdateStationRating` in a fixture. Checked 28,000
-conditions including callback-field decoding, random queue loss and pickup
-expiry, and checked the pinned constants. The port does not yet replace
-the road campaign's initial allocation rating. The next integration needs
-per-stop timer persistence and actual load/no-load/full-bus state changes.
+`python3 tests/station_rating_upstream.py /path/to/OpenTTD-16.0-RC1 lua5.1`
+compiles the pinned stock `UpdateStationRating` in a fixture. It checks
+28,000 cases, including callback-field decoding, random queue loss and
+pickup expiry, plus the pinned constants. The ordinary generated passenger
+and wood-freight simulation also tests the actual loss and packet draws
+in service. Run `lua5.1 tests/town_growth_rc1_corridor.lua` for that replay.
 
 ### Camera flight regression
 

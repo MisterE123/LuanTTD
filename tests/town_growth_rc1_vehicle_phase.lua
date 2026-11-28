@@ -63,13 +63,18 @@ local function at_yard(op,stock)
   local _,q=check(A.rail_assembly(owner,D),"assembly "..op)
   command("rail_assembly",{token=q.token,operation=op,stock=stock})
 end
+local expected,slot={},0
+while #expected<4 do
+  if not (s.stock_effect_vehicles and s.stock_effect_vehicles[slot]) then expected[#expected+1]=slot end
+  slot=slot+1
+end
 local low=buy_bus(home)
 at_yard("engine",0)
 local high=buy_bus(other_yard)
 at_yard("wagon",27)
 local id,unit=next(s.stock_rail_fleet.units)
-assert(unit.parts[1].stock_pool_id==1 and unit.parts[2].stock_pool_id==3)
-assert(s.fleet[low].stock_pool_id==0 and s.fleet[high].stock_pool_id==2)
+assert(unit.parts[1].stock_pool_id==expected[2] and unit.parts[2].stock_pool_id==expected[4])
+assert(s.fleet[low].stock_pool_id==expected[1] and s.fleet[high].stock_pool_id==expected[3])
 local a,b=assert(s.tiles[north].station),assert(s.tiles[south].station)
 assert(s.stations[a].stock_station_id==0 and s.stations[b].stock_station_id==1)
 for _,route in ipairs({{low,a,b},{high,assert(s.tiles[west_road].station),assert(s.tiles[east_road].station)}}) do
@@ -92,7 +97,7 @@ engine.advance_services=function(world,handlers,road_until)
   local train=rail_run.vehicle_ticks or rail_run.ticks
   before,after=early,late
   return advance(world,handlers,function(slot)
-    assert(slot==1 and (rail_run.vehicle_ticks or rail_run.ticks)==train)
+    assert(slot==expected[2] and (rail_run.vehicle_ticks or rail_run.ticks)==train)
     road_until(slot)
     assert(first.tick_counter==(early+1)%256 and last.tick_counter==late,
       "Low-slot bus advances before both train passes, high-slot bus waits")

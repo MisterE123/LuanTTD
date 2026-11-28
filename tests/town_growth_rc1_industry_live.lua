@@ -104,3 +104,6 @@ local function compare(with_company,expected,source_digest)
 end
 compare(false,expected,859417629)
 compare(true,dofile("tests/fixtures/rc1-stock-company-town-year.lua"),1679927514)
+
+-- Run the separate ordinary dual-service replay in the same CI job.
+dofile("tests/town_growth_rc1_corridor.lua")

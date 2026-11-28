@@ -1,4 +1,4 @@
--- Stock conventional bus fault lifecycle on the 74-tick campaign clock.
+-- Stock conventional road vehicle fault lifecycle on the 74-tick campaign clock.
 -- No automatic service detour, hidden second RNG, or separate movement.
 return function(Kernel,Sim,s,difficulty,random32)
   assert(difficulty==0 or difficulty==1 or difficulty==2,"Road breakdowns must be 0, 1, or 2.")
@@ -7,11 +7,10 @@ return function(Kernel,Sim,s,difficulty,random32)
   local function now() return market.epoch+s.day end
   local function attach(v)
     if v.road_fault then return v.road_fault end
-    if difficulty==0 or not v.stock_bus then return end
+    if difficulty==0 or not (v.stock_bus or v.stock_road_freight) then return end
     local engine=Sim.stock_road_offer(s,v.engine)
-    local offer=Sim.vehicle_offer(s,v.engine)
-    if not engine or not offer then return end
-    local f=Kernel.new(engine.reliability,engine.reliability_decay,offer.life*365,now(),now())
+    if not engine then return end
+    local f=Kernel.new(engine.reliability,engine.reliability_decay,engine.life_days,now(),now())
     v.road_fault=f
     return f
   end
@@ -34,7 +33,7 @@ return function(Kernel,Sim,s,difficulty,random32)
   end
   function F.daily(after)
     local ids={}
-    for id,v in pairs(s.fleet) do if v.stock_bus then ids[#ids+1]=id end end
+    for id,v in pairs(s.fleet) do if v.stock_bus or v.stock_road_freight then ids[#ids+1]=id end end
     table.sort(ids)
     for _,id in ipairs(ids) do
       local v=s.fleet[id]

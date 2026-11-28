@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the Lua rating kernel against pinned, unmodified OpenTTD 14.1 UpdateStationRating.
+"""Check the Lua rating kernel against pinned, unmodified OpenTTD 16.0-RC1 UpdateStationRating.
 
 Run: python3 tests/station_rating_upstream.py /path/to/OpenTTD [lua5.1]
 A directory containing the pinned files works in place of a checkout. The
@@ -20,12 +20,12 @@ def read_source(file, digest):
     candidates = [upstream_root / "src" / file, upstream_root / file, upstream_root / Path(file).name]
     path = next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
     data = path.read_bytes()
-    assert sha256(data).hexdigest() == digest, f"{path}: not pinned OpenTTD 14.1 content"
+    assert sha256(data).hexdigest() == digest, f"{path}: not pinned OpenTTD 16.0-RC1 content"
     return data.decode()
 
-station = read_source("station_cmd.cpp", "7f8ab7f9eba82461749c7356b722917a58fe8e202acc8fc453cb68e5652adbc5")
-base_header = read_source("station_base.h", "397bf6bfd7fe7194f265eb674b47899aaa156af0927800228eea30f938ed8c3b")
-timer = read_source("timer/timer_game_tick.h", "be45ea7873d9f61e2da80d824de3dede265de76d9178e8afa3dc685c2a95e7e1")
+station = read_source("station_cmd.cpp", "0ad7a57796e360f0cca272a859ecd39c1e690a4938c155dfcbf7e343dfad0522")
+base_header = read_source("station_base.h", "84afc66f2dbcf50c6d2f2348302289b9cd07002c76c1968a53dc9a91ae802498")
+timer = read_source("timer/timer_game_tick.h", "9b2c19319b97ab83958789122fea5f081c654c3eacab1a4dd804c959ba5576c2")
 
 def block(pattern):
     start = re.search(pattern, station, re.MULTILINE).start()
@@ -46,9 +46,16 @@ cpp = r"""
 using uint = unsigned int;
 using byte = uint8_t;
 using StationID = uint16_t;
-constexpr int VEH_INVALID=-1, VEH_ROAD=1, VEH_SHIP=2;
-constexpr int CBM_CARGO_STATION_RATING_CALC=0, CBID_CARGO_STATION_RATING_CALC=0;
-constexpr int CALLBACK_FAILED=65535, WC_STATION_VIEW=0, WID_SV_ACCEPT_RATING_LIST=0;
+enum class VehicleType : int {Invalid=-1, Road=1, Ship=2};
+enum class CargoCallbackMask : int {StationRatingCalc=0};
+enum class WindowClass : int {StationView=0};
+constexpr int CBID_CARGO_STATION_RATING_CALC=0, CALLBACK_FAILED=65535, WID_SV_ACCEPT_RATING_LIST=0;
+template <typename T> int to_underlying(T v) {return static_cast<int>(v);}
+struct Flag {
+    bool state=false;
+    template <typename T> bool Test(T) const {return state;}
+    template <typename T> void Reset(T) {state=false;}
+};
 template<typename T,typename U> T ClampTo(U u) {
     return std::clamp((int)u,(int)std::numeric_limits<T>::min(), (int)std::numeric_limits<T>::max());
 }
@@ -57,26 +64,30 @@ template <class T> bool HasBit(T x,int off) {return (x & (1u<<off))!=0;}
 void ClrBit(byte &bits,int bit) {bits &= ~(1u<<bit);}
 uint GB(uint a,uint off,uint n) {return (a>>off) & ((1u<<n)-1);}
 struct Company {static bool IsValidID(int id) {return id>=0 && id<15;}};
-struct Town {uint statues=0;};
+struct Town {Flag statues;};
 struct Cargo {uint units=0, destinations=0;
     uint AvailableCount() const {return units;}
     const Cargo *Packets() const {return this;}
     uint MapSize() const {return destinations;}
 };
 struct GoodsEntry {
-    enum {GES_RATING=0};
+    enum class State {Rating};
     Cargo cargo;
-    byte status=0,rating=175,time_since_pickup=255,last_speed=0,last_age=255;
+    Flag status;
+    byte rating=175,time_since_pickup=255,last_speed=0,last_age=255;
     uint max_waiting_cargo=0;
-    bool HasRating() const {return HasBit(status,GES_RATING);}
+    bool HasRating() const {return status.state;}
+    bool HasData() const {return cargo.destinations!=0;}
+    const GoodsEntry &GetData() const {return *this;}
+    uint AvailableCount() const {return cargo.units;}
     bool HasVehicleEverTriedLoading() const {return last_speed!=0;}
 };
-struct Station {int last_vehicle_type=VEH_ROAD, owner=0; Town *town;
+struct Station {VehicleType last_vehicle_type=VehicleType::Road;int owner=0; Town *town;
     byte time_since_load=0,time_since_unload=0;
     GoodsEntry goods[1]; StationID index=0;
 };
 struct CargoSpec {
-    uint callback_mask=0;
+    Flag callback_mask;
     uint Index() const {return 0;}
     static CargoSpec cargo;
     static std::vector<const CargoSpec *> Iterate() {return {&cargo};}
@@ -89,8 +100,8 @@ uint Random(){assert(rng_i<2);return randoms[rng_i++];}
 struct {struct {bool value;} station_rating;} _cheats;
 struct {struct {bool selectgoods;} order;} _settings_game;
 bool dirty=false;
-void SetWindowDirty(int wc,StationID id){dirty=true;}
-void SetWindowWidgetDirty(int wc,StationID id,int widget) {}
+void SetWindowDirty(WindowClass wc,StationID id){dirty=true;}
+void SetWindowWidgetDirty(WindowClass wc,StationID id,int widget) {}
 void TruncateCargo(const CargoSpec *cs,GoodsEntry *ge,uint amount=UINT32_MAX) {
     ge->cargo.units -= std::min(amount,ge->cargo.units);
 }
@@ -103,20 +114,20 @@ int main(){
     uint one,two;
     std::cout<<"175 255\n";
     while (std::cin>>rating>>has>>time>>speed>>age>>maxwaiting>>waiting>>dest>>select>>ship>>statue>>cheat>>cb>>vehicle>>tl>>tu>>one>>two) {
-        Town town; town.statues=statue?1u:0u;
+        Town town; town.statues.state=statue!=0;
         Station st; st.town=&town; st.owner=statue==2 ? -1 : 0;
-        st.last_vehicle_type=ship?VEH_SHIP:vehicle?VEH_ROAD:VEH_INVALID;
+        st.last_vehicle_type=ship?VehicleType::Ship:vehicle?VehicleType::Road:VehicleType::Invalid;
         st.time_since_load=tl; st.time_since_unload=tu;
         auto &g=st.goods[0];
-        g.rating=rating; g.status=has; g.time_since_pickup=time;g.last_speed=speed;g.last_age=age;
+        g.rating=rating; g.status.state=has!=0; g.time_since_pickup=time;g.last_speed=speed;g.last_age=age;
         g.max_waiting_cargo=maxwaiting;g.cargo.units=waiting;g.cargo.destinations=dest;
         _settings_game.order.selectgoods=select;_cheats.station_rating.value=cheat;
-        CargoSpec::cargo.callback_mask=cb>=0;callback=cb>=0?cb:CALLBACK_FAILED;
+        CargoSpec::cargo.callback_mask.state=cb>=0;callback=cb>=0?cb:CALLBACK_FAILED;
         randoms[0]=one;randoms[1]=two;rng_i=0;dirty=false;
         UpdateStationRating(&st);
-        std::cout<<(int)g.rating<<" "<<(int)g.status<<" "<<(int)g.time_since_pickup<<" "<<(int)g.last_speed<<" "
+        std::cout<<(int)g.rating<<" "<<(int)g.status.state<<" "<<(int)g.time_since_pickup<<" "<<(int)g.last_speed<<" "
           <<(int)g.last_age<<" "<<g.max_waiting_cargo<<" "<<g.cargo.units<<" "<<(waiting-g.cargo.units)<<" "
-          <<(has&&!g.status)<<" "<<dirty<<" "<<rng_i<<" "<<(int)st.time_since_load<<" "<<(int)st.time_since_unload<<"\n";
+          <<(has&&!g.status.state)<<" "<<dirty<<" "<<rng_i<<" "<<(int)st.time_since_load<<" "<<(int)st.time_since_unload<<"\n";
     }
 }
 """
@@ -170,4 +181,4 @@ with tempfile.TemporaryDirectory() as temp:
     assert len(ref)==len(got)==len(samples)+1
     for i,(expected,actual) in enumerate(zip(ref,got)):
         assert expected==actual, ("constants" if i==0 else samples[i-1],expected,actual)
-    print(f"PASS: {len(samples)} OpenTTD 14.1 station rating cases and 4 source constants")
+    print(f"PASS: {len(samples)} OpenTTD 16.0-RC1 station rating cases and 4 source constants")

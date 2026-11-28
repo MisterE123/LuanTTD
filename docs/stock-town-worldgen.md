@@ -167,3 +167,23 @@ houses match again through every checkpoint of the first year (including
 actual new streets and houses). Packed reopens and repeat admissions must
 not redraw identity. This does not assert finance parity for the full year,
 late-company inflation, or mixed services.
+
+### A normal region with passenger and freight services
+
+On the same seed, a bus serves Wunnwell and a truck hauls wood to the
+generated sawmill. Both routes are purchased and built, with normal stock
+low vehicle running-cost settings and base construction prices. Commands
+create the original vehicle types, depots, roads, through stops and orders.
+The scenarios are built independently, not imported from a native save.
+
+The corridor matches **27,010 consecutive shared RNG ticks**, fourteen
+whole-map and town snapshots, and nineteen matched position, speed, progress
+and load samples per vehicle. The year ends with **283 passengers and
+80 tonnes of wood** delivered. The LuanTTD replay also reopens three packed
+checkpoints. Source paths exercised include ordinary road `Station::AddFacility`,
+the shared vehicle pool's industrial chimney occupants, freight acceleration
+and servicing, `TileLoop_Industry` forest recovery, the stock depot-entry
+frame, `LoadUnloadStation` cargo-received triggers and RC1 queue attrition.
+This is one active road corridor, not full freight, finance or town-growth
+parity. Other cargoes, modes, service densities and municipal interactions
+still need comparisons.

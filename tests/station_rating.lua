@@ -27,9 +27,9 @@ assert(R.has_tried_loading(expired) and not expired.has_rating and expired.time_
 
 g.rating=99
 local unsigned=R.step(g,{waiting=19,destinations=1,select_goods=true,random_u32=function() return 127 end})
-assert(unsigned.waiting_changed and unsigned.drop==0 and unsigned.waiting==19 and unsigned.max_waiting_cargo==9)
+assert(unsigned.waiting_changed and unsigned.drop==1 and unsigned.waiting==18 and unsigned.max_waiting_cargo==0)
 local removed=R.step(g,{waiting=19,destinations=1,select_goods=true,random_u32=function() return 0x37f end})
-assert(removed.waiting_changed and removed.drop==2 and removed.waiting==17 and removed.max_waiting_cargo==0)
+assert(removed.waiting_changed and removed.drop==4 and removed.waiting==15 and removed.max_waiting_cargo==0)
 local clock,elapsed=0,0
 for i=1,5 do
   local periods

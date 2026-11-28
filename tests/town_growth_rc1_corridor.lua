@@ -1,0 +1,117 @@
+-- Normal generated RC1 town growth with a passenger bus and a wood truck
+-- carrying cargo between the generated forest and sawmill. Uses the
+-- actual worker entry points and committed construction, not save import.
+local ref=dofile("tests/fixtures/rc1-active-road-freight-town-year.lua")
+local f=dofile("tests/town_growth_rc1_industry_start.lua")
+local S,s,T=f.Sim,f.world,f.Terrain
+local mod=f.mod
+local function m(n) return dofile(mod.."/"..n..".lua") end
+local owner="Stock comparison"
+s.road_coal,s.road_timber,s.road_farm,s.road_oil,s.road_heavy=true,true,true,true,true
+s.road_mail,s.road_junction_clearance=true,true
+local cap={road={start_year=1950,breakdowns=1,service_interval=150,foster=true},ferry={},air={},oil_tanker=true}
+local Mount,Endpoint=m("campaign_authority_runtime"),m("campaign_authority_endpoint")
+local Codec,Rebuild=m("packed_campaign"),m("openttd/town_rebuild")
+local N=Mount(S,mod,s,cap)
+local A=Endpoint(S,N)
+local revision
+local function checked(r)
+ assert(r.ok,r.why)
+ revision=r.revision
+ return r.value
+end
+local function action(kind,fields)
+ fields=fields or {}
+ fields.kind,fields.revision=kind,revision
+ return checked(A.command(owner,fields))
+end
+local function terminal(kind,x,z,direction,through)
+ local first=S.id(x+1,z+1)
+ local request={tool="stock_terminal",first=first,kind=kind,direction=direction,through=through}
+ local quote=checked(A.road_quote(owner,request))
+ action("road_commit",{request=request,quote=quote})
+ return first
+end
+local function service(name,cargo,home,src,dst)
+ local p=assert(S.vehicle_offer(s,name))
+ local id=action("road_buy",{engine=name,cargo=cargo,depot=home,cost=p.cost})
+ for _,tile in ipairs({src,dst}) do action("road_order_add",{vehicle=id,station=assert(s.tiles[tile].station)}) end
+ action("road_toggle",{vehicle=id})
+ return id
+end
+action("company_open")
+assert(S.build(s,owner,"road",{S.id(46,45),S.id(47,45)}))
+local bd=terminal("depot",47,44,0)
+local bs=terminal("bus",41,44,0,true)
+local bt=terminal("bus",43,47,3,true)
+local bus=service("bus","passenger",bd,bs,bt)
+local road={}
+for i,id in ipairs(ref.road) do road[i]=id+1 end
+assert(S.build(s,owner,"road",road))
+local wd=terminal("depot",47,57,1)
+local ws=terminal("truck",47,59,3,true)
+local wt=terminal("truck",23,87,0,true)
+local truck=service("wood_truck","wood",wd,ws,wt)
+assert(s.passenger_rating_rng[1]==456539431 and s.passenger_rating_rng[2]==329337364)
+assert(s.companies[owner].cash==72275)
+assert(s.fleet[bus].stock_pool_id==2 and s.fleet[truck].stock_pool_id==3)
+local digest,ticks,maps,poses=1,0,0,0
+local function fold(h,...)
+  for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
+  return h
+end
+local function same(tick,label,value,expected)
+  assert(#value==#expected)
+  for i,v in ipairs(expected) do
+    assert(value[i]==v,("RC1 corridor tick %d %s field %d: got %s, expected %s"):format(tick,label,i,tostring(value[i]),v))
+  end
+end
+local function snapshot(tick)
+  local expected=ref.world[tick]
+  if not expected then return end
+  local hh,tt,house,road=1,1,1,1
+  local year=S.date(s)
+  for id,t in ipairs(s.tiles) do
+    local x,z=S.xy(id)
+    local typ=t.stock_void and 7 or t.stock_industry and 8 or t.stock_landmark and 10 or t.wood and 4
+      or t.terrain=="water" and 6 or t.build=="road_station" and 5
+      or (t.build=="road" or t.build=="road_depot") and 2 or t.source_house and 3 or 0
+    hh=fold(hh,T.corner(s.corner_grid,x,z));tt=fold(tt,typ)
+    local r=t.source_house
+    if r then house=fold(house,id-1,r.id,r.town-1,r.completed and 1 or 0,r.stage,r.counter,Rebuild.age(r,year),r.random_bits) end
+    if t.build=="road" then road=fold(road,id-1,t.road_bits,t.road_town and t.road_town-1 or -1) end
+  end
+  same(tick,"map and delivered units",{s.passenger_house_clock.head,hh,tt,house,road,
+    s.fleet[bus].delivered,s.fleet[truck].delivered},expected[1])
+  for i,t in ipairs(s.stock_town_growth.towns) do
+    local site=s.sites[i]
+    local p,q=t.supplied.passenger,t.supplied.mail
+    same(tick,"town "..i,{site.tile-1,site.nameparts,t.larger_town and 1 or 0,t.grow_counter,t.growth_rate,
+      t.time_until_rebuild,p.new_max,p.new_act or 0,p.old_max,p.old_act or 0,q.new_max,q.new_act or 0,q.old_max,q.old_act or 0},expected[i+1])
+  end
+  maps=maps+1
+end
+local function observe(tick)
+  digest=fold(digest,tick,unpack(s.passenger_rating_rng));ticks=ticks+1
+  snapshot(tick)
+  local expected=ref.poses[tick]
+  if not expected then return end
+  for n,id in ipairs({bus,truck}) do
+    local v=s.fleet[id]
+    local r=v.road_speed_state or v.road_stop_motion or {}
+    local p=S.road_motion_frame(s,v) or v.road_stop_pose
+    assert(p,"Expected the stock road vehicle to be visible at "..tick)
+    same(tick,v.engine,{p[4]-1,p[1]-16,p[2]-16,p[3],r.speed or 0,r.subspeed or 0,r.progress or 0,v.units or 0},expected[n])
+  end
+  poses=poses+1
+end
+for day=1,365 do
+  if day==33 or day==102 or day==244 then
+    s=assert(Codec.decode(Codec.encode(s)))
+    N=Mount(S,mod,s,cap)
+  end
+  N.day(observe)
+end
+same(28290,"year",{digest,ticks,maps,poses,s.fleet[bus].delivered,s.fleet[truck].delivered},
+  {ref.rng,27010,14,19,283,80})
+print("PASS RC1 normal industry corridor: 27,010 RNG ticks, 14 map/town and 19 vehicle checkpoints, 283 passengers and 80 wood delivered, three packed reopens")

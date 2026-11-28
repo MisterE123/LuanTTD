@@ -112,7 +112,8 @@ return function(Rules,Catchment)
       if ledger.landscape_tick~=tick then ledger.landscape_tick=tick;ledger.visited={} end
       if ledger.visited[key] then return 0,0,"DUPLICATE_TILE_VISIT" end
       ledger.visited[key]=true
-      local o={recession=opts.recession and opts.recession(world,tick),editor=opts.editor and opts.editor(world,tick)}
+      local o={recession=opts.recession and opts.recession(world,tick),editor=opts.editor and opts.editor(world,tick),
+        stock_tile_animation=ctx.stock_tile_animation}
       return Rules.tile_loop(t.ind,t.tile,o,function(ind,cargo,n)
         if ind.kind=="oil_rig" and cargo=="passenger" and offer_rig_passengers then return offer_rig_passengers(ind,n) end
         return Rules.distribute(ind,cargo,n,ctx.stations,covers,{
@@ -211,7 +212,7 @@ return function(Rules,Catchment)
           ledger.landscape_tick and ledger.landscape_tick>tick or ledger.station_phase_tick and ledger.station_phase_tick>tick then
         return nil,"STATION_PHASE_CLOSED"
       end
-      if not s.open then s.open={tick=tick,receipts={},order={},processors={}} end
+      if not s.open then s.open={tick=tick,receipts={},order={},processors={},processor_order={}} end
       ledger.open_station,ledger.station_phase_tick=id,tick
       return s
     end
@@ -256,7 +257,12 @@ return function(Rules,Catchment)
       end
       p.order[#p.order+1]=key
       p.receipts[key]={signature=signature,result=result}
-      for _,i in ipairs(result.industries) do p.processors[i.id]=true end
+      for _,i in ipairs(result.industries) do
+        if not p.processors[i.id] then
+          p.processors[i.id]=true
+          p.processor_order[#p.processor_order+1]=i.id
+        end
+      end
       return copy(result)
     end
 
@@ -269,7 +275,7 @@ return function(Rules,Catchment)
       if tick~=s.open.tick then return nil,"NOT_PENDING_STATION_SCAN" end
       local out={station=id,tick=tick,deliveries={},conversion={}}
       local open=s.open
-      local processed=sorted(open.processors)
+      local processed=ctx.stock_tile_animation and open.processor_order or sorted(open.processors)
       for _,iid in ipairs(processed) do
         local ind=by_id[iid]
         if not ind or ind.removed then return nil,"PENDING_PROCESSOR_UNAVAILABLE" end
@@ -279,6 +285,12 @@ return function(Rules,Catchment)
       end
       for _,iid in ipairs(processed) do
         local made,used=Rules.trigger(by_id[iid])
+        if ctx.stock_tile_animation then
+          -- economy.cpp LoadUnloadStation drains unique recipients in
+          -- first-delivery order and runs CargoReceived once per firm.
+          by_id[iid].was_cargo_delivered=true
+          ctx.random_u32()
+        end
         out.conversion[#out.conversion+1]={id=iid,consumed=used,produced=made}
       end
       s.closed,s.open,ledger.open_station=tick,nil,nil

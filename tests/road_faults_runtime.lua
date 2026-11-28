@@ -9,14 +9,14 @@ local function rng() rng_calls=rng_calls+1;return 0x03040000 end
 local source_reliability=50026
 local Sim={stock_road_offer=function(s,engine)
     assert(s==state and engine==v.engine)
-    return {reliability=source_reliability,reliability_decay=80}
-  end,vehicle_offer=function() return {life=15} end}
+    return {reliability=source_reliability,reliability_decay=80,life_days=5490}
+  end}
 state.fleet[1]=v
 local off=Host(B,Sim,state,0,rng)
 off.purchased(v);assert(not v.road_fault and not off.report(v))
 local runtime=Host(B,Sim,state,2,rng)
 runtime.purchased(v);local f=assert(v.road_fault)
-assert(f.reliability==50026 and f.max_age==5475 and f.date_of_last_service==713623)
+assert(f.reliability==50026 and f.max_age==5490 and f.date_of_last_service==713623)
 assert(runtime.tick(v,11)==false and f.tick_counter==1)
 v.road_speed_state.blocked_ctr=1
 runtime.daily();assert(f.reliability==50026 and rng_calls==0)

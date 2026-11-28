@@ -10,6 +10,11 @@ local realistic={}
 for _,engine in ipairs(Buses.order) do
   realistic[engine]=Accel.vehicle(Buses.quote(nil,nil,Buses.stock_id(engine)))
 end
+local Freight=dofile(base.."openttd/road_freight_catalog.lua")
+for _,engine in ipairs(Freight.road_order) do
+  realistic[engine]=Accel.vehicle(Freight.row(engine))
+end
+realistic.craighead_goods_truck=Accel.vehicle(Freight.row("craighead_goods_truck"))
 return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,crossing_step,oneway_guard,oneway_replan,Bay,Junction,tile_xy)
   local R={bay=Bay,preserve_after_tide=Junction and Junction.preserve_after_tide}
   local Pass,Motion
@@ -23,7 +28,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
   R.pose=pose
   local function visible(c,frames)
     local f=c and not c.depot_wait and pose(c,frames)
-    return f and not f[16] and f or nil
+    return f and not c.transit_hidden and f or nil
   end
   -- The route keeps the span ID, not the authoritative speed limit.
   -- RC1 reads the current GetBridgeSpec on the portal and in the
@@ -259,10 +264,10 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     end
     a.old=b
     if Pass then Pass.accept(state,b,nominal) end
-    if b[16] then
+    if b[16] and not a.realistic then
       W.erase(record)
-      state.speed=0
-      if a.entered_transit then a.entered_transit(v) end
+      state.speed,state.transit_hidden=0,true
+      if a.entered_transit then a.entered_transit(v,a.tick) end
       return false -- stop this movement budget until the stock depot-exit tick
     end
     W.put(record,b,state.lane_pose~=nil,actual_z)
@@ -273,6 +278,17 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
   local function move_frame(state,a)
     local s,W,v,frames,record,old,roof,board=a.s,a.W,a.v,a.frames,a.record,a.old,a.roof,a.board
     local nominal=frames[state.index+1]
+    if a.realistic and old[16] then
+      if not state.transit_hidden then
+        -- VehicleEnterTile_Road checks the current frame 11 on the
+        -- next movement attempt, not the movement reaching that frame.
+        state.transit_hidden,state.speed=true,0
+        state.heading=(state.heading+4)%8
+        W.erase(record)
+        if a.entered_transit then a.entered_transit(v,a.tick) end
+      end
+      return true -- retain the remaining budget, as with an ordered depot
+    end
     if not nominal then
       if a.depot_stop then
         -- VehicleEnterTile_Road checks the *current* frame 11 on the
@@ -391,7 +407,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
 
   local function stock_realistic(s,v)
     return s.stock_generated_profile and s.stock_bus_market and
-      s.stock_road_acceleration_model~=0 and v.stock_bus and realistic[v.engine]
+      s.stock_road_acceleration_model~=0 and (v.stock_bus or v.stock_road_freight) and realistic[v.engine]
   end
   local function step(s,W,a,board,on_exit,tick,stock_stop,realistic_profile,depot_stop)
     local v,c,frames,record=a.v,a.c,a.frames,a.record
@@ -400,7 +416,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
     local use_realistic=realistic_profile
     if use_realistic==nil then use_realistic=stock_realistic(s,v) end
     a.stock_stop,a.depot_stop=stock_stop,depot_stop
-    if old[16] then
+    if old[16] and c.transit_hidden then
       -- RoadVehLeaveDepot (RC1) checks the proposed outward point before
       -- unhiding, services the same physical vehicle, sets its speed to
       -- zero and consumes this tick without normal road acceleration.
@@ -409,7 +425,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         "Corrupt transit-depot departure")
       record.z=W.height(s,next)
       if W.find(record,c,next[1],next[2],next[3],false) then c.waiting="depot";return end
-      c.index,c.speed,c.heading,c.waiting=c.index+1,0,next[3],nil
+      c.index,c.speed,c.heading,c.waiting,c.transit_hidden=c.index+1,0,next[3],nil,nil
       c.overtaking,c.overtaking_ctr,c.lane_pose=nil,nil,nil
       W.put(record,next)
       if on_exit then on_exit(v,tick) end
@@ -445,7 +461,7 @@ return function(Speed,Proximity,road_z,bay_tile,is_depot,make_overtake_board,cro
         +(passing and 256 or 0)
       minimum=4
     end
-    a.old,a.roof,a.board,a.realistic=old,roof,board,use_realistic
+    a.old,a.roof,a.board,a.realistic,a.tick=old,roof,board,use_realistic,tick
     Speed.tick(c,roof,passing,move_frame,a,acceleration,minimum)
     c.ticks=c.ticks+1
   end

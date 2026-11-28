@@ -53,6 +53,11 @@ end
 local w,e=s.tiles[L].rail_station_id,s.tiles[B].rail_station_id
 local first,second=s.stock_rail_stations[w],s.stock_rail_stations[e]
 assert(first.stock_station_id~=nil and second.stock_station_id==first.stock_station_id+1)
+local expected,slot={},0
+while #expected<3 do
+  if not (s.stock_effect_vehicles and s.stock_effect_vehicles[slot]) then expected[#expected+1]=slot end
+  slot=slot+1
+end
 local rng={passenger_rating_rng={unpack(s.passenger_rating_rng)}}
 local engine_bits=Sim.stock_random_u32(rng)%65536
 at_yard("engine",0)
@@ -64,17 +69,17 @@ assert(s.passenger_rating_rng[1]==rng.passenger_rating_rng[1] and s.passenger_ra
 local id,ownership=next(s.stock_rail_fleet.units)
 local physical=ownership.parts
 assert(#physical==2 and physical[1].stock_id==0 and physical[2].stock_id==27)
-assert(physical[1].stock_pool_id==0 and physical[2].stock_pool_id==2 and s.fleet[bus].stock_pool_id==1)
+assert(physical[1].stock_pool_id==expected[1] and physical[2].stock_pool_id==expected[3] and s.fleet[bus].stock_pool_id==expected[2])
 assert(physical[1].stock_vehicle_random_bits==engine_bits and physical[2].stock_vehicle_random_bits==wagon_bits and
   s.fleet[bus].stock_vehicle_random_bits==road_bits)
 assert(Sim.sell(s,owner,bus))
 local rebought=purchase_road()
-assert(rebought~=bus and s.fleet[rebought].stock_pool_id==1)
+assert(rebought~=bus and s.fleet[rebought].stock_pool_id==expected[2])
 for _=1,2 do R.day() end
 assert(physical[1].stock_fault.age==2 and physical[1].stock_fault.reliability<physical[1].reliability)
 command("transport_start",{mode="rail",vehicle=id,first=w,second=e})
 local run=assert(s.stock_rail_dispatch.runs[1])
-assert(run.stock_fault and run.stock_pool_id==0 and run.stock_live_procurement and run.stock_train_service_opts.interval==150)
+assert(run.stock_fault and run.stock_pool_id==expected[1] and run.stock_live_procurement and run.stock_train_service_opts.interval==150)
 local arrival,departure
 local function observe(tick)
   if run.pending_depot_entry_tick==run.vehicle_ticks then
@@ -99,5 +104,5 @@ assert(arrival and departure and checked_inbound)
 assert(run.stock_random_parts[1].stock_waiting_random_triggers%4>=2)
 assert(run.stock_random_parts[2].stock_waiting_random_triggers%4>=2)
 assert((s.companies[owner].paid_units or 0)>0)
-print(("PASS original world, paid ordinary train: shared purchase slots 0/1/2, real cargo/depot draws, servicing tick %d, departed %d, %d passengers")
+print(("PASS original world, paid ordinary train: shared physical purchase slots, real cargo/depot draws, servicing tick %d, departed %d, %d passengers")
   :format(arrival,departure,s.companies[owner].paid_units))

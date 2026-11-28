@@ -118,8 +118,17 @@ return function(Packets,Catchment,Rating,Income,Commons,Houses)
     else n=0 end
     -- Stock completed forest tile: successful delivery starts gfx 17;
     -- on a subsequent visit it goes back to the ordinary tree graphics.
-    if t.gfx==16 and moved>0 then t.gfx=17
-    elseif t.gfx==17 then t.gfx=16 end
+    if t.gfx==16 and moved>0 then
+      t.gfx=17
+      if opts.stock_tile_animation then t.stage,t.construction_counter,t.completed=0,0,true end
+    elseif t.gfx==17 then
+      t.gfx=16
+      if opts.stock_tile_animation then
+        -- RC1 anim_next resets the completion bit. The growing stand
+        -- must progress through the original four-visit stages again.
+        t.stage,t.construction_counter,t.completed=0,0,false
+      end
+    end
     return n,moved
   end
 

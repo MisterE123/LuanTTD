@@ -44,6 +44,16 @@ local function rail(req)
   local quote=ask("rail_quote",{request=req})
   command("rail_commit",{token=quote.token})
 end
+local function first_free_three(s)
+  local ids={}
+  local effect=s.stock_effect_vehicles or {}
+  local i=0
+  while #ids<3 do
+    if not effect[i] then ids[#ids+1]=i end
+    i=i+1
+  end
+  return ids
+end
 local function state()
   ask("checkpoint")
   local s=assert(Checkpoint.read())
@@ -85,8 +95,9 @@ local function work()
     local s=state()
     local a,b=s.tiles[west].rail_station_id,s.tiles[east].rail_station_id
     assert(s.stock_rail_stations[a].stock_station_id~=s.stock_rail_stations[b].stock_station_id)
-    assert(s.stock_rail_fleet.units[train].parts[1].stock_pool_id==0 and
-      s.stock_rail_fleet.units[train].parts[2].stock_pool_id==2 and s.fleet[1].stock_pool_id==1)
+    local order=first_free_three(s)
+    assert(s.stock_rail_fleet.units[train].parts[1].stock_pool_id==order[1] and
+      s.stock_rail_fleet.units[train].parts[2].stock_pool_id==order[3] and s.fleet[1].stock_pool_id==order[2])
     command("transport_start",{mode="rail",vehicle=assert(train),first=a,second=b})
     for _=1,35 do ask("advance",{days=4}) end
     local shown=false
@@ -115,8 +126,9 @@ local function work()
       assert(run.stock_fault.date_of_last_service>old.stock_fault.date_of_last_service)
       assert(run.stock_random_parts[1].stock_waiting_random_triggers%4>=2 and
         run.stock_random_parts[2].stock_waiting_random_triggers%4>=2)
-      assert(not run.service_depot and run.order.kind=="station" and run.stock_pool_id==0)
-      assert(s.stock_rail_fleet.units[run.fleet_id].parts[2].stock_pool_id==2)
+      local order=first_free_three(s)
+      assert(not run.service_depot and run.order.kind=="station" and run.stock_pool_id==order[1])
+      assert(s.stock_rail_fleet.units[run.fleet_id].parts[2].stock_pool_id==order[3])
       proof=("ORDINARY_TRAIN_PASS serviced and resumed original station order after real restart, %d paid passengers")
         :format(s.companies[owner].paid_units)
       return {kind="stop"}

@@ -631,7 +631,8 @@ local function machine_rules()
     machinery_world=dofile(module_root.."industry_machinery_world.lua")(M,
       dofile(module_root.."openttd/industry_machinery_rc1.lua"),
       dofile(module_root.."oil_animation_registry.lua"),
-      dofile(module_root.."openttd/world_animation_rc1.lua"))
+      dofile(module_root.."openttd/world_animation_rc1.lua"),
+      dofile(module_root.."openttd/industry_chimney_effect.lua"))
   end
   return machinery_world
 end
@@ -2929,6 +2930,11 @@ local function apply_build(s,owner,changes,cost)
               town=site and site.kind=="town" and best or nil,site=best,served=served,stock={},last_service={},
               stock_station_id=M.stock_station_slot(s)}
           end
+          -- Station::AddFacility initializes the random bits when adding
+          -- the first facility, including reopening a retired station.
+          if s.stock_engine_startup_seed~=nil and M.tools[k].mode=="road" then
+            s.stations[sid].stock_random_bits=M.stock_random_u32(s)%65536
+          end
         end
         tile.station=sid
         tile.road_stop_type=item.stop_type
@@ -3055,8 +3061,7 @@ function M.road_motion_timeline(s,id)
 end
 function M.road_hidden_depot(v)
   local c=v.road_speed_state
-  local frame=c and v.road_motion_frames and v.road_motion_frames[c.index]
-  return c and (c.depot_wait or frame and frame[16]) and true or false
+  return c and (c.depot_wait or c.transit_hidden) and true or false
 end
 function M.road_motion_frame(s,v)
   local c=v.road_speed_state
@@ -3374,8 +3379,9 @@ function M.foster_art_ready(s)
 end
 function M.stock_road_offer(s,engine,date)
   local market=s.stock_bus_market
-  local id=market and road_bus_catalog().stock_id(engine)
-  if not id then return end
+  local e=M.vehicles[engine]
+  local id=market and (road_bus_catalog().stock_id(engine) or e and e.stock_engine_id)
+  if not id or not market.models[id] then return end
   if engine=="foster_bus" and not M.foster_art_ready(s) then return end
   if engine=="foster_mk2_bus" and not (extra_road_art[s] and extra_road_art[s][engine]) then return end
   return assert(M.engine_calendar.snapshot(market.models[id],date or market.epoch+s.day))
@@ -3479,6 +3485,7 @@ end
 function M.stock_vehicle_slots(s,count)
   local Pool=M.stock_identity_pool()
   local used,limit={},0xFF000
+  for id in pairs(s.stock_effect_vehicles or {}) do Pool.occupy(used,id,limit) end
   for id,v in pairs(s.fleet or {}) do
     Pool.occupy(used,v.stock_pool_id or id-1,limit)
   end
@@ -3551,6 +3558,12 @@ function M.purchase(s,owner,engine,cargo,station,depot)
     local key=s.stock_bus_market and "stock_bus" or "stock_regal"
     local v=s.fleet[id]
     v[key]=road_bus_catalog().new(e)
+    M.stock_road_vehicle_random(s,v,"built")
+    local f=road_faults_mount[s]
+    if f then f.purchased(v) end
+  elseif stock_id~=nil and e.stock_engine_id and M.stock_road_offer(s,engine) then
+    local v=s.fleet[id]
+    v.stock_road_freight=true
     M.stock_road_vehicle_random(s,v,"built")
     local f=road_faults_mount[s]
     if f then f.purchased(v) end
@@ -4151,7 +4164,7 @@ end
 -- Base engines do not change appearance here, but their original
 -- triggers still participate in the RNG shared by towns and industry.
 function M.stock_road_vehicle_random(s,v,trigger)
-  if not (s.stock_generated_profile and s.stock_bus_market and v.stock_bus) then return end
+  if not (s.stock_generated_profile and s.stock_bus_market and (v.stock_bus or v.stock_road_freight)) then return end
   if not M.stock_vanilla_road_triggers then
     local info=debug and debug.getinfo(1,"S").source
     local base=info and info:match("^@(.*/)sim%.lua$")
@@ -5553,23 +5566,30 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         if works and not work then works.decorate(s,x+1,z+1) end
         if tide then tide(x,z,tick) end
         local industry_id=machines and (exact and source+1 or x+z*width+1)
-        local completed=industry_id and machines.completed(industry_id)
+        local completed,prior_gfx,prior_stage
+        if industry_id then completed,prior_gfx,prior_stage=machines.phase(industry_id) end
+        local _,moved
         if coal_tiles then
           local item=coal_tiles[source]
-          if item then visit_coal(item,tick) end
-        elseif coal then coal.tile_visit(x,z,tick) end
+          if item then _,moved=visit_coal(item,tick) end
+        elseif coal then _,moved=coal.tile_visit(x,z,tick) end
         if timber_tiles then
           -- The farm maps are live. A plot planted earlier in this
           -- same source tick must still be visited if it comes next.
           local id=source+1
           if fields and (fields[id] or regrowth and regrowth[id]~=nil) then visit_field(x,z,tick,id) end
           local item=timber_tiles[source]
-          if item then visit_timber(item,source,tick,offer_rig) end
-        elseif timber then timber.tile_visit(x,z,tick,offer_rig) end
-        if completed then
+          if item then _,moved=visit_timber(item,source,tick,offer_rig) end
+        elseif timber then
+          local _,sent=timber.tile_visit(x,z,tick,offer_rig)
+          moved=(moved or 0)+(sent or 0)
+        end
+        if completed~=nil then
           local cell=s.tiles[industry_id] and s.tiles[industry_id].stock_industry
-          if not (industry_phase and timber and s.road_oil and cell and (cell.kind=="oil_well" or cell.kind=="wells")) then
-            machines.visit(industry_id,tick)
+          if not (completed and industry_phase and timber and s.road_oil and cell
+              and (cell.kind=="oil_well" or cell.kind=="wells")) then
+            if industry_phase then machines.distribution(industry_id,tick,completed,prior_gfx,prior_stage,moved)
+            elseif completed then machines.visit(industry_id,tick) end
           end
         end
       end
@@ -5577,6 +5597,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       local month_at=month_tick and before_tick+rating_runtime.day_ticks-1
       town_passengers.day(s,function(tick,finish_rating)
         if daily_road then daily_road((tick-before_tick)%74,false) end
+        if s.stock_effect_vehicles and machines then machines.effects_tick() end
         local ready,events
         if commercial then ready,events=commercial.before(tick) end
         if freighter then freighter.rating(tick) end
@@ -5777,7 +5798,10 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       v.road_via_pending=#vias>0 and vias or nil
       v.last_departure=s.day;v.last_departure_tick=tick
     end,
-    entered_transit=function(v) M.stock_road_vehicle_random(s,v,"depot") end,
+    entered_transit=function(v,tick)
+      if faults and tick then faults.service(v,tick,fault_date(tick)) end
+      M.stock_road_vehicle_random(s,v,"depot")
+    end,
     exited=faults and function(v,tick) faults.service(v,tick,fault_date(tick)) end or nil,
     arrive=function(v,tick,frame,stop_motion)
       if not stock_managed(s,v) then return false end
@@ -6112,8 +6136,8 @@ function M.daily(s,traverse,tick_pulse,openings)
       local group=slot[phase] or {};slot[phase]=group
       group[#group+1]=ev
     end
-    for _,id in ipairs(regal_ids) do
-      add({id=s.fleet[id].stock_pool_id or id-1,road=id})
+    for id,v in pairs(s.fleet) do
+      if stock_bus(v) or v.stock_road_freight then add({id=v.stock_pool_id or id-1,road=id}) end
     end
     local rail=paid_rail_runs[s]
     if rail and rail.stock_fault_days then
@@ -6136,7 +6160,7 @@ function M.daily(s,traverse,tick_pulse,openings)
               if faults then faults.calendar(v) end
             else
               if faults then faults.economy(v,date,automatic) end
-              settle_bus(v)
+              if stock_bus(v) then settle_bus(v) end
             end
           elseif calendar and entry.calendar then entry.calendar()
           elseif not calendar and entry.economy then entry.economy(date) end

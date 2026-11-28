@@ -1,6 +1,6 @@
 -- World-owned RC1 machinery clock. Static footprint roles on native
 -- scene tiles never change when their industry sprite state changes.
-return function(Sim,Rules,OilRegistry,Motion)
+return function(Sim,Rules,OilRegistry,Motion,Chimney)
   local M={}
   local function index(s,include_wells,stock_all)
     local records,animated={},{}
@@ -38,9 +38,26 @@ return function(Sim,Rules,OilRegistry,Motion)
     local hub=s.stock_world_animations
     local W={}
     local random=function() return Sim.stock_random_u32(s) end
-    function W.completed(id)
+    function W.effects_tick() Chimney.step(s) end
+    function W.phase(id)
       local part=records[id]
-      return part and part.completed
+      if part then return part.completed==true,part.gfx,part.stage end
+    end
+    function W.distribution(id,tick,completed,prior_gfx,prior_stage,moved)
+      local part=records[id]
+      if not part then return end
+      if not completed then
+        -- The chain's tile loop already progressed the construction
+        -- counters. Only dispatch its stage-change callback here.
+        if prior_stage~=part.stage then random() end
+        return
+      end
+      if moved and moved>0 then
+        random() -- TriggerIndustryAnimation(CargoDistributed)
+        if prior_gfx==16 then return end -- forest switches straight to 17
+      end
+      if prior_gfx==17 then random();return end -- trigger before anim_next
+      W.visit(id,tick)
     end
     function W.visit(id,tick)
       local part=records[id]
@@ -59,7 +76,12 @@ return function(Sim,Rules,OilRegistry,Motion)
               if stock_all and part.gfx==8 then
                 -- MakeIndustryTileBigger -> CreateChimneySmoke ->
                 -- ChimneySmokeInit consumes one shared sprite-phase word.
-                part.stock_chimney_start=random()
+                local slots=Sim.stock_vehicle_slots(s,1)
+                if slots then
+                  local word=random()
+                  part.stock_chimney_start=word
+                  Chimney.add(s,slots[1],id,word)
+                end
               end
             end
           else part.construction_counter=counter end

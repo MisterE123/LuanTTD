@@ -120,6 +120,7 @@ return function(SharedFactory,Packets,Catchment,Rating,Income,Commons,Timber)
       opts.complete_rig(ind,tile)
     end
     if opts.stock_tile_animation and ind.kind=="oil_well" and completed and not ind.removed and not opts.editor then
+      if moved>0 then opts.random_u32() end -- TriggerIndustryAnimation(CargoDistributed)
       opts.random_u32() -- TriggerIndustryTileAnimation precedes the pump lottery.
     end
     if ind.kind=="oil_well" and completed and not ind.removed and not opts.editor and tile.gfx==29 and opts.random_u32 then
