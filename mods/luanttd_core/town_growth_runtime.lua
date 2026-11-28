@@ -364,8 +364,17 @@ return function(Sim,Terrain,G,B,H)
     if not parts then return end
     for _,p in ipairs(parts) do
       local cell=s.tiles[p.id]
-      if not cell or not cell.house or cell.source_house~=p.record
-        or p.record.player_protected or cell.owner or protected(s,p.id,cell) then return end
+      if not cell or not cell.house or cell.source_house~=p.record or p.record.player_protected or cell.owner then return end
+      local floor=Sim.tunnel_floor_at(s,p.id)
+      local covered
+      if floor then
+        local x,z=Sim.xy(p.id)
+        local _,base=Terrain.tile(s.corner_grid,x,z)
+        covered=base and base>floor
+      end
+      -- ClearTownHouse only clears the house's surface footprint. A
+      -- confirmed bore below it is not part of that command or its veto.
+      if protected(s,p.id,cell,covered) then return end
     end
     year=year or Sim.date(s)
     local receipt=Rebuild.visit(t,h,style,true,word,year)

@@ -623,6 +623,9 @@ jobs:
           lua5.1 tests/town_growth_live.lua
           LUANTTD_QA_MUNICIPAL_KIND=underbridge bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-municipal-underbridge
           LUANTTD_QA_MUNICIPAL_KIND=abovetunnel bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-municipal-abovetunnel
+          lua5.1 tests/town_rebuild.lua
+          LUANTTD_QA_MUNICIPAL_KIND=renewbore bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-municipal-renewbore
+          LUANTTD_QA_MUNICIPAL_KIND=renewbore-replace bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-municipal-renewbore-replace
           lua5.1 tests/water_flood.lua
           lua5.1 tests/town_growth_rc1_fast_grid.lua wide
           bash tests/town_growth_rc1_goods_native.sh wide

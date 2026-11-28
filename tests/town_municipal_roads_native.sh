@@ -19,6 +19,7 @@ rm "$mod/init.lua"
 fixture=tests/town_municipal_roads_native.lua
 if [[ ${LUANTTD_QA_MUNICIPAL_KIND:-} == months ]]; then fixture=tests/town_monthly_worker_native.lua; fi
 if [[ ${LUANTTD_QA_MUNICIPAL_KIND:-} == construction ]]; then fixture=tests/town_construction_worker_native.lua; fi
+if [[ ${LUANTTD_QA_MUNICIPAL_KIND:-} == renewbore* ]]; then fixture=tests/town_renew_bore_native.lua; fi
 if [[ ${LUANTTD_QA_MUNICIPAL_KIND:-} == retired || ${LUANTTD_QA_MUNICIPAL_KIND:-} == reopened || ${LUANTTD_QA_MUNICIPAL_KIND:-} == rail-reopened || ${LUANTTD_QA_MUNICIPAL_KIND:-} == air-reopened ]]; then fixture=tests/town_retired_station_native.lua; fi
 cp "$fixture" "$mod/init.lua"
 printf 'gameid = municipalroad\nbackend = sqlite3\nplayer_backend = sqlite3\nauth_backend = sqlite3\nmod_storage_backend = sqlite3\n' > "$out/world/world.mt"

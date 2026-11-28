@@ -66,3 +66,25 @@ for i=0,1 do for j=0,1 do
 end end
 assert(#s.changed==4 and Sim.company(s,"Other owner").cash==cash)
 print("PASS live town-owned clearance removes and dirties a complete compound parcel once with no company charge")
+
+-- Native 16.0-RC1 TileLoop_Town renewed an aged ordinary house over a
+-- genuine tunnel, but left the protected copy untouched. Reuse the
+-- supplied completed-house random word and preserve both route layers.
+do
+  local id=Sim.id(20,20)
+  local bore={base=0,kind="tunnel",owner="Other owner"}
+  for _,layer in ipairs({{"tunnel_below","stock_road_tunnels"},{"rail_tunnel_below","stock_rail_spans"}}) do
+    local h={id=0,town=1,x=20,z=20,root=true,root_x=20,root_z=20,completed=true,age=90}
+    s.tiles[id].house,s.tiles[id].source_house=true,h
+    s[layer[1]],s[layer[2]]={[id]=1},{[1]=bore}
+    t.num_houses,t.population,t.time_until_rebuild,t.house_counts=1,H.specs[0][1],1,{[0]=1}
+    h.player_protected=true
+    assert(not W.rebuild(s,h,id,11*2^24+159*2^16,51,no_draw) and t.time_until_rebuild==1)
+    h.player_protected=nil
+    local done=assert(W.rebuild(s,h,id,11*2^24+159*2^16,52,no_draw))
+    assert(not done.replace and t.time_until_rebuild==351 and not s.tiles[id].source_house)
+    assert(s[layer[1]][id]==1 and s[layer[2]][1]==bore and Sim.company(s,"Other owner").cash==cash)
+    s[layer[1]],s[layer[2]]=nil,nil
+  end
+  print("PASS aged unprotected houses can renew over covered road and rail tunnels; protected houses keep the clock")
+end

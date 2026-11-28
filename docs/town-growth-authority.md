@@ -143,6 +143,15 @@ overhead bridge remain blocked. Separate native worker replays
 grow a house above each mode, reopen both layers and check routing
 through both portals without changing the infrastructure owner.
 
+RC1 also renews an aged building above a verified tunnel without
+touching the bore. The normal `TileLoop_Town` reconstruction countdown
+still excludes protected houses, but clearable surface houses trigger
+the same counter even when they share a tile with a subsurface span.
+A native RC1 capture replaced an aged office with Town Houses while
+its protected neighbor and the tunnel remained. A Luanti worker replay
+checks the timed renewal, the protected house, the reopened checkpoint,
+and YAPF through both unchanged portals.
+
 RC1's house construction counter uses three bits, not two. Each
 stage lasts eight visits to the root tile; a newly started house needs
 24 visits to finish. Multi-tile pieces advance together. The completion
