@@ -15,7 +15,10 @@ function M.kind(landscape,zone,seed)
 end
 function M.ground(target)
   if target.class==6 then return 3,3 end -- shore
-  if target.snow then return target.ground==1 and 4 or 2,target.density end
+  if target.snow then
+    if target.ground==1 then return 4,3 end
+    return 2,target.density
+  end
   if target.ground==0 then return 0,target.density end
   if target.ground==1 then return 1,3 end
   return 2,target.density -- desert

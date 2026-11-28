@@ -2,18 +2,20 @@
 -- OpenTTD contributors, pinned 16.0-RC1 src/tree_cmd.cpp GenerateTrees,
 -- PlaceTreeGroups, PlaceTreesRandomly, PlaceTreeAtSameHeight, PlaceTree,
 -- PlantTreesOnTile and CanPlantTreesOnTile; src/tree_map.h, src/map.cpp and
--- src/map_func.h. Temperate normal-game world generation only.
+-- src/map_func.h. Native normal-game world generation.
 -- See COPYING.OpenTTD.md; no original tree graphics are included.
 local T={}
 local here=debug and debug.getinfo(1,"S").source:match("^@(.*/)tree_worldgen%.lua$")
 local Grove=dofile((here or (core and core.get_modpath("luanttd_core").."/openttd/") or
   "mods/luanttd_core/openttd/").."tree_grove.lua")
+local Climate=dofile((here or (core and core.get_modpath("luanttd_core").."/openttd/") or
+  "mods/luanttd_core/openttd/").."tree_climate_rc1.lua")
 local floor,ceil,min,abs=math.floor,math.ceil,math.min,math.abs
 local MP_CLEAR,MP_WATER=0,6
 local GRASS,ROUGH,ROCKS,FIELDS,SNOW,DESERT=0,1,2,3,4,5
 local TREE_GRASS,TREE_ROUGH,TREE_SNOW_DESERT,TREE_SHORE,TREE_ROUGH_SNOW=0,1,2,3,4
 local NONE,ORIGINAL,IMPROVED=0,1,2
-local DEFAULT_TREE_STEPS=1000
+local DEFAULT_TREE_STEPS,DEFAULT_RAINFOREST_TREE_STEPS=1000,15000
 local one_raised={[1]=true,[2]=true,[4]=true,[8]=true}
 T.placer={none=NONE,original=ORIGINAL,improved=IMPROVED}
 T.ground={grass=TREE_GRASS,rough=TREE_ROUGH,snow_desert=TREE_SNOW_DESERT,
@@ -62,6 +64,13 @@ local function encode(r,t)
 end
 function T.decode(packed)
   if packed==nil then return nil end
+  if packed>=16384 then
+    local native=packed-16384
+    local g=bits(native,11,3)
+    return {class=T.tile_class,type=bits(native,0,6),count=bits(native,6,2)+1,
+      growth=bits(native,8,3),ground=g,density=bits(native,14,2),
+      water_class=g==TREE_SHORE and "sea" or nil}
+  end
   local ground=bits(packed,9,3)
   return {class=T.tile_class,type=bits(packed,0,4),count=bits(packed,4,2)+1,
     growth=bits(packed,6,3),ground=ground,density=bits(packed,12,2),
@@ -78,7 +87,10 @@ function T.generate(board,start,next_random,opts)
   local map_height=opts.map_height_limit or 0
   assert(int(map_height,0,255),"Expected original map-height limit")
   assert(int(mode,0,2),"Invalid OpenTTD tree placer")
-  assert(opts.landscape==nil or opts.landscape=="temperate","Only temperate forest generation is supported")
+  local climate=opts.landscape or "temperate"
+  local arctic,tropic=climate=="arctic",climate=="tropic"
+  assert(climate=="temperate" or climate=="toyland" or arctic or tropic,"Unknown stock climate")
+  if arctic then assert(int(opts.snowline,0,255),"Arctic forestry requires the current source snowline") end
   assert(not opts.editor,"Editor-only forest placement is not supported")
   assert(board.freeform==nil or type(board.freeform)=="boolean","Invalid freeform edge flag")
   local w,h=board.width,board.depth
@@ -94,14 +106,22 @@ function T.generate(board,start,next_random,opts)
   end
   local function xy(i) return i%w+1,floor(i/w)+1 end
   local packed,order={},{}
-  local function available(i)
+  local function available(i,allow_desert)
     if packed[i]~=nil then return nil end -- Actual MP_TREES written by an earlier stock attempt.
     local x,z=xy(i)
     local t=board.tile(x,z)
-    return T.can_plant(t,true) and t or nil
+    return T.can_plant(t,allow_desert~=false) and t or nil
   end
   local function place(i,r,t)
-    local word,count=encode(r,t)
+    local word,count
+    if climate=="temperate" then
+      word,count=encode(r,t)
+    else
+      local record=Climate.place(climate,t.zone or 0,r,t,false)
+      if not record then return end
+      count=record.count
+      word=16384+record.type+64*(count-1)+256*record.growth+2048*record.ground+16384*record.density
+    end
     packed[i]=word
     order[#order+1]=i
     S.tiles=S.tiles+1
@@ -137,7 +157,7 @@ function T.generate(board,start,next_random,opts)
   end
 
   if mode~=NONE then
-    S.groups=scale(random()%32+25)
+    if climate~="toyland" then S.groups=scale(random()%32+25) end
     for _=1,S.groups do
       local x,z=xy(random()%area)
       local grove=Grove.make(random)
@@ -160,7 +180,7 @@ function T.generate(board,start,next_random,opts)
         end
       end
     end
-    local passes=mode==ORIGINAL and 6 or 2
+    local passes=arctic and (mode==ORIGINAL and 15 or 4) or (mode==ORIGINAL and 6 or 2)
     for _=1,passes do
       for _=1,scale(DEFAULT_TREE_STEPS) do
         S.base_attempts=S.base_attempts+1
@@ -173,9 +193,19 @@ function T.generate(board,start,next_random,opts)
             local x,z=xy(i)
             local v=height(t)
             local j=v*2
+            if arctic and v>opts.snowline then j=j*3 end
             if map_height>15 then j=floor(j*15/map_height) end
             for _=1,j do near_height(x,z,v) end
           end
+        end
+      end
+      if tropic then
+        for _=1,scale(DEFAULT_RAINFOREST_TREE_STEPS) do
+          S.rainforest_attempts=(S.rainforest_attempts or 0)+1
+          local r=random()
+          local i=r%area
+          local t=available(i,false)
+          if t and t.zone==Climate.RAINFOREST then place(i,r,t) end
         end
       end
     end

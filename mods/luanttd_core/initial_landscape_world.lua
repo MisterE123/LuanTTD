@@ -77,7 +77,7 @@ return function(Sim,H,Lift)
         if t.water_class~="river" or t.coastal_water then
           stats.tide_changes=stats.tide_changes+sea.visit(water,x,z,tick,id,t)
         end
-      elseif field then
+      elseif field and t.stock_arctic_snow==nil then
         fields.visit(x,z,tick,false)
       elseif t.stock_clear_density then
         trees(x+1,z+1,tick)

@@ -1760,3 +1760,23 @@ tree spread, 17 towns, 14 industries, five map and vehicle
 snapshots, and two packed reopens inside Luanti's async VM.
 This is still a no-player lane, with no startup forest,
 company transport, dynamic industry openings or climate art.
+
+### Initial forests and the live growth clock
+
+Initial forests now use the stock climate-specific place passes:
+Arctic's altitude multiplier, Tropic's extra rainforest attempts,
+and Toyland's skipped grove pass. Exact species, tree counts,
+growth and ground come from the stock placement draw. Clear-tile
+snow is stored separately from the underlying terrain and follows
+the RC1 tile loop; it changes whether a farm or tree can use that
+tile and the state inherited by a new tree. Both affect later RNG.
+
+Three 128×128 native worlds with Improved initial forests match
+all 9,438 initial tree records; they each also match 1,280 pregame
+RNG/cursor observations and 120 live days. During live play, five
+native samples per world compare tree state as well as terrain,
+town growth, industry and Toyland bubble vehicles. These tests
+reopen packed state before live play and twice mid-run in Luanti's
+async VM. They cover the Frozen economy without a company or a
+fleet; Original and Smooth climate economies and normal menu
+integration remain open.

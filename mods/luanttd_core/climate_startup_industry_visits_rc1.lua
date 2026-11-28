@@ -72,8 +72,8 @@ return function(Sim,Terrain,s,live_frozen)
       end
     end
   end
-  local tropic=s.stock_climate.landscape=="tropic"
-  local Climate=tropic and o("town_climate_landscape_rc1")
+  local tropic,arctic=s.stock_climate.landscape=="tropic",s.stock_climate.landscape=="arctic"
+  local Climate=(tropic or arctic) and o("town_climate_landscape_rc1")
   local ground_name={[0]="grass","rough","rocks","fields",[5]="desert"}
   local ground_code={rocks=2,desert=5}
   local function valid(id) local t=s.tiles[id];return t and not t.stock_void end
@@ -82,14 +82,17 @@ return function(Sim,Terrain,s,live_frozen)
     local t=s.tiles[id]
     return t.water_class=="sea" and not t.coastal_water
   end
+  local function clear_surface(t)
+    return t and not (t.stock_void or t.wood or t.house or t.stock_industry or t.terrain=="water"
+          or t.build or t.stock_landmark or t.owner or t.site or t.station or t.rail_tracks
+          or t.tram or t.ship or t.airfield or t.road_bridge_id or t.road_tunnel_id)
+  end
   if tropic then
     -- clear_cmd.cpp restores desert by physical tile visit, not at
     -- demolition time. Farm eligibility reads the physical ground.
     function M.clear(id)
       local t=s.tiles[id]
-      if not t or t.stock_void or t.wood or t.house or t.stock_industry or t.terrain=="water"
-          or t.build or t.stock_landmark or t.owner or t.site or t.station or t.rail_tracks
-          or t.tram or t.ship or t.airfield or t.road_bridge_id or t.road_tunnel_id then return end
+      if not clear_surface(t) then return end
       local plots=s.stock_farm_fields
       local ground=plots and plots[id] and "fields" or ground_name[t.stock_clear_ground or 0]
       if t.stock_tropic_zone~=Climate.DESERT and ground~="desert" and ground~="rocks" then return end
@@ -102,13 +105,23 @@ return function(Sim,Terrain,s,live_frozen)
       if plots then plots[id]=nil end
       if s.stock_farm_grass then s.stock_farm_grass[id]=nil end
     end
+  elseif arctic then
+    function M.clear(id)
+      local t=s.tiles[id]
+      if not clear_surface(t) then return end
+      local x,z=Sim.xy(id)
+      local _,base=Terrain.tile(s.corner_grid,x,z)
+      local action,density=Climate.clear_snow(base,s.stock_climate.snowline,t.stock_arctic_snow~=nil,t.stock_arctic_snow)
+      if action then t.stock_arctic_snow=density end
+    end
   end
   local fields=live_frozen and Field.field_board(s)
   function M.landscape(x,z,tick)
     local id=Sim.id(x+1,z+1)
     if records[id] then return M.visit(id,tick) end
     if M.clear then M.clear(id) end
-    if (s.stock_farm_fields and s.stock_farm_fields[id]) or (s.stock_farm_grass and s.stock_farm_grass[id]~=nil) then
+    if s.tiles[id].stock_arctic_snow==nil and ((s.stock_farm_fields and s.stock_farm_fields[id])
+       or (s.stock_farm_grass and s.stock_farm_grass[id]~=nil)) then
       fields.visit(x,z,tick,false,id)
     end
   end

@@ -1501,7 +1501,7 @@ end
 function M.mark_clear_land(s,id)
   local t=s.tiles[id]
   if not s.stock_generated_profile or not t or t.terrain=="water" or t.stock_void then return end
-  t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits=nil,0,nil
+  t.stock_clear_ground,t.stock_clear_density,t.stock_clear_visits,t.stock_arctic_snow=nil,0,nil,nil
   if s.stock_farm_fields then s.stock_farm_fields[id]=nil end
 end
 function M.road_site_clear_cost(t,farm_field)

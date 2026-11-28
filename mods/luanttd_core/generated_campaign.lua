@@ -51,6 +51,10 @@ function M.landscape(Sim,Terrain,Generator,settings)
         assert(kind==0 or kind==4 and map.river_tree,"Unexpected stock landscape class")
         t.terrain=base>0 and "hill" or "grass"
         t.stock_clear_ground=clear_ground and clear_ground>0 and clear_ground or nil
+        if s.stock_climate and map.clear_density and clear_ground==5 then
+          local den=map.clear_density(x,z)
+          if den and den~=3 then t.stock_clear_density=den end
+        end
         if kind==4 then t.wood=assert(map.river_tree(x,z)) end
       end
       s.tiles[Sim.id(x,z)]=t
@@ -438,11 +442,14 @@ function M.forests(Sim,Terrain,s,Generator,Trees,tree_placer,pulse)
     local slope,base=Terrain.tile(s.corner_grid,x,z)
     local field=s.stock_farm_fields and s.stock_farm_fields[id]
     return {class=t.terrain=="water" and 6 or 0,ground=field and 3 or t.stock_clear_ground or 0,
+      zone=t.stock_tropic_zone,snow=t.stock_arctic_snow~=nil,density=t.stock_arctic_snow or t.stock_clear_density or 3,
       slope=slope,height=base,coast=t.coastal_water==true,rocky=t.stock_water_rocks==true,
       bridge_above=s.bridge_above and s.bridge_above[id]~=nil or
         s.rail_bridge_above and s.rail_bridge_above[id]~=nil}
   end
+  local climate=s.stock_climate
   local result=Trees.generate(board,start,Generator.next_random,{tree_placer=tree_placer,pulse=pulse,
+    landscape=climate and climate.landscape,snowline=climate and climate.snowline,
     map_height_limit=profile.map_height_limit or 30})
   local n=0
   result.each(function(x,z,record)

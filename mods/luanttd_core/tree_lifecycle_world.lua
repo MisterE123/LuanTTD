@@ -33,7 +33,7 @@ return function(Sim,Terrain,Rules)
     if type(t.wood)~="table" then
       -- RC1 ClearTile_Clear: eight actual landscape visits per
       -- density increment, independent of placement date and tile phase.
-      if t.stock_clear_density and clean(t) and t.terrain~="water"
+      if t.stock_clear_density and t.stock_arctic_snow==nil and clean(t) and t.terrain~="water"
           and (t.stock_clear_ground or 0)==0 and not (s.stock_farm_fields and s.stock_farm_fields[id]) then
         if surface then surface(id) end
         local n=(t.stock_clear_visits or 0)+1

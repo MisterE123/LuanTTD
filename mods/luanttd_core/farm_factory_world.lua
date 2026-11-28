@@ -128,7 +128,7 @@ return function(Sim,Terrain,Rules,Fields,Catchment)
         return id,(cover==3 or t.terrain=="shore") and shore or cover==1 and rough_trees or trees
       end
       local g=t.stock_clear_ground
-      return id,t.terrain=="snow" and snow or (g==5 or t.terrain=="desert") and dry or g==1 and rough or g==2 and rocks or grass
+      return id,(t.terrain=="snow" or t.stock_arctic_snow~=nil) and snow or (g==5 or t.terrain=="desert") and dry or g==1 and rough or g==2 and rocks or grass
     end
     local function dirty(id)
       s.changed=s.changed or {};s.changed[#s.changed+1]=id

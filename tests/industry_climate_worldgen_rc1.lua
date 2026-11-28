@@ -31,6 +31,11 @@ end
 local frozen=dofile(fp.."rc1-native-climate-industry-live-frozen.lua")
 local spread=dofile(fp.."rc1-native-climate-industry-live-trees.lua")
 local toyland_live=dofile(fp.."rc1-native-climate-industry-live-toyland.lua").toyland
+local wooded=dofile(fp.."rc1-native-climate-industry-live-wooded.lua")
+local function fold(h,...)
+  for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
+  return h
+end
 local function live_frozen(s,Calendar,climate,w,settings,fixture)
   s.stock_extra_tree_placement=settings
   local function mount()
@@ -40,10 +45,6 @@ local function live_frozen(s,Calendar,climate,w,settings,fixture)
     S.mount_frozen_climate_clock(s,T)
   end
   mount()
-  local function fold(h,...)
-    for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
-    return h
-  end
   local digest,ticks,maps,reopen=1,0,0,0
   local function check(tick)
     assert(tick==1281+ticks)
@@ -182,6 +183,8 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
       for j,row in ipairs(cells) do eq("physical cell "..i.."/"..j,row,want[19][j]);n=n+1 end
     end
     print(("PASS automatic RC1 %s generation: %d source-exact placements, %d reopened physical tiles and complete shared RNG"):format(climate,#out.firms,n))
+    local woods=(i<=3) and wooded[climate]
+    local industry_snapshot=woods and Codec.encode(s)
     local pregame=dofile(fp.."rc1-native-climate-industry-settle.lua")[i]
     assert(pregame.climate==climate and pregame.seed==seed)
     local Calendar=o("stock_engine_calendar")
@@ -228,6 +231,41 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
       live_frozen(assert(Codec.decode(fresh)),Calendar,climate,w,2,assert(spread[climate]))
     elseif climate=="toyland" and seed==49832 then
       live_frozen(s,Calendar,climate,w,2,toyland_live)
+    end
+    if woods then
+      s=assert(Codec.decode(industry_snapshot))
+      profile=s.stock_generated_profile
+      s.road_stock_loading,s.road_stock_clock,s.road_stock_house_supply,s.road_economy=true,true,true,true
+      s.road_junction_clearance,s.road_bay_build=true,true
+      s.stock_extra_tree_placement=2
+      S.mount_road_bus_market(s,Calendar,1985,false,false)
+      S.mount_stock_town_growth(s,Live,true)
+      S.mount_coastal_flood(s)
+      profile.industry_rng=profile.climate_industry_rng
+      eq("before forest",{profile.industry_rng[1],profile.industry_rng[2],profile.map_height_limit},woods.before)
+      local result=Campaign.forests(S,T,s,Generator,o("tree_worldgen"),2)
+      eq("after forest",result.rng_after,woods.after)
+      local size,stamp=0,1
+      for id,tile in ipairs(s.tiles) do
+        local wood=tile.wood
+        if wood then
+          size=size+1
+          stamp=fold(stamp,id-1,wood.type,wood.count,wood.growth,wood.ground,wood.density)
+        end
+      end
+      eq("complete initial forest",{size,stamp},woods.forest)
+      S.stock_world_launch(s,Calendar)
+      local runtime,board=m("climate_startup_industry_visits_rc1")(S,T,s)
+      local ticks,digest=0,1
+      S.prepare_initial_landscape(s,Live,board,nil,runtime,function(tick,head)
+        assert(tick==ticks)
+        ticks=ticks+1
+        digest=fold(digest,tick,s.passenger_rating_rng[1],s.passenger_rating_rng[2],head)
+      end)
+      eq("wooded pregame RNG and cursor",{ticks,digest},{1280,woods.pregame})
+      s=assert(Codec.decode(Codec.encode(s)))
+      print(("PASS wooded RC1 %s: %d initial trees and %d native pregame ticks"):format(climate,size,ticks))
+      live_frozen(s,Calendar,climate,w,2,woods)
     end
 
   end
