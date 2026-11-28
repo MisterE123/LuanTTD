@@ -121,6 +121,12 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
 
     -- Call after station loading, vehicles and OnTick_Station of the
     -- *same* stock tick. This fills industry waiting, not station queues.
+    local produce_options={}
+    function B.produce_one(ind,tick)
+      produce_options.editor,produce_options.scale=option("editor",tick),option("scale",tick)
+      produce_options.ambient_rng,produce_options.random_u32=random,random
+      return Coal.production_tick(ind,produce_options)
+    end
     function B.after_vehicle_tick(tick)
       local total=0
       local settings={editor=option("editor",tick),scale=option("scale",tick),
@@ -267,12 +273,15 @@ return function(Sim,Coal,Catchment,Packets,Income,Rating,Station)
       }
     end
 
+    function B.month_one(ind,_,year,settings)
+      local next_={random_u32=random}
+      for k,v in pairs(settings or {}) do next_[k]=v end
+      return Coal.month(ind,year,next_)
+    end
     function B.month(year,settings)
       local outcomes={}
       for _,ind in ipairs(industries) do
-        local next_={random_u32=random}
-        for k,v in pairs(settings or {}) do next_[k]=v end
-        local reason,change,percent=Coal.month(ind,year,next_)
+        local reason,change,percent=B.month_one(ind,nil,year,settings)
         if reason then outcomes[#outcomes+1]={id=ind.id,kind=reason,change=change,percent=percent} end
       end
       return outcomes

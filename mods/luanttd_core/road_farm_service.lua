@@ -100,7 +100,7 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
         serve_neutral=s.stock_serve_neutral_industries~=false,
         town_rights=options.town_rights,modified=options.modified_catchment,refuses=options.refuses,
         packet_allocatable=options.packet_allocatable,ambient=options.ambient,animated=options.animated,
-        complete_rig=options.complete_rig,
+        complete_rig=options.complete_rig,stock_tile_animation=options.stock_tile_animation,
         opts={current_payment=options.current_payment,scale=options.scale,recession=options.recession,
           economy_date=options.economy_date or function(world)return world.day end}})
       raw.report_with_sources=source_report
@@ -137,9 +137,18 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       return tiles,visit,field.landscape_fields,field.landscape_regrowth,visit_field
     end
     B.animate=options.each_tick
-    function B.after_vehicle_tick(tick)
+    function B.refresh_production_stations(tick)
       for _,p in ipairs(stations) do refresh(p.st,tick,true) end
+    end
+    function B.produce_one(ind,tick)
+      return raw.produce(ind.id,tick)
+    end
+    function B.after_vehicle_tick(tick)
+      B.refresh_production_stations(tick)
       raw.produce_all(tick)
+    end
+    function B.month_one(ind,ordinal,year,opts)
+      return raw.month(ind.id,ordinal,year,opts)
     end
     function B.month(ordinal,year,opts)
       local out={}

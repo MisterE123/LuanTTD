@@ -155,6 +155,15 @@ return function(Rules,Catchment)
     local function production_options()
       return {random_u32=ctx.random_u32,ambient=ctx.ambient}
     end
+    local quiet=Rules.counter_only_quiet_slot and not (opts.editor or opts.scale)
+    local function can_skip(ind,id,tick)
+      local c=quiet and ind.counter
+      if type(c)~="number" or c<=1 or c>=65536 or c%64<=1 or ind.removed then return false end
+      -- No source pre-decrement sound or post-decrement production.
+      ind.counter=c-1
+      ledger.production[id],ledger.industry_phase_tick=tick,tick
+      return true
+    end
     function B.produce(id,tick)
       assert(uint(tick))
       local ind=by_id[id]
@@ -163,29 +172,20 @@ return function(Rules,Catchment)
       if not available then return 0,reason end
       local last=ledger.production[id]
       if last and tick<=last then return 0,"DUPLICATE_OR_STALE_PRODUCTION" end
-      return produce(ind,id,tick,production_options())
+      if not can_skip(ind,id,tick) then return produce(ind,id,tick,production_options()) end
+      return 0
     end
     function B.produce_all(tick)
       assert(uint(tick))
       local options=production_options()
-      local quiet=Rules.counter_only_quiet_slot and not (opts.editor or opts.scale)
       for _,ind in ipairs(industries) do
-        -- Recheck the phase in case a client callback opens a station
-        -- scan. The saved per-industry replay guard remains authoritative.
+        -- Check again if a client callback opens a station scan.
         if not phase_available(tick) then return end
         local id=ind.id
         local last=ledger.production[id]
-        if not last or tick>last then
-          local c=quiet and ind.counter
-          if type(c)=="number" and c>1 and c<65536 and c%64>1 and not ind.removed then
-            -- The source pre-decrement 64-phase sound and
-            -- post-decrement 256-phase production cannot run here.
-            ind.counter=c-1
-            ledger.production[id],ledger.industry_phase_tick=tick,tick
-          else
-            options.field_attempt=nil
-            produce(ind,id,tick,options)
-          end
+        if (not last or tick>last) and not can_skip(ind,id,tick) then
+          options.field_attempt=nil
+          produce(ind,id,tick,options)
         end
       end
     end

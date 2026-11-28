@@ -61,3 +61,4 @@ for i,t in ipairs(profile.industries) do
   end
 end
 print("PASS fresh RC1 Normal-industry region: eleven real factories/mines/farms, exact startup map, initial production and shared RNG")
+return {world=s,Sim=Sim,Terrain=T,mod=root:sub(1,-2)}

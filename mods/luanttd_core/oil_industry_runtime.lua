@@ -7,7 +7,8 @@ return function(Rules,IndustryRuntime,Catchment)
   function M.bind(s,ledger,ctx)
     local adapted=setmetatable({}, {__index=Rules})
     function adapted.tile_loop(i,t,opts,offer)
-      opts.random_u32,opts.animated,opts.complete_rig=ctx.random_u32,ctx.animated,ctx.complete_rig
+      opts.random_u32,opts.animated,opts.complete_rig,opts.stock_tile_animation=
+        ctx.random_u32,ctx.animated,ctx.complete_rig,ctx.stock_tile_animation
       return Rules.tile_loop(i,t,opts,offer)
     end
     return IndustryRuntime(adapted,Catchment).bind(s,ledger,ctx)

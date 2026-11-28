@@ -33,7 +33,7 @@ return function(Sim,Rules,OilRegistry)
     return records,animated
   end
   function M.bind(s,include_wells)
-    local stock_all=include_wells and s.stock_generated_profile and s.stock_generated_profile.rc1_industry_phase
+    local stock_all=s.stock_generated_profile and s.stock_generated_profile.rc1_industry_phase
     local records,animated=index(s,include_wells,stock_all)
     local W={}
     local random=function() return Sim.stock_random_u32(s) end
@@ -66,6 +66,8 @@ return function(Sim,Rules,OilRegistry)
         return
       end
       if stock_all then random() end -- unconditional base TileLoop animation callback word
+      if not include_wells and not (part.gfx==Rules.MINE_REST or part.gfx==Rules.MINE_RUN
+            or part.gfx==Rules.POWER_SPARKS) then return end
       local prev_gfx,prev_frame,was=part.gfx,part.animation_frame,part.animated
       Rules.visit(part,tick,random)
       animated[id]=part.animated and part or nil

@@ -61,7 +61,7 @@ return function(Timber,Farm,Oil,Fields,Runtime,Catchment)
       return assert(by_kind[i.kind]).production_tick(i,opts)
     end
     function A.tile_loop(i,t,opts,offer)
-      if i.kind=="oil_well" then opts.random_u32,opts.animated=ctx.random_u32,ctx.animated end
+      if i.kind=="oil_well" then opts.random_u32,opts.animated,opts.stock_tile_animation=ctx.random_u32,ctx.animated,ctx.stock_tile_animation end
       if i.kind=="oil_rig" then opts.complete_rig=ctx.complete_rig end
       local sprite=t.gfx
       local n,moved,details=assert(by_kind[i.kind]).tile_loop(i,t,opts,offer)

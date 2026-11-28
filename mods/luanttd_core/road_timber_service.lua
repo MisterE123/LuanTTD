@@ -111,9 +111,18 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station)
       end
       return lot,moved,why
     end
-    function B.after_vehicle_tick(tick)
+    function B.refresh_production_stations(tick)
       for _,p in ipairs(stations) do refresh(p.st,tick,true) end
+    end
+    function B.produce_one(ind,tick)
+      return raw.produce(ind.id,tick)
+    end
+    function B.after_vehicle_tick(tick)
+      B.refresh_production_stations(tick)
       raw.produce_all(tick)
+    end
+    function B.month_one(ind,ordinal,year,opts)
+      return raw.month(ind.id,ordinal,year,opts)
     end
     function B.month(ordinal,year,opts)
       local out={}

@@ -3977,7 +3977,8 @@ local function passenger_modules()
       local animated,each_tick=oil.animation(s)
       local list,ports,dry=goods.join_ports(s)
       local B=oil.service.bind(s,{credit=credit,station_union=oil.runtime.union(s,paid_rail_runs[s],probe),
-        animated=animated,each_tick=each_tick,ship_stations=list,complete_rig=oil.completion(s)})
+        animated=animated,each_tick=each_tick,ship_stations=list,complete_rig=oil.completion(s),
+        stock_tile_animation=s.stock_generated_profile and s.stock_generated_profile.rc1_industry_phase})
       B.oil_ship_binding,B.goods_ship_binding=ports,dry
       return B
     end
@@ -4020,7 +4021,8 @@ local function passenger_modules()
       local station_union=rail_union(s,Freight.industry,rail_controllers,for_cargo,probe)
       local list,ports,dry=goods.join_ports(s)
       local B=union.bind(s,{credit=credit,industries=all,ship_stations=list,field_board=enabled.farm and farm_world.field_board(s),
-        station_union=station_union,animated=animated,each_tick=tick,complete_rig=enabled.oil and oil.completion(s),forestry_changed=function(t)
+        station_union=station_union,animated=animated,each_tick=tick,complete_rig=enabled.oil and oil.completion(s),
+        stock_tile_animation=s.stock_generated_profile and s.stock_generated_profile.rc1_industry_phase,forestry_changed=function(t)
           s.changed=s.changed or {};s.changed[#s.changed+1]=M.id(t.x+1,t.z+1)
         end})
       B.mixed=true;B.oil_ship_binding,B.goods_ship_binding=ports,dry
@@ -5492,10 +5494,13 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
       local width,height=M.W,M.H
       local clock=s.passenger_house_clock
       local exact=width==2^clock.log_x and height==2^clock.log_y
+      local industry_phase=s.stock_generated_profile and s.stock_generated_profile.rc1_industry_phase
+      local physical_industries
       local coal_tiles,visit_coal
       local timber_tiles,visit_timber,fields,regrowth,visit_field
       local offer_rig=commercial and commercial.offer_rig_passengers
       local function industry_footprints()
+        physical_industries=M.stock_industry_order(s,coal,timber)
         coal_tiles,visit_coal,timber_tiles,visit_timber,fields,regrowth,visit_field=nil,nil,nil,nil,nil,nil,nil
         if exact then
           if coal then coal_tiles,visit_coal=coal.landscape(width,height) end
@@ -5519,7 +5524,6 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
           local item=coal_tiles[source]
           if item then visit_coal(item,tick) end
         elseif coal then coal.tile_visit(x,z,tick) end
-        if completed then machines.visit(industry_id,tick) end
         if timber_tiles then
           -- The farm maps are live. A plot planted earlier in this
           -- same source tick must still be visited if it comes next.
@@ -5528,6 +5532,12 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
           local item=timber_tiles[source]
           if item then visit_timber(item,source,tick,offer_rig) end
         elseif timber then timber.tile_visit(x,z,tick,offer_rig) end
+        if completed then
+          local cell=s.tiles[industry_id] and s.tiles[industry_id].stock_industry
+          if not (industry_phase and timber and s.road_oil and cell and (cell.kind=="oil_well" or cell.kind=="wells")) then
+            machines.visit(industry_id,tick)
+          end
+        end
       end
       local before_tick=clock.counter
       local month_at=month_tick and before_tick+rating_runtime.day_ticks-1
@@ -5561,7 +5571,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
             if st.passenger_rating_phase==0 then coal.step_rating(st) end
           end
           if freight then freight.post(tick) end
-          coal.after_vehicle_tick(tick)
+          if not physical_industries then coal.after_vehicle_tick(tick) end
         end
         if timber then
           for _,view in ipairs(timber.stations) do
@@ -5571,8 +5581,19 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
           -- The rail industry station ages and rates before shared
           -- production; that producer has exactly one mixed StationID list.
           if industry_train then industry_train.post(tick) end
-          -- Timber scene IDs begin in the next band after stock coal.
-          timber.after_vehicle_tick(tick)
+          if not physical_industries then timber.after_vehicle_tick(tick)
+          else timber.refresh_production_stations(tick) end
+        end
+        if physical_industries then
+          -- OnTick_Industry: physical pool order, then the unconditional
+          -- TriggerIndustryAnimation word at each post-decrement 256 boundary.
+          for _,row in ipairs(physical_industries) do
+            local f=row.firm
+            if not f.removed then
+              row.binding.produce_one(f,tick)
+              if f.counter%256==0 then M.stock_random_u32(s) end
+            end
+          end
         end
       end,{passenger=commercial and commercial.hooks.passenger,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
@@ -5792,9 +5813,39 @@ function M.position(s,v)
   end
   return v.depot or (s.stations[v.station] and s.stations[v.station].tile)
 end
+function M.stock_industry_order(s,coal,timber)
+  local stock=s.stock_economy_subsidies
+  if not (stock and s.stock_generated_profile and s.stock_generated_profile.rc1_industry_phase) then return end
+  local ordered={}
+  for id,key in pairs(stock.industry_slots) do
+    local chain,n=key:match("^([^:]+):(%d+)$")
+    local binding=chain=="coal" and coal or chain~="coal" and timber
+    local registry=chain and s["stock_"..chain.."_industries"]
+    local firm=registry and registry[tonumber(n)]
+    if firm and binding then ordered[#ordered+1]={id=id,firm=firm,binding=binding,chain=chain} end
+  end
+  table.sort(ordered,function(a,b)return a.id<b.id end)
+  return ordered
+end
 -- RC1 Industry monthly timer rolls production and closure before the
 -- Station and Town timers on the same economy tick.
 function M.stock_industry_month(s,coal,timber,y,month)
+  local ordered=M.stock_industry_order(s,coal,timber)
+  if ordered then
+    local stock_options={original=s.stock_industry_original_economy==true,smooth=true}
+    for _,row in ipairs(ordered) do row.binding.month_one(row.firm,y*12+month,y,stock_options) end
+    s.changed=s.changed or {}
+    if M.road_oil_active(s) then
+      for _,id in ipairs(oil.world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+    end
+    if M.road_heavy_active(s) then
+      for _,id in ipairs(farm.heavy.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+    end
+    if M.road_farm_active(s) then
+      for _,id in ipairs(farm_world.sweep_closed(s)) do s.changed[#s.changed+1]=id end
+    end
+    return
+  end
   if coal then coal.month(y,{frozen=s.stock_coal_frozen}) end
   -- The placed forest/sawmill preview keeps its scenario industries
   -- active. Dynamic site opening/closure is a separate world command.
