@@ -124,6 +124,28 @@ function B.tick(s,ctx)
   return B.handle(s,ctx)
 end
 
+-- AircraftEventHandler calls this once per controller pass. Unlike a
+-- road vehicle, a broken aircraft continues moving and the delay byte
+-- is not decremented. HandleAircraftSmoke ends the breakdown at low
+-- speed; the FTA applies the broken speed limit separately.
+function B.aircraft_handle(s,ctx)
+  if ctx.stopped or ctx.crashed then return {broken=not not s.aircraft_broken} end
+  local n=s.breakdown_ctr
+  if n==2 then
+    s.breakdown_ctr=1
+    s.breakdowns_since_last_service=min(s.breakdowns_since_last_service+1,255)
+    s.aircraft_broken=true
+  elseif n>2 and not ctx.loading then
+    s.breakdown_ctr=n-1
+  end
+  if s.aircraft_broken and ctx.cur_speed<10 then
+    s.aircraft_broken,s.breakdown_ctr=nil,0
+    return {broken=false,recovered=true}
+  end
+  return {broken=not not s.aircraft_broken,started=n==2,
+    smoke=s.aircraft_broken and not ctx.second_pass and s.tick_counter%16==0 or nil}
+end
+
 -- Actual depot service: both timer dates, reliability from the latest
 -- engine calendar snapshot, service tally, and chance; *not* decay,
 -- count-down, or repair timers. A host must still model reaching a depot:

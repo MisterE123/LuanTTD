@@ -78,6 +78,7 @@ return function(Sim,mod,s,cap)
   end
   if s.air_paid_service then
     local net,run,owned,roster=B.air(s,Slope,function(id) return cap.air[id]==true end,cap.city_airport,cap.heliport,cap.ground_rotary,cap.expansion_airports)
+    run.stock_breakdown_difficulty=cap.road and cap.road.breakdowns or 1
     N.air={network=net,run=run,owned=owned,roster=roster}
     pilot(function()
       local r=run.current(s)

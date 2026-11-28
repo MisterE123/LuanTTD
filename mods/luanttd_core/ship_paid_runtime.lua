@@ -343,6 +343,19 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local ctx=context(s,active)
     ctx.stock_late_rating=s.stock_generated_profile and s.road_stock_clock and s.stock_town_growth and s.road_stock_loading
     if ctx.stock_late_rating and MailRandom then ctx.random_u32=function() return MailRandom(s) end end
+    local has_airports=s.stock_engine_startup_seed~=nil and s.stock_small_airports and next(s.stock_small_airports)
+    if has_airports then
+      local function airport_rng(st)
+        if (mode(st)=="air" or st.neutral_rig) and st.host_id then
+          local field=s.stock_small_airports[st.host_id]
+          local tile=field and s.tiles[field.origin]
+          if tile and tile.airfield and tile.airfield.airport==field.id then
+            Sim.stock_random_u32(s)
+          end
+        end
+      end
+      ctx.airport_new_cargo,ctx.airport_cargo_taken=airport_rng,airport_rng
+    end
     if s.stock_bus_market then
       local new_date=s.stock_bus_market.epoch+s.day
       ctx.stock_date=function(tick) return new_date-(tick<first_tick+73 and 1 or 0) end
@@ -371,7 +384,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     for _,a in ipairs(aircraft) do
       local id=air_key(a.paid_clock)
       air_ready[id]=active.air and (not Air.paid_art_ready or Air.paid_art_ready(a))
-      if air_ready[id] and Air.settle_owned_day then Air.settle_owned_day(s,a) end
+      if air_ready[id] and Air.settle_owned_day and not (Air.phased_economy and Air.phased_economy(s,a)) then
+        Air.settle_owned_day(s,a)
+      end
     end
     local base_vehicle_active=ctx.vehicle_active
     ctx.vehicle_active=function(v)
@@ -421,6 +436,11 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     if Air then reconcile_air(s,c,Air,aircraft,ctx,first_tick) end
     sync_stations(s,c,ctx,active,post and function(id) return post_run.ordered_dock(post,id) end)
     local hooks=Mux.town_hooks
+    if has_airports then
+      hooks={passenger=function(_,amount,x,z,house,tick)
+        return Mux.emit(s,service,ctx,amount,x,z,house,tick)
+      end}
+    end
     if (post or s.rail_mail_service and active.rail or active.air and next(s.stock_small_airports or {})) and Mail and Catchment then
       local physical={}
       for _,st in pairs(service.stations) do
@@ -437,7 +457,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         select_goods=ctx.select_goods,neutral_owner=ctx.neutral_owner,town_rights=rights,
         station_town=function(st) return st.town or st.site end,
         station_id=function(st) return st.stock_station_id or (st.host_mode=="ship" and ship_index(st.host_id) or st.id) end,
-        modified=s.stock_modified_catchment,immutable_footprints=true,tiles=function(st)
+        modified=s.stock_modified_catchment,immutable_footprints=true,
+        new_cargo=ctx.airport_new_cargo,tiles=function(st)
           if Mail.truck_stop(st) then return Sim.road_stop_tiles(st) end
           return st.tiles
         end})

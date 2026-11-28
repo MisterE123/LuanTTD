@@ -3,6 +3,7 @@
 -- Later model retirement/maintenance and non-default refits are not mounted.
 return function(Sim,Run,Roster,model_ready)
   local O={}
+  local Fault=dofile((core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/road_breakdowns.lua")
   local function plane_count(s)
     local n=s.stock_owned_aircraft and 1 or 0
     for _ in pairs(s.stock_owned_air_fleet or {}) do n=n+1 end
@@ -58,6 +59,20 @@ return function(Sim,Run,Roster,model_ready)
     end
     local c=Sim.company(s,owner)
     if c.cash<fresh.price then return nil,"NOT_ENOUGH_MONEY" end
+    if s.stock_engine_startup_seed~=nil and Sim.stock_vehicle_slots then
+      local model=assert(Roster.entry(fresh.stock_id))
+      local n=model.helicopter and 3 or 2
+      local slots,why=Sim.stock_vehicle_slots(s,n)
+      if not slots then return nil,why end
+      -- CmdBuildAircraft initializes separately allocated fuselage,
+      -- shadow and (helicopter only) rotor vehicles in this order.
+      fresh.stock_pool_ids,fresh.stock_random_bits=slots,{}
+      for i=1,n do fresh.stock_random_bits[i]=Sim.stock_random_u32(s)%65536 end
+      local engine=Roster.engine_snapshot(s,fresh.stock_id)
+      if engine then
+        fresh.stock_fault=Fault.new(engine.reliability,engine.reliability_decay,engine.life_days,engine.at,engine.at)
+      end
+    end
     c.cash,c.expense,c.month_exp=c.cash-fresh.price,c.expense+fresh.price,c.month_exp+fresh.price
     fresh.id,fresh.day,fresh.status=1,s.day,"hangar"
     if s.air_fleet_preview then

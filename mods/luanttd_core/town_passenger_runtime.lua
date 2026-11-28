@@ -188,6 +188,19 @@ return function(Sim,H,Packets,Rating,Mail)
         end
       end
     end
+    if s.stock_engine_startup_seed~=nil and s.air_paid_service then
+      local ordinary_visit=landscape_tile
+      landscape_tile=function(x,z,tick,tile)
+        if ordinary_visit then ordinary_visit(x,z,tick,tile) end
+        local cell=s.tiles[tile+1]
+        local field=cell and cell.airfield
+        if field and field.layout~="oilrig" and (s.stock_small_airports or {})[field.airport] then
+          -- TileLoop_Station(Airport) calls the Built-equivalent random
+          -- word on each actual airport tile; an oil rig is a water tile.
+          random()
+        end
+      end
+    end
     local traverse=hooks and hooks.traverse
     local tick_pulse=hooks and hooks.tick_pulse
     if after_tick then

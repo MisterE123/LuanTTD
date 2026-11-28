@@ -4,6 +4,7 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
   local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
   local O=dofile(source.."rail_order_list.lua")
   local Rig=dofile(source.."oil_rig.lua")
+  local Fault=dofile(source.."road_breakdowns.lua")
   local Rotor=dofile(source.."airport_rotary_motion.lua")(Motion)
   local R={VERSION=1,DWELL_TICKS=74,engine={id=215,visual="bayshore_trimotor",
     passengers=25,mail=4,acceleration=18,max_speed=473}} -- (37 * 128) / 10
@@ -104,7 +105,10 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       p.finance={annual_fp=owned.annual_fp,ticks=0,charged_ticks=0,expense=0}
     end
     local engine=R.engine_for(p)
-    p.vehicle=assert(layout(a).new(a,{owner=owner,order={kind="station",id=second},
+    -- A purchased plane is already at the first ordered airport. Stock
+    -- InHangar claims a local terminal before the first departure.
+    local first_stop=owned and owned.stock_fault and first or second
+    p.vehicle=assert(layout(a).new(a,{owner=owner,order={kind="station",id=first_stop},
       max_speed=engine.max_speed,acceleration=engine.acceleration,helicopter=engine.helicopter,
       hangar_index=owned and owned.hangar_index}))
     if s.air_paid_service then
@@ -117,6 +121,40 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       s.airport_owned_runs[p.paid_clock]=p
     else s.airport_pilot=p end
     return p
+  end
+  local function asset(s,p)
+    return s.stock_owned_air_fleet and s.stock_owned_air_fleet[p.paid_clock] or s.stock_owned_aircraft
+  end
+  function R.stock_fault_days(s)
+    local out={}
+    local function add(unit,p)
+      local h=unit.stock_fault
+      if not h or p and R.paid_art_ready and not R.paid_art_ready(p) then return end
+      local v=p and p.vehicle or nil
+      out[#out+1]={id=unit.stock_pool_ids[1],calendar=function()
+        Fault.calendar_day(h)
+      end,economy=function(date)
+        local engine=assert(Roster.engine_snapshot(s,unit.stock_id,date))
+        unit.stock_economy_age=math.min(Fault.MAX_AGE,(unit.stock_economy_age or 0)+1)
+        unit.stock_day_counter=((unit.stock_day_counter or 0)+1)%256
+        if unit.stock_day_counter%8==0 then
+          local value=unit.stock_value or unit.price
+          unit.stock_value=value-math.floor(value/256)
+        end
+        Fault.economy_day(h,{cur_speed=v and v.speed or 0,stopped=not v or v.stopped,
+          loading=v and v.loading,difficulty=R.stock_breakdown_difficulty,
+          engine_reliability=engine.reliability},function() return Sim.stock_random_u32(s) end)
+        if p then R.settle_owned_day(s,p) end
+      end}
+    end
+    for id,unit in pairs(s.stock_owned_air_fleet or {}) do add(unit,R.current(s,id)) end
+    if s.stock_owned_aircraft then add(s.stock_owned_aircraft,R.current(s)) end
+    return out
+  end
+  function R.phased_economy(s,p)
+    local unit=asset(s,p)
+    return s.stock_generated_profile and s.stock_bus_market and unit and unit.stock_fault~=nil
+      and Sim.road_stock_service_active(s)
   end
   function R.uses_airfield(p,id)
     if p.target==id then return true end
@@ -151,6 +189,21 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     local hooks={airports=airports,layout=layout,plane_speed=Motion.PLANE_SPEED,terrain_height=function(x,z)
       return R.terrain_under(s,x,z)
     end}
+    local unit=p.paid_clock and asset(s,p)
+    local fault=unit and unit.stock_fault
+    if fault then
+      hooks.breakdown=function(pass)
+        if pass==1 then fault.tick_counter=(fault.tick_counter+1)%256 end
+        local f=Fault.aircraft_handle(fault,{second_pass=pass==2,cur_speed=v.speed,
+          loading=v.loading or pass==1 and hooks.leaving,stopped=v.stopped,crashed=v.crashed})
+        v.broken=f.broken or nil
+      end
+      hooks.touchdown=function()
+        -- AircraftLandAirplane -> TriggerAirportTileAnimation;
+        -- its Random() precedes even the vanilla empty callback.
+        Sim.stock_random_u32(s)
+      end
+    end
     if v.helicopter then
       hooks.rotary=Rotor
       hooks.flying_state=Small.state.FLYING
@@ -211,6 +264,9 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
           v.order=order
         end
       end
+      -- HandleLoading switches to OT_LEAVESTATION on pass zero; that
+      -- pass does not move. ProcessOrders advances it on the second pass.
+      hooks.leaving=fault and ready
       if p.finance and not v.stopped then p.finance.ticks=p.finance.ticks+1 end
       local next,events,why=Motion.tick(a,v,hooks)
       if why then p.phase,p.failure="blocked",why;return p end

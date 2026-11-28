@@ -199,7 +199,10 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
       if units>0 then
         generated(st,units,e)
         if destination.kind=="road" then RoadRating.generated(s,st,units)
-        else StockRating.observe_waiting(st.passenger_rating_state,units) end
+        else
+          StockRating.observe_waiting(st.passenger_rating_state,units)
+          if ctx.airport_new_cargo then ctx.airport_new_cargo(st) end
+        end
         total=total+units
       end
       result[#result+1]={station=entry.st.id,kind=destination.kind,
@@ -207,6 +210,16 @@ return function(Sim,Catchment,Packets,RoadRating,StockRating)
     end
     Stats.supply(s,e,"passenger",0,total)
     return total
+  end
+
+  -- Airport callbacks consume stock RNG within the house tile command,
+  -- before returning to the landscape loop or rolling the mail amount.
+  -- Do not buffer those passenger allocations until vehicle processing.
+  function M.emit(s,service,ctx,amount,x,y,house,tick)
+    return consume_event(s,service,{
+      tick=tick,x=x,y=y,amount=amount,town=house.town,source=house.source,
+      source_type=house.source_type,area=house.area,
+    },ctx,{})
   end
 
   -- Call from PassengerService.pre_motion_tick's ctx.production, after

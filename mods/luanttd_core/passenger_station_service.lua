@@ -252,6 +252,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       if units>0 then
         enqueue_generated(st,units,town)
         Rating.observe_waiting(goods(st),units)
+        if ctx.airport_new_cargo then ctx.airport_new_cargo(st) end
         moved=moved+units
       end
     end
@@ -287,6 +288,7 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       if units>0 then
         enqueue_generated(st,units,ind.id,"industry")
         Rating.observe_waiting(goods(st),units)
+        if ctx.airport_new_cargo then ctx.airport_new_cargo(st) end
         moved=moved+units
       end
     end
@@ -398,6 +400,10 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
       end,
       loaded=function(st,v,n)
         Catchment.loaded(st,v.mode,n)
+        if ctx.airport_cargo_taken and (st.host_mode=="air" or st.neutral_rig) then
+          local remaining=S.waiting(state,st.id,v.cargo)
+          if remaining==0 then ctx.airport_cargo_taken(st) end
+        end
         local carrier=v.part and assert(state.vehicles[v.id]) or v
         carrier.boarded=(carrier.boarded or 0)+n
         if carrier.cargo=="mixed" then

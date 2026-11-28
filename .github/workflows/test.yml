@@ -585,6 +585,8 @@ jobs:
           bash tests/town_growth_rc1_goods_native.sh founding
       - name: Compare founding a city during live bus and freight service
         run: lua5.1 tests/town_growth_rc1_corridor.lua founded
+      - name: Compare live aircraft against the stock town RNG through first touchdown
+        run: lua5.1 tests/town_growth_rc1_corridor.lua air
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua

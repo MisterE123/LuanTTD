@@ -818,8 +818,30 @@ and the retained unload age changing from 20 to 21 at the source's
 next rating update. Idle airports still consume one stock random
 word on their staggered acceptance tick, together with the normal
 physical station order. Six native RC1 idle pulses are checked.
-Cross-mode joins, full pending cargo restoration, and the airport
-animation draws from live cargo handling remain unported.
+Cross-mode joins and full pending cargo restoration remain incomplete.
+
+### First stock flight in the live freight region
+
+A paid Coleman Count in the running bus, Wood and Goods economy
+uses the real airfield construction/buy/order commands. It visits the
+local terminal first when the hangar's airport is the first order.
+The fuselage and shadow take separate stock VehicleIDs; rotary craft
+reserve their additional rotor ID. Calendar aging, reliability, and
+running settlement for the owned fuselage run in the common physical
+vehicle day sequence. Airport tile visits, whole-unit new cargo, an
+emptied cargo queue, and runway touchdown use the original animation
+triggers' random words at their source call sites. Those draws affect
+the town simulation even without NewGRF artwork.
+
+The pinned native 128×128 capture matches 1,569 consecutive whole-world
+RNG pairs and 1,564 complete controller poses through the first
+touchdown, including an in-flight packed reload and the first Mail
+arrival into an airport's outgoing stock queue. The real Luanti worker
+also completes a separately tested 65-passenger and 8-Mail service
+with one credit across process restarts. This does not prove later
+rollout and air cargo chronology against RC1: Brake crash rolls,
+automatic aircraft servicing and the dedicated stock smoke-effect
+vehicle pool still require integration and comparison.
 
 
 ### Wide, varied terrain and neighbouring town roads

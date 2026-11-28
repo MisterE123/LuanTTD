@@ -131,6 +131,12 @@ function A.available(Sim,s,id)
     return Sim.date(s)>=({[217]=1955,[218]=1969,[220]=1958,[221]=1964,[222]=1978,[223]=1970,[224]=1989,[225]=1962,[226]=1963,[227]=1967,[228]=1968,
       [229]=1982,[230]=1981,[231]=1995,[232]=1969,[233]=1972,[237]=1980,[234]=1981,[238]=1986,[235]=1987,[236]=1993,[239]=2000,[247]=2010,[253]=1957,[254]=1997})[id]
   end
+  local stock=A.engine_snapshot(s,id)
+  return stock and stock.public or false
+end
+function A.engine_snapshot(s,id,date)
+  local row,market=rows[id],s.stock_bus_market
+  if not row or not market then return end
   local cached=calendar_cache[market]
   if not cached then cached={};calendar_cache[market]=cached end
   local model=cached[id]
@@ -139,7 +145,7 @@ function A.available(Sim,s,id)
       intro_after_1920=row.intro_after_1920,decay_speed=20,life=row.life,base_life=row.model_life},market.settings))
     cached[id]=model
   end
-  return Calendar.snapshot(model,market.epoch+s.day).public
+  return Calendar.snapshot(model,date or market.epoch+s.day)
 end
 local function uint(n)
   return type(n)=="number" and n>=0 and n%1==0 and n<=2^32-1

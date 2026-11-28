@@ -3540,6 +3540,11 @@ function M.stock_vehicle_slots(s,count)
     end
     collect(rail.units);collect(rail.loose)
   end
+  local function aircraft(unit)
+    for _,id in ipairs(unit.stock_pool_ids or {}) do Pool.occupy(used,id,limit) end
+  end
+  if s.stock_owned_aircraft then aircraft(s.stock_owned_aircraft) end
+  for _,unit in pairs(s.stock_owned_air_fleet or {}) do aircraft(unit) end
   return Pool.reserve(used,count,limit)
 end
 -- BaseStation (stations and waypoints) shares one allocator. A neutral
@@ -6286,6 +6291,10 @@ function M.daily(s,traverse,tick_pulse,openings)
     local rail=paid_rail_runs[s]
     if rail and rail.stock_fault_days then
       for _,ev in ipairs(rail.stock_fault_days(s)) do add(ev) end
+    end
+    local air=paid_air_runs[s]
+    if air and air.stock_fault_days then
+      for _,ev in ipairs(air.stock_fault_days(s)) do add(ev) end
     end
     for _,group in pairs(slot) do table.sort(group,function(a,b) return a.id<b.id end) end
     if next(slot) then

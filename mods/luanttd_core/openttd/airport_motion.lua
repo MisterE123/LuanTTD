@@ -168,32 +168,36 @@ return function(FTA)
     v.tick=(v.tick or 0)+1
     if v.helicopter and h.rotary then h.rotary.tick(v,h) end
     local events={}
-    for _=1,2 do
-      if v.stopped or v.loading or v.crashed then break end
-      local done,why=M.move(a,v,h)
-      if h.position then h.position(_,a.id) end
-      if done==nil then return a,events,why end
-      if done then
-        -- Optional trace of actual AirportClearBlock/AirportMove, not a
-        -- second admission or ownership rule. Preserve both intra-tick
-        -- transitions when one aircraft clears and another claims later.
-        local before
-        if h.transition then
-          before={loop=_,airport=a.id,flags=a.flags,pos=v.pos,previous=v.previous_pos,state=v.state,
-            x=v.x,z=v.z,y=v.y,speed=v.speed,subspeed=v.subspeed}
-        end
-        local event,next=(h.layout and h.layout(a) or FTA).arrive(a,v,h)
-        if not event then return a,events,next end
-        if before then
-          before.kind,before.after_flags,before.after_pos,before.after_state=event,a.flags,v.pos,v.state
-          before.after_speed,before.after_subspeed=v.speed,v.subspeed
-          before.destination=next and next.id
-          h.transition(before)
-        end
-        events[#events+1]=event
-        if event=="departed" then
-          if not next then return a,events,"destination_missing" end
-          a=next
+    for pass=1,2 do
+      if h.breakdown then h.breakdown(pass) end
+      if v.stopped or v.crashed then break end
+      if not v.loading and not (pass==1 and h.leaving) then
+        local done,why=M.move(a,v,h)
+        if h.position then h.position(pass,a.id) end
+        if done==nil then return a,events,why end
+        if done then
+          -- Optional trace of actual AirportClearBlock/AirportMove, not a
+          -- second admission or ownership rule. Preserve both intra-tick
+          -- transitions when one aircraft clears and another claims later.
+          local before
+          if h.transition then
+            before={loop=pass,airport=a.id,flags=a.flags,pos=v.pos,previous=v.previous_pos,state=v.state,
+              x=v.x,z=v.z,y=v.y,speed=v.speed,subspeed=v.subspeed}
+          end
+          local event,next=(h.layout and h.layout(a) or FTA).arrive(a,v,h)
+          if not event then return a,events,next end
+          if before then
+            before.kind,before.after_flags,before.after_pos,before.after_state=event,a.flags,v.pos,v.state
+            before.after_speed,before.after_subspeed=v.speed,v.subspeed
+            before.destination=next and next.id
+            h.transition(before)
+          end
+          if event=="touchdown" and not v.helicopter and h.touchdown then h.touchdown() end
+          events[#events+1]=event
+          if event=="departed" then
+            if not next then return a,events,"destination_missing" end
+            a=next
+          end
         end
       end
     end

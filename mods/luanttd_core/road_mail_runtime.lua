@@ -160,7 +160,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
       M.enqueue(st,{units=units,source=record.town,origin_station=st.id,age=0})
     end
   end
-  local function allocate(amount,record,list,source_type)
+  local function allocate(amount,record,list,source_type,new_cargo)
     if #list==0 then return 0 end
     Packets.allocate(amount,list)
     local moved=0
@@ -170,6 +170,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
       if units>0 then
         generated(st,units,record,source_type)
         Kernel.observe_waiting(goods(st),units)
+        if new_cargo then new_cargo(st) end
         moved=moved+units
       end
     end
@@ -256,7 +257,7 @@ return function(Sim,H,Packets,Income,Kernel,Station)
         local rank=Catchment.offer(q.st,q.region,"mail",x,z,goods,offer)
         if rank then list[#list+1]={st=q.st,rating=rank} end
       end
-      return allocate(amount,record,list,record.source_type or "town")
+      return allocate(amount,record,list,record.source_type or "town",options and options.new_cargo)
     end
     function S.acceptance(id,house_at)
       local _,region=lookup(id)
