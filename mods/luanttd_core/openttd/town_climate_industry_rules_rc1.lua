@@ -17,6 +17,18 @@ return function(F,Water,Food,Houses,climate)
   else
     F.cargo.fruit=commodity(Food.inputs_cargo.fruit,4,"bulk")
     F.cargo.maize=commodity(Food.inputs_cargo.maize,6,"bulk")
+    F.layout.fruit_plantation=Food.fruit.layout
+    F.layout.maize_farm=F.layout.farm
+    for kind,src in pairs{fruit_plantation=Food.fruit,maize_farm=Food.maize} do
+      F.spec[kind]={id=src.id,life="organic",minimum=src.minimum_to_distribute,
+        cost_factor=src.cost_factor,procurement_probability=src.probability,climates=4,sounds=0,
+        out={src.cargo},rates={src.rate},input={},multiplier={},
+        appearance={0,0,src.appearance,0},generation={0,0,src.generation,0},
+        map_colour=src.map_colour,plant_fields=src.plant_fields,plant_on_built=src.plant_on_built}
+    end
+  end
+  for _,cargo in ipairs(climate=="tropic" and {"food","fruit","maize"} or {"food","wheat"}) do
+    F.trucks[cargo]={load_amount=5,age_ticks=185,speed=96}
   end
   F.house_acceptance=function(id,cargo)
     if cargo=="food" then return Houses.eighths(id,cargo,climate) end

@@ -35,7 +35,7 @@ local town_id=34 -- Original TownID 33.
 local function resume(s)
   S.W,S.H=256,256
   S.mount_road_bus_market(s,Calendar,1985,false,false)
-  assert(S.mount_climate_water(s))
+  assert(S.mount_tropic_freight(s))
   S.mount_stock_town_growth(s,growth,true)
   S.mount_coastal_flood(s)
   return s
@@ -56,7 +56,7 @@ local function start()
   S.mount_stock_town_growth(s,growth,true)
   local firm={}
   s.stock_climate_industries=firm
-  local F=assert(S.mount_climate_water(s))
+  local F=assert(S.mount_tropic_freight(s))
   local supply=F.new("water_supply",15,25,91,{original=true,completed=true,counter=1})
   local tower=F.new("water_tower",49,26,106,{original=true,completed=true,counter=1})
   supply.produced[1].rate=17

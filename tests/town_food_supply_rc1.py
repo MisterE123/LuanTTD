@@ -27,12 +27,21 @@ assert "IT_FRUIT_PLANTATION, IT_FARM,           IT_FARM_2" in proc
 for table in ("food_process","fruit_plantation","farm2"):
     fields=re.search(r"MI\(_tile_table_"+table+r",\s*\{\},(.*?)IndustryCheck::",data,re.S)[1].split(",")
     vals.extend(int(fields[j].strip()) for j in (0,10))
-for i in range(2):
-    layout=re.search(rf"_tile_table_food_process_{i} \{{(.*?)\n\}};",data,re.S)[1]
-    coords=[tuple(map(int,m)) for m in re.findall(r"\{\{(\d+), (\d+)\}, (\d+)\}",layout)]
-    vals.append(len(coords))
-    for cell in coords:
-        vals.extend(cell)
+for table,count in (("food_process",2),("fruit_plantation",1),("farm2",3),("farm",3)):
+    for i in range(count):
+        layout=re.search(rf"_tile_table_{table}_{i} \{{(.*?)\n\}};",data,re.S)[1]
+        coords=[tuple(map(int,m)) for m in re.findall(r"\{\{(\d+), (\d+)\}, (\d+)\}",layout)]
+        vals.append(len(coords))
+        for cell in coords:
+            vals.extend(cell)
+engines=text("table/engines.h","d90c9b2ae091a740522b0f79078c3e5db32b2467cb2a9e0e96592c3c39ee1f74")
+for engine in (141,142,143,156,157,158,165,166,167,168,169,170):
+    mr=re.search(rf"MR\(\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*\w+\s*, LandscapeTypes\(\{{([^}}]*)}}\)\), // {engine} ",engines)
+    assert mr,engine
+    m=mr.groups()
+    rov=re.search(rf"ROV\(\s*(\d+),\s*(\d+),\s*(\d+),\s*\w+,\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\), //\s+{engine-116} ",engines)
+    assert rov,engine
+    vals.extend((engine,*(int(v) for v in m[:4]),sum(1<<i for i,k in enumerate("TASY") if k in m[4]),*(int(v) for v in rov.groups())))
 cpp=r"""
 #include <algorithm>
 #include <array>
@@ -95,10 +104,34 @@ for _,spec in ipairs{F.process,F.fruit,F.maize} do
   assert(spec.cost_factor==expected[offset] and spec.map_colour==expected[offset+1])
   offset=offset+2
 end
-for _,plan in ipairs(F.process.layout) do
+local kernel=dofile(p.."farm_factory_industry.lua")()
+assert(kernel.layout.farm[0])
+local function layout(plan)
   assert(#plan==expected[offset]);offset=offset+1
   for _,cell in ipairs(plan) do for _,v in ipairs(cell) do assert(v==expected[offset]);offset=offset+1 end end
 end
+for _,plan in ipairs(F.process.layout) do layout(plan) end
+layout(F.fruit.layout[0])
+for _=1,2 do for i=0,2 do layout(kernel.layout.farm[i]) end end
+local D=dofile(p.."climate_road_freight_rc1.lua")
+local by={}
+for _,id in ipairs(D.all) do
+  local row=D.rows[id]
+  by[row.stock_id]=by[row.stock_id] or {}
+  by[row.stock_id][#by[row.stock_id]+1]=row
+end
+while offset<=#expected do
+  local n=assert(by[expected[offset]])
+  local keys={"stock_id","intro_after_1920","decay_speed","life","base_life","climates",
+    "image","purchase_factor","running_factor","speed","capacity","weight_quarters","power_tens_hp"}
+  assert(#n==(expected[offset]<=143 and 2 or 1))
+  for j,k in ipairs(keys) do
+    for _,row in ipairs(n) do assert(row[k]==expected[offset+j-1],row.name.."/"..k) end
+  end
+  offset=offset+#keys
+end
+assert(offset==#expected+1 and #D.by_landscape.tropic==12 and #D.by_landscape.arctic==6)
+assert(D.rows.maize_hereford.cargo=="maize" and D.rows.wheat_hereford.cargo=="wheat")
 local a,b=F.inputs("arctic");assert(a=="livestock" and b=="wheat")
 a,b=F.inputs("tropic");assert(a=="fruit" and b=="maize")
 assert(not F.inputs("temperate") and not F.inputs("toyland"))

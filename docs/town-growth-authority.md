@@ -1522,3 +1522,30 @@ town population differs, and the road and depot quote are not exact
 matches to the native reference above. No ordinary Tropic campaign,
 new meshes or menu entries are exposed. The next proof is both live
 Food and Water reaching the same town in the same economy month.
+
+### Road Food chain and actual desert-town growth
+
+The stock Fruit Plantation footprint, three Maize Farm layouts,
+and 12 road engines come from the pinned RC1 tables. The latter
+include all original Food Vans, Fruit Trucks, Water Tankers and
+the Grain Truck family. The Grain Truck resolves its original
+cargo group to maize in Tropic and wheat in Arctic; only the
+Tropic freight chain is mounted by this integration test.
+
+On a controlled desert-edge board, four real trucks run from
+one depot through five drive-through stops. The worker produces
+Fruit, Maize and Water in their firms, hauls both crop inputs to
+the Food Processing Plant, and delivers the plant's Food and the
+Water Tower's Water to their respective acceptance paths. Native
+Luanti saves the Maize truck with 20 units in transit and reopens
+the same state in a second process. The town starts growing at
+the calendar month boundary after both effects arrive. Through
+that boundary the four services settle 36 Fruit, 40 Maize, 17
+Food and 42 Water, with no household Water and no cargo handoff
+in the fixture code.
+
+This verifies the live transport-to-growth chain on the controlled
+board. Ordinary Tropic industry siting, crop field landscape visits,
+dynamic industrial opening/closure, native parity of the complete
+economic timeline, and the playable climate art and menu still need
+work; this is not a claim of overall town-growth parity.

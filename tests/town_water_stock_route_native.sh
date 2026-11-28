@@ -4,6 +4,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 out=$(mktemp -d "$PWD/.native-water-XXXXXX")
 trap 'rm -rf "$out"' EXIT
+case "${1:-water}" in
+  water) fixture=town_water_stock_route.lua; marker="PASS Water truck workers and packed reopen";;
+  food) fixture=town_tropic_food_stock_route.lua; marker="PASS live Fruit";;
+  *) echo "usage: $0 [water|food]" >&2; exit 64;;
+esac
 game="$out/games/waterqa"
 mod="$game/mods/luanttd_core"
 mkdir -p "$mod" "$out/world" "$out/home"
@@ -12,7 +17,7 @@ mkdir -p "$mod" "$out/world" "$out/home"
 for path in "$PWD"/mods/luanttd_core/*.lua "$PWD"/mods/luanttd_core/openttd; do
   [[ ${path##*/} == init.lua ]] || cp -al "$path" "$mod/"
 done
-cp tests/town_water_stock_route.lua "$mod/route_test.lua"
+cp "tests/$fixture" "$mod/route_test.lua"
 printf 'title = Stock Water route QA\n' > "$game/game.conf"
 printf 'name = luanttd_core\n' > "$mod/mod.conf"
 cat > "$mod/init.lua" <<'LUA'
@@ -34,7 +39,7 @@ core.after(0,function()
   end,function(checkpoint,loaded)
     if checkpoint then
       storage:set_string("moving_water",checkpoint)
-      core.log("action",("STOCK_WATER_ROUTE_SAVED %d units in motion"):format(loaded))
+      core.log("action",("STOCK_TROPIC_ROUTE_SAVED %d units in motion"):format(loaded))
     end
     core.request_shutdown("Stock Water route QA",false,0)
   end,blob))
@@ -58,5 +63,5 @@ for phase in save reopen; do
   timeout 75 "$server" --world "$out/world" --gameid waterqa --config "$out/conf" --logfile "" > "$out/$phase.log" 2>&1 ||
     { cat "$out/$phase.log"; exit 1; }
 done
-grep STOCK_WATER_ROUTE_SAVED "$out/save.log"
-grep "PASS Water truck workers and packed reopen" "$out/reopen.log"
+grep STOCK_TROPIC_ROUTE_SAVED "$out/save.log"
+grep "$marker" "$out/reopen.log"

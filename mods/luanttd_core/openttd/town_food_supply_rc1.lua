@@ -20,8 +20,15 @@ F.process={id=13,cost_factor=206,map_colour=55,conflicts={19,9,24},minimum_to_di
     {{0,0,61},{1,0,60},{2,0,61},{3,0,61},{0,1,62},{1,1,63},{2,1,63},{3,1,63},
      {0,2,60},{1,2,60},{2,2,60},{3,2,60},{0,3,62},{1,3,62}},
   }}
-F.fruit={id=19,rate=10,cost_factor=225,map_colour=86,conflicts={13},cargo="fruit",minimum_to_distribute=15}
-F.maize={id=24,rate=11,cost_factor=250,map_colour=48,conflicts={13},cargo="maize",minimum_to_distribute=5}
+-- The Maize Farm and ordinary Farm share the three original physical
+-- layouts; the stock produce settings and RNG schedule are distinct.
+F.fruit={id=19,rate=10,cost_factor=225,map_colour=86,conflicts={13},cargo="fruit",minimum_to_distribute=15,
+  probability=0xBFFFFFFF,appearance=2,generation=4,layout={}}
+local orchard={}
+for x=0,4 do for z=0,3 do orchard[#orchard+1]={x,z,116} end end
+F.fruit.layout[0]=orchard
+F.maize={id=24,rate=11,cost_factor=250,map_colour=48,conflicts={13},cargo="maize",minimum_to_distribute=5,
+  probability=0xD9999999,appearance=1,generation=2,plant_fields=true,plant_on_built=true}
 local stock={
   arctic={livestock=true,wheat=true},
   tropic={fruit=true,maize=true},
