@@ -388,6 +388,7 @@ jobs:
           python3 tools/build_stock_industry_specs_rc1.py "$src" --check
           python3 tests/industry_footprint_rc1.py "$src" lua5.1
           lua5.1 tests/industry_native_phase_rc1.lua
+          lua5.1 tests/industry_native_init_rc1.lua
           python3 tests/town_house_construction_rc1.py "$src" lua5.1
           python3 tests/town_house_roadtypes_rc1.py "$src" lua5.1
           python3 tests/town_road_walk_rc1.py "$src" lua5.1

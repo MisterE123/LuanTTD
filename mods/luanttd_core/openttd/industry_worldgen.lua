@@ -8,6 +8,8 @@
 -- Native initial manifest excludes industry kinds / art layouts not ported.
 local directory=(core and core.get_modpath and core.get_modpath("luanttd_core").."/openttd/") or "mods/luanttd_core/openttd/"
 local Schedule=dofile(directory.."industry_generation_schedule_rc1.lua")
+local Stock=dofile(directory.."industry_spec_rc1.lua")
+local Initialize=dofile(directory.."industry_initial_record_rc1.lua")
 
 return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
   local W={POOL_MAX=64000,HARD_ATTEMPTS=10000,SOFT_ATTEMPTS=2000}
@@ -268,9 +270,8 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
     opts=opts or {}
     plan.seed,plan.initial_random=seed,initial_bits
     if opts.rc1 then
-      local counts={[0]=1,0,1,1,1,2,1,[8]=1,[9]=2,[11]=1,[12]=1,[18]=1}
-      plan.production_raw={}
-      for j=1,counts[plan.type] or 0 do plan.production_raw[j]=random() end
+      local spec=assert(Stock.get(plan.type,opts.landscape or "temperate"),"Unknown stock initial industry")
+      return Initialize.draw(plan,spec,random,opts.original==true,true)
     elseif opts.original==false then
       for j=1,16 do
         local r=random()
@@ -284,11 +285,6 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
       c.random_bits=random()%256
       c.stage,c.construction_counter,c.completed=2,3,false
     end
-    -- RC1's unconditional trigger argument draw happens after every
-    -- tile has been placed (row-major sorted physical footprint).
-    if opts.rc1 then
-      for _=1,#plan.cells do random() end
-    end
     return plan
   end
 
@@ -300,14 +296,14 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
     local spec=W.specs[plan.type]
     local kernel=spec and spec.kernel or Coal
     local rec=kernel.new(plan.kind,id,plan.x,plan.z,{layout=plan.layout,completed=opts.after_first_visit,
-      original=opts.original~=false,production_random=plan.production_random,
+      original=plan.production_raw~=nil or opts.original~=false,production_random=plan.production_random,
       generating_world=true,counter=plan.counter,economy_year=opts.year,
       scale=opts.cargo_scale,random_u32=opts.random})
     if plan.production_raw and rec.produced then
       local by_slot=rec.produced.rate and {rec.produced} or rec.produced
       for i,draw in ipairs(plan.production_raw) do
         local q=assert(by_slot[i],"Stock produced cargo slot absent from the host record")
-        q.rate=min(255,floor((128+range(256,draw))*q.rate/256))
+        q.rate=Initialize.rate(q.rate,draw)
         if q.last then q.last.production=floor(q.rate*8*(opts.cargo_scale or 100)/100) end
       end
     end

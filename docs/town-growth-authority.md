@@ -1634,3 +1634,22 @@ the exact ordered input and output CargoIDs for all 206 firms.
 The active worldgen selector and the five Tropic freight
 industries now read this catalog directly instead of using
 parallel handwritten weights and rates.
+
+### Native initial industry state
+
+The starting-industry worker now reads the count of active stock
+output slots when selecting the initial production draws, rather
+than using a hardcoded list of industry IDs. Original Economy
+skips this randomization; Smooth and Frozen retain the source
+initialization. The same RC1 routine owns industry color and
+counter, the selected layout, per-tile random bytes, and initial
+construction stages.
+
+The comparison begins at the actual DoCreateNewIndustry boundary
+after the source has finished clearing and leveling the site. Ten
+native RC1 fresh worlds match 261 firms, 2,406 physical industry
+tile states, all 224 production-rate and pregame history rows,
+and the two RNG words after tile construction. This includes
+42 firms in Original Economy worlds and a Frozen Toyland world.
+Farm planting and changes to the terrain platform are separate
+phases; this test does not claim that they select the same sites.
