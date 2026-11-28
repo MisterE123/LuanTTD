@@ -63,8 +63,9 @@ function M.landscape(Sim,Terrain,Generator,settings)
     initial_land_count=math.min(Sim.W*Sim.H,dry_count+math.floor(dry_count/12)),
     map_height_limit=settings.map_height_limit and settings.map_height_limit>0 and settings.map_height_limit or
       math.max(30,math.min(255,(map.estimated_max_height or 0)+15))}
-  if map.river_tileloop_cursor then
-    s.stock_generated_profile.river_rng_cursor=map.river_tileloop_cursor
+  local landscape_cursor=map.river_tileloop_cursor or map.climate_tileloop_cursor
+  if landscape_cursor then
+    s.stock_generated_profile.river_rng_cursor=landscape_cursor
     s.stock_generated_profile.river_stats=rivers
   end
   s.stock_coastal_profile=true
@@ -156,11 +157,7 @@ local function founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,s
           if s.stock_farm_grass then s.stock_farm_grass[tile]=nil end
         end
         placed[tile]=true
-        if rule_only_roots then
-          h.town_growth,h.built_tick,h.random_bits=true,candidate.tick,p.random_bits
-        else
-          art.stamp(h,p,art[p.id],part.index,candidate.tick)
-        end
+        art.stamp(h,p,footprint or art[p.id],part.index,candidate.tick)
         if h.completed then h.age,h.age_epoch=0,settings.year end
         local x,z=Sim.xy(tile)
         local _,base=Terrain.tile(s.corner_grid,x,z)

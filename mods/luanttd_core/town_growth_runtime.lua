@@ -1,14 +1,29 @@
--- Live stock Temperate town growth, limited to original native assets.
+-- Live stock town growth, mounted only with original native art.
+-- A rule-only house table can be passed by source tests, not the game.
 local source=debug and debug.getinfo(1,"S").source
 local path=(core and core.get_modpath and core.get_modpath("luanttd_core") and core.get_modpath("luanttd_core").."/")
   or assert(source and source:sub(2):match("^(.+[\\/])"),"Cannot locate stock town assets")
-return function(Sim,Terrain,G,B,H)
+return function(Sim,Terrain,G,B,H,rule_only_roots)
   local W={}
   W.reconstruction=dofile(path.."road_reconstruction_world.lua")(Sim,Terrain,G,
     dofile(path.."openttd/road_reconstruction.lua"),dofile(path.."openttd/road_slope.lua"),
     dofile(path.."openttd/rail_track.lua"),dofile(path.."openttd/slope.lua"),
     dofile(path.."openttd/roadside_temperate.lua"))
   local names=dofile(path.."stock_town_art.lua")
+  local function style(id) return (rule_only_roots or names)[id] end
+  local function footprint_parts(s,h)
+    return names.footprint(Sim,s,h,rule_only_roots and h and style(h.asset_root))
+  end
+  local function climate_options(s,opts)
+    local climate=rule_only_roots and s.stock_climate
+    if climate then opts.landscape,opts.highest_snowline=climate.landscape,climate.snowline end
+    return opts
+  end
+  local function uniqueness(id)
+    if rule_only_roots then return rule_only_roots[id] and rule_only_roots[id].unique end
+    if id==0x03 then return "church" end
+    if id==0x14 or id==0x20 then return "stadium" end
+  end
   local Lift=dofile(path.."openttd/town_lift.lua")
   local Rebuild=dofile(path.."openttd/town_rebuild.lua")
   local HouseRoadTypes=dofile(path.."openttd/town_house_roadtypes.lua")
@@ -67,7 +82,7 @@ return function(Sim,Terrain,G,B,H)
         return {kind=t.terrain=="water" and "water" or t.house and "house" or "object",protected=true}
       end,
       clear_quote=function(x,z,kind) return kind=="house" and clear_levels(s,Sim.id(x,z),allow_cover,allow_cover)~=nil end,
-      house_supported=function(id) return names[id]~=nil end,
+      house_supported=function(id) return style(id)~=nil end,
       house_roadtypes=HouseRoadTypes.on_board(Sim,s),
     }
   end
@@ -97,8 +112,8 @@ return function(Sim,Terrain,G,B,H)
         if h.root==true or not h.asset_root and h.root~=false then
           t.num_houses=t.num_houses+1
           if h.completed then t.population=t.population+assert(H.specs[h.id])[1] end
-          if h.id==0x03 then t.unique={church=true,stadium=t.unique and t.unique.stadium} end
-          if h.id==0x14 or h.id==0x20 then t.unique={stadium=true,church=t.unique and t.unique.church} end
+          local unique=uniqueness(h.id)
+          if unique then t.unique=t.unique or {};t.unique[unique]=true end
         end
       end
     end
@@ -280,14 +295,14 @@ return function(Sim,Terrain,G,B,H)
         Sim.invalidate_live_sea_near(s,id)
       end,
       grade_changed=function() s.topology=(s.topology or 0)+1 end,
-    })
+    },rule_only_roots)
   end
   function W.advance_house(s,id,h,tick,year)
     if not h or not h.town_growth or h.completed then return false end
     local t=s.stock_town_growth.towns[h.town]
     local stage=h.stage
     if h.asset_root and not h.root then return true end
-    local members=names.footprint(Sim,s,h)
+    local members=footprint_parts(s,h)
     if h.asset_root and not members then return true end
     local records={h}
     if members then
@@ -306,7 +321,7 @@ return function(Sim,Terrain,G,B,H)
     end
     return suppress
   end
-  function W.footprint(s,h) return names.footprint(Sim,s,h) end
+  function W.footprint(s,h) return footprint_parts(s,h) end
   function W.remove(s,h)
     if s.stock_town_lifts and Lift.supports(h) and h.x and h.z then
       Lift.erase(s.stock_town_lifts,Sim.id(h.x,h.z))
@@ -321,8 +336,8 @@ return function(Sim,Terrain,G,B,H)
     if h.root==true or not h.asset_root and h.root~=false then
       t.num_houses=t.num_houses-1;t.radii=G.radii(t.num_houses)
       if t.unique then
-        if h.id==0x03 then t.unique.church=nil end
-        if h.id==0x14 or h.id==0x20 then t.unique.stadium=nil end
+        local unique=uniqueness(h.id)
+        if unique then t.unique[unique]=nil end
       end
     end
     if t.house_counts then t.house_counts[h.id]=t.house_counts[h.id]-1 end
@@ -332,16 +347,17 @@ return function(Sim,Terrain,G,B,H)
     -- Everything is read-only until the exact proposal and occupancy
     -- recheck succeed. Do not issue a generic clear or terraform command.
     if not proposal or proposal.kind~="house" or proposal.town~=t.id then return false end
-    local style=names[proposal.id]
+    local house_style=style(proposal.id)
+    if not house_style then return false end
     local allow_cover=s.stock_generated_profile and not write_house
     local get_level=function(id) return clear_levels(s,id,allow_cover,allow_cover) end
-    local parts,level=names.inspect(Sim,proposal,get_level)
+    local parts,level=names.inspect(Sim,proposal,get_level,house_style)
     if not parts then return false end
     local root=parts[1]
     local h,id=root.record,root.id
     local wrote=false
     local function native_write()
-      local recheck,current=names.inspect(Sim,proposal,get_level)
+      local recheck,current=names.inspect(Sim,proposal,get_level,house_style)
       if wrote or not recheck or current~=level then return false end
       wrote=true
       for _,part in ipairs(parts) do
@@ -363,14 +379,14 @@ return function(Sim,Terrain,G,B,H)
           tile.wood=nil
           if s.stock_farm_grass then s.stock_farm_grass[part.id]=nil end
         end
-        names.stamp(part.record,proposal,style,part.index,tick)
+        names.stamp(part.record,proposal,house_style,part.index,tick)
         tile.house,tile.source_house,tile.h=true,part.record,base
         if s.stock_town_lifts and Lift.supports(part.record) then Lift.install(s.stock_town_lifts,part.id,Sim) end
         visual_changed(s,part.id)
         if coast or road then Sim.invalidate_live_sea_near(s,part.id) end
       end
       B.house_committed(t,proposal,views,growth_setting(s))
-      t.last_build={tile=id,house=h.id,tick=tick,name=style.name}
+      t.last_build={tile=id,house=h.id,tick=tick,name=house_style.name}
       return true
     end
     if write_house then
@@ -387,9 +403,9 @@ return function(Sim,Terrain,G,B,H)
     if not h.root or not h.completed then return end
     local t=s.stock_town_growth and s.stock_town_growth.towns[h.town]
     if not t or not t.growing then return end
-    local style=names[h.id]
-    if not style then return end
-    local parts=h.asset_root and names.footprint(Sim,s,h) or not h.asset_root and {{id=id,record=h}}
+    local house_style=style(h.id)
+    if not house_style then return end
+    local parts=h.asset_root and footprint_parts(s,h) or not h.asset_root and {{id=id,record=h}}
     if not parts then return end
     for _,p in ipairs(parts) do
       local cell=s.tiles[p.id]
@@ -406,7 +422,7 @@ return function(Sim,Terrain,G,B,H)
       if protected(s,p.id,cell,covered) then return end
     end
     year=year or Sim.date(s)
-    local receipt=Rebuild.visit(t,h,style,true,word,year)
+    local receipt=Rebuild.visit(t,h,house_style,true,word,year)
     if not receipt then return end
     -- OWNER_TOWN clears the complete building. No company can be
     -- billed or get a demolishing-company reputation adjustment.
@@ -422,7 +438,7 @@ return function(Sim,Terrain,G,B,H)
     if target then
       local policy=s.stock_road_town_policy
       local proposal=B.house(t,board(s,s.stock_generated_profile),target.x,target.z,
-        {year=year,allow_roads=not policy or policy.allow_town_roads~=false},random)
+        climate_options(s,{year=year,allow_roads=not policy or policy.allow_town_roads~=false}),random)
       commit(s,t,proposal,services(s),tick,nil)
     end
     return receipt
@@ -447,10 +463,10 @@ return function(Sim,Terrain,G,B,H)
       local function write(proposal)
         return commit(s,t,proposal,view,tick,write_house)
       end
-      local proposal,extra_built=B.grow(t,brd,{year=year or Sim.date(s),allow_roads=not not expand,
+      local proposal,extra_built=B.grow(t,brd,climate_options(s,{year=year or Sim.date(s),allow_roads=not not expand,
         build_on_slopes=not policy or policy.build_on_slopes~=false,
         allow_level_crossings=not policy or policy.allow_town_level_crossings~=false,
-        extra_house=expand and write or nil},random)
+        extra_house=expand and write or nil}),random)
       if not proposal then return not not extra_built end
       if proposal.kind=="house" then return write(proposal) or not not extra_built end
       local id=Sim.id(proposal.x,proposal.z)

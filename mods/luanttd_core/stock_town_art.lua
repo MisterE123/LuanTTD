@@ -84,9 +84,9 @@ function Art.stamp(h,p,style,part,tick)
   if style.width then h.asset_root,h.asset_part=p.id,part end
 end
 
-function Art.footprint(Sim,s,h)
+function Art.footprint(Sim,s,h,footprint)
   if not h or not h.asset_root then return end
-  local style=Art[h.asset_root]
+  local style=footprint or Art[h.asset_root]
   if not style or not style.width then return end
   local result={}
   for dx=0,style.width-1 do

@@ -16,10 +16,12 @@ local World=o("town_worldgen")(G,B)
 local Campaign=m("generated_campaign")
 local Codec=m("packed_campaign")
 local Names,Stats=o("stock_town_name"),o("town_cargo_stats")
-local Live=m("town_growth_runtime")(S,T,G,B,o("town_passengers"))
 local floor=math.floor
 local roots={}
-for _,r in ipairs(Catalog) do roots[r[1]]={width=r[6],depth=r[7]} end
+for _,r in ipairs(Catalog) do
+  roots[r[1]]={width=r[6]*r[7]>1 and r[6] or nil,depth=r[7],unique=r[8]}
+end
+local Live=m("town_growth_runtime")(S,T,G,B,o("town_passengers"),roots)
 local function eq(d,a,b)
   assert(#a==#b,d)
   for i=1,#a do assert(a[i]==b[i],("%s field %d: %.0f != %.0f"):format(d,i,a[i],b[i])) end

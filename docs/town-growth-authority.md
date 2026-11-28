@@ -1458,8 +1458,26 @@ It does not include later industry, tree or object placement.
 
 The worker's monthly town routine reads the current physical
 center height and desert zone. The test exercises four Arctic
-towns above the snowline and 40 Tropic desert towns on these
+towns at or above the snowline and 40 Tropic desert towns on these
 generated maps. Two packed reopens retain the climate and desert
 zone; the latter now uses reserved bits of the compact tile
 payload rather than falling back to a full table per tile.
 No non-Temperate world selector or placeholder art is exposed.
+
+### One live year in each additional climate
+
+Three real OpenTTD 16.0-RC1 source boards supplied a full live
+year each in Arctic, Tropic and Toyland. The rule-only LuanTTD
+worker matched all 81,030 source ticks (both RNG words and the
+carried landscape cursor), eighteen terrain/municipal road/house
+and town snapshots, and nine packed reopens. The worker uses
+stock house footprints and the climate house pool for placements,
+construction updates and replacements. It also retains Tropic's
+initial landscape cursor when no rivers are requested.
+
+These are controlled growth references: no companies, industries,
+subsidies, trees or landmark generation. They are not a playable
+release or evidence for cargo service across the full climate
+economy. The separate gate tests exercise the accepted Food and
+Water month histories; source-matched 3D assets and normal
+campaigns are still required.
