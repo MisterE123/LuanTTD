@@ -383,6 +383,7 @@ jobs:
           lua5.1 tests/town_climate_supply_ledger.lua
           lua5.1 tests/town_water_stock_route.lua
           lua5.1 tests/town_tropic_food_stock_route.lua
+          python3 tests/industry_generation_schedule_rc1.py "$src" lua5.1
           python3 tests/town_house_construction_rc1.py "$src" lua5.1
           python3 tests/town_house_roadtypes_rc1.py "$src" lua5.1
           python3 tests/town_road_walk_rc1.py "$src" lua5.1

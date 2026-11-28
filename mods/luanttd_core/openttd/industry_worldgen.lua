@@ -6,6 +6,9 @@
 -- Sawmill and Forest. Farm, Factory, Wells and Refinery tables/checks
 -- also verified against OpenTTD 16.0-RC1 (table/build_industry.h).
 -- Native initial manifest excludes industry kinds / art layouts not ported.
+local directory=(core and core.get_modpath and core.get_modpath("luanttd_core").."/openttd/") or "mods/luanttd_core/openttd/"
+local Schedule=dofile(directory.."industry_generation_schedule_rc1.lua")
+
 return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
   local W={POOL_MAX=64000,HARD_ATTEMPTS=10000,SOFT_ATTEMPTS=2000}
   local floor,ceil,min,max,abs=math.floor,math.ceil,math.min,math.max,math.abs
@@ -324,23 +327,10 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
     if density(opts)==0 then return result end
     local used={}
     for _,v in ipairs(board.industries or {}) do used[#used+1]=v end
-    local prob,force,total_prob,forced={},{},0,0
-    for id=0,last_type do
-      prob[id],force[id]=W.probability(board,id,opts)
-      total_prob=total_prob+prob[id]
-      if force[id] then forced=forced+1 end
-    end
-    local target=W.count(board,opts)
-    if opts.rc1 and density(opts)~=6 and board.initial_land_count then
-      target=floor(target*board.initial_land_count/(board.width*board.height))
-    end
-    if total_prob==0 or target<forced then target=forced end
-    result.target,result.forced=target,forced
-    if opts.progress then opts.progress(0,target) end
     local function attempt(id,hard)
       result.selected=result.selected+1
       result.choices[#result.choices+1]={type=id,forced=hard}
-      if opts.progress then opts.progress(result.selected,target) end
+      if opts.progress then opts.progress(result.selected,result.target) end
       local l=W.specs[id].layout
       for _=1,hard and W.HARD_ATTEMPTS or W.SOFT_ATTEMPTS do
         result.attempted=result.attempted+1
@@ -363,13 +353,40 @@ return function(Coal,Timber,Oil,Farm,Heavy,NativeLayouts)
         result.failures[why]=(result.failures[why] or 0)+1
       end
     end
-    for id=0,last_type do if force[id] then attempt(id,true) end end
-    for _=1,target-forced do
-      local r,id=range(total_prob,random()),0
-      while r>=prob[id] do r,id=r-prob[id],id+1 end
-      attempt(id,false)
+    if opts.rc1 then
+      local enabled={}
+      for id=0,Schedule.LAST_ID do
+        local spec=W.specs[id]
+        enabled[id]=not not (spec and spec.layout[0] and (not opts.enabled or opts.enabled[id]==true))
+      end
+      local dimensions={width=board.width,height=board.height,
+        initial_land_count=board.initial_land_count or board.width*board.height}
+      local settings={enabled=enabled,landscape=opts.landscape,density=opts.density,
+        custom_count=opts.custom_count or 1,editor=opts.editor}
+      Schedule.generate(dimensions,settings,random,function(id,_,hard)attempt(id,hard)end,
+        function(water,amount,forced)
+          result.target,result.forced=result.target+amount,result.forced+forced
+          if opts.progress and (not water or amount>0) then opts.progress(result.selected,result.target) end
+        end)
+    else
+      local prob,force,total_prob,forced={},{},0,0
+      for id=0,last_type do
+        prob[id],force[id]=W.probability(board,id,opts)
+        total_prob=total_prob+prob[id]
+        if force[id] then forced=forced+1 end
+      end
+      local target=W.count(board,opts)
+      if total_prob==0 or target<forced then target=forced end
+      result.target,result.forced=target,forced
+      if opts.progress then opts.progress(0,target) end
+      for id=0,last_type do if force[id] then attempt(id,true) end end
+      for _=1,target-forced do
+        local r,id=range(total_prob,random()),0
+        while r>=prob[id] do r,id=r-prob[id],id+1 end
+        attempt(id,false)
+      end
     end
-    result.shortfall=target-#result.placed
+    result.shortfall=result.target-#result.placed
     result.wanted_inds=#used*65536
     if opts.reset then opts.reset(result.wanted_inds) end
     return result

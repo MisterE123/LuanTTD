@@ -1569,3 +1569,22 @@ initial 373 crop tiles are worked by the live landscape clock;
 restart and subsequent Food and Water delivery. This is a
 controlled field lifecycle test, not a port of the full Tropic
 industry generator.
+
+### Starting industry allocation across climates
+
+Initial firm selection now uses the port of RC1's two-stage
+land/water allocation, with the stock generation weights for all
+37 vanilla types. Map area, coastline scaling, land coverage,
+normal/custom industry density and the editor override are applied
+in their original order. Forced attempts precede weighted
+selection. Placement still runs between draws on the same RNG;
+a host cannot precompute the later order and then use the shared
+random stream separately.
+
+The test compiles the original allocation functions from RC1
+and compares 336 cases across the four climates, maps through
+4,096 per axis, and both stages. It verifies counts, probabilities,
+forced/weighted selection order and final RNG with interleaved
+placement draws. The ordinary generator uses this allocator for
+its supported Temperate industry types; it does not yet generate
+the full industry maps or other climate campaigns.
