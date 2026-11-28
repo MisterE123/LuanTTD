@@ -1,5 +1,7 @@
 -- Compare a second ordinary, independently generated RC1 world.
 local profiles={
+  wide={fixture="rc1-wide-varied-town-year",width=512,depth=256,year=1960,seed=10873,
+    towns=4,custom_towns=42,layout="random",growth_rate=3,larger_towns=3,initial_city_size=4,coast=10,rivers=3,variety=2},
   crowded={fixture="rc1-crowded-grid2-years",width=256,depth=256,year=1993,seed=9354,
     towns=4,custom_towns=14,layout="grid2",growth_rate=4,larger_towns=1,initial_city_size=8,coast=0},
   grid={fixture="rc1-fast-grid-town-year",width=256,depth=128,year=1950,seed=98217,
@@ -21,7 +23,7 @@ local profile_id=arg[1] or "grid"
 local cfg=assert(profiles[profile_id=="hills-long" and "hills" or profile_id])
 local ref=dofile("tests/fixtures/"..(profile_id=="hills-long" and "rc1-hills-town-three-years" or cfg.fixture)..".lua")
 cfg.relief,cfg.sea,cfg.coast,cfg.rivers=cfg.relief or 1,0,cfg.coast or 16,cfg.rivers or 2
-cfg.trees,cfg.larger_towns,cfg.industries,cfg.variety,cfg.smooth=2,cfg.larger_towns or 3,4,0,1
+cfg.trees,cfg.larger_towns,cfg.industries,cfg.variety,cfg.smooth=2,cfg.larger_towns or 3,4,cfg.variety or 0,1
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local Sim,Terrain,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -96,6 +98,12 @@ local function observe(tick)
     local x,z=Sim.xy(47086+1)
     local slope,base=Terrain.tile(s.corner_grid,x,z)
     assert(slope==0 and base==7)
+  end
+  if ref.wide and tick==1281 then
+    local replaced=s.tiles[95901+1].source_house
+    assert(replaced and replaced.id==13 and replaced.town==6 and replaced.random_bits==70)
+    local approach,other=s.tiles[84229+1],s.tiles[84228+1]
+    assert(approach.road_town==36 and approach.road_bits==11 and other.road_town==27 and other.road_bits==10)
   end
   local expected=ref.snapshots[tick]
   if not expected then return end

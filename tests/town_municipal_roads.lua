@@ -313,3 +313,43 @@ do
   end
   print("PASS municipal road cleanup preserves through lanes and facing bay/depot entrances in every orientation")
 end
+
+-- CanBuildHouseHere uses LandscapeClear(Auto, NoWater). One ordinary
+-- road half is removable by OWNER_TOWN; a road layer that would carry
+-- through traffic, an occupied tip, or a tram/facility is not.
+do
+  for _,guard in ipairs({"none","two","works","tram","vehicle","depot","crossing"}) do
+    local s,t=fixture()
+    s.stock_road_town_policy={allow_town_roads=false}
+    local id=S.id(11,13)
+    local cell=s.tiles[id]
+    local company=S.company(s,"Neighbor")
+    local cash=company.cash
+    cell.build,cell.road_bits,cell.owner="road",4,"Neighbor"
+    if guard=="two" then cell.road_bits=5 end
+    if guard=="works" then cell.roadworks=true end
+    if guard=="tram" then cell.tram={kind="road",tram_bits=4} end
+    if guard=="vehicle" then s.fleet[1]={depot=id} end
+    if guard=="depot" then cell.build="road_depot" end
+    if guard=="crossing" then cell.level_crossing={} end
+    assert(S.town_clear_road_tip(s,id,false)==(guard=="none"))
+    assert(cell.build and not cell.house and cell.owner=="Neighbor","Quote changed the surface")
+    local draw={1073741824,0,300000000,41}
+    local n=0
+    W.tick(s,1,function() n=n+1;return draw[n] or (n%4)*1073741824 end)
+    if guard=="none" then
+      assert(cell.source_house and t.num_houses==1 and not cell.build and not cell.owner and not cell.road_bits)
+      assert(s.changed[1]==id)
+    else
+      assert(cell.build and not cell.house and cell.owner=="Neighbor")
+    end
+    assert(company.cash==cash,"Municipal housekeeping must not bill the company")
+  end
+  local s,t=fixture()
+  local id=S.id(17,12)
+  assert(S.town_road_piece(s,2,id,10,true))
+  local board=W.road_board(s)
+  assert(board.road_allowed(t,17,12,0,function() error("Flat road should not need an RNG draw") end))
+  assert(s.tiles[id].road_town==2)
+end
+print("PASS stock town can replace one clear road tip with a house, protects occupied/compound facilities, and can approach a foreign town's road")

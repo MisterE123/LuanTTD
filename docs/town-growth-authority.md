@@ -794,3 +794,29 @@ boundaries. A native Luanti test physically removes the only served
 bus stop, sees that station count for February growth, then no longer
 counts it at the March update. Rail and airport station retirement
 and the full cross-mode deletion lifecycle remain separate work.
+
+
+### Wide, varied terrain and neighbouring town roads
+
+The generated 512×256 Temperate seed 10873 starts in 1960 with 42
+towns, 92 industries, random town layouts, Fast growth, high river
+density and regional terrain variety. The source fixture isolates two
+previously missed founding rules:
+
+- On a Better Roads extra-house search, stock `ClearTile_Road` with
+  Auto admits exactly one normal road bit if there is no tram. The
+  town can replace that end piece with a house, on founding or during
+  live play. It still cannot clear an occupied tile, working road,
+  crossing, depot, tram or longer piece as part of this command.
+- `IsRoadAllowedHere` can look ahead to another town's existing road.
+  The road-walk stops when it lands on that foreign road. The lookahead
+  doesn't transfer ownership or prospectively block the last approach.
+
+The native map also exposes an otherwise unrelated shoreline mistake:
+sea below a bridge remains sea for flooding purposes, so adjoining
+coast doesn't dry out merely because there is a deck above the water.
+The [wide replay](../tests/town_growth_rc1_fast_grid.lua) compares
+27,010 RNG ticks and fourteen map/town snapshots, including two exact
+founding tile witnesses and three packed reopens. The native Luanti
+worker test also reopens the same map through SQLite and checks all
+42 town clocks against the official final state.

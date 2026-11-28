@@ -556,3 +556,24 @@ jobs:
           LUANTTD_QA_MUNICIPAL_KIND=retired bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-retired-station
       - name: Compare three years of dense 1993 grid cities
         run: lua5.1 tests/town_growth_rc1_fast_grid.lua crowded
+
+
+  rc1-wide-town-growth-parity:
+    runs-on: ubuntu-24.04
+    container: debian:13
+    timeout-minutes: 8
+    steps:
+      - name: Install Lua and Luanti server
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git lua5.1 luanti-server
+          echo /usr/games >> "$GITHUB_PATH"
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check road-tip replacement and growth across municipal boundaries
+        run: |
+          lua5.1 tests/town_municipal_roads.lua
+          lua5.1 tests/water_flood.lua
+          lua5.1 tests/town_growth_rc1_fast_grid.lua wide
+          bash tests/town_growth_rc1_goods_native.sh wide

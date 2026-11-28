@@ -152,3 +152,25 @@ for _,object in ipairs({false,true}) do
   assert(not ground.stock_landmark)
 end
 print("PASS real plain land floods preserve road geometry fingerprints; a flooded town object does not")
+
+-- An overhead deck does not replace the TileType::Water beneath it.
+-- The dry-out branch still sees active sea across that edge of a coast.
+do
+  local s=Sim.new(1814)
+  s.corner_grid=T.new(Sim.W,Sim.H,function(_,z) return z<=8 and 1 or 0 end)
+  for i in ipairs(s.tiles) do s.tiles[i]={terrain="grass"} end
+  local shore,under=ids(8,8),ids(8,9)
+  s.tiles[shore]={terrain="water",water_class="sea",coastal_water=true}
+  s.tiles[under]={terrain="water",water_class="sea"}
+  assert(T.tile(s.corner_grid,8,8)==9)
+  for _,layer in ipairs({"bridge_above","rail_bridge_above","aqueduct_above"}) do
+    s[layer]={[under]=17}
+    local board=W.board(s)
+    assert(Flood.behaviour(board.tile(8,9))=="active")
+    assert(W.visit(s,8,8,board)==0 and s.tiles[shore].coastal_water and s[layer][under]==17)
+    s[layer]=nil
+  end
+  s.tiles[under]={terrain="grass"}
+  assert(W.visit(s,8,8)==1 and s.tiles[shore].terrain=="grass")
+end
+print("PASS sea below an overhead span still keeps the adjacent shore flooded")

@@ -1873,6 +1873,28 @@ function M.town_road_piece(s,town,id,bits,execute)
   return r
 end
 
+-- RC1 ClearTile_Road with Auto and NoWater, used by CanBuildHouseHere.
+-- OWNER_TOWN may erase the single normal road bit. Never quote a
+-- crossing, depot, tram, occupied road, or road reconstruction site.
+function M.town_clear_road_tip(s,id,execute)
+  local t=id and s.tiles[id]
+  if not t or t.build~="road" or t.roadworks or t.stock_void or t.stock_object or
+      t.tram or t.station or t.road_waypoint_id or t.level_crossing or t.rail_tracks or
+      t.rail_span_id or t.road_bridge_id or t.road_tunnel_id or t.road_depot_dir or t.depot_dir or
+      t.site or t.house or t.stock_industry or t.stock_landmark or t.ship or t.airfield or
+      M.bridge_deck_at(s,id) then return false end
+  local bits=t.road_bits
+  if bits~=1 and bits~=2 and bits~=4 and bits~=8 then return false end
+  if M.road_piece_occupancy(s)(id,true,true) then return false end
+  if execute then
+    t.build,t.owner,t.road_bits,t.road_town,t.roadtype=nil,nil,nil,nil,nil
+    t.roadside,t.stock_roadside_town,t.road_disallowed,t.disallowed,t.closed=nil,nil,nil,nil,nil
+    M.mark_clear_land(s,id)
+    s.topology=(s.topology or 0)+1
+  end
+  return true
+end
+
 function M.town_clear_coast(s,id,execute)
   local t=s.tiles[id]
   if not t or t.stock_void or not t.coastal_water or t.owner or t.build or t.stock_object or

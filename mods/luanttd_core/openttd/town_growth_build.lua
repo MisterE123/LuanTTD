@@ -52,6 +52,7 @@ return function(G,catalog)
     -- RC1 CanBuildHouseHere quotes LandscapeClear with Auto and NoWater.
     -- The host can explicitly admit ordinary trees without allowing
     -- demolition of buildings or owned property.
+    if t.kind=="road" then return not t.occupied and board.clear_quote and board.clear_quote(x,z,"house") end
     local wooded=t.kind=="trees" and board.clear_quote~=nil
     if t.kind~="clear" and not t.coast and not wooded or t.occupied or t.owner then return false end
     return not board.clear_quote or board.clear_quote(x,z,"house")

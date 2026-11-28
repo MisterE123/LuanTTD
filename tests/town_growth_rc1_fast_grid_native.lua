@@ -4,15 +4,16 @@ local function m(n) return dofile(mod.."/"..n..".lua") end
 local Sim=m("sim")
 local Checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
 local client=m("campaign_authority_client")(core,mod)
-local cap={road={start_year=1950,breakdowns=1,service_interval=150},ferry={},air={},oil_tanker=true}
 local ref=m("qa_native_goods")
+local year=ref.wide and 1960 or 1950
+local cap={road={start_year=year,breakdowns=1,service_interval=150},ferry={},air={},oil_tanker=true}
 if ref.houses_only then
   -- A server default deliberately contradicts the chosen world. Verify
   -- the authority retains the world setting through two processes.
   cap.road_town_policy={allow_town_roads=true,allow_town_level_crossings=false}
 end
-local width=ref.midyear and 128 or 256
-local depth=ref.hills and 256 or 128
+local width=ref.wide and 512 or ref.midyear and 128 or 256
+local depth=(ref.wide or ref.hills) and 256 or 128
 local industry_count=#ref.industries
 local town_count=#ref.snapshots[1281]-1
 local restart_day=ref.restart_day or 128
@@ -24,9 +25,13 @@ if not initial then
   local cfg=ref.hills and {seed=1,relief=3,coast=0,rivers=3,towns=3,larger_towns=4,layout="original",growth_rate=2}
     or {seed=98217,relief=1,coast=16,rivers=2,towns=4,custom_towns=6,larger_towns=3,layout="grid3",growth_rate=3}
   if ref.midyear then cfg={seed=1751,relief=1,coast=16,rivers=2,towns=4,custom_towns=4,larger_towns=3,layout="original",growth_rate=2} end
+  if ref.wide then
+    cfg={seed=10873,relief=1,coast=10,rivers=3,towns=4,custom_towns=42,larger_towns=3,
+      initial_city_size=4,layout="random",growth_rate=3,variety=2}
+  end
   if ref.quadratic then cfg.town_cargo=0 end
   if ref.houses_only then cfg.town_roads,cfg.town_crossings=0,1 end
-  cfg.width,cfg.depth,cfg.year,cfg.sea,cfg.trees,cfg.industries,cfg.variety,cfg.smooth=width,depth,1950,0,2,4,0,1
+  cfg.width,cfg.depth,cfg.year,cfg.sea,cfg.trees,cfg.industries,cfg.variety,cfg.smooth=width,depth,year,0,2,4,cfg.variety or 0,1
   local s=gen.run(cfg)
   assert(#s.stock_generated_profile.industries==industry_count and #s.stock_town_growth.towns==town_count)
   s.road_coal,s.road_timber,s.road_farm,s.road_oil,s.road_heavy=true,true,true,true,true

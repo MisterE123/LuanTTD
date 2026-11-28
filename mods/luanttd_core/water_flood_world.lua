@@ -64,6 +64,16 @@ return function(Sim,Terrain,Flood,Track,Slope,RailWater)
       for _,k in ipairs(adjacent_layers) do if s[k] and s[k][id] then return "protected" end end
       return "object"
     end
+    -- A raised bridge deck is independent of the underlying stock
+    -- tile. It does not turn an otherwise open sea/coast cell into a
+    -- non-flooding facility when the adjacent coast tests its source.
+    if t.terrain=="water" and not (t.wood or t.build or t.ship or t.tram or t.airfield or t.station
+        or t.house or t.site or t.stock_canal or t.stock_industry or t.stock_landmark or t.stock_object
+        or t.signal or t.rail_tracks or t.rail_span_id or t.road_bridge_id or t.road_tunnel_id
+        or t.level_crossing or t.road_town) then
+      if t.coastal_water then return "coast" end
+      return t.water_class or "sea"
+    end
     if protected(s,id,t) then return "protected" end
     if t.build and t.build~="canal" then return "protected" end
     if t.build=="canal" or t.stock_canal then return "canal" end

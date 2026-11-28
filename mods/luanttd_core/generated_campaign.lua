@@ -129,7 +129,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         local x,z=Sim.xy(id)
         local ground=growth.tile(x,z)
         if ground and not ground.bridge_above and ground.slope and ground.slope<16 and
-            (ground.kind=="clear" or ground.coast and Sim.town_clear_coast(s,id,false)) then
+            growth.clear_quote(x,z,"house") then
           return ground.max_z/8
         end
       end)
@@ -138,6 +138,9 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         local tile,h=part.id,part.record
         local t=s.tiles[tile]
         if t.coastal_water then assert(Sim.town_clear_coast(s,tile,true)) end
+        if t.build=="road" then
+          assert(Sim.town_clear_road_tip(s,tile,true))
+        end
         placed[tile]=true
         art.stamp(h,p,art[p.id],part.index)
         if h.completed then h.age,h.age_epoch=0,settings.year end

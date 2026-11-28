@@ -49,6 +49,9 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
     local t=B.tile(x,z)
     if not t or t.owner or t.bridge_above then return false end
     if t.coast then return Sim.town_clear_coast(s,Sim.id(x,z),false)~=nil end
+    if kind=="house" and t.kind=="road" then
+      return Sim.town_clear_road_tip(s,Sim.id(x,z),false)
+    end
     return t.kind=="clear"
   end
   function B.seed_road_clear_quote(x,z)
@@ -60,7 +63,10 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
   end
   function B.road_allowed(town,x,z,d,random)
     local t=B.tile(x,z)
-    if not t or B.distance_to_edge(x,z)<=0 or t.road_town and t.road_town~=town.id then return false end
+    -- The stock lookahead does not reject an existing foreign-town
+    -- road. The walk checks that owner only when actually stepping on
+    -- it; the last new piece can still approach the other town.
+    if not t or B.distance_to_edge(x,z)<=0 then return false end
     local axis=d%2==0 and 10 or 5
     if t.bridge_above then
       for _,l in ipairs(Sim.bridge_layers) do

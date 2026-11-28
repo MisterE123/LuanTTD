@@ -29,6 +29,12 @@ return function(Sim,Terrain,G,B,H)
   end
   local function clear_levels(s,id,allow_cover,allow_coast,allow_steep)
     local tile=at(s.tiles,id)
+    if allow_cover and not allow_steep and tile and tile.build=="road" and Sim.town_clear_road_tip(s,id,false) then
+      local x,z=Sim.xy(id)
+      local slope,base,top=Terrain.tile(s.corner_grid,x,z)
+      if slope and slope<16 then return top,slope,base end
+      return
+    end
     local coast=tile and allow_coast and tile.terrain=="water" and tile.coastal_water
     if not tile or tile.terrain~="grass" and tile.terrain~="hill" and not coast or tile.owner or tile.site or
       tile.stock_void or tile.stock_object or (not allow_cover and at(s.stock_farm_fields,id)) or
@@ -301,7 +307,10 @@ return function(Sim,Terrain,G,B,H)
         local tile=s.tiles[part.id]
         local _,_,base=clear_levels(s,part.id,allow_cover,allow_cover)
         local coast=tile.terrain=="water" and tile.coastal_water
-        if coast then
+        local road=tile.build=="road"
+        if road then
+          assert(Sim.town_clear_road_tip(s,part.id,true))
+        elseif coast then
           -- RC1's NoWater flag prohibits clearing actual water, not a
           -- coast or rocky coast. Reuse the exact municipal clear quote.
           assert(Sim.town_clear_coast(s,part.id,true))
@@ -317,7 +326,7 @@ return function(Sim,Terrain,G,B,H)
         tile.house,tile.source_house,tile.h=true,part.record,base
         if s.stock_town_lifts and Lift.supports(part.record) then Lift.install(s.stock_town_lifts,part.id,Sim) end
         visual_changed(s,part.id)
-        if coast then Sim.invalidate_live_sea_near(s,part.id) end
+        if coast or road then Sim.invalidate_live_sea_near(s,part.id) end
       end
       B.house_committed(t,proposal,views,growth_setting(s))
       t.last_build={tile=id,house=h.id,tick=tick,name=style.name}
