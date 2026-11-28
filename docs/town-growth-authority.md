@@ -224,8 +224,20 @@ company-owned bridge. A clear surface also admits municipal road above
 a verified tunnel in either direction: the bridge-axis rule does not
 apply to a bore. The native Luanti scenarios keep both road layers in
 place after a worker reopen, with the original span ownership and
-its two routed ends unchanged. House placement beneath a deck
+its two routed ends unchanged. Existing streets can also accept the
+missing connection when a town reaches them on either layer: the
+source command added a third road bit under a bridge, and native
+Luanti scenarios extended both layered streets while keeping the span
+and road on independent routes. House placement beneath a deck
 remains prohibited.
+
+When grading changes a neighboring tile with one ordinary road bit,
+RC1's automatic surface clear can remove the stub but not a full
+road. The native town's successful clear-and-grade costs 290 in the
+baseline economy (250 for one corner, 40 for the road bit) and consumes
+the same eight terrain RNG words as other successful four-tile grades.
+Rejected full-road grades do not draw or erase any road. This is
+limited to normal municipal or unowned, unoccupied road tips.
 
 Only an admitted native command writes terrain, road bits, bridge geometry
 or a tunnel. The town cannot clear a private lot, active industry or

@@ -161,6 +161,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
     return Spans.bridge(town,B,x,z,d,random) or Spans.tunnel(town,B,x,z,d)
   end
   local terraform_price=250 -- RC1 construction base terraform price for this economy.
+  local clear_road_tip_price=40 -- Price::ClearRoad for one stock road bit.
   local function plan_earthworks(x,z,mask,up,cleared_portal)
     if mask==0 then return end
     return Terrain.plan(s.corner_grid,x,z,mask,up,{
@@ -173,21 +174,28 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
           local floor=Sim.tunnel_floor_at(s,Sim.id(u,v))
           return floor and base<=floor
         end,
-        validate_tile=function(_,u,v)
+        validate_tile=function(_,u,v,_,_,_,plan)
           local id=Sim.id(u,v)
           local t=B.tile(u,v)
           local deck,overhead=Sim.bridge_deck_at(s,id)
           if overhead and not deck then return nil,"TOWN_PROTECTED_TERRAIN" end
+          -- Valid existing bores are independent of the surface.
+          -- Unknown geometry must still fail the entire quote.
+          local floor,bore=Sim.tunnel_floor_at(s,id)
+          if bore and not floor then return nil,"TOWN_PROTECTED_TERRAIN" end
+          -- Town-owned terraforming has no autoslope. Its stock Auto
+          -- LandscapeClear can still remove an unoccupied normal road
+          -- with exactly one road bit and no tram.
+          if t and t.kind=="road" and not t.owner and Sim.town_clear_road_tip(s,id,false) then
+            plan.road_tips=plan.road_tips or {};plan.road_tips[id]=true
+            return clear_road_tip_price
+          end
           -- RC1's tree terraform callback delegates to LandscapeClear.
           -- Quote the stems before committing any shared corner. Leave
           -- non-tree structures and protected company land alone.
           local permitted=live and (live.terraformable or live.houseable)(u,v)
           if not t or t.owner or (t.kind~="clear" and t.kind~="trees" and not (deck and permitted)) or
               live and not permitted then return nil,"TOWN_PROTECTED_TERRAIN" end
-          -- Valid existing bores are independent of the surface.
-          -- Unknown geometry must still fail the entire quote.
-          local floor,bore=Sim.tunnel_floor_at(s,id)
-          if bore and not floor then return nil,"TOWN_PROTECTED_TERRAIN" end
           -- CmdBuildTunnel already paid to clear the far portal.
           if id==cleared_portal then return 0 end
           return Sim.road_site_clear_cost(s.tiles[id],s.stock_farm_fields and s.stock_farm_fields[id])
@@ -207,8 +215,14 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
         if not s.tiles[id].stock_void then
           local _,_,top=Terrain.tile(s.corner_grid,d.x,d.z,p)
           local make_rocks=G.range(height_limit,random())<=top
-          if pass==1 and not up and make_rocks then rock[id]=true end
+          if pass==1 and not up and make_rocks and not (p.road_tips and p.road_tips[id]) then rock[id]=true end
         end
+      end
+    end
+    if p.road_tips then
+      for _,d in ipairs(p.dirty) do
+        local id=Sim.id(d.x,d.z)
+        if p.road_tips[id] then assert(Sim.town_clear_road_tip(s,id,true)) end
       end
     end
     assert(Terrain.apply(s.corner_grid,p))

@@ -17,8 +17,9 @@ s.passenger_house_clock=load_("openttd/town_passengers").new_clock(6,6,nil,4*74)
 s.stock_town_growth={version=1,order={1},towns={}}
 local mode=core.settings:get("luanttd_qa_municipal_kind") or "road"
 local span=mode=="bridge" or mode=="tunnel"
-local underbridge=mode=="underbridge"
-local abovetunnel=mode=="abovetunnel"
+local extending=mode=="underbridge-extend" or mode=="abovetunnel-extend"
+local underbridge=mode=="underbridge" or mode=="underbridge-extend"
+local abovetunnel=mode=="abovetunnel" or mode=="abovetunnel-extend"
 local layered_street=underbridge or abovetunnel
 local reseed=mode=="reseed"
 local crossing=mode=="crossing"
@@ -141,6 +142,10 @@ elseif mode=="tunnel" then
   for z=cz,cz+1 do for x=cx+2,cx+4 do s.corner_grid.levels[(z-1)*65+x]=2 end end
   assert(S.town_road_piece(s,1,S.id(cx+2,cz),5,true))
 end
+if extending then
+  local id=underbridge and over_road.target or under_bore.target
+  assert(S.town_road_piece(s,1,id,10,true))
+end
 local file="municipal-roads.chk"
 local disk=load_("campaign_checkpoint")(core,load_("packed_campaign"),file)
 disk.write_state(s)
@@ -163,7 +168,8 @@ local function ask()
         if row.id==rail_cell and row.surface.level_crossing then newroad=row.id end
       elseif layered_street then
         local at=underbridge and over_road.target or under_bore.target
-        if row.id==at and row.surface.build=="road" and row.surface.road_town==1 then newroad=row.id end
+        if row.id==at and row.surface.build=="road" and row.surface.road_town==1 and
+            (not extending or row.surface.road_bits~=10) then newroad=row.id end
       elseif natural_house then
         if row.surface.source_house and row.surface.source_house.root then newroad=row.id end
       elseif row.id~=center and row.surface.build==target and row.surface.road_town==1 then newroad=row.id end
@@ -240,7 +246,8 @@ core.register_on_mods_loaded(function()
         and span["end"]==(underbridge and over_road.tail or under_bore.finish))
       assert(span.owner=="Span Builder" and S.company(next_,"Span Builder").cash==
         (underbridge and over_road.balance or under_bore.cash))
-      assert(created.road_bits==5 and not created.owner)
+      local expected=extending and (underbridge and 11 or 14) or 5
+      assert((created.road_bits==expected or extending and created.road_bits==15) and not created.owner)
       local F=load_("openttd/yapf_road_follow")
       local road=load_("road_yapf_board")(S,next_,F)
       for _,id in ipairs({span.start,span["end"]}) do

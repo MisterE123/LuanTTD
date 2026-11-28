@@ -341,6 +341,11 @@ do
   assert(s.bridge_above[lot]==key and s.stock_road_bridges[key]==bridge and bridge.owner=="Span Builder")
   assert(Sim.company(s,"Span Builder").cash==balance and s.passenger_rating_rng[1]==2886033970
     and s.passenger_rating_rng[2]==1113251459)
+  -- The actual stock GrowTownWithRoad command adds NE=8 to ROAD_Y=5
+  -- on a surface street under the same deck, yielding junction mask 13.
+  assert(b.road_quote(town,x,z,8))
+  assert(Sim.town_road_piece(s,town.id,lot,8,true))
+  assert(s.tiles[lot].road_bits==13 and s.bridge_above[lot]==key and s.stock_road_bridges[key]==bridge)
   print("PASS RC1 town street crosses below an existing bridge without replacing the deck or allowing parallel lookahead")
 end
 
@@ -373,4 +378,39 @@ do
     and s.stock_road_tunnels[key]==bore and s.passenger_rating_rng[1]==2536072277
     and s.passenger_rating_rng[2]==1090321433)
   print("PASS RC1 town roads run alongside or across a covered tunnel without altering the bore")
+end
+
+-- Real 16.0-RC1 LevelTownLand calls the normal road Auto clear: the
+-- adjoining owned-by-town or unowned road stub costs 40 to remove;
+-- a full ordinary road prevents both grading attempts.
+do
+  for _,test in ipairs({
+      {bits=8,town=1,first={308770875,2314172559},last={3309771557,3607261628}},
+      {bits=10,town=1,first={3309771557,3607261628}},
+      {bits=8,first={3309771557,3607261628},last={1325700299,2080519754}},
+      {bits=8,owner="Private builder",first={3309771557,3607261628}},
+      {bits=8,town=1,works=true,first={3309771557,3607261628}},
+    }) do
+    local s=world()
+    local x,z=32,32
+    s.corner_grid=Terrain.new(Sim.W,Sim.H,function(u,v) return u==x and v==z and 1 or 2 end)
+    s.stock_generated_profile={map_height_limit=30}
+    for dx=-2,2 do for dz=-2,2 do s.tiles[Sim.id(x+dx,z+dz)]={h=2,terrain="hill"} end end
+    local tip=s.tiles[Sim.id(x-1,z)]
+    tip.build,tip.road_town,tip.road_bits="road",test.town,test.bits
+    tip.owner,tip.roadworks=test.owner,test.works
+    assert(Terrain.tile(s.corner_grid,x,z)==7 and Terrain.tile(s.corner_grid,x-1,z)==14)
+    s.passenger_rating_rng={unpack(test.first)}
+    local b=W.road_board(s)
+    local changed=b.level_land(x,z,function() return Sim.stock_random_u32(s) end)
+    if test.last then
+      assert(changed and not tip.road_bits and not tip.road_town and not tip.build)
+      assert(Terrain.tile(s.corner_grid,x,z)==0 and Terrain.tile(s.corner_grid,x-1,z)==0)
+    else
+      assert(not changed and tip.road_bits==test.bits and tip.owner==test.owner and s.corner_grid.revision==0)
+    end
+    local expect=test.last or test.first
+    assert(s.passenger_rating_rng[1]==expect[1] and s.passenger_rating_rng[2]==expect[2])
+  end
+  print("PASS RC1 municipal land grade removes one-bit road tips, not full roads, with stock draws")
 end
