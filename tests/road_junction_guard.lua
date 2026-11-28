@@ -105,6 +105,45 @@ assert(G.check(wide,bounded_world,{id=72},outside,entering,0),
 assert(checked<200,"Local lookup fell back to a whole-map scan on topology change")
 Sim.road_bits=road_bits
 
+-- Adjacent junctions and a bend at the end of a signed approach.
+-- The front coach crosses the halo threshold midway through its turn;
+-- its follower is still inside the halo on the same motion rows.
+local bend=Sim.new(1751)
+bend.road_junction_clearance=true
+for z=11,13 do for x=10,13 do bend.tiles[id(x,z)]={h=0,terrain="grass"} end end
+local function piece(x,z,bits,oneway)
+  local tile=id(x,z)
+  bend.tiles[tile]={h=0,terrain="grass",build="road",road_bits=bits,road_disallowed=oneway}
+  return tile
+end
+local j=piece(11,11,14)
+local turn=piece(12,11,12)
+piece(11,12,15)
+piece(12,12,13)
+piece(12,13,5,1)
+local function row(x,z,d,tile,blend)
+  return {x,z,d,tile,blend or 1,13}
+end
+local rows={row(197,188,7,turn,.177585),row(197,188,0,turn,.177585),
+  row(196,187,0,turn,.5),row(195,186,0,turn,.822415),row(194,185,0,turn,.995986),
+  row(194,185,1,turn,.995986),row(193,185,1,turn),row(192,185,1,turn),
+  row(191,185,1,j)}
+local front={id=1,clock={index=3}}
+local rear={id=2,clock={index=1},frame=rows[1],z=0}
+bend.fleet={[1]={road_motion_frames=rows},[2]={road_motion_frames=rows}}
+local bend_world={vehicles_at=function(tile) return tile==turn and {rear} or {} end}
+assert(G.check(bend,bend_world,front,rows[3],rows[4],0),
+  "A same-curve follower held the front coach at the edge of a junction")
+rear.stopped=true
+assert(not G.check(bend,bend_world,front,rows[3],rows[4],0),
+  "A parked vehicle was incorrectly treated as a moving convoy")
+rear.stopped=false
+local split={unpack(rows)}
+split[5]=row(195,185,7,turn)
+bend.fleet[2].road_motion_frames=split
+assert(not G.check(bend,bend_world,front,rows[3],rows[4],0),
+  "Traffic with a different imminent path was incorrectly exempted")
+
 local function copy(t)
   if type(t)~="table" then return t end
   local o={}

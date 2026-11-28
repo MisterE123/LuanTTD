@@ -232,6 +232,34 @@ return function(Sim,Presentation)
     end
     return true
   end
+  -- A following vehicle can already touch the same junction halo
+  -- while the bus ahead is turning into it from an adjacent bend.
+  -- It must not hold the front bus: the stock following rule then
+  -- holds the rear bus, deadlocking the entire queue. Prove that the
+  -- rear bus is following this exact movement, including the turn,
+  -- and that the next movement increases their physical separation.
+  local function queued_behind(s,front,previous,wanted,rear)
+    local fc,rc=front.clock,rear.clock
+    if not fc or not rc or fc.lane_pose or rc.lane_pose or rear.stopped or
+        (fc.overtaking or 0)~=0 or (rc.overtaking or 0)~=0 then return false end
+    local fv,rv=s.fleet[front.id],s.fleet[rear.id]
+    local ahead,behind=fv and fv.road_motion_frames,rv and rv.road_motion_frames
+    if not ahead or not behind or ahead[fc.index]~=previous or ahead[fc.index+1]~=wanted or
+        behind[rc.index]~=rear.frame then return false end
+    local x,z=center(previous)
+    local u,w=center(wanted)
+    local a,b=center(rear.frame)
+    if (u-a)^2+(w-b)^2<=(x-a)^2+(z-b)^2 then return false end
+    for i=rc.index+1,math.min(#behind,rc.index+40) do
+      if same_pixel(behind[i],previous) then
+        for d=1,4 do
+          if not same_pixel(behind[i+d],ahead[fc.index+d]) then return false end
+        end
+        return true
+      end
+    end
+    return false
+  end
   function G.check(s,W,v,prev,next_pose,z,road_z)
     if not s.road_junction_clearance or prev[12] or next_pose[12] then return true,z end
     local map=board(s)
@@ -251,7 +279,7 @@ return function(Sim,Presentation)
               if abs(other.z-z)<6 then
                 local a,b=center(other.frame)
                 if touches_cluster(a,b,g) and not separate_lanes(s,v,prev,next_pose,other,x,y,a,b)
-                    and not aligned_convoy(s,v,next_pose,other) then
+                    and not aligned_convoy(s,v,next_pose,other) and not queued_behind(s,v,prev,next_pose,other) then
                   return false,z
                 end
               end
