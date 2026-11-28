@@ -305,6 +305,7 @@ jobs:
           python3 tests/farm_factory_fields_upstream.py "$src" --lua lua5.1
           python3 tests/farm_clear_rc1_upstream.py "$src/src/clear_cmd.cpp" --lua lua5.1
           lua5.1 tests/terragenesis_rc1.lua
+          lua5.1 tests/river_worldgen_rc1.lua
           python3 tests/terragenesis_clear_rc1_upstream.py "$src" --lua lua5.1
           lua5.1 tests/rocky_water_tiles.lua
           lua5.1 tests/river_rapid_particles.lua
@@ -474,6 +475,7 @@ jobs:
           lua5.1 tests/rail_auto_service_rc1.lua
           lua5.1 tests/town_growth_rc1_station_phase.lua
           lua5.1 tests/town_growth_rc1_generated_region.lua
+          lua5.1 tests/town_growth_rc1_generated_region.lua rivers
           lua5.1 tests/town_growth_rc1_vehicle_phase.lua
           lua5.1 tests/town_growth_rc1_two_buses.lua
           lua5.1 tests/town_growth_rc1_mixed_road_rail.lua

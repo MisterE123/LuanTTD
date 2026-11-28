@@ -3,8 +3,9 @@
 -- FlowRiver, BuildRiver, MakeLake, RiverMakeWider, CreateRivers;
 -- map.cpp CircularTileSearch; pathfinder/npf/aystar.cpp and queue.cpp;
 -- water_cmd.cpp terrain flood/reflood, void_cmd.cpp, landscape.cpp RunTileLoop.
+-- Ordinary generation injects the 16.0-RC1 spring, terminus and YAPF ports.
 -- Detached temperate driver. No hard-coded rivers or substituted paths.
-return function(Slope)
+return function(Slope,RC1,Yapf,TreeLife)
   local R={AYSTAR_LIMIT=10000}
   local floor,ceil,min,max,abs=math.floor,math.ceil,math.min,math.max,math.abs
   local dx,dz={-1,0,1,0},{0,1,0,-1} -- stock DIAGDIR_NE,SE,SW,NW
@@ -59,9 +60,9 @@ return function(Slope)
     local hole=n%2
     if hole==1 then
       if f(i) then return i end
-      x,z=xy(B,(i-1-B.width)%size(B))
+      if B.rc1 then x,z=x+1,z-1 else x,z=xy(B,(i-1-B.width)%size(B));x=x+2 end
     end
-    x=x+hole+1
+    if hole==0 then x=x+1 end
     for ring=0,floor(n/2)-1 do
       for d=1,4 do
         for _=1,hole+2*ring+1 do
@@ -75,6 +76,8 @@ return function(Slope)
       x,z=x+1,z-1
     end
   end
+
+  local rc1=RC1 and RC1(valid,offset,dist,water,function(...)return R.flows_down(...) end,R.circular,range)
 
   function R.find_spring(B,i)
     local t=B.tile(i)
@@ -319,7 +322,12 @@ return function(Slope)
   end
 
   function R.build(B,begin,finish,spring,main,random,make,opts)
-    local path,details=R.route(B,begin,finish,random,opts.river_route_random)
+    local path,details
+    if B.rc1 then
+      path,details=Yapf.route(B,begin,finish,random,opts.river_route_random,opts.max_search_nodes,valid,R.flows_down,offset,dist)
+    else
+      path,details=R.route(B,begin,finish,random,opts.river_route_random)
+    end
     if not path then return nil,details end
     for _,tile in ipairs(path) do if not water(B,tile) then make(tile) end end
     if main and not opts.original then
@@ -396,10 +404,17 @@ return function(Slope)
       for _=1,longer and 512 or 128 do
         stats.attempts=stats.attempts+1
         local tile=random()%size(B)
-        local spring=R.circular(B,tile,8,function(i)return R.find_spring(B,i)end)
+        local spring=R.circular(B,tile,8,function(i)
+          if B.rc1 then return rc1.find_spring(B,i,opts.terrain_type) end
+          return R.find_spring(B,i)
+        end)
         if spring~=nil then
           stats.springs=stats.springs+1
-          if R.flow(B,spring,spring,river_len*(longer and 4 or 1),random,make,opts) then
+          local minimum=river_len*(longer and 4 or 1)
+          local success
+          if B.rc1 then success=rc1.flow(B,spring,minimum,random,make,opts,R.build)
+          else success=R.flow(B,spring,spring,minimum,random,make,opts) end
+          if success then
             stats.rivers=stats.rivers+1;break
           end
         end
@@ -494,7 +509,7 @@ return function(Slope)
   -- CmdTerraformLand at the clear/water/void worldgen boundary.
   -- Duplicating the far source corner would permit fictitious recursive
   -- height edits, so the Terrain grid has one fewer cell in each axis.
-  function R.terraform_boundary(B,set,Terrain,max_height,trace)
+  function R.terraform_boundary(B,set,Terrain,max_height,trace,random)
     assert(type(Terrain)=="table" and type(Terrain.plan)=="function","Stock Terrain.plan required")
     uint(max_height,15,255)
     local grid
@@ -514,7 +529,7 @@ return function(Slope)
           grid={width=B.width-1,depth=B.height-1,max_height=max_height,freeform_edges=B.freeform,
             unit_cost=1,revision=0,levels=levels}
         end
-        local clear={}
+        local clear,rock={},{}
         local function tile_at(u,v) return id(B,u-1,v-1) end
         local plan
         plan,reason=Terrain.plan(grid,x+1,z+1,mask,up,{
@@ -522,6 +537,7 @@ return function(Slope)
           validate_tile=function(pass,u,v)
             local tid=tile_at(u,v)
             local t=B.tile(tid)
+            if random and t.kind=="water" and t.class=="river" then return nil,"MUST_DEMOLISH_RIVER_FIRST" end
             if t.kind=="water" then
               -- Plain sea/river can be cleared by worldgen. Coast has its
               -- own command branch and does not use the edge check.
@@ -530,17 +546,35 @@ return function(Slope)
                 return nil,"TOO_CLOSE_TO_EDGE"
               end
               if pass==1 then clear[#clear+1]=tid end
-            elseif t.kind~="clear" then
+            elseif t.kind~="clear" and not (random and t.kind=="trees") then
               return nil,"NOT_WORLDGEN_GROUND"
             end
             return 0 -- no paying company during world generation
           end,
         })
         if plan then
+          if random then
+            -- Top-level Command::Do quotes first. Only a validated
+            -- TerraformLand reaches the two executing passes.
+            for pass=0,1 do
+              for _,t in ipairs(plan.dirty) do
+                local j=tile_at(t.x,t.z)
+                if B.tile(j).kind~="void" then
+                  local _,_,top=Terrain.tile(grid,t.x,t.z,plan)
+                  local make_rocks=range(max_height,random())<=top
+                  if pass==1 and not up and make_rocks then rock[j]=true end
+                end
+              end
+            end
+            for _,t in ipairs(plan.dirty) do
+              local j=tile_at(t.x,t.z)
+              if B.tile(j).kind~="void" then set.word(j,rock[j] and 512 or 0) end
+            end
+          end
           assert(Terrain.apply(grid,plan))
           -- The actual command clears affected tiles before applying
           -- heights. Stable clear grass density/type needs no packed write.
-          for _,tid in ipairs(clear) do set.word(tid,0) end
+          if not random then for _,tid in ipairs(clear) do set.word(tid,0) end end
           for _,c in ipairs(plan.changes) do set.corner(c.x-1,c.z-1,c.height) end
           success,changed,cleared=true,#plan.changes,#clear
         end
@@ -562,8 +596,9 @@ return function(Slope)
     if hooks then
       assert(type(opts.hook_id)=="string" and #opts.hook_id>0,"Custom river adapters need a cache identity")
     end
-    local water_words,river_extra,corners={},{},{}
-    local B={width=base.width,height=base.depth,freeform=base.freeform==true}
+    local water_words,river_extra,corners,trees={},{},{},{}
+    local B={width=base.width,height=base.depth,freeform=base.freeform==true,rc1=opts.rc1==true}
+    assert(not B.rc1 or rc1 and Yapf and TreeLife,"Missing pinned RC1 river source rules")
     local function corner(x,z)
       local i=id(B,x,z)
       return corners[i] or base.corner(x+1,z+1)
@@ -578,12 +613,13 @@ return function(Slope)
       local t=max(hn,hw,he,hs)
       local word=water_words[i] or base.tile(x+1,z+1)
       local class=floor(word/16)%16
-      return {kind=word%16==7 and "void" or word%16==6 and "water" or "clear",class=class==3 and "river" or
+      return {kind=word%16==7 and "void" or word%16==6 and "water" or word%16==4 and "trees" or "clear",class=class==3 and "river" or
         class==2 and "coast" or class==1 and "sea" or nil,corner_height=corner(x,z),slope=s,base=h,top=t}
     end
     local function set_word(i,v)
       water_words[uint(i,0,size(B)-1)]=v
       if v~=54 then river_extra[i]=nil end
+      if v~=4 then trees[i]=nil end
     end
     local setter={
       word=set_word,
@@ -592,10 +628,49 @@ return function(Slope)
     function B.make_river(i,bits)
       -- Native TerraGenesis adapter word: kind 6, subtype 3 reserved
       -- for river (sea/coast remain 1/2). Keep gameplay random byte separate.
-      water_words[i],river_extra[i]=54,bits
+      water_words[i],river_extra[i],trees[i]=54,bits,nil
+    end
+    function B.roughen(i) set_word(i,256) end
+    function B.place_tree(i,r)
+      -- PlaceTree(..., keep_density=true) on freshly roughened temperate land.
+      set_word(i,4)
+      trees[i]={class=4,ground=1,density=3,
+        type=floor(floor(r/16777216)*12/256),count=floor(r/4194304)%4+1,
+        growth=min(floor(r/65536)%8,6)}
+    end
+    function B.drain_sea(order)
+      for _,j in ipairs(order) do
+        B.terraform(j,15,false)
+        B.terraform(j,15-B.tile(j).slope%16,true)
+      end
     end
     local cursor=1
-    local next_loop=R.loop_scheduler(B,function(i)R.loop_water(B,set_word,i) end)
+    local function random() return next_random(rng) end
+    local function tree_neighbor(d,_,x,z)
+      local i=flood_off(B,id(B,x,z),d)
+      if not valid(B,i) then return end
+      local u,v=xy(B,i)
+      local word=water_words[i] or base.tile(u+1,v+1)
+      return {class=word%16,ground=floor(word/256)%16,density=3,coast=floor(word/16)%16==2,
+        rocky=floor(word/4096)%2==1,slope=B.tile(i).slope}
+    end
+    local next_loop=R.loop_scheduler(B,function(i)
+      local tree=trees[i]
+      if not tree then R.loop_water(B,set_word,i);return end
+      local x,z=xy(B,i)
+      -- CreateRivers calls RunTileLoop directly: source TimerGameTick is 0
+      -- for all 256 passes. Only existing wetland trees can grow or spread.
+      local next_tree,event=TreeLife.visit(tree,x,z,0,opts.extra_tree_placement,random,tree_neighbor)
+      if not next_tree then
+        set_word(i,tree.ground==3 and 38 or tree.ground*256)
+      else
+        trees[i]=next_tree
+      end
+      if event and event.kind=="plant" then
+        local j=flood_off(B,i,event.direction)
+        set_word(j,4);trees[j]=event.tree
+      end
+    end)
     function B.reflood()
       if hooks and hooks.reflood then return hooks.reflood(B,setter,rng) end
       R.reflood(B,set_word)
@@ -617,7 +692,8 @@ return function(Slope)
         if success then committed=committed+1 end
         if opts.terraform_trace then opts.terraform_trace(i,mask,up,success,changed,n,reason) end
       end
-      B.terraform=R.terraform_boundary(B,setter,opts.terrain,limit,trace)
+      B.terraform=R.terraform_boundary(B,setter,opts.terrain,limit,trace,
+        B.rc1 and function()return next_random(rng) end or nil)
     end
     local stats=R.create(B,function()return next_random(rng)end,opts)
     if limit then
@@ -628,7 +704,7 @@ return function(Slope)
     for k,v in pairs(base) do output[k]=v end
     output.rng_after=rng
     output.river_tileloop_cursor=cursor
-    output.base_id=base.base_id.."/rivers-separate-v2-"..tostring(permitted or 2).."-"..
+    output.base_id=base.base_id..(B.rc1 and "/rivers-16.0-RC1-" or "/rivers-separate-v2-")..tostring(permitted or 2).."-"..
       tostring(opts.min_river_length or 16).."-"..tostring(opts.river_route_random or 5).."-"..(opts.original and "orig" or "tg")..(limit and "-cap"..limit or "")..(hooks and "-hook-"..opts.hook_id or "")
     function output.corner(x,z)
       if x<1 or z<1 or x>B.width+1 or z>B.height+1 then return end
@@ -637,6 +713,10 @@ return function(Slope)
     function output.tile(x,z)
       if x<1 or z<1 or x>B.width or z>B.height then return end
       return water_words[id(B,x-1,z-1)] or base.tile(x,z)
+    end
+    function output.river_tree(x,z)
+      if x<1 or z<1 or x>B.width or z>B.height then return end
+      return trees[id(B,x-1,z-1)]
     end
     function output.river_bits(x,z)
       if x<1 or z<1 or x>B.width or z>B.height then return end

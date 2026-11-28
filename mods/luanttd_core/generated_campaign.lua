@@ -39,9 +39,10 @@ function M.landscape(Sim,Terrain,Generator,settings)
         t.stock_water_rocks=water_rocks or nil
         if t.water_class=="river" then t.stock_river_bits=assert(map.river_bits(x,z)) end
       else
-        assert(kind==0,"Unexpected stock landscape class")
+        assert(kind==0 or kind==4 and map.river_tree,"Unexpected stock landscape class")
         t.terrain=base>0 and "hill" or "grass"
         t.stock_clear_ground=clear_ground and clear_ground>0 and clear_ground or nil
+        if kind==4 then t.wood=assert(map.river_tree(x,z)) end
       end
       s.tiles[Sim.id(x,z)]=t
     end
@@ -336,7 +337,7 @@ function M.forests(Sim,Terrain,s,Generator,Trees,tree_placer,pulse)
   function board.tile(x,z)
     local id=Sim.id(x,z)
     local t=id and s.tiles[id]
-    if not t or t.stock_void or t.build or t.house or t.site or t.stock_industry or t.stock_landmark then return end
+    if not t or t.stock_void or t.build or t.house or t.wood or t.site or t.stock_industry or t.stock_landmark then return end
     local slope,base=Terrain.tile(s.corner_grid,x,z)
     local field=s.stock_farm_fields and s.stock_farm_fields[id]
     return {class=t.terrain=="water" and 6 or 0,ground=field and 3 or t.stock_clear_ground or 0,

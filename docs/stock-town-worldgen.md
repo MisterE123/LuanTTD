@@ -136,6 +136,7 @@ earthworks. During founding, as in live growth, RC1's executing terraform
 command makes both altitude-dependent random passes; only the second pass
 can mark an excavated tile as rock. Quotes do not consume a draw.
 
-This evidence excludes rivers, industries, companies and subsidy attempts
-to isolate the town system. The river-enabled case and active industry/subsidy interactions on fresh
-worlds require separate parity checks.
+The regression runs this full year with both rivers off and stock Normal
+rivers. Active industries, companies, disasters and subsidies are off in
+these two same-seed comparisons; active industry and subsidy interactions
+on newly generated maps remain separate parity cases.

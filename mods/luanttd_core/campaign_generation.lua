@@ -6,7 +6,9 @@ return function(core,mod,Sim,Settings)
   local Terrain=dofile(src.."terrain.lua")
   local TG=dofile(src.."terragenesis.lua")(dofile(src.."slope.lua"))
   local Clear=dofile(src.."terragenesis_clear_rc1.lua")
-  local Rivers=dofile(src.."river_worldgen.lua")(dofile(src.."slope.lua"))
+  local Rivers=dofile(src.."river_worldgen.lua")(dofile(src.."slope.lua"),
+    dofile(src.."river_landscape_rc1.lua"),dofile(src.."river_yapf_rc1.lua"),
+    dofile(src.."tree_lifecycle_temperate.lua")(dofile(src.."tree_worldgen.lua")))
   local Calendar=dofile(src.."stock_engine_calendar.lua")
   local G=dofile(src.."town_growth.lua")
   local B=dofile(src.."town_growth_build.lua")(G,dofile(src.."town_growth_houses.lua"))
@@ -20,12 +22,14 @@ return function(core,mod,Sim,Settings)
     local width,depth=Settings.dimensions(settings,cfg)
     local seed=option("seed","bayline_seed",1751)
     local Gen={next_random=TG.next_random,describe=Clear.describe}
+    local tree_placer=option("trees","bayline_generated_tree_placer",2)
     function Gen.generate(opts)
       progress(5,"Shaping the landscape")
       opts.progress=function(f,stage) progress(5+math.floor(30*f),stage,true) end
       local m=TG.generate(opts)
       progress(36,"Carving rivers and shorelines")
-      local river,stats=Rivers.generate(m,TG.next_random,{original=false,terrain=Terrain,
+      local river,stats=Rivers.generate(m,TG.next_random,{rc1=true,original=false,terrain=Terrain,
+        terrain_type=opts.terrain_type,tree_placer=tree_placer,
         amount_of_rivers=opts.amount_of_rivers,min_river_length=opts.min_river_length,
         progress=function(i,n)
           progress(36+math.floor(11*i/math.max(1,n)),"Carving rivers and shorelines",true)
@@ -84,7 +88,7 @@ return function(core,mod,Sim,Settings)
       function(i,n) progress(72+math.floor(6*i/math.max(1,n)),"Placing industries",true) end,ready and heavy or nil)
     progress(79,"Adding landmarks and forests")
     Campaign.landmarks(Sim,Terrain,S,Gen,dofile(src.."scenery_object_rc1.lua")(Clear,Calendar),Calendar.date(Sim.date(S)))
-    Campaign.forests(Sim,Terrain,S,Gen,dofile(src.."tree_worldgen.lua"),option("trees","bayline_generated_tree_placer",2),
+    Campaign.forests(Sim,Terrain,S,Gen,dofile(src.."tree_worldgen.lua"),tree_placer,
       function() progress(79,"Adding landmarks and forests",true) end)
     Sim.stock_world_launch(S,Calendar)
     progress(83,"Settling the landscape")

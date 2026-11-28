@@ -112,3 +112,24 @@ At seed 1751 with river-route random 5:
 The positive synthetic fixture starts a broad, legal-height dry basin
 and an isolated lowered corner with shore cells: the basin refloods,
 three visited isolated shores dry, and the fourth remains until its visit.
+
+## Live 16.0-RC1 terrain phase
+
+Ordinary generation mounts the pinned 16.0-RC1 landscape and YAPF river
+builder. It replaces the 14.1 spring search and AyStar path in live games.
+Spring admission now checks the four diagonal rays with the terrain-dependent
+hill thresholds. The stock FIFO chooses lake or wetland centres, and small
+disconnected sea patches drain with the reference Linux bucket traversal.
+YAPF computes random segment costs before rejecting duplicate open or closed
+nodes and preserves the stock heap tie behavior. Widening uses the normal
+TerraformLand quote before either executing rock RNG pass: it cannot terraform
+through another river. The final 256 landscape passes update both flooded
+shores and the wetland trees before town setup.
+
+`tests/river_worldgen_rc1.lua` compares the complete height/class digests and
+both RNG words for six native **16.0-RC1** temperate maps, including inland sea
+drainage and a 485-tile wooded wetland.
+`tests/town_growth_rc1_generated_region.lua rivers` replays a new river-enabled
+128×128 region from its seed for one year with the ordinary worker authority.
+The older standalone tests below continue to check their pinned 14.1 terrain
+fixtures, not the active campaign generator.
