@@ -1709,3 +1709,28 @@ samples and the final animation and construction state of all
 before the live economy clock: monthly production changes,
 industrial openings, active transport and actual climate art are
 not covered by this proof.
+
+### Live towns and industries in the Frozen economy
+
+An isolated Arctic and Tropic day-loop comparison starts from the
+automatically generated and settled worlds. The shared landscape
+visits run industry construction/animation, cargo-lot dispatch
+without collecting stations, farm planting and crop tile visits.
+The industry tick advances stock counters; the economy boundary
+rolls production history. Tropic clearing restores physical
+desert at the next tile visit using RC1's neighbor rules rather
+than immediately treating every desert-zone tile as desert.
+This matters to the majority-suitable test when a farm plants.
+
+Two independent RC1 worlds match the RNG and landscape cursor at
+every tick of 120 live days (8,880 ticks each); five native samples
+per world verify the terrain and road raster, house and industry
+animation states, town population and growth clocks, and industry
+waiting cargo and production. A stock Luanti async worker also
+reopens packed state twice during each run. This isolate uses
+the Frozen economy with no companies, vehicles, stations,
+subsidies, landmarks or tree growth/spread. Default tree spread,
+dynamic industry changes, active player transport on these fully
+generated worlds, and Toyland's live bubble animation are not
+certified by this comparison. The new climate runtimes remain
+headless, not a playable climate-selector release.

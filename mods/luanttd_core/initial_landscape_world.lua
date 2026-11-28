@@ -47,6 +47,7 @@ return function(Sim,H,Lift)
       local id=tile+1
       local t=tiles[id]
       if not t or t.stock_void then return end
+      if machines and machines.clear then machines.clear(id) end
       local field=field_rows[id] or s.stock_farm_grass and s.stock_farm_grass[id]
       if not (t.house or t.build=="road" or t.wood or t.terrain=="water" or
               t.stock_clear_density or field or t.stock_industry) then return end

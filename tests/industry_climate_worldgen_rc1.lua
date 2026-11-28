@@ -28,6 +28,81 @@ local function eq(d,a,b)
   assert(#a==#b,d)
   for i=1,#a do assert(a[i]==b[i],("%s field %d: %.0f != %.0f"):format(d,i,a[i],b[i])) end
 end
+local frozen=dofile(fp.."rc1-native-climate-industry-live-frozen.lua")
+local function live_frozen(s,Calendar,climate,w)
+  local fixture=assert(frozen[climate])
+  local function mount()
+    S.mount_road_bus_market(s,Calendar,1985,false,false)
+    S.mount_stock_town_growth(s,Live,true)
+    S.mount_coastal_flood(s)
+    S.mount_frozen_climate_clock(s,T)
+  end
+  mount()
+  local function fold(h,...)
+    for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
+    return h
+  end
+  local digest,ticks,maps,reopen=1,0,0,0
+  local function check(tick)
+    assert(tick==1281+ticks)
+    ticks=ticks+1
+    local a,b=unpack(s.passenger_rating_rng)
+    digest=fold(digest,tick,a,b,s.passenger_house_clock.head)
+    local expected=fixture.snapshots[tick]
+    if not expected then return end
+    local gh,hh,ih=1,1,1
+    local physical={}
+    local firms=s.stock_worldgen_climate_firms
+    for _,f in ipairs(firms) do
+      for _,t in ipairs(f.cells) do physical[S.id(t.x+1,t.z+1)]=t end
+    end
+    for id,c in ipairs(s.tiles) do
+      local x,z=S.xy(id)
+      local h=c.source_house
+      local kind=c.stock_void and 7 or h and 3 or c.terrain=="water" and 6 or c.wood and 4
+        or c.stock_industry and 8 or c.build=="road" and 2 or (c.road_bridge_id or c.road_tunnel_id) and 9 or 0
+      gh=fold(gh,T.corner(s.corner_grid,x,z),kind)
+      if kind==2 then gh=fold(gh,c.road_bits) end
+      if h then hh=fold(hh,h.id,h.town-1,h.random_bits,h.stage) end
+      if kind==8 then
+        local t=assert(physical[id])
+        ih=fold(ih,t.gfx,t.stage,t.construction_counter,t.animation_frame or 0,t.animated and 1 or 0)
+      end
+    end
+    local label=climate.." at tick "..tick.." "
+    eq(label.."map, house and animated tile states",{gh,hh,ih},expected[1])
+    local towns=assert(s.stock_town_growth)
+    local th,fh,ph,np=1,1,1,0
+    for _,id in ipairs(towns.order) do
+      local t=assert(towns.towns[id])
+      th=fold(th,t.stock_id or id-1,(t.z-1)*w+t.x-1,t.population,t.num_houses,
+        t.grow_counter,t.growth_rate,t.growing and 1 or 0,t.time_until_rebuild)
+    end
+    for _,f in ipairs(firms) do
+      fh=fold(fh,f.id,f.type,f.counter,f.prod_level)
+      for _,pr in ipairs(f.produced) do
+        np=np+1
+        ph=fold(ph,f.id,pr.id,pr.rate,pr.waiting,pr.current_production or 0,pr.last_production)
+      end
+    end
+    eq(label.."town growth",{#towns.order,th},expected[2])
+    eq(label.."industry pool",{#firms,fh},expected[3])
+    eq(label.."industry production",{np,ph},expected[4])
+    maps=maps+1
+  end
+  for day=1,120 do
+    if day==32 or day==95 then
+      s=assert(Codec.decode(Codec.encode(s)))
+      mount()
+      reopen=reopen+1
+    end
+    S.daily(s,nil,check)
+  end
+  assert(ticks==8880 and maps==5 and reopen==2)
+  eq(climate.." full live RNG and landscape cursor",{digest},{fixture.trace})
+  print(("PASS live frozen RC1 %s: %d exact ticks, %d map/town/industry snapshots, %d reopens")
+    :format(climate,ticks,maps,reopen))
+end
 local proper=selection or arg and tonumber(arg[1]) or 0
 for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
   if proper==0 or i==proper then
@@ -128,6 +203,7 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
     end
     assert(checked==n)
     print(("PASS active RC1 %s pregame: %d exact landscape ticks and %d reopened industry tiles"):format(climate,ticks,n))
+    if frozen[climate] and seed==1751 then live_frozen(s,Calendar,climate,w) end
 
   end
 end

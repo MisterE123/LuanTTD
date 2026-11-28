@@ -644,6 +644,14 @@ local function machine_rules()
 end
 function M.industry_machinery(s,pregame) return machine_rules().bind(s,pregame) end
 function M.visible_machinery(s,x,z,w,h) return machine_rules().visible(s,x,z,w,h) end
+-- Isolated no-company climate authority; never mounted by the ordinary
+-- menu campaign. Its sparse indices are remounted from persistent records.
+M.stock_climate_clock=setmetatable({},{__mode="k"})
+function M.mount_frozen_climate_clock(s,Terrain)
+  assert(s.stock_climate and s.stock_world_animations and s.stock_generated_profile.initial_landscape,
+    "Settle native climate before measuring live industries")
+  M.stock_climate_clock[s]=dofile(module_root.."climate_startup_industry_visits_rc1.lua")(M,Terrain,s,true)
+end
 function M.prepare_initial_landscape(s,growth,Farm,progress,machines,after_tick)
   assert(coastal_active(s) and s.passenger_house_clock and s.stock_town_growth)
   local _,_,water,trees=coastal_visit(s)
@@ -5893,11 +5901,13 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
   local growth=town_growth_mount[s]
   local growth_random=growth and function() return rating_runtime.random_u32(s) end
   local tide,plant_trees=coastal_visit(s)
+  local climate_clock=M.stock_climate_clock[s]
   local machines=s.stock_generated_profile and s.stock_coal_industries and M.industry_machinery(s)
   if s.road_stock_house_supply then
     town_passengers.start(s)
     clock=function(callback)
-      if not commercial and not coal and not timber and not growth and not tide and not month_tick and not daily_road then return town_passengers.day(s,callback,{traverse=traverse,tick_pulse=tick_pulse}) end
+      if not commercial and not coal and not timber and not growth and not tide and not climate_clock
+          and not month_tick and not daily_road then return town_passengers.day(s,callback,{traverse=traverse,tick_pulse=tick_pulse}) end
       local works=growth and growth.world.reconstruction
       local work_state=works and s.stock_town_growth.reconstruction
       local road_ground,road_tick
@@ -5946,6 +5956,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         end
         if works and not work then works.decorate(s,x+1,z+1) end
         if tide then tide(x,z,tick) end
+        if climate_clock then climate_clock.landscape(x,z,tick) end
         local industry_id=machines and (exact and source+1 or x+z*width+1)
         local completed,prior_gfx,prior_stage
         if industry_id then completed,prior_gfx,prior_stage=machines.phase(industry_id) end
@@ -6055,11 +6066,12 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
             end
           end
         end
+        if climate_clock then climate_clock.produce() end
       end,{passenger=commercial and commercial.hooks.passenger,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
         growth=growth and growth.world,growth_calendar=growth_calendar,traverse=traverse,tick_pulse=tick_pulse,
         commercial_ratings=commercial and commercial.finish_ratings,
-        animate_industry=machines and function(id,tick) return machines.frame(id,tick) end,
+        animate_industry=machines and function(id,tick) return machines.frame(id,tick) end or climate_clock and climate_clock.frame,
         before_landscape=(month_tick or daily_road or machines or timber and timber.animate) and function(tick)
           if not s.stock_world_animations then
             if machines then machines.animate(tick) end
@@ -6355,6 +6367,7 @@ end
 -- RC1 Industry monthly timer rolls production and closure before the
 -- Station and Town timers on the same economy tick.
 function M.stock_industry_month(s,coal,timber,y,month)
+  local climate=M.stock_climate_clock[s];if climate then climate.month() end
   local ordered=M.stock_industry_order(s,coal,timber)
   if ordered then
     local stock_options={original=s.stock_industry_original_economy==true,smooth=true}
