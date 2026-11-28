@@ -226,3 +226,18 @@ dedicated native version also matches those totals and the RC1 town
 clock across a real SQLite restart. This ports normal unlisted stopping
 on road routes; the complete visible implicit list and shared order
 cursor lifecycle are not yet ported.
+
+
+### Rectangular map, Fast growth and 3×3 streets
+
+On a 256×128 Temperate map (seed 98217), OpenTTD counts ordinary and
+rocky coast as land when choosing the number of industries. In RC1's
+Map::CountLandTiles, IsWaterTile means plain water rather than every
+tile of the water class. LuanTTD had excluded coast, causing a missing
+25th industry (a steel mill) and a different shared random stream.
+
+The fast-grid replay compares all 25 industry placements and layouts,
+six towns, three municipal bridge spans, 14 map/town snapshots and
+27,010 random-state ticks against RC1 through the first year. It also
+reopens the packed state three times. The no-company run does not cover
+the effects of active routes or the other mapped layouts and settings.
