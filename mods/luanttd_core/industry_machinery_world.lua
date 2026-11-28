@@ -1,6 +1,6 @@
 -- World-owned RC1 machinery clock. Static footprint roles on native
 -- scene tiles never change when their industry sprite state changes.
-return function(Sim,Rules,OilRegistry)
+return function(Sim,Rules,OilRegistry,Motion)
   local M={}
   local function index(s,include_wells,stock_all)
     local records,animated={},{}
@@ -35,6 +35,7 @@ return function(Sim,Rules,OilRegistry)
   function M.bind(s,include_wells)
     local stock_all=s.stock_generated_profile and s.stock_generated_profile.rc1_industry_phase
     local records,animated=index(s,include_wells,stock_all)
+    local hub=s.stock_world_animations
     local W={}
     local random=function() return Sim.stock_random_u32(s) end
     function W.completed(id)
@@ -71,16 +72,29 @@ return function(Sim,Rules,OilRegistry)
       local prev_gfx,prev_frame,was=part.gfx,part.animation_frame,part.animated
       Rules.visit(part,tick,random)
       animated[id]=part.animated and part or nil
+      if hub then
+        if part.animated then Motion.add(hub,id,"industry")
+        elseif was then Motion.delete(hub,id,false) end
+      end
       if include_wells and part.gfx>=Rules.OIL_FIRST and part.gfx<=Rules.OIL_LAST then
         -- Registration survives later pregame visits and preserves
         -- physical activation order. The live animation starts later.
-        OilRegistry.add(s,id)
-        -- The established live oil animation list is authoritative for
-        -- pumps after generation; never tick that same actor twice.
-        part.animated=nil
-        animated[id]=nil
+        if not hub then
+          OilRegistry.add(s,id)
+          -- Standalone oil bindings own their original dedicated vector.
+          part.animated=nil
+          animated[id]=nil
+        end
       end
       return part.gfx~=prev_gfx or part.animation_frame~=prev_frame or part.animated~=was
+    end
+    function W.frame(id,tick)
+      local part=records[id]
+      local t=s.tiles[id]
+      if not part or not t or not t.stock_industry then return false end
+      if part.gfx>=Rules.OIL_FIRST and part.gfx<=Rules.OIL_LAST then part.animated=true end
+      Rules.animate(part,tick,random)
+      return not not part.animated
     end
     function W.animate(tick)
       -- Native GameLoop invokes AnimateAnimatedTiles before updating

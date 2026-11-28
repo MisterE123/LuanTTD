@@ -149,11 +149,11 @@ match; the final pre-play map and RNG also match after 1,280 landscape
 ticks. This comparison isolates the startup phase, not live industry
 behavior. The fixture is `tests/town_growth_rc1_industry_start.lua`.
 
-The live authority on the same map also matches the source from the first
-playable tick for **5,824 consecutive ticks**, including the February and
-March boundaries, shared RNG on every tick, and all map and town data at
-four stock snapshots. This includes two packed checkpoint rebinds. Industry
-production and monthly accounting walk the actual shared IndustryID order;
-the engine samples its stock animation callbacks even without drawing their
-original art. Stock subsidies are enabled, but this run has no player
-company or routes. It does not establish full-year active-industry parity.
+The same live authority matches the source through the first running year:
+**27,010 consecutive ticks**, the shared RNG on every tick, and all heights,
+tile classes, house state, roads, and town cargo and clocks at fourteen stock
+snapshots. The fixture also rebinds three packed checkpoints. Industry
+production and monthly accounting walk the actual IndustryID order. Houses
+and industries animate in one stock tile vector; removal swaps in the last
+tile, which determines the next tick's random draw order. Stock subsidies
+are enabled, but this run has no player company or routes.

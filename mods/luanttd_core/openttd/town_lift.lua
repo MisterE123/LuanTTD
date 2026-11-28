@@ -3,8 +3,11 @@
 -- AnimateTile_Town. Stock house 0x04 is Temperate; 0x05 is Arctic.
 local L={}
 local floor=math.floor
+local source=debug and debug.getinfo(1,"S").source:match("^@(.*/)town_lift%.lua$")
+local Motion=dofile((source or (core and core.get_modpath("luanttd_core").."/openttd/") or
+  "mods/luanttd_core/openttd/").."world_animation_rc1.lua")
 function L.supports(h) return h and (h.id==0x04 or h.id==0x05) end
-function L.new() return {order={},states={},built={},sectors={}} end
+function L.new(hub) return {order={},states={},built={},sectors={},hub=hub} end
 local function sector(x,z) return floor((x-1)/32)+128*floor((z-1)/32) end
 function L.visible(a,Sim,tiles,x,z,w,h)
   if not a then return end
@@ -33,7 +36,8 @@ function L.install(a,id,Sim)
 end
 function L.add(a,id)
   local state=a.states[id]
-  if not state then a.order[#a.order+1]=id end
+  if a.hub then Motion.add(a.hub,id,"lift")
+  elseif not state then a.order[#a.order+1]=id end
   a.states[id]="active"
 end
 function L.erase(a,id)
@@ -43,6 +47,7 @@ function L.erase(a,id)
     bucket[id],a.built[id]=nil,nil
     if not next(bucket) then a.sectors[key]=nil end
   end
+  if a.hub then Motion.delete(a.hub,id,true) end
   if not a.states[id] then return end
   a.states[id]=nil
   for i,v in ipairs(a.order) do
@@ -51,6 +56,30 @@ function L.erase(a,id)
       return
     end
   end
+end
+function L.frame(a,id,tick,house,random,changed)
+  if tick%4==0 then
+    local h=house(id)
+    if not L.supports(h) then
+      if a.hub then a.states[id]=nil else a.states[id]="delete" end
+    else
+      local p=h.lift_position or 0
+      local dest=h.lift_destination
+      if dest==nil then
+        repeat dest=floor(random()*7/4294967296) until dest~=1 and dest*6~=p
+        h.lift_destination=dest
+        h.lift_has_destination=true
+      end
+      p=p+(p<dest*6 and 1 or -1)
+      h.lift_position=p
+      if p==dest*6 then
+        h.lift_destination,h.lift_has_destination=nil,nil
+        if a.hub then a.states[id]=nil else a.states[id]="delete" end
+      end
+      if changed then changed(id,h) end
+    end
+  end
+  return a.states[id]=="active"
 end
 function L.step(a,tick,house,random,changed)
   local index=1
@@ -62,27 +91,7 @@ function L.step(a,tick,house,random,changed)
       a.order[index]=a.order[#a.order];a.order[#a.order]=nil
       a.states[id]=nil
     else
-      if tick%4==0 then
-        local h=house(id)
-        if not L.supports(h) then
-          a.states[id]="delete"
-        else
-          local p=h.lift_position or 0
-          local dest=h.lift_destination
-          if dest==nil then
-            repeat dest=floor(random()*7/4294967296) until dest~=1 and dest*6~=p
-            h.lift_destination=dest
-            h.lift_has_destination=true
-          end
-          p=p+(p<dest*6 and 1 or -1)
-          h.lift_position=p
-          if p==dest*6 then
-            h.lift_destination,h.lift_has_destination=nil,nil
-            a.states[id]="delete"
-          end
-          if changed then changed(id,h) end
-        end
-      end
+      L.frame(a,id,tick,house,random,changed)
       index=index+1
     end
   end

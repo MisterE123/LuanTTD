@@ -609,7 +609,8 @@ local function machine_rules()
   if not machinery_world then
     machinery_world=dofile(module_root.."industry_machinery_world.lua")(M,
       dofile(module_root.."openttd/industry_machinery_rc1.lua"),
-      dofile(module_root.."oil_animation_registry.lua"))
+      dofile(module_root.."oil_animation_registry.lua"),
+      dofile(module_root.."openttd/world_animation_rc1.lua"))
   end
   return machinery_world
 end
@@ -3943,7 +3944,19 @@ local function passenger_modules()
     oil.runtime=dofile(base.."rail_oil_runtime.lua")(M,oil_rail,freight,roster,debit,credit)
     for kind,record in pairs(oil.world.facilities) do M.facilities[kind]=record end
     local oil_registry=dofile(base.."oil_animation_registry.lua")
+    local tile_animation=dofile(base.."openttd/world_animation_rc1.lua")
     function oil.animation(s)
+      if s.stock_world_animations then
+        return function(_,tile,on)
+          local id=M.id(tile.x+1,tile.z+1)
+          if on then
+            tile.animated=true
+            tile_animation.add(s.stock_world_animations,id,"industry")
+          else
+            tile_animation.delete(s.stock_world_animations,id,false)
+          end
+        end
+      end
       local tiles={}
       for _,firm in pairs(s.stock_oil_industries or {}) do
         if firm.kind=="oil_well" and not firm.removed then
@@ -5599,9 +5612,12 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         mail=commercial and commercial.hooks.mail,landscape_tile=landscape,
         growth=growth and growth.world,traverse=traverse,tick_pulse=tick_pulse,
         commercial_ratings=commercial and commercial.finish_ratings,
+        animate_industry=machines and function(id,tick) return machines.frame(id,tick) end,
         before_landscape=(month_tick or daily_road or machines or timber and timber.animate) and function(tick)
-          if machines then machines.animate(tick) end
-          if timber and timber.animate then timber.animate(tick) end
+          if not s.stock_world_animations then
+            if machines then machines.animate(tick) end
+            if timber and timber.animate then timber.animate(tick) end
+          end
           if daily_road then daily_road((tick-before_tick+1)%74,true) end
           if tick==month_at then
             local changed=month_tick()

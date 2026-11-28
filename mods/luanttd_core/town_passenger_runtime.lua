@@ -2,6 +2,7 @@
 -- production and catchment, not town expansion or visual buildings.
 local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
 local Lift=dofile(path.."openttd/town_lift.lua")
+local Anim=dofile(path.."openttd/world_animation_rc1.lua")
 local Stats=dofile(path.."openttd/town_cargo_stats.lua")
 local road_candidates=dofile(path.."road_house_catchments.lua")
 return function(Sim,H,Packets,Rating,Mail)
@@ -114,6 +115,7 @@ return function(Sim,H,Packets,Rating,Mail)
       end
     end
     local physical=Sim.W==2^clock.log_x and Sim.H==2^clock.log_y and s.tiles
+    local hub=s.stock_world_animations
     local lift_registry=s.stock_town_lifts
     local settings={}
     if s.stock_generated_profile and growth and growth.rebuild then
@@ -133,6 +135,18 @@ return function(Sim,H,Packets,Rating,Mail)
           return t and t.house and t.source_house
         end,random)
       end
+    end
+    if hub then
+      local function house(id)
+        local t=s.tiles[id]
+        return t and t.house and t.source_house
+      end
+      local function frame(id,role,tick)
+        if role=="lift" and lift_registry then return Lift.frame(lift_registry,id,tick,house,random) end
+        if role=="industry" and hooks and hooks.animate_industry then return hooks.animate_industry(id,tick) end
+        return false
+      end
+      animate=function(tick) Anim.step(hub,tick-1,frame) end
     end
     local before_landscape=hooks and hooks.before_landscape
     if before_landscape then

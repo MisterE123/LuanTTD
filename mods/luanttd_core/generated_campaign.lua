@@ -91,7 +91,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   local state=copy(profile.terrain_rng)
   local function random() return Generator.next_random(state) end
   local save={version=1,order={},towns={}}
-  local lifts=Lift.new()
+  local lifts=Lift.new(s.stock_world_animations)
   local growth=growth_board(Sim,Terrain,s,G,Worldgen,function(x,z)return get(Sim,Terrain,s,x,z) end)
   local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={},
     initial_land_count=profile.initial_land_count}

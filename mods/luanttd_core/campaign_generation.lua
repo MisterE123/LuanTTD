@@ -49,6 +49,7 @@ return function(core,mod,Sim,Settings)
       corner_progress=function(f) progress(49+math.floor(3*f),"Building the shared-corner grid",true) end,
       host_progress=function(f) progress(52+math.floor(9*f),"Preparing playable tiles",true) end,
     })
+    S.stock_world_animations=dofile(src.."world_animation_rc1.lua").new()
     S.stock_pool_authority=true -- original BaseStation/VehicleID allocation, including pregeneration rigs
     S.road_stock_loading,S.road_stock_clock,S.road_stock_house_supply,S.road_economy=true,true,true,true
     S.road_junction_clearance,S.road_bay_build,S.road_regal_enabled,S.road_mail=true,true,true,true
