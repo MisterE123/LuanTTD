@@ -5,6 +5,7 @@
 return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,Station,LoaderFactory,Timing)
   local root=(core and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
   local Ordered=dofile(root.."/openttd/rail_multihead_loading.lua")
+  local TownStations=dofile(root.."/town_station_services.lua")(Sim)
   local R={version=1,wagon=profile.wagon}
   local stock=Roster.entry(R.wagon.stock_id)
   if stock then
@@ -66,6 +67,7 @@ return function(profile,Sim,Rules,Catchment,Roster,RailStation,Packets,Rating,St
             loading_order={},time_since_load=255,time_since_unload=255,
           }
           assert(st.owner==raw.owner,"Rail industry platform owner changed")
+          TownStations.resume_service(s,raw,st)
           local x,z=tile_xy(first)
           st.x,st.z,st.tile,st.tiles,st.role=x-1,z-1,first,tiles,role
           st.freight_cargo=cargo_name

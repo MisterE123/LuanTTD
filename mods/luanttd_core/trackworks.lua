@@ -100,14 +100,18 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     end
     return true,group,axis
   end
-  function Lab.commit_station(s,owner,group,axis,area,join,gauge,graphics)
+  function Lab.retired_station(s,owner,first)
+    if not TownStations then return end
+    return Sim.road_station_retirement().closest(s,"rail",owner,first)
+  end
+  function Lab.commit_station(s,owner,group,axis,area,join,gauge,graphics,reopen)
     for _,tile in ipairs(group) do
       if Lab.facility_protected(s,tile) or not graphics and Lab.span_protected(s,tile) then return false,protected end
       local t=s.tiles[tile]
       if Sim.is_owned_land and Sim.is_owned_land(t) and t.owner~=owner then return false,"Land owned by another company." end
     end
     s.stock_rail_stations=s.stock_rail_stations or {}
-    local id=join or s.next_stock_rail_station or 1
+    local id=join or reopen or s.next_stock_rail_station or 1
     local st=join and s.stock_rail_stations[join]
     if join then
       if not st or st.owner~=owner then return false,"Station changed; select the footprint again." end
@@ -120,10 +124,37 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       table.sort(merged)
       st.tiles,st.area=merged,area
     else
-      s.next_stock_rail_station=id+1
-      st={id=id,owner=owner,axis=axis,tiles=group,area=area,
-        stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)}
+      if reopen then
+        local Retired=Sim.road_station_retirement()
+        local old=Retired.get(s,"rail",reopen)
+        if not old or old.owner~=owner then return false,"Station changed; select the footprint again." end
+        local _,phase=Retired.take(s,"rail",reopen)
+        st={id=id,owner=owner,axis=axis,tiles=group,area=area,name=old.name,stock_station_id=old.stock_station_id,
+          town=old.town,stock_reactivation={tick=Retired.clock(s,"rail"),phase=phase,
+            load=old.time_since_load,unload=old.time_since_unload,sequence=(old.sequence or 0)+1}}
+      else
+        s.next_stock_rail_station=id+1
+        st={id=id,owner=owner,axis=axis,tiles=group,area=area,
+          stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)}
+      end
+      st.sign_tile=group[1]
+      if s.stock_engine_startup_seed~=nil then st.stock_random_bits=Sim.stock_random_u32(s)%65536 end
       s.stock_rail_stations[id]=st
+    end
+    if s.stock_engine_startup_seed~=nil then
+      local order={}
+      for i,tile in ipairs(group) do order[i]=tile end
+      if axis==0 then table.sort(order)
+      else
+        table.sort(order,function(a,b)
+          local x,z=Sim.xy(a)
+          local u,v=Sim.xy(b)
+          return x<u or x==u and z<v
+        end)
+      end
+      -- RC1 CmdBuildRailStation draws once per tile, scanning along a
+      -- track before moving to the next track, also when overbuilding.
+      for _,tile in ipairs(order) do s.tiles[tile].stock_station_random_bits=Sim.stock_random_u32(s)%16 end
     end
     for _,tile in ipairs(group) do
       local t=s.tiles[tile]
@@ -138,7 +169,8 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
   function Lab.station(s,owner,first,last)
     local ok,group,axis=Lab.station_plan(s,owner,first,last)
     if not ok then return false,group end
-    return Lab.commit_station(s,owner,group,axis)
+    local reopen=Lab.retired_station(s,owner,group[1])
+    return Lab.commit_station(s,owner,group,axis,nil,nil,nil,nil,reopen and reopen.id)
   end
   function Lab.waypoint_at(s,tile)
     local t=s.tiles[tile]
@@ -222,12 +254,17 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
     local rest={}
     for i,parcel in ipairs(st.tiles) do if i~=index then rest[#rest+1]=parcel end end
     if #rest==0 and TownStations then TownStations.retire(s,"rail",st) end
-    t.rail_station_id,t.rail_station_axis,t.rail_station_gfx=nil,nil,nil
+    t.rail_station_id,t.rail_station_axis,t.rail_station_gfx,t.stock_station_random_bits=nil,nil,nil,nil
     if #rest==0 then
       s.stock_rail_stations[st.id]=nil
     else
       st.tiles,st.area=rest,nil
       st.area=Lab.station_bounds(s,st)
+      if st.sign_tile then
+        local x,z=Sim.xy(st.sign_tile)
+        local a=st.area
+        st.sign_tile=Sim.id(math.max(a.x,math.min(x,a.x+a.w-1)),math.max(a.z,math.min(z,a.z+a.h-1)))
+      end
     end
     return true
   end
@@ -247,7 +284,7 @@ return function(Sim,Track,Follow,Slope,Costs,Search,shape_at)
       for _,tile in ipairs(group) do
         s.tiles[tile].rail_station_id=nil
         s.tiles[tile].rail_station_axis=nil
-        s.tiles[tile].rail_station_gfx=nil
+        s.tiles[tile].rail_station_gfx,s.tiles[tile].stock_station_random_bits=nil,nil
       end
     elseif t.rail_depot_dir then
       if Lab.owned_depot_occupied and Lab.owned_depot_occupied(s,id) then

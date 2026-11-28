@@ -298,7 +298,9 @@ return function(api,Lab,Track,Run,prices)
       if area.axis==1 then track,along=along,track end
       graphics[id]=Bridge.rail_gfx(area.tracks,area.length,track,along,area.axis)
     end
+    local reuse=not join and not layout.separate and Lab.retired_station and Lab.retired_station(S,owner,group[1])
     return budget(owner,{kind="platform",axis=area.axis,area=area,combined=combined,join=join and join.id,
+      reopen=reuse and reuse.id or nil,separate=layout.separate,
       ids=group,price=value,gauge=layout.railtype,graphics=graphics})
   end
   function R.quote_platform(owner,first,last,d)
@@ -572,7 +574,11 @@ return function(api,Lab,Track,Run,prices)
       ok,note=true,plan.crossing and "Track laid, including level crossing work." or "Track pieces updated."
     elseif plan.kind=="platform" then
       if not gauge_allowed(owner,plan.gauge) then return false,"This rail type is not available to your company." end
-      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis,plan.combined or plan.area,plan.join,plan.gauge,plan.graphics)
+      if not plan.join and not plan.separate and Lab.retired_station then
+        local reuse=Lab.retired_station(S,owner,plan.ids[1])
+        if (reuse and reuse.id or nil)~=plan.reopen then return false,"Station changed; select the footprint again." end
+      end
+      ok,note=Lab.commit_station(S,owner,plan.ids,plan.axis,plan.combined or plan.area,plan.join,plan.gauge,plan.graphics,plan.reopen)
     elseif plan.kind=="depot" then
       local fresh,why=R.quote_depot(owner,plan.id,plan.direction,plan.requested_railtype)
       if not fresh then return false,why end

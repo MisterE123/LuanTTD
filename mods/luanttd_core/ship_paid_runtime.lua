@@ -10,6 +10,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
   local Freight=dofile(mod.."/rail_freight_kinds.lua")
   local Rig=dofile(mod.."/openttd/oil_rig.lua")
   local CargoOrder=dofile(mod.."/openttd/rail_order_cargo.lua")
+  local TownStations=dofile(mod.."/town_station_services.lua")(Sim)
   local views=setmetatable({},{__mode="k"})
   local floor=math.floor
   local function commercial(s)
@@ -248,11 +249,15 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         st=Service.station(service,{id=id,owner=owner,town=town and town.id,neutral_rig=neutral and neutral.industry,
           tick_index=id_for_tick,tiles=tiles},ctx)
       end
+      if mode_=="rail" then TownStations.resume_service(s,actual,st) end
       st.host_mode,st.host_id,st.footprint_rev=mode_,local_id,ref
       st.stock_station_id=actual.stock_station_id
       st.mail_enabled=mail or nil
       if mail and fresh then Service.refresh_mail_acceptance(service,id,ctx) end
-      if not st.sign then local x,y=Sim.xy(base);st.sign={x=x,y=y} end
+      if not st.sign or mode_=="rail" and actual.sign_tile then
+        local x,y=Sim.xy(mode_=="rail" and actual.sign_tile or base)
+        if not st.sign or st.sign.x~=x or st.sign.y~=y then st.sign={x=x,y=y} end
+      end
       if mode_=="ship" then
         st.land,st.water=actual.land,actual.water
         if actual.sign_tile then local x,y=Sim.xy(actual.sign_tile);st.sign={x=x,y=y} end

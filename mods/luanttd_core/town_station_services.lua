@@ -6,6 +6,7 @@ return function(Sim)
   local path=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/"
   local freight=dofile(path.."rail_freight_kinds.lua")
   local Rig=dofile(path.."openttd/oil_rig.lua")
+  local rating_ticks=dofile(path.."openttd/station_rating.lua").rating_ticks
   local modes={road=0,rail=1,ship=2,air=3}
   local function at(t,id) return id and t and t[id] end
   local function has_rail(s,record,id)
@@ -47,6 +48,21 @@ return function(Sim)
     local t=at(s.tiles,id)
     return t and (t.station==station or t.tram and t.tram.tram_station==station)
   end
+  function M.reactivated_clocks(s,record,at_tick)
+    local r=record.stock_reactivation
+    if not r then return end
+    at_tick=at_tick or Sim.road_station_retirement().clock(s,"rail")
+    local ticks=math.max(0,at_tick-r.tick)+r.phase
+    local age=math.floor(ticks/rating_ticks)
+    return math.min(255,(r.load or 255)+age),math.min(255,(r.unload or 255)+age),ticks%rating_ticks,r.sequence
+  end
+  function M.resume_service(s,record,ledger)
+    local load,unload,phase,sequence=M.reactivated_clocks(s,record)
+    if sequence and ledger.stock_reopen_sequence~=sequence then
+      ledger.time_since_load,ledger.time_since_unload,ledger.rating_phase=load,unload,phase
+      ledger.stock_reopen_sequence=sequence
+    end
+  end
   function M.view(s,include_idle,at_tick)
     local views={}
     local admitted={rail={},ship={},air={},rig={}}
@@ -72,7 +88,8 @@ return function(Sim)
         return
       end
       local x,z
-      if neutral or mode=="ship" or not st.sign then x,z=Sim.xy(anchor)
+      if mode=="rail" and record.sign_tile then x,z=Sim.xy(record.sign_tile)
+      elseif neutral or mode=="ship" or not st.sign then x,z=Sim.xy(anchor)
       else x,z=st.sign.x,st.sign.y end
       row=project(id,neutral and "ship" or mode,x,z,st)
       slot[id]=row
@@ -121,6 +138,14 @@ return function(Sim)
         if Sim.ship_goods_active(s,st.host_id) then merge("ship",st) end
       end
     end
+    for id,record in pairs(s.stock_rail_stations or {}) do
+      if record.stock_reactivation and not admitted.rail[id] then
+        local load,unload=M.reactivated_clocks(s,record,at_tick)
+        if math.min(load,unload)<=20 then
+          merge("rail",{host_id=id,owner=record.owner,time_since_load=load,time_since_unload=unload})
+        end
+      end
+    end
     if include_idle then
       -- A new or unserved physical station can already affect council
       -- rating before any carrier has created a service ledger.
@@ -162,7 +187,8 @@ return function(Sim)
     local sign=record.sign_tile or record.origin or record.tile or
       (mode=="rail" and record.tiles and record.tiles[1])
     if not sign then return end
-    local dead={id=record.id,owner=record.owner,tile=sign,stock_station_id=record.stock_station_id}
+    local dead={id=record.id,owner=record.owner,tile=sign,stock_station_id=record.stock_station_id,
+      name=record.name,town=record.town,sequence=record.stock_reactivation and record.stock_reactivation.sequence}
     for _,active in ipairs(M.view(s,true)) do
       if active.mode==mode and active.id==record.id then
         dead.tile=Sim.id(active.x,active.z)

@@ -5,6 +5,8 @@
 -- cargopacket.h and table/engines.h. Reuse production, rating, packet and
 -- station command kernels rather than producing coal in a second clock.
 return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingFactory,Timing)
+  local root=(core and core.get_modpath and core.get_modpath("luanttd_core")) or "mods/luanttd_core"
+  local TownStations=dofile(root.."/town_station_services.lua")(Sim)
   local R={VERSION=1,wagon=assert(Roster.entry(29)),cargo=Coal.cargo,rail_index=0x4000}
   local function keys(t)
     local out={}
@@ -123,6 +125,7 @@ return function(Sim,Coal,Catchment,Roster,Packets,Rating,Station,Income,LoadingF
         local st=old or {id=id,owner=raw.owner,host_id=host_id,stock={coal={}},
           loading_order={},time_since_load=255,time_since_unload=255,rating_phase=0}
         assert(st.owner==raw.owner,"Freight station ownership changed")
+        TownStations.resume_service(s,raw,st)
         if old and old.footprint~=ref then assert(#old.loading_order==0,"Freight platform changed while loading") end
         st.tiles,st.tile,st.footprint,st.role=geo,tiles[1],ref,raw.coal_role
         local x,z=xy(st.tile)

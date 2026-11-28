@@ -798,8 +798,19 @@ rail and air service clocks, then counts all three in February but
 none in March. A second native run reopens the road stop at a new
 site under its previous ID and verifies the exact tick window when
 it next ages. Bulldozing a central platform no longer drops the
-station from the town index if other platforms remain. Reuse
-across modes and same-mode rail and airport reuse remain unported.
+station from the town index if other platforms remain.
+
+Ordinary rail placement also reuses an unused nearby rail sign,
+unless the player requests a separate station. A native Luanti
+quote and build move the original sign and resume its service age.
+An already-running pinned OpenTTD source game supplied the rail
+build/reopen fixture: physical StationID 5, the sign moving from
+(68,63) to (69,63), the resumed rating phase 3, and exact station
+and tile random draws. A new or reopened station gets a sign draw;
+both new platforms and extensions draw once per tile in the source's
+track-major order. Cross-mode station joins, airport reuse, and
+full restoration of pending rail cargo when reopening remain
+unported.
 
 
 ### Wide, varied terrain and neighbouring town roads

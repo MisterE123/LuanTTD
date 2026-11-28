@@ -12,6 +12,7 @@ return function(Sim)
     end
     return s.stock_load_tick or s.day*74
   end
+  R.clock=now
   function R.retire(s,kind,row)
     local key=assert(buckets[kind])
     s[key]=s[key] or {}
