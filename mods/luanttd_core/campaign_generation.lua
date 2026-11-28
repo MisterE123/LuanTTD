@@ -61,6 +61,7 @@ return function(core,mod,Sim,Settings)
       layout=cfg and cfg.layout or settings:get("bayline_generated_town_layout") or "original",
       growth_setting=option("growth_rate","luanttd_town_growth_rate",2),
       cargo_mode=option("town_cargo","luanttd_town_cargo_mode",1),
+      founding_policy=option("found_town","luanttd_found_town",0),
       difficulty=option("towns","bayline_generated_towns",2),
       custom_count=option("custom_towns","bayline_generated_custom_towns",1),
       larger_towns=option("larger_towns","bayline_generated_larger_towns",4),

@@ -85,28 +85,22 @@ local function get(Sim,Terrain,s,x,z)
     road_town=t.road_town,owner=t.owner,rough=t.stock_clear_ground==1}
 end
 
-function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
-  local profile=s.stock_generated_profile
-  assert(profile and not profile.towns,"Stock towns should be generated once")
-  local growth_setting=tonumber(settings.growth_setting) or 2
-  growth_setting=math.max(0,math.min(4,math.floor(growth_setting)))
-  local state=copy(profile.terrain_rng)
-  local function random() return Generator.next_random(state) end
-  local save={version=1,order={},towns={}}
-  local lifts=Lift.new(s.stock_world_animations)
-  local growth=growth_board(Sim,Terrain,s,G,Worldgen,function(x,z)return get(Sim,Terrain,s,x,z) end)
-  local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={},
-    initial_land_count=profile.initial_land_count}
-  function board.tile(x,z) return get(Sim,Terrain,s,x+1,z+1) end
-  local opts=copy(settings)
-  opts.random,opts.name=random,Names.generate
-  function opts.create(candidate,rnd)
+local function founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,save,lifts)
+  return function(candidate,rnd)
     local id=#s.sites+1
     local x,z=candidate.x+1,candidate.z+1
     local site={id=id,kind="town",name=assert(candidate.name),nameparts=candidate.nameparts,
-      tile=Sim.id(x,z),stock={},produced={},received={},population=0,service=0,larger_town=candidate.city}
-    local town=G.new(id,x,z,{layout=candidate.layout,larger_town=candidate.city,grow_counter=(id-1)%G.TOWN_TICKS})
+      tile=Sim.id(x,z),custom_name=candidate.custom_name,stock={},produced={},received={},population=0,service=0,larger_town=candidate.city}
+    local town=G.new(id,x,z,{layout=candidate.layout,larger_town=candidate.city,
+      grow_counter=(candidate.stock_id or id-1)%G.TOWN_TICKS})
+    if candidate.stock_id then town.stock_id=candidate.stock_id end
     s.sites[id]=site
+    local function dirty(tile)
+      if not candidate.manual then return end
+      s.changed=s.changed or {}
+      s.changed[#s.changed+1]=tile
+      Sim.invalidate_live_sea_near(s,tile)
+    end
     local placed,built_lifts,spans={},{},{}
     local had=s.has_town_roads
     local function commit(p)
@@ -114,14 +108,18 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         local tile=Sim.id(p.x,p.z)
         if not Sim.town_road_piece(s,id,tile,p.bits,true) then return false end
         placed[tile]=true
+        dirty(tile)
         return true
       end
       if p.kind=="bridge" or p.kind=="tunnel" then
         local a,b=Sim.id(p.x,p.z),Sim.id(p.u,p.v)
-        local ok
-        if p.kind=="bridge" then ok=Sim.road_bridge(s,"town",a,b,p.style,false,id)
-        else ok=Sim.road_tunnel(s,"town",a,false,id,growth.excavation,rnd) end
-        if ok then spans[#spans+1]=a end
+        local ok,note,tiles
+        if p.kind=="bridge" then ok,note,tiles=Sim.road_bridge(s,"town",a,b,p.style,false,id)
+        else ok,note,tiles=Sim.road_tunnel(s,"town",a,false,id,growth.excavation,rnd) end
+        if ok then
+          spans[#spans+1]=a
+          for _,tile in ipairs(tiles or {}) do dirty(tile) end
+        end
         return ok
       end
       if p.kind~="house" then return false end
@@ -141,19 +139,26 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         if t.build=="road" then
           assert(Sim.town_clear_road_tip(s,tile,true))
         end
+        if candidate.manual then
+          Sim.mark_clear_land(s,tile)
+          if s.stock_farm_grass then s.stock_farm_grass[tile]=nil end
+        end
         placed[tile]=true
-        art.stamp(h,p,art[p.id],part.index)
+        art.stamp(h,p,art[p.id],part.index,candidate.tick)
         if h.completed then h.age,h.age_epoch=0,settings.year end
         local x,z=Sim.xy(tile)
         local _,base=Terrain.tile(s.corner_grid,x,z)
         t.house,t.source_house,t.wood,t.stock_clear_ground,t.h=true,h,nil,nil,base
+        dirty(tile)
         if Lift.supports(h) then built_lifts[#built_lifts+1]=tile end
       end
       return true
     end
     Worldgen.initialize(town,growth,{year=settings.year,allow_roads=true,
-      initial_city_size=settings.initial_city_size,growth_setting=growth_setting,commit=commit},rnd)
-    if town.population==0 then
+      initial_city_size=settings.initial_city_size,growth_setting=growth_setting,
+      size=candidate.size,manual=candidate.manual,stations=candidate.stations,
+      build_on_slopes=candidate.build_on_slopes,allow_level_crossings=candidate.allow_level_crossings,commit=commit},rnd)
+    if town.population==0 and not candidate.manual then
       -- CmdDeleteTown removes failed town buildings and roads, not
       -- previously executed corner shaping or shore clearing.
       for _,tile in ipairs(spans) do assert(Sim.discard_generated_town_span(s,tile,id)) end
@@ -171,6 +176,24 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
     save.towns[id],save.order[#save.order+1]=town,id
     return {x=candidate.x,z=candidate.z,id=id,name=site.name,population=town.population}
   end
+end
+
+function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
+  local profile=s.stock_generated_profile
+  assert(profile and not profile.towns,"Stock towns should be generated once")
+  local growth_setting=tonumber(settings.growth_setting) or 2
+  growth_setting=math.max(0,math.min(4,math.floor(growth_setting)))
+  local state=copy(profile.terrain_rng)
+  local function random() return Generator.next_random(state) end
+  local save={version=1,order={},towns={}}
+  local lifts=Lift.new(s.stock_world_animations)
+  local growth=growth_board(Sim,Terrain,s,G,Worldgen,function(x,z)return get(Sim,Terrain,s,x,z) end)
+  local board={width=Sim.W,height=Sim.H,freeform=s.corner_grid.freeform_edges,towns={},
+    initial_land_count=profile.initial_land_count}
+  function board.tile(x,z) return get(Sim,Terrain,s,x+1,z+1) end
+  local opts=copy(settings)
+  opts.random,opts.name=random,Names.generate
+  opts.create=founder(Sim,Terrain,s,Worldgen,G,settings,growth_setting,growth,save,lifts)
   local result,why=Worldgen.generate(board,opts)
   if not result or #s.sites==0 then return nil,why or "OpenTTD's placement rules found no viable town on this seed." end
   s.stock_town_growth,s.stock_town_lifts=save,lifts
@@ -181,6 +204,24 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
   profile.town_rng=copy(state)
   s.passenger_rating_rng=copy(state)
   return result
+end
+
+-- The paid Found Town command runs the same original DoCreateTown
+-- construction, with manual city size and the live home's protections.
+function M.found(Sim,Terrain,s,Worldgen,G,growth,settings,plan,random)
+  local state=assert(s.stock_town_growth)
+  local tick=s.passenger_house_clock and s.passenger_house_clock.counter
+  local make=founder(Sim,Terrain,s,Worldgen,G,{year=Sim.date(s),initial_city_size=settings.initial_city_size},
+    settings.growth_setting or 2,growth,state,assert(s.stock_town_lifts))
+  plan.manual,plan.stock_id,plan.tick=true,#state.order,tick
+  plan.layout=Worldgen.resolve_layout(plan.x,plan.z,plan.layout)
+  local policy=s.stock_road_town_policy or {}
+  plan.build_on_slopes,plan.allow_level_crossings=policy.build_on_slopes,policy.allow_town_level_crossings
+  plan.stations=dofile(path.."town_station_services.lua")(Sim).view(s,true)
+  local town=assert(make(plan,random))
+  s.stock_generated_profile.towns=#state.order
+  s.topology=(s.topology or 0)+1
+  return town
 end
 
 function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_count,Timber,Oil,Farm,progress,Heavy)

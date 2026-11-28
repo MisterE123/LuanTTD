@@ -820,3 +820,31 @@ The [wide replay](../tests/town_growth_rc1_fast_grid.lua) compares
 founding tile witnesses and three packed reopens. The native Luanti
 worker test also reopens the same map through SQLite and checks all
 42 town clocks against the official final state.
+
+
+### Found a new town during play
+
+This is the ordinary RC1 paid company command, not the scenario
+editor or GameScript command. **Town founding** defaults to
+**Forbidden** like stock. In a new world use **Advanced options**,
+or in a running world as host/admin use **Finance → World rules →
+Town founding rules**. **Allowed** uses the world's layout;
+**Custom layout** lets companies choose on each foundation.
+
+Aim at a flat, clear site and open **Finance → Found town here**.
+Choose a small, medium, or random-size town or city, with a stock
+or custom name. Review the site and stock price before committing.
+The worker rechecks permissions, land, name uniqueness and cash;
+a failed or stale request does not spend money or advance RNG.
+The new town joins normal growth, the local authority and airport
+census, map labels and newspaper. Initial city-size multipliers
+apply only to generation, not to cities founded by companies.
+
+The source fixture builds Rivermark, a medium city with stock
+random layout resolved to 2×2, at (68,63) for $26,250,000 in the
+default economy. The port matches the initial 804 population
+and six complete map/town snapshots across the year, all 27,010
+RNG ticks and three packed reopens. The real Luanti worker checks
+the debit, news and immediate durability, then restores the same
+growth across a process restart. A graphical Linux client also
+completed the ordinary quote and confirmation without chat.

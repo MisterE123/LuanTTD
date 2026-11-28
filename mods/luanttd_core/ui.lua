@@ -44,8 +44,13 @@ function U.install_worker_controls(client)
   api.worker_signal_client=client
   api.worker_rail_assembly=client
   api.worker_tutorial_client=client
+  api.worker_town_founding=dofile(mod.."/town_founding_ui.lua")(core,client,dollars,
+    function(p)
+      local id=api.world.target(p)
+      if id then local x,z=Sim.xy(id);return id,x-1,z-1 end
+    end,function(p) return api.worker_finance.show(p) end)
   api.worker_finance=dofile(mod.."/campaign_worker_finance_ui.lua")(core,client,formatted_date,dollars,
-    function(p,id) U.teleport_tile(p,id) end)
+    function(p,id) U.teleport_tile(p,id) end,api.worker_town_founding.open)
   api.worker_news=dofile(mod.."/campaign_news_ui.lua")(core,mod,client,formatted_date,
     api.stock_audio and api.stock_audio.effect)
   api.worker_build=api.worker_build or dofile(mod.."/campaign_build_proxy.lua")(client)
@@ -424,6 +429,7 @@ function U.leave(n)
   if Tutorials then Tutorials.leave(n) end
   if U.layer_bulldozer then U.layer_bulldozer.leave(n) end
   if api.worker_fleet then api.worker_fleet.leave(n) end
+  if api.worker_town_founding then api.worker_town_founding.leave(n) end
   if api.worker_news then api.worker_news.leave(n) end
   if api.worker_build then api.worker_build.leave(n) end
   if U.signal_ui then U.signal_ui.leave(n) end
@@ -521,6 +527,7 @@ function U.fields(p,formname,f)
   if api.authority_handoff and formname==worker_jump_form then return worker_jump_fields(p,f) end
   if api.worker_fleet and formname==api.worker_fleet.form then return api.worker_fleet.fields(p,f) end
   if api.worker_finance and formname==api.worker_finance.form then return api.worker_finance.fields(p,f) end
+  if api.worker_town_founding and formname==api.worker_town_founding.form then return api.worker_town_founding.fields(p,f) end
   if api.worker_news and formname==api.worker_news.form then return api.worker_news.fields(p,f) end
   if api.worker_depot and formname==api.worker_depot.form then return api.worker_depot.fields(p,f) end
   if api.worker_truck_stop and formname==api.worker_truck_stop.form then return api.worker_truck_stop.fields(p,f) end

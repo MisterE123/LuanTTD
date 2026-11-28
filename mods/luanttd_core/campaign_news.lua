@@ -175,6 +175,12 @@ return function(Sim,mod,R,cap)
     local m=s[stations[row.ref_mode]]
     return m and m[row.ref_station]~=nil
   end
+  -- CmdFoundTown adds an IndustryOpen-style story aimed at the new site.
+  function W.town_founded(town)
+    return publish("open","thin",town.name.." founded",
+      "A company sponsored construction of "..town.name..".",
+      {tile=town.tile,icon="industry"})
+  end
   function W.industry_opened(ind)
     local site=s.sites[ind.site or 0]
     if not site then return end

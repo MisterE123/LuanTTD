@@ -4569,6 +4569,30 @@ function M.mount_stock_town_growth(s,world,want_new)
   town_growth_mount[s]={world=world,new=want_new~=false}
   return state
 end
+function M.town_founding_host()
+  if not M.founding_host then
+    load_road_rules()
+    M.founding_host=dofile(module_root.."town_founding_world.lua")(M,terrain_rules,
+      dofile(module_root.."openttd/town_growth.lua"))
+  end
+  return M.founding_host
+end
+function M.quote_town_founding(s,owner,request)
+  local current=town_growth_mount[s]
+  if not current then return nil,"TOWN_FOUNDING_FORBIDDEN" end
+  local q,why=M.town_founding_host().quote(s,owner,current.world,request)
+  return q,why
+end
+function M.found_town(s,owner,request,cost)
+  local current=town_growth_mount[s]
+  if not current then return nil,"TOWN_FOUNDING_FORBIDDEN" end
+  local town,why=M.town_founding_host().apply(s,owner,current.world,request,cost)
+  if not town then return nil,why end
+  debit(s.companies[owner],town.cost,"other")
+  M.road_tree_authority().invalidate_towns(s)
+  return town
+end
+
 -- RC1 TownActionFundBuildings, GetTownActionCost[FundBuildings] (53),
 -- and Price::TownAction. Shares the mounted town growth state and clock.
 M.town_buildings_fund_cost=math.floor(1000000*53/256)

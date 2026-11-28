@@ -40,6 +40,8 @@ local items={
     labels={"Yes","No"},advanced="Let towns build roads"},
   {key="town_crossings",setting="luanttd_allow_town_level_crossings",default=1,values={1,0},boolean_setting=true,
     labels={"Yes","No"},advanced="Let towns build rail crossings"},
+  {key="found_town",setting="luanttd_found_town",default=0,values={0,1,2},
+    labels={"Forbidden","Allowed","Custom layout"},advanced="Town founding"},
   {key="variety",setting="bayline_generated_variety",default=0,values={0,1,2,3,4,5},
     labels={"None","Very low","Low","Medium","High","Very high"},advanced="Regional variety"},
 }
@@ -224,8 +226,8 @@ local function formspec(core,cfg,advanced,note)
           :format(x,y,label,x,y+.20,item.key,cfg[item.key],item.key)
         n=n+1
       end
-      out[#out+1]="label[6.43,7.30;Custom count needs Custom density.]"
-      out[#out+1]="label[6.43,7.62;No forced coast still allows inland water.]"
+      out[#out+1]="tooltip[setup_custom_towns;Used only when Town density is Custom.]"
+      out[#out+1]="tooltip[setup_coast;No forced coast still allows inland water.]"
     end
   elseif cfg.scenario=="original" then
     out[#out+1]="label[.49,3.86;Survey map side length]"

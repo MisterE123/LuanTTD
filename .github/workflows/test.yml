@@ -571,6 +571,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Verify paid founding and follow the new city across an RC1 year
+        run: |
+          lua5.1 tests/world_setup.lua
+          lua5.1 tests/campaign_worker_finance_ui.lua
+          lua5.1 tests/town_founding_ui.lua
+          lua5.1 tests/town_founding_rc1.lua
+          bash tests/town_growth_rc1_goods_native.sh founding
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua

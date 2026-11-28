@@ -339,8 +339,14 @@ return function(Sim,R,max_days)
   local function town_settings()
     return s.stock_generated_profile and s.stock_generated_profile.town_settings
   end
+  function A.town_found_quote(name,request)
+    if not owner(name) or type(request)~="table" then return reply(false,"INVALID_REQUEST") end
+    local q,why=Sim.quote_town_founding(s,name,request)
+    return reply(q~=nil,why,q)
+  end
   local growth_names={[0]="None","Slow","Normal","Fast","Very fast"}
   local cargo_names={[0]="Quadratic (original)","Linear"}
+  local founding_names={[0]="Forbidden","Allowed","Custom layout"}
   function A.company(name,midday)
     if not owner(name) then return reply(false,"INVALID_REQUEST") end
     local c=s.companies[name]
@@ -354,7 +360,9 @@ return function(Sim,R,max_days)
       news_head=R.news and R.news.head(),
       year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name,
       world_town_growth=growth and (growth.growth_setting or 2) or nil,
-      world_town_cargo=growth and (growth.cargo_mode or 1) or nil})
+      world_town_cargo=growth and (growth.cargo_mode or 1) or nil,
+      town_founding=growth and (growth.founding_policy or 0) or 0,
+      town_layout=growth and growth.layout or "original"})
   end
   function A.news(name,page,after,req)
     if not owner(name) or not s.companies[name] or not R.news then return reply(false,"Newspaper unavailable.") end
@@ -464,7 +472,7 @@ return function(Sim,R,max_days)
   -- vehicle records. Everything else must be treated as
   -- a potential surface edit, including future command types. Both
   -- direct placement RPCs below flow through this same handler.
-  local keeps_sea={company_open=true,company_loan=true,speed=true,town_growth_setting=true,town_cargo_setting=true,
+  local keeps_sea={company_open=true,company_loan=true,speed=true,town_growth_setting=true,town_cargo_setting=true,town_founding_setting=true,
     road_buy=true,road_order_add=true,road_toggle=true}
   local function valid_speed(speed)
     return speed==0 or speed==1 or speed==2 or speed==4
@@ -653,6 +661,21 @@ return function(Sim,R,max_days)
       -- queues, or the random state at the time the setting is changed.
       growth.cargo_mode=c.mode
       ok,note=true,"Town cargo generation set to "..cargo_names[c.mode].."."
+    elseif c.kind=="town_founding_setting" then
+      if not integer(c.policy,0,2) then return reply(false,"INVALID_TOWN_FOUNDING_SETTING") end
+      if s.chair~=name and c.admin~=true then return reply(false,"Only the host or server admin can change world rules.") end
+      local config=town_settings()
+      if not config then return reply(false,"Town founding is unavailable in this world.") end
+      if (config.founding_policy or 0)==c.policy then return reply(true,"Town founding is already "..founding_names[c.policy]..".") end
+      config.founding_policy=c.policy
+      ok,note=true,"Town founding set to "..founding_names[c.policy].."."
+    elseif c.kind=="town_found" and type(c.request)=="table" then
+      value,note=Sim.found_town(s,name,c.request,c.cost)
+      ok=value~=nil
+      if ok then
+        note="Founded "..value.name.."."
+        if R.news and R.news.town_founded then R.news.town_founded(value) end
+      end
     elseif c.kind=="town_fund_buildings" and index(c.town) then
       ok,note,value=Sim.fund_town_buildings(s,name,c.town,c.cost)
     elseif c.kind=="town_fund_roads" and index(c.town) then

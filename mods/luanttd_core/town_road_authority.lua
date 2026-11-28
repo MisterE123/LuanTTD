@@ -23,7 +23,7 @@ return function(Sim,Stock)
   -- ClosestTownFromTile only accepts a strict Manhattan threshold. The
   -- fixed generated town centers can be bucketed once; live industries,
   -- buildings, station admissions and road edits never move a town center.
-  -- The explicit invalidation hook is for a future town editor.
+  -- Found Town explicitly invalidates the index when a town is added.
   function A.nearest_in(s,id,limit)
     if limit<=0 then return end
     if not s.stock_generated_profile then

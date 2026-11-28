@@ -175,7 +175,7 @@ return function(Sim,Terrain,G,B,H)
     return t and not (t.stock_void or t.stock_object or t.owner or t.house or t.source_house or
       t.parcel or t.site or t.station or protected(s,id,t)) and (not t.build or t.build=="road")
   end
-  function W.road_board(s)
+  function W.road_board(s,founding)
     local function read(x,z)
       local id=Sim.id(x,z)
       local t=at(s.tiles,id)
@@ -218,6 +218,7 @@ return function(Sim,Terrain,G,B,H)
       return available(s,id,at(s.tiles,id)) or Sim.town_mixed_road(s,id)
     end
     return roads(Sim,Terrain,s,G,Worldgen,read,{
+      founding=founding,
       houseable=function(x,z) return clear_levels(s,Sim.id(x,z),true,true)~=nil end,
       terraformable=function(x,z) return clear_levels(s,Sim.id(x,z),true,false,true)~=nil end,
       roadable=roadable,

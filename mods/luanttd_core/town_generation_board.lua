@@ -98,7 +98,7 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
       local neighbor=B.tile(u,v)
       if neighbor and has(neighbor.road_bits or 0,2^(3-(back and d or (d+2)%4))) then ret=false;break end
     end
-    return Grade.allowed(current,d,ret,not live,random,B.terraform_land,x,z)
+    return Grade.allowed(current,d,ret,not live or live.founding,random,B.terraform_land,x,z)
   end
   function B.clean_road_bits(_,x,z,bits)
     -- Ordinary clear/normal-road/shore classes of RC1 CleanUpRoadBits.

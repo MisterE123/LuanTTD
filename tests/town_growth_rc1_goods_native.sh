@@ -25,6 +25,7 @@ case "${1:-}" in
     ;;
   midyear) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-midyear-town-setting.lua ;;
   wide) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-wide-varied-town-year.lua ;;
+  founding) test_init=tests/town_founding_native.lua; fixture=tests/fixtures/rc1-manual-founded-year.lua ;;
   houses) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-houses-only-town-year.lua ;;
   quadratic) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-quadratic-town-year.lua ;;
   grid) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-fast-grid-town-year.lua ;;
