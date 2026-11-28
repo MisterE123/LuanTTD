@@ -2709,6 +2709,28 @@ local function road_terminal_plan(s,owner,tool,ids)
   if total>M.company(s,owner).cash then return nil,"Not enough cash." end
   return result,total
 end
+function M.stock_house_clear_quote(s,owner,h,journal)
+  local town=s.sites[h.town]
+  if not town then return nil,"Unknown governing town for this house." end
+  local company=M.company(s,owner)
+  local policy=s.stock_road_town_policy or {}
+  local ratings=company.stock_town_authority_ratings
+  local before=journal[town.id] or ratings and ratings[town.id] or 500
+  if not M.stock_house_demolition then
+    M.stock_house_demolition=dofile(module_root.."openttd/town_house_demolition.lua")(
+      dofile(module_root.."openttd/town_house_demolition_data.lua"))
+  end
+  local q,why=M.stock_house_demolition.quote(h.id,before,policy.tolerance or 0,policy,s.stock_clear_house_price)
+  if not q then
+    if why=="HOUSE_AUTHORITY_RATING" then
+      return nil,town.name.." refuses demolition at your current local authority rating."
+    end
+    return nil,why=="BUILDING_IS_PROTECTED" and "The building is protected." or "Unknown stock house type."
+  end
+  q.town=town.id
+  journal[q.town]=q.after
+  return q
+end
 function M.plan(s,owner,tool,ids,quote_clear_only)
   for _,id in ipairs(ids or {}) do
     if s.tiles[id] and s.tiles[id].road_waypoint_id and tool~="road" then return nil,"Remove the road waypoint while keeping its pavement." end
@@ -2742,7 +2764,7 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
     if tool=="grade" then return nil,"Corner terraforming is not connected to this tool yet." end
     if tool=="road_bridge" or tool=="road_tunnel" then return nil,"This structure is not available in the corner terrain preview." end
   end
-  local result,seen,total={},{},0
+  local result,seen,total,house_ratings={},{},0,{}
   for _,id in ipairs(ids) do
     local t=s.tiles[id]
     if not t or t.stock_void then return nil,"Outside the playable map." end
@@ -2803,7 +2825,13 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
       local target=tool
       local skip=false
       local extra=t.house and 240 or 0
-      if t.house and tool=="clear" then
+      local stock_house
+      if t.house and tool=="clear" and t.source_house and s.stock_generated_profile then
+        local why
+        stock_house,why=M.stock_house_clear_quote(s,owner,t.source_house,house_ratings)
+        if not stock_house then return nil,why end
+        extra=stock_house.cost-w.price
+      elseif t.house and tool=="clear" then
         local town=M.nearest_town(s,id)
         if town and ((M.company(s,owner).rating[town.id] or 48)<28) then
           return nil,town.name.." refuses demolition. Deliver cargo there to rebuild your reputation."
@@ -2876,7 +2904,7 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
       end
       if not skip then
         total=total+M.tools[target].price+extra
-        result[#result+1]={id=id,tool=target,house_parts=house_parts}
+        result[#result+1]={id=id,tool=target,house_parts=house_parts,stock_house=stock_house}
       end
       end
     end
@@ -2949,13 +2977,19 @@ local function apply_build(s,owner,changes,cost)
           for _,part in ipairs(item.house_parts) do
             growth.world.remove(s,part.record)
             local parcel=s.tiles[part.id]
-            parcel.house,parcel.source_house=nil,nil
+            parcel.house,parcel.source_house,parcel.parcel=nil,nil,nil
             M.mark_clear_land(s,part.id)
             if part.id~=id then changed[#changed+1]=part.id end
           end
         elseif growth then growth.world.remove(s,tile.source_house) end
-        local town=M.nearest_town(s,id)
-        if town then c.rating[town.id]=math.max(10,(c.rating[town.id] or 48)-10) end
+        if item.stock_house then
+          local receipt=item.stock_house
+          tile.parcel=nil
+          if receipt.change_rating then M.road_tree_authority().apply(c,{[receipt.town]=receipt.after}) end
+        else
+          local town=M.nearest_town(s,id)
+          if town then c.rating[town.id]=math.max(10,(c.rating[town.id] or 48)-10) end
+        end
       end
       tile.road_terminal_level=nil
       if tile.road_town or item.keep_road then

@@ -636,6 +636,11 @@ jobs:
           lua5.1 tests/rail_diesel_smoke_rc1.lua
           lua5.1 tests/town_growth_rc1_ferry.lua hub-four
           bash tests/town_growth_rc1_ferry_native.sh hub-four
+      - name: Clear a stock town house and compare the remaining RC1 year
+        run: |
+          lua5.1 tests/town_house_demolition_rc1.lua
+          lua5.1 tests/town_growth_rc1_ferry.lua hub-house
+          bash tests/town_growth_rc1_ferry_native.sh hub-house
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua

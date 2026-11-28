@@ -1,10 +1,11 @@
 -- A fresh RC1 port, not an imported save: use production world generation
 -- and the ordinary worker's quote, buy, order and company commands.
 local four=arg[1]=="hub-four"
-local rotary=four or arg[1]=="hub-air"
+local demolition=arg[1]=="hub-house"
+local rotary=four or demolition or arg[1]=="hub-air"
 local hub=rotary or arg[1]=="hub"
 local mixed=hub or arg[1]=="mixed"
-local ref=dofile("tests/fixtures/"..(four and "rc1-active-coastal-four-town-year" or rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
+local ref=dofile("tests/fixtures/"..(demolition and "rc1-active-coastal-house-clear-town-year" or four and "rc1-active-coastal-four-town-year" or rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local S,T,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -147,6 +148,37 @@ local function start_train()
   action("transport_start",{mode="rail",vehicle=train,first=home,second=other})
 end
 
+local function clear_house()
+  local id=S.id(50,110)
+  local tile=assert(s.tiles[id])
+  local house=assert(tile.source_house)
+  local owner_id=house.town
+  local town=assert(s.stock_town_growth.towns[owner_id])
+  assert(house.id==6 and (town.stock_id or owner_id-1)==17)
+  local expected=ref.house_clear
+  local c=assert(s.companies[owner])
+  local ratings=assert(c.stock_town_authority_ratings)
+  assert(ratings[owner_id]==expected.before)
+  local request={operation="bulldoze",first=id}
+  -- Test actual command refusal and quote, then restore the original
+  -- published 1985 world condition before executing the deliberate edit.
+  ratings[owner_id]=79
+  local denied=A.terrain_quote(owner,request)
+  assert(not denied.ok and denied.why:find("refuses demolition",1,true))
+  local policy=s.stock_road_town_policy
+  local tolerance=policy.tolerance
+  policy.tolerance=3
+  assert(checked(A.terrain_quote(owner,request)).cost==expected.cost)
+  policy.tolerance=tolerance
+  ratings[owner_id]=expected.before
+  local quote=checked(A.terrain_quote(owner,request))
+  assert(quote.cost==expected.cost and ratings[owner_id]==expected.before)
+  local cash=c.cash
+  action("terrain_commit",{token=quote.token})
+  assert(not tile.house and not tile.source_house and ratings[owner_id]==expected.after)
+  assert(town.population==expected.population and town.num_houses==expected.houses and c.cash==cash-expected.cost)
+end
+
 local function fold(h,...)
   for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
   return h
@@ -269,6 +301,7 @@ local function tick(t)
       rail_count=rail_count+1
     end
   end
+  if demolition and t==ref.clear_tick then clear_house() end
   digest=fold(digest,t,unpack(s.passenger_rating_rng));ticks=ticks+1
   if ref.towns[t] then snapshot(t,ref.towns[t]);snapshots=snapshots+1 end
   if t<=ref.build then return end
@@ -307,6 +340,7 @@ if mixed then
     assert(s.airport_owned_runs[aircraft_id].arrivals>8)
     print(("PASS RC1 hub helicopter: %d exact aircraft frames across three packed reloads"):format(air_count))
   end
+  if demolition then print("PASS RC1 company demolition: exact quote, signed authority and following town year") end
   if four then
     same(ref.last,"physical passenger engine and coach cargo",{rail_hash,rail_count},{ref.rail,ref.rail_count})
     print(("PASS RC1 four-mode hub: %d exact rail poses and coach cargo frames"):format(rail_count))

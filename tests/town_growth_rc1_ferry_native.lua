@@ -5,7 +5,8 @@ local function m(n) return dofile(mod.."/"..n..".lua") end
 local Sim=m("sim")
 local owner="Stock Ferry QA"
 local four=core.settings:get_bool("luanttd_qa_coastal_four",false)
-local rotary=four or core.settings:get_bool("luanttd_qa_coastal_air",false)
+local demolition=core.settings:get_bool("luanttd_qa_house_clear",false)
+local rotary=four or demolition or core.settings:get_bool("luanttd_qa_coastal_air",false)
 local hub=rotary or core.settings:get_bool("luanttd_qa_coastal_hub",false)
 local mixed=hub or core.settings:get_bool("luanttd_qa_join_bus_dock",false)
 local Checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
@@ -159,6 +160,27 @@ local function work()
       local aircraft=transport({mode="air",operation="buy",depot=home,engine=253}).id
       command("transport_start",{mode="air",vehicle=aircraft,first=away,second=home})
     end
+    if demolition then
+      for _=1,4 do ask("advance",{days=4}) end
+      ask("checkpoint")
+      local id=109*256+50
+      local s=assert(Checkpoint.read())
+      local h=assert(s.tiles[id].source_house)
+      local town=s.stock_town_growth.towns[h.town]
+      assert(h.id==6 and (town.stock_id or h.town-1)==17)
+      local c=s.companies[owner]
+      local before=assert(c.stock_town_authority_ratings[h.town])
+      local q=ask("terrain_quote",{request={operation="bulldoze",first=id}})
+      assert(q.cost==500)
+      command("terrain_commit",{token=q.token})
+      ask("checkpoint")
+      local changed=assert(Checkpoint.read())
+      local after=changed.stock_town_growth.towns[h.town]
+      assert(not changed.tiles[id].house and not changed.tiles[id].source_house)
+      assert(after.population==town.population-30 and after.num_houses==town.num_houses-1)
+      assert(changed.companies[owner].cash==c.cash-500)
+      assert(changed.companies[owner].stock_town_authority_ratings[h.town]==before-80)
+    end
     if four then
       -- The year witness buys its train in late January; let the
       -- ordinary company and dated engine roster advance to that point.
@@ -213,6 +235,14 @@ local function work()
     assert(s.passenger_house_clock.counter==baseline_tick and boarded==baseline_boarded and money==baseline_money)
     assert(p.arrivals==previous.ship_pilot.arrivals)
     if rotary then assert(air.arrivals==baseline_air) end
+    if demolition then
+      local id=109*256+50
+      local now,prior=s.tiles[id].source_house,previous.tiles[id].source_house
+      assert((now and now.id)==(prior and prior.id))
+      local town=18 -- physical TownID 17 in the one-based Luanti town book
+      assert(s.companies[owner].stock_town_authority_ratings[town]
+        ==previous.companies[owner].stock_town_authority_ratings[town])
+    end
     if four then
       assert(train.shuttle.arrivals==baseline_train and bus.last_arrival.tick==baseline_bus)
     end
@@ -228,6 +258,7 @@ local function work()
       if mixed then result=result..(", bus carries %d through the same physical station"):format(bus.units) end
       if rotary then result=result..(", helicopter made %d arrivals"):format(air.arrivals) end
       if four then result=result..(", train made %d arrivals, bus last arrived at tick %d"):format(train.shuttle.arrivals,bus.last_arrival.tick) end
+      if demolition then result=result..", stock house clear retained" end
       return {kind="stop"}
     end
   end

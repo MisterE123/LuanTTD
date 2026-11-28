@@ -1216,3 +1216,24 @@ station loading frames and six housing and town snapshots. The
 ordinary native worker resumes all four routes after a process
 restart. This is one combined Temperate scenario, not complete
 town-growth parity or a test of four simultaneous loading vehicles.
+
+
+### Deliberate company demolition of stock town buildings
+
+The Bulldozer prices the selected original HouseSpec and checks the
+house's own TownID, rather than the nearest town or the old delivery
+score. It uses the signed RC1 authority ledger and applies the house's
+rating penalty only after a successful clear. The player explicitly
+chooses demolition: the source `Auto` rule still prevents automatic
+road or rail placement from bulldozing a house.
+
+In the 1985 coastal bus, ferry and helicopter comparison, the player
+clears HouseID 6 in physical TownID 17 at tick 2982. Both engines
+charge 500, lower the rating from 465 to 385, and leave population
+294 with 15 houses. Lenient rejects 79 when 80 is needed; Permissive
+quotes the same price. The full year then matches 27,010 RNG states,
+six terrain and town snapshots, and the active vehicle and station
+records. The native worker keeps the removal and stock authority
+state across restart. This replay covers one ordinary unlayered
+lot; planning over layered structures still requires separate
+clearance checks.
