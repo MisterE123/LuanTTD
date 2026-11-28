@@ -29,8 +29,9 @@ local function eq(d,a,b)
   for i=1,#a do assert(a[i]==b[i],("%s field %d: %.0f != %.0f"):format(d,i,a[i],b[i])) end
 end
 local frozen=dofile(fp.."rc1-native-climate-industry-live-frozen.lua")
-local function live_frozen(s,Calendar,climate,w)
-  local fixture=assert(frozen[climate])
+local spread=dofile(fp.."rc1-native-climate-industry-live-trees.lua")
+local function live_frozen(s,Calendar,climate,w,settings,fixture)
+  s.stock_extra_tree_placement=settings
   local function mount()
     S.mount_road_bus_market(s,Calendar,1985,false,false)
     S.mount_stock_town_growth(s,Live,true)
@@ -50,7 +51,7 @@ local function live_frozen(s,Calendar,climate,w)
     digest=fold(digest,tick,a,b,s.passenger_house_clock.head)
     local expected=fixture.snapshots[tick]
     if not expected then return end
-    local gh,hh,ih=1,1,1
+    local gh,hh,ih,wood,trees=1,1,1,1,0
     local physical={}
     local firms=s.stock_worldgen_climate_firms
     for _,f in ipairs(firms) do
@@ -59,11 +60,16 @@ local function live_frozen(s,Calendar,climate,w)
     for id,c in ipairs(s.tiles) do
       local x,z=S.xy(id)
       local h=c.source_house
-      local kind=c.stock_void and 7 or h and 3 or c.terrain=="water" and 6 or c.wood and 4
+      local kind=c.stock_void and 7 or h and 3 or c.wood and 4 or c.terrain=="water" and 6
         or c.stock_industry and 8 or c.build=="road" and 2 or (c.road_bridge_id or c.road_tunnel_id) and 9 or 0
       gh=fold(gh,T.corner(s.corner_grid,x,z),kind)
       if kind==2 then gh=fold(gh,c.road_bits) end
       if h then hh=fold(hh,h.id,h.town-1,h.random_bits,h.stage) end
+      if kind==4 then
+        local t=c.wood
+        wood=fold(wood,id-1,t.type,t.count,t.growth,t.ground,t.density)
+        trees=trees+1
+      end
       if kind==8 then
         local t=assert(physical[id])
         ih=fold(ih,t.gfx,t.stage,t.construction_counter,t.animation_frame or 0,t.animated and 1 or 0)
@@ -88,6 +94,7 @@ local function live_frozen(s,Calendar,climate,w)
     eq(label.."town growth",{#towns.order,th},expected[2])
     eq(label.."industry pool",{#firms,fh},expected[3])
     eq(label.."industry production",{np,ph},expected[4])
+    if expected[5] then eq(label.."tree species/age and surface state",{trees,wood},expected[5]) end
     maps=maps+1
   end
   for day=1,120 do
@@ -100,8 +107,8 @@ local function live_frozen(s,Calendar,climate,w)
   end
   assert(ticks==8880 and maps==5 and reopen==2)
   eq(climate.." full live RNG and landscape cursor",{digest},{fixture.trace})
-  print(("PASS live frozen RC1 %s: %d exact ticks, %d map/town/industry snapshots, %d reopens")
-    :format(climate,ticks,maps,reopen))
+  print(("PASS live frozen RC1 %s (tree setting %d): %d exact ticks, %d snapshots, %d reopens")
+    :format(climate,settings,ticks,maps,reopen))
 end
 local proper=selection or arg and tonumber(arg[1]) or 0
 for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
@@ -203,7 +210,11 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
     end
     assert(checked==n)
     print(("PASS active RC1 %s pregame: %d exact landscape ticks and %d reopened industry tiles"):format(climate,ticks,n))
-    if frozen[climate] and seed==1751 then live_frozen(s,Calendar,climate,w) end
+    if frozen[climate] and seed==1751 then
+      local fresh=Codec.encode(s)
+      live_frozen(s,Calendar,climate,w,3,assert(frozen[climate]))
+      live_frozen(assert(Codec.decode(fresh)),Calendar,climate,w,2,assert(spread[climate]))
+    end
 
   end
 end

@@ -1734,3 +1734,15 @@ dynamic industry changes, active player transport on these fully
 generated worlds, and Toyland's live bubble animation are not
 certified by this comparison. The new climate runtimes remain
 headless, not a playable climate-selector release.
+
+### The same live run with stock tree spread
+
+The Frozen comparison now also runs with RC1's default live tree
+spread restored. Both climates match all 8,880 ticks and both packed
+reopens. Five samples per climate compare the physical position,
+species, count, growth stage, ground and density of every native tree
+tile (16 Arctic and 861 Tropic samples). Tropical rainforest planting
+and ordinary planting share the same RNG in their original order;
+Arctic tree visits apply the snow line and the source ambient draw.
+Initial woods are disabled in these reference worlds, so this does
+not certify initial wooded climate generation or full climate parity.

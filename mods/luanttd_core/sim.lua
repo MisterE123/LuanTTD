@@ -586,7 +586,8 @@ local function coastal_visit(s)
   end
   if s.stock_generated_profile and not stock_tree_lifecycle then
     local gen=dofile(module_root.."openttd/tree_worldgen.lua")
-    local rules=dofile(module_root.."openttd/tree_lifecycle_temperate.lua")(gen)
+    local rules=dofile(module_root.."openttd/tree_lifecycle_temperate.lua")(gen,
+      dofile(module_root.."openttd/tree_climate_rc1.lua"))
     stock_tree_lifecycle=dofile(module_root.."tree_lifecycle_world.lua")(M,terrain_rules,rules)
   end
   local board=coastal_world.board(s)

@@ -9,7 +9,7 @@ return function(Worldgen,Climate)
     for k,v in pairs(old) do copy[k]=v end
     return copy
   end
-  function T.visit(tree,x,z,tick,setting,random,neighbor,context,tropic_zone)
+  function T.visit(tree,x,z,tick,setting,random,neighbor,context,tropic_zone,arctic_height,arctic_line)
     setting=setting or T.SPREAD_ALL
     local cycle=11*x+9*z+math.floor(tick/256)
     local new=tree
@@ -20,6 +20,20 @@ return function(Worldgen,Climate)
         -- Source consumes this word even when ambient sound is off.
         random()
       end
+    elseif arctic_height and tree.ground~=SHORE then
+      -- TileLoopTreesAlps changes ground/density before generic growth.
+      local k=arctic_height-arctic_line+1
+      local g,d=tree.ground,tree.density
+      if k<0 then
+        if g==2 then g,d=GRASS,3
+        elseif g==4 then g,d=ROUGH,3 end
+      else
+        local density=math.min(k,3)
+        if g~=2 and g~=4 then g,d=g==ROUGH and 4 or 2,density
+        elseif d~=density then d=density
+        elseif d==3 then random() end -- ambient input even without audio
+      end
+      if g~=tree.ground or d~=tree.density then new=clone(tree);new.ground,new.density=g,d end
     end
     if cycle%8==7 and new.ground==GRASS and new.density<3 then
       if new==tree then new=clone(tree) end
@@ -45,9 +59,9 @@ return function(Worldgen,Climate)
         local d=math.floor(random()/536870912)
         local target=neighbor(d,context,x,z)
         if Worldgen.can_plant(target,false) and not (target.class==0 and
-           (target.ground or 0)==0 and target.density~=3) then
+           (target.ground or 0)==0 and not target.snow and target.density~=3) then
           local g,density
-          if tropic_zone~=nil then
+          if tropic_zone~=nil or target.snow then
             g,density=Climate.ground(target)
           else
             g=target.class==6 and SHORE or target.ground==1 and ROUGH or GRASS
@@ -78,21 +92,36 @@ return function(Worldgen,Climate)
   -- OnTick_Trees / DecrementTreeCounter / PlantRandomTree. Map area is the
   -- stock power-of-two product (axes 64–4096); ScaleBySize uses ceil.
   -- A rejected destination still consumes the single draw that chose it.
-  function T.global_tick(counter,area,tick,setting,random,tile)
+  function T.global_tick(counter,area,tick,setting,random,tile,landscape,apply)
     setting=setting or T.SPREAD_ALL
     if setting==T.NO_SPREAD or setting==T.NO_GROWTH then return counter end
     local skip=math.ceil(area/4096)
     if skip<16 and tick%(16/skip)~=0 then return counter end
-    local next_counter=(counter-math.ceil(area/65536))%256
-    if counter>next_counter or setting==T.RAINFOREST_ONLY then return next_counter end
-    local r=random()
-    local i=r%area
-    local t=tile(i)
-    if not Worldgen.can_plant(t,false) then return next_counter end
-    local g=t.class==6 and SHORE or t.ground==1 and ROUGH or GRASS
-    return next_counter,i,{class=4,type=math.floor(math.floor(r/16777216)*12/256),
-      count=1,growth=0,ground=g,density=g==GRASS and t.density or 3,
-      water_class=g==SHORE and "sea" or nil}
+    local quantity=math.ceil(area/65536)
+    local index,tree
+    local function plant(rainforest)
+      local r=random()
+      local i=r%area
+      local t=tile(i)
+      if rainforest and not (t and t.zone==Climate.RAINFOREST) then return end
+      if not Worldgen.can_plant(t,false) then return end
+      local species=landscape and Climate.kind(landscape,t.zone or 0,math.floor(r/16777216))
+        or not landscape and math.floor(math.floor(r/16777216)*12/256)
+      if not species then return end
+      local g,density
+      if landscape then g,density=Climate.ground(t)
+      else
+        g=t.class==6 and SHORE or t.ground==1 and ROUGH or GRASS
+        density=g==GRASS and t.density or 3
+      end
+      index,tree=i,{class=4,type=species,count=1,growth=0,ground=g,density=density,
+        water_class=g==SHORE and "sea" or nil}
+      if apply then apply(i,tree) end
+    end
+    if landscape=="tropic" then for _=1,quantity do plant(true) end end
+    local next_counter=(counter-quantity)%256
+    if counter<=next_counter and setting~=T.RAINFOREST_ONLY then plant(false) end
+    return next_counter,index,tree
   end
   return T
 end
