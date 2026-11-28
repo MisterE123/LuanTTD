@@ -1691,3 +1691,21 @@ packed save/reopen. The source observations are used as assertions
 after generation. This proves the tested starting phase only;
 a full economy year with these active industries, climate 3D
 art, and the normal world-selector path remain separate work.
+
+### Pregame landscape with the new industries active
+
+After automatic placement the controlled worker settles the whole
+landscape through RC1's 1,280 pregame ticks. Coal, copper and gold
+towers, Oil Wells, power sparks, stock vegetation transition
+graphics, and the Toyland animation triggers share the source
+random stream. These are the underlying industry states, not
+placeholder scene objects. The expanded C++ machinery comparison
+covers 100,544 source cases.
+
+In the same four fresh maps (with landmark generation intentionally
+omitted), Luanti matches all 5,120 native RNG and landscape-cursor
+samples and the final animation and construction state of all
+939 industry tiles after a packed reopen. This phase is still
+before the live economy clock: monthly production changes,
+industrial openings, active transport and actual climate art are
+not covered by this proof.

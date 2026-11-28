@@ -88,5 +88,46 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
       for j,row in ipairs(cells) do eq("physical cell "..i.."/"..j,row,want[19][j]);n=n+1 end
     end
     print(("PASS automatic RC1 %s generation: %d source-exact placements, %d reopened physical tiles and complete shared RNG"):format(climate,#out.firms,n))
+    local pregame=dofile(fp.."rc1-native-climate-industry-settle.lua")[i]
+    assert(pregame.climate==climate and pregame.seed==seed)
+    local Calendar=o("stock_engine_calendar")
+    profile=s.stock_generated_profile
+    s.road_stock_loading,s.road_stock_clock,s.road_stock_house_supply,s.road_economy=true,true,true,true
+    s.road_junction_clearance,s.road_bay_build=true,true
+    s.stock_pool_authority=true
+    s.stock_extra_tree_placement=3
+    S.mount_road_bus_market(s,Calendar,1985,false,false)
+    S.mount_stock_town_growth(s,Live,true)
+    S.mount_coastal_flood(s)
+    profile.industry_rng=profile.climate_industry_rng
+    Campaign.forests(S,T,s,Generator,o("tree_worldgen"),0)
+    S.stock_world_launch(s,Calendar)
+    local function cursor()
+      return {s.passenger_rating_rng[1],s.passenger_rating_rng[2],s.passenger_house_clock.head}
+    end
+    eq("pregame entry",cursor(),pregame.start)
+    local Machines,Field=m("climate_startup_industry_visits_rc1")(S,T,s)
+    local digest,ticks=1,0
+    local function roll(v) digest=(65599*digest+v)%2147483647 end
+    S.prepare_initial_landscape(s,Live,Field,nil,Machines,function(tick,head)
+      assert(tick==ticks);ticks=ticks+1
+      roll(tick);roll(s.passenger_rating_rng[1]);roll(s.passenger_rating_rng[2]);roll(head)
+    end)
+    assert(ticks==1280 and digest==pregame.trace,"Different pregame RNG or landscape cursor")
+    eq("pregame exit",cursor(),pregame.finish)
+    s=assert(Codec.decode(Codec.encode(s)))
+    eq("reopened pregame exit",cursor(),pregame.finish)
+    local checked=0
+    for _,firm in ipairs(s.stock_worldgen_climate_firms) do
+      for _,f in ipairs(firm.cells) do
+        local id=S.id(f.x+1,f.z+1)-1
+        eq("pregame industry tile "..id,{firm.id,f.gfx,f.stage,f.construction_counter,f.completed and 1 or 0,
+          f.animation_frame or 0,f.animation_loop or 0,f.animated and 1 or 0},assert(pregame.cells[id]))
+        checked=checked+1
+      end
+    end
+    assert(checked==n)
+    print(("PASS active RC1 %s pregame: %d exact landscape ticks and %d reopened industry tiles"):format(climate,ticks,n))
+
   end
 end

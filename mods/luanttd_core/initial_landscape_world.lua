@@ -5,7 +5,7 @@
 return function(Sim,H,Lift)
   local M={}
   local TICKS=0x500
-  function M.settle(s,growth,Farm,water,trees,random,pulse,machines)
+  function M.settle(s,growth,Farm,water,trees,random,pulse,machines,after_tick)
     local profile=assert(s.stock_generated_profile)
     local clock=assert(s.passenger_house_clock)
     assert(not profile.frontage and not profile.initial_landscape and clock.counter==0,
@@ -84,7 +84,7 @@ return function(Sim,H,Lift)
     end
     H.advance_initial(clock,TICKS,visit,pulse and function(tick)
       if tick%16==0 then pulse(tick,TICKS) end
-    end)
+    end,after_tick)
     if pulse then pulse(TICKS,TICKS) end
     stats.next_head=clock.head
     profile.initial_landscape=stats

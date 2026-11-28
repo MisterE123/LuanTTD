@@ -59,7 +59,7 @@ function H.new_clock(log_x,log_y,head,counter)
   return {log_x=log_x,log_y=log_y,head=head,counter=counter}
 end
 
-local function advance(clock,ticks,visit,before_tick,initial)
+local function advance(clock,ticks,visit,before_tick,initial,after_tick)
   local bits=clock.log_x+clock.log_y
   local mask=assert(feedback[bits-11],"Unsupported stock map size")
   local poly=polynomial[bits-11]
@@ -82,6 +82,7 @@ local function advance(clock,ticks,visit,before_tick,initial)
       visit(tile,time)
       tile=step(tile)
     end
+    if after_tick then after_tick(time,tile) end
     if initial then time=time+1 end
   end
   clock.head,clock.counter=tile,time
@@ -94,8 +95,8 @@ end
 -- OpenTTD 16.0-RC1 genworld.cpp generates a fresh economy without
 -- calling the regular game loop: the global tick increases only
 -- after each pre-game landscape visit, including tick 0's tile 0.
-function H.advance_initial(clock,ticks,visit,before_tick)
-  advance(clock,ticks,visit,before_tick,true)
+function H.advance_initial(clock,ticks,visit,before_tick,after_tick)
+  advance(clock,ticks,visit,before_tick,true,after_tick)
 end
 
 -- Exact source order, three little-endian bytes per zero-based tile.

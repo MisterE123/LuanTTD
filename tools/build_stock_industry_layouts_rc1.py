@@ -48,15 +48,23 @@ tile_specs=src.split("_origin_industry_tile_specs[NEW_INDUSTRYTILEOFFSET] = {",1
 tile_specs=re.sub(r"//[^\n]*|/\*.*?\*/","",tile_specs,flags=re.S)
 masks={"SLOPE_W":1,"SLOPE_S":2,"SLOPE_E":4,"SLOPE_N":8,"SLOPE_STEEP":16}
 slopes=[]
+anim_production,anim_next={},{}
 for row in re.findall(r"\{(.*?)\}",tile_specs,re.S):
     args_=[t.strip() for t in row.split(",")]
     assert len(args_) in (5,10),args_
+    gfx=len(slopes)
     slopes.append(16 if len(args_)==5 else masks[args_[6]])
+    if len(args_)==10:
+        if args_[7]!="INDUSTRYTILE_NOANIM":anim_production[gfx]=int(args_[7])
+        if args_[8]!="INDUSTRYTILE_NOANIM":anim_next[gfx]=int(args_[8])
 assert len(slopes)==175
 out.append("  slope_refused={ -- Graphics-ID indexed construction restriction")
 for j in range(0,len(slopes),16):
     out.append("    "+("[0]=" if j==0 else "")+",".join(map(str,slopes[j:j+16]))+",")
-out.extend(("  },","}"))
+out.append("  },")
+for name,table in (("anim_production",anim_production),("anim_next",anim_next)):
+    out.append("  "+name+"={"+",".join(f"[{key}]={value}" for key,value in table.items())+"},")
+out.append("}")
 data="\n".join(out)+"\n"
 if args.check:
     assert OUT.read_text()==data,"The committed stock layout catalog differs from the RC1 table"

@@ -644,13 +644,13 @@ local function machine_rules()
 end
 function M.industry_machinery(s,pregame) return machine_rules().bind(s,pregame) end
 function M.visible_machinery(s,x,z,w,h) return machine_rules().visible(s,x,z,w,h) end
-function M.prepare_initial_landscape(s,growth,Farm,progress)
+function M.prepare_initial_landscape(s,growth,Farm,progress,machines,after_tick)
   assert(coastal_active(s) and s.passenger_house_clock and s.stock_town_growth)
   local _,_,water,trees=coastal_visit(s)
   local initial=dofile(module_root.."initial_landscape_world.lua")(M,
     dofile(module_root.."openttd/town_passengers.lua"),dofile(module_root.."openttd/town_lift.lua"))
   return initial.settle(s,growth,Farm,assert(water),assert(trees),
-    function() return M.stock_random_u32(s) end,progress,M.industry_machinery(s,true))
+    function() return M.stock_random_u32(s) end,progress,machines or M.industry_machinery(s,true),after_tick)
 end
 local function coastal_tile_occupied(s,id)
   local extra=coastal_occupied[s]
