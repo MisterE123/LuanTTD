@@ -205,6 +205,7 @@ return function(Sim,R,x,z,w,h,fraction,frame)
       if point(p) then add("ship","ferry",{owner=ferry.owner,engine=ferry.engine_id,pos=xyz(p),dir=dir,
         passenger=true,running=not (ferry.stopped or ferry.crashed or ferry.phase=="blocked"),
         sound_idle=ferry.stopped or ferry.phase~="sailing",sound_crashed=ferry.crashed or nil,
+        breakdown_smoke=ferry.vehicle.breakdown or nil,sound_breakdown=ferry.vehicle.breakdown or nil,
         depot=ferry.depot,label=ferry.engine_id==208 and "Bakewell 300 Hovercraft" or ferry.engine_id==207 and "FFP Passenger Ferry" or "MPS Passenger Ferry"}) end
     end
     if R.water.tanker then

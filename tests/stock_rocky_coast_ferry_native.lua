@@ -59,8 +59,12 @@ function begin()
     assert(found)
     return Yapf.trace(b,probe,dest,goal),goal.cost
   end
+  -- This counterfactual is about geometric obstruction, not lane
+  -- preferences. The live owned ferry below uses the RC1 lane costs.
+  clear.stock_rc1_ship_cost=false
+  local raw_distance=setmetatable({stock_rc1_ship_cost=false},{__index=board})
   local dry,short=trace(clear)
-  local _,long=trace(board)
+  local _,long=trace(raw_distance)
   assert(short==1510 and long==1597,"Unexpected reference path costs")
   local inlet={}
   for _,id in ipairs(original_rocks) do inlet[id]=true end

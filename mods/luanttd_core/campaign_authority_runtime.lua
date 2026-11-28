@@ -62,7 +62,8 @@ return function(Sim,mod,s,cap)
     return changed
   end
   if s.ship_paid_service then
-    local _,follow,net,roster,run,depot,freight,coal,tanker,tanker_run=B.water(s,network.track,function(id) return cap.ferry[id]==true end)
+    local _,follow,net,roster,run,depot,freight,coal,tanker,tanker_run=B.water(s,network.track,
+      function(id) return cap.ferry[id]==true end,cap.road and cap.road.breakdowns or 1)
     N.water={network=net,follow=follow,roster=roster,run=run,depot=depot,freight=freight,coal=coal,tanker=tanker,tanker_run=tanker_run}
     local Bridge=dofile(source.."road_bridge.lua")(Slope)
     local Aqua=dofile(source.."aqueduct.lua")(Bridge)

@@ -3543,6 +3543,8 @@ function M.stock_vehicle_slots(s,count)
   local function aircraft(unit)
     for _,id in ipairs(unit.stock_pool_ids or {}) do Pool.occupy(used,id,limit) end
   end
+  local ferry=s.stock_owned_ferry
+  if ferry and ferry.stock_pool_id~=nil then Pool.occupy(used,ferry.stock_pool_id,limit) end
   if s.stock_owned_aircraft then aircraft(s.stock_owned_aircraft) end
   for _,unit in pairs(s.stock_owned_air_fleet or {}) do aircraft(unit) end
   return Pool.reserve(used,count,limit)
@@ -6314,6 +6316,10 @@ function M.daily(s,traverse,tick_pulse,openings)
     local rail=paid_rail_runs[s]
     if rail and rail.stock_fault_days then
       for _,ev in ipairs(rail.stock_fault_days(s)) do add(ev) end
+    end
+    local ship=paid_ferry_runs[s]
+    if ship and ship.stock_fault_days then
+      for _,ev in ipairs(ship.stock_fault_days(s)) do add(ev) end
     end
     local air=paid_air_runs[s]
     if air and air.stock_fault_days then

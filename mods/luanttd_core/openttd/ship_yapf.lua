@@ -24,17 +24,35 @@ return function(Track,Water,SearchFactory)
   -- Board contract: docking_occupancy(tile) -> visible ship count (exclude
   -- aircraft and hidden/depot ships). speed fractions are stock 0..255
   -- penalties, where 0 is full vehicle speed; rivers are inland.
+  local odd_lane={[13]=true,[4]=true,[10]=true,[3]=true}
+  function C.preferred_direction(x,y,td)
+    local odd_x,odd_y=x%2==1,y%2==1
+    if td==0 then return odd_y end
+    if td==8 then return not odd_y end
+    if td==9 then return odd_x end
+    if td==1 then return not odd_x end
+    return (odd_x~=odd_y)~=(odd_lane[td] or false)
+  end
   function C.tile_cost(board,v,id,td,prior,skip,settings)
     local cost=Track.track(td)<2 and C.TILE_LENGTH or C.TILE_CORNER_LENGTH
     cost=cost+C.curve_cost(prior,td,settings)
     if Water.is_docking(board,id) and board.docking_occupancy then
       cost=cost+board.docking_occupancy(id)*3*C.TILE_LENGTH
     end
+    if board.stock_rc1_ship_cost then
+      local x,y=board.xy(id)
+      if not C.preferred_direction(x-1,y-1,td) then cost=cost+C.TILE_LENGTH end
+    end
     cost=cost+C.TILE_LENGTH*skip
-    local wc=assert(Water.water_class(board.tile(id)),"Navigable tile missing water class")
+    local tile=board.tile(id)
+    local wc=assert(Water.water_class(tile),"Navigable tile missing water class")
     local frac=(wc=="sea" and v.ocean_speed_frac or wc~="sea" and v.canal_speed_frac) or 0
     assert(frac>=0 and frac<=255 and frac%1==0,"Ship speed fraction must be a byte")
     if frac>0 then cost=cost+floor(C.TILE_LENGTH*(1+skip)*frac/(256-frac)) end
+    if board.stock_rc1_ship_cost and tile.kind=="lock" and tile.part=="middle" then
+      local canal_speed=floor((v.max_speed or 0)*(256-(v.canal_speed_frac or 0))/256)
+      cost=cost+floor(8*C.TILE_LENGTH*canal_speed/128)
+    end
     return cost
   end
 

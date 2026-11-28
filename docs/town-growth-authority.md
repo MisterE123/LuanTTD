@@ -836,7 +836,7 @@ the town simulation even without NewGRF artwork.
 In the pinned native 128×128 capture, a funded aircraft joins the
 ordinary freight economy partway through 1950. The rest of the year
 matches 15,693 consecutive world RNG pairs, 15,688 aircraft controller
-poses, and seven snapshots of housing tiles, town growth counters,
+poses, and seven snapshots of corner heights, housing tiles, town growth counters,
 population, passenger and Mail production, and Goods acceptance.
 The test checks cargo on board when the cabin empties before the
 Mail hold, and saves and reopens during the run. An earlier road
@@ -857,6 +857,33 @@ restarts. These tests do not cover all airport layouts or shared
 cross-mode stations, other climates, terrain around airport
 foundations, or every service/replacement setting.
 
+
+### A purchased ferry in a generated coastal region
+
+A separate 256×256 Temperate seed 1751 starts in 1985 with 51 towns,
+Very Flat terrain, no forced coasts, normal rivers and industries,
+and a paid FFP Passenger Ferry added after day four. The build command
+takes the original physical VehicleID and applies the stock engine
+reliability. A newly built or reopened dock consumes the source
+station-sign random word; adding another pier to a live dock does not.
+
+In this run, the original ship controller’s berth stop resets speed,
+the next order can reverse the ship by seeding YAPF with both track
+directions, and water-tile routing uses RC1’s preferred directional
+lanes and lock cost. The ship follows the stock day phase, including the
+ship-specific breakdown reliability adjustment and trigger words on
+first loading and fully emptied cargo. Running settlement is paid at
+that physical economy phase.
+
+The native RC1 replay matches all 27,010 world RNG pairs and 26,714
+ship movement/cargo samples, with six exact snapshots of shared
+corners, houses, and town counters and supply across three packed
+reopens. A separate Luanti worker test checks boarding through a real
+process restart. These specific two docks catch passengers but have
+insufficient acceptance for a fare, so the test distinguishes activity
+and loading from payment. It does not cover shared road/dock stations,
+lost-route random navigation, or the full automatic ship servicing and
+cargo/refit fleet.
 
 ### Wide, varied terrain and neighbouring town roads
 

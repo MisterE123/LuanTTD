@@ -392,13 +392,15 @@ return function(Catchment,Packets,Income,Rating,Queue,LoadingFactory,BaseTiming)
         local speed=ctx.speed and ctx.speed(v) or v.cached_max_speed
         Catchment.observe_loading(goods(st,v.cargo),v.mode,speed,ctx.year(tick),v.built,capacity_left)
       end,
-      new_cargo=(ctx.train_random or ctx.air_random) and function(st,v)
+      new_cargo=(ctx.train_random or ctx.air_random or ctx.ship_random) and function(st,v)
         if v.mode=="rail" and ctx.train_random then ctx.train_random(v,v.part or 2,"new_cargo")
-        elseif v.mode=="air" and ctx.air_random then ctx.air_random(v,v.part or 1,"new_cargo") end
+        elseif v.mode=="air" and ctx.air_random then ctx.air_random(v,v.part or 1,"new_cargo")
+        elseif v.mode=="ship" and ctx.ship_random then ctx.ship_random(v,"new_cargo") end
       end,
-      emptied=(ctx.train_random or ctx.air_random) and function(st,v)
+      emptied=(ctx.train_random or ctx.air_random or ctx.ship_random) and function(st,v)
         if v.mode=="rail" and ctx.train_random then ctx.train_random(v,1,"empty")
-        elseif v.mode=="air" and ctx.air_random then ctx.air_random(v,1,"empty") end
+        elseif v.mode=="air" and ctx.air_random then ctx.air_random(v,1,"empty")
+        elseif v.mode=="ship" and ctx.ship_random then ctx.ship_random(v,"empty") end
       end,
       loaded=function(st,v,n)
         Catchment.loaded(st,v.mode,n)

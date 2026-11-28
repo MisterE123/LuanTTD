@@ -52,7 +52,7 @@ return function(Sim,mod)
     local owned=dofile(mod.."/airport_owned.lua")(Sim,run,roster,ready)
     return net,run,owned,roster
   end
-  function B.water(s,track,ready)
+  function B.water(s,track,ready,breakdown_difficulty)
     local water=dofile(source.."ship_follow.lua")(track)
     local yapf=dofile(source.."ship_yapf.lua")(track,water,dofile(source.."yapf_road_search.lua"))
     local terrain=dofile(source.."terrain.lua")
@@ -69,6 +69,9 @@ return function(Sim,mod)
     local run=make({engine=roster.model(206),engine_for=roster.model,validate_both=true})
     local depot=dofile(mod.."/passenger_ship_depot.lua")(Sim,roster,calendar,run,ready)
     run.settle_owned_day,run.count_owned_tick,run.paid_art_ready=depot.settle,depot.count_tick,depot.ready
+    run.stock_breakdown_difficulty=breakdown_difficulty
+    run.stock_fault_days,run.phased_economy,run.stock_fault_turn=depot.stock_fault_days,depot.phased_economy,depot.stock_fault_turn
+    run.stock_cargo_random=depot.stock_cargo_random
     s.ship_paid_service=true
     Sim.mount_paid_ferry(s,run)
     local cargo_run,coal

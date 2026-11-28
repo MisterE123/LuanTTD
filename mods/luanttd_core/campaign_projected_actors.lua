@@ -73,7 +73,7 @@ return function(core,api,motion,models,airframes)
           v.scale=part.scale
         end
       end
-      if row.mode=="road" or row.mode=="air" then
+      if row.mode=="road" or row.mode=="air" or row.mode=="ship" then
         if row.breakdown_smoke then
           viewers=viewers or core.get_connected_players()
           repair_smoke.draw_active(key,true,pos,rotation.y,viewers)

@@ -12,11 +12,11 @@ end
 -- Non-chimney cases from effectvehicle.cpp SmokeTick, ExplosionLargeTick
 -- and ExplosionSmallTick: 5 smoke frames, 16 large and 12 small.
 local timed={aircraft_smoke={72,12},explosion_large={64,0},explosion_small={48,0}}
-function E.add_timed(s,id,kind,x,y,z,creator)
+function E.add_timed(s,id,kind,x,y,z,creator,duration)
   local effects=s.stock_effect_vehicles
   if not effects then effects={};s.stock_effect_vehicles=effects end
   assert(effects[id]==nil)
-  local t=assert(timed[kind])
+  local t=kind=="ship_smoke" and {assert(duration),0} or assert(timed[kind])
   -- If the higher slot is still ahead of the creator inside Vehicle::Iterate,
   -- it receives its first tick this frame; a lower slot waits until next.
   local elapsed=id>creator and 1 or 0

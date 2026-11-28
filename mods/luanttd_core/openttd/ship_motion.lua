@@ -211,6 +211,7 @@ return function(T,Water)
         v.leaving=nil
         local dir=M.exit_direction(v.direction,v.track)
         if Water.at(board,board.adjacent(v.tile,dir),dir)==0 then return M.reverse(v),true end
+        if board.stock_rc1_ship_cost then v.stock_order_reversal=true end
         event="leave"
       elseif v.order and not v.loading then
         local o=v.order
@@ -231,7 +232,7 @@ return function(T,Water)
             (not h.docking_area or h.docking_area(board,target,o.id)) then
           v.last_station=o.id
           if not h.station_has_dock or h.station_has_dock(board,o.id) then
-            v.loading=true
+            v.loading,v.speed=true,0 -- Vehicle::BeginLoading
             event="dock"
           else
             v.leaving=true

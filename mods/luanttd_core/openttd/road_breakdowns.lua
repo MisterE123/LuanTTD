@@ -60,7 +60,7 @@ function B.economy_day(s,ctx,random32)
   -- Chance16I(1,25,r): unsigned low half only, rounding by b/2.
   local boost=floor(((r%65536)*25+12)/65536)<1
   s.breakdown_chance=min(s.breakdown_chance+(boost and 26 or 1),255)
-  local rel=s.reliability+(difficulty==B.REDUCED and 0x6666 or 0)
+  local rel=s.reliability+(ctx.ship and 0x6666 or 0)+(difficulty==B.REDUCED and 0x6666 or 0)
   if thresholds[floor(min(rel,65535)/1024)]<=s.breakdown_chance then
     s.breakdown_ctr=floor(r/2^16)%64+0x3F
     s.breakdown_delay=floor(r/2^24)%128+0x80

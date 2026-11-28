@@ -153,16 +153,18 @@ local function run(ref,founding,air)
     action("transport_start",{mode="air",first=ids[1],second=ids[2],vehicle=unit.id})
   end
   local function snapshot_air(tick,expected)
-    local houses=1
+    local height,houses=1,1
     local year=S.date(s)
     for id,t in ipairs(s.tiles) do
+      local x,z=S.xy(id)
+      height=fold(height,T.corner(s.corner_grid,x,z))
       local r=t.source_house
       if r then
         houses=fold(houses,id-1,r.id,physical_town(r.town),r.completed and 1 or 0,r.stage,r.counter,
           Rebuild.age(r,year),r.random_bits)
       end
     end
-    same(tick,"air corridor housing tiles",{houses},expected[1])
+    same(tick,"air corridor corner heights and housing tiles",{height,houses},expected[1])
     for i,id in ipairs(s.stock_town_growth.order) do
       local t,site=s.stock_town_growth.towns[id],s.sites[id]
       local p,m=t.supplied.passenger,t.supplied.mail

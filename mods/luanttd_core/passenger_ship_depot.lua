@@ -2,16 +2,28 @@
 -- between orders. The shared passenger clock owns loading and fares.
 return function(Sim,Roster,Calendar,Run,art)
   local D={}
+  local source=(core and core.get_modpath and core.get_modpath("luanttd_core") or "mods/luanttd_core").."/openttd/"
+  local Fault=dofile(source.."road_breakdowns.lua")
+  local Trigger=dofile(source.."vehicle_random_trigger.lua")
+  local Effects=dofile(source.."industry_chimney_effect.lua")
+  local markets=setmetatable({},{__mode="k"})
+  local function snapshot(s,stock,date)
+    local market=s.stock_bus_market
+    if not market then return end
+    local models=markets[market]
+    if not models then models={};markets[market]=models end
+    if not models[stock] then
+      local data=assert(Roster.model(stock))
+      models[stock]=assert(Calendar.prepare_original(data,market.settings))
+    end
+    return assert(Calendar.snapshot(models[stock],date or market.epoch+s.day))
+  end
   function D.offer(s,id)
     if not art(id) then return end
     local r=Roster.quote(id,s.stock_ship_purchase_base)
     if not r then return end
-    local market=s.stock_bus_market -- same stock campaign epoch and seed
-    local cfg=market and market.settings
-    if not cfg then return end
-    local record=assert(Calendar.prepare_original(r,cfg))
-    local status=assert(Calendar.snapshot(record,market.epoch+s.day))
-    return status.public and r or nil
+    local status=snapshot(s,id)
+    return status and status.public and r or nil
   end
   function D.quote(s,owner,depot,id)
     if s.stock_owned_ferry then return nil,"The current passenger fleet supports one owned ferry." end
@@ -28,9 +40,17 @@ return function(Sim,Roster,Calendar,Run,art)
     if not quote then return nil,why end
     local c=Sim.company(s,owner)
     if c.cash<quote.price then return nil,"Not enough cash for this ferry." end
-    c.cash,c.expense,c.month_exp=c.cash-quote.price,c.expense+quote.price,c.month_exp+quote.price
     local unit={owner=owner,depot=depot,engine_id=id,price=quote.price,built=Sim.date(s),purchase_day=s.day,
       running_ticks=0,charged_ticks=0,expense=0}
+    if s.stock_engine_startup_seed~=nil then
+      local slots,why=Sim.stock_vehicle_slots(s,1)
+      if not slots then return nil,why end
+      local engine=assert(snapshot(s,id))
+      unit.stock_pool_id=slots[1]
+      unit.stock_fault=Fault.new(engine.reliability,engine.reliability_decay,engine.life_days,engine.at,engine.at)
+      Trigger.built(unit,function() return Sim.stock_random_u32(s) end)
+    end
+    c.cash,c.expense,c.month_exp=c.cash-quote.price,c.expense+quote.price,c.month_exp+quote.price
     s.stock_owned_ferry=unit
     return unit,"Purchased "..quote.name..". Choose two docks to order the ferry."
   end
@@ -46,6 +66,57 @@ return function(Sim,Roster,Calendar,Run,art)
     p.owned=true
     p.paid_build_year=u.built
     return p
+  end
+  function D.stock_cargo_random(s,p,kind)
+    local u=p.owned and s.stock_owned_ferry
+    if u and u.stock_pool_id~=nil then
+      Trigger.single(u,kind,function() return Sim.stock_random_u32(s) end)
+    end
+  end
+  function D.stock_fault_days(s)
+    local u=s.stock_owned_ferry
+    local h=u and u.stock_fault
+    if not h then return {} end
+    local p=Run.current(s)
+    if p and not D.ready(s,p) then return {} end
+    return {{id=u.stock_pool_id,calendar=function()
+      Fault.calendar_day(h)
+    end,economy=function(date)
+      local v=p and p.vehicle
+      local engine=assert(snapshot(s,u.engine_id,date))
+      u.stock_economy_age=math.min(Fault.MAX_AGE,(u.stock_economy_age or 0)+1)
+      u.stock_day_counter=((u.stock_day_counter or 0)+1)%256
+      if u.stock_day_counter%8==0 then
+        local value=u.stock_value or u.price
+        u.stock_value=value-math.floor(value/256)
+      end
+      Fault.economy_day(h,{ship=true,cur_speed=v and v.speed or 0,stopped=not v or p.stopped,
+        loading=v and v.loading,engine_reliability=engine.reliability,difficulty=Run.stock_breakdown_difficulty},
+        function() return Sim.stock_random_u32(s) end)
+      if p then D.settle(s,p) end
+    end}}
+  end
+  function D.phased_economy(s,p)
+    local u=s.stock_owned_ferry
+    return p and p.owned and u and u.stock_fault and s.stock_generated_profile
+      and s.stock_bus_market and Sim.road_stock_service_active(s)
+  end
+  function D.stock_fault_turn(s,p)
+    local u=p.owned and s.stock_owned_ferry
+    local h=u and u.stock_fault
+    if not h then return end
+    local v=p.vehicle
+    local event=Fault.tick(h,{cur_speed=v.speed,loading=v.loading,hidden=v.hidden,crashed=v.crashed})
+    v.speed,v.breakdown=event.cur_speed,event.hold_motion or nil
+    if event.hold_motion then
+      v.tick=v.tick+1
+      v.order_time=(v.order_time or 0)+1
+    end
+    if event.smoke_animation_state then
+      local ids=Sim.stock_vehicle_slots(s,1)
+      if ids then Effects.add_timed(s,ids[1],"ship_smoke",v.x+4,v.z+5,v.y+4,u.stock_pool_id,event.smoke_animation_state) end
+    end
+    return event.hold_motion
   end
   function D.stop(s,owner,stopped)
     local u=s.stock_owned_ferry

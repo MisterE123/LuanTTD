@@ -590,6 +590,11 @@ jobs:
           lua5.1 tests/aircraft_accident_rc1.lua
           lua5.1 tests/town_growth_rc1_corridor.lua air
           lua5.1 tests/town_growth_rc1_corridor.lua air-crash
+      - name: Check ordinary ferry effects on the full RC1 coastal year
+        run: |
+          lua5.1 tests/ship_rc1_lane_costs.lua
+          lua5.1 tests/town_growth_rc1_ferry.lua
+          bash tests/town_growth_rc1_ferry_native.sh
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua

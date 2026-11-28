@@ -404,8 +404,15 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       return base_vehicle_active(v)
     end
     local ship_ready=active.ship and p and (not Ship.paid_art_ready or Ship.paid_art_ready(s,p))
-    if ship_ready and Ship.settle_owned_day then Ship.settle_owned_day(s,p) end
+    if ship_ready and Ship.settle_owned_day and not (Ship.phased_economy and Ship.phased_economy(s,p)) then
+      Ship.settle_owned_day(s,p)
+    end
     local run=p and p.paid_clock
+    if run and Ship.stock_cargo_random then
+      ctx.ship_random=function(v,kind)
+        if v.id==run then Ship.stock_cargo_random(s,p,kind) end
+      end
+    end
     local frame=view(s)
     if live then
       -- Only presentation strips are omitted. Keep the same raw dock,

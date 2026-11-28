@@ -117,7 +117,8 @@ return function(Sim,Terrain,Water,Facilities)
   function N.board(s,occupancy)
     local function tile(id) return read(s,id) end
     local function adjacent(id,d) return id and Sim.adjacent(id,4-d) end
-    local B={xy=Sim.xy,tile_at=Sim.id,tile=tile,adjacent=adjacent}
+    local B={xy=Sim.xy,tile_at=Sim.id,tile=tile,adjacent=adjacent,
+      stock_rc1_ship_cost=s.stock_generated_profile~=nil}
     function B:solid_plain_sea(x,z,size)
       -- Do not certify a decorated board with different water status or
       -- adjacency (for example a hypothetical route-planning overlay).
@@ -318,6 +319,11 @@ return function(Sim,Terrain,Water,Facilities)
           -- Station::AddFacility relocates an unused sign to the new
           -- facility, retaining the existing station name and ID.
           st.sign_tile,st.tile=p.land,nil
+        end
+        if s.stock_engine_startup_seed~=nil then
+          -- Station::AddFacility only reseeds its sign when adding its
+          -- first facility (including one returning from retirement).
+          st.stock_random_bits=Sim.stock_random_u32(s)%65536
         end
         for k,v in pairs(part) do st[k]=v end
         st.docks={}

@@ -302,6 +302,7 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
       p.phase="sailing"
     end
     for _=1,num or 1 do
+      if paid and R.stock_fault_turn and R.stock_fault_turn(s,p) then break end
       if p.dock_forced_leave then
         if not v.loading then
           p.dock_forced_leave=nil
@@ -342,6 +343,22 @@ return function(Network,Track,Water,Y,Motion,Regions,extents,config)
         p.dwell=p.dwell-1
         if p.dwell==0 then
           leave()
+        end
+      end
+      if v.stock_order_reversal then
+        v.stock_order_reversal=nil
+        local td=v.order and Motion.trackdir(v)
+        if td and region then
+          -- CheckShipReverse: one YAPF search seeded with both current
+          -- and reversed trackdirs, starting in this berth's own patch.
+          local reverse=Track.reverse_trackdir(td)
+          local bits=Track.trackdirbit(td)+Track.trackdirbit(reverse)
+          local route=region.find_route(Y,v,v.tile,bits,v.tile,route_order(v))
+          if route and route[1].td==reverse then
+            v.tick,v.order_time=v.tick+1,(v.order_time or 0)+1
+            Motion.reverse(v)
+            break
+          end
         end
       end
       if v.track==Motion.DEPOT then
