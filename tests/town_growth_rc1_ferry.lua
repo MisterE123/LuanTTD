@@ -1,11 +1,12 @@
 -- A fresh RC1 port, not an imported save: use production world generation
 -- and the ordinary worker's quote, buy, order and company commands.
 local four=arg[1]=="hub-four"
-local demolition=arg[1]=="hub-house"
+local compound=arg[1]=="hub-compound"
+local demolition=compound or arg[1]=="hub-house"
 local rotary=four or demolition or arg[1]=="hub-air"
 local hub=rotary or arg[1]=="hub"
 local mixed=hub or arg[1]=="mixed"
-local ref=dofile("tests/fixtures/"..(demolition and "rc1-active-coastal-house-clear-town-year" or four and "rc1-active-coastal-four-town-year" or rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
+local ref=dofile("tests/fixtures/"..(compound and "rc1-active-coastal-compound-clear-town-year" or demolition and "rc1-active-coastal-house-clear-town-year" or four and "rc1-active-coastal-four-town-year" or rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local S,T,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -149,20 +150,21 @@ local function start_train()
 end
 
 local function clear_house()
-  local id=S.id(50,110)
+  local expected=ref.house_clear
+  local id=S.id((expected.x or 49)+1,(expected.z or 109)+1)
   local tile=assert(s.tiles[id])
   local house=assert(tile.source_house)
   local owner_id=house.town
   local town=assert(s.stock_town_growth.towns[owner_id])
-  assert(house.id==6 and (town.stock_id or owner_id-1)==17)
-  local expected=ref.house_clear
+  assert(house.id==(expected.house or 6) and (town.stock_id or owner_id-1)==(expected.town or 17))
   local c=assert(s.companies[owner])
   local ratings=assert(c.stock_town_authority_ratings)
-  assert(ratings[owner_id]==expected.before)
+  local saved_rating=ratings[owner_id]
+  assert((saved_rating or 500)==expected.before)
   local request={operation="bulldoze",first=id}
   -- Test actual command refusal and quote, then restore the original
   -- published 1985 world condition before executing the deliberate edit.
-  ratings[owner_id]=79
+  ratings[owner_id]=(expected.gate or 80)-1
   local denied=A.terrain_quote(owner,request)
   assert(not denied.ok and denied.why:find("refuses demolition",1,true))
   local policy=s.stock_road_town_policy
@@ -170,12 +172,15 @@ local function clear_house()
   policy.tolerance=3
   assert(checked(A.terrain_quote(owner,request)).cost==expected.cost)
   policy.tolerance=tolerance
-  ratings[owner_id]=expected.before
+  ratings[owner_id]=saved_rating
   local quote=checked(A.terrain_quote(owner,request))
-  assert(quote.cost==expected.cost and ratings[owner_id]==expected.before)
+  assert(quote.cost==expected.cost and ratings[owner_id]==saved_rating)
   local cash=c.cash
   action("terrain_commit",{token=quote.token})
-  assert(not tile.house and not tile.source_house and ratings[owner_id]==expected.after)
+  for _,part in ipairs(expected.footprint or {id-1}) do
+    assert(not s.tiles[part+1].house and not s.tiles[part+1].source_house)
+  end
+  assert(ratings[owner_id]==expected.after)
   assert(town.population==expected.population and town.num_houses==expected.houses and c.cash==cash-expected.cost)
 end
 

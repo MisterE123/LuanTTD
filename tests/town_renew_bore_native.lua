@@ -4,7 +4,8 @@ for _,alias in ipairs{"mapgen_stone","mapgen_water_source","mapgen_river_water_s
 local mod=core.get_modpath(core.get_current_modname())
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local S,T,G,H=m("sim"),m("openttd/terrain"),m("openttd/town_growth"),m("openttd/town_passengers")
-local replacement=core.settings:get("luanttd_qa_municipal_kind")=="renewbore-replace"
+local kind=core.settings:get("luanttd_qa_municipal_kind")
+local replacement,manual=kind=="renewbore-replace",kind=="renewbore-manual"
 S.W,S.H=64,64
 local s=S.new(1751)
 local x,z=11,12
@@ -35,6 +36,9 @@ for _,id in ipairs({old,protected}) do
   t.source_house={id=0,x=a,z=b,root=true,root_x=a,root_z=b,town=1,completed=true,stage=3,counter=0,
     age=90,random_bits=65,built_tick=0,player_protected=id==protected or nil}
 end
+local buyer="Town House Buyer"
+local budget
+if manual then budget=S.company(s,buyer).cash end
 local file="town-renew-bore.chk"
 local disk=m("campaign_checkpoint")(core,m("packed_campaign"),file)
 disk.write_state(s)
@@ -44,6 +48,26 @@ local function ask(req,fn)
   assert(client.query(req,function(r) assert(r.ok,r.why);fn(r) end))
 end
 local released
+local function manual_work()
+  local function option(r,key)
+    for _,row in ipairs(r.value.options) do if row.key==key then return row end end
+  end
+  ask({kind="demolition",player=buyer,tile=protected},function(r)
+    local locked=assert(option(r,"surface_house"))
+    assert(not locked.ok and locked.detail:find("protected",1,true), tostring(locked.ok)..": "..locked.detail)
+    ask({kind="demolition",player=buyer,tile=old},function(q)
+      local surface=assert(option(q,"surface_house"))
+      assert(surface.ok and surface.detail:find("$937",1,true))
+      assert(not option(q,"road_tunnel") or not option(q,"road_tunnel").ok)
+      ask({kind="command",player=buyer,command={kind="demolition",token=q.value.token,
+        layer="surface_house",revision=q.revision}},function(a)
+        assert(#a.value==1 and a.value[1]==old,"Only the occupied surface lot may be erased")
+        released=true
+        assert(client.query({kind="stop"},function()error("Expected a durable stop frame")end))
+      end)
+    end)
+  end)
+end
 local function work(left)
   assert(left>0,"Town never renewed the aged house above the bore")
   ask({kind="advance",days=1},function()
@@ -62,7 +86,7 @@ local function work(left)
   end)
 end
 core.register_on_mods_loaded(function()
-  assert(client.start(cap,function(r) assert(r.ready);work(18) end,function(reason,_,day,detail)
+  assert(client.start(cap,function(r) assert(r.ready);if manual then manual_work() else work(18) end end,function(reason,_,day,detail)
     assert(reason=="stopped" and released,detail or reason)
     local copied=assert(disk.read())
     assert(copied.day==day and copied.tunnel_below[old]==level and copied.tunnel_below[protected]==level)
@@ -73,6 +97,11 @@ core.register_on_mods_loaded(function()
     local h=copied.tiles[old].source_house
     if replacement then assert(h and h.id==6 and h.built_tick==375 and not h.completed)
     else assert(not h) end
+    if manual then
+      local c=assert(copied.companies[buyer])
+      assert(c.cash==budget-937 and c.stock_town_authority_ratings[1]==360)
+      assert(copied.stock_town_growth.towns[1].num_houses==1 and copied.sites[1].population==pop)
+    end
     local F=m("openttd/yapf_road_follow")
     local road=m("road_yapf_board")(S,copied,F)
     for _,at in ipairs({run.start,run["end"]}) do
@@ -80,7 +109,7 @@ core.register_on_mods_loaded(function()
       local followed=F.follow(road,{owner="Carrier"},at,F.direction_trackdir(a.dir))
       assert(followed.ok and followed.tunnel and followed.tile==a.other)
     end
-    core.log("action","PASS NATIVE MUNICIPAL ROADS: "..(replacement and "replaced old office with Town Houses" or "cleared old office")..
+    core.log("action","PASS NATIVE MUNICIPAL ROADS: "..(manual and "player demolished upper office only" or replacement and "replaced old office with Town Houses" or "cleared old office")..
       " above owned bore; protected house and route survived")
     core.request_shutdown("Town renewal verified",false,0)
   end,file))

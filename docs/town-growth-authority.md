@@ -1237,3 +1237,18 @@ records. The native worker keeps the removal and stock authority
 state across restart. This replay covers one ordinary unlayered
 lot; planning over layered structures still requires separate
 clearance checks.
+
+
+Selecting the southeast tile of a 2×2 office clears the entire
+original footprint and charges once, using the selected HouseSpec.
+The coastal full-year reference removes the 180-person office
+from TownID 40: one 1,562 construction charge, authority 500 to 200,
+and one building removed. All four surface tiles are cleared. The
+replay matches the full town/vehicle year and three packed reopens.
+
+If the lot overlays a verified transport structure, the normal
+Bulldozer layer confirmation exposes a separate building action.
+The native worker check removes the upper office while keeping
+the other company's road tunnel, its two live pathfinder portals,
+and the neighboring protected property. Unknown or insufficient
+cover is refused; blind area demolition still skips that layer.

@@ -2720,7 +2720,8 @@ function M.stock_house_clear_quote(s,owner,h,journal)
     M.stock_house_demolition=dofile(module_root.."openttd/town_house_demolition.lua")(
       dofile(module_root.."openttd/town_house_demolition_data.lua"))
   end
-  local q,why=M.stock_house_demolition.quote(h.id,before,policy.tolerance or 0,policy,s.stock_clear_house_price)
+  local flags={magic_bulldozer=policy.magic_bulldozer,protected=h.player_protected}
+  local q,why=M.stock_house_demolition.quote(h.id,before,policy.tolerance or 0,flags,s.stock_clear_house_price)
   if not q then
     if why=="HOUSE_AUTHORITY_RATING" then
       return nil,town.name.." refuses demolition at your current local authority rating."
@@ -2775,7 +2776,10 @@ function M.plan(s,owner,tool,ids,quote_clear_only)
         local growth=town_growth_mount[s]
         house_parts=growth and growth.world.footprint(s,t.source_house)
         if not house_parts then return nil,"This building footprint is incomplete." end
-        for _,part in ipairs(house_parts) do seen[part.id]=true end
+        for _,part in ipairs(house_parts) do
+          if s.stock_generated_profile and part.record.player_protected then return nil,"The building is protected." end
+          seen[part.id]=true
+        end
       end
       local water=tool=="clear" and s.corner_grid and not t.wood and
         (t.terrain=="water" or t.build=="canal" or t.stock_canal)
@@ -3083,6 +3087,52 @@ local function build(s,owner,tool,ids,funded_clear)
   return apply_build(s,owner,changes,cost)
 end
 function M.build(s,owner,tool,ids) return build(s,owner,tool,ids) end
+-- Explicit rendered surface layer, not an override for an area drag.
+-- ClearTownHouse may erase a whole building but never a crossing,
+-- portal, or occupied right-of-way. Verify every member before paying.
+function M.stock_house_layer_clear(s,owner,id,execute)
+  local tile=s.tiles[id]
+  local h=tile and tile.house and tile.source_house
+  local growth=town_growth_mount[s]
+  if not (h and growth and s.stock_generated_profile) then return nil,"SURFACE_HOUSE_UNAVAILABLE" end
+  local parts={{id=id,record=h}}
+  if h.asset_root then
+    parts=growth.world.footprint(s,h)
+    if not parts then return nil,"Incomplete building footprint." end
+  end
+  local layers,layered={}
+  for i,part in ipairs(parts) do
+    local floor,below=M.tunnel_floor_at(s,part.id)
+    local deck,above=M.bridge_deck_at(s,part.id)
+    layers[i]={floor=floor,below=below,deck=deck,above=above}
+    layered=layered or below or above
+  end
+  if not layered then return nil,"SURFACE_HOUSE_NOT_LAYERED" end
+  for i,part in ipairs(parts) do
+    local cell=s.tiles[part.id]
+    if part.record.player_protected then return nil,"The building is protected." end
+    if not cell or cell.source_house~=part.record or cell.build or cell.owner or cell.site or cell.ship or cell.airfield or
+        cell.station or cell.tram or cell.stock_landmark or cell.stock_industry or cell.road_tunnel_id or cell.road_bridge_id or cell.rail_span_id or cell.level_crossing then
+      return nil,"A transport facility occupies the building surface."
+    end
+    local layer=layers[i]
+    if layer.below then
+      local _,base=ground_shape(s,part.id)
+      if type(layer.floor)~="number" or type(base)~="number" or base<=layer.floor then
+        return nil,"Cannot verify solid ground above the tunnel."
+      end
+    end
+    if layer.above and type(layer.deck)~="number" then return nil,"Cannot verify the overhead bridge layer." end
+  end
+  local receipt,why=M.stock_house_clear_quote(s,owner,h,{})
+  if not receipt then return nil,why end
+  if not s.companies[owner] or s.companies[owner].cash<receipt.cost then return nil,"Not enough cash." end
+  receipt.tiles={}
+  for i,part in ipairs(parts) do receipt.tiles[i]=part.id end
+  if not execute then return receipt end
+  local ok,note,tiles=apply_build(s,owner,{{id=id,tool="clear",house_parts=parts,stock_house=receipt}},receipt.cost)
+  return ok and receipt or nil,note,tiles
+end
 function M.remove_through_road_stop(s,owner,id,preview)
   local t=s.tiles[id]
   if not t or t.owner~=owner or t.build~="road_station" or not t.stop_axis or t.road_stop_pair then

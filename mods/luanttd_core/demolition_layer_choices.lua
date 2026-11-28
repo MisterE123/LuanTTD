@@ -31,6 +31,16 @@ return function(api,clear_structure)
           end)
       end
     end
+    if t.house and t.source_house and Sim.stock_house_layer_clear then
+      local q,why=Sim.stock_house_layer_clear(S,n,id,false)
+      if q or why~="SURFACE_HOUSE_UNAVAILABLE" and why~="SURFACE_HOUSE_NOT_LAYERED" then
+        add("surface_house","Remove town building, keep transport layers",q,
+          q and ("Cost: "..money(q.cost)..". The bridge and tunnel layers stay in place.") or why,function()
+            local fresh,note,tiles=Sim.stock_house_layer_clear(S,n,id,true)
+            return true,fresh and tiles or nil,note
+          end)
+      end
+    end
     span(S.bridge_above,S.stock_road_bridges,"Remove overhead road bridge, keep surface","road_bridge")
     span(S.rail_bridge_above,S.stock_rail_spans,"Remove overhead rail bridge, keep surface","rail_bridge")
     span(S.aqueduct_above,S.stock_aqueducts,"Remove overhead aqueduct, keep surface","aqueduct")

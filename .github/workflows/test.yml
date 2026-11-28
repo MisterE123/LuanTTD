@@ -641,6 +641,10 @@ jobs:
           lua5.1 tests/town_house_demolition_rc1.lua
           lua5.1 tests/town_growth_rc1_ferry.lua hub-house
           bash tests/town_growth_rc1_ferry_native.sh hub-house
+      - name: Clear a full house footprint without deleting transport layers
+        run: |
+          lua5.1 tests/town_growth_rc1_ferry.lua hub-compound
+          LUANTTD_QA_MUNICIPAL_KIND=renewbore-manual bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-house-surface-bore
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua
