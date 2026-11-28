@@ -33,6 +33,7 @@ local spread=dofile(fp.."rc1-native-climate-industry-live-trees.lua")
 local toyland_live=dofile(fp.."rc1-native-climate-industry-live-toyland.lua").toyland
 local wooded=dofile(fp.."rc1-native-climate-industry-live-wooded.lua")
 local smooth=dofile(fp.."rc1-native-climate-industry-smooth-year.lua")
+local smooth_open=dofile(fp.."rc1-native-climate-industry-smooth-opening.lua")
 local function fold(h,...)
   for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
   return h
@@ -40,19 +41,39 @@ end
 local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
   economy=economy or "frozen"
   s.stock_extra_tree_placement=settings
+  local industry_clock
   local function mount()
     S.mount_road_bus_market(s,Calendar,1985,false,false)
     S.mount_stock_town_growth(s,Live,true)
     S.mount_coastal_flood(s)
-    S.mount_climate_industry_clock(s,T,economy)
+    industry_clock=S.mount_climate_industry_clock(s,T,economy)
   end
   mount()
-  local digest,ticks,maps,reopen=1,0,0,0
+  local digest,ticks,maps,reopen,opens=1,0,0,0,0
   local function check(tick)
     assert(tick==1281+ticks)
     ticks=ticks+1
     local a,b=unpack(s.passenger_rating_rng)
     digest=fold(digest,tick,a,b,s.passenger_house_clock.head)
+    if tick==fixture.opening_tick then
+      for _,event in ipairs(fixture.openings) do
+        local kind=event.before[1]
+        eq("industry opening entry",{kind,unpack(s.passenger_rating_rng)},event.before)
+        local firm=assert(industry_clock.open(kind),"Stock live industry site was not found")
+        eq("industry opening receipt",{kind,firm.id,firm.x+firm.z*w,firm.width,firm.height,
+          firm.town-1,firm.selected_layout,firm.counter,unpack(s.passenger_rating_rng)},event.after)
+        local footprint={}
+        for _,c in ipairs(firm.cells) do
+          local id=S.id(c.x+1,c.z+1)
+          assert(s.tiles[id].stock_industry.id==firm.id)
+          footprint[#footprint+1]={firm.id,id-1,c.gfx,c.stage,c.construction_counter}
+        end
+        table.sort(footprint,function(x,y)return x[2]<y[2] end)
+        assert(#footprint==#event.cells)
+        for n,row in ipairs(footprint) do eq("industry opening tile "..n,row,event.cells[n]) end
+        opens=opens+1
+      end
+    end
     local expected=fixture.snapshots[tick]
     if not expected then return end
     local gh,hh,ih,wood,trees=1,1,1,1,0
@@ -127,8 +148,9 @@ local function live_industries(s,Calendar,climate,w,settings,fixture,economy)
   end
   assert(ticks==days*74 and maps==(days==120 and 5 or 8) and reopen==(days==120 and 2 or 3))
   eq(climate.." full live RNG and landscape cursor",{digest},{fixture.trace})
-  print(("PASS live %s RC1 %s (tree setting %d): %d exact ticks, %d snapshots, %d reopens")
-    :format(economy,climate,settings,ticks,maps,reopen))
+  if fixture.openings then assert(opens==#fixture.openings) end
+  print(("PASS live %s RC1 %s (tree setting %d): %d exact ticks, %d snapshots, %d reopens, %d test openings")
+    :format(economy,climate,settings,ticks,maps,reopen,opens))
 end
 local proper=selection or arg and tonumber(arg[1]) or 0
 for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
@@ -274,7 +296,10 @@ for i,r in ipairs(dofile(fp.."rc1-climate-town-start.lua")) do
       print(("PASS wooded RC1 %s: %d initial trees and %d native pregame ticks"):format(climate,size,ticks))
       local smooth_start=climate=="tropic" and Codec.encode(s)
       live_industries(s,Calendar,climate,w,2,woods)
-      if smooth_start then live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth,"smooth") end
+      if smooth_start then
+        live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth,"smooth")
+        live_industries(assert(Codec.decode(smooth_start)),Calendar,climate,w,2,smooth_open,"smooth")
+      end
     end
 
   end

@@ -651,7 +651,10 @@ M.stock_climate_clock=setmetatable({},{__mode="k"})
 function M.mount_climate_industry_clock(s,Terrain,economy)
   assert(s.stock_climate and s.stock_world_animations and s.stock_generated_profile.initial_landscape,
     "Settle native climate before measuring live industries")
-  M.stock_climate_clock[s]=dofile(module_root.."climate_startup_industry_visits_rc1.lua")(M,Terrain,s,economy or "frozen")
+  local growth=assert(town_growth_mount[s],"Mount the live municipal board for climate industry")
+  local clock=dofile(module_root.."climate_startup_industry_visits_rc1.lua")(M,Terrain,s,economy or "frozen",growth.world)
+  M.stock_climate_clock[s]=clock
+  return clock
 end
 function M.prepare_initial_landscape(s,growth,Farm,progress,machines,after_tick)
   assert(coastal_active(s) and s.passenger_house_clock and s.stock_town_growth)

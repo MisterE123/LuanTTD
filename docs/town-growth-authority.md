@@ -1796,3 +1796,21 @@ This source year contains two daily market selections but no new
 industry site or physical industry closure. The test exercises
 the shared calendar, rate adjustments and market RNG, not live
 construction/removal, companies or station coverage.
+
+### Physical industry openings during live play
+
+The daily industry scheduler now shares the same site search,
+placement and construction-state code as the climate setup, with
+RC1's gameplay clearance rules. Live buildings start at stage zero;
+their acceptable site is not contingent on a worldgen-only platform
+check. Their initial production history is empty. Newly placed
+industries enter the same physical tile, farm and animation clocks.
+
+In a separate native Smooth Tropic run, two test-scheduled stock
+opening attempts at tick 3500 build a fruit plantation and a
+maize farm. We compare the selected layout, town, construction
+counter and stage, 32 physical tiles and both RNG words. The same
+world then keeps matching through 8,880 live ticks and two
+save/reopens. This validates real site search and construction,
+not its selection frequency in play. Physical closures and
+player transport still need their own end-to-end proofs.

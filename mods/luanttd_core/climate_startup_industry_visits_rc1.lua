@@ -2,7 +2,7 @@
 -- Vanilla RC1 industry_cmd.cpp: MakeIndustryTileBigger, TileLoop_Industry,
 -- ProduceIndustryGoods and the monthly production roll. Pregame runs only
 -- the tile visits; the isolated climate lane also runs the live phases.
-return function(Sim,Terrain,s,live_economy)
+return function(Sim,Terrain,s,live_economy,town_runtime)
   local live=live_economy~=nil
   local dir=(core and core.get_modpath and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
   local function o(n)return dofile(dir.."openttd/"..n..".lua")end
@@ -16,11 +16,12 @@ return function(Sim,Terrain,s,live_economy)
   local by_spec={}
   local FieldWorld=dofile(dir.."farm_factory_world.lua")(Sim,Terrain,nil,Fields)
   local records,by_id={},{}
-  for _,firm in ipairs(assert(s.stock_worldgen_climate_firms)) do
+  local function index_firm(firm)
     by_id[firm.id]=firm
     by_spec[firm.id]=assert(Specs.get(firm.type,s.stock_climate.landscape))
     for _,tile in ipairs(firm.cells) do records[Sim.id(tile.x+1,tile.z+1)]={tile,firm} end
   end
+  for _,firm in ipairs(assert(s.stock_worldgen_climate_firms)) do index_firm(firm) end
   local Field={}
   function Field.field_board(state) return FieldWorld.field_board(state,{industries=by_id,exact_grid=true}) end
   function Field.field(state,id) return FieldWorld.field(state,id) end
@@ -146,12 +147,16 @@ return function(Sim,Terrain,s,live_economy)
       local probability=spec.appearance[slot]
       return probability,probability>0 and flags.CanCloseLastInstance and 1 or 0
     end
-    -- This clock comparison includes the stock monthly production and
-    -- daily market selection. A newly constructed industry requires the
-    -- separate physical site/placement host, not a fake success.
-    function market_api.place()
-      error("Live climate industry construction is not mounted")
+    local Builder=dofile(dir.."generated_climate_industry_phase_rc1.lua")(Sim,Terrain,random)
+    function market_api.place(kind)
+      local firm=Builder.open(s,kind,{town_runtime=town_runtime,original=live_economy=="original"})
+      if firm then
+        index_firm(firm)
+        s.topology=s.topology+1
+      end
+      return firm
     end
+    M.open=market_api.place
     function market_api.change_random_industry()
       if #firms==0 then return end
       local firm=firms[1+math.floor(random()*#firms/4294967296)]

@@ -1,6 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- Headless stock industry construction phase. The game renderer and
--- the ongoing industry callbacks are deliberately not selected here.
+-- Headless stock industry construction for generated and economy sites.
+-- The host owns renderer, company authorization, and station callbacks.
 return function(Sim,Terrain,random_next)
   local dir=(core and core.get_modpath and core.get_modpath("luanttd_core").."/") or "mods/luanttd_core/"
   local function stock(n)return dofile(dir.."openttd/"..n..".lua") end
@@ -13,17 +13,18 @@ return function(Sim,Terrain,random_next)
   local FieldWorld=dofile(dir.."farm_factory_world.lua")(Sim,Terrain,nil,Fields)
   local floor,abs,max=math.floor,math.abs,math.max
   local M={}
-  function M.generate(s,options)
-    options=options or {}
+  local function mount(s,options,generating)
     local p=assert(s.stock_generated_profile)
-    assert(s.stock_climate and p.town_rng and not p.climate_industry_rng)
+    assert(s.stock_climate and p.town_rng)
     local w,h=Sim.W,Sim.H
     local climate=s.stock_climate.landscape
     local corners=s.corner_grid
-    local state={p.town_rng[1],p.town_rng[2]}
+    local state=generating and {p.town_rng[1],p.town_rng[2]} or assert(s.passenger_rating_rng)
     local function random()return random_next(state)end
-    local result={firms={},attempts={},selections={},failures={}}
+    local result={firms=generating and {} or assert(s.stock_worldgen_climate_firms),
+      attempts={},selections={},failures={}}
     local by_id={}
+    for _,firm in ipairs(result.firms) do by_id[firm.id]=firm end
     local board={width=w,height=h,initial_land_count=p.initial_land_count,freeform=corners.freeform_edges}
     local function id(x,z)
       return Sim.id(x+1,z+1)
@@ -104,7 +105,7 @@ return function(Sim,Terrain,random_next)
         if s.stock_farm_fields then s.stock_farm_fields[tid]=nil end
       end
     end
-    local quote_opts={landscape=climate,terragenesis=true,generating_world=true,width=w,height=h,freeform=board.freeform,
+    local quote_opts={landscape=climate,terragenesis=true,generating_world=generating,width=w,height=h,freeform=board.freeform,
       multiple=options.multiple,highest_snowline=s.stock_climate.snowline,oil_refinery_limit=options.oil_refinery_limit}
     local function place(type,water,forced)
       local spec=assert(Specs.get(type,climate))
@@ -113,20 +114,25 @@ return function(Sim,Terrain,random_next)
         local x,z,seed,bits,variant=Schedule.candidate(w,h,#plans+1,random)
         local q,why=Admission.quote(spec,plans[variant],Layout.slope_refused,x,z,board,quote_opts,result.firms)
         if q then
-          local n=#result.firms
+          local n=generating and #result.firms or 0
+          while by_id[n]~=nil do n=n+1 end
           local firm={id=n,type=type,kind=type==24 and "maize_farm" or spec.kind,x=x,z=z,town=q.town,seed=seed,random=bits,layout=variant,cells=q.cells,
             width=1,height=1,prod_level=16,produced={},accepted={}}
           for _,c in ipairs(q.cells) do
             firm.width,firm.height=max(firm.width,c.x-x+1),max(firm.height,c.z-z+1)
           end
-          apply_platform(assert(q.platform))
+          -- Creation requires a proven platform only during initial
+          -- TerraGenesis. Live placement attempts it after legal slopes
+          -- are checked; an unavailable apron does not veto that site.
+          local platform=q.platform or (not generating and board.platform(x,z,plans[variant],q.cells))
+          if platform then apply_platform(platform) end
           firm.before_rng={state[1],state[2]}
-          Init.draw(firm,spec,random,options.original,true)
+          Init.draw(firm,spec,random,options.original,generating)
           firm.after_tiles_rng={state[1],state[2]}
           for i,c in ipairs(spec.produce) do
             if c.cargo then
               local rate=Init.rate(c.value,firm.production_raw[i])
-              firm.produced[#firm.produced+1]={id=c.cargo.id,rate=rate,waiting=0,last_production=rate*8}
+              firm.produced[#firm.produced+1]={id=c.cargo.id,rate=rate,waiting=0,last_production=generating and rate*8 or 0}
             end
           end
           for _,c in ipairs(spec.accept) do if c.cargo then firm.accepted[#firm.accepted+1]={id=c.cargo.id,waiting=0} end end
@@ -149,17 +155,27 @@ return function(Sim,Terrain,random_next)
             if s.stock_farm_fields then s.stock_farm_fields[cell_id]=nil end
           end
           by_id[n]=firm
+          if not generating then firm.created_year=Sim.date(s) end
           if spec.behavior.PlantOnBuild then
             Fields.on_built(firm,FieldWorld.field_board(s,{industries=by_id,exact_grid=true}),random)
           end
           result.firms[#result.firms+1]=firm
+          if not generating then table.sort(result.firms,function(a,b)return a.id<b.id end) end
           result.attempts[#result.attempts+1]={type,attempt}
-          return
+          return firm
         end
         result.failures[why]=(result.failures[why] or 0)+1
       end
       result.attempts[#result.attempts+1]={type,false}
     end
+    return result,place,state,board,random
+  end
+  function M.generate(s,options)
+    options=options or {}
+    local p=assert(s.stock_generated_profile)
+    assert(not p.climate_industry_rng,"Native climate industries are generated once")
+    local result,place,state,board,random=mount(s,options,true)
+    local climate=s.stock_climate.landscape
     Schedule.generate(board,{landscape=climate,density=options.density or 4,custom_count=options.custom_count},random,
       function(type,water,forced)
         result.selections[#result.selections+1]={type,water,forced,state[1],state[2]}
@@ -168,6 +184,10 @@ return function(Sim,Terrain,random_next)
     p.climate_industry_rng={state[1],state[2]}
     s.stock_worldgen_climate_firms=result.firms
     return result
+  end
+  function M.open(s,kind,options)
+    local result,place=mount(s,options or {},false)
+    return place(kind,false,false),result
   end
   return M
 end
