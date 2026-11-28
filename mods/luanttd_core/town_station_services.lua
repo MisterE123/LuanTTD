@@ -138,14 +138,17 @@ return function(Sim)
         if Sim.ship_goods_active(s,st.host_id) then merge("ship",st) end
       end
     end
-    for id,record in pairs(s.stock_rail_stations or {}) do
-      if record.stock_reactivation and not admitted.rail[id] then
-        local load,unload=M.reactivated_clocks(s,record,at_tick)
-        if math.min(load,unload)<=20 then
-          merge("rail",{host_id=id,owner=record.owner,time_since_load=load,time_since_unload=unload})
+    local function resumed(mode)
+      for id,record in pairs(s[books[mode]] or {}) do
+        if record.stock_reactivation and not admitted[mode][id] then
+          local load,unload=M.reactivated_clocks(s,record,at_tick)
+          if math.min(load,unload)<=20 then
+            merge(mode,{host_id=id,owner=record.owner,time_since_load=load,time_since_unload=unload})
+          end
         end
       end
     end
+    resumed("rail");resumed("air")
     if include_idle then
       -- A new or unserved physical station can already affect council
       -- rating before any carrier has created a service ledger.

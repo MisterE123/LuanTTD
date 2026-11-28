@@ -9,6 +9,7 @@ local s=Sim.new(4841)
 local tile=Sim.id(18,20)
 local verify_reopen=core.settings:get("luanttd_qa_municipal_kind")=="reopened"
 local verify_rail=core.settings:get("luanttd_qa_municipal_kind")=="rail-reopened"
+local verify_air=core.settings:get("luanttd_qa_municipal_kind")=="air-reopened"
 local target=Sim.id(19,20)
 local owner="Builder"
 s.corner_grid=T.new(64,64,function()return 1 end)
@@ -57,7 +58,7 @@ assert(Air.remove(s,owner,airport_tile,false))
 assert(not Air.airport_for(s,airport_tile) and count()==3)
 assert(Sim.stock_station_slot(s)==3,"Retired stations still occupy their physical IDs")
 s.stock_ship_commercial=nil
-s.rail_paid_service,s.air_paid_service=verify_rail or nil,nil
+s.rail_paid_service,s.air_paid_service=verify_rail or nil,verify_air or nil
 local cutoff=math.min(s.retired_road_stations[id].until_tick,
   s.retired_rail_stations[station.id].until_tick,s.retired_airports[airport.id].until_tick)
 local file="retired-town-station.chk"
@@ -115,31 +116,38 @@ local function run()
     live=assert(Checkpoint.read().stations[id])
     assert(live.passenger_rating_phase==phase+222-185 and live.time_since_load==21)
     ask("advance",4);ask("advance",4);ask("advance",1)
-  elseif verify_rail then
+  elseif verify_rail or verify_air then
     for _=1,4 do ask("advance",4) end
     ask("checkpoint")
     local before=assert(Checkpoint.read())
-    local dead=before.retired_rail_stations[station.id]
+    local facility=verify_rail and station or airport
+    local retired=verify_rail and "retired_rail_stations" or "retired_airports"
+    local current=verify_rail and "stock_rail_stations" or "stock_small_airports"
+    local dead=before[retired][facility.id]
     assert(before.day==47 and dead)
-    local destination=Sim.id(18,19)
-    local request={tool="station",first=destination,last=destination,axis=0,length=1,tracks=1,drag=true}
-    local quote=assert(ask("rail_quote",{request=request}))
-    ask("command",{command={kind="rail_commit",revision=revision,token=quote.token}})
+    local destination=verify_rail and Sim.id(18,19) or Sim.id(19,21)
+    local request=verify_rail and {tool="station",first=destination,last=destination,axis=0,length=1,tracks=1,drag=true}
+      or {mode="air",operation="build",tile=destination,layout="country"}
+    local quote=assert(ask(verify_rail and "rail_quote" or "transport_quote",{request=request}))
+    ask("command",{command={kind=verify_rail and "rail_commit" or "transport_commit",revision=revision,token=quote.token}})
     ask("checkpoint")
     local reopened=assert(Checkpoint.read())
-    assert(reopened.tiles[destination].rail_station_id==station.id)
-    local p=assert(reopened.stock_rail_stations[station.id])
-    assert(p.stock_station_id==station.stock_station_id and p.sign_tile==destination)
+    local p=assert(reopened[current][facility.id])
+    assert(p.stock_station_id==facility.stock_station_id and (p.sign_tile or p.origin)==destination)
+    local tile=reopened.tiles[destination]
+    assert((verify_rail and tile.rail_station_id or tile.airfield.airport)==facility.id)
     local phase=7-math.floor((dead.until_tick-1-reopened.passenger_house_clock.counter)/250)
     local View=m("town_station_services")(Sim)
-    local a,b,c=View.reactivated_clocks(reopened,p)
-    assert(a==20 and b==255 and c==phase)
+    local function ages(snapshot,want_phase,want_age)
+      local load,unload,c=View.reactivated_clocks(snapshot,snapshot[current][facility.id])
+      assert(load==(verify_rail and want_age or 255) and unload==(verify_air and want_age or 255) and c==want_phase)
+    end
+    ages(reopened,phase,20)
     assert(G.active_stations(t,View.view(reopened))==3)
     ask("advance",3)
     ask("checkpoint")
     local loaded=assert(Checkpoint.read())
-    a,b,c=View.reactivated_clocks(loaded,loaded.stock_rail_stations[station.id])
-    assert(a==21 and b==255 and c==phase+222-185)
+    ages(loaded,phase+222-185,21)
     assert(G.active_stations(t,View.view(loaded))==2)
     ask("advance",4);ask("advance",4);ask("advance",1)
   else
@@ -162,7 +170,8 @@ core.register_on_mods_loaded(function()
     resume(reply)
   end,function(reason,_,_,detail)
     assert(reason=="stopped" and proof,tostring(detail or reason))
-    core.log("action",verify_rail and
+    core.log("action",verify_air and
+      "PASS NATIVE MUNICIPAL ROADS: airfield reused its ID and aged out of town growth on the stock phase" or verify_rail and
       "PASS NATIVE MUNICIPAL ROADS: rail station reused its ID and aged out of town growth on the stock phase" or verify_reopen and
       "PASS NATIVE MUNICIPAL ROADS: road stop relocated under its stock physical ID and resumed the exact rating phase" or
       "PASS NATIVE MUNICIPAL ROADS: removed road, rail and air facilities counted in February and expired before March")

@@ -78,7 +78,7 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
     local used,limit=noise_budget(s,id,towns(s),policy.tolerance or 0)
     return {used=used,limit=limit}
   end
-  function N.quote(s,owner,origin,name)
+  function N.quote(s,owner,origin,name,separate)
     local field=N.layout(name)
     if not field or name=="oilrig" then return nil,"AIRPORT_TYPE_NOT_AVAILABLE" end
     if field.intro_year and Sim.date(s)<field.intro_year then
@@ -135,6 +135,10 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
     airport.price=#airport.tiles*N.PRICE_PER_TILE
     local c=s.companies[owner]
     if (c and c.cash or 100000)<airport.price then return nil,"NOT_ENOUGH_MONEY" end
+    if not separate and TownStations then
+      local reuse=Sim.road_station_retirement().closest(s,"airport",owner,origin)
+      airport.reopen=reuse and reuse.id or nil
+    end
     return airport
   end
   local function expense(s,owner,cost)
@@ -142,20 +146,38 @@ return function(Sim,Terrain,Small,City,OilRig,Heliport,GroundRotary,Noise)
     c.cash,c.expense,c.month_exp=c.cash-cost,c.expense+cost,c.month_exp+cost
     s.topology=s.topology+1
   end
-  function N.build(s,owner,origin,name)
-    local airport,why,id=N.quote(s,owner,origin,name)
+  function N.build(s,owner,origin,name,separate)
+    local airport,why,id=N.quote(s,owner,origin,name,separate)
     if not airport then return nil,why,id end
     -- The price/impact is a quote. Do not persist a stale noise budget.
     airport.noise=nil
-    airport.id=s.next_small_airport or 1
-    s.next_small_airport=airport.id+1
     s.stock_small_airports=s.stock_small_airports or {}
-    airport.stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)
+    if airport.reopen then
+      local Retired=Sim.road_station_retirement()
+      local old,phase=Retired.take(s,"airport",airport.reopen)
+      airport.id,airport.name,airport.stock_station_id=old.id,old.name,old.stock_station_id
+      airport.town=old.town or airport.town
+      airport.stock_reactivation={tick=Retired.clock(s,"airport"),phase=phase,
+        load=old.time_since_load,unload=old.time_since_unload,sequence=(old.sequence or 0)+1}
+      airport.reopen=nil
+    else
+      airport.id=s.next_small_airport or 1
+      s.next_small_airport=airport.id+1
+      airport.stock_station_id=Sim.stock_station_slot and Sim.stock_station_slot(s)
+    end
+    local exact=s.stock_engine_startup_seed~=nil
+    if exact then airport.stock_random_bits=Sim.stock_random_u32(s)%65536 end
     s.stock_small_airports[airport.id]=airport
     local dirty={}
     for _,pos in ipairs(airport.tiles) do
       s.tiles[pos.id].airfield={airport=airport.id,x=pos.x,z=pos.z,layout=airport.layout,owner=owner,level=airport.ground/8}
+      if exact then s.tiles[pos.id].airfield.stock_random_bits=Sim.stock_random_u32(s)%16 end
       dirty[#dirty+1]=pos.id
+    end
+    if exact then
+      -- CmdBuildAirport calls TriggerAirportTileAnimation(Built) on
+      -- every layout tile after placement; stock still draws a word.
+      for _=1,#airport.tiles do Sim.stock_random_u32(s) end
     end
     expense(s,owner,airport.price)
     return airport,dirty

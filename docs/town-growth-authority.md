@@ -808,9 +808,18 @@ build/reopen fixture: physical StationID 5, the sign moving from
 (68,63) to (69,63), the resumed rating phase 3, and exact station
 and tile random draws. A new or reopened station gets a sign draw;
 both new platforms and extensions draw once per tile in the source's
-track-major order. Cross-mode station joins, airport reuse, and
-full restoration of pending rail cargo when reopening remain
-unported.
+track-major order.
+
+Airports reuse their same-mode sign and small-tick phase too,
+unless you hold E during placement to build separately. The
+country-airfield oracle matches station 5 moving from (60,36) to
+(61,36), the same 25 ground and Built-animation random draws,
+and the retained unload age changing from 20 to 21 at the source's
+next rating update. Idle airports still consume one stock random
+word on their staggered acceptance tick, together with the normal
+physical station order. Six native RC1 idle pulses are checked.
+Cross-mode joins, full pending cargo restoration, and the airport
+animation draws from live cargo handling remain unported.
 
 
 ### Wide, varied terrain and neighbouring town roads

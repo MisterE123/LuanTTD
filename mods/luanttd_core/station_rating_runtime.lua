@@ -198,6 +198,32 @@ return function(Sim,Kernel,Packets)
     end
   end
 
+  local airport_cache=setmetatable({},{__mode="k"})
+  function R.airports(s)
+    local fields=s.stock_small_airports
+    if s.stock_engine_startup_seed==nil or not fields or not next(fields) then return end
+    local cached=airport_cache[s]
+    if cached and cached.topology==s.topology then return cached.rows end
+    local rows={}
+    for _,field in pairs(fields) do
+      local tile=s.tiles[field.origin]
+      if field.stock_station_id~=nil and tile and tile.airfield and tile.airfield.airport==field.id then
+        rows[#rows+1]={id=field.stock_station_id,airport=field}
+      end
+    end
+    table.sort(rows,function(a,b) return a.id<b.id end)
+    airport_cache[s]={topology=s.topology,rows=rows}
+    return rows
+  end
+  function R.airport_acceptance_tick(s,row,tick)
+    if not row or not tick or (tick+row.id)%250~=0 then return end
+    local field=row.airport
+    if (s.stock_small_airports or {})[field.id]==field then
+      -- newgrf_airporttiles.cpp TriggerAirportAnimation: an existing
+      -- airport consumes the first word before testing any tile's GRF.
+      random_u32(s)
+    end
+  end
   -- station_cmd.cpp OnTick_Station: a single BaseStation's small tick,
   -- then its staggered big tick. Its caller merges different modes by ID.
   function R.station_tick(s,st,other_goods,absolute_tick)
@@ -211,7 +237,28 @@ return function(Sim,Kernel,Packets)
     if (absolute_tick+(st.stock_station_id or st.id-1))%250==0 then big(st) end
   end
 
+  local combined_cache=setmetatable({},{__mode="k"})
   function R.advance(s,ticks,other_goods,absolute_tick)
+    local airports=R.airports(s)
+    if ticks==1 and absolute_tick and airports and #airports>0 then
+      local cache=combined_cache[s]
+      if not cache or cache.topology~=s.topology then
+        local rows={}
+        for _,st in pairs(s.stations) do
+          if st.mode=="road" then rows[#rows+1]={id=st.stock_station_id or st.id-1,road=st} end
+        end
+        for _,airport in ipairs(airports) do rows[#rows+1]=airport end
+        table.sort(rows,function(a,b) return a.id<b.id or a.id==b.id and a.road~=nil and b.road==nil end)
+        cache={topology=s.topology,rows=rows}
+        combined_cache[s]=cache
+      end
+      for _,row in ipairs(cache.rows) do
+        local road=row.road
+        if road and s.stations[road.id]==road then R.station_tick(s,road,other_goods,absolute_tick)
+        elseif row.airport then R.airport_acceptance_tick(s,row,absolute_tick) end
+      end
+      return
+    end
     local events={}
     for _,st in pairs(s.stations) do
       if st.mode=="road" then

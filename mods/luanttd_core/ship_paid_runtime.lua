@@ -249,7 +249,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
         st=Service.station(service,{id=id,owner=owner,town=town and town.id,neutral_rig=neutral and neutral.industry,
           tick_index=id_for_tick,tiles=tiles},ctx)
       end
-      if mode_=="rail" then TownStations.resume_service(s,actual,st) end
+      if mode_=="rail" or mode_=="air" then TownStations.resume_service(s,actual,st) end
       st.host_mode,st.host_id,st.footprint_rev=mode_,local_id,ref
       st.stock_station_id=actual.stock_station_id
       st.mail_enabled=mail or nil
@@ -453,7 +453,7 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
     local landscape_ratings,road_departures
     if ctx.stock_late_rating then
       local topology,sorted
-      local function each_station(road,commercial)
+      local function each_station(road,commercial,airport_rating)
         if not sorted or topology~=s.topology then
           topology,sorted=s.topology,{}
           for _,st in pairs(s.stations) do
@@ -462,19 +462,27 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
           for _,st in pairs(service.stations) do
             if ctx.station_active(st) then sorted[#sorted+1]={id=st.tick_index or st.id,st=st} end
           end
+          local by_physical={}
+          for _,row in ipairs(sorted) do by_physical[row.id]=row end
+          for _,air in ipairs(Sim.stock_station_airports and Sim.stock_station_airports(s) or {}) do
+            local row=by_physical[air.id]
+            if row then row.airport=air
+            else sorted[#sorted+1]={id=air.id,airport=air} end
+          end
           table.sort(sorted,function(a,b)
             if a.id~=b.id then return a.id<b.id end
             -- Physical IDs never tie in the live stock pool. Keep old
             -- synthetic inputs deterministic if they reuse mode-local IDs.
             if a.road~=b.road then return a.road==true end
-            return a.st.id<b.st.id
+            return (a.st and a.st.id or -1)<(b.st and b.st.id or -1)
           end)
         end
         for _,row in ipairs(sorted) do
           local st=row.st
           if row.road then
             if s.stations[st.id]==st then road(st) end
-          elseif service.stations[st.id]==st then commercial(st) end
+          elseif st and service.stations[st.id]==st then commercial(st) end
+          if airport_rating and row.airport then airport_rating(row.airport) end
         end
       end
       -- RC1 CallVehicleTicks loads each station once before the
@@ -494,7 +502,8 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       end
       landscape_ratings=function(tick,road_step)
         each_station(function(st) road_step(tick,st) end,
-          function(st) Service.landscape_rating(service,st,tick,ctx) end)
+          function(st) Service.landscape_rating(service,st,tick,ctx) end,
+          function(air) Sim.stock_airport_acceptance_tick(s,air,tick) end)
       end
     end
     local function before(tick)

@@ -2299,7 +2299,9 @@ local function authority_preview(p,id,hit)
     kind,request="transport",{mode="ship",operation="waterwork",kind=dock,tile=V.anchor or id,last=id}
   elseif airfield_tools[tool] and tool~="airfield_remove" then
     label=airfield_tools[tool].name
-    kind,request="transport",{mode="air",operation="build",tile=id,layout=airfield_tools[tool].layout}
+    local separate=p:get_player_control().aux1==true
+    if separate then label=label.." · New station" end
+    kind,request="transport",{mode="air",operation="build",tile=id,layout=airfield_tools[tool].layout,separate=separate}
   elseif tool=="structure_tunnel" or tool=="rail_span_tunnel" then
     kind,request="transport",{mode=tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id}
   else
@@ -2951,7 +2953,8 @@ function U.build_world(p,id,hit)
       return
     end
     if airfield_tools[V.tool] and V.tool~="airfield_remove" then
-      worker_build(n,V,"transport",{mode="air",operation="build",tile=id,layout=airfield_tools[V.tool].layout});return
+      worker_build(n,V,"transport",{mode="air",operation="build",tile=id,layout=airfield_tools[V.tool].layout,
+        separate=p:get_player_control().aux1==true});return
     end
     if V.tool=="structure_tunnel" or V.tool=="rail_span_tunnel" then
       worker_build(n,V,"transport",{mode=V.tool=="rail_span_tunnel" and "rail" or "road",operation="tunnel",tile=id})

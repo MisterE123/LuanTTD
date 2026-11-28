@@ -4203,6 +4203,13 @@ function M.stock_random_u32(s)
   passenger_modules()
   return rating_runtime.random_u32(s)
 end
+function M.stock_station_airports(s)
+  passenger_modules()
+  return rating_runtime.airports(s)
+end
+function M.stock_airport_acceptance_tick(s,row,tick)
+  return rating_runtime.airport_acceptance_tick(s,row,tick)
+end
 -- Base engines do not change appearance here, but their original
 -- triggers still participate in the RNG shared by towns and industry.
 function M.stock_road_vehicle_random(s,v,trigger)
