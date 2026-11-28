@@ -2,7 +2,7 @@
 -- carrying cargo between the generated forest and sawmill. Uses the
 -- actual worker entry points and committed construction, not save import.
 local road_base=dofile("tests/fixtures/rc1-active-road-freight-town-year.lua")
-local function run(ref)
+local function run(ref,founding)
   local goods_circuit=ref.has_goods
   local f=dofile("tests/town_growth_rc1_industry_start.lua")
   local S,s,T=f.Sim,f.world,f.Terrain
@@ -80,8 +80,13 @@ local function run(ref)
       assert(value[i]==v,("RC1 corridor tick %d %s field %d: got %s, expected %s"):format(tick,label,i,tostring(value[i]),v))
     end
   end
+  local founded=false
+  local function physical_town(id)
+    local t=id and s.stock_town_growth.towns[id]
+    return t and (t.stock_id or id-1) or -1
+  end
   local function snapshot(tick)
-    local expected=ref.world[tick]
+    local expected=(founded and founding or ref).world[tick]
     if not expected then return end
     local hh,tt,house,road=1,1,1,1
     local year=S.date(s)
@@ -89,20 +94,20 @@ local function run(ref)
       local x,z=S.xy(id)
       local typ=t.stock_void and 7 or t.stock_industry and 8 or t.stock_landmark and 10 or t.wood and 4
         or t.terrain=="water" and 6 or t.build=="road_station" and 5
-        or (t.build=="road" or t.build=="road_depot") and 2 or t.source_house and 3 or 0
+        or (t.road_bridge_id or t.road_tunnel_id) and 9 or (t.build=="road" or t.build=="road_depot") and 2 or t.source_house and 3 or 0
       hh=fold(hh,T.corner(s.corner_grid,x,z));tt=fold(tt,typ)
       local r=t.source_house
-      if r then house=fold(house,id-1,r.id,r.town-1,r.completed and 1 or 0,r.stage,r.counter,Rebuild.age(r,year),r.random_bits) end
-      if t.build=="road" then road=fold(road,id-1,t.road_bits,t.road_town and t.road_town-1 or -1) end
+      if r then house=fold(house,id-1,r.id,physical_town(r.town),r.completed and 1 or 0,r.stage,r.counter,Rebuild.age(r,year),r.random_bits) end
+      if t.build=="road" then road=fold(road,id-1,t.road_bits,physical_town(t.road_town)) end
     end
     local summary={s.passenger_house_clock.head,hh,tt,house,road}
     for _,id in ipairs(ids) do summary[#summary+1]=s.fleet[id].delivered end
     same(tick,"map and delivered units",summary,expected[1])
-    for i,t in ipairs(s.stock_town_growth.towns) do
-      local site=s.sites[i]
+    for i,id in ipairs(s.stock_town_growth.order) do
+      local t,site=s.stock_town_growth.towns[id],s.sites[id]
       local p,q=t.supplied.passenger,t.supplied.mail
       local row={site.tile-1,site.nameparts,t.larger_town and 1 or 0,t.grow_counter,t.growth_rate,
-        t.time_until_rebuild,p.new_max,p.new_act or 0,p.old_max,p.old_act or 0,q.new_max,q.new_act or 0,q.old_max,q.old_act or 0}
+        t.time_until_rebuild,p.new_max or 0,p.new_act or 0,p.old_max or 0,p.old_act or 0,q.new_max or 0,q.new_act or 0,q.old_max or 0,q.old_act or 0}
       if goods_circuit then
         local a=t.accepted and t.accepted.goods or {}
         row[#row+1],row[#row+2]=a.new_act or 0,a.old_act or 0
@@ -114,7 +119,7 @@ local function run(ref)
   local function observe(tick)
     digest=fold(digest,tick,unpack(s.passenger_rating_rng));ticks=ticks+1
     snapshot(tick)
-    local expected=ref.poses[tick]
+    local expected=not founded and ref.poses[tick]
     if not expected then return end
     for n,id in ipairs(ids) do
       local v=s.fleet[id]
@@ -145,6 +150,26 @@ local function run(ref)
       N=Mount(S,mod,s,cap)
     end
     N.day(observe)
+    if founding and day==181 then
+      A=Endpoint(S,N)
+      revision=s.authority_revision or 0
+      s.companies[owner].cash=80000000
+      action("town_founding_setting",{policy=2})
+      local request={tile=S.id(69,64),size="medium",city=true,layout="random",name="Rivermark",nameparts=0xC0FFEE}
+      local offer=checked(A.town_found_quote(owner,request))
+      local city=action("town_found",{request=request,cost=offer.cost})
+      assert(city.id==16 and city.population==714 and s.stock_town_growth.towns[city.id].stock_id==4)
+      -- The three existing road services and the new company city
+      -- continue in one shared stock tick stream.
+      assert(s.passenger_house_clock.counter==14674)
+      digest,ticks,maps,founded=1,0,0,true
+      observe(14674)
+    end
+  end
+  if founding then
+    assert(digest==founding.rng and ticks==13617 and maps==6)
+    print("PASS RC1 founded city in an active bus, wood and Goods economy, 13,617 exact RNG ticks and six map/cargo snapshots")
+    return
   end
   local passenger,wood,finished=unpack(ref.world[28290][1],6)
   local expected_poses=0
@@ -158,6 +183,10 @@ local function run(ref)
   else
     print("PASS RC1 normal industry corridor: 27,010 RNG ticks, 14 map/town and 19 vehicle checkpoints, 283 passengers and 80 wood delivered, three packed reopens")
   end
+end
+if arg[1]=="founded" then
+  run(dofile("tests/fixtures/rc1-active-town-goods-year.lua"),dofile("tests/fixtures/rc1-active-manual-town.lua"))
+  return
 end
 if arg[1]~="shared" and arg[1]~="stock-only" then
   run(road_base)

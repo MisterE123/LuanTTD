@@ -848,3 +848,12 @@ RNG ticks and three packed reopens. The real Luanti worker checks
 the debit, news and immediate durability, then restores the same
 growth across a process restart. A graphical Linux client also
 completed the ordinary quote and confirmation without chat.
+
+A separate source replay founds a fifth town on July 1 with the
+original bus, wood and Goods routes already running. The new city
+starts with 714 people. Through January 1 the port matches every
+RNG tick (13,617) and six map/town/cargo checkpoints after
+founding, with three packed reopens across the year.
+This case uses Medium construction costs in OpenTTD and compares
+simulation, not finances. The default-price debit is verified
+separately in the Rivermark case above.
