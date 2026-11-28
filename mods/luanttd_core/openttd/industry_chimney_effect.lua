@@ -11,7 +11,7 @@ function E.add(s,id,tile,word)
 end
 -- Non-chimney cases from effectvehicle.cpp SmokeTick, ExplosionLargeTick
 -- and ExplosionSmallTick: 5 smoke frames, 16 large and 12 small.
-local timed={aircraft_smoke={72,12},explosion_large={64,0},explosion_small={48,0}}
+local timed={diesel_smoke={41,0},aircraft_smoke={72,12},explosion_large={64,0},explosion_small={48,0}}
 function E.add_timed(s,id,kind,x,y,z,creator,duration)
   local effects=s.stock_effect_vehicles
   if not effects then effects={};s.stock_effect_vehicles=effects end
@@ -27,7 +27,7 @@ function E.step(s)
     if row.kind then
       row.remaining,row.progress=row.remaining-1,row.progress+1
       if row.remaining==0 then s.stock_effect_vehicles[id]=nil
-      elseif row.kind=="aircraft_smoke" and row.progress%4==0 then row.y=row.y+1 end
+      elseif (row.kind=="aircraft_smoke" or row.kind=="diesel_smoke") and row.progress%4==0 then row.y=row.y+1 end
     elseif row.progress>0 then
       row.progress=row.progress-1
     elseif s.tiles[row.tile].stock_industry then

@@ -1191,3 +1191,28 @@ positions, speeds, destination and passenger samples, the same ferry
 and bus frames, the station's arrival-ordered loading list, and town
 state. The live Luanti worker resumes all three routes on restart.
 The rail platform is still idle in this comparison.
+
+
+### One year with all four modes in service
+
+A Floss '47' and passenger coach join the working bus, ferry and
+Tricario at StationID 0. A conventional unsignalled branch connects a
+second rail platform. The orders use OpenTTD's normal non-stop
+default: pass the second platform on the way to the first order,
+then reverse and serve both in the selected order.
+
+`Vehicle::ShowVisualEffect` can advance the authoritative random
+stream even though the resulting exhaust is visual. The source
+diesel cutoff, power and weight contribution, `Chance16I` draw and
+41-tick physical effect lifetime now run on the worker. A train
+reversing at a station retains its slowing flag until the next
+actual `TrainCheckIfLineEnds` check. The native renderer still
+draws its existing exhaust independently of simulation RNG.
+
+The 51-town RC1 year matches all 27,010 random-state checks,
+25,309 train position and coach cargo frames, 26,049 helicopter
+frames, 26,714 ferry frames, 26,676 bus frames, 1,634 nonempty
+station loading frames and six housing and town snapshots. The
+ordinary native worker resumes all four routes after a process
+restart. This is one combined Temperate scenario, not complete
+town-growth parity or a test of four simultaneous loading vehicles.

@@ -145,6 +145,18 @@ return function(Sim,mod)
     local block=dofile(source.."rail_block_signals.lua")(track,signal)
     local pilot=dofile(mod.."/rail_dispatch_run.lua")(track,follow,cost,search,pbs,dispatch_life,signal,
       dispatch_motion,dispatch,speed,lab,height,reverse,geo.spans,geo.crossings,roster,block,s.stock_rail_forbid_90)
+    local effects=dofile(source.."industry_chimney_effect.lua")
+    pilot.stock_smoke_effect=function(s,run,part)
+      local slot=Sim.stock_vehicle_slots(s,1)
+      if not slot then return end
+      effects.add_timed(s,slot[1],"diesel_smoke",part.pose.x,(part.z or run.z or 0)+10,
+        part.pose.y,run.stock_pool_id)
+    end
+    pilot.stock_bridge_above=function(s,part)
+      if part.wormhole then return false end
+      local _,above=Sim.bridge_deck_at(s,part.tile)
+      return above
+    end
     return pilot,signal,roster,height,heights,profile
   end
   function B.owned_rail(s,lab,roster,pilot,oil_active)

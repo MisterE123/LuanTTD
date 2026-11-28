@@ -4,7 +4,8 @@ local mod=core.get_modpath(core.get_current_modname())
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local Sim=m("sim")
 local owner="Stock Ferry QA"
-local rotary=core.settings:get_bool("luanttd_qa_coastal_air",false)
+local four=core.settings:get_bool("luanttd_qa_coastal_four",false)
+local rotary=four or core.settings:get_bool("luanttd_qa_coastal_air",false)
 local hub=rotary or core.settings:get_bool("luanttd_qa_coastal_hub",false)
 local mixed=hub or core.settings:get_bool("luanttd_qa_join_bus_dock",false)
 local Checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
@@ -90,7 +91,13 @@ local function counts()
     assert(s.stock_small_airports[air.second].stock_station_id==0)
     if air.arrivals>0 then assert(unit.stock_fault.date_of_last_service>s.stock_bus_market.epoch+unit.day) end
   end
-  return s,p,hull.boarded or 0,c.revenue or 0,bus,air
+  local train
+  if four then
+    train=assert(s.stock_rail_dispatch.runs[1])
+    assert(train.stock_pool_id==17 and train.stock_engine==15 and train.stock_wagon==27 and not train.failure)
+    assert(train.shuttle and train.shuttle.first==s.stock_joined_stations[0].members.rail)
+  end
+  return s,p,hull.boarded or 0,c.revenue or 0,bus,air,train
 end
 local function work()
   local first=previous and previous.companies[owner]
@@ -152,26 +159,75 @@ local function work()
       local aircraft=transport({mode="air",operation="buy",depot=home,engine=253}).id
       command("transport_start",{mode="air",vehicle=aircraft,first=away,second=home})
     end
+    if four then
+      -- The year witness buys its train in late January; let the
+      -- ordinary company and dated engine roster advance to that point.
+      for _=1,5 do ask("advance",{days=4}) end
+      -- The ordinary game has a real starting budget. Finance its fifth
+      -- vehicle body through the normal company loan controls.
+      for _=1,7 do command("company_loan",{amount=10000}) end
+      local function cell(x,y) return y*256+x+1 end
+      local Track=m("openttd/rail_track")
+      local function rail(r)
+        local q=ask("rail_quote",{request=r})
+        command("rail_commit",{token=q.token})
+      end
+      rail({tool="track",first=cell(52,109),last=cell(52,109),track=Track.X})
+      rail({tool="track",first=cell(54,109),last=cell(59,109),track=Track.X})
+      rail({tool="station",first=cell(57,109),last=cell(57,109),axis=0,length=1,tracks=1,separate=true,drag=true})
+      local depot=cell(60,109)
+      rail({tool="depot",first=depot,direction=Track.NE})
+      for i,stock in ipairs({15,27}) do
+        local q=ask("rail_assembly",{depot=depot})
+        local offers={}
+        for _,offer in ipairs(i==1 and q.engines or q.wagons) do offers[#offers+1]=offer.id end
+        assert((", "..table.concat(offers,", ")..", "):find(", "..stock..", ",1,true),
+          ("Stock part %d missing from actual depot offers: %s"):format(stock,table.concat(offers,", ")))
+        command("rail_assembly",{token=q.token,operation=i==1 and "engine" or "wagon",stock=stock})
+      end
+      local q=ask("rail_assembly",{depot=depot})
+      local train
+      for id,u in pairs(q.units) do if #u.stocks==2 and u.stocks[1]==15 and u.stocks[2]==27 then train=id end end
+      assert(train)
+      ask("checkpoint")
+      local s=assert(Checkpoint.read())
+      local home=s.stock_joined_stations[0].members.rail
+      local away=assert(s.tiles[cell(57,109)].rail_station_id)
+      command("transport_start",{mode="rail",vehicle=train,first=home,second=away})
+    end
   end
   local prior_ferry=first and previous.stock_ship_commercial.service.vehicles[previous.ship_pilot.paid_clock]
   local baseline_boarded,baseline_money=prior_ferry and prior_ferry.boarded or 0,first and first.revenue or 0
   local baseline_tick=previous and previous.passenger_house_clock.counter or 0
   local baseline_air=rotary and first and previous.airport_owned_runs[1].arrivals or 0
+  local baseline_train=four and first and previous.stock_rail_dispatch.runs[1].shuttle.arrivals or 0
+  local baseline_bus=0
+  if four and first then
+    for _,v in pairs(previous.fleet) do
+      if v.stock_pool_id==12 then baseline_bus=assert(v.last_arrival).tick;break end
+    end
+    assert(baseline_bus>0)
+  end
   if first then
-    local s,p,boarded,money,_,air=counts()
+    local s,p,boarded,money,bus,air,train=counts()
     assert(s.passenger_house_clock.counter==baseline_tick and boarded==baseline_boarded and money==baseline_money)
     assert(p.arrivals==previous.ship_pilot.arrivals)
     if rotary then assert(air.arrivals==baseline_air) end
+    if four then
+      assert(train.shuttle.arrivals==baseline_train and bus.last_arrival.tick==baseline_bus)
+    end
   end
   for _=1,(mixed and 43 or 22) do
     ask("advance",{days=4})
-    local state,p,boarded,revenue,bus,air=counts()
-    if boarded>baseline_boarded and (not mixed or bus.units>0) and (not rotary or air.arrivals>baseline_air) then
+    local state,p,boarded,revenue,bus,air,train=counts()
+    if boarded>baseline_boarded and (not mixed or bus.units>0) and (not rotary or air.arrivals>baseline_air) and
+        (not four or train.shuttle.arrivals>baseline_train and (bus.last_arrival and bus.last_arrival.tick or 0)>baseline_bus) then
       assert(state.stock_owned_ferry.stock_fault.reliability<65535 and p.arrivals>=2 and (mixed or revenue==0))
       result=("NATIVE RC1 FERRY %s: %d boarded, VehicleID %d, elapsed tick %d"):format(
         first and "REOPEN" or "SERVICE",boarded,state.stock_owned_ferry.stock_pool_id,state.passenger_house_clock.counter)
       if mixed then result=result..(", bus carries %d through the same physical station"):format(bus.units) end
       if rotary then result=result..(", helicopter made %d arrivals"):format(air.arrivals) end
+      if four then result=result..(", train made %d arrivals, bus last arrived at tick %d"):format(train.shuttle.arrivals,bus.last_arrival.tick) end
       return {kind="stop"}
     end
   end

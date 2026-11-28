@@ -17,6 +17,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
   local OrderList=dofile(upstream.."rail_order_list.lua")
   local Types=dofile(upstream.."rail_types.lua")
   local Realistic=dofile(upstream.."rail_acceleration_rc1.lua")
+  local DieselSmoke=dofile(upstream.."rail_diesel_smoke_rc1.lua")
   local Fault=dofile(upstream.."road_breakdowns.lua")
   local Auto=dofile(upstream.."rail_auto_service_rc1.lua")
   local Trigger=dofile(upstream.."vehicle_random_trigger.lua")
@@ -1368,7 +1369,9 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     -- TrainLocoHandler's ProcessOrders/CheckReverseTrain clears speed
     -- and subspeed, not the current fractional progress.
     if not run.stock_realistic then run.progress=0 end
-    run.slowing=false;run.phase="turnaround";orders.dwell_until=nil
+    -- TrainSlowing survives the station reversal until the first moving
+    -- TrainCheckIfLineEnds pass, suppressing premature smoke draws.
+    run.phase="turnaround";orders.dwell_until=nil
     local height=run.span and base.stock_height or stock_height
     if height then run.z=height(first.tile,head.x%16,head.y%16) end
   end
@@ -1578,6 +1581,27 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     return result.hold_motion
   end
 
+  local function diesel_smoke(s,base,run,limit,stopping)
+    if not (run.stock_live_procurement and run.stock_engine and R.stock_smoke_effect)
+      or run.stopped or run.slowing or run.speed<2 or stopping and run.speed>=limit then return end
+    local model=Roster.entry(run.stock_engine)
+    if not (model and model.engine_class=="diesel") then return end
+    local parts, power=run.consist.parts,run.stock_power
+    local front=run.consist.driving_backwards and #parts or 1
+    local amount=s.stock_vehicle_smoke_amount or DieselSmoke.DEFAULT_AMOUNT
+    local function exhaust(part)
+      local tile=base.tile(part.tile)
+      if not tile or part.hidden or tile.kind=="depot" or tile.kind=="tunnel"
+        or (R.stock_bridge_above and R.stock_bridge_above(s,part))
+        or not Types.has_power(run.engine_railtype or 0,tile.railtype or 0) then return end
+      if DieselSmoke.sample(run.speed,limit,power and power.power or run.power,
+        power and power.weight or run.consist_mass,amount,function() return R.stock_random(s) end) then
+        R.stock_smoke_effect(s,run,part)
+      end
+    end
+    exhaust(parts[front])
+    if run.dual_head and #parts>1 then exhaust(parts[#parts-front+1]) end
+  end
   local function pass(s,base,d,run,events,mode,paid,service,already_handled_fault)
     if not already_handled_fault and handle_fault(run) or
        run.pending_depot_entry_tick==run.vehicle_ticks then return end
@@ -1646,13 +1670,14 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
     local checked_approach=false
     if run.span then run.visible_bridge_speed=ConsistMotion.max_bridge_speed(base,run.consist) end
     local realistic=run.stock_power
-    local limit,force,minimum
+    local limit,force,minimum,stopping
     if realistic then
       local board=base
       local tile=board.tile(head.tile)
       local gauge=tile and tile.railtype or 0
       local distance
-      if tile and tile.kind=="station" and Speed.should_stop(run,tile.station) then
+      stopping=tile and tile.kind=="station" and Speed.should_stop(run,tile.station)
+      if stopping then
         local stop,ahead,length=Speed.stop_location(board,head.tile,run,head.pose.direction)
         distance=floor(ahead/16)-floor((length-stop)/16)
       end
@@ -1679,6 +1704,7 @@ return function(Track,Follow,Costs,Search,PBS,Life,Signal,ConsistMotion,Dispatch
         distance,in_depot,run.visible_bridge_speed,run.order_max_speed,not run.consist.driving_backwards or run.consist.last_can_lead)
       minimum=brake and 0 or 2
     end
+    if not mode then diesel_smoke(s,base,run,limit or run.max_track_speed,stopping) end
     local motion_settings=run.service_depot and {forbid_90=settings.forbid_90,inbound_depot=run.service_depot} or settings
     Speed.move_pass(run,function()
       local old_parts=run.consist.parts

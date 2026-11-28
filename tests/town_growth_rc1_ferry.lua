@@ -1,9 +1,10 @@
 -- A fresh RC1 port, not an imported save: use production world generation
 -- and the ordinary worker's quote, buy, order and company commands.
-local rotary=arg[1]=="hub-air"
+local four=arg[1]=="hub-four"
+local rotary=four or arg[1]=="hub-air"
 local hub=rotary or arg[1]=="hub"
 local mixed=hub or arg[1]=="mixed"
-local ref=dofile("tests/fixtures/"..(rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
+local ref=dofile("tests/fixtures/"..(four and "rc1-active-coastal-four-town-year" or rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local S,T,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -119,6 +120,33 @@ local function start_air()
   return aircraft
 end
 
+local function start_train()
+  local track=m("openttd/rail_track")
+  local function cell(x,y) return S.id(x+1,y+1) end
+  local function rail(r)
+    local q=checked(A.rail_quote(owner,r))
+    return action("rail_commit",{token=q.token})
+  end
+  rail({tool="track",first=cell(52,109),last=cell(52,109),track=track.X})
+  rail({tool="track",first=cell(54,109),last=cell(59,109),track=track.X})
+  rail({tool="station",first=cell(57,109),last=cell(57,109),axis=0,length=1,tracks=1,separate=true,drag=true})
+  local depot=cell(60,109)
+  rail({tool="depot",first=depot,direction=track.NE})
+  local function assemble(operation,stock)
+    local q=checked(A.rail_assembly(owner,depot))
+    action("rail_assembly",{token=q.token,operation=operation,stock=stock})
+  end
+  assemble("engine",15)
+  assemble("wagon",27)
+  local q=checked(A.rail_assembly(owner,depot))
+  local train
+  for id,u in pairs(q.units) do if #u.stocks==2 and u.stocks[1]==15 and u.stocks[2]==27 then train=id end end
+  assert(train)
+  local home=s.stock_joined_stations[0].members.rail
+  local other=assert(s.tiles[cell(57,109)].rail_station_id)
+  action("transport_start",{mode="rail",vehicle=train,first=home,second=other})
+end
+
 local function fold(h,...)
   for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
   return h
@@ -154,6 +182,7 @@ end
 local digest,motion,ticks,poses,snapshots=1,1,0,0,0
 local bus_hash,bus_count,joint_hash,joint_count,queue_hash,queue_count,both=1,0,1,0,1,0,0
 local air_hash,air_count,three=1,0,0
+local rail_hash,rail_count=1,0
 local aircraft_id
 local function joint(t)
   local service=s.stock_ship_commercial.service
@@ -185,7 +214,7 @@ local function joint(t)
   end
   for _,id in ipairs(st.loading_order or {}) do
     local v=service.vehicles[id]
-    local layout=v.mode=="air" and 3 or 2
+    local layout=({rail=0,ship=2,air=3})[v.mode]
     order[#order+1]={v.load_state.arrived_tick,v.stock_station_physical_vehicle,layout}
     if v.carrying_parts then
       for _,body in ipairs(v.carrying_parts) do
@@ -227,6 +256,19 @@ local function tick(t)
       air_count=air_count+1
     end
   end
+  if four then
+    if t==ref.rail_build then start_train() end
+    if t>=ref.rail_build then
+      local r=assert(s.stock_rail_dispatch.runs[1])
+      assert(not r.failure,r.failure)
+      local parts=r.consist.parts
+      local p=parts[r.consist.driving_backwards and #parts or 1]
+      local cargo=s.stock_ship_commercial.service.vehicles[0x4000+r.paid_clock]
+      rail_hash=fold(rail_hash,t,r.stock_pool_id,p.tile-1,p.pose.x-16,p.pose.y-16,r.z,r.speed,r.subspeed,
+        r.progress,p.pose.direction,r.phase=="dwell" and 1 or 0,p.hidden and 1 or 0,cargo and cargo.units or 0)
+      rail_count=rail_count+1
+    end
+  end
   digest=fold(digest,t,unpack(s.passenger_rating_rng));ticks=ticks+1
   if ref.towns[t] then snapshot(t,ref.towns[t]);snapshots=snapshots+1 end
   if t<=ref.build then return end
@@ -265,8 +307,12 @@ if mixed then
     assert(s.airport_owned_runs[aircraft_id].arrivals>8)
     print(("PASS RC1 hub helicopter: %d exact aircraft frames across three packed reloads"):format(air_count))
   end
+  if four then
+    same(ref.last,"physical passenger engine and coach cargo",{rail_hash,rail_count},{ref.rail,ref.rail_count})
+    print(("PASS RC1 four-mode hub: %d exact rail poses and coach cargo frames"):format(rail_count))
+  end
   print(("PASS RC1 %s: %d world RNG ticks, %d ship poses, %d bus frames, %d shared queue frames and six town snapshots")
-    :format(rotary and "hub with bus, ferry and helicopter" or hub and "hub with bus and ferry" or "bus + ferry",
+    :format(four and "hub with bus, ferry, rail and helicopter" or rotary and "hub with bus, ferry and helicopter" or hub and "hub with bus and ferry" or "bus + ferry",
       ticks,poses,bus_count,queue_count))
   return
 end
