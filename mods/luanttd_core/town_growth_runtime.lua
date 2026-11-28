@@ -407,7 +407,7 @@ return function(Sim,Terrain,G,B,H)
         if not brd.bridge_quote(t,proposal.x,proposal.z,proposal.u,proposal.v,proposal.style) then return false end
         ok,_,dirty=Sim.road_bridge(s,"town",id,finish,proposal.style,false,t.id)
       elseif proposal.kind=="tunnel" then
-        ok,_,dirty=Sim.road_tunnel(s,"town",id,false,t.id)
+        ok,_,dirty=Sim.road_tunnel(s,"town",id,false,t.id,brd.excavation,random)
       end
       if not ok then return false end
       for _,cell in ipairs(dirty) do

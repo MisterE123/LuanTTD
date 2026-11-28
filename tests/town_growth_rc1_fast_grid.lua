@@ -1,5 +1,17 @@
 -- Compare a second ordinary, independently generated RC1 world.
-local ref=dofile("tests/fixtures/rc1-fast-grid-town-year.lua")
+local profiles={
+  grid={fixture="rc1-fast-grid-town-year",width=256,depth=128,year=1950,seed=98217,
+    towns=4,custom_towns=6,layout="grid3",growth_rate=3},
+  better={fixture="rc1-better-slow-town-year",width=128,depth=256,year=1950,seed=11681,
+    towns=2,layout="better",growth_rate=1},
+  random={fixture="rc1-random-1975-town-year",width=256,depth=256,year=1975,seed=77294,
+    towns=2,layout="random",growth_rate=4},
+}
+local profile_id=arg[1] or "grid"
+local cfg=assert(profiles[profile_id])
+local ref=dofile("tests/fixtures/"..cfg.fixture..".lua")
+cfg.relief,cfg.sea,cfg.coast,cfg.rivers=1,0,16,2
+cfg.trees,cfg.larger_towns,cfg.industries,cfg.variety,cfg.smooth=2,3,4,0,1
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local Sim,Terrain,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -10,10 +22,7 @@ local core={settings={get=function() return nil end},get_dir_list=function(path)
   p:close()
   return out
 end}
-local s=m("campaign_generation")(core,mod,Sim,m("world_setup")).run({
-  width=256,depth=128,year=1950,seed=98217,relief=1,sea=0,coast=16,rivers=2,
-  trees=2,towns=4,custom_towns=6,larger_towns=3,industries=4,variety=0,smooth=1,layout="grid3",growth_rate=3,
-})
+local s=m("campaign_generation")(core,mod,Sim,m("world_setup")).run(cfg)
 local function equal(tick,label,found,expected)
   assert(#found==#expected)
   for i,need in ipairs(expected) do
@@ -23,7 +32,7 @@ end
 local industry_keys={[0]="coal_mine","power_station","sawmill","forest","oil_refinery",
   [6]="factory",[8]="steel_mill",[9]="farm",[11]="oil_well",[18]="iron_mine"}
 local profile=s.stock_generated_profile
-assert(profile.industry_stats.target==25 and #profile.industries==#ref.industries)
+assert(profile.industry_stats.target>=#ref.industries and #profile.industries==#ref.industries)
 for i,source in ipairs(ref.industries) do
   local placement=profile.industries[i]
   local record=s["stock_"..placement.chain.."_industries"][placement.industry]
@@ -34,7 +43,7 @@ end
 
 s.road_coal,s.road_timber,s.road_farm,s.road_oil,s.road_heavy=true,true,true,true,true
 local mount,Codec=m("campaign_authority_runtime"),m("packed_campaign")
-local cap={road={start_year=1950,breakdowns=1,service_interval=150},ferry={},air={},oil_tanker=true}
+local cap={road={start_year=cfg.year,breakdowns=1,service_interval=150},ferry={},air={},oil_tanker=true}
 local runtime=mount(Sim,mod,s,cap)
 local function fold(h,...)
   for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
@@ -67,13 +76,14 @@ local function observe(tick)
     end
   end
   equal(tick,"map", {s.passenger_house_clock.head,rng[1],rng[2],heights,types,houses,roads,spans},expected[1])
-  assert(#s.stock_town_growth.towns==6)
+  assert(#s.stock_town_growth.towns==#expected-1)
   for i,t in ipairs(s.stock_town_growth.towns) do
     local site=s.sites[i]
     local p,q=t.supplied.passenger,t.supplied.mail
-    assert(t.layout=="grid3" or t.layout==3)
+    local layouts={original=0,better=1,grid2=2,grid3=3}
+    local layout=type(t.layout)=="number" and t.layout or layouts[t.layout]
     equal(tick,"town "..i,{site.tile-1,site.nameparts,t.larger_town and 1 or 0,t.grow_counter,t.growth_rate,
-      t.time_until_rebuild,3,p.new_max,p.old_max,q.new_max,q.old_max},expected[i+1])
+      t.time_until_rebuild,layout,p.new_max,p.old_max,q.new_max,q.old_max},expected[i+1])
   end
   maps=maps+1
 end
@@ -85,4 +95,5 @@ for day=1,365 do
   runtime.day(observe)
 end
 assert(ticks==27010 and maps==14 and digest==ref.rng)
-print("PASS RC1 Fast grid region: 25 industry placements, six towns, original span portals, 14 map snapshots, 27,010 RNG ticks, three packed reopens")
+print(("PASS RC1 %s region: %d industry placements, %d towns, original span portals, 14 map snapshots, 27,010 RNG ticks, three packed reopens")
+  :format(profile_id,#ref.industries,#s.stock_town_growth.towns))

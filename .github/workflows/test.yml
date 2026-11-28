@@ -459,7 +459,7 @@ jobs:
     name: OpenTTD RC1 mixed town parity
     runs-on: ubuntu-24.04
     container: debian:13
-    timeout-minutes: 6
+    timeout-minutes: 9
     steps:
       - name: Install Lua and Luanti server
         run: |
@@ -483,9 +483,16 @@ jobs:
           lua5.1 tests/town_growth_rc1_ordinary_train.lua
           lua5.1 tests/station_stop_order_rc1.lua
           lua5.1 tests/town_growth_rc1_fast_grid.lua
+          lua5.1 tests/town_growth_rc1_fast_grid.lua better
+          lua5.1 tests/town_growth_rc1_fast_grid.lua random
+          lua5.1 tests/town_tunnel_excavation.lua
+          lua5.1 tests/industry_generated_tree_clear.lua
+          lua5.1 tests/generated_town_grade_spans.lua
       - name: Restart ordinary train mid-service in native Luanti
         run: bash tests/town_growth_rc1_ordinary_train_native.sh
       - name: Restart the shared-depot Goods circuit in native Luanti
         run: bash tests/town_growth_rc1_goods_native.sh shared
       - name: Restart a rectangular Fast-growth region in native Luanti
         run: bash tests/town_growth_rc1_goods_native.sh grid
+      - name: Excavate a town road-tunnel exit in native Luanti
+        run: bash tests/town_tunnel_excavation_native.sh

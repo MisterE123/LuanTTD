@@ -145,18 +145,17 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
   end
   function B.tunnel_quote(town,x,z,u,v)
     if live and not live.span_ends(x,z,u,v) then return end
-    local ok,_,plan=Sim.road_tunnel(s,"town",Sim.id(x,z),true,town.id)
+    local ok,_,plan=Sim.road_tunnel(s,"town",Sim.id(x,z),true,town.id,B.excavation)
     return ok and plan["end"]==Sim.id(u,v) and plan or nil
   end
   function B.road_span(town,x,z,d,random)
     return Spans.bridge(town,B,x,z,d,random) or Spans.tunnel(town,B,x,z,d)
   end
-  function B.terraform_land(x,z,mask,up,cost_limited,random)
-    if mask==0 then return false end
-    local price=250 -- RC1 construction base terraform price for this economy.
-    local height_limit=s.stock_generated_profile.map_height_limit
-    local p=Terrain.plan(s.corner_grid,x,z,mask,up,{
-        unit_cost=price,max_height=height_limit,
+  local terraform_price=250 -- RC1 construction base terraform price for this economy.
+  local function plan_earthworks(x,z,mask,up,cleared_portal)
+    if mask==0 then return end
+    return Terrain.plan(s.corner_grid,x,z,mask,up,{
+        unit_cost=terraform_price,max_height=s.stock_generated_profile.map_height_limit,
         void=function(u,v) return s.tiles[Sim.id(u,v)].stock_void end,
         validate_tile=function(_,u,v)
           local t=B.tile(u,v)
@@ -171,10 +170,14 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
           if (s.tunnel_below and s.tunnel_below[id]) or (s.rail_tunnel_below and s.rail_tunnel_below[id]) then
             return nil,"TOWN_PROTECTED_TERRAIN"
           end
+          -- CmdBuildTunnel already paid to clear the far portal.
+          if id==cleared_portal then return 0 end
           return Sim.road_site_clear_cost(s.tiles[id],s.stock_farm_fields and s.stock_farm_fields[id])
         end,
       })
-    if not p or cost_limited and p.cost>=(price+2)*8 then return false end
+  end
+  local function apply_earthworks(p,up,random)
+    local height_limit=s.stock_generated_profile.map_height_limit
     -- CmdTerraformLand visits the sorted non-void tile set twice on
     -- Execute, in both world founding and live growth. The validation pass
     -- still draws; only pass 1 clears. Pure quotes never consume RNG.
@@ -209,6 +212,21 @@ return function(Sim,Terrain,s,G,Worldgen,read,live)
     if live then live.grade_changed() end
     return true
   end
+  function B.terraform_land(x,z,mask,up,cost_limited,random)
+    local p=plan_earthworks(x,z,mask,up)
+    if not p or cost_limited and p.cost>=(terraform_price+2)*8 then return false end
+    return apply_earthworks(p,up,random)
+  end
+  B.excavation={
+    quote=function(id,mask,expected,base)
+      local x,z=Sim.xy(id)
+      local p=plan_earthworks(x,z,mask,false,id)
+      if not p then return end
+      local actual,h=Terrain.tile(s.corner_grid,x,z,p)
+      if actual==expected and h==base then return p end
+    end,
+    apply=function(p,random) return apply_earthworks(p,false,random) end,
+  }
   function B.level_land(x,z,random)
     local cell=B.tile(x,z)
     if not cell or not cell.slope or cell.slope==0 or cell.kind=="house" then return false end

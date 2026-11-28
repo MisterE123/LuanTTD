@@ -1223,7 +1223,7 @@ function M.remove_wood_bridge(s,owner,id,quote_only)
   M.road_tree_authority().apply(c,ratings)
   return true,("Road bridge removed for $%d; land underneath retained."):format(price),dirty,span.deck
 end
-function M.road_tunnel(s,owner,start,quote_only,municipal)
+function M.road_tunnel(s,owner,start,quote_only,municipal,earthworks,random)
   if not s.corner_grid or not start then return false,"Select an uphill tile for the portal." end
   load_road_rules()
   local board={xy=M.xy,id=M.id}
@@ -1242,12 +1242,16 @@ function M.road_tunnel(s,owner,start,quote_only,municipal)
     end
     if t and not (t.owner or t.build or t.tram or t.ship or t.airfield or t.site or t.stock_industry or t.stock_landmark or t.house or t.wood or t.terrain=="water"
         or M.rail_span_protected(s,id)
-        or s.bridge_above and s.bridge_above[id] or s.tunnel_below and s.tunnel_below[id]) then return 0 end
+        or s.bridge_above and s.bridge_above[id] or s.tunnel_below and s.tunnel_below[id]) then
+      if municipal and earthworks then return M.road_site_clear_cost(t,s.stock_farm_fields and s.stock_farm_fields[id]) end
+      return 0
+    end
   end
   board.blocked=function(id,depth)
     local key=s.tunnel_below and s.tunnel_below[id]
     return key and s.stock_road_tunnels[key].base==depth
   end
+  if municipal and earthworks then board.excavate=earthworks.quote end
   local c=not municipal and M.company(s,owner)
   local plan,why,at=tunnel_rules.plan(board,start,{owner=owner,budget=c and c.cash})
   if not plan then
@@ -1264,6 +1268,11 @@ function M.road_tunnel(s,owner,start,quote_only,municipal)
     end
   end
   if quote_only then return true,plan.price,plan end
+  if plan.excavation then
+    assert(earthworks and type(random)=="function","Municipal excavation needs the town RNG")
+    earthworks.apply(plan.excavation,random)
+    plan.excavation=nil
+  end
   local key=s.next_stock_road_tunnel or 1
   s.next_stock_road_tunnel=key+1
   s.stock_road_tunnels=s.stock_road_tunnels or {}

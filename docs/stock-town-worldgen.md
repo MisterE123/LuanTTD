@@ -118,7 +118,7 @@ demolition. The `LUANTTD_NATIVE_GENERATED_TOWN_SPANS=1` renderer replay
 views the actual freshly generated bridge and tunnel from a real
 Luanti client on the production campaign worker.
 
-Live municipal road expansion is covered separately in [Town growth and authority](town-growth-authority.md). Some foundation changes, bore-exit excavation, and other climates remain outside this slice.
+Live municipal road expansion is covered separately in [Town growth and authority](town-growth-authority.md). Some foundation changes, complex or protected bore excavation, and other climates remain outside this slice.
 
 ## Ordinary RC1 founding and full-year authority baseline
 
@@ -241,3 +241,29 @@ six towns, three municipal bridge spans, 14 map/town snapshots and
 27,010 random-state ticks against RC1 through the first year. It also
 reopens the packed state three times. The no-company run does not cover
 the effects of active routes or the other mapped layouts and settings.
+
+
+### Additional growth settings and municipal excavation
+
+The same full-year comparison also covers a 128×256 Slow-growth Better
+Roads region, with 13 automatically selected towns and 25 industries,
+and a 1975 256-square Very Fast-growth world with 22 towns assigned
+all four stock layouts and 52 industries. Both use normal rivers and
+industry. The checks compare 14 map and town snapshots as well as all
+27,010 random-state ticks through three packed reopens.
+
+Town-built road tunnels can now lower the shared raised corners on a
+dry far portal before installing the tunnel. The controlled RC1
+CmdBuildTunnel comparison has the uphill 3 slope, exits at 13, lowers
+one corner, and yields the required complementary 12. It matches a
+3,815 construction quote at Medium prices and eight shared RNG draws
+on commit, with no draws on quote. The transaction refuses to excavate
+protected neighboring structures, and does not change player tunnel
+construction or support non-complementary exit geometry.
+
+
+A separate hill-world regression checks an industry footprint with a
+river-generated tree. The stock placement quote allowed the tile, but
+the host rejected it when no preparatory leveling was needed. Generated
+industry placement now clears those trees on the actual footprint before
+the host writes it, preserving trees outside the layout.

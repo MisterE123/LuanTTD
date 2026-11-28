@@ -1,8 +1,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
--- OpenTTD 14.1 CmdBuildTunnel, tunnelbridge_cmd.cpp; slope_func.h
--- GetInclinedSlopeDirection; pricebase.h PR_BUILD_TUNNEL. This port handles
--- ordinary paired road portals with already complementary slopes. The
--- stock fallback can excavate the exit; the host currently refuses it.
+-- OpenTTD 16.0-RC1 CmdBuildTunnel, tunnelbridge_cmd.cpp; slope_func.h
+-- GetInclinedSlopeDirection; pricebase.h PR_BUILD_TUNNEL. The board may
+-- quote the stock lowering of shared raised corners on the exit tile.
 local M={}
 local direction={[12]=0,[6]=1,[3]=2,[9]=3}
 local dx,dz={[0]=-1,0,1,0},{[0]=0,1,0,-1}
@@ -40,11 +39,21 @@ function M.plan(board,start,opts)
   if b.water then return nil,"TUNNEL_EXIT_ON_WATER",target end
   local exit=board.clear(target)
   if not exit then return nil,"TUNNEL_EXIT_NOT_CLEAR",target end
-  if b.slope~=15-a.slope then return nil,"TUNNEL_EXIT_NEEDS_OPPOSITE_SLOPE",target end
+  local excavation
+  if b.slope~=15-a.slope then
+    if not board.excavate then return nil,"TUNNEL_EXIT_NEEDS_OPPOSITE_SLOPE",target end
+    local mask=0
+    for _,bit in ipairs({1,2,4,8}) do
+      if floor(a.slope/bit)%2==1 and floor(b.slope/bit)%2==1 then mask=mask+bit end
+    end
+    excavation=board.excavate(target,mask,15-a.slope,a.base)
+    if not excavation then return nil,"TUNNEL_EXIT_EXCAVATION_REFUSED",target end
+    exit=exit+excavation.cost
+  end
   local cost=M.construction_cost(#inner,entrance,exit,opts.price or 450,opts.road_half or 95)
   if opts.budget and cost>opts.budget then return nil,"NOT_ENOUGH_CASH",target end
   return {start=start,["end"]=target,base=a.base,middle=inner,middle_by_tile=set,middle_length=#inner,
     head={id=start,inside_direction=d},tail={id=target,inside_direction=(d+2)%4},price=cost,owner=opts.owner,
-    roadtype=0}
+    roadtype=0,excavation=excavation}
 end
 return M

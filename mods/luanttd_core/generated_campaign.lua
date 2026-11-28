@@ -120,7 +120,7 @@ function M.towns(Sim,Terrain,s,Generator,Worldgen,Names,G,Build,settings)
         local a,b=Sim.id(p.x,p.z),Sim.id(p.u,p.v)
         local ok
         if p.kind=="bridge" then ok=Sim.road_bridge(s,"town",a,b,p.style,false,id)
-        else ok=Sim.road_tunnel(s,"town",a,false,id) end
+        else ok=Sim.road_tunnel(s,"town",a,false,id,growth.excavation,rnd) end
         if ok then spans[#spans+1]=a end
         return ok
       end
@@ -269,6 +269,18 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
         if s.stock_farm_fields then s.stock_farm_fields[tile]=nil end
       end
     end
+    -- The exact placement quote already admitted these tree tiles.
+    -- Upstream clears each occupied layout cell before writing industry
+    -- tiles, even when no platform leveling was needed. River generation
+    -- can leave live trees on level footprint cells before GenerateTrees.
+    local cleared_trees={}
+    for _,c in ipairs(plan.cells) do
+      local tile=Sim.id(c.x+1,c.z+1)
+      local t=s.tiles[tile]
+      if t.wood then
+        cleared_trees[tile],t.wood=t.wood,nil
+      end
+    end
     if plan.type==2 or plan.type==3 then
       chain="timber"
       assert(Timber,"Generated Timber needs its native industry world")
@@ -288,7 +300,10 @@ function M.industries(Sim,Terrain,s,Generator,Industry,World,density,custom_coun
       chain="coal"
       placed,cells=World.place(s,plan.kind,id,opts)
     end
-    if not placed then return false end
+    if not placed then
+      for tile,tree in pairs(cleared_trees) do s.tiles[tile].wood=tree end
+      return false
+    end
     for _,c in ipairs(cells) do s.tiles[c.id].stock_clear_ground=nil end
     choices[#choices+1]={industry=placed.id,site=placed.site,kind=plan.kind,tile=id,near=plan.town,
       chain=chain,leveled=plan.leveling and #plan.leveling.changes>0 or nil}
