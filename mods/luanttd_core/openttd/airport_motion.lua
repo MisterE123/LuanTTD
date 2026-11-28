@@ -45,7 +45,9 @@ return function(FTA)
   end
 
   function M.bounds(v,terrain_height)
-    local base=(terrain_height or 0)+(v.direction<4 and 10 or 0)
+    -- aircraft.h sets the rotor holding band 34 px above fixed wing;
+    -- GetAircraftFlightLevelBounds shifts both the lower and upper bound.
+    local base=(terrain_height or 0)+(v.direction<4 and 10 or 0)+(v.helicopter and 34 or 0)
     base=base+min(20*floor(v.max_speed/200)-90,0)
     return base+120,base+360
   end
@@ -145,7 +147,7 @@ return function(FTA)
       v.airborne=takeoff or slow or landing
       if takeoff then v.y=M.flight_height(v,ground_at(a,v,h),true)
       elseif flag(f,F.HOLD) then
-        if v.y>ground_at(a,v,h)+150 then v.y=v.y-1 end
+        if v.y>ground_at(a,v,h)+(v.helicopter and 184 or 150) then v.y=v.y-1 end
       elseif slow and flag(f,F.NOSPDCLAMP) then v.y=M.flight_height(v,ground_at(a,v,h),false) end
       local ground=(a.ground or 0)+1
       if landing then v.y=M.glide(v.y,ground,dist) end

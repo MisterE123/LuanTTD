@@ -19,6 +19,9 @@ fi
 if [[ ${1:-} == hub ]]; then
   printf 'luanttd_qa_coastal_hub = true\n' >> "$out/server.conf"
 fi
+if [[ ${1:-} == hub-air ]]; then
+  printf 'luanttd_qa_coastal_air = true\n' >> "$out/server.conf"
+fi
 for phase in SERVICE REOPEN; do
   timeout 120 luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' > "$out/$phase.log" 2>&1 || {
     tail -80 "$out/$phase.log";exit 1;

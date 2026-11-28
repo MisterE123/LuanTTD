@@ -34,7 +34,7 @@ return function(api,Network,Run,Owned,Roster)
     STOCK_HOUSE_CLOCK_REQUIRED="Paid flights need stock house production enabled.",
     AIRFIELD_BUSY="The runway or stand is already in use.",
     PURCHASED_AIRCRAFT_DISABLED="Enable paid aircraft and stock town supply before buying.",
-    FIRST_AIRFIELD_MUST_BE_YOUR_PURCHASE_HANGAR="Click your aircraft’s purchase hangar airfield first.",
+    SELECT_OWNED_PARKED_AIRCRAFT="Select one of your parked aircraft.",
     OWN_COUNTRY_HANGAR_REQUIRED="Choose your company's country airfield.",
     OWNED_AIRCRAFT_CANNOT_BE_CLEARED="An owned aircraft cannot be cleared by a pilot command.",
     ONE_OWNED_PLANE_ONLY="This preview already has one aircraft.",

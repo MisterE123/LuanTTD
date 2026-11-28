@@ -98,8 +98,8 @@ return function(Sim,Run,Roster,model_ready)
     else
       unit=O.status(s,first)
     end
-    if not unit or unit.hangar~=first or unit.owner~=owner or unit.status~="hangar" then
-      return nil,"FIRST_AIRFIELD_MUST_BE_YOUR_PURCHASE_HANGAR"
+    if not unit or unit.owner~=owner or unit.status~="hangar" then
+      return nil,"SELECT_OWNED_PARKED_AIRCRAFT"
     end
     if not model_ready(unit.stock_id) then return nil,"NATIVE_AIRCRAFT_MODEL_UNAVAILABLE" end
     local run,why=Run.start(s,owner,first,second,unit)

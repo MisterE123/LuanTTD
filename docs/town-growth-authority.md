@@ -1171,3 +1171,23 @@ The ordinary Luanti authority-worker test keeps the combined station
 and resumes boarding after a restart. The rail platform and
 helidepot are idle in this comparison; it does not yet prove
 simultaneous operation of all four transport modes.
+
+
+### Active helicopter at the coastal hub
+
+The hangar is the aircraft's physical starting point, not its first
+order. The depot can now select both destinations. Stock
+`CmdBuildAircraft` places the Tricario inside the hangar; the first
+taxi node is reached through normal movement. `GetAircraftFlightLevelBounds`
+uses a helicopter holding altitude of 184 pixels rather than 150
+for fixed-wing aircraft. `AircraftEventHandler_AtTerminal` applies
+the default helipad service without entering the hangar, and
+`HelicopterTickHandler` runs before the loading order clears.
+
+A Tricario flies from the coastal hub to a second helidepot and back.
+The bus, ferry and helicopter run in the same 51-town comparison
+through the end of 1985. The source replay checks 26,049 helicopter
+positions, speeds, destination and passenger samples, the same ferry
+and bus frames, the station's arrival-ordered loading list, and town
+state. The live Luanti worker resumes all three routes on restart.
+The rail platform is still idle in this comparison.

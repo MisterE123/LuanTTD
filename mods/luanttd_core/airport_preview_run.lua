@@ -89,21 +89,25 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
     if s.air_paid_service and not (s.road_stock_house_supply and s.corner_grid) then
       return nil,"STOCK_HOUSE_CLOCK_REQUIRED"
     end
-    local a,b=s.stock_small_airports and s.stock_small_airports[first],s.stock_small_airports and s.stock_small_airports[second]
-    local neutral=R.fits(b,owned and owned.stock_id) and Rig.neutral_ref(s,b)
-    if not a or not b or a==b or a.owner~=owner or b.owner~=owner and not neutral then
+    local airports=s.stock_small_airports or {}
+    local origin=airports[owned and owned.hangar or first]
+    local a,b=airports[first],airports[second]
+    local function allowed(field)
+      return field and (field.owner==owner or owned and R.fits(field,owned.stock_id) and Rig.neutral_ref(s,field))
+    end
+    if not origin or origin.owner~=owner or not allowed(a) or not allowed(b) or a==b then
       return nil,"SELECT_YOUR_HANGAR_AND_COMPATIBLE_AIRFIELD"
     end
-    if not layout(a).hangar then return nil,"AIRPORT_HAS_NO_HANGAR" end
+    if not layout(origin).hangar then return nil,"AIRPORT_HAS_NO_HANGAR" end
     for _,field in ipairs({a,b}) do
       local ok,why=R.route_stop(s,field,owned and owned.stock_id)
       if not ok then return nil,why end
     end
     -- Fleet aircraft contend for the actual FTA flags. A second filing
     -- from another hangar need not wait for its destination to be idle.
-    if not in_fleet and (a.flags~=0 or b.flags~=0) then return nil,"AIRFIELD_BUSY" end
+    if not in_fleet and (origin.flags~=0 or a.flags~=0 or b.flags~=0) then return nil,"AIRFIELD_BUSY" end
     local p={version=R.VERSION,owner=owner,first=first,second=second,arrivals=0,departures=0,
-      target=first,phase="hangar",dwell=0}
+      target=origin.id,phase="hangar",dwell=0}
     if owned then
       local own=in_fleet and s.stock_owned_air_fleet and s.stock_owned_air_fleet[owned.serial] or s.stock_owned_aircraft
       assert(own==owned and s.air_paid_service)
@@ -111,12 +115,13 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
       p.finance={annual_fp=owned.annual_fp,ticks=0,charged_ticks=0,expense=0}
     end
     local engine=R.engine_for(p)
-    -- A purchased plane is already at the first ordered airport. Stock
-    -- InHangar claims a local terminal before the first departure.
-    local first_stop=owned and owned.stock_fault and first or second
-    p.vehicle=assert(layout(a).new(a,{owner=owner,order={kind="station",id=first_stop},
+    -- CmdBuildAircraft places the aircraft in its physical hangar.
+    -- AircraftEventHandler_InHangar claims a local terminal only if it
+    -- is the first order; otherwise it takes off for the ordered airport.
+    local first_stop=owned and (owned.stock_fault or first~=origin.id) and first or second
+    p.vehicle=assert(layout(origin).new(origin,{owner=owner,order={kind="station",id=first_stop},
       max_speed=engine.max_speed,acceleration=engine.acceleration,helicopter=engine.helicopter,
-      hangar_index=owned and owned.hangar_index}))
+      hangar_index=owned and owned.hangar_index,stock_build_spawn=owned and owned.stock_fault~=nil}))
     if s.air_paid_service then
       p.paid_clock=in_fleet and owned.serial or s.next_paid_air_run or 1
       p.paid_built_day=owned and owned.day or s.day
@@ -273,6 +278,17 @@ return function(Sim,Network,Small,Motion,Terrain,Slope,Roster)
           local date=paid.date()
           local engine=assert(Roster.engine_snapshot(s,p.engine_id,date))
           auto_service(s,p,fault,date,engine.reliability)
+        end
+      end
+      if v.helicopter and s.stock_air_service_at_helipad~=false then
+        -- AircraftEventHandler_AtTerminal services a rotorcraft at a
+        -- helipad by default, without applying hangar-only side effects.
+        hooks.service_at_helipad=function()
+          local date=paid.date and paid.date()
+          if not date then return end
+          local engine=assert(Roster.engine_snapshot(s,p.engine_id,date))
+          fault.date_of_last_service,fault.date_of_last_service_newgrf=date,date
+          fault.breakdowns_since_last_service,fault.reliability=0,engine.reliability
         end
       end
       hooks.hangar=function(entering)

@@ -164,3 +164,13 @@ done({ok=false,why="No route"})
 done({ok=true,revision=26,value=rail_depot})
 assert(body:find("Start Train 2",1,true) and body:find("No route",1,true))
 print("PASS explicit rail selection, visible wagon counts, named dispatch and preserved selection after failure")
+
+local air=dofile("mods/luanttd_core/campaign_worker_depot_ui.lua")(core,client,build,function(n)return "$"..n end)
+assert(air.open(mock,"air",8))
+done({ok=true,revision=40,value={offers={},vehicles={{id=2,label="Tricario",parked=true}},
+  targets={{id=8,label="Home helidepot"},{id=9,label="Remote helistation"}}}})
+assert(body:find("d1_from;Home helidepot,Remote helistation;1;true",1,true))
+air.fields(mock,{d1_start=true,d1_from="2",d1_to="1"})
+assert(request.command.mode=="air" and request.command.vehicle==2 and request.command.depot==8
+  and request.command.first==9 and request.command.second==8)
+print("PASS the hangar offers two selectable airport orders without moving the launch hangar")

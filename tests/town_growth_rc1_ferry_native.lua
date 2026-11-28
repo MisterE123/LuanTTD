@@ -4,7 +4,8 @@ local mod=core.get_modpath(core.get_current_modname())
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local Sim=m("sim")
 local owner="Stock Ferry QA"
-local hub=core.settings:get_bool("luanttd_qa_coastal_hub",false)
+local rotary=core.settings:get_bool("luanttd_qa_coastal_air",false)
+local hub=rotary or core.settings:get_bool("luanttd_qa_coastal_hub",false)
 local mixed=hub or core.settings:get_bool("luanttd_qa_join_bus_dock",false)
 local Checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
 local previous=Checkpoint.read()
@@ -79,7 +80,17 @@ local function counts()
     for _,v in pairs(s.fleet) do if v.stock_pool_id==12 then bus=v end end
     assert(bus and bus.engine=="leopard_bus")
   end
-  return s,p,hull.boarded or 0,c.revenue or 0,bus
+  local air
+  if rotary then
+    air=assert(s.airport_owned_runs and s.airport_owned_runs[1])
+    local unit=assert(s.stock_owned_air_fleet[1])
+    assert(air.phase~="blocked",air.failure)
+    assert(unit.stock_pool_ids[1]==14 and air.first~=unit.hangar and air.second==unit.hangar)
+    assert(s.stock_small_airports[air.first].origin==90*256+46)
+    assert(s.stock_small_airports[air.second].stock_station_id==0)
+    if air.arrivals>0 then assert(unit.stock_fault.date_of_last_service>s.stock_bus_market.epoch+unit.day) end
+  end
+  return s,p,hull.boarded or 0,c.revenue or 0,bus,air
 end
 local function work()
   local first=previous and previous.companies[owner]
@@ -133,23 +144,34 @@ local function work()
     local dp=transport({mode="ship",operation="build",kind="depot",tile=29760,axis=0})
     assert(transport({mode="ship",operation="buy",depot=dp.id,engine=207}).id=="ferry")
     command("transport_start",{mode="ship",vehicle="ferry",depot=dp.id,first=da.id,second=db.id})
+    if rotary then
+      ask("checkpoint")
+      local s=assert(Checkpoint.read())
+      local home=assert(s.stock_joined_stations[0].members.air)
+      local away=transport({mode="air",operation="build",tile=90*256+46,layout="helidepot",separate=true}).id
+      local aircraft=transport({mode="air",operation="buy",depot=home,engine=253}).id
+      command("transport_start",{mode="air",vehicle=aircraft,first=away,second=home})
+    end
   end
   local prior_ferry=first and previous.stock_ship_commercial.service.vehicles[previous.ship_pilot.paid_clock]
   local baseline_boarded,baseline_money=prior_ferry and prior_ferry.boarded or 0,first and first.revenue or 0
   local baseline_tick=previous and previous.passenger_house_clock.counter or 0
+  local baseline_air=rotary and first and previous.airport_owned_runs[1].arrivals or 0
   if first then
-    local s,p,boarded,money=counts()
+    local s,p,boarded,money,_,air=counts()
     assert(s.passenger_house_clock.counter==baseline_tick and boarded==baseline_boarded and money==baseline_money)
     assert(p.arrivals==previous.ship_pilot.arrivals)
+    if rotary then assert(air.arrivals==baseline_air) end
   end
   for _=1,(mixed and 43 or 22) do
     ask("advance",{days=4})
-    local state,p,boarded,revenue,bus=counts()
-    if boarded>baseline_boarded and (not mixed or bus.units>0) then
+    local state,p,boarded,revenue,bus,air=counts()
+    if boarded>baseline_boarded and (not mixed or bus.units>0) and (not rotary or air.arrivals>baseline_air) then
       assert(state.stock_owned_ferry.stock_fault.reliability<65535 and p.arrivals>=2 and (mixed or revenue==0))
       result=("NATIVE RC1 FERRY %s: %d boarded, VehicleID %d, elapsed tick %d"):format(
         first and "REOPEN" or "SERVICE",boarded,state.stock_owned_ferry.stock_pool_id,state.passenger_house_clock.counter)
       if mixed then result=result..(", bus carries %d through the same physical station"):format(bus.units) end
+      if rotary then result=result..(", helicopter made %d arrivals"):format(air.arrivals) end
       return {kind="stop"}
     end
   end

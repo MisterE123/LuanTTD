@@ -1,8 +1,9 @@
 -- A fresh RC1 port, not an imported save: use production world generation
 -- and the ordinary worker's quote, buy, order and company commands.
-local hub=arg[1]=="hub"
+local rotary=arg[1]=="hub-air"
+local hub=rotary or arg[1]=="hub"
 local mixed=hub or arg[1]=="mixed"
-local ref=dofile("tests/fixtures/"..(hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
+local ref=dofile("tests/fixtures/"..(rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local S,T,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -110,6 +111,14 @@ local function build()
   action("transport_start",{mode="ship",vehicle="ferry",depot=d,first=a,second=b})
 end
 
+local function start_air()
+  local home=assert(s.stock_joined_stations[0].members.air)
+  local away=transport({mode="air",operation="build",tile=S.id(46,91),layout="helidepot",separate=true}).id
+  local aircraft=transport({mode="air",operation="buy",depot=home,engine=253}).id
+  action("transport_start",{mode="air",first=away,second=home,vehicle=aircraft})
+  return aircraft
+end
+
 local function fold(h,...)
   for i=1,select("#",...) do h=(h*65599+select(i,...))%2147483647 end
   return h
@@ -144,6 +153,8 @@ end
 
 local digest,motion,ticks,poses,snapshots=1,1,0,0,0
 local bus_hash,bus_count,joint_hash,joint_count,queue_hash,queue_count,both=1,0,1,0,1,0,0
+local air_hash,air_count,three=1,0,0
+local aircraft_id
 local function joint(t)
   local service=s.stock_ship_commercial.service
   local group=assert(s.stock_joined_stations[0])
@@ -173,9 +184,16 @@ local function joint(t)
     waiting=waiting+v.load_state.reserved_units
   end
   for _,id in ipairs(st.loading_order or {}) do
-    local ship=service.vehicles[id]
-    order[#order+1]={ship.load_state.arrived_tick,ship.stock_station_physical_vehicle,2}
-    waiting=waiting+ship.load_state.reserved_units
+    local v=service.vehicles[id]
+    local layout=v.mode=="air" and 3 or 2
+    order[#order+1]={v.load_state.arrived_tick,v.stock_station_physical_vehicle,layout}
+    if v.carrying_parts then
+      for _,body in ipairs(v.carrying_parts) do
+        if body.cargo=="passenger" then waiting=waiting+body.load_state.reserved_units end
+      end
+    elseif v.cargo=="passenger" then
+      waiting=waiting+v.load_state.reserved_units
+    end
   end
   joint_hash=fold(joint_hash,t,group.tile-1,group.facilities,st.rating_phase,st.time_since_load,st.time_since_unload,
     waiting,st.passenger_rating_state.rating)
@@ -185,6 +203,7 @@ local function joint(t)
     queue_hash=fold(queue_hash,t,#order)
     for _,r in ipairs(order) do queue_hash=fold(queue_hash,r[2],r[3]) end
     queue_count=queue_count+1
+    if #order==3 then three=three+1 end
     if #order==2 then
       if both==0 then assert(t==ref.both_first and order[1][2]==12 and order[2][2]==13) end
       both=both+1
@@ -194,6 +213,20 @@ end
 local function tick(t)
   if t==ref.first then same(t,"startup",{#s.stock_town_growth.order,unpack(s.passenger_rating_rng)},ref.startup) end
   if t==ref.build then build() end
+  if rotary then
+    if t==ref.air_build then aircraft_id=start_air() end
+    if t>=ref.air_build then
+      local p=assert(s.airport_owned_runs[aircraft_id])
+      assert(p.phase~="blocked",p.failure)
+      local v,air=p.vehicle,s.stock_owned_air_fleet[aircraft_id]
+      local carrier=s.stock_ship_commercial.service.vehicles[0xC000+aircraft_id]
+      local body=carrier and carrier.carrying_parts and carrier.carrying_parts[1]
+      air_hash=fold(air_hash,t,air.stock_pool_ids[1],v.x-16,v.z-16,v.y,v.speed,v.subspeed,v.progress,v.direction,
+        v.state,v.pos,s.stock_small_airports[p.target].stock_station_id,body and body.units or 0,
+        v.loading and 1 or 0,v.hidden and 1 or 0)
+      air_count=air_count+1
+    end
+  end
   digest=fold(digest,t,unpack(s.passenger_rating_rng));ticks=ticks+1
   if ref.towns[t] then snapshot(t,ref.towns[t]);snapshots=snapshots+1 end
   if t<=ref.build then return end
@@ -227,8 +260,14 @@ assert((freight.boarded or 0)>0 and freight.units>0 and s.stock_owned_ferry.pric
 if mixed then
   same(ref.last,"bus, station and queues",{bus_hash,bus_count,joint_hash,joint_count,queue_hash,queue_count,both},
     {ref.bus,ref.bus_count,ref.station,ref.station_count,ref.loading,ref.loading_count,ref.both})
+  if rotary then
+    same(ref.last,"helicopter pose, orders and cargo",{air_hash,air_count,three},{ref.air,ref.air_count,ref.three})
+    assert(s.airport_owned_runs[aircraft_id].arrivals>8)
+    print(("PASS RC1 hub helicopter: %d exact aircraft frames across three packed reloads"):format(air_count))
+  end
   print(("PASS RC1 %s: %d world RNG ticks, %d ship poses, %d bus frames, %d shared queue frames and six town snapshots")
-    :format(hub and "four-facility hub with bus and ferry" or "bus + ferry",ticks,poses,bus_count,queue_count))
+    :format(rotary and "hub with bus, ferry and helicopter" or hub and "hub with bus and ferry" or "bus + ferry",
+      ticks,poses,bus_count,queue_count))
   return
 end
 -- This seeded two-dock route generates passengers but neither dock

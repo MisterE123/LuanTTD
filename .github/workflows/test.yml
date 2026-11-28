@@ -627,6 +627,10 @@ jobs:
         run: |
           lua5.1 tests/town_growth_rc1_ferry.lua hub
           bash tests/town_growth_rc1_ferry_native.sh hub
+      - name: Compare active bus, ferry and helicopter on the coastal year
+        run: |
+          lua5.1 tests/town_growth_rc1_ferry.lua hub-air
+          bash tests/town_growth_rc1_ferry_native.sh hub-air
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua

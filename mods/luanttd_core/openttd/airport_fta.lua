@@ -123,6 +123,11 @@ return function(A)
       x,z,_,d=A.point(pos,a.rotation,a.width,a.height)
     end
     if not x or not A.layout[pos] or A.layout[pos][1][1]~=S.HANGAR then return nil,"INVALID_AIRCRAFT_HANGAR" end
+    if opts.stock_build_spawn and opts.helicopter and not A.hangar_geometry and (a.rotation or 0)==0 then
+      -- CmdBuildAircraft starts inside the depot before the controller
+      -- drives to its first exact FTA node (which is not the spawn point).
+      x,z,d=A.hangar.x*16+5,A.hangar.z*16+3,3
+    end
     return {pos=pos,previous_pos=pos,state=S.HANGAR,x=a.x+x,z=a.z+z,y=(a.ground or 0)+1,direction=d,
       owner=opts.owner,target=a.id,hidden=true,order=opts.order,speed=0,subspeed=0,progress=0,
       acceleration=opts.acceleration or 24,max_speed=opts.max_speed or 320,

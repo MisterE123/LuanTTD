@@ -47,3 +47,14 @@ do
   assert(not f.free_terminal(station,{helicopter=true}))
 end
 print("PASS RC1 ground rotor airports: ordinary pickup, stock pad reservations and repeated two-way flights")
+
+do
+  local h={rotor_speed=96,rotor_state=1,rotor_tick=1}
+  Rotor.tick(h,{leaving=true})
+  assert(h.rotor_speed==97 and h.rotor_tick==2)
+  Rotor.tick(h,{})
+  assert(h.rotor_speed==96 and h.rotor_tick==3)
+  local lo,hi=M.bounds({direction=3,max_speed=320,helicopter=true},8)
+  assert(lo==102 and hi==342)
+end
+print("PASS RC1 rotor altitude band and loading-to-departure substep order")

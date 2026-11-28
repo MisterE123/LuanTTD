@@ -15,6 +15,13 @@ return function(core,client,build,money,assembly)
     local rows=data.vehicles or {}
     return Route.targets(p.mode,data,rows[unit_index(p,rows)])
   end
+  local function source_index(p,rows)
+    if p.from then return p.from end
+    if p.mode=="air" then
+      for i,r in ipairs(rows) do if r.id==p.depot then return i end end
+    end
+    return 1
+  end
   local function train_name(u) return u.unit_number and "Train "..u.unit_number or u.label end
   local function draw(n,p,note)
     local data=p.data or {}
@@ -84,7 +91,8 @@ return function(core,client,build,money,assembly)
       b[#b+1]="label[.5,6.49;Select the train you want to use.]"
     end
     local route_ok=Route.possible(first,last) and not (active and active.parked==false)
-    local origin=p.mode=="air" and p.depot or (first[p.from or 1] or {}).id
+    local from_index=source_index(p,first)
+    local origin=(first[from_index] or {}).id
     local default_to=last[1] and last[1].id==origin and 2 or 1
     if rail and active and active.draft_orders then
       -- All initial and copied town-service orders now use the same editor.
@@ -93,9 +101,7 @@ return function(core,client,build,money,assembly)
       b[#b+1]="button[7.50,6.84;3.44,.57;"..stem.."start_copied;Start copied orders]"
     elseif roster and route_ok and #units>0 then
       local y=rail and 6.84 or 6.17
-      if p.mode~="air" then
-        b[#b+1]=("dropdown[.45,%g;3.39,.57;%sfrom;%s;%d;true]"):format(y,stem,table.concat(from,","),p.from or 1)
-      end
+      b[#b+1]=("dropdown[.45,%g;3.39,.57;%sfrom;%s;%d;true]"):format(y,stem,table.concat(from,","),from_index)
       b[#b+1]=("dropdown[3.98,%g;3.38,.57;%sto;%s;%d;true]"):format(y,stem,table.concat(to,","),p.to or default_to)
       b[#b+1]=("button[7.50,%g;3.44,.57;%sstart;%s]"):format(y,stem,esc(rail and "Start "..train_name(active) or "Start service"))
     end
@@ -293,7 +299,7 @@ return function(core,client,build,money,assembly)
     if f[stem.."start"] and (p.mode~="rail" or p.page=="roster") then
       local unit=p.data.vehicles[unit_index(p,p.data.vehicles)]
       local sources,sinks,cargo=routes(p)
-      local first=p.mode=="air" and Route.find(sources,p.depot) or sources[p.from or 1]
+      local first=sources[source_index(p,sources)]
       local default_to=sinks[1] and first and sinks[1].id==first.id and 2 or 1
       local last=sinks[p.to or default_to]
       if not (unit and not unit.draft_orders and unit.parked~=false and first and last and first.id~=last.id) then
@@ -301,7 +307,7 @@ return function(core,client,build,money,assembly)
       end
       p.pending=true
       local sent,why=client.query({kind="command",player=n,command={kind="transport_start",mode=p.mode,
-        vehicle=unit.id,depot=p.depot,first=p.mode=="air" and p.depot or first.id,second=last.id,cargo=cargo,
+        vehicle=unit.id,depot=p.depot,first=first.id,second=last.id,cargo=cargo,
         revision=p.revision}},
         function(r) if panels[n]==p then
           local q=p.data.offers[p.offer or 1]

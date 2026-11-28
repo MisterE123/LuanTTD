@@ -85,3 +85,20 @@ advance(100)
 assert(flight.arrivals>=arrivals+2 and Sim.air_paid_status(s,aircraft.id).fare>stats.fare)
 print(("PASS RC1 ground rotor facilities: exact budgets, dated offers, %d terminals and $%d across save")
   :format(flight.arrivals,Sim.air_paid_status(s,aircraft.id).fare))
+
+-- The first order is not a spawn point. RC1 starts from the owned
+-- hangar and departs directly for the selected remote first stop.
+local reversed,net,run,owned=fixture(1980,ready)
+local home=assert(net.build(reversed,owner,Sim.id(11,26),"helidepot"))
+local away=assert(net.build(reversed,owner,Sim.id(47,26),"helistation"))
+local heli=assert(owned.commit(reversed,owner,assert(owned.quote(reversed,owner,home.id,253))))
+local route=assert(owned.start(reversed,owner,away.id,home.id,heli.id))
+assert(route.target==home.id and route.vehicle.hidden and route.vehicle.target==home.id)
+assert(route.first==away.id and route.vehicle.order.id==away.id and route.second==home.id)
+for day=1,50 do
+  Sim.daily(reversed)
+  assert(route.phase~="blocked",route.failure)
+  if route.arrivals>0 then break end
+end
+assert(route.arrivals==1 and route.last_airfield==away.id)
+print("PASS RC1 aircraft leaves its actual hangar for the remote first order")

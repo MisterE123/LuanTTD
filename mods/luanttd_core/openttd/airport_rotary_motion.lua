@@ -9,7 +9,10 @@ return function(M)
   function H.tick(v,ctx)
     if v.rotor_hidden then return end
     local speed,state=v.rotor_speed,v.rotor_state or 0
-    if v.loading or v.stopped then
+    -- Aircraft::Tick spins the rotor before the first event handler
+    -- changes OT_LOADING to OT_LEAVESTATION. In the host the loading
+    -- departure has already been staged for that first controller pass.
+    if v.loading or ctx.leaving or v.stopped then
       if speed~=0 then
         speed=speed+1
         if speed>=0x80 and state==3 then speed=0 end
