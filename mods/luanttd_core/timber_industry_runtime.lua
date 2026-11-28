@@ -99,6 +99,17 @@ return function(Rules,Catchment)
       local st=stations[id]
       if st then return Rules.acceptance(st,covers[id],cargo,B.local_industries(id),ctx.house_at) end
     end
+    local function distribute(ind,cargo,amount)
+      return Rules.distribute(ind,cargo,amount,ctx.stations,covers,{
+        select_goods=ctx.select_goods,town_rights=ctx.town_rights,neutral_owner=ctx.neutral_owner,
+        packet_allocatable=ctx.packet_allocatable,
+      })
+    end
+    function B.offer_industry_lot(id,cargo,amount)
+      local ind=by_id[id]
+      if not ind or not cargo or not Rules.output(ind,cargo) then return 0 end
+      return distribute(ind,cargo,amount)
+    end
     -- Call from the existing landscape loop. Replay protection is per
     -- physical tile and tick, not per-industry: multiple legit tiles of
     -- one sawmill can release separate 255-unit capped lots in a tick.
@@ -116,10 +127,7 @@ return function(Rules,Catchment)
         stock_tile_animation=ctx.stock_tile_animation}
       return Rules.tile_loop(t.ind,t.tile,o,function(ind,cargo,n)
         if ind.kind=="oil_rig" and cargo=="passenger" and offer_rig_passengers then return offer_rig_passengers(ind,n) end
-        return Rules.distribute(ind,cargo,n,ctx.stations,covers,{
-          select_goods=ctx.select_goods,town_rights=ctx.town_rights,neutral_owner=ctx.neutral_owner,
-          packet_allocatable=ctx.packet_allocatable,
-        })
+        return distribute(ind,cargo,n)
       end)
     end
 

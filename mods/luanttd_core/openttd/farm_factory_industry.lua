@@ -293,7 +293,7 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
     local scheme=F.spec[ind.kind]
     if ind.removed or not scheme or (scheme.life~="processing" and scheme.life~="black_hole") then return 0,0,{} end
     local output=ind.produced[1]
-    local before=output.waiting
+    local before=output and output.waiting or 0
     local matrix=arrival_matrices[scheme]
     if not matrix then
       matrix={}
@@ -301,7 +301,7 @@ return function(Packets,Catchment,Rating,Income,Commons,Timber)
       arrival_matrices[scheme]=matrix
     end
     local used,details=Arrival.apply(ind,matrix)
-    return output.waiting-before,used,details
+    return (output and output.waiting or 0)-before,used,details
   end
 
   -- Original random industry-change dispatch is selected by the host

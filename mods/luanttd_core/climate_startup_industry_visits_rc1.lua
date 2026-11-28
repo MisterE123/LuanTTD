@@ -33,16 +33,16 @@ return function(Sim,Terrain,s,live_economy,town_runtime)
     elseif was then Anim.delete(hub,id,false) end
   end
   if live then
-    -- Passenger-only road transport shares the town/station clock
-    -- without a duplicate producer. Freight waits for native climate
-    -- cargo to use the same physical industry records.
+    local tropic_freight=s.stock_climate.landscape=="tropic"
     for _,v in pairs(s.fleet) do
-      assert((v.stock_bus or v.stock_regal) and v.cargo=="passenger",
-        "The climate industry comparison does not yet settle other player freight")
+      assert((v.stock_bus or v.stock_regal) and v.cargo=="passenger"
+        or tropic_freight and v.stock_road_freight and
+          (v.cargo=="water" or v.cargo=="food" or v.cargo=="fruit" or v.cargo=="maize"),
+        "Unsupported vehicle in the climate industry authority")
     end
     for _,st in pairs(s.stations) do
-      assert(st.mode=="road" and Sim.road_stop_has(st,"bus") and not Sim.road_stop_has(st,"truck"),
-        "The climate industry comparison requires passenger-only road stops")
+      assert(st.mode=="road" and (Sim.road_stop_has(st,"bus") or tropic_freight and Sim.road_stop_has(st,"truck")),
+        "Unsupported station in the climate industry authority")
     end
     assert(live_economy=="frozen" or live_economy=="smooth","Choose a supported climate economy")
     if live_economy~="frozen" then
@@ -176,9 +176,9 @@ return function(Sim,Terrain,s,live_economy,town_runtime)
       Scheduler.day(market,market_api)
     end
   end
-  function M.landscape(x,z,tick)
+  function M.landscape(x,z,tick,offer)
     local id=Sim.id(x+1,z+1)
-    if records[id] then return M.visit(id,tick) end
+    if records[id] then return M.visit(id,tick,offer) end
     if M.clear then M.clear(id) end
     if s.tiles[id].stock_arctic_snow==nil and ((s.stock_farm_fields and s.stock_farm_fields[id])
        or (s.stock_farm_grass and s.stock_farm_grass[id]~=nil)) then
@@ -253,7 +253,7 @@ return function(Sim,Terrain,s,live_economy,town_runtime)
   local function reset_stage(t)
     t.completed,t.stage,t.construction_counter=false,0,0
   end
-  function M.visit(id,tick)
+  function M.visit(id,tick,offer)
     local r=records[id]
     if not r then return false end
     local t,firm=r[1],r[2]
@@ -279,14 +279,26 @@ return function(Sim,Terrain,s,live_economy,town_runtime)
     end
     if live then
       -- TransportIndustryGoods consumes the completed tile's lot even
-      -- if there are no collecting stations; only transported stays 0.
+      -- if there are no collecting stations.
       local min=by_spec[firm.id].minimum
+      local moved=false
       for _,p in ipairs(firm.produced) do
         local lot=math.min(p.waiting,255)
         if lot>min then
           p.waiting=p.waiting-lot
-          p.current_production=((p.current_production or 0)+lot)%65536
+          local amount=s.stock_recession and math.floor((lot+1)/2) or lot
+          p.current_production=((p.current_production or 0)+amount)%65536
+          if offer and p.cargo then
+            local units=offer(firm.id,p.cargo,amount)
+            p.current_transported=((p.current_transported or 0)+units)%65536
+            moved=moved or units>0
+          end
         end
+      end
+      if moved then
+        random() -- TriggerIndustryAnimation(CargoDistributed)
+        local gfx=Layout.anim_production[t.gfx]
+        if gfx then t.gfx,t.stage,t.construction_counter=gfx,0,0;return true end
       end
     end
     random() -- TriggerIndustryTileAnimation(TileLoop)

@@ -4037,7 +4037,7 @@ M.road_station_order_should_stop=dofile(module_root.."openttd/station_stop_order
 local rating_runtime,town_passengers,mail_runtime,station_service,paid_ferry,coal_service,rail_coal
 local timber_service,timber_rules,ship_coal
 local farm_service,farm_world
-local farm={}
+local farm={tropic_native=setmetatable({},{__mode="k"})}
 local oil={reports=setmetatable({},{__mode="k"})}
 local goods={ready=setmetatable({},{__mode="k"})}
 local FreightKinds
@@ -4053,7 +4053,10 @@ local coal_day_bindings=setmetatable({},{__mode="k"})
 local function timber_binding(s,force)
   if timber_day_bindings[s] then return timber_day_bindings[s] end
   if M.road_climate_industry_active(s) then
-    return farm.tropic_freight.bind(s,{credit=credit,field_board=farm.tropic_field_board(s),
+    local native=farm.tropic_native[s]
+    local industries=native and native.bind(s.stock_worldgen_climate_firms)
+    return farm.tropic_freight.bind(s,{credit=credit,field_board=farm.tropic_field_board(s,industries),
+      industries=industries,external_industry_clock=not not native,stock_tile_animation=not not native,
       modified_catchment=s.stock_modified_catchment~=false,
       town_rights=function(id) return s.stock_town_growth and s.stock_town_growth.towns[id] end})
   end
@@ -4440,7 +4443,11 @@ end
 -- authority, independent of UI or asset readiness. Never mix overlapping
 -- commodity owners or initialise a second industry clock.
 function M.mount_tropic_freight(s)
-  if not (s.stock_climate and s.stock_climate.landscape=="tropic" and s.stock_climate_industries) then return end
+  if not (s.stock_climate and s.stock_climate.landscape=="tropic") then return end
+  if not s.stock_climate_industries then
+    if not (s.stock_worldgen_climate_firms and M.stock_climate_clock[s]) then return end
+    farm.tropic_native[s]=dofile(module_root.."climate_industry_freight_view.lua")
+  end
   passenger_modules()
   if not farm.tropic_freight then
     local function openttd(name) return dofile(module_root.."openttd/"..name..".lua") end
@@ -4453,8 +4460,8 @@ function M.mount_tropic_freight(s)
       openttd("town_water_industry_rc1"),openttd("town_food_supply_rc1"),openttd("town_house_acceptance_rc1"),"tropic")
     local fields=openttd("farm_factory_fields")(coal)
     local field_world=dofile(module_root.."farm_factory_world.lua")(M,openttd("terrain"),rules,fields,catchment)
-    function farm.tropic_field_board(state)
-      return field_world.field_board(state,{industries=state.stock_climate_industries,exact_grid=true})
+    function farm.tropic_field_board(state,industries)
+      return field_world.field_board(state,{industries=industries or state.stock_climate_industries,exact_grid=true})
     end
     farm.tropic_field_rules=fields
     local adapter=dofile(module_root.."farm_factory_runtime.lua")(rules,fields,
@@ -5098,8 +5105,8 @@ function M.road_timber_active(s)
   return not not (s.road_timber and s.road_stock_house_supply and s.stock_timber_industries and M.road_stock_service_active(s))
 end
 function M.road_climate_industry_active(s)
-  return not not (s.stock_climate and s.stock_climate.landscape=="tropic" and s.stock_climate_industries
-    and farm.tropic_freight and M.road_stock_service_active(s))
+  return not not (s.stock_climate and s.stock_climate.landscape=="tropic"
+    and (s.stock_climate_industries or farm.tropic_native[s]) and farm.tropic_freight and M.road_stock_service_active(s))
 end
 function M.road_farm_active(s)
   return not not (s.road_farm and s.road_stock_house_supply and s.stock_farm_industries and farm_service and
@@ -5960,7 +5967,7 @@ local function stock_station_day(s,legacy_supply,commercial,coal,freight,timber,
         end
         if works and not work then works.decorate(s,x+1,z+1) end
         if tide then tide(x,z,tick) end
-        if climate_clock then climate_clock.landscape(x,z,tick) end
+        if climate_clock then climate_clock.landscape(x,z,tick,timber and timber.offer_industry_lot) end
         local industry_id=machines and (exact and source+1 or x+z*width+1)
         local completed,prior_gfx,prior_stage
         if industry_id then completed,prior_gfx,prior_stage=machines.phase(industry_id) end
@@ -6495,6 +6502,20 @@ function M.bind_stock_industry_ships(s,industry,first,live,refresh)
   elseif dry then tanker=dry end
   industry.tanker=tanker
 end
+-- RoadVehicle::OnNewEconomyDay and SubtractMoneyFromCompanyFract.
+function M.settle_freight_running_cost(s,v,key,scale)
+  local ticks=v[key]
+  if not ticks or ticks==0 then return end
+  local c=M.company(s,v.owner)
+  local annual=math.floor(1600*M.vehicles[v.engine].running_factor*(scale or 1))
+  local amount=math.floor(annual*ticks/(365*74))
+  local old=c.stock_money_fraction or 0
+  local remainder=(old-amount%256)%256
+  c.stock_money_fraction=remainder
+  local whole=math.floor(amount/256)+(remainder>old and 1 or 0)
+  if whole~=0 then debit(c,whole,"road_run");v.expense=v.expense+whole;HQStats.record(s,v,-whole) end
+  v[key]=0
+end
 function M.daily(s,traverse,tick_pulse,openings)
   local live=tick_pulse~=nil
   s.day=s.day+1
@@ -6563,16 +6584,7 @@ function M.daily(s,traverse,tick_pulse,openings)
       local resume=is_mail and "stock_mail_resume" or is_timber and "stock_timber_resume" or "stock_coal_resume"
       -- Running-tick cost at the next economy day, not an invented fee
       -- for only moving. Source stores 8-bit corporate money fractions.
-      if v[key] and v[key]>0 then
-        local c=M.company(s,v.owner)
-        local amount=math.floor(1600*M.vehicles[v.engine].running_factor*v[key]/(365*74))
-        local old=c.stock_money_fraction or 0
-        local remainder=(old-amount%256)%256
-        c.stock_money_fraction=remainder
-        local whole=math.floor(amount/256)+(remainder>old and 1 or 0)
-        if whole~=0 then debit(c,whole,"road_run");v.expense=v.expense+whole;HQStats.record(s,v,-whole) end
-        v[key]=0
-      end
+      if not (stock_dates and farm.tropic_native[s]) then M.settle_freight_running_cost(s,v,key) end
       if not enabled then
         if v.load_state then abort_stock_stop(s,v) end
         if v.running then
@@ -6651,7 +6663,8 @@ function M.daily(s,traverse,tick_pulse,openings)
               if faults then faults.calendar(v) end
             else
               if faults then faults.economy(v,date,automatic) end
-              if stock_bus(v) then settle_bus(v) end
+              if stock_bus(v) then settle_bus(v)
+              elseif farm.tropic_native[s] then M.settle_freight_running_cost(s,v,"stock_timber_running_ticks",6/8) end
             end
           elseif calendar and entry.calendar then entry.calendar()
           elseif not calendar and entry.economy then entry.economy(date) end

@@ -14,6 +14,11 @@ local Freight=dofile(base.."openttd/road_freight_catalog.lua")
 for _,engine in ipairs(Freight.road_order) do
   realistic[engine]=Accel.vehicle(Freight.row(engine))
 end
+for _,climate in ipairs({"arctic","tropic"}) do
+  for _,engine in ipairs(Freight.climate_roster(climate)) do
+    realistic[engine]=realistic[engine] or Accel.vehicle(Freight.row(engine))
+  end
+end
 for _,engine in ipairs({"goods_truck","craighead_goods_truck"}) do
   realistic[engine]=Accel.vehicle(Freight.row(engine))
 end

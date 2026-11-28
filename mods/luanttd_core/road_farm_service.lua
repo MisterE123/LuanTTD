@@ -112,15 +112,20 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
       assert(raw,"The station union did not bind freight")
     else open(stations) end
     B.stations,B.industries=stations,raw.industries
+    if options.external_industry_clock then
+      B.offer_industry_lot=raw.offer_industry_lot
+    end
     function B.report(st,cargo,tick)
       if not (st and by_id[st.id] and pairs_by_cargo[cargo]) then return {accepts=false,eighths=0,sources={}} end
       return refresh(st,tick)[cargo]
     end
     function B.tile_visit(x,z,tick,offer_rig_passengers)
+      if options.external_industry_clock then return 0,0 end
       if options.field_board and options.field_board.visit then options.field_board.visit(x,z,tick,options.editor and options.editor(s,tick)) end
       return raw.tile_visit(x,z,tick,offer_rig_passengers)
     end
     function B.landscape(width_,height_)
+      if options.external_industry_clock then return end
       -- A custom editor callback or board may do work even for a
       -- blank cell. Keep the coordinate dispatcher for such bindings.
       if options.editor or not raw.landscape then return end
@@ -145,12 +150,13 @@ return function(Sim,Rules,Adapter,Packets,Income,Rating,Station,profile)
     end
     function B.after_vehicle_tick(tick)
       B.refresh_production_stations(tick)
-      raw.produce_all(tick)
+      if not options.external_industry_clock then raw.produce_all(tick) end
     end
     function B.month_one(ind,ordinal,year,opts)
       return raw.month(ind.id,ordinal,year,opts)
     end
     function B.month(ordinal,year,opts)
+      if options.external_industry_clock then return {} end
       local out={}
       for _,i in ipairs(raw.industries) do
         local kind,details=raw.month(i.id,ordinal,year,opts)

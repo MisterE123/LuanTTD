@@ -1846,3 +1846,21 @@ ratings, town state, cash and passenger payments. The bus delivers
 gate merely by adding busy passenger stops. This run reopens the
 packed world twice in the Luanti worker; it is not a visual
 playtest or a general climate freight or network-parity claim.
+
+### A player water tanker on the complete generated Tropic world
+
+A truck stop can now offer and receive the pooled cargo of the
+same generated firms that the landscape and economy simulate.
+The truck adapter does not run a second producer or field clock.
+This also uses each original climate truck's loaded weight and the
+stock Low running cost on the vehicle's own economy-day slot.
+
+On the generated Smooth Tropic world, the stock Uhl tanker
+collects from the actual Water Supply and delivers 21 units to the
+actual Water Tower. Native comparisons match all 8,584 vehicle
+frames, ten checks of station stock, ratings, running costs,
+payments and town water receipts, all 8,880 shared RNG ticks, and
+two packed reopens in the Luanti worker. The 21 units roll into
+the old-month water record; without food, this desert town
+remains growth-blocked. This verifies the single water route,
+not the complete multi-vehicle food-and-water network.

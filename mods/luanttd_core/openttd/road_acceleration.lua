@@ -7,7 +7,7 @@
 local A={}
 local floor,min,max=math.floor,math.min,math.max
 local mass_weight={passenger=1,coal=16,mail=4,oil=16,livestock=3,goods=8,
-  grain=16,wood=16,iron_ore=16,steel=16,valuables=2}
+  grain=16,wood=16,iron_ore=16,steel=16,valuables=2,food=16,water=16,fruit=16,maize=16,wheat=16}
 
 function A.vehicle(spec)
   local maximum=floor((spec.source_speed or spec.speed)/2)
