@@ -26,8 +26,13 @@ place(a,"bus");place(b,"truck")
 local aa,bb=s.tiles[a].station,s.tiles[b].station
 s.stations[aa].name="Old Junction"
 s.stations[aa].stock.passenger=6
+s.stations[aa].time_since_load,s.stations[aa].time_since_unload,s.stations[aa].town_growth_service_clock=20,255,true
+local service=dofile(mod.."town_station_services.lua")(S)
+local G=dofile(mod.."openttd/town_growth.lua")
+local t=G.new(1,13,14)
 remove(a);remove(b)
 assert(not s.stations[aa] and not s.stations[bb])
+assert(G.active_stations(t,service.view(s))==1,"Clearing the last platform must not erase town service")
 assert(R.closest(s,"station",own,id(16,14)).id==aa)
 assert(not R.closest(s,"station","Other rail",id(16,14)))
 assert(not R.closest(s,"station",own,id(27,14)),"distance eight is excluded")
@@ -39,7 +44,7 @@ for _,r in ipairs(options.choices) do names[r.name]=true end
 assert(names["Rebuild Old Junction"])
 place(id(16,14),"bus")
 assert(s.tiles[id(16,14)].station==aa and s.stations[aa].name=="Old Junction")
-assert(s.stations[aa].stock.passenger==6)
+assert(s.stations[aa].stock.passenger==6 and s.stations[aa].time_since_load==20)
 local next=s.next_station
 place(id(22,14),"truck",nil,true)
 assert(s.tiles[id(22,14)].station==next and s.next_station==next+1)

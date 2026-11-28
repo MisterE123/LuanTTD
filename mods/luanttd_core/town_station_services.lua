@@ -43,7 +43,7 @@ return function(Sim)
     return {id=id,mode=mode,x=x,z=z,owner=row.owner,time_since_load=row.time_since_load,time_since_unload=row.time_since_unload}
   end
   local active={coal=Sim.rail_coal_active,goods=Sim.rail_goods_active,oil=Sim.rail_oil_active}
-  function M.view(s,include_idle)
+  function M.view(s,include_idle,at_tick)
     local views={}
     local admitted={rail={},ship={},air={},rig={}}
     local function merge(mode,st,role)
@@ -123,6 +123,20 @@ return function(Sim)
         end
       end
     end
+    -- RC1 keeps the sign in the station spatial index after the last
+    -- facility is removed. The small tick no longer ages its service,
+    -- but town growth/rating still count it until the eighth big tick.
+    local function inactive(mode,bucket,kind)
+      if not s[bucket] then return end
+      Sim.road_station_retirement().visit(s,kind,function(st)
+        if not include_idle and (st.time_since_load or 255)>20 and (st.time_since_unload or 255)>20 then return end
+        local x,z=Sim.xy(st.tile)
+        local row=project(st.id,mode,x,z,st)
+        if row then views[#views+1]=row end
+      end,at_tick)
+    end
+    inactive("road","retired_road_stations","station")
+    inactive("ship","retired_ship_stations","dock")
     table.sort(views,function(a,b)
       if a.mode~=b.mode then return modes[a.mode]<modes[b.mode] end
       return a.id<b.id

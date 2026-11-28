@@ -773,3 +773,24 @@ compares 81,104 RNG ticks and 16 snapshots of the ground, road network,
 house identity, construction, age and town cargo clocks from 1993 to
 1996. It does not extend proof to other climates, multiplayer
 competition or NewGRF building callbacks.
+
+
+### Service survives removal of a stop until its station expires
+
+OpenTTD retains a station's sign in its spatial index after removal of
+its last facility. The station cannot accept a delivery, but it still
+has a sign, owner and last service times. `CountActiveStations` and the
+monthly rating pass use that index. The rating clock stops aging when
+the station is unused, and `StationHandleBigTick` destroys the station
+on its eighth staggered 250-tick check. On that last tick an earlier
+town growth attempt can still see it; the next tick cannot.
+
+The growth view now follows that rule for deleted road stops and docks,
+without adding them back to orders, catchment or routing. Former docks
+capture the shared station service times before the visible dock and its
+active service records disappear. The compiled RC1 test compares 7,000
+cases at the town radius, 20/21 service-age, and station expiry
+boundaries. A native Luanti test physically removes the only served
+bus stop, sees that station count for February growth, then no longer
+counts it at the March update. Rail and airport station retirement
+and the full cross-mode deletion lifecycle remain separate work.

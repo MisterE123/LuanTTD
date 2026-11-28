@@ -110,7 +110,15 @@ do
   end
   local old=build(10)
   s.stock_ship_stations[old.id].name="Tidewater Wharf"
+  local service=m("town_station_services")(Sim)
+  s.ship_paid_service=true
+  s.stock_ship_commercial={service={stations={
+    {host_mode="ship",host_id=old.id,owner="A",time_since_load=4,time_since_unload=8},
+  }}}
   retire(old)
+  s.stock_ship_commercial=nil
+  local served=assert(service.view(s)[1])
+  assert(served.mode=="ship" and served.id==old.id and served.time_since_load==4 and served.time_since_unload==8)
   local record=s.retired_ship_stations[old.id]
   assert(record.until_tick==2249 and record.row.tile==old.land and record.row.land==nil)
   assert(quote(17).join==old.id and not quote(18).join,"Manhattan distance is strictly below eight")

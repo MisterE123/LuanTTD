@@ -10,6 +10,7 @@ return function(Sim,Terrain,Water,Facilities)
   local function spread(s) return s.stock_station_spread or 12 end
   local function area(p) return Area.search_area(Geo,p.land,p.dir) end
   local run_keys={"ship_pilot","stock_coal_ship_run","stock_oil_ship_route"}
+  local town_stations=dofile(path.."town_station_services.lua")(Sim)
   local function retiring() return Sim.road_station_retirement() end
   local function joined_board(s,owner)
     local B={xy=Sim.xy,id=Sim.id,matches=function()return true end}
@@ -452,14 +453,23 @@ return function(Sim,Terrain,Water,Facilities)
       -- new spread, even if the original entrance was just demolished.
       p.sign_tile=Area.closest_tile(Geo,p.spread,sign)
     else
-      entries[p.id]=nil
       if pair_idx then
+        -- The station persists after its dock/route ledger is cleared.
+        -- Transfer the latest shared physical station clocks before
+        -- removing either the dock tiles or the service row.
+        for _,row in ipairs(town_stations.view(s)) do
+          if row.mode=="ship" and row.id==p.id then
+            p.time_since_load,p.time_since_unload=row.time_since_load,row.time_since_unload
+            break
+          end
+        end
         -- An unused StationID has no footprint, routing, or catchment
         -- until another dock activates it. Keep the sign and identity.
         p.tile=p.sign_tile or p.land
         p.land,p.water,p.dir,p.station_area,p.approach,p.water_class,p.docks,p.spread=nil,nil,nil,nil,nil,nil,nil,nil
         retiring().retire(s,"dock",p)
       end
+      entries[p.id]=nil
     end
     for _,key in ipairs(tiles) do s.tiles[key].ship=nil end
     if pair_idx then wake_lost_berths(s,p.id) end

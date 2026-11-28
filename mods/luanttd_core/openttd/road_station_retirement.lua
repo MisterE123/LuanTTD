@@ -24,6 +24,12 @@ return function(Sim)
     local entry=map and map[id]
     if entry and now(s,kind)<entry.until_tick then return entry.row end
   end
+  function R.visit(s,kind,visit,at_tick)
+    local tick=at_tick or now(s,kind)
+    for _,entry in pairs(s[buckets[kind]] or {}) do
+      if tick<entry.until_tick then visit(entry.row) end
+    end
+  end
   function R.take(s,kind,id)
     local row=R.get(s,kind,id)
     if row then s[buckets[kind]][id]=nil end

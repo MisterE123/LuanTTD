@@ -367,6 +367,7 @@ jobs:
           /usr/bin/python3 tests/canal_dike_art.py
           python3 tests/rail_autoslope_rc1.py "$src"
           python3 tests/town_growth_scheduler_rc1.py "$src" lua5.1
+          python3 tests/town_retired_station_rc1.py "$src" lua5.1
           lua5.1 tests/town_growth_extra_house.lua
           python3 tests/town_reseed_rc1.py "$src" lua5.1
           python3 tests/town_house_selection_rc1.py "$src" lua5.1
@@ -548,5 +549,10 @@ jobs:
         run: |
           lua5.1 tests/town_growth_rc1_fast_grid.lua houses
           bash tests/town_growth_rc1_goods_native.sh houses
+      - name: Check growth service after removing the last stop
+        run: |
+          lua5.1 tests/road_station_retirement.lua
+          lua5.1 tests/dock_station_join.lua
+          LUANTTD_QA_MUNICIPAL_KIND=retired bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-retired-station
       - name: Compare three years of dense 1993 grid cities
         run: lua5.1 tests/town_growth_rc1_fast_grid.lua crowded

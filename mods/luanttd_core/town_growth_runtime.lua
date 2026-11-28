@@ -379,7 +379,9 @@ return function(Sim,Terrain,G,B,H)
     -- due. G.tick supplies the town when its countdown actually expires;
     -- share one callback and the lazy board for this source tick.
     local function attempt(t)
-      view=view or services(s)
+      -- OnTick_Town runs before OnTick_Station on this source tick;
+      -- an unused stop due for destruction is still in the sign index.
+      view=view or services(s,false,tick-1)
       -- Houses-only still follows existing crossings, drive-through
       -- stops and road portals; only construction of new roads stops.
       brd=brd or (ordinary and W.road_board(s) or board(s,false))
