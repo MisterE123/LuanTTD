@@ -336,17 +336,23 @@ return function(Sim,R,max_days)
     end
     return reply(true,nil,row)
   end
+  local function town_settings()
+    return s.stock_generated_profile and s.stock_generated_profile.town_settings
+  end
+  local growth_names={[0]="None","Slow","Normal","Fast","Very fast"}
   function A.company(name,midday)
     if not owner(name) then return reply(false,"INVALID_REQUEST") end
     local c=s.companies[name]
     if not c then return reply(false,"COMPANY_NOT_OPEN") end
     local year,month,day=Sim.date(s)
+    local growth=town_settings()
     return reply(true,nil,{cash=c.cash,loan=c.loan,revenue=c.revenue,expense=c.expense,
       month_revenue=c.month_rev,month_expense=c.month_exp,paid_units=c.paid_units,hq=Sim.company_hq_status(s,name,midday),
       rail_maglev=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,3) or false,
       rail_mono=R.rail and R.rail.railtype_available and R.rail.railtype_available(name,2) or false,
       news_head=R.news and R.news.head(),
-      year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name})
+      year=year,month=month,day_of_month=day,world_day=s.day,speed=s.speed,can_speed=s.chair==name,
+      world_town_growth=growth and (growth.growth_setting or 2) or nil})
   end
   function A.news(name,page,after,req)
     if not owner(name) or not s.companies[name] or not R.news then return reply(false,"Newspaper unavailable.") end
@@ -456,7 +462,7 @@ return function(Sim,R,max_days)
   -- vehicle records. Everything else must be treated as
   -- a potential surface edit, including future command types. Both
   -- direct placement RPCs below flow through this same handler.
-  local keeps_sea={company_open=true,company_loan=true,speed=true,
+  local keeps_sea={company_open=true,company_loan=true,speed=true,town_growth_setting=true,
     road_buy=true,road_order_add=true,road_toggle=true}
   local function valid_speed(speed)
     return speed==0 or speed==1 or speed==2 or speed==4
@@ -622,6 +628,19 @@ return function(Sim,R,max_days)
       if s.chair~=name and c.admin~=true then return reply(false,"Only the first company or a server admin can change speed.") end
       s.speed=c.speed
       ok,note=true,speed_note(c.speed)
+    elseif c.kind=="town_growth_setting" then
+      if not integer(c.rate,0,4) then return reply(false,"INVALID_GROWTH_SETTING") end
+      if s.chair~=name and c.admin~=true then return reply(false,"Only the host or server admin can change world rules.") end
+      local growth=town_settings()
+      if not growth then return reply(false,"Stock town growth is unavailable in this world.") end
+      if (growth.growth_setting or 2)==c.rate then
+        return reply(true,"World town growth is already "..growth_names[c.rate]..".")
+      end
+      -- RC1 economy.town_growth_rate has no change callback: existing
+      -- timers/eligibility are updated by the normal monthly and house
+      -- paths, not by the setting command and not by an extra tick.
+      growth.growth_setting=c.rate
+      ok,note=true,"World town growth set to "..growth_names[c.rate].."."
     elseif c.kind=="town_fund_buildings" and index(c.town) then
       ok,note,value=Sim.fund_town_buildings(s,name,c.town,c.cost)
     elseif c.kind=="town_fund_roads" and index(c.town) then

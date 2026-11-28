@@ -285,3 +285,15 @@ all 27,010 random-state ticks, original industry placement and layouts,
 14 map/town snapshots, and three packed reopens. The hills mode of the
 dedicated Luanti check also verifies the final stock town clocks and
 RNG after a real SQLite restart.
+
+
+### Changing the growth setting in a running world
+
+A separate OpenTTD 16.0-RC1 run changes Normal to None in February
+and None to Very Fast in May using the stock server ChangeSetting
+command. LuanTTD uses the same five values, populated from the
+world checkpoint. Changing the value does not modify existing
+growth counters immediately. Both engines match the growth clocks,
+roads, houses, cargo production, and RNG at 20 samples and through
+the entire year. The real worker persists None across a SQLite
+restart, then applies Very Fast without regenerating the world.

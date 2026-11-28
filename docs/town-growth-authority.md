@@ -164,7 +164,12 @@ None, Slow, Normal (the default), Fast or Very fast. This setting is
 saved per world and reaches the worker on monthly eligibility, funding,
 and house commits. None does not prevent initial towns from being
 founded, and Fund New Buildings can temporarily bypass it. The setup
-does not yet expose changing the stock setting in an existing world. The native monthly worker test exercises the actual funding
+also supports changing this per-world setting during play. The host or
+server admin can open **Finance → World rules**, pick a stock rate, and
+press **Apply**. The authority worker saves it without rerolling any
+growth state at button press: normal town updates pick up the new rate,
+and changing to None does not demolish or cancel existing buildings.
+The native monthly worker test exercises the actual funding
 action with no vehicles, grows houses after a paid command with growth
 set to None, then verifies the three monthly decrements and no further
 building after two worker reopens. [Whole-town replay tests](stock-town-worldgen.md)

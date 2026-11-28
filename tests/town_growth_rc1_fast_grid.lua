@@ -4,6 +4,8 @@ local profiles={
     towns=4,custom_towns=6,layout="grid3",growth_rate=3},
   better={fixture="rc1-better-slow-town-year",width=128,depth=256,year=1950,seed=11681,
     towns=2,layout="better",growth_rate=1},
+  midyear={fixture="rc1-midyear-town-setting",width=128,depth=128,year=1950,seed=1751,
+    towns=4,custom_towns=4,layout="original",growth_rate=2},
   hills={fixture="rc1-hills-town-year",width=256,depth=256,year=1950,seed=1,
     towns=3,layout="original",growth_rate=2,relief=3,coast=0,rivers=3,larger_towns=4},
   random={fixture="rc1-random-1975-town-year",width=256,depth=256,year=1975,seed=77294,
@@ -44,7 +46,7 @@ for i,source in ipairs(ref.industries) do
 end
 
 s.road_coal,s.road_timber,s.road_farm,s.road_oil,s.road_heavy=true,true,true,true,true
-local mount,Codec=m("campaign_authority_runtime"),m("packed_campaign")
+local mount,Codec,endpoint=m("campaign_authority_runtime"),m("packed_campaign"),m("campaign_authority_endpoint")
 local cap={road={start_year=cfg.year,breakdowns=1,service_interval=150},ferry={},air={},oil_tanker=true}
 local runtime=mount(Sim,mod,s,cap)
 local function fold(h,...)
@@ -55,6 +57,26 @@ local digest,ticks,maps=1,0,0
 local function observe(tick)
   local rng=s.passenger_rating_rng
   digest=fold(digest,tick,rng[1],rng[2]);ticks=ticks+1
+  if ref.midyear and (tick==4388 or tick==10974) then
+    local before={}
+    for i,t in ipairs(s.stock_town_growth.towns) do before[i]={t.grow_counter,t.growth_rate,t.growing} end
+    local authority=endpoint(Sim,runtime)
+    local rate=tick==4388 and 0 or 4
+    local revision=s.authority_revision or 0
+    local request={kind="town_growth_setting",rate=rate,revision=revision}
+    local unauthorized=authority.command("Visitor",request)
+    assert(not unauthorized.ok and unauthorized.revision==revision)
+    request.admin=true
+    local result=authority.command("Server Admin",request)
+    assert(result.ok and result.revision==revision+1)
+    assert(s.stock_generated_profile.town_settings.growth_setting==rate)
+    assert(not authority.command("Server Admin",request).ok,"A stale settings submission must fail")
+    for i,t in ipairs(s.stock_town_growth.towns) do
+      local b=before[i]
+      assert(b[1]==t.grow_counter and b[2]==t.growth_rate and b[3]==t.growing,
+        "Stock settings changes must not force a premature growth update")
+    end
+  end
   if profile_id=="hills" and tick==1281 then
     local edge,rock=s.tiles[40226+1],s.tiles[40225+1]
     assert(edge.build=="road" and edge.road_bits==10 and rock.stock_water_rocks and not rock.coastal_water)
@@ -106,6 +128,6 @@ for day=1,365 do
   end
   runtime.day(observe)
 end
-assert(ticks==27010 and maps==14 and digest==ref.rng)
-print(("PASS RC1 %s region: %d industry placements, %d towns, original span portals, 14 map snapshots, 27,010 RNG ticks, three packed reopens")
-  :format(profile_id,#ref.industries,#s.stock_town_growth.towns))
+assert(ticks==27010 and maps==(ref.midyear and 20 or 14) and digest==ref.rng)
+print(("PASS RC1 %s region: %d industry placements, %d towns, original span portals, %d map snapshots, 27,010 RNG ticks, three packed reopens")
+  :format(profile_id,#ref.industries,#s.stock_town_growth.towns,maps))

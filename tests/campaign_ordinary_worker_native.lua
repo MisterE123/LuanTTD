@@ -317,6 +317,13 @@ local function transfer_ordinary(viewer)
               core.show_formspec=function(player,form,body)
                 assert(player==owner and form=="luanttd_core:worker_finance")
                 show(player,form,body)
+                if core.settings:get_bool("luanttd_worker_town_rules_qa",false) and body:find("Town growth (all towns)",1,true) then
+                  if body:find("World town growth set to None.",1,true) then
+                    core.log("action","PASS NATIVE PROJECTED WORLD RULES: graphical growth change reached the stock authority")
+                  else
+                    core.log("action","NATIVE_PROJECTED_WORLD_RULES_READY")
+                  end
+                end
                 if body:find("Borrow $10,000",1,true) then
                   core.log("action","NATIVE_PROJECTED_FINANCE_READY "..(body:match("label%[%.45,0%.94;([^%]]*)") or "") )
                 end

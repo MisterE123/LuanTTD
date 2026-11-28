@@ -34,6 +34,7 @@ bayline_generated_tree_placer = $((rail_exhaust == 1 ? 0 : 2))
 bayline_generated_relief = 0
 bayline_generated_coasts = 0
 luanttd_worker_graphical_qa = true
+luanttd_worker_town_rules_qa = ${LUANTTD_NATIVE_TOWN_RULES:-false}
 singleplayer_mode = false
 CONF
 cat >"$out/client.conf" <<'CONF'
@@ -89,6 +90,23 @@ mark 'PASS NATIVE PROJECTED TRAIN EDIT'
 mark 'NATIVE_PROJECTED_FINANCE_READY'
 sleep .45
 import -window root -resize 960x600 -quality 88 "$out/worker-finance.jpg"
+if [[ ${LUANTTD_NATIVE_TOWN_RULES:-false} == true ]]; then
+  xdotool mousemove 612 598 click 1
+  mark 'NATIVE_PROJECTED_WORLD_RULES_READY'
+  sleep .45
+  import -window root -resize 960x600 -quality 88 "$out/worker-world-rules.jpg"
+  xdotool mousemove 760 449 click 1
+  sleep .23
+  import -window root -resize 960x600 -quality 88 "$out/worker-growth-dropdown.jpg"
+  xdotool key Home Return
+  sleep .25
+  xdotool mousemove 869 448 click 1
+  mark 'PASS NATIVE PROJECTED WORLD RULES'
+  sleep .4
+  import -window root -resize 960x600 -quality 88 "$out/worker-world-rules-changed.jpg"
+  xdotool mousemove 612 534 click 1
+  sleep .35
+fi
 xdotool mousemove 612 450 click 1
 mark 'PASS NATIVE PROJECTED FINANCE'
 mark 'NATIVE_PROJECTED_DEMOLITION_READY'

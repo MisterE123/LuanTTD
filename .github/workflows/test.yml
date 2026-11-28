@@ -515,3 +515,8 @@ jobs:
         run: lua5.1 tests/town_growth_rc1_fast_grid.lua hills
       - name: Restart the same hills profile in native Luanti
         run: bash tests/town_growth_rc1_goods_native.sh hills
+      - name: Verify live world-growth setting changes
+        run: |
+          lua5.1 tests/campaign_worker_finance_ui.lua
+          lua5.1 tests/town_growth_rc1_fast_grid.lua midyear
+          bash tests/town_growth_rc1_goods_native.sh midyear
