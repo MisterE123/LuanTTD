@@ -1314,3 +1314,21 @@ This is a port of the scheduler branch. Arctic and Tropic world
 generation and the playable Food and Water supply chains remain
 open. The base Arctic game uses a configured snowline height; an
 optional calendar-indexed snowline comes from NewGRF data.
+
+### Terrain inputs for the climate growth gate
+
+The terrain port now has the exact RC1 snow/desert coverage histogram,
+strict tie handling, 13-wide rainforest/desert neighborhood, and desert
+ground and snow transitions in clear-tile updates. It distinguishes
+stock `TileHeight` (used by the growth gate) from `GetTileZ` (used by
+snow on a clear slope). New rivers clear only the desert zone within
+the stock five-tile-diameter footprint, before towns read that zone.
+The terrain adapter exposes the live town-center inputs, not a cached
+elevation or biome label derived from rendering.
+
+The [compiled source differential](../tests/town_climate_landscape_rc1.py)
+runs 108 boards containing 46,440 tile records. It checks exact
+thresholds, three-way zone classification, desert surface type and
+density, and snow transitions. Its landscape scheduler visits each
+clear cell once using the compiled stock desert update. This does not
+claim order/RNG parity for complete Arctic or Tropic world generation.
