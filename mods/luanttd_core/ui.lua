@@ -516,15 +516,19 @@ function U.fields(p,formname,f)
     end)
     return true
   end
+  if formname=="luanttd_core:town_council_campaigns" then
+    return U.town_council_fields(p,f)
+  end
   if formname=="luanttd_core:town_advertising" then
     return U.town_advertising_fields(p,f)
   end
   if formname=="luanttd_core:town_authority" then
-    if f.town_advertising then U.open_town_advertising(p)
+    if f.town_council then U.open_town_council(p)
+    elseif f.town_advertising then U.open_town_advertising(p)
     elseif f.build_statue then U.fund_town_from_panel(p,"statue")
     elseif f.fund_buildings or f.fund_roads then U.fund_town_from_panel(p,f.fund_roads and "roads" or "buildings")
     else
-      local v=view(p:get_player_name());v.town_funding=nil;v.road_funding=nil;v.statue_offer=nil;v.advertising_offer=nil;v.authority_context=nil
+      local v=view(p:get_player_name());v.town_funding=nil;v.road_funding=nil;v.statue_offer=nil;v.advertising_offer=nil;v.council_offer=nil;v.authority_context=nil
     end
     return true
   end
@@ -3284,7 +3288,7 @@ function U.open_town_authority(p,town)
   if not client then return false end
   local token={}
   v.authority_context=token
-  v.town_funding,v.road_funding,v.statue_offer,v.advertising_offer=nil,nil,nil,nil
+  v.town_funding,v.road_funding,v.statue_offer,v.advertising_offer,v.council_offer=nil,nil,nil,nil,nil
   local queued=client.query({kind="town_authority",player=n,town=town},function(result)
     if v.authority_context~=token or not core.get_player_by_name(n) then return end
     if not result.ok then U.status(p,"Town authority information is unavailable.");return end
@@ -3345,6 +3349,11 @@ function U.open_town_authority(p,town)
     if row.advertising and #row.advertising>0 then
       v.advertising_offer={town=row.id,name=row.town,offers=row.advertising,revision=result.revision,token=token}
       action=action..("button[.45,%g;9.7,.57;town_advertising;Advertising campaigns…]"):format(exit)
+      exit=exit+.80
+    end
+    if row.council then
+      v.council_offer={town=row.id,name=row.town,state=row.council,revision=result.revision,token=token}
+      action=action..("button[.45,%g;9.7,.57;town_council;Transport rights and council actions…]"):format(exit)
       exit=exit+.80
     end
     if row.new_stations~=nil then
@@ -3422,6 +3431,60 @@ function U.town_advertising_fields(p,f)
     U.open_town_authority(p,q.town)
   end)
   if not ok then v.advertising_offer=q;U.status(p,why or "Advertising request could not be sent.") end
+  return true
+end
+function U.open_town_council(p)
+  local n=p:get_player_name()
+  local v=view(n)
+  local q=v.council_offer
+  if not (q and q.token==v.authority_context) then return end
+  local labels={exclusive_rights="Buy exclusive rights for 12 months",bribe="Bribe the town council"}
+  local reasons={RIGHTS_UNAVAILABLE="Exclusive rights unavailable",BRIBE_UNAVAILABLE="Bribery unavailable",
+    UNWANTED_COMPANY="The council is refusing applications",NOT_ENOUGH_CASH="Not enough cash"}
+  local overview=q.state.holder and ("%s holds exclusive transport rights for %d more months."):format(q.state.holder,q.state.months)
+    or "No company holds exclusive transport rights."
+  local ban=q.state.unwanted>0 and ("The council won't take your applications for %d more months."):format(q.state.unwanted) or ""
+  local body={"formspec_version[7]size[9.5,5.52]bgcolor[#152334;false]",
+    "label[.45,.45;TRANSPORT RIGHTS AND COUNCIL ACTIONS]label[.45,.90;"..esc(q.name).."]",
+    "textarea[.45,1.34;8.6,1.1;;;"..esc(overview.."\n"..ban).."]"}
+  for i,o in ipairs(q.state.offers) do
+    local y=2.42+(i-1)*.82
+    local name=labels[o.key]
+    if o.affordable then
+      body[#body+1]=("button[.45,%g;8.6,.58;council_%s;%s]"):format(y,o.key,esc(name.." · "..dollars(o.cost)))
+    else
+      body[#body+1]=("label[.52,%g;%s]"):format(y+.28,esc((reasons[o.why] or name).." · "..dollars(o.cost)))
+    end
+  end
+  body[#body+1]="tooltip[council_exclusive_rights;Rival stations in this town lose access to locally produced cargo.]"
+  body[#body+1]="tooltip[council_bribe;A failed bribe has a one in fourteen chance and blocks company actions for six months.]"
+  body[#body+1]="button_exit[.45,4.55;8.6,.58;authority_back;Back to Local Authority]"
+  core.show_formspec(n,"luanttd_core:town_council_campaigns",table.concat(body))
+end
+function U.town_council_fields(p,f)
+  local n=p:get_player_name()
+  local v=view(n)
+  local q=v.council_offer
+  local client=api.worker_bridge_client
+  if not (q and q.token==v.authority_context and client) then return true end
+  if f.authority_back then U.open_town_authority(p,q.town);return true end
+  if f.quit then v.council_offer=nil;return true end
+  local chosen
+  for _,o in ipairs(q.state.offers) do
+    if f["council_"..o.key] then
+      if chosen then return true end
+      chosen=o
+    end
+  end
+  if not (chosen and chosen.affordable) then return true end
+  v.council_offer=nil
+  local ok,why=client.query({kind="command",player=n,command={kind="town_council_campaign",
+    town=q.town,action=chosen.key,cost=chosen.cost,revision=q.revision}},function(result)
+    if v.authority_context~=q.token or not core.get_player_by_name(n) then return end
+    U.status(p,result.why or (result.ok and "Council action completed." or "This action is unavailable."))
+    U.open_town_authority(p,q.town)
+  end)
+  if not ok then v.council_offer=q;U.status(p,why or "Council request could not be sent.") end
   return true
 end
 function U.fund_town_from_panel(p,action)

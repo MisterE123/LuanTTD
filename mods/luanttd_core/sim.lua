@@ -4753,10 +4753,15 @@ end
 -- RC1 TownActionFundBuildings, GetTownActionCost[FundBuildings] (53),
 -- and Price::TownAction. Shares the mounted town growth state and clock.
 M.town_buildings_fund_cost=math.floor(1000000*53/256)
+function M.town_action_unwanted(s,owner,id)
+  local t=s.stock_town_growth and s.stock_town_growth.towns[id]
+  return t and t.unwanted and (t.unwanted[owner] or 0)>0 and
+    (not s.stock_road_town_policy or s.stock_road_town_policy.bribe~=false)
+end
 function M.quote_town_buildings(s,owner,id)
   local company=s.companies[owner]
   local growth,town=town_growth_mount[s],s.stock_town_growth and s.stock_town_growth.towns[id]
-  if not growth or not company or not town then return end
+  if not growth or not company or not town or M.town_action_unwanted(s,owner,id) then return end
   local policy=s.stock_road_town_policy or {}
   if policy.fund_buildings==false then return end
   local cost=M.town_buildings_fund_cost
@@ -4775,7 +4780,9 @@ end
 function M.town_advertising(s,owner,id,key,cost)
   local c=s.companies[owner]
   local t=s.stock_town_growth and s.stock_town_growth.towns[id]
-  if not (c and t and s.stock_generated_profile) then return nil,"Town advertising is unavailable." end
+  if not (c and t and s.stock_generated_profile) or M.town_action_unwanted(s,owner,id) then
+    return nil,"Town advertising is unavailable."
+  end
   if not M.stock_town_advertising then
     M.stock_town_advertising=dofile(module_root.."openttd/town_advertising_rc1.lua")
     M.stock_town_advertising_world=dofile(module_root.."town_advertising_world.lua")(M,
@@ -4799,7 +4806,53 @@ function M.town_advertising(s,owner,id,key,cost)
   debit(c,q.cost,"other")
   return {town=id,cost=q.cost,affected_cargos=count},"Town advertising paid."
 end
+function M.town_council_campaign(s,owner,id,key,cost)
+  local c=s.companies[owner]
+  local t=s.stock_town_growth and s.stock_town_growth.towns[id]
+  if not (c and t and s.stock_generated_profile) then return nil,"Council actions unavailable." end
+  if not M.stock_council_campaigns then
+    M.stock_council_campaigns=dofile(module_root.."openttd/town_council_campaigns_rc1.lua")
+  end
+  if not M.stock_town_advertising_world then
+    M.stock_town_advertising_world=dofile(module_root.."town_advertising_world.lua")(M,
+      dofile(module_root.."openttd/station_rating.lua"))
+  end
+  local K=M.stock_council_campaigns
+  local policy=s.stock_road_town_policy or {}
+  local ratings=c.stock_town_authority_ratings
+  local score=ratings and ratings[id] or 500
+  local price=s.stock_town_action_price
+  if key==nil then
+    local offers={}
+    for _,name in ipairs({"exclusive_rights","bribe"}) do
+      local offer,why=K.quote(name,t,owner,score,c.cash,policy,price)
+      offers[#offers+1]=offer or {key=name,cost=math.floor((price or K.PRICE)*K.actions[name].factor/256),why=why}
+      offers[#offers].affordable=offer~=nil
+    end
+    return {offers=offers,months=t.exclusive_counter,holder=t.exclusivity,unwanted=t.unwanted and t.unwanted[owner] or 0}
+  end
+  local q,why=K.quote(key,t,owner,score,c.cash,policy,price)
+  if not q then
+    local messages={RIGHTS_UNAVAILABLE="This town's exclusive rights are unavailable.",
+      BRIBE_UNAVAILABLE="Bribery is unavailable at your current standing.",
+      UNWANTED_COMPANY="The council is still refusing your company's applications.",
+      NOT_ENOUGH_CASH="Not enough cash for this council action."}
+    return nil,messages[why] or "Council action unavailable."
+  end
+  if q.cost~=cost then return nil,"The council action price changed." end
+  local rating,success=K.execute(q,t,owner,score,function() return M.stock_random_u32(s) end,
+    function(company,tx,tz,amount,radius)
+      M.stock_town_advertising_world.apply(s,company,tx,tz,amount,radius)
+    end,function(company,town) M.stock_town_advertising_world.clear(s,company,town) end)
+  if key=="bribe" then M.road_tree_authority().apply(c,{[id]=rating}) end
+  debit(c,q.cost,"other")
+  local note=key=="exclusive_rights" and "Bought exclusive transport rights for 12 months." or
+    success and "The bribe was accepted." or "The bribe failed. This town will refuse company actions for six months."
+  return {town=id,cost=q.cost,accepted=success,rating=rating,months=t.exclusive_counter,holder=t.exclusivity,
+    unwanted=t.unwanted and t.unwanted[owner] or 0},note
+end
 function M.quote_road_reconstruction(s,owner,id)
+  if M.town_action_unwanted(s,owner,id) then return end
   local growth=town_growth_mount[s]
   return growth and growth.world.reconstruction and growth.world.reconstruction.view(s,id,owner)
 end
@@ -4823,10 +4876,12 @@ local function statues()
   return statue_world
 end
 function M.quote_town_statue(s,owner,id)
+  if M.town_action_unwanted(s,owner,id) then return end
   local mount=town_growth_mount[s]
   if mount and s.stock_generated_profile then return statues().quote(s,owner,id,mount.world) end
 end
 function M.build_town_statue(s,owner,id,offer)
+  if M.town_action_unwanted(s,owner,id) then return false,"The town is refusing council actions." end
   local mount=town_growth_mount[s]
   if not (mount and s.stock_generated_profile) then return false,"Town statue is unavailable." end
   local ids,cost=statues().apply(s,owner,id,offer,mount.world)

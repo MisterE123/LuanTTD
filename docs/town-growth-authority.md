@@ -1271,4 +1271,26 @@ non-accepting mail is unchanged. The large campaign affects two
 eligible cargo ratings. The 51-town year matches the source
 random states, vehicle and loading records, and map snapshots;
 the native worker preserves the campaign effects across reopen.
-Exclusive rights and bribery are separate town actions.
+Exclusive rights and bribery are available separately in Local Authority.
+
+
+### Exclusive rights and council bribery
+
+The Local Authority panel uses the original `TownActionBuyRights`,
+`TownActionBribe` and `GetMaskOfTownActions` factors and conditions.
+Exclusive rights last 12 months and deny rival companies access to
+the town's newly allocated cargo. Bribery consumes the stock
+`Chance16(1,14)` draw. Success raises council standing by up to 200
+and removes another company's exclusive rights. Failure is still
+paid, sets the council ban to six months, lowers standing to at most
+−50, and clears the relevant station cargo ratings.
+
+On the 1985 coastal reference a second company buys rights in
+TownID 17. The existing operator then bribes successfully, removing
+those rights, and fails on a later attempt after the rival purchases
+them again. Both engines charge 457,031 for rights and 683,593 for
+either bribe outcome. The full 51-town comparison matches all
+27,010 random states, map and town snapshots, and the resulting
+vehicle and station records. The real Luanti worker persists the
+rights and ban across restart and decrements them at the next
+economy month; the standing and action-mask tests also cover expiry.

@@ -125,6 +125,9 @@ return function(Sim,Service,Mux,credit,news,RailActors,Mail,Catchment,MailRandom
       select_goods=s.stock_select_goods,
       statue=Sim.station_has_town_statue and function(st) return Sim.station_has_town_statue(s,st) end,
       modified=s.stock_modified_catchment,
+      town_rights=function(id)
+        return s.stock_town_growth and s.stock_town_growth.towns[id]
+      end,
       neutral_owner=false,serve_neutral=s.stock_serve_neutral_industries~=false,
       mail_random_u32=MailRandom and function() return MailRandom(s) end,
       year=function() return Sim.date(s) end,

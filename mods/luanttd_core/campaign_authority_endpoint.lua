@@ -334,6 +334,7 @@ return function(Sim,R,max_days)
     row.reconstruction=Sim.quote_road_reconstruction(s,name,id)
     row.statue=Sim.quote_town_statue(s,name,id)
     row.advertising=Sim.town_advertising(s,name,id)
+    row.council=Sim.town_council_campaign(s,name,id)
     local stock=s.stock_town_growth and s.stock_town_growth.towns[id]
     if stock then
       row.last_month={}
@@ -490,7 +491,7 @@ return function(Sim,R,max_days)
   -- vehicle records. Everything else must be treated as
   -- a potential surface edit, including future command types. Both
   -- direct placement RPCs below flow through this same handler.
-  local keeps_sea={company_open=true,company_loan=true,speed=true,town_growth_setting=true,town_cargo_setting=true,town_founding_setting=true,
+  local keeps_sea={company_open=true,company_loan=true,speed=true,town_advertise=true,town_council_campaign=true,town_growth_setting=true,town_cargo_setting=true,town_founding_setting=true,
     road_buy=true,road_order_add=true,road_toggle=true}
   local function valid_speed(speed)
     return speed==0 or speed==1 or speed==2 or speed==4
@@ -694,6 +695,10 @@ return function(Sim,R,max_days)
         note="Founded "..value.name.."."
         if R.news and R.news.town_founded then R.news.town_founded(value) end
       end
+    elseif c.kind=="town_council_campaign" and index(c.town) and integer(c.cost,0,2147483647)
+        and (c.action=="exclusive_rights" or c.action=="bribe") then
+      value,note=Sim.town_council_campaign(s,name,c.town,c.action,c.cost)
+      ok=value~=nil
     elseif c.kind=="town_advertise" and index(c.town) and integer(c.cost,0,2147483647)
         and (c.size=="small" or c.size=="medium" or c.size=="large") then
       value,note=Sim.town_advertising(s,name,c.town,c.size,c.cost)

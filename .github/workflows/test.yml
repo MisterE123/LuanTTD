@@ -650,6 +650,11 @@ jobs:
           lua5.1 tests/town_advertising_rc1.lua
           lua5.1 tests/town_growth_rc1_ferry.lua hub-advertising
           bash tests/town_growth_rc1_ferry_native.sh hub-advertising
+      - name: Compare stock exclusive rights and both bribery outcomes
+        run: |
+          lua5.1 tests/town_council_campaigns_rc1.lua
+          lua5.1 tests/town_growth_rc1_ferry.lua hub-council
+          bash tests/town_council_worker_native.sh
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua

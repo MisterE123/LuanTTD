@@ -195,6 +195,11 @@ function G.month(t,stations,setting,random)
     t.exclusive_counter=t.exclusive_counter-1
     if t.exclusive_counter==0 then t.exclusivity=nil end
   end
+  -- The ordinary economy month decrements failed-bribe cooloffs before
+  -- rotating cargo and reevaluating growth.
+  for company,months in pairs(t.unwanted or {}) do
+    t.unwanted[company]=months>1 and months-1 or nil
+  end
   -- Stock rotates actual/max before checking received-cargo goals.
   month_rotate(t.supplied)
   if t.accepted then month_rotate(t.accepted) end

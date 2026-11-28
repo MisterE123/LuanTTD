@@ -4,10 +4,11 @@ local four=arg[1]=="hub-four"
 local compound=arg[1]=="hub-compound"
 local demolition=compound or arg[1]=="hub-house"
 local advertising=arg[1]=="hub-advertising"
-local rotary=four or demolition or advertising or arg[1]=="hub-air"
+local council=arg[1]=="hub-council"
+local rotary=four or demolition or advertising or council or arg[1]=="hub-air"
 local hub=rotary or arg[1]=="hub"
 local mixed=hub or arg[1]=="mixed"
-local ref=dofile("tests/fixtures/"..(advertising and "rc1-active-coastal-town-advertising-year" or compound and "rc1-active-coastal-compound-clear-town-year" or demolition and "rc1-active-coastal-house-clear-town-year" or four and "rc1-active-coastal-four-town-year" or rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
+local ref=dofile("tests/fixtures/"..(council and "rc1-active-coastal-town-council-year" or advertising and "rc1-active-coastal-town-advertising-year" or compound and "rc1-active-coastal-compound-clear-town-year" or demolition and "rc1-active-coastal-house-clear-town-year" or four and "rc1-active-coastal-four-town-year" or rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local S,T,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -209,6 +210,34 @@ local function advertise(t,expected)
   assert(company.cash==cash-offer.cost and st.mail_rating_state.rating==175)
 end
 
+local function council_action(t,expected)
+  local hub=assert(s.stock_joined_stations[0])
+  local town=assert(hub.town)
+  local rival="Second stock company"
+  if t==2982 then
+    checked(A.command(rival,{kind="company_open"}))
+    s.companies[rival].cash=80000000
+  end
+  local who=expected[1]==0 and owner or rival
+  local bribe=expected[2]==7
+  local p=checked(A.town_authority(who,town))
+  local offer=assert(p.council.offers[bribe and 2 or 1])
+  local c=assert(s.companies[who])
+  local cash=c.cash
+  assert(offer.affordable)
+  local r=checked(A.command(who,{kind="town_council_campaign",town=town,cost=offer.cost,
+    action=offer.key,revision=revision}))
+  local station=assert(s.stock_ship_commercial.service.stations[hub.service_station_id])
+  same(t,"stock council action",{expected[1],expected[2],r.cost,p.rating,r.rating,r.months,
+    r.holder==rival and 1 or r.holder==owner and 0 or 255,r.unwanted,station.passenger_rating_state.rating},expected)
+  assert(c.cash==cash-offer.cost and r.accepted==(expected[8]==0))
+  if expected[8]>0 then
+    local banned=checked(A.town_authority(who,town))
+    assert(not banned.funding and not banned.reconstruction and not banned.statue and not banned.advertising)
+    assert(not banned.council.offers[1].affordable and not banned.council.offers[2].affordable)
+  end
+end
+
 local function snapshot(tick,expected)
   local corners,houses,towns=1,1,1
   local year=S.date(s)
@@ -322,6 +351,7 @@ local function tick(t)
   end
   if demolition and t==ref.clear_tick then clear_house() end
   if advertising and ref.campaigns[t] then advertise(t,ref.campaigns[t]) end
+  if council and ref.council[t] then council_action(t,ref.council[t]) end
   digest=fold(digest,t,unpack(s.passenger_rating_rng));ticks=ticks+1
   if ref.towns[t] then snapshot(t,ref.towns[t]);snapshots=snapshots+1 end
   if t<=ref.build then return end
@@ -360,6 +390,7 @@ if mixed then
     assert(s.airport_owned_runs[aircraft_id].arrivals>8)
     print(("PASS RC1 hub helicopter: %d exact aircraft frames across three packed reloads"):format(air_count))
   end
+  if council then print("PASS RC1 exclusive rights, successful and failed bribery and the following coastal year") end
   if advertising then print("PASS RC1 small, medium and large town campaigns and the resulting town year") end
   if demolition then print("PASS RC1 company demolition: exact quote, signed authority and following town year") end
   if four then

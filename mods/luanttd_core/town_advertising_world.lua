@@ -42,5 +42,25 @@ return function(Sim,Kernel)
     end
     return Kernel.modify_around(rows,owner,x,z,amount,radius)
   end
+  -- Bribe failure clears every represented GoodsEntry at a station
+  -- assigned to this TownID, irrespective of distance from its sign.
+  function A.clear(s,owner,town)
+    local seen={}
+    local function clear(st,id)
+      if st.owner~=owner or id~=town or seen[st] then return end
+      seen[st]=true
+      st.passenger_rating_state=st.passenger_rating_state or Kernel.new()
+      st.mail_rating_state=st.mail_rating_state or Kernel.new()
+      st.passenger_rating_state.rating=0
+      st.mail_rating_state.rating=0
+      for _,g in pairs(st.goods or {}) do if type(g)=="table" and type(g.rating)=="number" then g.rating=0 end end
+    end
+    local c=s.stock_ship_commercial and s.stock_ship_commercial.service
+    for _,st in pairs(c and c.stations or {}) do clear(st,st.town) end
+    for _,st in pairs(s.stations) do
+      local group=s.stock_joined_stations and st.stock_station_id~=nil and s.stock_joined_stations[st.stock_station_id]
+      clear(st,group and group.town or st.town or st.site)
+    end
+  end
   return A
 end
