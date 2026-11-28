@@ -645,6 +645,11 @@ jobs:
         run: |
           lua5.1 tests/town_growth_rc1_ferry.lua hub-compound
           LUANTTD_QA_MUNICIPAL_KIND=renewbore-manual bash tests/town_municipal_roads_native.sh "$(command -v luantiserver)" /tmp/rc1-house-surface-bore
+      - name: Compare all three Local Authority advertising campaigns
+        run: |
+          lua5.1 tests/town_advertising_rc1.lua
+          lua5.1 tests/town_growth_rc1_ferry.lua hub-advertising
+          bash tests/town_growth_rc1_ferry_native.sh hub-advertising
       - name: Check road-tip replacement and growth across municipal boundaries
         run: |
           lua5.1 tests/town_municipal_roads.lua

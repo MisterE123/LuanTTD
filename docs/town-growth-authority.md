@@ -1252,3 +1252,23 @@ The native worker check removes the upper office while keeping
 the other company's road tunnel, its two live pathfinder portals,
 and the neighboring protected property. Unknown or insufficient
 cover is refused; blind area demolition still skips that layer.
+
+
+### Local Authority advertising
+
+Small, medium, and large campaigns use the original
+`GetTownActionCost` factors and `ModifyStationRatingAround` tests.
+They affect the company's own station signs within the stock
+Manhattan radius, add 64, 112, or 160 to cargo ratings with a
+nonempty status, and cap at 255. A compound road and commercial
+station has one shared rating record, so it receives one boost.
+Local Authority exposes all three through its advertising panel.
+
+In the ordinary 1985 coastal replay, the three campaign prices
+are 7,812, 15,625, and 35,156. The shared passenger grade changes
+from 185 to 249, 241 to 255, and 247 to 255 respectively; unrated,
+non-accepting mail is unchanged. The large campaign affects two
+eligible cargo ratings. The 51-town year matches the source
+random states, vehicle and loading records, and map snapshots;
+the native worker preserves the campaign effects across reopen.
+Exclusive rights and bribery are separate town actions.

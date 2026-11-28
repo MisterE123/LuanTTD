@@ -28,6 +28,9 @@ fi
 if [[ ${1:-} == hub-house ]]; then
   printf 'luanttd_qa_house_clear = true\n' >> "$out/server.conf"
 fi
+if [[ ${1:-} == hub-advertising ]]; then
+  printf 'luanttd_qa_town_advertising = true\n' >> "$out/server.conf"
+fi
 for phase in SERVICE REOPEN; do
   timeout 120 luantiserver --world "$out/world" --config "$out/server.conf" --gameid luanttd --logfile '' > "$out/$phase.log" 2>&1 || {
     tail -80 "$out/$phase.log";exit 1;

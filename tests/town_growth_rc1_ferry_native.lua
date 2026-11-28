@@ -6,7 +6,8 @@ local Sim=m("sim")
 local owner="Stock Ferry QA"
 local four=core.settings:get_bool("luanttd_qa_coastal_four",false)
 local demolition=core.settings:get_bool("luanttd_qa_house_clear",false)
-local rotary=four or demolition or core.settings:get_bool("luanttd_qa_coastal_air",false)
+local advertising=core.settings:get_bool("luanttd_qa_town_advertising",false)
+local rotary=four or demolition or advertising or core.settings:get_bool("luanttd_qa_coastal_air",false)
 local hub=rotary or core.settings:get_bool("luanttd_qa_coastal_hub",false)
 local mixed=hub or core.settings:get_bool("luanttd_qa_join_bus_dock",false)
 local Checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wide-campaign.chk")
@@ -160,6 +161,30 @@ local function work()
       local aircraft=transport({mode="air",operation="buy",depot=home,engine=253}).id
       command("transport_start",{mode="air",vehicle=aircraft,first=away,second=home})
     end
+    if advertising then
+      for _=1,5 do command("company_loan",{amount=10000}) end
+      for i,fee in ipairs({7812,15625,35156}) do
+        for _=1,3 do ask("advance",{days=4}) end
+        ask("checkpoint")
+        local game=assert(Checkpoint.read())
+        local group=assert(game.stock_joined_stations[0])
+        local ledger=game.stock_ship_commercial.service.stations[group.service_station_id]
+        local old=ledger.passenger_rating_state.rating
+        local cash=game.companies[owner].cash
+        local panel=ask("town_authority",{town=group.town})
+        local offer=panel.advertising[i]
+        assert(offer.affordable and offer.cost==fee)
+        local q=command("town_advertise",{town=group.town,size=offer.key,cost=offer.cost})
+        assert(q.affected_cargos>0)
+        ask("checkpoint")
+        local changed=assert(Checkpoint.read())
+        local st=changed.stock_ship_commercial.service.stations[group.service_station_id]
+        assert(changed.companies[owner].cash==cash-fee)
+        assert(st.passenger_rating_state.rating==math.min(255,old+offer.bonus))
+        local rd=changed.stations[changed.stock_joined_stations[0].members.road]
+        assert(rd.passenger_rating_state==st.passenger_rating_state)
+      end
+    end
     if demolition then
       for _=1,4 do ask("advance",{days=4}) end
       ask("checkpoint")
@@ -235,6 +260,11 @@ local function work()
     assert(s.passenger_house_clock.counter==baseline_tick and boarded==baseline_boarded and money==baseline_money)
     assert(p.arrivals==previous.ship_pilot.arrivals)
     if rotary then assert(air.arrivals==baseline_air) end
+    if advertising then
+      local left=s.stock_ship_commercial.service.stations[s.stock_joined_stations[0].service_station_id]
+      local right=previous.stock_ship_commercial.service.stations[previous.stock_joined_stations[0].service_station_id]
+      assert(left.passenger_rating_state.rating==right.passenger_rating_state.rating)
+    end
     if demolition then
       local id=109*256+50
       local now,prior=s.tiles[id].source_house,previous.tiles[id].source_house
@@ -259,6 +289,7 @@ local function work()
       if rotary then result=result..(", helicopter made %d arrivals"):format(air.arrivals) end
       if four then result=result..(", train made %d arrivals, bus last arrived at tick %d"):format(train.shuttle.arrivals,bus.last_arrival.tick) end
       if demolition then result=result..", stock house clear retained" end
+      if advertising then result=result..", station advertising retained" end
       return {kind="stop"}
     end
   end

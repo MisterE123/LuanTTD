@@ -333,6 +333,7 @@ return function(Sim,R,max_days)
     row.funding=Sim.quote_town_buildings(s,name,id)
     row.reconstruction=Sim.quote_road_reconstruction(s,name,id)
     row.statue=Sim.quote_town_statue(s,name,id)
+    row.advertising=Sim.town_advertising(s,name,id)
     local stock=s.stock_town_growth and s.stock_town_growth.towns[id]
     if stock then
       row.last_month={}
@@ -693,6 +694,10 @@ return function(Sim,R,max_days)
         note="Founded "..value.name.."."
         if R.news and R.news.town_founded then R.news.town_founded(value) end
       end
+    elseif c.kind=="town_advertise" and index(c.town) and integer(c.cost,0,2147483647)
+        and (c.size=="small" or c.size=="medium" or c.size=="large") then
+      value,note=Sim.town_advertising(s,name,c.town,c.size,c.cost)
+      ok=value~=nil
     elseif c.kind=="town_fund_buildings" and index(c.town) then
       ok,note,value=Sim.fund_town_buildings(s,name,c.town,c.cost)
     elseif c.kind=="town_fund_roads" and index(c.town) then

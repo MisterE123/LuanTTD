@@ -4772,6 +4772,33 @@ function M.fund_town_buildings(s,owner,id,seen)
   debit(s.companies[owner],q.cost)
   return true,"Funded town growth for three months.",{town=id,months=town.fund_buildings_months}
 end
+function M.town_advertising(s,owner,id,key,cost)
+  local c=s.companies[owner]
+  local t=s.stock_town_growth and s.stock_town_growth.towns[id]
+  if not (c and t and s.stock_generated_profile) then return nil,"Town advertising is unavailable." end
+  if not M.stock_town_advertising then
+    M.stock_town_advertising=dofile(module_root.."openttd/town_advertising_rc1.lua")
+    M.stock_town_advertising_world=dofile(module_root.."town_advertising_world.lua")(M,
+      dofile(module_root.."openttd/station_rating.lua"))
+  end
+  local rules=M.stock_town_advertising
+  if key==nil then
+    local offers={}
+    for _,c_ in ipairs(rules.campaigns) do
+      local offer=rules.quote(c_.key,s.stock_town_action_price)
+      offer.affordable=c.cash>=offer.cost
+      offers[#offers+1]=offer
+    end
+    return offers
+  end
+  local q=rules.quote(key,s.stock_town_action_price)
+  if not q or q.cost~=cost then return nil,"The town campaign price changed. Review the offer." end
+  if c.cash<q.cost then return nil,"Not enough cash for this campaign." end
+  local x,z=M.xy(s.sites[id].tile)
+  local count=M.stock_town_advertising_world.apply(s,owner,x,z,q.bonus,q.radius)
+  debit(c,q.cost,"other")
+  return {town=id,cost=q.cost,affected_cargos=count},"Town advertising paid."
+end
 function M.quote_road_reconstruction(s,owner,id)
   local growth=town_growth_mount[s]
   return growth and growth.world.reconstruction and growth.world.reconstruction.view(s,id,owner)

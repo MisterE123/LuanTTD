@@ -3,10 +3,11 @@
 local four=arg[1]=="hub-four"
 local compound=arg[1]=="hub-compound"
 local demolition=compound or arg[1]=="hub-house"
-local rotary=four or demolition or arg[1]=="hub-air"
+local advertising=arg[1]=="hub-advertising"
+local rotary=four or demolition or advertising or arg[1]=="hub-air"
 local hub=rotary or arg[1]=="hub"
 local mixed=hub or arg[1]=="mixed"
-local ref=dofile("tests/fixtures/"..(compound and "rc1-active-coastal-compound-clear-town-year" or demolition and "rc1-active-coastal-house-clear-town-year" or four and "rc1-active-coastal-four-town-year" or rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
+local ref=dofile("tests/fixtures/"..(advertising and "rc1-active-coastal-town-advertising-year" or compound and "rc1-active-coastal-compound-clear-town-year" or demolition and "rc1-active-coastal-house-clear-town-year" or four and "rc1-active-coastal-four-town-year" or rotary and "rc1-active-coastal-helicopter-town-year" or hub and "rc1-active-coastal-hub-town-year" or mixed and "rc1-active-bus-dock-town-year" or "rc1-active-ferry-town-year")..".lua")
 local mod="mods/luanttd_core"
 local function m(n) return dofile(mod.."/"..n..".lua") end
 local S,T,Rebuild=m("sim"),m("openttd/terrain"),m("openttd/town_rebuild")
@@ -195,6 +196,19 @@ local function same(tick,label,value,expected)
       tick,label,i,tostring(value[i]),tostring(v)))
   end
 end
+local function advertise(t,expected)
+  local group=assert(s.stock_joined_stations[0])
+  local town=assert(group.town)
+  local st=assert(s.stock_ship_commercial.service.stations[group.service_station_id])
+  local company=s.companies[owner]
+  local offer=checked(A.town_authority(owner,town)).advertising[expected[1]]
+  assert(town-1==17 and offer.affordable)
+  local before,cash=st.passenger_rating_state.rating,company.cash
+  local result=action("town_advertise",{town=town,cost=offer.cost,size=offer.key})
+  same(t,"council advertising",{expected[1],result.cost,before,st.passenger_rating_state.rating,result.affected_cargos},expected)
+  assert(company.cash==cash-offer.cost and st.mail_rating_state.rating==175)
+end
+
 local function snapshot(tick,expected)
   local corners,houses,towns=1,1,1
   local year=S.date(s)
@@ -307,6 +321,7 @@ local function tick(t)
     end
   end
   if demolition and t==ref.clear_tick then clear_house() end
+  if advertising and ref.campaigns[t] then advertise(t,ref.campaigns[t]) end
   digest=fold(digest,t,unpack(s.passenger_rating_rng));ticks=ticks+1
   if ref.towns[t] then snapshot(t,ref.towns[t]);snapshots=snapshots+1 end
   if t<=ref.build then return end
@@ -345,6 +360,7 @@ if mixed then
     assert(s.airport_owned_runs[aircraft_id].arrivals>8)
     print(("PASS RC1 hub helicopter: %d exact aircraft frames across three packed reloads"):format(air_count))
   end
+  if advertising then print("PASS RC1 small, medium and large town campaigns and the resulting town year") end
   if demolition then print("PASS RC1 company demolition: exact quote, signed authority and following town year") end
   if four then
     same(ref.last,"physical passenger engine and coach cargo",{rail_hash,rail_count},{ref.rail,ref.rail_count})

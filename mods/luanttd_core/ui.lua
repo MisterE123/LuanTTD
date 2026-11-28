@@ -516,11 +516,15 @@ function U.fields(p,formname,f)
     end)
     return true
   end
+  if formname=="luanttd_core:town_advertising" then
+    return U.town_advertising_fields(p,f)
+  end
   if formname=="luanttd_core:town_authority" then
-    if f.build_statue then U.fund_town_from_panel(p,"statue")
+    if f.town_advertising then U.open_town_advertising(p)
+    elseif f.build_statue then U.fund_town_from_panel(p,"statue")
     elseif f.fund_buildings or f.fund_roads then U.fund_town_from_panel(p,f.fund_roads and "roads" or "buildings")
     else
-      local v=view(p:get_player_name());v.town_funding=nil;v.road_funding=nil;v.statue_offer=nil;v.authority_context=nil
+      local v=view(p:get_player_name());v.town_funding=nil;v.road_funding=nil;v.statue_offer=nil;v.advertising_offer=nil;v.authority_context=nil
     end
     return true
   end
@@ -3280,7 +3284,7 @@ function U.open_town_authority(p,town)
   if not client then return false end
   local token={}
   v.authority_context=token
-  v.town_funding,v.road_funding,v.statue_offer=nil,nil,nil
+  v.town_funding,v.road_funding,v.statue_offer,v.advertising_offer=nil,nil,nil,nil
   local queued=client.query({kind="town_authority",player=n,town=town},function(result)
     if v.authority_context~=token or not core.get_player_by_name(n) then return end
     if not result.ok then U.status(p,"Town authority information is unavailable.");return end
@@ -3338,6 +3342,11 @@ function U.open_town_authority(p,town)
       end
       exit=exit+.85
     end
+    if row.advertising and #row.advertising>0 then
+      v.advertising_offer={town=row.id,name=row.town,offers=row.advertising,revision=result.revision,token=token}
+      action=action..("button[.45,%g;9.7,.57;town_advertising;Advertising campaigns…]"):format(exit)
+      exit=exit+.80
+    end
     if row.new_stations~=nil then
       local station=row.new_stations and "New stations: your rating allows construction." or
         "New stations: refused at your current rating."
@@ -3366,6 +3375,54 @@ function U.open_town_authority(p,town)
       ("button_exit[.45,%g;9.7,.57;close;Back to world]"):format(exit))
   end)
   return not not queued
+end
+function U.open_town_advertising(p)
+  local n=p:get_player_name()
+  local v=view(n)
+  local q=v.advertising_offer
+  if not q or q.token~=v.authority_context then return end
+  local body={"formspec_version[7]size[8.7,5.28]bgcolor[#152334;false]",
+    "label[.45,.45;TOWN ADVERTISING]label[.45,.93;"..esc(q.name).."]",
+    "label[.45,1.43;Boost cargo ratings at your stations around this town.]"}
+  for i,offer in ipairs(q.offers) do
+    local y=1.93+(i-1)*.76
+    local label=("%s · %d tiles · %s"):format(offer.name,offer.radius,dollars(offer.cost))
+    if offer.affordable then
+      body[#body+1]=("button[.45,%g;7.8,.59;advertise_%s;%s]"):format(y,offer.key,esc(label))
+      body[#body+1]=("tooltip[advertise_%s;Adds up to %g%% to active cargo ratings within %d tiles.]"):format(
+        offer.key,math.floor(offer.bonus*100/255+.5),offer.radius)
+    else
+      body[#body+1]=("label[.58,%g;%s]"):format(y+.28,esc(label.." required"))
+    end
+  end
+  body[#body+1]="button_exit[.45,4.36;7.8,.58;authority_back;Back to Local Authority]"
+  core.show_formspec(n,"luanttd_core:town_advertising",table.concat(body))
+end
+function U.town_advertising_fields(p,f)
+  local n=p:get_player_name()
+  local v=view(n)
+  local q=v.advertising_offer
+  local client=api.worker_bridge_client
+  if not (q and q.token==v.authority_context and client) then return true end
+  if f.authority_back then U.open_town_authority(p,q.town);return true end
+  if f.quit then v.advertising_offer=nil;return true end
+  local chosen
+  for _,offer in ipairs(q.offers) do
+    if f["advertise_"..offer.key] then
+      if chosen then return true end
+      chosen=offer
+    end
+  end
+  if not (chosen and chosen.affordable) then return true end
+  v.advertising_offer=nil
+  local ok,why=client.query({kind="command",player=n,command={kind="town_advertise",
+    town=q.town,size=chosen.key,cost=chosen.cost,revision=q.revision}},function(result)
+    if v.authority_context~=q.token or not core.get_player_by_name(n) then return end
+    U.status(p,result.why or (result.ok and "Advertising campaign launched." or "Advertising unavailable."))
+    U.open_town_authority(p,q.town)
+  end)
+  if not ok then v.advertising_offer=q;U.status(p,why or "Advertising request could not be sent.") end
+  return true
 end
 function U.fund_town_from_panel(p,action)
   local name=p:get_player_name()
