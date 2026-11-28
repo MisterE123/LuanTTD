@@ -75,10 +75,12 @@ if S.stock_generated_profile then
   Sim.W,Sim.H=p.width,p.depth
   generated_world=true
 end
+local town_configuration=S.stock_generated_profile and S.stock_generated_profile.town_settings
+local municipal=town_configuration and town_configuration.municipal or WorldSetup.municipal_policy(settings)
 S.stock_road_town_policy={
   tolerance=math.max(0,math.min(3,math.floor(tonumber(settings:get("luanttd_town_council_tolerance")) or 0))),
-  allow_town_roads=settings:get_bool("luanttd_allow_town_roads",true),
-  allow_town_level_crossings=settings:get_bool("luanttd_allow_town_level_crossings",true),
+  allow_town_roads=municipal.allow_town_roads,
+  allow_town_level_crossings=municipal.allow_town_level_crossings,
   extra_dynamite=settings:get_bool("luanttd_extra_dynamite",true),
   station_noise_level=settings:get_bool("luanttd_station_noise_level",false),
 }

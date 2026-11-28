@@ -36,6 +36,10 @@ local items={
     labels={"None","Slow","Normal","Fast","Very fast"},advanced="Town growth speed"},
   {key="town_cargo",setting="luanttd_town_cargo_mode",default=1,values={0,1},
     labels={"Quadratic (original)","Linear"},advanced="Town cargo generation"},
+  {key="town_roads",setting="luanttd_allow_town_roads",default=1,values={1,0},boolean_setting=true,
+    labels={"Yes","No"},advanced="Let towns build roads"},
+  {key="town_crossings",setting="luanttd_allow_town_level_crossings",default=1,values={1,0},boolean_setting=true,
+    labels={"Yes","No"},advanced="Let towns build rail crossings"},
   {key="variety",setting="bayline_generated_variety",default=0,values={0,1,2,3,4,5},
     labels={"None","Very low","Low","Medium","High","Very high"},advanced="Regional variety"},
 }
@@ -77,6 +81,18 @@ function M.random_seed(rng)
   -- Signed RNG bounds are too narrow for the original uint32 seed.
   return rng:next(0,65535)*65536+rng:next(0,65535)
 end
+local function municipal_value(settings,setting)
+  if settings.get_bool then return settings:get_bool(setting,true) and 1 or 0 end
+  local value=settings:get(setting)
+  return (value=="false" or value=="0" or value==false) and 0 or 1
+end
+function M.municipal_policy(settings,cfg)
+  local roads=cfg and cfg.town_roads
+  local crossings=cfg and cfg.town_crossings
+  if roads==nil then roads=municipal_value(settings,"luanttd_allow_town_roads") end
+  if crossings==nil then crossings=municipal_value(settings,"luanttd_allow_town_level_crossings") end
+  return {allow_town_roads=roads~=0,allow_town_level_crossings=crossings~=0}
+end
 function M.defaults(settings,fresh)
   local seed=tonumber(settings:get("bayline_seed"))
   if not integer(seed,0,4294967295) and fresh then seed=fresh() end
@@ -86,7 +102,8 @@ function M.defaults(settings,fresh)
   for _,item in ipairs(items) do
     if item.setting then
       local v=settings:get(item.setting)
-      if type(item.default)=="number" then v=tonumber(v) end
+      if item.boolean_setting then v=municipal_value(settings,item.setting)
+      elseif type(item.default)=="number" then v=tonumber(v) end
       out[item.key]=index(item.values,v) and v or item.default
     end
   end
@@ -188,7 +205,7 @@ local function formspec(core,cfg,advanced,note)
   if cfg.scenario=="generated" then
     for i,item in ipairs(items) do
       if advanced==not not item.advanced then
-        local x,y=n%2==0 and .49 or 6.43,3.59+math.floor(n/2)*(advanced and .84 or .76)
+        local x,y=n%2==0 and .49 or 6.43,3.59+math.floor(n/2)*(advanced and .74 or .76)
         out[#out+1]=("label[%g,%g;%s]dropdown[%g,%g;5.46,%g;setup_%s;%s;%d;true]")
           :format(x,y,item.advanced or labels[i],x,y+.20,advanced and .44 or .50,
             item.key,table.concat(item.labels,","),index(item.values,cfg[item.key]))
@@ -201,14 +218,14 @@ local function formspec(core,cfg,advanced,note)
         (big and "High RAM use. May run out of memory." or "Larger maps need more RAM.").."]"
     else
       for _,item in ipairs(town_numbers) do
-        local x,y=n%2==0 and .49 or 6.43,3.59+math.floor(n/2)*.84
+        local x,y=n%2==0 and .49 or 6.43,3.59+math.floor(n/2)*.74
         local label=item.key=="larger_towns" and item.label.." (0 = no cities)" or item.label
         out[#out+1]=("label[%g,%g;%s]field[%g,%g;5.46,.43;setup_%s;;%d]field_close_on_enter[setup_%s;false]")
           :format(x,y,label,x,y+.20,item.key,cfg[item.key],item.key)
         n=n+1
       end
-      out[#out+1]="label[6.43,6.95;Custom count needs Custom density.]"
-      out[#out+1]="label[6.43,7.30;No forced coast still allows inland water.]"
+      out[#out+1]="label[6.43,7.30;Custom count needs Custom density.]"
+      out[#out+1]="label[6.43,7.62;No forced coast still allows inland water.]"
     end
   elseif cfg.scenario=="original" then
     out[#out+1]="label[.49,3.86;Survey map side length]"
@@ -220,13 +237,16 @@ local function formspec(core,cfg,advanced,note)
     out[#out+1]="label[.49,4.20;This scenario uses fixed terrain and industry sites.]"
     out[#out+1]="label[.49,4.83;Road, rail, harbor and air tools are available as usual.]"
   end
-  out[#out+1]="box[.42,7.70;11.56,.025;#466277]"
-  out[#out+1]="label[.49,8.03;"..esc(note or "Generate immediately using the selected parameters.").."]"
-  out[#out+1]="label[.49,8.42;The game may reconnect once to load the finished world.]"
-  out[#out+1]="button[.49,9.02;2.40,.60;setup_defaults;Reset options]"
-  out[#out+1]="button[3.08,9.02;2.30,.60;setup_cancel;Cancel setup]"
+  local expanded=advanced and cfg.scenario=="generated"
+  local line,notice,reconnect,buttons=7.70,8.03,8.42,9.02
+  if expanded then line,notice,reconnect,buttons=8.10,8.36,8.69,9.18 end
+  out[#out+1]=("box[.42,%g;11.56,.025;#466277]"):format(line)
+  out[#out+1]=("label[.49,%g;%s]"):format(notice,esc(note or "Generate immediately using the selected parameters."))
+  out[#out+1]=("label[.49,%g;The game may reconnect once to load the finished world.]"):format(reconnect)
+  out[#out+1]=("button[.49,%g;2.40,.60;setup_defaults;Reset options]"):format(buttons)
+  out[#out+1]=("button[3.08,%g;2.30,.60;setup_cancel;Cancel setup]"):format(buttons)
   out[#out+1]="style[setup_generate;bgimg=bl_button_primary.png;textcolor=#101C2B]"
-  out[#out+1]="button[7.62,9.02;4.28,.60;setup_generate;Generate world]"
+  out[#out+1]=("button[7.62,%g;4.28,.60;setup_generate;Generate world]"):format(buttons)
   return table.concat(out)
 end
 function M.progress_form(core,title,pct,stage,detail)

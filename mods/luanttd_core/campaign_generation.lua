@@ -69,6 +69,11 @@ return function(core,mod,Sim,Settings)
       progress=function(i,n) progress(62+math.floor(9*i/math.max(1,n)),"Building towns and roads",true) end,
     })
     assert(towns,why)
+    -- RC1 GenerateTowns always builds its initial streets. These stock
+    -- settings then constrain expansion in the running game.
+    local municipal=Settings.municipal_policy(settings,cfg)
+    S.stock_generated_profile.town_settings.municipal=municipal
+    S.stock_road_town_policy=municipal
     local growth=dofile(mod.."/town_growth_runtime.lua")(Sim,Terrain,G,B,dofile(src.."town_passengers.lua"))
     Sim.mount_stock_town_growth(S,growth,true)
     progress(72,"Placing industries")

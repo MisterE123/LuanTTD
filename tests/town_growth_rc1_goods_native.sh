@@ -24,6 +24,7 @@ case "${1:-}" in
     cp tests/fixtures/rc1-hills-town-year.lua "$game/mods/luanttd_core/"
     ;;
   midyear) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-midyear-town-setting.lua ;;
+  houses) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-houses-only-town-year.lua ;;
   quadratic) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-quadratic-town-year.lua ;;
   grid) test_init=tests/town_growth_rc1_fast_grid_native.lua; fixture=tests/fixtures/rc1-fast-grid-town-year.lua ;;
 esac

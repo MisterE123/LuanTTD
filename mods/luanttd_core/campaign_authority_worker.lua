@@ -12,7 +12,17 @@ function core.luanttd_own_campaign(path,channel,cap,filename)
   local storage=Checkpoints(setmetatable({get_worldpath=function() return path end},{__index=core}),
     Codec,filename or "luanttd-wide-campaign.chk")
   local s=assert(storage.read(),"authority requires a prepared checkpoint")
-  if cap.road_town_policy then s.stock_road_town_policy=cap.road_town_policy end
+  local policy=cap.road_town_policy or s.stock_road_town_policy
+  local towns=s.stock_generated_profile and s.stock_generated_profile.town_settings
+  if towns and towns.municipal then
+    local mounted={}
+    for name,value in pairs(policy or {}) do mounted[name]=value end
+    -- Host-wide authority settings may supply unrelated defaults, but
+    -- cannot change a particular world's saved municipal choices.
+    mounted.allow_town_roads=towns.municipal.allow_town_roads
+    mounted.allow_town_level_crossings=towns.municipal.allow_town_level_crossings
+    s.stock_road_town_policy=mounted
+  else s.stock_road_town_policy=policy end
   local Sim=dofile(mod.."/sim.lua")
   local runtime=mounts(Sim,mod,s,cap)
   local observer={}

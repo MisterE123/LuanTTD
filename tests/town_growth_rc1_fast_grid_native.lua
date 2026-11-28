@@ -6,6 +6,11 @@ local Checkpoint=m("campaign_checkpoint")(core,m("packed_campaign"),"luanttd-wid
 local client=m("campaign_authority_client")(core,mod)
 local cap={road={start_year=1950,breakdowns=1,service_interval=150},ferry={},air={},oil_tanker=true}
 local ref=m("qa_native_goods")
+if ref.houses_only then
+  -- A server default deliberately contradicts the chosen world. Verify
+  -- the authority retains the world setting through two processes.
+  cap.road_town_policy={allow_town_roads=true,allow_town_level_crossings=false}
+end
 local width=ref.midyear and 128 or 256
 local depth=ref.hills and 256 or 128
 local industry_count=#ref.industries
@@ -20,6 +25,7 @@ if not initial then
     or {seed=98217,relief=1,coast=16,rivers=2,towns=4,custom_towns=6,larger_towns=3,layout="grid3",growth_rate=3}
   if ref.midyear then cfg={seed=1751,relief=1,coast=16,rivers=2,towns=4,custom_towns=4,larger_towns=3,layout="original",growth_rate=2} end
   if ref.quadratic then cfg.town_cargo=0 end
+  if ref.houses_only then cfg.town_roads,cfg.town_crossings=0,1 end
   cfg.width,cfg.depth,cfg.year,cfg.sea,cfg.trees,cfg.industries,cfg.variety,cfg.smooth=width,depth,1950,0,2,4,0,1
   local s=gen.run(cfg)
   assert(#s.stock_generated_profile.industries==industry_count and #s.stock_town_growth.towns==town_count)
@@ -44,6 +50,14 @@ end
 local function rate(n)
   ask("command",nil,{kind="town_growth_setting",rate=n,revision=revision,admin=true})
 end
+local function check_municipal(s)
+  if ref.houses_only then
+    local set=s.stock_generated_profile.town_settings.municipal
+    assert(set.allow_town_roads==false and set.allow_town_level_crossings==true)
+    assert(s.stock_road_town_policy.allow_town_roads==false and s.stock_road_town_policy.allow_town_level_crossings==true)
+    assert(s.has_town_roads)
+  end
+end
 local function run()
   if not initial then
     if ref.midyear then
@@ -53,12 +67,14 @@ local function run()
     else advance(restart_day) end
     ask("checkpoint")
     local s=assert(Checkpoint.read())
+    check_municipal(s)
     assert(s.day==restart_day and #s.stock_generated_profile.industries==industry_count)
     if ref.midyear then assert(s.stock_generated_profile.town_settings.growth_setting==0) end
     if ref.quadratic then assert(s.stock_generated_profile.town_settings.cargo_mode==0) end
     proof=("ORDINARY_GOODS_SAVED: %dx%d region at day %d, %d industries"):format(width,depth,restart_day,industry_count)
   else
     assert(initial.day==restart_day)
+    check_municipal(initial)
     if ref.midyear then
       assert(initial.stock_generated_profile.town_settings.growth_setting==0)
       advance(3)
@@ -67,6 +83,7 @@ local function run()
     else advance(final_day-restart_day) end
     ask("checkpoint")
     local s=assert(Checkpoint.read())
+    check_municipal(s)
     local final=ref.snapshots[final_tick]
     assert(s.day==final_day and s.passenger_house_clock.counter==final_tick and s.passenger_house_clock.head==final[1][1])
     assert(s.passenger_rating_rng[1]==final[1][2] and s.passenger_rating_rng[2]==final[1][3])

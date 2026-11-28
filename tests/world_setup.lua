@@ -1,10 +1,15 @@
 local M=dofile("mods/luanttd_core/world_setup.lua")
 local params={bayline_seed="4294967295",bayline_generated_map_size="128",
-  luanttd_town_growth_rate="4",bayline_generated_relief="99",bayline_generated_town_layout="grid3"}
+  luanttd_town_growth_rate="4",luanttd_allow_town_level_crossings="false",bayline_generated_relief="99",bayline_generated_town_layout="grid3"}
 local settings={get=function(_,name)return params[name] end}
 local defaults=M.defaults(settings)
 assert(defaults.seed==4294967295 and defaults.size==128 and defaults.relief==1 and defaults.layout=="grid3" and defaults.rivers==2)
 assert(defaults.growth_rate==4 and defaults.town_cargo==1)
+assert(defaults.town_roads==1 and defaults.town_crossings==0)
+local chosen=assert(M.parse(defaults,{setup_town_roads="2",setup_town_crossings="1"}))
+local policy=M.municipal_policy(settings,chosen)
+assert(policy.allow_town_roads==false and policy.allow_town_level_crossings==true)
+assert(not M.parse(defaults,{setup_town_roads="3"}))
 assert(defaults.larger_towns==4 and defaults.initial_city_size==2 and defaults.town_min_distance==20 and defaults.custom_towns==1)
 local custom=assert(M.parse(defaults,{setup_towns="5",setup_custom_towns="123",setup_larger_towns="0",
   setup_initial_city_size="10",setup_town_min_distance="500"}))
@@ -54,6 +59,7 @@ fields(p,M.form,{setup_defaults="true"})
 assert(shown:find("Generate world",1,true) and shown:find("Cancel setup",1,true))
 fields(p,M.form,{setup_advanced="true"})
 assert(shown:find("Custom town count",1,true) and shown:find("Every Nth town is a city",1,true))
+assert(shown:find("Let towns build roads",1,true) and shown:find("Let towns build rail crossings",1,true))
 assert(shown:find("Town cargo generation",1,true) and shown:find("Quadratic (original),Linear",1,true))
 assert(shown:find("Town growth speed",1,true) and shown:find("None,Slow,Normal,Fast,Very fast",1,true))
 fields(p,M.form,{setup_cancel="true",setup_seed="bad"})

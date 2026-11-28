@@ -6,6 +6,8 @@ local profiles={
     towns=4,custom_towns=6,layout="grid3",growth_rate=3},
   quadratic={fixture="rc1-quadratic-town-year",width=256,depth=128,year=1950,seed=98217,
     towns=4,custom_towns=6,layout="grid3",growth_rate=3,town_cargo=0},
+  houses={fixture="rc1-houses-only-town-year",width=256,depth=128,year=1950,seed=98217,
+    towns=4,custom_towns=6,layout="grid3",growth_rate=3,town_roads=0},
   better={fixture="rc1-better-slow-town-year",width=128,depth=256,year=1950,seed=11681,
     towns=2,layout="better",growth_rate=1},
   midyear={fixture="rc1-midyear-town-setting",width=128,depth=128,year=1950,seed=1751,
@@ -40,6 +42,10 @@ end
 local industry_keys={[0]="coal_mine","power_station","sawmill","forest","oil_refinery",
   [6]="factory",[8]="steel_mill",[9]="farm",[11]="oil_well",[18]="iron_mine"}
 local profile=s.stock_generated_profile
+if ref.houses_only then
+  assert(profile.town_settings.municipal.allow_town_roads==false and s.stock_road_town_policy.allow_town_roads==false)
+  assert(s.has_town_roads,"Disabling live road expansion must not block starting streets")
+end
 assert(profile.industry_stats.target>=#ref.industries and #profile.industries==#ref.industries)
 for i,source in ipairs(ref.industries) do
   local placement=profile.industries[i]
@@ -118,6 +124,10 @@ local function observe(tick)
       local dir=u>x and 2 or u<x and 0 or v>z and 1 or 3
       spans=fold(spans,id-1,bridge and 1 or 0,dir)
     end
+  end
+  if ref.houses_only then
+    local initial=ref.snapshots[1281][1]
+    assert(roads==initial[7] and spans==initial[8],"Municipal roads or spans changed while expansion was disabled")
   end
   equal(tick,"map", {s.passenger_house_clock.head,rng[1],rng[2],heights,types,houses,roads,spans},expected[1])
   assert(#s.stock_town_growth.towns==#expected-1)

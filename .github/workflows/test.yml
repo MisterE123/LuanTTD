@@ -544,5 +544,9 @@ jobs:
           lua5.1 tests/campaign_worker_finance_ui.lua
           lua5.1 tests/town_growth_rc1_fast_grid.lua quadratic
           bash tests/town_growth_rc1_goods_native.sh quadratic
+      - name: Compare live housing with municipal road construction off
+        run: |
+          lua5.1 tests/town_growth_rc1_fast_grid.lua houses
+          bash tests/town_growth_rc1_goods_native.sh houses
       - name: Compare three years of dense 1993 grid cities
         run: lua5.1 tests/town_growth_rc1_fast_grid.lua crowded

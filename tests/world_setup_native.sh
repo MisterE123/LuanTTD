@@ -51,6 +51,13 @@ cat "$game/mods/luanttd_core/init.lua" >> "$out/probe.lua"
 cat >> "$out/probe.lua" <<'LUA'
 assert(placement and Sim.W==128 and Sim.H==128 and S.stock_generated_profile.industries)
 assert(core.get_mod_storage():get_string("campaign")=="")
+if core.settings:get_bool("luanttd_qa_municipal_options",false) then
+  local p=assert(S.stock_generated_profile.town_settings.municipal)
+  assert(p.allow_town_roads==false and p.allow_town_level_crossings==false)
+  assert(S.stock_road_town_policy.allow_town_roads==false and S.stock_road_town_policy.allow_town_level_crossings==false)
+  assert(S.has_town_roads,"Initial town streets must still be generated")
+  core.log("action","WORLD_CREATION_MUNICIPAL_OPTIONS: both choices saved; founding streets still generated")
+end
 local terrain_witness,river_corner,mine_tile,oil_tile
 if core.settings:get_bool("luanttd_qa_normal_river",false) then
   local count=0
@@ -260,6 +267,9 @@ bayline_seconds_per_day = 8
 bayline_generated_map_width = 128
 bayline_generated_map_depth = 128
 CONF
+if [[ ${LUANTTD_QA_MUNICIPAL_OPTIONS:-0} == 1 ]]; then
+  printf 'luanttd_qa_municipal_options = true\n' >> "$out/local.conf"
+fi
 if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
   printf 'luanttd_qa_normal_river = true\nbayline_generated_relief = 2\n' >> "$out/local.conf"
 fi
@@ -290,7 +300,24 @@ cc -shared -fPIC tests/native_loopback.c -ldl -o "$out/loopback.so"
 env LD_PRELOAD="$out/loopback.so" Xvfb ":$disp" -screen 0 1440x900x24 -listen tcp -nolisten local -nolisten unix -ac -noreset >"$out/xvfb.log" 2>&1 &
 xv=$!
 client=""
-trap 'rc=$?; if (( rc )); then tail -30 "$out/client.log" "$out/xvfb.log" 2>/dev/null || true; fi; if [[ -n "$client" ]]; then kill "$client" 2>/dev/null || true; wait "$client" 2>/dev/null || true; fi; kill "$xv" 2>/dev/null || true; wait "$xv" 2>/dev/null || true' EXIT
+stop_child(){
+  local pid=$1
+  [[ -n "$pid" ]] || return 0
+  kill "$pid" 2>/dev/null || true
+  for _ in {1..30}; do
+    kill -0 "$pid" 2>/dev/null || break
+    sleep .1
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+}
+cleanup(){
+  local rc=$?
+  if (( rc )); then tail -30 "$out/client.log" "$out/xvfb.log" 2>/dev/null || true; fi
+  stop_child "$client"
+  stop_child "$xv"
+}
+trap cleanup EXIT
 for _ in {1..40}; do xdpyinfo >/dev/null 2>&1 && break; sleep .25; done
 "${BAYLINE_LUANTI_CLIENT:-luanti}" --go --world "$out/world" --gameid luanttd --config "$out/local.conf" --logfile '' >"$out/client.log" 2>&1 &
 client=$!
@@ -316,7 +343,23 @@ if [[ ${LUANTTD_QA_NORMAL_RIVER:-0} == 1 ]]; then
   sleep .4
   snap normal-river-options
 fi
-xdotool mousemove 916 686 click 1
+if [[ ${LUANTTD_QA_MUNICIPAL_OPTIONS:-0} == 1 ]]; then
+  xdotool mousemove 925 300 click 1
+  sleep .45
+  snap municipal-advanced
+  xdotool mousemove 699 476 click 1
+  sleep .23
+  xdotool key End Return
+  sleep .30
+  xdotool mousemove 1025 476 click 1
+  sleep .23
+  xdotool key End Return
+  sleep .30
+  snap municipal-choices
+  xdotool mousemove 916 695 click 1
+else
+  xdotool mousemove 916 686 click 1
+fi
 for _ in {1..160}; do
   if grep -q 'generating_world 90' "$out/client.log"; then break; fi
   if grep -q 'generating_world 5 ' "$out/client.log" && [[ ! -f "$out/progress.jpg" ]]; then snap progress; fi
@@ -335,6 +378,9 @@ if ! grep -q 'WORLD_CREATION_PLAYABLE' "$out/client.log"; then
   client=$!
 fi
 waitmark WORLD_CREATION_PLAYABLE
+if [[ ${LUANTTD_QA_MUNICIPAL_OPTIONS:-0} == 1 ]]; then
+  grep WORLD_CREATION_MUNICIPAL_OPTIONS "$out/client.log"
+fi
 sleep .45
 snap playable
 win=$(xdotool search --sync --limit 1 --onlyvisible --pid "$client" | tail -1)

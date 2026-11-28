@@ -220,10 +220,16 @@ force a crossing.
 The supported spans preserve open river
 water below a bridge and surface roads above a bore. Changed cells
 invalidate the nearby sea cache rather than restarting it for the map.
-The stock **Allow towns to build roads** option defaults to on. Turning it
-off only blocks new town roads: founding a world still creates initial
-streets, and live towns may still find house lots through existing
-streets, drive-through stops, bridges and tunnels. A controlled live
+In world setup's **Advanced options**, **Let towns build roads** and
+**Let towns build rail crossings** are both on by default, as in RC1.
+These are saved on the new world and survive worker or server restart;
+changing the server-wide defaults does not rewrite an existing world's
+choices. Turning off road building stops new municipal streets, not the
+initial starting streets or live housing beside usable roads, stops,
+bridges and tunnels. A 256×128 stock comparison with road building off
+matches all 27,010 first-year ticks and 14 map/town snapshots, with no
+road/span additions by town growth. A real Luanti SQLite restart keeps
+the choices even against explicitly different server defaults. A controlled live
 test starts at a real bridgehead and builds a house beyond the far
 end without changing either the existing road or the bridge.
 
